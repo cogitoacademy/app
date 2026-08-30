@@ -66,8 +66,14 @@ export function getBookingTypeLabel(type: string) {
   return type;
 }
 
-export function canCancelBooking(state: string) {
-  return !TERMINAL_STATES.has(state);
+export function canCancelBooking(
+  state: string,
+  scheduledStartAt: string | Date,
+  now = Date.now(),
+) {
+  return (
+    !TERMINAL_STATES.has(state) && now < new Date(scheduledStartAt).getTime()
+  );
 }
 
 export function formatBookingDate(

@@ -1,17 +1,23 @@
 # Cogito Frontend — PRD Gaps Specification
 
-| Field      | Value                                                                                                                                                                                                                            |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status     | Living gap inventory (updated 2026-08-27; F1/F8/F9/F13/F14/F18 closed; F16 scope retired; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F12 closed; competition taxonomy follow-up implemented; meeting fallback follow-up added) |
-| Branch     | `f/frontend-prd-gaps` (merged #55); `f/competition-taxonomy` (PR pending)                                                                                                                                                        |
-| Created    | 2026-07-29                                                                                                                                                                                                                       |
-| Audited    | 2026-08-26                                                                                                                                                                                                                       |
-| Depends on | Backend PRD gaps (G1-G19) where API is needed                                                                                                                                                                                    |
-| Scope      | Frontend surfaces plus the admin queue projection needed for SLA detail (`apps/web/`, `packages/api/`)                                                                                                                           |
+| Field      | Value                                                                                                                                                                                                                                                           |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status     | Living gap inventory (updated 2026-08-28; F1/F8/F9/F13/F14/F18 closed; F16 scope retired; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F12 closed; competition taxonomy follow-up implemented; meeting fallback follow-up added; booking overflow polish added) |
+| Branch     | `f/frontend-prd-gaps` (merged #55); `f/competition-taxonomy` (PR pending)                                                                                                                                                                                       |
+| Created    | 2026-07-29                                                                                                                                                                                                                                                      |
+| Audited    | 2026-08-28                                                                                                                                                                                                                                                      |
+| Depends on | Backend PRD gaps (G1-G19) where API is needed                                                                                                                                                                                                                   |
+| Scope      | Frontend surfaces plus the admin queue projection needed for SLA detail (`apps/web/`, `packages/api/`)                                                                                                                                                          |
 
 This document catalogs all PRD-required frontend surfaces that are not yet implemented. It runs in parallel with (or after) the backend PRD gaps spec — each frontend gap references the backend gap it depends on.
 
 The backend spec is `docs/plans/completed/PRD-GAPS-SPEC.md` (backend-only). This is the frontend counterpart.
+
+### Tutor profile and payout privacy follow-up (2026-08-28)
+
+Tutor onboarding now has separate multiline Achievements and Experiences fields, with the legacy credential summary migrated into Achievements. Availability-summary and credential-proof inputs are retired. Base honorarium is adjusted only through Rp 5,000 minus/plus controls and its six group-size outcomes are shown in tables. Tutor portraits use a source-upload/admin-edited-public-photo workflow. Tutor payout details expose only completed sessions and IDR honorarium, removing take-rate and Marks terminology from the tutor interface.
+
+Achievement and Experience sections now each accept an optional list of supporting proof URLs. They are visible to admins during review, participate in the protected edit-review flow, and are intentionally omitted from public tutor discovery.
 
 ### Subject taxonomy follow-up (2026-08-25)
 
@@ -73,7 +79,14 @@ primary progress arc, and a `Loading` label instead of a small arc that could
 read as a stray line. Reduced-motion users still receive a clear static
 loading indicator. No API, schema, or persistence contract changed.
 
+Update (2026-08-28, started-session cancellation): student cancellation now closes at `scheduledStartAt` in both the booking service and detail action visibility. The backend remains authoritative and returns `BOOKING_CANCELLATION_DEADLINE_PASSED` for direct or stale-client attempts, preserving tutor completion and payout handling; post-start disputes use the existing support/admin path.
+
 ### Shared booking list follow-up (2026-08-22)
+
+Update (2026-08-28): navigation is now Needs action, Upcoming, Recurring, History, and All. History consolidates terminal outcomes; URL-backed Recommended/Soonest/Latest sorting defaults to decisions first, active bookings next, and terminal outcomes last. Students and tutors land on Needs action whenever pending decisions exist.
+
+Update (2026-08-28, timing): shared booking cards now show server-deadline countdowns for pending states and same-day/start proximity indicators for confirmed or scheduled sessions. The implementation shares one live clock across visible cards and does not alter lifecycle state client-side.
+The indicator is positioned after financial metadata in the list; dashboard next-lesson cards intentionally suppress financial metadata.
 
 The booking list is now one role-aware surface at `/_app/bookings`. Students,
 tutors, and admins use the protected `booking.listMine` read contract; the
@@ -88,7 +101,7 @@ mutations remain in the operations console. Marks values use the Cogito mark
 icon as a prefix, and visible status badges reveal the state explanation on
 hover or keyboard focus.
 
-The shared booking list orders active/all rows by the nearest scheduled start
+The shared booking list offers Recommended, Soonest, and Latest ordering
 while keeping past/cancelled history newest-first. Defaults are role-aware:
 students see Upcoming, tutors see Pending when requests exist (or Upcoming
 otherwise), and admins see All; an explicit `tab` query parameter wins.
@@ -99,6 +112,16 @@ The rounded booking status-tab strip fills the available width on narrow
 screens. Only its inner tab list remains horizontally swipeable, while the
 native scrollbar is hidden so the page itself does not overflow. This is a
 presentation-only change with no RPC, schema, or persistence contract change.
+
+### Booking-list overflow polish follow-up (2026-08-28)
+
+The booking tab scroller now includes internal horizontal and vertical paint
+padding, so the selected tab's shadow and keyboard focus ring remain visible at
+the edges while horizontal swiping stays inside the tab list. The shared
+`EmptyStateCard` keeps its rounded decorative glow and card shadow visible
+without widening the page, and loading/error/list branches use explicit
+`min-w-0`/`max-w-full` constraints. This is presentation-only; the
+`booking.listMine` contract is unchanged.
 
 ### Dashboard next-lesson and onboarding follow-up (2026-08-24)
 
@@ -148,7 +171,7 @@ for classmates.
 | `/_app/dashboard`            | role-specific dashboard pages   | Complete — student, tutor, and admin next-action views using existing oRPC data                                               |
 | `/_app/balance`              | balance-page.tsx                | Exists (wallet + Knowledge Bank card)                                                                                         |
 | `/_app/calendar`             | competition-calendar-page.tsx   | Complete — authenticated, English-only read-only calendar backed by published Sanity content                                  |
-| `/_app/student-resources`    | student-resources-page.tsx      | Complete — student-only 35-Mark gate, metadata search/filter, and protected PDF preview                                       |
+| `/_app/knowledge-bank`       | knowledge-bank-page.tsx         | Complete — student-only 35-Mark gate, metadata search/filter, and protected PDF preview                                       |
 | `/_app/bookings`             | bookings-page.tsx               | Exists (role-scoped list and lifecycle entry points)                                                                          |
 | `/_app/bookings/$bookingId`  | booking-detail-page.tsx         | Complete baseline — detail, lifecycle, reschedule, reporting, invites, notes, history                                         |
 | `/_app/tutors`               | tutors-page-content.tsx         | Exists (discovery list)                                                                                                       |
@@ -344,7 +367,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-15
 
-**Current state:** **CLOSED (2026-08-19; role-dispatch follow-up 2026-08-22).** `booking-reschedule-action.tsx` (calendar + time input + reason; role-aware `booking.proposeReschedule`/`tutorActions.proposeReschedule`, per-session `sessionId`, supersedes pending proposal) — merged via #55 with the tutor route wiring corrected in the follow-up.
+**Current state:** **CLOSED (2026-08-19; role-dispatch follow-up 2026-08-22; no-op/race guards 2026-08-28).** `booking-reschedule-action.tsx` (calendar + time input + reason; role-aware `booking.proposeReschedule`/`tutorActions.proposeReschedule`, per-session `sessionId`, supersedes pending proposal) — merged via #55 with the tutor route wiring corrected in the follow-up. The UI disables proposals matching either the active start or pending proposal; the service applies the same invariant to booking and series-session targets, serializes replacement, and the database permits only one pending proposal per booking.
 
 **Required (after G6 backend fix):**
 
@@ -548,7 +571,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **Required:**
 
-1. Verify the "Open Knowledge Bank" button links to the authenticated `/student-resources` route
+1. Verify the "Open Knowledge Bank" button links to the authenticated `/knowledge-bank` route
 2. User-facing copy must say: "Knowledge Bank access requires at least 35 Marks in your wallet. You are not paying 35 Marks to open it." (DL-16)
 3. If below 35 Marks: show "Top up your wallet to unlock the Knowledge Bank" with link to balance/top-up
 4. Opening Knowledge Bank must NOT deduct Marks (verify no deduction entry created)
@@ -588,7 +611,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-07, FR-08, FR-14, FR-15, FR-21
 
-**Current state:** **CLOSED (2026-08-19; UX follow-up 2026-08-24; manual fallback follow-up 2026-08-27).** The booking detail route implements student/tutor state, schedule, participants, Marks, meeting/room access, history, cancellation, tutor review/completion, group invitation/reconfirmation, reschedule proposal/decision, lateness reporting with ticket status, and post-session notes. Its responsive task-detail presentation now prioritizes status, schedule, format/access, visible participant identities, and role-appropriate primary booking actions directly below the status badge; contextual actions remain above Marks or in the main flow. Participant rows show saved images or initials, names, roles, and confirmation states; online meeting-pending/failed states explain when the link is generated and when retries are active, while an available meeting URL is opened from the compact meeting-status popover instead of a `Ready` badge or standalone CTA. Tutor review uses a compact responsive accept/decline dialog with a session summary before the existing mutation is submitted. When automatic meeting setup is unavailable, the assigned tutor can add or replace a trusted URL for an online `confirmed`/`scheduled` booking through a shared Selia dialog; admins retain the operations fallback. Backend guards reject offline, terminal, pre-confirmation, and wrong-tutor requests. Admin review and override actions remain on the dedicated admin operations surface. The manual-link follow-up adds `tutorActions.setMeetingLink` and keeps the booking state machine unchanged.
+**Current state:** **CLOSED (2026-08-19; UX follow-up 2026-08-24; manual fallback follow-up 2026-08-27).** The booking detail route implements student/tutor state, schedule, participants, Marks, meeting/room access, history, cancellation, tutor review/completion, group invitation/reconfirmation, reschedule proposal/decision, lateness reporting with ticket status, and post-session notes. Its responsive task-detail presentation now prioritizes status, schedule, format/access, visible participant identities, and role-appropriate primary booking actions directly below the status badge; contextual actions remain above Marks or in the main flow. Participant rows show saved images or initials, names, roles, and confirmation states; online meeting-pending/failed states explain when the link is generated and when retries are active, while an available meeting URL is opened from the compact meeting-status popover instead of a `Ready` badge or standalone CTA. Tutor review uses a compact responsive accept/decline dialog with a session summary before the existing mutation is submitted. When automatic meeting setup is unavailable, the assigned tutor can add or replace a trusted URL for an online `confirmed`/`scheduled` booking through a shared Selia dialog; admins retain the operations fallback. The desktop overview/activity flow now stays in an independent left column from the sticky Actions/Marks rail, preventing the rail height from creating a blank row before Activity; narrow layouts retain the overview → actions/Marks → Activity order. Backend guards reject offline, terminal, pre-confirmation, and wrong-tutor requests. Admin review and override actions remain on the dedicated admin operations surface. The manual-link follow-up adds `tutorActions.setMeetingLink` and keeps the booking state machine unchanged.
 
 **Required:**
 
@@ -692,6 +715,10 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 
 ### Version Notes
 
+- v1.37 (2026-08-28): Updated the shared `/bookings` page to consume the existing `booking.listMine` cursor contract in batches of 20 with an append-only **Load more bookings** flow. Existing cards stay visible during next-page loading, and tab counts show `+` while more pages remain. Mutation invalidation now targets the procedure key so all cached infinite pages refresh. No API or schema contract changed.
+- v1.36 (2026-08-28): Stabilized server-backed collection transitions with TanStack Query `keepPreviousData` for admin tutor pagination, tutor discovery search/filters, and the admin booking queue. Admin tutor pagination scrolls to the selected table card by DOM ID and disables controls while loading. No RPC, schema, persistence, or URL search contract changed.
+- v1.35 (2026-08-28): Kept the booking-detail overview/activity flow independent from the sticky desktop Actions/Marks rail so rail height cannot create a blank row before Activity; narrow layouts retain actions/Marks before Activity. No RPC, schema, or persistence contract changed.
+- v1.34 (2026-08-28): Added paint-safe tab-scroller padding and overflow-safe empty-state/card boundaries for the shared bookings page, including an E2E narrow-viewport regression. No RPC, schema, or persistence contract changed.
 - v1.32 (2026-08-27): Improved admin tutor review readability by mapping pending subject IDs to active category/subject labels and wrapping long pending values. No RPC, schema, or persistence contract changed.
 - v1.31 (2026-08-27): Added the assigned-tutor `tutorActions.setMeetingLink` fallback plus a shared Selia manual-link dialog for tutor booking detail and admin operations. The fallback is limited to online `CONFIRMED`/`SCHEDULED` bookings, updates the active meeting-attempt row, and keeps force-majeure handling on the auditable admin override path. No schema change.
 - v1.28 (2026-08-26): Added the authenticated shell's `D` keyboard shortcut for toggling the rendered light/dark theme outside editable fields, while retaining the Light/Dark/System menu and `next-themes` persistence. No API, schema, or persistence contract changed.

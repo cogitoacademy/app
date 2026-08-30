@@ -5,8 +5,19 @@ import {
   FieldDescription,
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
-import { NumberField } from "@cogito-app/ui/components/selia/number-field";
 import { Text } from "@cogito-app/ui/components/selia/text";
+import { IconMinus, IconPlus } from "@tabler/icons-react";
+import {
+  NumberField,
+  NumberFieldDecrement,
+  NumberFieldGroup,
+  NumberFieldIncrement,
+  NumberFieldInput,
+} from "@cogito-app/ui/components/selia/number-field";
+import {
+  TutorPricingTable,
+  type TutorPricingModality,
+} from "./tutor-pricing-table";
 
 const MIN_BASE_RATE_IDR = 50_000;
 const TUTOR_INCREMENT_IDR = { online: 30_000, offline: 40_000 } as const;
@@ -30,18 +41,33 @@ export function TutorPricingFields({
   onChange,
   errors,
 }: PricingFieldsProps) {
-  const modalities =
+  const modalities: readonly TutorPricingModality[] =
     modality === "both"
       ? (["online", "offline"] as const)
-      : ([modality] as const);
+      : ([modality as TutorPricingModality] as const);
+  const previewModalities = modalities.filter(
+    (currentModality) =>
+      typeof baseRatesIdr[currentModality as "online" | "offline"] === "number",
+  );
+  const previewRows = Array.from({ length: 6 }, (_, index) => ({
+    size: String(index + 1),
+    ...(previewModalities.includes("online")
+      ? { online: baseRatesIdr.online! + index * TUTOR_INCREMENT_IDR.online }
+      : {}),
+    ...(previewModalities.includes("offline")
+      ? {
+          offline: baseRatesIdr.offline! + index * TUTOR_INCREMENT_IDR.offline,
+        }
+      : {}),
+  }));
 
   return (
     <div className="flex flex-col gap-4">
       <div>
         <Text className="font-medium">Base honorarium</Text>
         <Text className="mt-1 text-sm text-muted">
-          Set your one-student IDR honorarium. Values use Rp 5,000 increments;
-          Cogito adds the platform take separately.
+          Adjust your one-student IDR honorarium with the minus and plus
+          controls. Each step is Rp 5,000.
         </Text>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -56,24 +82,42 @@ export function TutorPricingFields({
               <NumberField
                 id={"tutor-base-rate-" + key}
                 name={"base-rate-" + key}
+                value={value ?? MIN_BASE_RATE_IDR}
                 min={MIN_BASE_RATE_IDR}
                 step={5_000}
-                allowOutOfRange
-                value={value ?? null}
-                onValueChange={(nextValue) => {
-                  if (nextValue === null) {
-                    const next = { ...baseRatesIdr };
-                    delete next[key];
-                    onChange(next);
-                    return;
-                  }
-                  onChange({ ...baseRatesIdr, [key]: nextValue });
+                snapOnStep
+                locale="id-ID"
+                format={{
+                  style: "currency",
+                  currency: "IDR",
+                  currencyDisplay: "symbol",
+                  maximumFractionDigits: 0,
                 }}
-                inputProps={{
-                  placeholder: String(MIN_BASE_RATE_IDR),
-                  "aria-invalid": Boolean(errors.baseRatesIdr),
-                }}
-              />
+                onValueChange={(nextValue) =>
+                  onChange({
+                    ...baseRatesIdr,
+                    [key]: nextValue ?? MIN_BASE_RATE_IDR,
+                  })
+                }
+              >
+                <NumberFieldGroup className="w-full">
+                  <NumberFieldDecrement
+                    aria-label={`Decrease ${key} base honorarium by Rp 5,000`}
+                  >
+                    <IconMinus />
+                  </NumberFieldDecrement>
+                  <NumberFieldInput
+                    className="min-w-0 flex-1 font-medium"
+                    aria-invalid={Boolean(errors.baseRatesIdr)}
+                    inputMode="numeric"
+                  />
+                  <NumberFieldIncrement
+                    aria-label={`Increase ${key} base honorarium by Rp 5,000`}
+                  >
+                    <IconPlus />
+                  </NumberFieldIncrement>
+                </NumberFieldGroup>
+              </NumberField>
               <FieldDescription>
                 Minimum {formatIdr(MIN_BASE_RATE_IDR)} · +{" "}
                 {formatIdr(TUTOR_INCREMENT_IDR[key])} per additional student
@@ -82,30 +126,20 @@ export function TutorPricingFields({
           );
         })}
       </div>
-      {modalities.map((currentModality) => {
-        const key = currentModality as "online" | "offline";
-        const base = baseRatesIdr[key];
-        if (typeof base !== "number") return null;
-        const increment = TUTOR_INCREMENT_IDR[key];
-        return (
-          <div
-            key={currentModality + "-breakdown"}
-            className="rounded-lg bg-accent px-3 py-2 text-sm text-muted"
-          >
-            <Text className="font-medium capitalize">
-              {currentModality} honorarium preview
-            </Text>
-            <Text className="mt-1 text-sm text-muted">
-              {Array.from({ length: 6 }, (_, index) => {
-                const size = index + 1;
-                return (
-                  "Class " + size + ": " + formatIdr(base + index * increment)
-                );
-              }).join(" · ")}
-            </Text>
-          </div>
-        );
-      })}
+      {previewModalities.length > 0 ? (
+        <div>
+          <Text className="mb-2 font-medium">Honorarium preview</Text>
+          <TutorPricingTable
+            modalities={previewModalities}
+            rows={previewRows}
+            columnLabels={{
+              online: "Online honorarium",
+              offline: "Offline honorarium",
+            }}
+            renderValue={formatIdr}
+          />
+        </div>
+      ) : null}
       {errors.baseRatesIdr ? (
         <Text className="text-sm text-danger" role="alert">
           {errors.baseRatesIdr}

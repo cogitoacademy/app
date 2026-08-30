@@ -379,7 +379,7 @@ describe("Booking late-cancel penalty flow (TC-late)", () => {
 
     await db
       .update(booking)
-      .set({ scheduledStartAt: new Date(Date.now() - 3 * 3600_000) })
+      .set({ scheduledStartAt: new Date(Date.now() + 60 * 60_000) })
       .where(eq(booking.id, bookingId));
 
     const updated = await studentClient.booking.cancel({

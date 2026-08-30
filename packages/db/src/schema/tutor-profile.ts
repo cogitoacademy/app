@@ -5,6 +5,7 @@ import {
   timestamp,
   jsonb,
   integer,
+  boolean,
   index,
   check,
 } from "drizzle-orm/pg-core";
@@ -27,6 +28,15 @@ export const tutorProfile = pgTable(
     displayName: text("display_name"),
     shortBio: text("short_bio"),
     credentialsSummary: text("credentials_summary"),
+    achievements: text("achievements"),
+    experiences: text("experiences"),
+    achievementProofUrls: jsonb("achievement_proof_urls")
+      .$type<string[]>()
+      .default([]),
+    experienceProofUrls: jsonb("experience_proof_urls")
+      .$type<string[]>()
+      .default([]),
+    sourcePhotoUrl: text("source_photo_url"),
     expertise: jsonb("expertise").$type<string[]>().default([]),
     modality: text("modality"),
     prices: jsonb("prices").$type<Record<string, number>>(),
@@ -34,6 +44,16 @@ export const tutorProfile = pgTable(
       jsonb("base_rates_idr").$type<
         Partial<{ online: number; offline: number }>
       >(),
+    bankName: text("bank_name"),
+    bankAccountNumber: text("bank_account_number"),
+    bankAccountHolderName: text("bank_account_holder_name"),
+    bankAccountOpeningCity: text("bank_account_opening_city"),
+    bankAccountOwnership: text("bank_account_ownership", {
+      enum: ["self", "trusted_person"],
+    }),
+    bankTransferDisclaimerAccepted: boolean("bank_transfer_disclaimer_accepted")
+      .default(false)
+      .notNull(),
     availabilitySummary: text("availability_summary"),
     proofUrls: jsonb("proof_urls").$type<string[]>().default([]),
     onboardingStatus: text("onboarding_status").notNull().default("draft"),
@@ -42,6 +62,11 @@ export const tutorProfile = pgTable(
       Partial<{
         displayName: string;
         credentialsSummary: string;
+        achievements: string;
+        experiences: string;
+        achievementProofUrls: string[];
+        experienceProofUrls: string[];
+        sourcePhotoUrl: string;
         expertise: string[];
         subjectIds: string[];
         modality: "online" | "offline" | "both";
@@ -64,6 +89,10 @@ export const tutorProfile = pgTable(
     check(
       "tutor_profile_modality_check",
       sql`${table.modality} IS NULL OR ${table.modality} IN ('online', 'offline', 'both')`,
+    ),
+    check(
+      "tutor_profile_bank_account_ownership_check",
+      sql`${table.bankAccountOwnership} IS NULL OR ${table.bankAccountOwnership} IN ('self', 'trusted_person')`,
     ),
     check(
       "tutor_profile_onboarding_status_check",

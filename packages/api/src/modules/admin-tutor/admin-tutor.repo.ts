@@ -1,4 +1,4 @@
-import { eq, and, desc, asc, inArray, isNotNull } from "drizzle-orm";
+import { eq, and, desc, asc, inArray, isNotNull, sql } from "drizzle-orm";
 import {
   account,
   subjectCategory,
@@ -58,10 +58,15 @@ export interface TutorProfileUpdates {
   publishedAt?: Date | null;
   displayName?: string | null;
   credentialsSummary?: string | null;
+  achievements?: string | null;
+  experiences?: string | null;
+  achievementProofUrls?: string[] | null;
+  experienceProofUrls?: string[] | null;
   expertise?: string[] | null;
   modality?: string | null;
   prices?: Record<string, number> | null;
   proofUrls?: string[] | null;
+  sourcePhotoUrl?: string | null;
   pendingProfileChanges?: Record<string, unknown> | null;
   profileEditStatus?: string;
   profileEditAdminNote?: string | null;
@@ -205,11 +210,32 @@ async function updateTutorProfile(
   conn: DbOrTx,
   id: string,
   updates: TutorProfileUpdates,
-): Promise<TutorProfileRow> {
+  expectedVersion?: number,
+): Promise<TutorProfileRow | undefined> {
+  const conditions = [eq(tutorProfile.id, id)];
+  if (expectedVersion !== undefined) {
+    conditions.push(eq(tutorProfile.version, expectedVersion));
+  }
   const [row] = await conn
     .update(tutorProfile)
-    .set(updates)
-    .where(eq(tutorProfile.id, id))
+    .set({
+      ...updates,
+      version: sql`${tutorProfile.version} + 1`,
+    })
+    .where(and(...conditions))
+    .returning();
+  return row;
+}
+
+async function updateTutorPublicPhoto(
+  conn: DbOrTx,
+  userId: string,
+  image: string,
+) {
+  const [row] = await conn
+    .update(user)
+    .set({ image })
+    .where(eq(user.id, userId))
     .returning();
   return row!;
 }
@@ -287,6 +313,7 @@ export function createAdminTutorRepo() {
     listActiveChildSubjects,
     replaceTutorProfileSubjects,
     updateTutorProfile,
+    updateTutorPublicPhoto,
     listTutorProfiles,
   };
 }

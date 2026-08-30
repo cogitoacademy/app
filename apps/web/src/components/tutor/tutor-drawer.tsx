@@ -8,15 +8,8 @@ import {
   AvatarImage,
 } from "@cogito-app/ui/components/selia/avatar";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@cogito-app/ui/components/selia/table";
 import { Text } from "@cogito-app/ui/components/selia/text";
+import { Separator } from "@cogito-app/ui/components/selia/separator";
 import {
   Drawer,
   DrawerBody,
@@ -32,6 +25,7 @@ import { IconX } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import { CogitoMarks } from "@/components/cogito-marks";
 import { groupTutorSubjects, type TutorSubject } from "./subject-taxonomy";
+import { TutorPricingTable } from "./tutor-pricing-table";
 
 const MODALITY_LABELS: Record<string, string> = {
   online: "Online",
@@ -62,6 +56,8 @@ type TutorDrawerProps = {
     displayName: string | null;
     shortBio: string | null;
     credentialsSummary: string | null;
+    achievements: string | null;
+    experiences: string | null;
     expertise: string[];
     subjects?: TutorSubject[] | null;
     modality: string | null;
@@ -69,8 +65,6 @@ type TutorDrawerProps = {
     pricesByModality?: Partial<
       Record<"online" | "offline", Record<string, number>>
     > | null;
-    availabilitySummary: string | null;
-    proofUrls: string[] | null;
     publishedAt: Date | null;
     user: { name: string | null; image: string | null } | null;
   } | null;
@@ -197,110 +191,46 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
                 <Heading size="sm" className="mb-2">
                   Pricing
                 </Heading>
-                <div className="overflow-hidden rounded-lg border border-item-border">
-                  <Table className="text-sm">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="py-2!">Group Size</TableHead>
-                        {priceModalities.includes("online") && (
-                          <TableHead className="py-2! text-right">
-                            Online (Marks)
-                          </TableHead>
-                        )}
-                        {priceModalities.includes("offline") && (
-                          <TableHead className="py-2! text-right">
-                            Offline (Marks)
-                          </TableHead>
-                        )}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {priceRows.map(({ size, online, offline }) => (
-                        <TableRow key={size}>
-                          <TableCell className="py-2!">
-                            {size} student{Number(size) > 1 ? "s" : ""}
-                          </TableCell>
-                          {priceModalities.includes("online") && (
-                            <TableCell className="py-2! text-right font-medium">
-                              {online !== undefined ? (
-                                <CogitoMarks size="3" value={online} />
-                              ) : (
-                                <span className="text-dimmed">—</span>
-                              )}
-                            </TableCell>
-                          )}
-                          {priceModalities.includes("offline") && (
-                            <TableCell className="py-2! text-right font-medium">
-                              {offline !== undefined ? (
-                                <CogitoMarks size="3" value={offline} />
-                              ) : (
-                                <span className="text-dimmed">—</span>
-                              )}
-                            </TableCell>
-                          )}
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                <TutorPricingTable
+                  modalities={priceModalities}
+                  rows={priceRows}
+                  columnLabels={{
+                    online: "Online (Marks)",
+                    offline: "Offline (Marks)",
+                  }}
+                  renderValue={(value) => (
+                    <CogitoMarks size="3" value={value} />
+                  )}
+                />
               </div>
             )}
 
-            {/*
-            {t.availabilitySummary && (
-              <div className="mb-4">
-                <Heading size="sm" className="mb-2">
-                  Availability
-                </Heading>
-                <Text className="text-muted">{t.availabilitySummary}</Text>
-              </div>
-            )}
-
-            {t.credentialsSummary && (
+            {(t.achievements || t.credentialsSummary) && (
               <>
                 <Separator className="my-4" />
                 <div className="mb-4">
                   <Heading size="sm" className="mb-2">
-                    Credentials
+                    Achievements
                   </Heading>
-                  <Text className="text-muted">{t.credentialsSummary}</Text>
+                  <Text className="whitespace-pre-line text-muted">
+                    {t.achievements ?? t.credentialsSummary}
+                  </Text>
                 </div>
               </>
             )}
-
-            {t.proofUrls && t.proofUrls.length > 0 && (
-              <div className="mb-4">
-                <Heading size="sm" className="mb-2">
-                  Proof Links
-                </Heading>
-                <ul className="space-y-1">
-                  {t.proofUrls.map((url) => (
-                    <li key={url}>
-                      <a
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary underline text-sm break-all"
-                      >
-                        {url}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+            {t.experiences && (
+              <>
+                <Separator className="my-4" />
+                <div className="mb-4">
+                  <Heading size="sm" className="mb-2">
+                    Experiences
+                  </Heading>
+                  <Text className="whitespace-pre-line text-muted">
+                    {t.experiences}
+                  </Text>
+                </div>
+              </>
             )}
-
-            <Separator className="my-4" />
-            <div className="mb-4">
-              <Heading size="sm" className="mb-2">
-                Book a session
-              </Heading>
-              <Text className="text-muted">
-                Review current availability, choose a modality, and send a
-                booking request.
-              </Text>
-            </div>
-            */}
           </>
 
           <DrawerDescription className="sr-only">

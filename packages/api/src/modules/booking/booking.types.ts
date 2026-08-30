@@ -1,10 +1,12 @@
 import { z } from "zod";
+import { externalHttpUrl } from "../../lib/url-schema";
 
 const futureStart = z.coerce
   .date()
   .refine((date) => date > new Date(), "Must be in the future");
 
 const learningGoal = z.string().trim().max(2000).default("");
+const subjectId = z.string().min(1).max(100).optional();
 
 export const createSoloInput = z
   .object({
@@ -13,6 +15,7 @@ export const createSoloInput = z
     modality: z.enum(["online", "offline"]),
     scheduledStartAt: futureStart,
     scheduledEndAt: z.coerce.date().optional(),
+    subjectId,
     learningGoal,
     timezone: z.string().max(50).default("Asia/Jakarta"),
     requestedRoomId: z.string().max(100).optional(),
@@ -31,6 +34,7 @@ export const createGroupInput = z
     inviteeUserIds: z.array(z.string().max(100)).min(1).max(5),
     scheduledStartAt: futureStart,
     scheduledEndAt: z.coerce.date().optional(),
+    subjectId,
     learningGoal,
     timezone: z.string().max(50).default("Asia/Jakarta"),
     requestedRoomId: z.string().max(100).optional(),
@@ -54,6 +58,7 @@ export const createSeriesInput = z.object({
     )
     .min(2)
     .max(4),
+  subjectId,
   learningGoal,
   timezone: z.string().max(50).default("Asia/Jakarta"),
 });
@@ -74,6 +79,7 @@ export const createGroupSeriesInput = z.object({
     )
     .min(2)
     .max(4),
+  subjectId,
   learningGoal,
   timezone: z.string().max(50).default("Asia/Jakarta"),
 });
@@ -129,17 +135,8 @@ export const completeSessionInput = z.object({
   sessionId: z.string().max(100).optional(),
 });
 
-const manualMeetingUrl = z
-  .string()
-  .url()
-  .max(2048)
-  .refine((value) => {
-    const protocol = new URL(value).protocol;
-    return protocol === "http:" || protocol === "https:";
-  }, "Meeting links must start with http:// or https://");
-
 export const setMeetingLinkInput = bookingActionInput.extend({
-  url: manualMeetingUrl,
+  url: externalHttpUrl,
 });
 
 export const cancelSessionInput = z.object({

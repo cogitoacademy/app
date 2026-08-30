@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  keepPreviousData,
   useMutation,
   useQueries,
   useQuery,
@@ -158,9 +159,10 @@ function BookingQueue() {
     ...(urgency !== "all" ? { urgency } : {}),
     ...(slaFilter === "escalated" ? { escalated: true } : {}),
   };
-  const queueQuery = useQuery(
-    orpc.adminBooking.listBookings.queryOptions({ input: queryInput }),
-  );
+  const queueQuery = useQuery({
+    ...orpc.adminBooking.listBookings.queryOptions({ input: queryInput }),
+    placeholderData: keepPreviousData,
+  });
 
   return (
     <Stack direction="column" spacing="md">
@@ -249,7 +251,7 @@ function BookingQueue() {
               Urgent and action-required bookings appear first.
             </CardDescription>
           </CardHeader>
-          <CardBody>
+          <CardBody aria-busy={queueQuery.isFetching}>
             {queueQuery.data.items.length === 0 ? (
               <EmptyState
                 icon={<IconSearch />}

@@ -1,6 +1,7 @@
 import { describe, test, expect } from "bun:test";
 import { readFileSync } from "node:fs";
 import { assertPasswordPolicy } from "@cogito-app/auth";
+import { parseSignupBody } from "./signup-body";
 
 // C6: password policy (upper/lower/digit, min 8) — validator unit tests plus
 // a source-level assertion that the server route wires the guard at sign-up
@@ -21,6 +22,13 @@ describe("C6: password policy", () => {
 
   test("accepts a compliant password", () => {
     expect(assertPasswordPolicy("Test1234!")).toBeNull();
+  });
+
+  test("malformed sign-up JSON is rejected without throwing", () => {
+    expect(parseSignupBody('{"password":')).toBeNull();
+    expect(parseSignupBody('{"password":"Test1234!"}')).toEqual({
+      password: "Test1234!",
+    });
   });
 
   test("server route guards sign-up with the policy", () => {

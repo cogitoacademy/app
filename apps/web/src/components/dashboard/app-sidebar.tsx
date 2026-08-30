@@ -81,7 +81,7 @@ const resourceItems = [
     icon: IconCalendarEvent,
   },
   {
-    to: "/student-resources",
+    to: "/knowledge-bank",
     label: "Knowledge Bank",
     icon: IconLibrary,
   },
@@ -170,6 +170,11 @@ export function AppSidebar({
                       render={
                         <Link
                           to={item.to}
+                          className={
+                            pathname === item.to
+                              ? "text-cogito-orange! **:text-cogito-orange! **:transition-colors **:duration-150 **:ease-linear"
+                              : undefined
+                          }
                           preload="intent"
                           aria-label={item.label}
                         />
@@ -193,7 +198,17 @@ export function AppSidebar({
                   <SidebarItem key={item.to}>
                     <SidebarItemButton
                       active={pathname === item.to}
-                      render={<Link to={item.to} aria-label={item.label} />}
+                      render={
+                        <Link
+                          to={item.to}
+                          className={
+                            pathname === item.to
+                              ? "text-cogito-orange! **:text-cogito-orange! **:transition-colors **:duration-150 **:ease-linear"
+                              : undefined
+                          }
+                          aria-label={item.label}
+                        />
+                      }
                     >
                       <Icon />
                       {item.label}

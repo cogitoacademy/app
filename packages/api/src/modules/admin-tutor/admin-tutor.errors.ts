@@ -45,6 +45,17 @@ export class DuplicateInviteError extends DomainError {
   }
 }
 
+export class TutorProfileOptimisticLockError extends DomainError {
+  readonly domain = "admin-tutor";
+  constructor(id: string, expectedVersion: number) {
+    super(
+      "TUTOR_PROFILE_OPTIMISTIC_LOCK",
+      "Tutor profile was modified by another transaction",
+      { id, expectedVersion },
+    );
+  }
+}
+
 export function mapAdminTutorError(
   err: DomainError,
 ): ORPCError<string, undefined> {
@@ -54,6 +65,8 @@ export function mapAdminTutorError(
   if (err instanceof InvalidInviteActionError)
     return conflict(err.message, err);
   if (err instanceof DuplicateInviteError) return conflict(err.message, err);
+  if (err instanceof TutorProfileOptimisticLockError)
+    return conflict(err.message, err);
   if (err instanceof InvalidTutorSubjectSelectionError)
     return badRequest(err.message, err);
   return internalServerError(err.message, err);

@@ -1,4 +1,4 @@
-import { eq, and, gte, lte, ne, desc, asc, inArray } from "drizzle-orm";
+import { eq, and, gt, lt, ne, desc, asc, inArray } from "drizzle-orm";
 import { booking, room, roomBooking } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
 import { ROOM_BOOKING_STATUS } from "../../shared/constants";
@@ -158,8 +158,9 @@ export async function findRoomBookings(
   const conditions = [
     eq(roomBooking.roomId, roomId),
     eq(roomBooking.status, ROOM_BOOKING_STATUS.CONFIRMED),
-    lte(roomBooking.startAt, endAt),
-    gte(roomBooking.endAt, startAt),
+    // Half-open intervals [start, end): adjacent room sessions are valid.
+    lt(roomBooking.startAt, endAt),
+    gt(roomBooking.endAt, startAt),
   ];
   if (excludeBookingId) {
     conditions.push(ne(roomBooking.bookingId, excludeBookingId));
@@ -191,8 +192,10 @@ export async function findRoomBookingsForUpdate(
   const conditions = [
     eq(roomBooking.roomId, roomId),
     eq(roomBooking.status, ROOM_BOOKING_STATUS.CONFIRMED),
-    lte(roomBooking.startAt, endAt),
-    gte(roomBooking.endAt, startAt),
+    // Keep application conflict checks aligned with the database GiST
+    // exclusion constraint, which also uses half-open intervals.
+    lt(roomBooking.startAt, endAt),
+    gt(roomBooking.endAt, startAt),
   ];
   if (excludeBookingId) {
     conditions.push(ne(roomBooking.bookingId, excludeBookingId));

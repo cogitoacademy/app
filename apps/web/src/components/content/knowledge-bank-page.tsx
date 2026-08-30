@@ -59,10 +59,10 @@ function getCategoryLabel(category: string) {
 }
 
 function resourceFileUrl(resourceId: string) {
-  return `${serverUrl}/content/student-resources/${encodeURIComponent(resourceId)}/file`;
+  return `${serverUrl}/content/knowledge-bank/${encodeURIComponent(resourceId)}/file`;
 }
 
-export function StudentResourcesPage() {
+export function KnowledgeBankPage() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [selectedResource, setSelectedResource] = useState<Resource | null>(

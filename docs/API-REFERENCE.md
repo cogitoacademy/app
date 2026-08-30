@@ -1,6 +1,19 @@
 # Cogito API Reference
 
-Last updated: 2026-08-27
+Last updated: 2026-08-28
+
+## Stable collection transitions (2026-08-28)
+
+Pagination and filter-transition stability is client-side only. The admin tutor
+tables, tutor discovery list, and admin booking queue retain their previous
+successful collection while the next query is loading; pagination scrolls to
+the selected table card by DOM ID. No RPC path, request envelope, response
+shape, cursor/offset contract, or URL search parameter changes.
+
+Booking-list UI note: `/bookings` uses Needs action, Upcoming, Recurring, History, and All tabs. Students and tutors default to Needs action when a response is pending and Upcoming otherwise; admins default to All. URL-backed Recommended, Soonest, and Latest sorting is client-side; Recommended ranks pending, active, then terminal bookings, and History consolidates terminal outcomes. The web list consumes the existing `nextCursor` in batches of 20 through an infinite query and appends with **Load more bookings**; loaded cards remain visible during the next-page request. Tab counts are lower bounds and show `+` while more pages remain. The RPC contract is unchanged.
+
+Booking-card timing note: list rows already include the booking `deadlineAt` column. The web client uses it for pending response countdowns and uses scheduled start/end times for Today, Starts in, Starting soon, and In progress labels. It never derives response windows from `createdAt` and does not infer an Expired lifecycle state before the server transitions it.
+The list presentation places the timing chip after financial metadata with a divider; dashboard reuse hides the financial metadata. This remains presentation-only.
 
 ## Overview
 
@@ -14,7 +27,7 @@ checks. When the API is linked to Coolify's bundled private PostgreSQL, set
 serve TLS. `DB_SSL_REJECT_UNAUTHORIZED` is only relevant when database TLS is
 enabled.
 
-Email/password sign-in and sign-up use Better Auth endpoints under `/api/auth`. The web client validates the email forms on the client and surfaces invalid fields with Selia's inline error state and danger outline, waits for the successful auth response and a fresh session read before entering an authenticated route, and the authenticated route guard also reads the non-cookie-cached session so role-based redirects do not briefly fall back to `/login`. If that fresh session has `emailVerified !== true`, the web client requests an email-verification OTP and routes the user to `/verify-email` before the normal role/return-path destination; this also covers legacy accounts created before verification was introduced. The validated destination is preserved after verification. This changes no request or response shape.
+Email/password sign-in and sign-up use Better Auth endpoints under `/api/auth`. The server's sign-up password-policy preflight returns 400 for malformed JSON instead of allowing a parser exception to become a 500. The web client validates the email forms on the client and surfaces invalid fields with Selia's inline error state and danger outline, waits for the successful auth response and a fresh session read before entering an authenticated route, and the authenticated route guard also reads the non-cookie-cached session so role-based redirects do not briefly fall back to `/login`. If that fresh session has `emailVerified !== true`, the web client requests an email-verification OTP and routes the user to `/verify-email` before the normal role/return-path destination; this also covers legacy accounts created before verification was introduced. The validated destination is preserved after verification. This changes no successful request or response shape.
 
 Production and staging server bootstrap also reconcile `ADMIN_EMAILS` before
 serving traffic (default: `itcogitoacademy01@gmail.com`). Matching addresses
@@ -24,7 +37,7 @@ Auth signup hook. This is operational role initialization, not a new RPC or
 auth request/response field; other admins can still be managed through the
 existing admin role-management flow.
 
-The web dashboard has no aggregate endpoint. Its role-specific views compose existing procedures: the shared booking list uses protected `booking.listMine` for student, tutor, and admin visibility (with admin seeing all bookings), while tutor discovery remains student-only (`tutors.listPublished`) and tutor/admin dashboards compose their remaining role-specific procedures. Student and tutor next-lesson sections derive the nearest future non-terminal, non-pending item client-side and reuse the booking-list card; the tutor dashboard's above-the-fold ordering of welcome/setup, review requests, and next lesson is presentation-only. Student and tutor welcome cards also share one frontend visual component with role-specific copy and links. On narrow screens, the rounded booking status-tab strip fills the available page width and only its inner tab list scrolls horizontally inside a scrollbar-hidden region. This adds no RPC endpoint or input/output change.
+The web dashboard has no aggregate endpoint. Its role-specific views compose existing procedures: the shared booking list uses protected `booking.listMine` for student, tutor, and admin visibility (with admin seeing all bookings), while tutor discovery remains student-only (`tutors.listPublished`) and tutor/admin dashboards compose their remaining role-specific procedures. Student and tutor next-lesson sections derive the nearest future non-terminal, non-pending item client-side and reuse the booking-list card; the tutor dashboard's above-the-fold ordering of welcome/setup, review requests, and next lesson is presentation-only. Student and tutor welcome cards also share one frontend visual component with role-specific copy and links. On narrow screens, the rounded booking status-tab strip fills the available page width and only its inner tab list scrolls horizontally inside a scrollbar-hidden region; internal paint padding keeps selected-tab shadows and focus rings visible, while shared empty-state cards preserve their rounded glow and card shadow without widening the page. These are presentation-only details and add no RPC endpoint or input/output change.
 
 The authenticated `/guide` (`How Cogito Works`) route is frontend-only. Its typed journey content is bundled with the web app, is role-filtered in the route UI, and adds no RPC procedure, request input, response output, or persistence contract. The centered `max-w-6xl` shell, Selia-composed chapter rail, and bold timing callouts are presentation-only; the callouts restate existing 7-day, 12-hour, H-2, 15-minute, 24-hour, meeting-retry, and support-SLA rules. The development-only anti-slop Tweaks Bar is a static browser asset and does not change the production API surface.
 
@@ -52,9 +65,9 @@ Sanity is queried only by the API server. The browser receives normalized conten
 - **Auth:** Student
 - **Input:** None
 - **Output:** `{ items: [{ id, title, description, category }], access: { eligible, balance, threshold } }`
-- **Description:** Returns published Knowledge Bank metadata only when the student's total Marks balance meets the 35-Mark threshold. Held Marks count toward eligibility. Below the threshold, `items` is empty and the access state explains the lock.
+- **Description:** Returns published Knowledge Bank metadata for the authenticated `/knowledge-bank` app route only when the student's total Marks balance meets the 35-Mark threshold. Held Marks count toward eligibility. Below the threshold, `items` is empty and the access state explains the lock.
 
-### `GET /content/student-resources/:resourceId/file`
+### `GET /content/knowledge-bank/:resourceId/file`
 
 - **Auth:** Student with current total balance at or above the threshold
 - **Input:** `resourceId` path parameter
@@ -223,7 +236,22 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Input:** `{ tutorId, dateFrom?, dateTo? }`
 - **Output:** `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }` (`tutorPayoutIdr` is summed from IDR tutor-honorarium snapshots; legacy pre-economy bookings use the compatibility path)
 - **Errors:** `INVALID_LEDGER_FILTER` (400) — invalid date
-- **Description:** Tutor payout summary from completed bookings in a date range. `totalMarks` reports the split basis (`priceSnapshot.baseline`), so `totalMarks === cogitoTake + tutorPayout`; per-student rounding surpluses (`actualMarksPooled ≥ baseline`) are not included.
+- **Description:** Internal tutor payout reporting from completed bookings in the requested date range. With no date filters this is an all-time report; use `admin.getPendingTutorPayouts` for the unpaid amount after the latest admin-paid cutoff. `totalMarks` reports the internal split basis (`priceSnapshot.baseline`), so `totalMarks === cogitoTake + tutorPayout`; per-student rounding surpluses (`actualMarksPooled ≥ baseline`) are not included.
+
+### `admin.getPendingTutorPayouts`
+
+- **Auth:** Admin
+- **Input:** `{ tutorId }`
+- **Output:** `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr, lastPaidAt }`
+- **Description:** Returns the unpaid tutor honorarium since the latest admin-paid cutoff. The cutoff advances only when `admin.markTutorPayoutPaid` succeeds; no calendar-week reset is applied.
+
+### `admin.markTutorPayoutPaid`
+
+- **Auth:** Admin
+- **Input:** `{ tutorId }`
+- **Output:** `{ id, tutorId, grossHonorariumIdr, transferFeeIdr, netHonorariumIdr, bankName, paidAt }`
+- **Errors:** `TUTOR_PAYOUT_NOT_AVAILABLE` (400) when no unpaid honorarium exists or payout account details are incomplete
+- **Description:** Atomically records an immutable paid payout at the current completion-time cutoff. Exact conventional `BCA` has no transfer fee; all other bank names deduct Rp2,500 once from the payout. The application records the payment and audit trail but does not execute the bank transfer.
 
 ### `admin.getEconomySettings`
 
@@ -294,9 +322,9 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `adminTutor.reviewTutorProfile`
 
 - **Auth:** Admin
-- **Input:** `{ tutorProfileId, action, adminNote? }` (`action` one of request_changes/approve_unpublished/publish/unpublish/suspend/approve_edits/request_edit_changes)
+- **Input:** `{ tutorProfileId, action, adminNote?, publicPhotoUrl? }` (`action` one of request_changes/approve_unpublished/publish/unpublish/suspend/approve_edits/request_edit_changes; `publicPhotoUrl`, when present, must be an HTTP(S) URL of at most 2048 characters)
 - **Output:** `{ profile }`
-- **Errors:** `TUTOR_PROFILE_NOT_FOUND` (404), `INVALID_INVITE_ACTION` (400) when the action is not allowed from the profile's current onboarding status (F25 state machine: publish only from `pending_review`/`changes_requested`/`approved_unpublished`; unpublish/suspend/approve_edits/request_edit_changes only from `published`; request_changes only from `pending_review`/`changes_requested`)
+- **Errors:** `TUTOR_PROFILE_NOT_FOUND` (404), `INVALID_INVITE_ACTION` (400) when the action is not allowed from the profile's current onboarding status (F25 state machine: publish only from `pending_review`/`changes_requested`/`approved_unpublished`; unpublish/suspend/approve_edits/request_edit_changes only from `published`; request_changes only from `pending_review`/`changes_requested`), `TUTOR_PROFILE_OPTIMISTIC_LOCK` (409) if another moderator changed the profile first
 
 ---
 
@@ -312,10 +340,10 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `tutor.updateMyProfile`
 
 - **Auth:** Tutor
-- **Input:** `{ version, displayName?, shortBio?, credentialsSummary?, expertise?, subjectIds?, modality?, prices?, availabilitySummary?, proofUrls? }`
+- **Input:** `{ version, displayName?, shortBio?, achievements?, experiences?, achievementProofUrls?, experienceProofUrls?, sourcePhotoUrl?, expertise?, subjectIds?, modality?, baseRatesIdr?, bankName?, bankAccountNumber?, bankAccountHolderName?, bankAccountOpeningCity?, bankAccountOwnership?: "self" | "trusted_person", bankTransferDisclaimerAccepted?, prices? }`
 - **Output:** `{ profile, subjects: [{ id, slug, name, description?, isSelectable, parent: { id, slug, name } }] }`
 - **Errors:** `OPTIMISTIC_LOCK` (409) on version mismatch, `INVALID_TUTOR_PRICING` (400) on floor-price violation, `INVALID_TUTOR_SUBJECT_SELECTION` (400) when ids are not active selectable child subjects or exceed 20
-- **Description:** Updates the tutor profile with optimistic locking. `subjectIds` is the normalized child-category selection; draft selections are persisted atomically. For published profiles, trust-sensitive subject changes wait in `pendingProfileChanges` for admin approval. Archived legacy subjects remain readable but cannot be submitted as new selections.
+- **Description:** Updates the tutor profile with optimistic locking. Achievements and experiences are separate multiline plain-text fields pending the client's final structured format. `achievementProofUrls`, `experienceProofUrls`, and `sourcePhotoUrl` accept only HTTP(S) URLs up to 2048 characters. Proof URLs are optional admin-verification evidence grouped by section; they are review-protected and excluded from public discovery responses. `sourcePhotoUrl` is the tutor-uploaded private editing source and never replaces the public account image; only an admin may set the edited public photo through tutor review. The retired generic credential-proof field is not accepted. `subjectIds` is the normalized child-category selection; draft selections are persisted atomically. Payout-account fields are private and capture the bank, account number, account-holder name, account-opening city/regency, whether the destination is the tutor's own account or a trusted person's account, and the tutor's transfer-responsibility acknowledgment. For published profiles, trust-sensitive changes wait in `pendingProfileChanges` for admin approval. The tutor editor's combined honorarium matrix and responsive section layout are presentation-only, while onboarding submission requires complete payout details and the acknowledgment.
 
 ### `tutor.submitForReview`
 
@@ -367,9 +395,9 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 - **Auth:** Tutor
 - **Input:** `{ dateFrom?, dateTo? }`
-- **Output:** `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }`
+- **Output:** `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }` (internal split fields remain for compatibility; the tutor UI renders only `tutorPayoutIdr`)
 - **Errors:** `INVALID_DATE_RANGE` (400)
-- **Description:** The authenticated tutor's payout summary from completed bookings
+- **Description:** The authenticated tutor's unpaid honorarium summary. With no date filters, completed sessions are selected after the latest admin-paid cutoff; the cutoff advances only when an admin records a payout. Weekly processing is an operational cadence, not an automatic Monday reset.
 
 ---
 
@@ -438,7 +466,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Student (`studentProcedure` — tutors/admins get FORBIDDEN, F17; FR-18 is student-facing)
 - **Input:** `{ eventName, category, award, level, awardingDate?, location?, description?, subjects?, evidenceUrl?, documentationUrl? }`
 - **Output:** `{ achievement }`
-- **Description:** Submits a new achievement in `pending` status
+- **Description:** Submits a new achievement in `pending` status. `evidenceUrl` and `documentationUrl`, when present, must be HTTP(S) URLs of at most 2048 characters.
 
 ### `achievement.update`
 
@@ -465,7 +493,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Admin
 - **Input:** `{ achievementId, status, adminNote? }` (`status` one of `approved`/`rejected`/`archived`)
 - **Output:** `{ achievement }`
-- **Description:** Moderation action per the transition table (F12): `pending`/`pending_review` → `approved`/`rejected`/`archived`; `approved`/`rejected` → `archived` (hide from public surfacing); `archived` → `approved`/`rejected` (restore). Other transitions throw `ACHIEVEMENT_NOT_EDITABLE`. Owner is notified and an `achievement_{status}` audit record is written.
+- **Description:** Moderation action per the transition table (F12): `pending`/`pending_review` → `approved`/`rejected`/`archived`; `approved`/`rejected` → `archived` (hide from public surfacing); `archived` → `approved`/`rejected` (restore). Other transitions throw `ACHIEVEMENT_NOT_EDITABLE`. The row is updated with optimistic compare-and-swap semantics; a concurrent moderation decision returns `OPTIMISTIC_LOCK` (409) and emits no duplicate notification/audit. Owner is notified and an `achievement_{status}` audit record is written after a successful update.
 
 ---
 
@@ -532,7 +560,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Input:** Raw body; headers `x-callback-token` (xendit) / `x-webhook-signature`, `x-timestamp` (timestamp validation is **skipped for xendit** — the API documents only `x-callback-token`, P3.5/L4)
 - **Output:** `{ ok: true }`
 - **Errors:** 401 signature failure, 408 stale timestamp (> 5 min, non-xendit), 403 IP not allowlisted, 500 processing failure
-- **Description:** Provider webhook; verifies signature, validates timestamp (provider-conditional), then atomically claims the idempotency key (keyed on the verified payload's event id — released on processing failure), calls `payment.confirmFromWebhook`, and updates payment status (`PENDING → PAID/SETTLED/FAILED/EXPIRED`; `PAID/SETTLED → REFUNDED`); credits the wallet on PAID/SETTLED and writes the payment notification (#46). Xendit idempotency keys are derived from `data.payment_id ?? data.payment_request_id` (2024-11-11 webhooks carry no `event_id` — P3.4). On re-purchase after FAILED/EXPIRED the `providerRequestId` is rotated to the new attempt while the previous `providerEventId` is retained as a stale-generation marker: a late FAILED/EXPIRED webhook for the OLD attempt is ignored so it cannot flip the re-purchased PENDING row terminal and strand the new purchase's credit (H3, wave-6b). A REFUNDED webhook reads the wallet through the transaction (`wallet.getByUserId(tx, ...)`, N4) and reverses the credited Marks from the **total balance** (`held + available`): held Marks are released back to available (`refund.{id}.release`) then the full payment Marks are reversed via `compensate_deduct` (`refund.{id}.reverse`) when total ≥ marks; if the Marks were already spent (`totalBalance < marks`, H4), the payment is still marked REFUNDED and a `refund_webhook_reconciliation` audit + `refund_record` row are written for admin (no reversal, no throw, no 500/retry loop — P2.7/H4, M1/N4 wave-6b)
+- **Description:** Provider webhook; verifies signature, validates timestamp (provider-conditional), then atomically claims the idempotency key (released on transient processing failure), calls `payment.confirmFromWebhook`, and updates payment status (`PENDING → PAID/SETTLED/FAILED/EXPIRED`; `PAID/SETTLED → REFUNDED`); credits the wallet on PAID/SETTLED and writes the payment notification (#46). Xendit lifecycle keys combine provider, `data.payment_id ?? data.payment_request_id`, and normalized status because 2024-11-11 webhooks carry no unique `event_id`: distinct lifecycle states for one payment are processed, while retries of the same state dedupe. A missing event id falls back to the provider reference rather than a shared placeholder. On re-purchase after FAILED/EXPIRED the `providerRequestId` is rotated to the new attempt while the previous `providerEventId` is retained as a stale-generation marker: a late FAILED/EXPIRED webhook for the OLD attempt is ignored so it cannot flip the re-purchased PENDING row terminal and strand the new purchase's credit (H3, wave-6b). A REFUNDED webhook reads the wallet through the transaction (`wallet.getByUserId(tx, ...)`, N4) and reverses the credited Marks from the **total balance** (`held + available`): held Marks are released back to available (`refund.{id}.release`) then the full payment Marks are reversed via `compensate_deduct` (`refund.{id}.reverse`) when total ≥ marks; if the Marks were already spent (`totalBalance < marks`, H4), the payment is still marked REFUNDED and a `refund_webhook_reconciliation` audit + `refund_record` row are written for admin (no reversal, no throw, no 500/retry loop — P2.7/H4, M1/N4 wave-6b)
 
 ### Provider refunds (X1, P3.6 — superseded by N1, 2026-08-19)
 
@@ -545,7 +573,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `booking.createSolo`
 
 - **Auth:** Verified Student (`verifiedStudentProcedure` — student role with a verified email; unverified → `FORBIDDEN`)
-- **Input:** `{ tutorId, availabilitySlotId, modality, scheduledStartAt, timezone?, learningGoal }` (`scheduledStartAt` must leave room for the server-fixed 90-minute session inside the availability window; `timezone` default `Asia/Jakarta`)
+- **Input:** `{ tutorId, subjectId?, availabilitySlotId, modality, scheduledStartAt, timezone?, learningGoal }` (`subjectId` selects one active subcategory offered by the tutor and is snapshotted as the session topic; legacy callers may omit it and the sole tutor topic is selected automatically; `learningGoal` carries Session Notes and accepts up to 2,000 characters including reference links; duration is server-fixed to 90 minutes)
 - **Output:** `{ booking }`
 - **Errors:** `BOOKING_NOT_FOUND` (404), `BOOKING_NOT_EDITABLE` (400), `BOOKING_CONFLICT` (409), `INSUFFICIENT_MARKS` (400)
 - **Description:** Creates a solo booking and holds Marks; idempotency via `idempotency-key` header
@@ -559,28 +587,28 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Description:** `meetingStatus` is `ready` only when a URL exists, `pending` while the booking is awaiting the tutor/participants or a tutor/admin fallback link, and `failed` when automatic Google Meet creation needs another retry. If tutor acceptance encounters a provider failure, the booking remains `confirmed` until retry or manual-link recovery; clients must not treat that state as `scheduled`.
 - **Frontend note:** Booking activity presents the destination state as the primary badge and uses transition-specific icons for participant, scheduling, room, and terminal events. The detail page composes schedule, format/access, and participant profile/name/status information in the overview, places role-appropriate primary actions (including reschedule and completion when eligible) directly below the status badge, keeps contextual actions above Marks or in the main flow, and shows a live response-window notice for deadline-bound states. The API contract is unchanged.
 
-**UI behavior note:** The booking detail surface uses compact accessible Selia `IconInfoSquareRounded` popover triggers for online-link explanations, retry/manual setup status, available meeting-room access, missing offline-room details, and tutor completion timing. Available links no longer render a `Ready` badge or standalone CTA; the popover contains the meeting-room action. The trigger supports hover, keyboard focus, click, and touch; the overview merges the date and hours into one `Date & time` field, places Format & access beside it in a responsive two-column grid that stacks on narrow screens, and does not change the `booking.get` response contract.
+**UI behavior note:** The booking detail surface uses compact accessible Selia `IconInfoSquareRounded` popover triggers for online-link explanations, retry/manual setup status, available meeting-room access, missing offline-room details, and tutor completion timing. Available links no longer render a `Ready` badge or standalone CTA; the popover contains the meeting-room action. The trigger supports hover, keyboard focus, click, and touch; the overview merges the date and hours into one `Date & time` field, places Format & access beside it in a responsive two-column grid that stacks on narrow screens, and keeps the desktop overview/activity flow independent from the sticky Actions/Marks rail so rail height does not add a blank row before Activity. Narrow layouts keep actions/Marks before Activity. This does not change the `booking.get` response contract.
 
 ### `booking.listMine`
 
 - **Auth:** Protected
 - **Input:** `{ cursor?, limit?, states? }`
 - **Output:** `{ items: Booking[], nextCursor }`
-- **Description:** Shared role-aware booking list. Students see bookings where they are proposer or participant, tutors see bookings assigned to them, and admins see all bookings. `states` can narrow the result for server-side consumers; the web list applies its Upcoming/Pending/Recurring/Past/Cancelled/All presentation filters client-side, defaults to Upcoming for students, Pending for tutors with pending requests (otherwise Upcoming), and All for admins, unless an explicit `tab` query parameter is present. It sorts Upcoming/Pending/Recurring/All by nearest scheduled start, while Past/Cancelled remain newest-first. Related user projections contain display identity only (`id`, `name`, `image`, `role`); internal meeting attendee email arrays are never part of this response. The web row presents Marks with the Cogito mark icon and keeps status explanations in the status-badge tooltip. On narrow screens, the rounded status-tab strip stays within the available page width while only its inner tab list scrolls horizontally without showing a native scrollbar. Dashboards reuse the same read model for their next-lesson card; no dashboard-specific endpoint is required.
+- **Description:** Shared role-aware booking list. Students see bookings where they are proposer or participant, tutors see bookings assigned to them, and admins see all bookings. `states` can narrow the result for server-side consumers; the web list requests 20 items at a time, follows `nextCursor` for **Load more bookings**, and applies its Upcoming/Pending/Recurring/Past/Cancelled/All presentation filters client-side, defaults to Upcoming for students, Pending for tutors with pending requests (otherwise Upcoming), and All for admins, unless an explicit `tab` query parameter is present. It sorts Upcoming/Pending/Recurring/All by nearest scheduled start, while Past/Cancelled remain newest-first. Related user projections contain display identity only (`id`, `name`, `image`, `role`); internal meeting attendee email arrays are never part of this response. The web row presents Marks with the Cogito mark icon and keeps status explanations in the status-badge tooltip. On narrow screens, the rounded status-tab strip stays within the available page width while only its inner tab list scrolls horizontally without showing a native scrollbar; internal paint padding keeps selected-tab shadows and focus rings visible, and shared empty-state cards keep their rounded glow and card shadow visible without widening the page. Dashboards reuse the same read model for their next-lesson card; no dashboard-specific endpoint is required.
 
 ### `booking.cancel`
 
 - **Auth:** Student
 - **Input:** `{ bookingId, cancellationReason? }`
 - **Output:** `{ booking }`
-- **Description:** Cancels booking and releases held Marks; late cancel within H-2 becomes `late_cancelled`
+- **Description:** Cancels a booking before its scheduled start. A cancellation within H-2 becomes `late_cancelled` and forfeits held Marks; at or after `scheduledStartAt`, the procedure rejects with `BOOKING_CANCELLATION_DEADLINE_PASSED` so the live booking remains available for tutor completion. Session-delivery or attendance problems after start go through support/admin review.
 
 ### `booking.acceptReschedule`
 
 - **Auth:** Protected; required tutor or active student voter
 - **Input:** `{ bookingId, proposalId? }`
 - **Output:** `{ booking }`
-- **Description:** Records one acceptance on the active proposal. Partial acceptance does not change the schedule; unanimous tutor + active-student acceptance applies the proposed 90-minute time and restores the booking state that was active before the proposal. For an offline booking-level proposal, the active room assignment is moved with the booking when available; a room conflict or missing assignment returns the booking to `awaiting_admin_room_approval`.
+- **Description:** Records one acceptance on the active, unexpired proposal. Partial acceptance does not change the schedule; before unanimous tutor + active-student acceptance applies the proposed 90-minute time, the server serializes the booking/tutor decision and rechecks tutor overlap plus series-session ownership/state/sibling overlap. A stale, expired, or newly conflicting target is rejected without changing the schedule. Successful acceptance restores the booking state that was active before the proposal. For an offline booking-level proposal, the active room assignment is moved with the booking when available; a room conflict or missing assignment returns the booking to `awaiting_admin_room_approval`.
 
 ### `booking.getRescheduleAvailability`
 
@@ -589,13 +617,14 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Input:** `{ bookingId }`
 - **Output:** `AvailabilitySlot[]`
 - **Description:** Returns active tutor availability for the booking-scoped reschedule picker. Access is checked against the booking rather than tutor discovery visibility.
+- **Reschedule invariant:** `/rpc/booking/proposeReschedule` and `/rpc/tutorActions/proposeReschedule` reject a proposed start in the same minute as the active booking/target-session start or the pending proposal for that same target with `BOOKING_NOT_EDITABLE`. Proposal replacement is serialized, and only one pending proposal may exist per booking.
 
 ### `booking.rejectReschedule`
 
 - **Auth:** Protected; required tutor or active student voter
 - **Input:** `{ bookingId, proposalId? }`
 - **Output:** `{ booking }`
-- **Description:** Rejects the active proposal, preserves the original schedule, and restores the booking state that was active before the proposal. Offline booking-level proposals also restore the confirmed room assignment to the original window; a conflict or missing assignment falls back to `awaiting_admin_room_approval`.
+- **Description:** Rejects the active, unexpired proposal under the same booking-level decision lock, preserves the original schedule, and restores the booking state that was active before the proposal. Expired/stale decisions are rejected and left for the expiry worker. Offline booking-level proposals also restore the confirmed room assignment to the original window; a conflict or missing assignment falls back to `awaiting_admin_room_approval`.
 
 ### `booking.proposeReschedule`
 
@@ -609,7 +638,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Student (proposer)
 - **Input:** `{ sessionId }`
 - **Output:** `{ booking }`
-- **Description:** Student cancels an individual series session; pre-H-2 releases the session hold, post-H-2 forfeits it (per-session penalty, #46). Group-series sessions cannot be cancelled (no opt-out)
+- **Description:** Student cancels an individual series session before that session starts; pre-H-2 releases the session hold and a pre-start post-H-2 cancellation forfeits it (per-session penalty, #46). At/after the session start it rejects with `BOOKING_CANCELLATION_DEADLINE_PASSED`. Group-series sessions cannot be cancelled (no opt-out).
 
 ### `booking.addSessionNote`
 
@@ -628,14 +657,14 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `booking.createGroup`
 
 - **Auth:** Verified Student (`verifiedStudentProcedure` — student role with a verified email; unverified → `FORBIDDEN`)
-- **Input:** `{ tutorId, availabilitySlotId, modality, targetGroupSize, inviteeUserIds, scheduledStartAt, timezone?, learningGoal, requestedRoomId? }` (`targetGroupSize` 2–6, `inviteeUserIds` 1–5; duration is server-fixed to 90 minutes; `requestedRoomId` applies only to offline bookings)
+- **Input:** `{ tutorId, subjectId?, availabilitySlotId, modality, targetGroupSize, inviteeUserIds, scheduledStartAt, timezone?, learningGoal, requestedRoomId? }` (`subjectId` selects an active tutor subcategory; `learningGoal` carries Session Notes including reference links; `targetGroupSize` 2–6, `inviteeUserIds` 1–5; duration is fixed to 90 minutes)
 - **Output:** `{ booking }`
 - **Description:** Creates a group booking, holds the target headcount total from the proposer, invites participants, and releases the excess hold as invitees confirm; idempotency via `idempotency-key` header
 
 ### `booking.createSeries`
 
 - **Auth:** Verified Student (`verifiedStudentProcedure`; unverified → `FORBIDDEN`)
-- **Input:** `{ tutorId, availabilitySlotId, modality, sessions: [{ availabilitySlotId, scheduledStartAt }], timezone?, learningGoals }` (2–4 sessions; each session is fixed to 90 minutes)
+- **Input:** `{ tutorId, subjectId?, availabilitySlotId, modality, sessions: [{ availabilitySlotId, scheduledStartAt }], timezone?, learningGoal }` (`subjectId` selects an active tutor subcategory; `learningGoal` carries Session Notes including reference links; 2–4 fixed 90-minute sessions)
 - **Output:** `{ booking }`
 - **Errors:** `BOOKING_SERIES_SIZE` (400) if sessions < 2 or > 4
 - **Description:** Creates a multi-session solo series booking
@@ -643,7 +672,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `booking.createGroupSeries`
 
 - **Auth:** Verified Student (`verifiedStudentProcedure` — unverified → `FORBIDDEN`)
-- **Input:** `{ tutorId, availabilitySlotId, modality, sessions: [...], targetGroupSize, inviteeUserIds, timezone? }` (`targetGroupSize` 2–6, `inviteeUserIds` 1–5, sessions 2–4)
+- **Input:** `{ tutorId, subjectId?, availabilitySlotId, modality, sessions: [...], targetGroupSize, inviteeUserIds, timezone?, learningGoal }` (`subjectId` selects an active tutor subcategory; `learningGoal` carries Session Notes/reference links; `targetGroupSize` 2–6, `inviteeUserIds` 1–5, sessions 2–4)
 - **Output:** `{ booking }`
 - **Errors:** `BOOKING_SERIES_SIZE` (400), `USER_NOT_FOUND` (400) for unknown invitees
 - **Description:** Creates a group series with upfront per-participant holds for all sessions (FR-20, #46); invitees accept/decline the full-series package via `booking.confirmInvite`/`booking.declineInvite`
@@ -680,7 +709,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Student (participant)
 - **Input:** `{ bookingId, reason? }`
 - **Output:** `{ withdrawn: true, late: boolean }`
-- **Description:** Participant withdraws; pre-H-2 releases held Marks, post-H-2 late-cancels. Group-series bookings (`type: "series"` with `targetGroupSize > 1`) are rejected with `CONFLICT` (`BOOKING_SERIES_NO_OPT_OUT`) — no opt-out from the series (U4)
+- **Description:** Participant withdraws before the scheduled start; pre-H-2 releases held Marks and a pre-start post-H-2 withdrawal forfeits them. At/after `scheduledStartAt`, the procedure rejects with `BOOKING_CANCELLATION_DEADLINE_PASSED`. Group-series bookings (`type: "series"` with `targetGroupSize > 1`) are rejected with `CONFLICT` (`BOOKING_SERIES_NO_OPT_OUT`) — no opt-out from the series (U4)
 
 ### `booking.listSessions`
 
@@ -715,7 +744,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Tutor
 - **Input:** `{ bookingId }`
 - **Output:** `{ booking, isOffline }`
-- **Description:** Tutor accepts a booking; online attempts to create the meeting immediately and moves to `scheduled` when the attempt succeeds. The Google Calendar event uses a human-readable title (`Solo session with {Tutor} & {Student}` for solo bookings, or the session type with the tutor for group/series bookings) and its description includes the tutor/students, the booking's learning goal when present, and an authenticated `/bookings/{bookingId}` link. If Google Meet creation fails, the booking remains `confirmed`, the proposer receives meeting-setup attention copy, and the `retry-failed-meetings` scheduler retries it every 5 minutes (up to 3 failed attempts); after that, the assigned tutor or an admin can add a manual link with `setMeetingLink`; offline goes `awaiting_admin_room_approval`.
+- **Description:** Tutor accepts a booking; online attempts to create the meeting immediately and moves to `scheduled` on success. Calendar titles use `Cogito - {Competition} | {Tutor} x {Student}` or append `& Friends` for groups. Descriptions include tutor/students, the snapshotted Session Topic, Session Notes/reference links, and `/bookings/{bookingId}`. Provider failure leaves the booking `confirmed` for retry/manual fallback; offline goes `awaiting_admin_room_approval`.
 - **Frontend note:** The tutor booking-detail flow presents a responsive confirmation summary before calling this unchanged procedure; the dialog does not change the input, output, or transition rules.
 
 ### `tutorActions.setMeetingLink`
@@ -755,6 +784,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `tutorActions.markParticipantNoShow`
 
 - **RPC path:** `/rpc/tutorActions/markParticipantNoShow`
+- **Session ownership invariant:** For a series booking, `sessionId` must be a child of the supplied `bookingId`; a session from another series is rejected before any wallet deduction or attendance mutation.
 - **Auth:** Tutor
 - **Input:** `{ bookingId, participantUserId, sessionId? }` (`sessionId` required for series child sessions)
 - **Output:** `{ bookingId, participantUserId, sessionId, forfeitedMarks }`
@@ -973,3 +1003,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Output:** `{ uploadUrl, key, publicUrl, contentType, maxBytes, method, fields }` (`maxBytes` 5 MB; `method: "POST"`; `fields` carries the S3/R2 presigned-POST policy fields — or is `{}` in local mode)
 - **Errors:** `INVALID_CONTENT_TYPE` (400), `INVALID_FILENAME` (400)
 - **Description:** Returns a presigned POST URL (Cloudflare R2, size-bounded via `content-length-range` in the policy) or a local URL (dev, `POST /uploads/*` with a session) for uploading a file; uploaded objects are referenced by `key`/`publicUrl` (e.g. private achievement `evidenceUrl`, public `documentationUrl`, or user avatar). Local files are served via `GET /uploads/*` when `R2_PUBLIC_URL` is unset
+
+## Tutor payout profile fields (2026-08-28)
+
+`/rpc/tutor/updateMyProfile` accepts payout-account fields (`bankName`, `bankAccountNumber`, `bankAccountHolderName`, `bankAccountOpeningCity`, `bankAccountOwnership`, and `bankTransferDisclaimerAccepted`) inside the standard `{"json": <input>}` envelope. `/rpc/tutor/getMyProfile` returns the private fields to the authenticated tutor; the public tutor discovery projection omits all of them. `/rpc/tutor/submitForReview` requires every payout field plus the acknowledgment. Only the exact bank name `BCA` represents conventional BCA and has no transfer fee; `BCA Syariah`, `blu`/`BCA Digital`, and all other bank names incur Rp2,500 once per payout. `/rpc/tutor/payouts/get` with no date filters returns honorarium since the latest admin-paid cutoff; explicit date filters remain available for reporting. Admins use `/rpc/admin/payouts/tutor/pending` to inspect unpaid honorarium and `/rpc/admin/payouts/tutor/mark-paid` to atomically create a paid payout record. Completion timestamps, rather than calendar weeks, determine which completed sessions enter a payout batch; completion and payout use a per-tutor lock to avoid a race at the cutoff.

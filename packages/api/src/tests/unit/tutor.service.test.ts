@@ -21,7 +21,16 @@ function makeProfile(overrides: Record<string, unknown> = {}) {
     displayName: "Dr. Smith",
     shortBio: "Experienced tutor",
     credentialsSummary: "PhD in Math",
+    achievements: "National mathematics medalist (2025)",
+    experiences: "Mathematics tutor (2024–2025)",
+    sourcePhotoUrl: "https://example.com/source-photo.jpg",
     modality: "online",
+    bankName: "BCA",
+    bankAccountNumber: "1234567890",
+    bankAccountHolderName: "Dr. Smith",
+    bankAccountOpeningCity: "Jakarta Selatan",
+    bankAccountOwnership: "self",
+    bankTransferDisclaimerAccepted: true,
     prices: { "1": 50 },
     expertise: ["math"],
     subjects: [
@@ -180,6 +189,21 @@ describe("Tutor Service", () => {
       expect(() =>
         validateSubmitForReview(
           makeProfile({ displayName: null }),
+          mockPricingPort,
+        ),
+      ).toThrow(TutorProfileIncompleteError);
+    });
+
+    test("requires payout account ownership and transfer disclaimer confirmation", () => {
+      expect(() =>
+        validateSubmitForReview(
+          makeProfile({ bankAccountOwnership: null }),
+          mockPricingPort,
+        ),
+      ).toThrow(TutorProfileIncompleteError);
+      expect(() =>
+        validateSubmitForReview(
+          makeProfile({ bankTransferDisclaimerAccepted: false }),
           mockPricingPort,
         ),
       ).toThrow(TutorProfileIncompleteError);
@@ -724,6 +748,30 @@ describe("Tutor Service", () => {
       await expect(
         service.getMyPayouts("u1", { dateTo: "not-a-date" }),
       ).rejects.toThrow(InvalidDateRangeError);
+    });
+
+    test("getMyPayouts uses pending totals by default and dated totals for filters", async () => {
+      const payout = {
+        getPendingTutorPayouts: mock(async () => ({ completedSessions: 2 })),
+        getTutorPayouts: mock(async () => ({ completedSessions: 1 })),
+      };
+      const service = createTutorService(makeDeps({ payout }) as any);
+      await expect(service.getMyPayouts("u1", {})).resolves.toEqual({
+        completedSessions: 2,
+      });
+      await expect(
+        service.getMyPayouts("u1", {
+          dateFrom: "2026-08-01T00:00:00Z",
+          dateTo: "2026-08-31T00:00:00Z",
+        }),
+      ).resolves.toEqual({ completedSessions: 1 });
+      expect(payout.getTutorPayouts).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tutorId: "u1",
+          dateFrom: expect.any(Date),
+          dateTo: expect.any(Date),
+        }),
+      );
     });
 
     test("deleteAvailability throws TutorProfileNotFoundError when slot not found", async () => {

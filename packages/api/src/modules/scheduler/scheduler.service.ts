@@ -179,7 +179,8 @@ export function createSchedulerService(
     // M4: after attempts are exhausted the job would vanish — move it to the
     // DLQ so it is logged, kept in the bounded Redis list, and can be
     // replayed manually if needed.
-    if (job) {
+    const maxAttempts = job?.opts?.attempts ?? 1;
+    if (job && job.attemptsMade >= maxAttempts) {
       dlqQueue
         .add(job.name, {
           originalJobId: job.id,

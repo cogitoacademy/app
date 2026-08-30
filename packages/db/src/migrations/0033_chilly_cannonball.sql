@@ -1,0 +1,2 @@
+ALTER TABLE "tutor_profile" ADD COLUMN "achievement_proof_urls" jsonb DEFAULT '[]'::jsonb;--> statement-breakpoint
+ALTER TABLE "tutor_profile" ADD COLUMN "experience_proof_urls" jsonb DEFAULT '[]'::jsonb;

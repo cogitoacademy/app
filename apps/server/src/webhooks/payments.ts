@@ -10,6 +10,19 @@ import { PaymentNotFoundError } from "@cogito-app/api/modules/payment/payment.er
 const MAX_WEBHOOK_AGE_MS = 5 * 60 * 1000;
 const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
 
+export function paymentWebhookIdempotencyKey(
+  provider: string,
+  payload: {
+    providerEventId?: string | null;
+    providerReference?: string | null;
+    status: string;
+  },
+) {
+  const eventReference =
+    payload.providerEventId || payload.providerReference || "missing-reference";
+  return `${provider}:${eventReference}:${payload.status}`;
+}
+
 /**
  * M5: classifies a webhook processing failure as permanent (a bug that retrying
  * will never fix — the provider should NOT be asked to retry) vs transient
@@ -141,7 +154,12 @@ export function paymentsWebhook(app: Elysia) {
           return { error: "Webhook event is missing a payment reference" };
         }
 
-        const idempotencyKey = `${provider}:${payload.providerEventId || "no-event-id"}`;
+        // Xendit identifies lifecycle notifications with a payment or
+        // payment-request id rather than a unique delivery id. Include status
+        // so PENDING and PAID for one payment both run, while retries of the
+        // same lifecycle event remain idempotent. If an event id is absent,
+        // isolate the claim by the provider payment reference.
+        const idempotencyKey = paymentWebhookIdempotencyKey(provider, payload);
         // Short 2-minute claim window (R7): a crash mid-processing only blocks
         // retries for 2 minutes instead of the 24h processed-record TTL, so the
         // provider's retry can re-process after a crash. `markProcessed` below

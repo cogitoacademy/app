@@ -2,6 +2,24 @@
 
 Last updated: 2026-08-28
 
+## Collection transition QA (2026-08-28)
+
+The stable-pagination behavior requires no environment variable, migration, or
+server rollout. When checking the web UI, verify that changing either admin
+tutor table page keeps the old rows visible while loading, disables that table's
+pagination controls during the request, and scrolls the owning card into view.
+Changing tutor discovery search/filters and the admin booking-queue filters
+should also retain the prior collection until the response arrives. Wallet
+lookup and student search should continue to replace results only after their
+own query completes.
+
+Started-session cancellation check: open a scheduled booking as its student before start and confirm Cancel booking is available. At/after `scheduledStartAt`, reload the detail and confirm the action is absent. Calling `/rpc/booking/cancel`, participant withdrawal, or per-series-session cancellation directly must return `BOOKING_CANCELLATION_DEADLINE_PASSED`, must not deduct/release Marks or cancel the meeting, and the tutor must still be able to complete the booking. Route post-start delivery/attendance problems through support/admin review.
+
+Booking-list smoke check: verify Needs action, Upcoming, Recurring, History, and All. Students and tutors default to Needs action when pending decisions exist and Upcoming otherwise; admins default to All. Recommended places pending decisions above active bookings and terminal outcomes at the bottom. Soonest and Latest order by scheduled date, `?tab=`/`?sort=` preserve choices, and History contains every terminal outcome. With more than 20 bookings, verify **Load more bookings** appends the next cursor without removing the current cards, keeps the page stable while loading, and removes itself after the final page. Tab counts should show `+` until all pages are loaded.
+
+Timing-chip check: pending rows with `deadlineAt` show Respond in, switch to warning within three hours and danger within 30 minutes, then say Response overdue without pretending the state is Expired. Confirmed/scheduled rows show Today, Starts in within three hours, Starting soon within 30 minutes, and In progress between start and end. Completed, declined, cancelled, expired, and other terminal rows show no chip. Leave the page open and confirm labels refresh without reloading.
+On `/bookings`, verify the timing chip follows the role-appropriate financial summary (IDR Honorarium for tutors; Earns/Total or You pay for student/admin views) and has a vertical divider on its left. On student and tutor dashboards, verify the shared next-lesson card hides You pay/Earns/Total while retaining the timing chip.
+
 For manual tutor-invite delivery, copy the visible latest link. After reloading the page, use **Generate & copy link** on a pending invitation history entry; this safely rotates the token instead of persisting plaintext secrets.
 
 **Generate & copy link** never sends email. Use the separate **Send again** action when an admin intentionally wants Resend to deliver a replacement link.
@@ -34,7 +52,7 @@ Coolify checks from causing a false `Connection refused` status.
 
 Open `/login` in a clean browser and sign in as a student, tutor, and admin. The email button may show progress while the auth request and fresh session read complete; it must then go directly to `/dashboard`, `/onboarding`, or `/admin-tutors` without an intermediate `/login` navigation. Verify a wrong password returns the form with an error and the button is usable again. For a return link such as `/login?redirect=/bookings`, verify it lands on the validated target after the same handoff.
 
-Also verify the client validation feedback: blur an empty or malformed email, a short password, and (on sign-up) a short name or password missing uppercase/lowercase/digit requirements. Each invalid field should show its own Selia inline error and danger outline; submitting incomplete data should reveal the field errors and must not call `/api/auth`. Correcting the values should clear the errors and re-enable the normal auth request.
+Also verify the client validation feedback: blur an empty or malformed email, a short password, and (on sign-up) a short name or password missing uppercase/lowercase/digit requirements. Each invalid field should show its own Selia inline error and danger outline; submitting incomplete data should reveal the field errors and must not call `/api/auth`. Correcting the values should clear the errors and re-enable the normal auth request. An API-level malformed JSON request to `/api/auth/sign-up/email` must return 400, never 500.
 
 ### Dashboard smoke check
 
@@ -55,6 +73,10 @@ From any authenticated shell page, press `D` once and verify the UI switches bet
 As an authenticated user, open `/calendar` and confirm published Sanity competitions render in the month grid. Verify today, outside-month days, multi-day spans, and the `+N more` overflow popup; select an event from either the grid or popup and confirm the responsive details modal shows categories, level, scale, organizer, location, timeline, registration deadline, description, and the available external-link actions. On a short viewport, verify the page heading and calendar toolbar remain in place while only the calendar body scrolls vertically; on a narrow viewport, verify only the month grid scrolls horizontally. Switch to **Agenda**, confirm the 30-day grouped list and rich event cards, use `M`/`A` to switch views, and verify previous/next period plus **Today** navigation. The calendar remains read-only and the browser console should remain free of runtime errors.
 
 The route selects the dashboard from the authenticated session role. A tutor or admin must never receive student-only wallet or booking queries from this page.
+
+### Knowledge Bank smoke check
+
+As an authenticated student, open `/knowledge-bank`. With at least 35 total Marks, confirm published Sanity resource metadata loads, search/category filtering works, and the PDF preview opens through the authenticated `/content/knowledge-bank/:resourceId/file` proxy. Below 35 Marks, confirm the page stays locked and offers the balance/top-up action; opening the Knowledge Bank must not create a Marks deduction.
 
 ### Empty-state consistency smoke check
 
@@ -98,21 +120,43 @@ As a student or tutor, opening `/admin-economy` must redirect away and direct
 `admin.getEconomySettings`/update calls must return FORBIDDEN.
 
 Tutor onboarding should show IDR base honorarium fields (online/offline), enforce the
-Rp 50,000 minimum and Rp 5,000 steps, and must not describe Marks as cash-out. Student
+Rp 50,000 minimum and Rp 5,000 steps, show one combined six-row preview matrix for the
+selected modalities, and must not describe Marks as cash-out. Student
 tutor discovery and booking previews should show computed Marks per student for the
 selected modality; legacy profiles without `baseRatesIdr` remain readable.
 
+The tutor payout form must collect bank name, account number, account-holder name,
+account-opening city/regency, account ownership (the tutor's own account or a
+trusted person's account), and an acknowledgment that Cogito is not responsible
+for issues after transfer to the provided account. Verify the copy identifies only
+conventional BCA as fee-free; BCA Syariah and blu (BCA Digital) must be treated as
+non-BCA and charged Rp2,500 per payout.
+
+Tutor portrait operations use a two-stage workflow: the tutor uploads an image through
+`upload.createUploadUrl`, which is saved as `sourcePhotoUrl` for internal editing. After
+editing and applying the standard background, an admin pastes the finished public URL in
+the tutor review card and completes an allowed review action. Never copy a tutor source
+photo directly into `user.image`; only the admin-provided edited asset is public.
+
+Achievement and experience proof URLs are verification-only tutor-profile data.
+All user/admin-supplied external links in achievement evidence/documentation,
+tutor proof/source/public-photo fields, and manual meeting-link dialogs must use
+`http://` or `https://`; schemes such as `javascript:`, `data:`, and `file:` must
+be rejected by the API even if client validation is bypassed.
+Operators may open them from the admin tutor review card, but they must not be added
+to public discovery projections, marketing exports, or student-facing interfaces.
+
 ### Shared booking list smoke check
 
-With seeded student, tutor, and admin sessions, open `/bookings` and verify the same list layout loads for each role. Students see proposer/participant bookings, tutors see assigned bookings with the Cogito mark icon before `Earns: X` and `Total: Y`, and admins see the full list with the icon before `Total X` and `Tutor Y`, with no lifecycle mutations. Verify the Upcoming/Pending/Recurring/Past/Cancelled/All tabs, that generic status badges are hidden outside All (except attention states), and that hovering/focusing a visible status badge shows its explanation. On a narrow viewport, confirm the rounded tab strip fills the available page width, only the inner tab list can be swiped horizontally to reach every tab, and the page does not create horizontal overflow or show a scrollbar. Confirm mobile rows keep date, location, and tutor name readable beside the booking summary, while desktop time/location/tutor metadata stays aligned and the action button remains at the far edge. For single-session group bookings, student `You pay` must show the per-student amount, and the participant avatar stack must not include the tutor. Open a row’s detail page to perform actions; list rows should not expose inline cancellation or reschedule mutations. `/tutor-bookings` should redirect to `/bookings`.
+With seeded student, tutor, and admin sessions, open `/bookings` and verify the same list layout loads for each role. Students see proposer/participant bookings, tutors see assigned bookings with the Cogito mark icon before `Earns: X` and `Total: Y`, and admins see the full list with the icon before `Total X` and `Tutor Y`, with no lifecycle mutations. Verify the Upcoming/Pending/Recurring/Past/Cancelled/All tabs, that generic status badges are hidden outside All (except attention states), and that hovering/focusing a visible status badge shows its explanation. On a narrow viewport, confirm the rounded tab strip fills the available page width, only the inner tab list can be swiped horizontally to reach every tab, active-tab shadows and focus rings remain visible at both scroll edges, and the page does not create horizontal overflow or show a scrollbar. Confirm the empty-state outline and decorative glow remain visible inside the rounded card boundary without creating overflow. Confirm mobile rows keep date, location, and tutor name readable beside the booking summary, while desktop time/location/tutor metadata stays aligned and the action button remains at the far edge. For single-session group bookings, student `You pay` must show the per-student amount, and the participant avatar stack must not include the tutor. Open a row’s detail page to perform actions; list rows should not expose inline cancellation or reschedule mutations. `/tutor-bookings` should redirect to `/bookings`.
 
-Verify the role-aware default tab: students open on Upcoming, tutors open on Pending when a pending request exists (otherwise Upcoming), and admins open on All. An explicit `?tab=` selection must override the default. Upcoming/Pending/Recurring/All rows should be ordered by the nearest scheduled date, while Past/Cancelled show the most recent history first.
+Verify the role-aware default tab: students and tutors open on Needs action when pending decisions exist and Upcoming otherwise; admins open on All. Explicit `?tab=` and `?sort=` selections must override the defaults. Recommended sorting must put pending decisions above active bookings and terminal outcomes at the bottom, using soonest dates within active groups and latest dates in History. Verify that Soonest and Latest order solely by scheduled date.
 
 ### Booking detail smoke check
 
-Open an online booking detail and verify the overview shows date/time first, then `Format & access` with the meeting CTA or pending/retry status, followed by participant rows with saved profile images (or initials), names, roles, and confirmation states. On desktop participants may use two columns; on narrow screens they stack without hiding names. When available, `Booking actions` appears above Marks in the sticky desktop rail and before Activity on narrow screens; session notes/support reports remain in the main flow. Every Marks amount has the Cogito mark prefix. The Activity card should read newest-first as a vertical timeline with a transition-specific icon, one destination-state badge, actor type, timestamp in the booking timezone, and any transition reason; the previous state is shown as muted context when available. After a tutor accepts an online booking, the link is generated immediately; a successful provider call moves the booking to `scheduled`. In the Google Calendar event, verify a solo title follows `Solo session with [Tutor] & [Student]`, while group/series titles name the tutor, and the description lists the participants, includes the booking learning goal when present, and includes a clickable `/bookings/{bookingId}` Cogito link. If provider creation fails, the booking remains `confirmed`, the detail overview says it is retrying, and the `retry-failed-meetings` scheduler retries every 5 minutes. If no link is available, the assigned tutor can use **Add meeting link** and an admin can use **Add/Replace link** in operations; verify the shared Selia dialog accepts a trusted `http`/`https` URL and that the student read becomes ready without a reload. Repeat after multiple failed provider rows to confirm the newest meeting-attempt row is updated. For an offline booking, verify the same overview section shows the room name and location instead of a meeting CTA.
+Open an online booking detail and verify the overview shows date/time first, then `Format & access` with the meeting CTA or pending/retry status, followed by participant rows with saved profile images (or initials), names, roles, and confirmation states. On desktop participants may use two columns; on narrow screens they stack without hiding names. When available, `Booking actions` appears above the role-appropriate financial card in the sticky desktop rail and before Activity on narrow screens; session notes/support reports remain in the main flow. Tutors must see the IDR Honorarium card only; student/admin views retain the Cogito Marks financial card. Every student/admin Marks amount has the Cogito mark prefix. The Activity card should read newest-first as a vertical timeline with a transition-specific icon, one destination-state badge, actor type, timestamp in the booking timezone, and any transition reason; the previous state is shown as muted context when available. After a tutor accepts an online booking, the link is generated immediately; a successful provider call moves the booking to `scheduled`. In Google Calendar, verify solo uses `Cogito - MUN | [Tutor] x [Student]` (or the selected competition label) and group/group-series appends `& Friends`. The description must list Tutor, Student, `Session Topic: [category] - [subcategory]`, Session Notes with pasted links preserved, and a clickable `/bookings/{bookingId}` link. If provider creation fails, the booking remains `confirmed`, the detail overview says it is retrying, and the `retry-failed-meetings` scheduler retries every 5 minutes. If no link is available, the assigned tutor can use **Add meeting link** and an admin can use **Add/Replace link** in operations; verify the shared Selia dialog accepts a trusted `http`/`https` URL and that the student read becomes ready without a reload. Repeat after multiple failed provider rows to confirm the newest meeting-attempt row is updated. For an offline booking, verify the same overview section shows the room name and location instead of a meeting CTA.
 
-The overview row must show one `Date & time` field with the date and session hours merged beside `Format & access` in a two-column desktop grid; on narrow screens the two fields stack without horizontal overflow. The online `Format & access` section now shows only the compact info trigger; activate it with mouse, keyboard, and touch to verify the Selia popover exposes the pending/failed explanation plus retry or manual setup status, or the `Open meeting room` action when a URL is available. Available links must not render a `Ready` badge or standalone meeting CTA. Offline bookings without an assigned room should expose the same trigger beside `Offline`; tutors with an eligible `Complete session` action should find its completion-timing explanation beside the button. Confirm the Participants heading uses the matching Selia `IconBox`, and on desktop all eligible booking actions, including propose and complete, sit at the bottom of the right header column beneath the state badge.
+The overview row must show one `Date & time` field with the date and session hours merged beside `Format & access` in a two-column desktop grid; on narrow screens the two fields stack without horizontal overflow. The online `Format & access` section now shows only the compact info trigger; activate it with mouse, keyboard, and touch to verify the Selia popover exposes the pending/failed explanation plus retry or manual setup status, or the `Open meeting room` action when a URL is available. Available links must not render a `Ready` badge or standalone meeting CTA. Offline bookings without an assigned room should expose the same trigger beside `Offline`; tutors with an eligible `Complete session` action should find its completion-timing explanation beside the button. Confirm the Participants heading uses the matching Selia `IconBox`, and on desktop all eligible booking actions, including propose and complete, sit at the bottom of the right header column beneath the state badge. Also confirm Activity follows the left-column content with only the normal section gap even when the Actions/Marks rail is taller; on narrow layouts the order remains overview → actions/Marks → Activity.
 
 ### Meeting fallback and exception smoke check
 
@@ -180,13 +224,15 @@ For booking deadline coverage, inspect a new online request, an offline request 
 
 From a booking detail in `awaiting_tutor_review`, `confirmed`, or `scheduled`, verify that a student booking proposer submits through `/rpc/booking/proposeReschedule` and a tutor submits through `/rpc/tutorActions/proposeReschedule`. Both should show the success toast and move the booking to `reschedule_proposed`; a tutor may choose a custom time outside the published availability window. A student proposal in `confirmed` or `scheduled` remains valid before H-2, while a proposal at or after H-2 must be rejected as not editable. A tutor receiving `403 Student access required` indicates the frontend is using the wrong procedure. Group bookings still in `awaiting_participant_confirmation` intentionally wait for invitees before rescheduling is enabled. For offline bookings, accept/reject/expiry must keep the confirmed room row aligned with the active schedule; a conflict should return the booking to admin room approval. Force-majeure requests after H-2 follow support/admin exception handling and require an auditable override decision rather than the normal reschedule mutation.
 
+In the same dialog, select the booking's current date and start minute. Confirm the UI explains that a different time is required and disables **Send proposal**. While a proposal is pending, reopen the dialog and select that pending start minute; it must also be disabled. Repeat against a non-first series session's own active time. Direct RPC requests for either no-op must return `BOOKING_NOT_EDITABLE` without creating or superseding a proposal. Finally, submit two concurrent proposals for one booking and verify no more than one `pending` row exists.
+
 ### Tutor subject taxonomy smoke check
 
 Open `/onboarding` as a tutor and verify the selector loads exactly seven active competition categories and 33 child subjects from `tutors.listSubjects`. All categories should be visible with keyboard-accessible checkboxes, no manual subject input, selected-subject chips, and a 20-subject limit. Select subjects from multiple categories, save a draft, and confirm the selections reload with the profile. A submission with no current child subject must be blocked; archived legacy subjects on an existing profile should remain visible as read-only labels. Published tutor discovery should expose current subjects and allow students to filter by mother category or child subject. On the tutor list page, category, child-subject, and modality filter triggers must show their labels rather than raw IDs or values. Confirm category and child-subject filters support multiple values, retain overlapping subjects while categories are added, remove subjects that are no longer available after a category is removed, and wait about 300 ms after typing/toggling before `listPublished` runs. Open a tutor drawer with both modalities and verify pricing appears in one table with `Group Size`, `Online (Marks)`, and `Offline (Marks)` columns; populated prices should have the Cogito Marks icon as a prefix, and a size available in only one modality should show an em dash in the other column.
 
 ### Profile UX smoke check
 
-Open `/profile` as a student and `/onboarding` as a tutor at desktop and narrow widths. Verify the account card shows the current name, profile image (or initials), and read-only sign-in email; changing the name or image enables only the account save action. On the student page, learning and parent/guardian fields use separate sections with one learning-profile save action. On the tutor page, profile status and review feedback remain visible, fields are grouped into public profile/teaching setup/availability sections, and the sticky action area offers draft save plus submit-for-review only when the profile is editable. Confirm the browser console has no runtime errors and that no profile API contract changes are required.
+Open `/profile` as a student and `/onboarding` as a tutor at desktop and narrow widths. Verify the account card shows the current name, profile image (or initials), and read-only sign-in email; changing the name or image enables only the account save action. On the student page, learning and parent/guardian fields use separate sections with one learning-profile save action. On the tutor page, profile status and review feedback remain visible, the public profile section is separated from the teaching setup row, the honorarium preview is one combined modality matrix, fields are grouped into public profile/teaching setup/availability sections, and the sticky action area offers draft save plus submit-for-review only when the profile is editable. In the payout-account form, verify all four account details plus ownership and disclaimer confirmation are required, the conventional-BCA/non-BCA fee copy is visible, and BCA Syariah and blu (BCA Digital) are not treated as fee-free. Confirm the browser console has no runtime errors and that the updated payout fields remain private to the tutor/admin surfaces.
 
 The authenticated shell shows a session-expiry warning during the final 30 minutes of Better Auth's seven-day session. The warning includes a sign-in-again action; an API `401` remains the fallback redirect for expired sessions.
 
@@ -226,6 +272,8 @@ bun run db:test          # Starts isolated test PostgreSQL + Redis (docker-compo
 bun run db:migrate       # Apply pending migrations
 bun run db:generate      # Generate new migration from schema changes
 ```
+
+Migration `0038_room_booking_overlap_guard.sql` enables PostgreSQL `btree_gist` and adds `room_booking_confirmed_no_overlap`. Before applying it to an existing environment, query for overlapping `confirmed` room assignments and resolve any duplicates; PostgreSQL will refuse the constraint if conflicting historical rows exist. The range is half-open (`[start,end)`), and the API conflict queries use the same strict boundaries, so back-to-back room sessions are valid. The migration requires a database role allowed to install the trusted `btree_gist` extension (or an operator must pre-install it).
 
 Contact sharing uses migration `0030_bouncy_madrox.sql`, which adds
 `student_profile.allow_contact_requests` and the `contact_request` table. Apply
@@ -443,6 +491,11 @@ curl http://localhost:3001/health
 
 `checks.scheduler` mirrors Redis reachability (`ok`/`error`/`degraded`) because the BullMQ scheduler runs on the same Redis — an `error` there means the booking-expiry/hold-release/email/SLA jobs are not running and the readiness check trips (503).
 
+When investigating `cogito-jobs-dlq`, expect one entry only after the source
+job has exhausted its configured BullMQ attempt count. A failure with retries
+remaining is intentionally absent from the DLQ; inspect the source queue's
+attempt counter and backoff state instead.
+
 **Scheduler boot failure mode:** with `SCHEDULER_ENABLED=true`, `initScheduler()` pings Redis first and **throws if unreachable — the API boot aborts**. This is intentional: a silently dead scheduler (no expiry/hold-release/email jobs) is worse than a failed deploy. Fix Redis (or set `SCHEDULER_ENABLED=false` for a scheduler-less instance) and redeploy.
 
 Redis is **mandatory** (`REDIS_URL` is required — the server won't boot without it). The in-memory stores are defensive fallbacks only when a configured Redis call fails at runtime; they are per-process and degrade cross-instance guarantees.
@@ -510,6 +563,8 @@ For rescheduling, `reschedule_proposed` must return to the state captured in `bo
 
 When a 24-hour reschedule proposal deadline passes, expire only the proposal. Keep the original schedule and wallet holds, restore `booking.previousState`, and do not cancel the provider meeting event.
 
+Acceptance/rejection calls also reject an already expired proposal. Final acceptance rechecks the tutor and series-session target under advisory locks; `BOOKING_CONFLICT` at this stage means the proposed slot became occupied after it was proposed and a fresh time must be proposed.
+
 ### `BOOKING_NOT_EDITABLE` while creating a booking (400)
 
 Confirm the chosen start is inside the selected tutor availability window and leaves the full server-fixed 90 minutes before the window ends. The web form shows the valid start range and blocks invalid submissions. Also verify the availability is active and that no non-terminal booking overlaps the requested session; declined, cancelled, and expired bookings should not keep the time blocked.
@@ -573,132 +628,6 @@ Deployments are Coolify auto-deploys from GHCR images (`ghcr.io/cogitoacademy/ap
    bun run db:studio  # Check migration table
    ```
 5. Roll back migrations if needed (rare — coordinate with DBA)
-
-## Incident Response
-
-> **The "do I restart?" cheat sheet:** never restart for a deploy failure —
-> roll back. Crash-loops are a config problem — fix + redeploy, not restart.
-> Circuit breakers heal themselves — wait. Restart only for stuck containers
-> (healthy but wedged). When in doubt, check `/health` and the Coolify
-> deployment log before touching anything.
-
-### Deploy failure
-
-| Symptom                                      | Action                                                                                                                                                                                                                                                                                                                                                           |
-| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| CD pipeline red at the Coolify webhook step  | Check the webhook secret is the resolvable `https://coolify.cogitoacademy.id/api/v1/deploy?uuid=...` URL (S7) and that the Traefik route for `/api/v1/deploy/*` exists. A `401` means the route is present but the `Authorization: Bearer <coolify-api-token>` header is missing or the token lacks the `deploy` permission. A `404` means the route is missing. |
-| CD pipeline red at the health poll           | The new image never came up. **Do not restart** — roll back to the previous immutable `v<prev-sha>` tag in Coolify, verify `/health` returns `version == <prev-sha>`, then investigate the API logs.                                                                                                                                                             |
-| Coolify deploy succeeds but `/health` is 503 | Wait for the bounded rollout/healthcheck (up to ~5 min), then inspect API logs. Common causes: `DB_SSL_ENABLED=false` missing (TLS mismatch), Redis unreachable (scheduler fail-loud boot aborts), missing env vars.                                                                                                                                             |
-| Image pushed but Coolify did not redeploy    | Check auto-deploy toggle + webhook logs; use **Force deploy without cache** to pull the new digest.                                                                                                                                                                                                                                                              |
-
-### Crash-loop
-
-| Symptom                                                 | Action                                                                                                                                                                                                                                                                                                                                                                                    |
-| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Container restarts repeatedly (`Restarting` in Coolify) | **Fix the config, not the container.** Read the crash log (Coolify → Logs). The most common production causes: env schema rejection (missing/incorrect env var — the server fails fast), `DB_SSL_ENABLED=false` missing, `SCHEDULER_ENABLED=true` with unreachable Redis (fail-loud boot abort), or a bad image tag. Fix the cause, redeploy. A restart loop will not fix a config error. |
-| Crash-loop after a migration                            | The migration may have failed or the code expects a newer schema. Check the migration journal, apply the pending migration with the production `DATABASE_URL`, then redeploy. Never restart into a half-migrated state.                                                                                                                                                                   |
-
-### Circuit breaker
-
-| Symptom                             | Action                                                                                                          |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `Email service unavailable: 503`    | Resend circuit breaker open. **Wait** (2 min auto-reset) or reset manually: `redis-cli DEL "cogito:cb:resend"`. |
-| `Google Meet API timeout after 30s` | Google Meet circuit open. **Wait** (1 min) or reset: `redis-cli DEL "cogito:cb:google_meet"`.                   |
-| `Payment provider error`            | Xendit circuit open. **Wait** (30 s) or reset: `redis-cli DEL "cogito:cb:xendit"`.                              |
-
-Circuit breakers trip on repeated provider failures and reset automatically
-after their timeout. Restarting the container resets the in-memory state but
-not the Redis state — the breaker will still be open. Only reset manually
-after the underlying provider issue is fixed.
-
-### DLQ alert
-
-| Symptom                                                                | Action                                                                                                                                                                                                                                                                                                                                                                                                 |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `/health` reports `dlqDepth > 0` (alert-only, does not trip the probe) | Inspect the DLQ: `redis-cli LRANGE "cogito:dlq" 0 -1`. The DLQ is a **ledger, not a retry queue** — repeatable BullMQ jobs re-fire on their cadence, so never auto-replay (double-running money paths). Identify the failing job from the entry, fix the root cause (provider config, data issue), and let the next scheduled run succeed. Clear the list only after confirming the cause is resolved. |
-
-### Database loss / corruption
-
-| Symptom                               | Action                                                                                                                                                                                                                                                    |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| DB container gone or data volume lost | **Do not recreate the container blindly** — Coolify recreating the Postgres service without the volume loses data. Restore from the nightly R2 backup under a maintenance window (see Backup & Restore → restore drill). Never restore over live traffic. |
-| `ECONNREFUSED` / `connection timeout` | Check the Postgres container is running and `DATABASE_URL` resolves from the API container's network (`postgres-prod` on the private network).                                                                                                            |
-| `server does not support SSL`         | `DB_SSL_ENABLED=false` for Coolify's bundled non-TLS PostgreSQL.                                                                                                                                                                                          |
-
-### Disk full
-
-| Symptom                                                | Action                                                                                                                                                                                                                                                                          |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `No space left on device`, containers failing to start | Check `df -h` on the VPS. Common culprits: Docker logs (json-file rotation not applied — verify `max-size 10m, max-file 3` per resource), old images (`docker image prune`), R2 uploads buffered locally. Free space, then verify log rotation is configured on every resource. |
-| Postgres refuses writes (`disk full`)                  | Free space immediately, then verify the nightly backup still ran (a full disk silently kills the 02:00 WIB backup).                                                                                                                                                             |
-
-### VPS loss / unreachable
-
-| Symptom                  | Action                                                                                                                                                                                                      |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| VPS unreachable over SSH | Try the tailnet IP first (`tailscale status`), then the public IP. Check OVH console for host state. If the host is gone, restore from the R2 backups onto a new VPS (Terraform bootstrap + restore drill). |
-| Coolify UI unreachable   | The control plane is tailnet-only by design — connect via the tailnet/tunnel, never by exposing port 8000 publicly.                                                                                         |
-
-## Migration Policy (live users)
-
-Rules for shipping schema changes once real users are on the database:
-
-1. **Additive-only in a release.** New tables, new nullable columns, new
-   indexes — safe to ship with the code. Never drop or rename a column in the
-   same release that reads it.
-2. **Destructive steps are two-step.** Drop/rename/backfill in a _later_
-   release, after the code that no longer needs the old shape has been live
-   for at least one full deploy cycle. Each destructive migration is reviewed
-   and applied manually.
-3. **Up-only Drizzle files.** Migration files contain only the up-DDL.
-   `drizzle-kit` executes each file as one batch, so embedded down-DDL would
-   run immediately after the up-DDL — never put down-SQL inside a migration
-   file.
-4. **Manual down-SQL, newest-first.** Rollback SQL lives in the RUNBOOK
-   (see Migration rollback above), ordered newest-first, applied with `psql`
-   against the target database. There is **no automatic CD rollback** —
-   revert the code first, then run the down SQL, then re-run
-   `bun run db:migrate` to restore the journal state.
-5. **Pre-migrate snapshot + restore under a maintenance window.** The CD
-   pipeline snapshots the database to R2 (`pre-migrate-<sha>.sql.gz`) before
-   migrating. If a migration fails, restore that snapshot under a maintenance
-   window — never blind-auto-restore with live traffic.
-6. **Migrations are never automatic** in the server container. Apply with the
-   exact production `DATABASE_URL` (`ENV_FILE=/secure/cogito-prod.env bun run db:migrate`)
-   before or during the rollout. Never use `db:push` as a production migration
-   mechanism.
-
-## Drizzle Studio (Database GUI)
-
-```bash
-bun run db:studio        # Opens Drizzle Studio on port 4983
-```
-
-### Drizzle Studio against production (tailnet SSH tunnel)
-
-Never run Drizzle Studio on the production container. The production database
-is on Coolify's private Docker network, so reach it from the operator machine
-through a tailnet SSH tunnel:
-
-```bash
-# 1. Forward the production Postgres port through the tailnet SSH connection.
-#    The production Postgres publishes no host port; use the container's
-#    private-network port (5432) via the VPS host.
-ssh -N -L 5433:127.0.0.1:5432 ubuntu@<tailnet-ip-of-cogito-vps>
-
-# 2. Point Drizzle Studio at the tunnel with the production credentials
-#    (from the SOPS vault — never commit them):
-DATABASE_URL=postgresql://cogito:<password>@127.0.0.1:5433/cogito bun run db:studio
-```
-
-Notes:
-
-- The tunnel is read-write — treat it as a production console. Prefer
-  read-only queries; run DDL only through reviewed migrations.
-- The VPS host must be able to reach the Postgres container (publish the port
-  or join the host to the private network) — the same requirement as the
-  nightly backup (`DATABASE_URL` host-reachable note in backup-cron.yml).
-- Close the tunnel when done; never leave a production DB port forwarded.
 
 ## Agent Herd
 
@@ -771,44 +700,45 @@ Student account name/image editing uses the existing Better Auth session and req
 
 Key environment variables (see `.env.example` for full list):
 
-| Variable                                                                                      | Required | Description                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| --------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `DATABASE_URL`                                                                                | Yes      | PostgreSQL connection string                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `BETTER_AUTH_SECRET`                                                                          | Yes      | Auth secret key                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `BETTER_AUTH_URL`                                                                             | Yes      | API base URL for auth cookies (production: `https://api.cogitoacademy.id`)                                                                                                                                                                                                                                                                                                                                                     |
-| `CORS_ORIGIN`                                                                                 | Yes      | Allowed frontend origin (production: `https://app.cogitoacademy.id`)                                                                                                                                                                                                                                                                                                                                                           |
-| `PAYMENT_WEBHOOK_SECRET`                                                                      | Yes      | Webhook verification secret (provider-agnostic)                                                                                                                                                                                                                                                                                                                                                                                |
-| `REDIS_URL`                                                                                   | Yes      | Redis URL (required since #48 — mandatory for boot)                                                                                                                                                                                                                                                                                                                                                                            |
-| `GOOGLE_CLIENT_EMAIL`                                                                         | No       | Google service account email                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `GOOGLE_PRIVATE_KEY`                                                                          | No       | Google service account private key                                                                                                                                                                                                                                                                                                                                                                                             |
-| `GOOGLE_CALENDAR_ID`                                                                          | No       | Google Calendar ID for meeting creation                                                                                                                                                                                                                                                                                                                                                                                        |
-| `GOOGLE_IMPERSONATED_USER`                                                                    | No       | SA-mode impersonation address (REVIEW-FIXES-4 P4.2)                                                                                                                                                                                                                                                                                                                                                                            |
-| `GOOGLE_MEET_ENABLED`                                                                         | No       | Enables Google Meet provider (default false)                                                                                                                                                                                                                                                                                                                                                                                   |
-| `GOOGLE_MEET_CLIENT_ID`/`GOOGLE_MEET_CLIENT_SECRET`/`GOOGLE_MEET_REFRESH_TOKEN`               | No       | OAuth path credentials for Google Meet                                                                                                                                                                                                                                                                                                                                                                                         |
-| `RESEND_API_KEY`                                                                              | No       | Resend API key (required in production/staging — P4.1)                                                                                                                                                                                                                                                                                                                                                                         |
-| `EMAIL_FROM`                                                                                  | No       | Sender address (default `noreply@cogitoacademy.id`; must be a verified Resend domain in prod/staging)                                                                                                                                                                                                                                                                                                                          |
-| `ADMIN_EMAILS`                                                                                | No       | Comma-separated production/staging admin bootstrap emails (default `itcogitoacademy01@gmail.com`); existing admins are never demoted                                                                                                                                                                                                                                                                                           |
-| `XENDIT_SECRET_KEY`                                                                           | No       | Xendit API secret key (required when `PAYMENT_PROVIDER=xendit`)                                                                                                                                                                                                                                                                                                                                                                |
-| `XENDIT_WEBHOOK_TOKEN`                                                                        | No       | Xendit webhook verification token                                                                                                                                                                                                                                                                                                                                                                                              |
-| `XENDIT_MODE`                                                                                 | No       | Required when `PAYMENT_PROVIDER=xendit`: `test` for Xendit Test Mode or `live` for Live Mode. The matching Xendit API key selects the actual environment                                                                                                                                                                                                                                                                       |
-| `XENDIT_TEST_ALLOWED_EMAILS`                                                                  | No       | Comma-separated verified student emails allowed to create purchases when `XENDIT_MODE=test` in production/staging; required there to prevent unrestricted sandbox-funded Marks                                                                                                                                                                                                                                                 |
-| `XENDIT_SUCCESS_REDIRECT_URL` / `XENDIT_FAILURE_REDIRECT_URL`                                 | No       | Required when `PAYMENT_PROVIDER=xendit` (P3.7)                                                                                                                                                                                                                                                                                                                                                                                 |
-| `WEBHOOK_ALLOWED_IPS`                                                                         | No       | Webhook source IP allowlist (comma-separated). **Optional defense-in-depth** (the D2 mandatory guard was removed 2026-08-28): when set, the webhook endpoint rejects sources outside the list. Populate it from **observed** webhook source IPs (see the Xendit webhook wiring section) — never from a published list, because Xendit publishes none. Leave empty to rely on `x-callback-token` + signature verification alone |
-| `SCHEDULER_ENABLED`                                                                           | No       | Starts the BullMQ worker + repeatable jobs (default false). **Required `true` in production/staging (D3)** — the env schema rejects boot with it false, since a prod server without the scheduler silently skips booking expiry, hold release, email dispatch and SLA escalation                                                                                                                                               |
-| `TRUST_PROXY`                                                                                 | No       | Trust `x-forwarded-for` first hop for client IP (default false) — required behind a reverse proxy so rate limiting and webhook IP checks see real client IPs                                                                                                                                                                                                                                                                   |
-| `DB_SSL_ENABLED`                                                                              | No       | Enable TLS for the PostgreSQL connection (default true); set false for Coolify's bundled non-TLS PostgreSQL                                                                                                                                                                                                                                                                                                                    |
-| `DB_SSL_REJECT_UNAUTHORIZED`                                                                  | No       | Reject unauthorized TLS certificates on the DB connection (default true)                                                                                                                                                                                                                                                                                                                                                       |
-| `METRICS_TOKEN`                                                                               | No       | Bearer token for the metrics endpoint                                                                                                                                                                                                                                                                                                                                                                                          |
-| `UPLOAD_DIR`                                                                                  | No       | Local upload directory when R2 is not configured (default `./uploads`)                                                                                                                                                                                                                                                                                                                                                         |
-| `SANITY_PROJECT_ID`                                                                           | No       | Sanity project id (defaults to the Cogito Academy project; set explicitly per deployment)                                                                                                                                                                                                                                                                                                                                      |
-| `SANITY_DATASET`                                                                              | No       | Sanity dataset (defaults to `development`; production/staging must set the intended published dataset)                                                                                                                                                                                                                                                                                                                         |
-| `SANITY_API_VERSION`                                                                          | No       | Sanity API version in `YYYY-MM-DD` format (default `2024-03-01`)                                                                                                                                                                                                                                                                                                                                                               |
-| `SANITY_API_TOKEN`                                                                            | No       | Server-only token for private Sanity datasets; never add it to `apps/web`/`VITE_*` variables                                                                                                                                                                                                                                                                                                                                   |
-| `XENDIT_DEFAULT_PAYMENT_METHOD`                                                               | No       | Default Xendit channel (`ewallet_ovo`/`qris`/`va_bca`; default `ewallet_ovo`)                                                                                                                                                                                                                                                                                                                                                  |
-| `SESSION_COOKIE_CACHE_MAX_AGE`                                                                | No       | Better Auth session-cookie cache max age in seconds (default 60)                                                                                                                                                                                                                                                                                                                                                               |
-| `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` / `R2_PUBLIC_URL` | No       | Cloudflare R2 upload backend (required in production/staging — P4.3). `R2_BUCKET` is the PUBLIC uploads bucket (`cogito-bucket`); backups use the separate `R2_BACKUP_BUCKET` (private, `cogito-backups`)                                                                                                                                                                                                                      |
-| `SEED_ALLOWED_IN_PROD`                                                                        | No       | Seed-script production guard                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `STUB_WEBHOOK_ALLOWED`                                                                        | No       | Stub-checkout E2E flag; the stub checkout endpoint only serves `development`/`test` — staging always returns 404 (prod-fixes C2)                                                                                                                                                                                                                                                                                               |
+| Variable                                                                                      | Required | Description                                                                                                                                                                                                                                                                      |
+| --------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                                                                                | Yes      | PostgreSQL connection string                                                                                                                                                                                                                                                     |
+| `BETTER_AUTH_SECRET`                                                                          | Yes      | Auth secret key                                                                                                                                                                                                                                                                  |
+| `BETTER_AUTH_URL`                                                                             | Yes      | API base URL for auth cookies (production: `https://api.cogitoacademy.id`)                                                                                                                                                                                                       |
+| `CORS_ORIGIN`                                                                                 | Yes      | Allowed frontend origin (production: `https://app.cogitoacademy.id`)                                                                                                                                                                                                             |
+| `PAYMENT_WEBHOOK_SECRET`                                                                      | Yes      | Webhook verification secret (provider-agnostic)                                                                                                                                                                                                                                  |
+| `REDIS_URL`                                                                                   | Yes      | Redis URL (required since #48 — mandatory for boot)                                                                                                                                                                                                                              |
+| `GOOGLE_CLIENT_EMAIL`                                                                         | No       | Google service account email                                                                                                                                                                                                                                                     |
+| `GOOGLE_PRIVATE_KEY`                                                                          | No       | Google service account private key                                                                                                                                                                                                                                               |
+| `GOOGLE_CALENDAR_ID`                                                                          | No       | Google Calendar ID for meeting creation                                                                                                                                                                                                                                          |
+| `GOOGLE_IMPERSONATED_USER`                                                                    | No       | SA-mode impersonation address (REVIEW-FIXES-4 P4.2)                                                                                                                                                                                                                              |
+| `GOOGLE_MEET_ENABLED`                                                                         | No       | Enables Google Meet provider (default false)                                                                                                                                                                                                                                     |
+| `GOOGLE_MEET_CLIENT_ID`/`GOOGLE_MEET_CLIENT_SECRET`/`GOOGLE_MEET_REFRESH_TOKEN`               | No       | OAuth path credentials for Google Meet                                                                                                                                                                                                                                           |
+| `RESEND_API_KEY`                                                                              | No       | Resend API key (required in production/staging — P4.1)                                                                                                                                                                                                                           |
+| `EMAIL_FROM`                                                                                  | No       | Sender address (default `noreply@cogitoacademy.id`; must be a verified Resend domain in prod/staging)                                                                                                                                                                            |
+| `ADMIN_EMAILS`                                                                                | No       | Comma-separated production/staging admin bootstrap emails (default `itcogitoacademy01@gmail.com`); existing admins are never demoted                                                                                                                                             |
+| `XENDIT_SECRET_KEY`                                                                           | No       | Xendit API secret key (required when `PAYMENT_PROVIDER=xendit`)                                                                                                                                                                                                                  |
+| `XENDIT_WEBHOOK_TOKEN`                                                                        | No       | Xendit webhook verification token                                                                                                                                                                                                                                                |
+| `XENDIT_MODE`                                                                                 | No       | Required when `PAYMENT_PROVIDER=xendit`: `test` for Xendit Test Mode or `live` for Live Mode. The matching Xendit API key selects the actual environment                                                                                                                         |
+| `XENDIT_TEST_ALLOWED_EMAILS`                                                                  | No       | Comma-separated verified student emails allowed to create purchases when `XENDIT_MODE=test` in production/staging; required there to prevent unrestricted sandbox-funded Marks                                                                                                   |
+| `XENDIT_SUCCESS_REDIRECT_URL` / `XENDIT_FAILURE_REDIRECT_URL`                                 | No       | Required when `PAYMENT_PROVIDER=xendit` (P3.7)                                                                                                                                                                                                                                   |
+| `WEBHOOK_ALLOWED_IPS`                                                                         | No       | Webhook source IP allowlist (comma-separated). **Required in production/staging when `PAYMENT_PROVIDER=xendit`** (D2) — the env schema rejects boot with an empty allowlist so the endpoint is never open to every IP                                                            |
+| `SCHEDULER_ENABLED`                                                                           | No       | Starts the BullMQ worker + repeatable jobs (default false). **Required `true` in production/staging (D3)** — the env schema rejects boot with it false, since a prod server without the scheduler silently skips booking expiry, hold release, email dispatch and SLA escalation |
+| `TRUST_PROXY`                                                                                 | No       | Trust `x-forwarded-for` first hop for client IP (default false) — required behind a reverse proxy so rate limiting and webhook IP checks see real client IPs                                                                                                                     |
+| `DB_SSL_ENABLED`                                                                              | No       | Enable TLS for the PostgreSQL connection (default true); set false for Coolify's bundled non-TLS PostgreSQL                                                                                                                                                                      |
+| `DB_SSL_REJECT_UNAUTHORIZED`                                                                  | No       | Reject unauthorized TLS certificates on the DB connection (default true)                                                                                                                                                                                                         |
+| `METRICS_TOKEN`                                                                               | No       | Bearer token for the metrics endpoint                                                                                                                                                                                                                                            |
+| `UPLOAD_DIR`                                                                                  | No       | Local upload directory when R2 is not configured (default `./uploads`)                                                                                                                                                                                                           |
+| `SANITY_PROJECT_ID`                                                                           | No       | Sanity project id (defaults to the Cogito Academy project; set explicitly per deployment)                                                                                                                                                                                        |
+| `SANITY_DATASET`                                                                              | No       | Sanity dataset (defaults to `development`; production/staging must set the intended published dataset)                                                                                                                                                                           |
+| `SANITY_API_VERSION`                                                                          | No       | Sanity API version in `YYYY-MM-DD` format (default `2024-03-01`)                                                                                                                                                                                                                 |
+| `SANITY_API_TOKEN`                                                                            | No       | Server-only token for private Sanity datasets; never add it to `apps/web`/`VITE_*` variables                                                                                                                                                                                     |
+| `XENDIT_DEFAULT_PAYMENT_METHOD`                                                               | No       | Default Xendit channel (`ewallet_ovo`/`qris`/`va_bca`; default `ewallet_ovo`)                                                                                                                                                                                                    |
+| `SESSION_COOKIE_CACHE_MAX_AGE`                                                                | No       | Better Auth session-cookie cache max age in seconds (default 60)                                                                                                                                                                                                                 |
+| `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` / `R2_PUBLIC_URL` | No       | Cloudflare R2 upload backend (required in production/staging — P4.3)                                                                                                                                                                                                             |
+| `R2_BACKUP_BUCKET`                                                                            | No       | Private R2 bucket used only for database backups; keep separate from the public upload bucket                                                                                                                                                                                    |
+| `SEED_ALLOWED_IN_PROD`                                                                        | No       | Seed-script production guard                                                                                                                                                                                                                                                     |
+| `STUB_WEBHOOK_ALLOWED`                                                                        | No       | Stub-checkout E2E flag; the stub checkout endpoint only serves `development`/`test` — staging always returns 404 (prod-fixes C2)                                                                                                                                                 |
 
 ## Real-Provider Swap (Resend / Xendit / Google Meet / R2)
 
@@ -821,15 +751,15 @@ The app defaults to dev-safe stand-ins (stub email, stub payments, manual Meet f
 | Google Meet | Manual link fallback | **Boot warning + fallback** — a failed probe is logged and online bookings fall back to manual/retry handling until credentials are fixed | Complete credential set + `GOOGLE_IMPERSONATED_USER` (SA mode) + successful boot probe (P4.2)                                                                |
 | R2          | Local `UPLOAD_DIR`   | **Silent** — prod without R2 writes to container-local disk, lost on redeploy; R2 set but `R2_PUBLIC_URL` unset → objects unreachable     | All `R2_*` + `R2_PUBLIC_URL` required in production/staging (P4.3)                                                                                           |
 
-> **P3 status (2026-08-17):** the Xendit provider was rewritten for `api-version: 2024-11-11` — `request_amount`/`channel_code`/`channel_properties`, top-level response with `actions[].value` (REDIRECT_CUSTOMER → PRESENT_TO_CUSTOMER), statuses SUCCEEDED/REQUIRES_ACTION/AUTHORIZED/CANCELED, webhook idempotency keys from `data.payment_id`/`payment_request_id` (fixes the `xendit:no-event-id` collision), and a provider `refund()` port (migration 0025 adds `payment_record.provider_request_id`). Timestamp validation is provider-conditional (skipped for xendit — L4). `XENDIT_SUCCESS/FAILURE_REDIRECT_URL` are required by the env schema when `PAYMENT_PROVIDER=xendit` (P3.7). **N1 (2026-08-19):** the provider `refund()` port is **no longer wired into `adminRefund`** — admin refunds are in-app Marks credits only (`refund_record.amount_idr = 0`, `provider_event_id` NULL); no Xendit cash refund is ever issued from `adminRefund` (PRD §677: Marks not convertible to rupiah).
+> **P3 status (2026-08-17; idempotency hardened 2026-08-29):** the Xendit provider was rewritten for `api-version: 2024-11-11` — `request_amount`/`channel_code`/`channel_properties`, top-level response with `actions[].value` (REDIRECT_CUSTOMER → PRESENT_TO_CUSTOMER), statuses SUCCEEDED/REQUIRES_ACTION/AUTHORIZED/CANCELED, webhook lifecycle keys from provider + `data.payment_id`/`payment_request_id` + normalized status (with provider-reference fallback), and a provider `refund()` port (migration 0025 adds `payment_record.provider_request_id`). The status component ensures a later paid/refunded lifecycle event is not hidden by an earlier event for the same payment; an identical retry still deduplicates. Timestamp validation is provider-conditional (skipped for xendit — L4). `XENDIT_SUCCESS/FAILURE_REDIRECT_URL` are required by the env schema when `PAYMENT_PROVIDER=xendit` (P3.7). **N1 (2026-08-19):** the provider `refund()` port is **no longer wired into `adminRefund`** — admin refunds are in-app Marks credits only (`refund_record.amount_idr = 0`, `provider_event_id` NULL); no Xendit cash refund is ever issued from `adminRefund` (PRD §677: Marks not convertible to rupiah).
 
 ### Xendit go-live checklist (production switch)
 
 The production app can run Xendit Test Mode first. The switch to Live Mode happens only after the production-domain UAT checklist below passes:
 
 1. **Pre-flight:** run the sandbox checklist above against the sandbox keys. Confirm `XENDIT_DEFAULT_PAYMENT_METHOD` matches the launch channel (default `ewallet_ovo`).
-2. **Webhook wiring:** set the Xendit dashboard webhook URL to `https://api.cogitoacademy.id/webhooks/payments/xendit` and confirm the dashboard sends the `api-version: 2024-11-11` payload shape (`data.payment_id` / `data.payment_request_id`). The webhook idempotency key derives from the verified payload id — no `x-callback-token` guessing.
-3. **Env:** in the SOPS-encrypted prod env, set `XENDIT_MODE=live` and replace the Test Mode `XENDIT_SECRET_KEY`/`XENDIT_WEBHOOK_TOKEN` with Live Mode credentials. Keep the redirect URLs, update the webhook configuration to Live Mode, and set `WEBHOOK_ALLOWED_IPS` to the **observed** live egress IPs (defense-in-depth; optional since the D2 guard was removed — see the two-allowlist section). The env schema fails boot if `PAYMENT_PROVIDER=xendit` lacks credentials or an explicit mode, so a half-swapped config cannot silently run the stub.
+2. **Webhook wiring:** set the Xendit dashboard webhook URL to `https://api.cogitoacademy.id/webhooks/payments/xendit` and confirm the dashboard sends the `api-version: 2024-11-11` payload shape (`data.payment_id` / `data.payment_request_id`). The webhook idempotency key derives from the verified payload id/reference plus normalized lifecycle status — no `x-callback-token` guessing. During UAT, send the same paid payload twice (the second must be idempotent), then verify a different lifecycle status for the same payment is not suppressed.
+3. **Env:** in the SOPS-encrypted prod env, set `XENDIT_MODE=live` and replace the Test Mode `XENDIT_SECRET_KEY`/`XENDIT_WEBHOOK_TOKEN` with Live Mode credentials. Keep the redirect URLs, update the webhook configuration to Live Mode, and set `WEBHOOK_ALLOWED_IPS` to the live egress IPs from Xendit. The env schema fails boot if `PAYMENT_PROVIDER=xendit` lacks credentials or an explicit mode, so a half-swapped config cannot silently run the stub.
 4. **Live smoke:** run one real small purchase (Pioneer 400 / Rp 2,000,000 or the smallest approved package) end-to-end: create purchase → Xendit checkout → webhook → wallet credit once. Verify the redirect return works and the balance page reflects the credit.
 5. **Negative tests:** deliver a webhook with a wrong token (rejected), from a non-allowlisted IP (rejected), and a duplicate delivery (idempotent — single credit).
 6. **Refund path:** confirm an `adminRefund` writes `refund_record` with `amount_idr = 0` and `provider_event_id` NULL — no Xendit cash refund is ever issued (PRD §677).
@@ -847,53 +777,6 @@ Steps to validate the Xendit integration on the production domain before accepti
 6. Verify the wrong Test Mode token returns 401, a non-allowlisted webhook source returns 403, a duplicate webhook is idempotent, and a REFUNDED webhook follows the reconciliation rules. Xendit timestamp validation is intentionally skipped because the current integration relies on `x-callback-token`.
 7. Record the test payment IDs and remove/expire the UAT data or use dedicated test accounts before switching to Live Mode. Test transactions in the production database are still application data and may affect “package already purchased” checks.
 8. Only after all checks pass, follow the go-live checklist and switch the key/token + `XENDIT_MODE` from `test` to `live`.
-
-### Xendit webhook wiring (two-allowlist distinction)
-
-There are **two different allowlists** that are easy to confuse:
-
-| Allowlist                           | Where it lives                      | What it contains                          | Purpose                                                                                             |
-| ----------------------------------- | ----------------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| **Xendit dashboard IP Allowlist**   | Xendit dashboard (webhook settings) | **Your VPS public IP** (`15.235.186.159`) | Tells Xendit which IPs may _receive_ webhooks — Xendit only delivers to allowlisted destination IPs |
-| **`WEBHOOK_ALLOWED_IPS`** (app env) | Coolify API env                     | **Observed Xendit source IPs**            | Tells the app which IPs may _send_ webhooks — the app rejects sources outside the list              |
-
-The two are not interchangeable: the dashboard list gates Xendit's _delivery_,
-the app env gates the app's _acceptance_. Xendit publishes **no** source-IP
-list, so `WEBHOOK_ALLOWED_IPS` can never be populated from a published list —
-it must be populated from **observed** webhook source IPs.
-
-**Primary gate: `x-callback-token`.** The app verifies the callback token
-(`XENDIT_WEBHOOK_TOKEN`) and the webhook signature before processing; that is
-the primary authentication. `WEBHOOK_ALLOWED_IPS` is defense-in-depth only
-(the D2 mandatory guard was removed 2026-08-28) — when set, sources outside
-the list are rejected with 403.
-
-**Observed-IPs approach (recommended):**
-
-1. Leave `WEBHOOK_ALLOWED_IPS` empty initially (rely on `x-callback-token` +
-   signature verification).
-2. Watch the API logs for webhook deliveries and record the source IPs
-   (`x-forwarded-for` first hop — requires `TRUST_PROXY=true`).
-3. Once the observed set is stable, set `WEBHOOK_ALLOWED_IPS` to that
-   comma-separated list as defense-in-depth.
-4. Re-check after any Xendit infrastructure change (they can rotate egress
-   IPs); a suddenly-rejected webhook is usually a rotated source IP, not a
-   broken integration.
-
-**Webhook 401 investigation (wave-2, 2026-08-28):** the Coolify deploy webhook
-currently returns 401. Two candidate causes, both documented:
-
-1. **Missing Traefik route** for `coolify.cogitoacademy.id/api/v1/deploy/*`
-   (the route is declared in `coolify-resources.yml`; a 404/401 from the
-   proxy means the route is not live).
-2. **Missing `Authorization: Bearer` header** — current Coolify versions label
-   the endpoint **Deploy Webhook (auth required)**: the URL identifies the
-   target, and a Coolify API token with the `deploy` permission must be sent
-   as `Authorization: Bearer <coolify-api-token>` (see DEPLOYMENT.md §5).
-
-Verify which one it is: curl the webhook URL from a public client — `404`
-means the route is missing, `401` with the Bearer header means the token is
-wrong/expired, `401` without it means the header is missing.
 
 ### Google Meet refresh-token acquisition (X3)
 
@@ -935,17 +818,10 @@ Manual smoke test after an auth or web deploy:
 
 The production env schema requires all four `R2_*` vars together **and** `R2_PUBLIC_URL` when R2 is configured (partial config or a missing public URL fails loudly — no container-local disk fallback, no unreachable objects).
 
-**Two buckets, never mixed (2026-08-28):**
-
-- `cogito-bucket` — **PUBLIC** app uploads (avatars, achievement evidence), served via the `r2bucket.cogitoacademy.id` custom domain. This is the app's `R2_BUCKET`.
-- `cogito-backups` — **PRIVATE** nightly DB dumps + CD pre-migrate snapshots, API-token access only, **no public domain**. This is `R2_BACKUP_BUCKET` (used by `infra/backup.sh` + `scripts/migrate-and-deploy.sh`).
-
-Never put database dumps in the public bucket — a guessable `https://r2bucket.cogitoacademy.id/backups/2026-08-28.sql.gz` URL would leak the full DB (PII, payments).
-
-1. Cloudflare dashboard → **R2** → create the two buckets above (region `auto`).
-2. **Manage R2 API Tokens** → create a token with Object Read & Write on both buckets → copy `ACCESS_KEY_ID` + `SECRET_ACCESS_KEY` into `R2_ACCOUNT_ID` (your Cloudflare account id), `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` (public), `R2_BACKUP_BUCKET` (private).
-3. Set `R2_PUBLIC_URL` to the public custom domain (`https://r2bucket.cogitoacademy.id`). `GET /uploads/*` is disabled whenever `R2_PUBLIC_URL` is set (objects are served from R2 instead).
-4. Verify an upload → the returned key resolves under `R2_PUBLIC_URL`; verify a backup lands in `s3://cogito-backups/backups/` (private).
+1. Cloudflare dashboard → **R2** → create a bucket (region `auto`).
+2. **Manage R2 API Tokens** → create a token with Object Read & Write on the bucket → copy `ACCESS_KEY_ID` + `SECRET_ACCESS_KEY` into `R2_ACCOUNT_ID` (your Cloudflare account id), `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`.
+3. Set `R2_PUBLIC_URL` to the public object URL (e.g. `https://media.cogitoacademy.id` via a custom domain, or the `r2.cloudflarestorage.com` endpoint). `GET /uploads/*` is disabled whenever `R2_PUBLIC_URL` is set (objects are served from R2 instead).
+4. Verify an upload → the returned key resolves under `R2_PUBLIC_URL`.
 
 ## Deploy Secrets (CD webhooks)
 
@@ -970,13 +846,11 @@ The CD workflows (`cd-staging.yml` / `cd-prod.yml`) trigger Coolify deploys via 
    > plane is tailnet-only — the UI and SSH are reachable only over Tailscale,
    > and the old webhook host (`cl.cogitoacademy.id`) had no DNS record, so
    > GitHub Actions (cloud) failed with `curl exit 6 "Could not resolve host"`.
-   > Option A exposes **only** the deploy-webhook path: a DNS record + Traefik
+   > Option A exposes **only** the deploy-webhook path: a DNS record + Caddy
    > route for `coolify.cogitoacademy.id/api/v1/deploy/*` (the per-resource UUID
    > in the URL is the bearer secret); everything else on that host returns
    > 404/denied and the Coolify UI stays tailnet-only. The operator must
    > recreate the two production secrets with the resolvable URL above.
-   > (The Coolify bundled proxy is **Traefik v3.6**, verified 2026-08-28 —
-   > not Caddy.)
 
 3. GitHub → repo **Settings → Secrets and variables → Actions**:
    - `COOLIFY_STAGING_SERVER_WEBHOOK` — full staging API resource URL
@@ -1065,3 +939,7 @@ If a push fails with `denied: installation not allowed to Create organization pa
    docker push ghcr.io/cogitoacademy/app/server:init   # repeat for /web
    ```
    After the packages exist, the workflows push without org changes.
+
+## Tutor payout operations (2026-08-28)
+
+Apply migrations `0034_faulty_richard_fisk.sql`, `0035_ordinary_lyja.sql`, and `0036_worried_groot.sql` before deploying the tutor payout-account UI. Operations may process tutor honoraria weekly, but the balance does not reset on a calendar boundary. Review the unpaid amount, transfer the net amount, then call the admin mark-paid procedure; this advances the completion-time cutoff and clears only the sessions included in that payout. Completion and mark-paid operations are serialized per tutor to avoid a boundary race. Only conventional BCA (exact bank name `BCA`) is fee-free; BCA Syariah, blu (BCA Digital), and any other destination incur Rp2,500 once on that payout. The application records the payment audit trail but does not execute a bank transfer. Confirm the tutor's account number, holder name, opening city/regency, ownership choice, and transfer disclaimer before initiating the transfer.

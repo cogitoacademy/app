@@ -41,13 +41,13 @@ describe("matchRateLimitPath maps real slash-key RPC URLs", () => {
     expect(matchRateLimitPath("/rpc/upload/createUploadUrl")).toBe("upload");
   });
 
-  test("content file proxy matches /content/student-resources/*", () => {
-    expect(matchRateLimitPath("/content/student-resources/abc123/file")).toBe(
+  test("content file proxy matches /content/knowledge-bank/*", () => {
+    expect(matchRateLimitPath("/content/knowledge-bank/abc123/file")).toBe(
       "content",
     );
-    expect(
-      matchRateLimitPath("/content/student-resources/abc123/file?x=1"),
-    ).toBe("content");
+    expect(matchRateLimitPath("/content/knowledge-bank/abc123/file?x=1")).toBe(
+      "content",
+    );
     expect(matchRateLimitPath("/content/competitions")).toBeNull();
   });
 

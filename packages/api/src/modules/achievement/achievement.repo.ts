@@ -268,11 +268,24 @@ async function updateStatus(
   id: string,
   status: string,
   adminNote?: string | null,
+  expectedStatus?: string,
+  expectedVersion?: number,
 ) {
+  const conditions = [eq(achievement.id, id)];
+  if (expectedStatus !== undefined) {
+    conditions.push(eq(achievement.status, expectedStatus));
+  }
+  if (expectedVersion !== undefined) {
+    conditions.push(eq(achievement.version, expectedVersion));
+  }
   const [updated] = await conn
     .update(achievement)
-    .set({ status, adminNote: adminNote ?? null })
-    .where(eq(achievement.id, id))
+    .set({
+      status,
+      adminNote: adminNote ?? null,
+      version: sql`${achievement.version} + 1`,
+    })
+    .where(and(...conditions))
     .returning();
   return updated;
 }

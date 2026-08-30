@@ -9,6 +9,7 @@ import { ACHIEVEMENT_STATUS } from "../../shared/constants";
 import {
   AchievementNotFoundError,
   AchievementNotEditableError,
+  OptimisticLockError,
 } from "../../modules/achievement/achievement.errors";
 
 function makeDb() {
@@ -559,6 +560,37 @@ describe("AchievementService", () => {
           targetId: "a1",
         }),
       );
+    });
+
+    test("rejects a moderation decision that lost an optimistic race", async () => {
+      const existing = {
+        id: "a1",
+        userId: "owner1",
+        eventName: "Olympiad",
+        status: ACHIEVEMENT_STATUS.PENDING_REVIEW,
+        version: 4,
+      };
+      const repo = makeAchievementRepo({
+        getById: mock(async () => existing),
+        updateStatus: mock(async () => undefined),
+      });
+      const auditPort = makeAuditPort();
+      const notificationPort = makeNotificationPort();
+      const service = createAchievementService({
+        achievementRepo: repo as any,
+        auditPort: auditPort as any,
+        notificationPort: notificationPort as any,
+        db: makeDb(),
+      });
+
+      await expect(
+        service.adminReview("admin1", {
+          achievementId: "a1",
+          status: "approved",
+        }),
+      ).rejects.toBeInstanceOf(OptimisticLockError);
+      expect(auditPort.record).not.toHaveBeenCalled();
+      expect(notificationPort.writeBestEffort).not.toHaveBeenCalled();
     });
 
     test("records audit with rejection action", async () => {

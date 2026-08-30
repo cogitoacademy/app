@@ -14,6 +14,7 @@ import type {
   adminGetWalletInput,
   adminListLedgerEntriesInput,
   adminGetTutorPayoutsInput,
+  adminMarkTutorPayoutPaidInput,
   adminUpdateEconomySettingsInput,
 } from "./admin.types";
 
@@ -24,6 +25,9 @@ type AdminListLedgerEntriesInputZod = z.infer<
   typeof adminListLedgerEntriesInput
 >;
 type AdminGetTutorPayoutsInputZod = z.infer<typeof adminGetTutorPayoutsInput>;
+type AdminMarkTutorPayoutPaidInputZod = z.infer<
+  typeof adminMarkTutorPayoutPaidInput
+>;
 type AdminUpdateEconomySettingsInputZod = z.infer<
   typeof adminUpdateEconomySettingsInput
 >;
@@ -92,6 +96,31 @@ export function createAdminHandler(adminService: AdminService) {
     }) => {
       return withDomainMap(
         () => adminService.getTutorPayouts(input),
+        mapAdminError,
+      );
+    },
+
+    getPendingTutorPayouts: async ({
+      input,
+    }: {
+      context: Context;
+      input: AdminMarkTutorPayoutPaidInputZod;
+    }) => {
+      return withDomainMap(
+        () => adminService.getPendingTutorPayouts(input),
+        mapAdminError,
+      );
+    },
+
+    markTutorPayoutPaid: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: AdminMarkTutorPayoutPaidInputZod;
+    }) => {
+      return withDomainMap(
+        () => adminService.markTutorPayoutPaid(context.session!.user.id, input),
         mapAdminError,
       );
     },

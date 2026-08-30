@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { externalHttpUrl } from "../../lib/url-schema";
 
 export const createInviteInput = z.object({
   email: z.string().email().max(320),
@@ -60,4 +61,5 @@ export const reviewTutorProfileInput = z.object({
     "request_edit_changes",
   ]),
   adminNote: z.string().max(2000).optional(),
+  publicPhotoUrl: externalHttpUrl.optional(),
 });

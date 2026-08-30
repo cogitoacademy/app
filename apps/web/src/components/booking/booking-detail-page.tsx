@@ -90,6 +90,8 @@ import {
 } from "./booking-reschedule-action";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { orpc } from "@/utils/orpc";
+
+const LEGACY_TUTOR_PAYOUT_RATE_IDR = 7_000;
 import { ContactRequestPanel } from "./contact-request-panel";
 import { ManualMeetingLinkDialog } from "./manual-meeting-link-dialog";
 
@@ -146,7 +148,7 @@ export function BookingDetailPage({
         queryKey: orpc.booking.get.queryKey({ input: { bookingId } }),
       }),
       queryClient.invalidateQueries({
-        queryKey: orpc.booking.listMine.queryKey({ input: { limit: 100 } }),
+        queryKey: orpc.booking.listMine.key(),
       }),
       queryClient.invalidateQueries({
         queryKey: orpc.tutorActions.listBookings.queryKey({ input: {} }),
@@ -299,7 +301,9 @@ export function BookingDetailPage({
   const canReview = isTutor && booking.currentState === "awaiting_tutor_review";
   const canComplete = isTutor && booking.currentState === "scheduled";
   const canCancel =
-    !isTutor && !isAdmin && canCancelBooking(booking.currentState);
+    !isTutor &&
+    !isAdmin &&
+    canCancelBooking(booking.currentState, booking.scheduledStartAt);
   const canSetManualLink =
     isTutor &&
     booking.modality === "online" &&
@@ -326,6 +330,7 @@ export function BookingDetailPage({
       viewerRole={viewerRole}
       modality={booking.modality}
       currentStartAt={booking.scheduledStartAt}
+      pendingStartAt={activeRescheduleProposal?.proposedStartAt}
       onBookingChanged={refreshBookingQueries}
     />
   ) : null;
@@ -498,7 +503,7 @@ export function BookingDetailPage({
                         title="Completion timing"
                         description={
                           sessionHasEnded
-                            ? "Confirm completion to settle the held Marks."
+                            ? "Confirm completion to record your IDR honorarium."
                             : "Completion becomes available after the scheduled end time."
                         }
                         label="About completing this session"
@@ -512,9 +517,9 @@ export function BookingDetailPage({
         </div>
       </header>
 
-      <div className="grid w-full min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,36rem)] lg:auto-rows-max">
-        <div className="grid min-w-0 gap-4 lg:col-start-1 lg:row-start-1">
-          <Card className="min-w-0 overflow-hidden">
+      <div className="grid w-full min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,36rem)]">
+        <div className="contents lg:col-start-1 lg:flex lg:flex-col lg:gap-4">
+          <Card className="order-1 min-w-0 overflow-hidden lg:order-none">
             <CardHeader>
               <CardTitle>Session overview</CardTitle>
               <CardDescription>
@@ -683,16 +688,19 @@ export function BookingDetailPage({
           !isAdmin &&
           booking.currentState === "completed" &&
           booking.targetGroupSize > 1 ? (
-            <ContactRequestPanel bookingId={bookingId} />
+            <div className="order-1 min-w-0 lg:order-none">
+              <ContactRequestPanel bookingId={bookingId} />
+            </div>
           ) : null}
 
           {booking.type === "series" ? (
-            <Card className="min-w-0 overflow-hidden">
+            <Card className="order-1 min-w-0 overflow-hidden lg:order-none">
               <CardHeader>
                 <CardTitle>Series sessions</CardTitle>
                 <CardDescription>
-                  Each session is completed individually to settle its held
-                  Marks.
+                  {isTutor
+                    ? "Each session is completed individually to record its IDR honorarium."
+                    : "Each session is completed individually to settle its held Marks."}
                 </CardDescription>
               </CardHeader>
               <CardBody className="grid gap-3">
@@ -774,9 +782,48 @@ export function BookingDetailPage({
               </CardBody>
             </Card>
           ) : null}
+
+          <div className="order-3 grid min-w-0 gap-4 lg:order-none">
+            {!isAdmin ? (
+              <BookingLifecycleActions
+                {...lifecycleActionProps}
+                section="supplementary"
+              />
+            ) : null}
+
+            <Card className="min-w-0 overflow-hidden">
+              <CardHeader>
+                <CardTitle>Activity</CardTitle>
+                <CardDescription>
+                  A chronological record of this booking
+                </CardDescription>
+              </CardHeader>
+              <CardBody className="px-6">
+                {history.length > 0 ? (
+                  <ol aria-label="Booking activity" className="relative">
+                    {history.map((entry) => (
+                      <ActivityTimelineItem
+                        key={entry.id}
+                        entry={entry}
+                        timeZone={booking.timezone}
+                        isLast={entry.id === history[history.length - 1]?.id}
+                      />
+                    ))}
+                  </ol>
+                ) : (
+                  <EmptyState
+                    icon={<IconClock />}
+                    title="No activity yet"
+                    description="Booking updates will appear here."
+                    size="inline"
+                  />
+                )}
+              </CardBody>
+            </Card>
+          </div>
         </div>
 
-        <aside className="grid min-w-0 gap-4 lg:col-start-2 lg:row-start-1 lg:sticky lg:top-4">
+        <aside className="order-2 grid min-w-0 gap-4 lg:order-none lg:col-start-2 lg:row-start-1 lg:sticky lg:top-4">
           {!isAdmin ? (
             <BookingLifecycleActions
               {...lifecycleActionProps}
@@ -788,72 +835,46 @@ export function BookingDetailPage({
               <IconBox variant="warning-subtle">
                 <IconCoins />
               </IconBox>
-              <CardTitle>Marks</CardTitle>
-              <CardDescription>Cost and reservation</CardDescription>
-            </CardHeader>
-            <CardBody className="space-y-4">
-              <SummaryRow
-                label="Original price"
-                value={<MarkAmount value={booking.originalMarks} />}
-              />
-              <SummaryRow
-                label="Currently held"
-                value={<MarkAmount value={booking.holdAmount} />}
-              />
-              <SummaryRow
-                label="Refunded"
-                value={<MarkAmount value={booking.refundedAmount} />}
-              />
-              {booking.priceSnapshot ? (
-                <SummaryRow
-                  label="Per participant"
-                  value={
-                    <MarkAmount value={booking.priceSnapshot.perStudent} />
-                  }
-                />
-              ) : null}
-            </CardBody>
-          </Card>
-        </aside>
-
-        <div className="grid min-w-0 gap-4 lg:col-start-1 lg:row-start-2">
-          {!isAdmin ? (
-            <BookingLifecycleActions
-              {...lifecycleActionProps}
-              section="supplementary"
-            />
-          ) : null}
-
-          <Card className="min-w-0 overflow-hidden">
-            <CardHeader>
-              <CardTitle>Activity</CardTitle>
+              <CardTitle>{isTutor ? "Honorarium" : "Marks"}</CardTitle>
               <CardDescription>
-                A chronological record of this booking
+                {isTutor
+                  ? "Amount earned after completion"
+                  : "Cost and reservation"}
               </CardDescription>
             </CardHeader>
-            <CardBody className="px-6">
-              {history.length > 0 ? (
-                <ol aria-label="Booking activity" className="relative">
-                  {history.map((entry) => (
-                    <ActivityTimelineItem
-                      key={entry.id}
-                      entry={entry}
-                      timeZone={booking.timezone}
-                      isLast={entry.id === history[history.length - 1]?.id}
-                    />
-                  ))}
-                </ol>
-              ) : (
-                <EmptyState
-                  icon={<IconClock />}
-                  title="No activity yet"
-                  description="Booking updates will appear here."
-                  size="inline"
+            <CardBody className="space-y-4">
+              {isTutor ? (
+                <SummaryRow
+                  label="Session honorarium"
+                  value={`Rp${(booking.priceSnapshot?.tutorHonorariumIdr ?? (booking.priceSnapshot?.tutorShare ?? 0) * LEGACY_TUTOR_PAYOUT_RATE_IDR).toLocaleString("id-ID")}`}
                 />
+              ) : (
+                <>
+                  <SummaryRow
+                    label="Original price"
+                    value={<MarkAmount value={booking.originalMarks} />}
+                  />
+                  <SummaryRow
+                    label="Currently held"
+                    value={<MarkAmount value={booking.holdAmount} />}
+                  />
+                  <SummaryRow
+                    label="Refunded"
+                    value={<MarkAmount value={booking.refundedAmount} />}
+                  />
+                  {booking.priceSnapshot ? (
+                    <SummaryRow
+                      label="Per participant"
+                      value={
+                        <MarkAmount value={booking.priceSnapshot.perStudent} />
+                      }
+                    />
+                  ) : null}
+                </>
               )}
             </CardBody>
           </Card>
-        </div>
+        </aside>
       </div>
 
       <Dialog
@@ -885,7 +906,9 @@ export function BookingDetailPage({
               </DialogTitle>
               <DialogDescription>
                 {reviewDialog === "decline"
-                  ? "The held Marks will be released and the student will receive your reason."
+                  ? isTutor
+                    ? "The student's reservation will be released and they will receive your reason."
+                    : "The held Marks will be released and the student will receive your reason."
                   : booking.modality === "online"
                     ? "The student will be notified and the session will move to scheduling."
                     : "The student will be notified and the booking will move to room confirmation."}
@@ -1019,7 +1042,9 @@ export function BookingDetailPage({
         description={
           confirmationDialog?.action === "cancel"
             ? "Cancellation rules and applicable refunds will be applied."
-            : "Held Marks will be settled."
+            : isTutor
+              ? "The session will be marked complete and your IDR honorarium will be recorded."
+              : "Held Marks will be settled."
         }
         confirmLabel={
           confirmationDialog?.action === "cancel"

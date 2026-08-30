@@ -2,6 +2,7 @@ import { describe, expect, mock, test } from "bun:test";
 import { Elysia } from "elysia";
 import { webhookIdempotency } from "@cogito-app/api/lib/idempotency";
 import { PaymentNotFoundError } from "@cogito-app/api/modules/payment/payment.errors";
+import { paymentWebhookIdempotencyKey } from "./payments";
 
 const basePayload = {
   providerReference: "stub:user1:pkg1",
@@ -22,6 +23,24 @@ const requestFor = (payload: Record<string, unknown>) =>
   });
 
 describe("webhook M5/L1 failure handling", () => {
+  test("uses lifecycle status and fallback reference in idempotency keys", () => {
+    expect(paymentWebhookIdempotencyKey("xendit", basePayload)).toBe(
+      "xendit:evt_m5:PAID",
+    );
+    expect(
+      paymentWebhookIdempotencyKey("xendit", {
+        ...basePayload,
+        status: "PENDING",
+      }),
+    ).toBe("xendit:evt_m5:PENDING");
+    expect(
+      paymentWebhookIdempotencyKey("xendit", {
+        ...basePayload,
+        providerEventId: null,
+      }),
+    ).toBe("xendit:stub:user1:pkg1:PAID");
+  });
+
   test("L1: event with no event id AND no reference → 400", async () => {
     webhookIdempotency.claim = mock(async (_k: string, _ttl?: number) => true);
     mock.module("@cogito-app/api", () => ({

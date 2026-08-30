@@ -22,3 +22,33 @@ export async function lockTutorForBooking(
     sql`SELECT pg_advisory_xact_lock(hashtextextended(${tutorId}, 0))`,
   );
 }
+
+/** Serializes payout cutoff creation for a single tutor. */
+export async function lockTutorForPayout(
+  conn: DbOrTx,
+  tutorId: string,
+): Promise<void> {
+  await conn.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtextextended(${tutorId}, 2))`,
+  );
+}
+
+/** Serializes proposal replacement for a single booking. */
+export async function lockBookingReschedule(
+  conn: DbOrTx,
+  bookingId: string,
+): Promise<void> {
+  await conn.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtextextended(${bookingId}, 1))`,
+  );
+}
+
+/** Serializes room conflict checks and writes for a single room. */
+export async function lockRoomForBooking(
+  conn: DbOrTx,
+  roomId: string,
+): Promise<void> {
+  await conn.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtextextended(${roomId}, 3))`,
+  );
+}

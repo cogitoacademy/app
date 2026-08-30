@@ -14,6 +14,7 @@ import {
   WalletNotFoundError,
   InvalidLedgerFilterError,
   EconomyConfigConflictError,
+  TutorPayoutNotAvailableError,
 } from "./admin.errors";
 import type { EconomyService } from "../economy";
 import { log } from "../../lib/logger";
@@ -230,6 +231,36 @@ export function createAdminService(deps: {
     });
   }
 
+  async function getPendingTutorPayouts(input: { tutorId: string }) {
+    if (!payout.getPendingTutorPayouts) {
+      throw new TutorPayoutNotAvailableError(input.tutorId);
+    }
+    return payout.getPendingTutorPayouts(input.tutorId);
+  }
+
+  async function markTutorPayoutPaid(
+    adminId: string,
+    input: { tutorId: string },
+  ) {
+    if (!payout.markTutorPayoutPaid) {
+      throw new TutorPayoutNotAvailableError(input.tutorId);
+    }
+    const result = await payout.markTutorPayoutPaid(input.tutorId, adminId);
+    if (!result) throw new TutorPayoutNotAvailableError(input.tutorId);
+    await deps.auditPort.record({
+      db,
+      actorId: adminId,
+      actorType: "admin",
+      action: "tutor_payout_paid",
+      targetId: result.id,
+      targetType: "tutor_payout",
+      beforeState: { tutorId: result.tutorId },
+      afterState: result,
+      details: { transferFeeIdr: result.transferFeeIdr },
+    });
+    return result;
+  }
+
   async function getEconomySettings() {
     if (!economy) throw new Error("Economy service is not configured");
     return economy.getConfig(db);
@@ -357,6 +388,8 @@ export function createAdminService(deps: {
     getWallet,
     listLedgerEntries,
     getTutorPayouts,
+    getPendingTutorPayouts,
+    markTutorPayoutPaid,
     getEconomySettings,
     updateEconomySettings,
   };

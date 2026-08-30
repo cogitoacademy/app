@@ -740,7 +740,9 @@ export function BookingLifecycleActions({
                     </SelectItem>
                     <SelectItem value="technical">Technical problem</SelectItem>
                     <SelectItem value="payment">
-                      Marks or payment issue
+                      {viewerRole === "tutor"
+                        ? "Payment issue"
+                        : "Marks or payment issue"}
                     </SelectItem>
                     <SelectItem value="other">Other</SelectItem>
                   </SelectList>

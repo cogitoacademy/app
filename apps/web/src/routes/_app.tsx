@@ -28,7 +28,7 @@ const routeTitles: Record<string, string> = {
   "/admin-operations": "Operations",
   "/admin-economy": "Economy Settings",
   "/calendar": "Competition Calendar",
-  "/student-resources": "Knowledge Bank",
+  "/knowledge-bank": "Knowledge Bank",
   "/guide": "How Cogito Works",
 };
 
@@ -79,6 +79,7 @@ function RouteComponent() {
           role={(session.data.user as CogitoUser).role}
         />
       }
+      role={(session.data.user as CogitoUser).role}
       sessionExpiresAt={session.data.session.expiresAt}
     >
       <Outlet />

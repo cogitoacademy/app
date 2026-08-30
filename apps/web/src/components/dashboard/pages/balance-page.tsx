@@ -190,10 +190,7 @@ export function BalancePage() {
               <Button
                 className="w-full sm:ml-auto sm:w-auto sm:shrink-0 group"
                 render={
-                  <Link
-                    to="/student-resources"
-                    aria-label="Open Knowledge Bank"
-                  />
+                  <Link to="/knowledge-bank" aria-label="Open Knowledge Bank" />
                 }
                 nativeButton={false}
               >

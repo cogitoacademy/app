@@ -18,12 +18,14 @@ export function Layout({
   children,
   sidebar,
   title = "Dashboard",
+  role,
   sessionExpiresAt,
   contentScrollMode = "page",
 }: {
   children: React.ReactNode;
   sidebar: React.ReactNode;
   title?: string;
+  role?: string;
   sessionExpiresAt?: Date | string | null;
   contentScrollMode?: "page" | "contained";
 }) {
@@ -91,8 +93,10 @@ export function Layout({
             {title}
           </Heading>
           <div className="ml-auto mr-0 flex shrink-0 items-center gap-2">
-            <BalanceBadge />
-            <Separator orientation="vertical" className="mr-2" />
+            {role === "student" ? <BalanceBadge /> : null}
+            {role === "student" ? (
+              <Separator orientation="vertical" className="mr-2" />
+            ) : null}
             <NotificationBell />
             <ModeToggle />
           </div>

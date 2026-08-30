@@ -133,6 +133,26 @@ export interface BookingPayoutPort {
     tutorPayout: number;
     tutorPayoutIdr: number;
   }>;
+  getPendingTutorPayouts?(tutorId: string): Promise<{
+    completedSessions: number;
+    totalMarks: number;
+    cogitoTake: number;
+    tutorPayout: number;
+    tutorPayoutIdr: number;
+    lastPaidAt: Date | null;
+  }>;
+  markTutorPayoutPaid?(
+    tutorId: string,
+    adminId: string,
+  ): Promise<{
+    id: string;
+    tutorId: string;
+    grossHonorariumIdr: number;
+    transferFeeIdr: number;
+    netHonorariumIdr: number;
+    bankName: string;
+    paidAt: Date;
+  } | null>;
 }
 
 export function createBookingModule(deps: {

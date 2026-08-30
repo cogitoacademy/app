@@ -17,6 +17,8 @@ function makeProfile(
     displayName: "Dr. Smith",
     shortBio: "Experienced tutor",
     credentialsSummary: "PhD Math",
+    achievements: "National medalist",
+    experiences: "Math tutor",
     expertise: ["algebra", "calculus"],
     modality: "online",
     prices: { "1": 50, "2": 40 },
@@ -54,11 +56,13 @@ describe("Discovery Service", () => {
       expect(result.displayName).toBe("Dr. Smith");
       expect(result.shortBio).toBe("Experienced tutor");
       expect(result.credentialsSummary).toBe("PhD Math");
+      expect(result.achievements).toBe("National medalist");
+      expect(result.experiences).toBe("Math tutor");
       expect(result.expertise).toEqual(["algebra", "calculus"]);
       expect(result.modality).toBe("online");
       expect(result.prices).toEqual({ "1": 50, "2": 40 });
-      expect(result.availabilitySummary).toBe("Weekdays");
-      expect(result.proofUrls).toEqual(["https://proof.example.com/cert.pdf"]);
+      expect(result).not.toHaveProperty("availabilitySummary");
+      expect(result).not.toHaveProperty("proofUrls");
       expect(result.publishedAt).toEqual(new Date("2025-01-01"));
     });
 

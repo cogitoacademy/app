@@ -74,7 +74,7 @@ export function StudentDashboardPage({ studentName }: { studentName: string }) {
         </div>
       </div>
 
-      <div className="grid items-start gap-4 lg:grid-cols-2">
+      <div className="grid items-start gap-4 min-[1600px]:grid-cols-2">
         <NextLessonSection
           booking={nextBooking}
           isLoading={bookings.isPending}
@@ -113,7 +113,7 @@ function KnowledgeBankCard({ eligible }: { eligible: boolean }) {
           nativeButton={false}
           render={
             eligible ? (
-              <Link to="/student-resources" aria-label="Open Knowledge Bank" />
+              <Link to="/knowledge-bank" aria-label="Open Knowledge Bank" />
             ) : (
               <Link to="/balance" aria-label="View Marks balance" />
             )

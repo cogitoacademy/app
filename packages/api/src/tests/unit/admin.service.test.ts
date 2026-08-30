@@ -10,6 +10,7 @@ import {
   WalletNotFoundError,
   InvalidLedgerFilterError,
   EconomyConfigConflictError,
+  TutorPayoutNotAvailableError,
 } from "../../modules/admin/admin.errors";
 
 function makeTarget(overrides: Partial<TargetUser> = {}): TargetUser {
@@ -17,6 +18,62 @@ function makeTarget(overrides: Partial<TargetUser> = {}): TargetUser {
 }
 
 describe("Admin Service", () => {
+  describe("tutor payout settlement", () => {
+    const makeService = (
+      payout: any,
+      auditPort = { record: mock(async () => {}) },
+    ) => ({
+      service: createAdminService({
+        adminRepo: {} as any,
+        auditPort,
+        db: {} as any,
+        wallet: {} as any,
+        payout,
+      }),
+      auditPort,
+    });
+
+    test("returns pending payout data and rejects an unavailable port", async () => {
+      const payout = {
+        getPendingTutorPayouts: mock(async () => ({ tutorId: "t1" })),
+      };
+      await expect(
+        makeService(payout).service.getPendingTutorPayouts({ tutorId: "t1" }),
+      ).resolves.toEqual({ tutorId: "t1" });
+      await expect(
+        makeService({}).service.getPendingTutorPayouts({ tutorId: "t1" }),
+      ).rejects.toThrow(TutorPayoutNotAvailableError);
+    });
+
+    test("marks a payout paid and audits it", async () => {
+      const row = { id: "p1", tutorId: "t1", transferFeeIdr: 6500 };
+      const payout = { markTutorPayoutPaid: mock(async () => row) };
+      const { service, auditPort } = makeService(payout);
+      await expect(
+        service.markTutorPayoutPaid("admin1", { tutorId: "t1" }),
+      ).resolves.toBe(row);
+      expect(auditPort.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "tutor_payout_paid",
+          targetId: "p1",
+        }),
+      );
+    });
+
+    test("rejects missing payout support and empty settlements", async () => {
+      await expect(
+        makeService({}).service.markTutorPayoutPaid("admin1", {
+          tutorId: "t1",
+        }),
+      ).rejects.toThrow(TutorPayoutNotAvailableError);
+      await expect(
+        makeService({
+          markTutorPayoutPaid: mock(async () => null),
+        }).service.markTutorPayoutPaid("admin1", { tutorId: "t1" }),
+      ).rejects.toThrow(TutorPayoutNotAvailableError);
+    });
+  });
+
   describe("validateRoleChange", () => {
     test("returns previousRole for changing student to tutor", () => {
       const result = validateRoleChange(

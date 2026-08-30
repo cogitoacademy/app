@@ -1,6 +1,21 @@
 # Cogito Module Reference
 
-Last updated: 2026-08-27
+Last updated: 2026-08-28
+
+## Collection transition behavior (2026-08-28)
+
+The web collection layer uses `keepPreviousData` for server-backed admin tutor
+pagination, tutor discovery search/filter changes, and admin booking-queue
+filter changes. Admin tutor pagination uses per-card DOM anchors and
+`scrollIntoView` after a click; it keeps the current table visible during the
+request and disables the controls until the next page arrives. Cursor-loaded
+notifications already preserve prior pages by design. User-specific wallet
+lookup and student search do not retain stale results across a changed query.
+
+The shared booking list uses Needs action, Upcoming, Recurring, History, and All tabs. Students and tutors land on Needs action when pending decisions exist; admins retain All. Recommended sorting ranks pending decisions first, active bookings next, and terminal outcomes last; Soonest and Latest provide direct date ordering. The URL stores both presentation choices. The page consumes `booking.listMine` in cursor-backed batches of 20 with an explicit **Load more bookings** action. Infinite-query pages are appended without replacing loaded cards; tabs and sorting operate on loaded pages, and counts use a `+` suffix while another cursor remains.
+
+`BookingListCard` derives one contextual time chip from server facts: pending states read `deadlineAt`, confirmed/scheduled states read the scheduled window, and terminal states render none. A module-level external clock store updates all mounted cards from one 30-second interval rather than allocating one timer per row.
+The reusable card exposes `showFinancialInfo`; booking lists keep it enabled and place the time chip after it, while dashboard next-lesson cards disable it.
 
 Tutor invitations use the shared email provider: create sends once, **Generate & copy link** only rotates the token, and the separate **Send again** procedure rotates then explicitly delivers through Resend. Delivery failure does not roll back the valid invite.
 
@@ -32,7 +47,7 @@ configured address only for the production/staging seed account.
 
 The frontend form-control refactor remains outside this service boundary. Selia controls provide consistent date, time, number, and multiline-input UX while retaining semantic HTML behavior and the existing API contracts. Shared text-entry controls use an explicit 16px font size below the `lg` breakpoint to prevent mobile focus zoom, then use the tokenized `text-base` size from `lg` upward. Tutor availability keeps compact, equal-width minute-time fields with a visual range separator and content-sized suggestions, and modality triggers render icons beside labels. Portal-based date/select popups are layered above dialogs so the shared controls remain usable inside modal forms.
 
-Frontend dashboard integration is intentionally read-only and role-scoped: student data comes from booking/discovery/wallet, tutor data from tutor actions/profile/availability/payouts, and admin data from booking operations/tutor moderation/achievement moderation. The shared booking list keeps financial/status metadata beside participant avatars, uses the Cogito mark icon plus status-badge tooltips for compact row presentation, orders active/all rows by nearest scheduled start while keeping past/cancelled history newest-first, and defaults by role to Upcoming (student), Pending when tutor requests exist (tutor), or All (admin); an explicit `tab` query parameter wins. On narrow screens, its rounded status-tab strip fills the available width while only the inner tab list scrolls horizontally within a hidden-scrollbar region so the page itself does not overflow. Student and tutor dashboards derive their next lesson from the same non-terminal, non-pending upcoming set and render the shared `BookingListCard`, so visual changes to the booking card apply to all three surfaces. They also render the shared `DashboardWelcomeCard` with role-specific copy and destinations, keeping the SVG illustration, minimum height, spacing, and CTA structure aligned. The tutor dashboard presents welcome/setup first and keeps the review queue and next lesson in the next visible row, with a stable empty/loading review card. Booking detail activity uses transition-specific icons and a single destination-state badge for scanability. Dashboard cards link to the existing feature routes where mutations and detailed workflows live.
+Frontend dashboard integration is intentionally read-only and role-scoped: student data comes from booking/discovery/wallet, tutor data from tutor actions/profile/availability/payouts, and admin data from booking operations/tutor moderation/achievement moderation. The shared booking list keeps financial/status metadata beside participant avatars, uses the Cogito mark icon plus status-badge tooltips for compact row presentation, orders active/all rows by nearest scheduled start while keeping past/cancelled history newest-first, and defaults by role to Upcoming (student), Pending when tutor requests exist (tutor), or All (admin); an explicit `tab` query parameter wins. On narrow screens, its rounded status-tab strip fills the available width while only the inner tab list scrolls horizontally within a hidden-scrollbar region so the page itself does not overflow; internal paint padding keeps selected-tab shadows and focus rings visible, and shared empty-state cards preserve their rounded glow and card shadow without widening the page. Student and tutor dashboards derive their next lesson from the same non-terminal, non-pending upcoming set and render the shared `BookingListCard`, so visual changes to the booking card apply to all three surfaces. They also render the shared `DashboardWelcomeCard` with role-specific copy and destinations, keeping the SVG illustration, minimum height, spacing, and CTA structure aligned. The tutor dashboard presents welcome/setup first and keeps the review queue and next lesson in the next visible row, with a stable empty/loading review card. Booking detail activity uses transition-specific icons and a single destination-state badge for scanability. Dashboard cards link to the existing feature routes where mutations and detailed workflows live.
 
 The authenticated frontend guide is a read-only, code-managed journey map at `/guide`. Its content lives in `apps/web/src/components/guide/guide-content.ts`, while `guide-page.tsx` renders the responsive Scandinavian timeline inside a centered `max-w-6xl` shell, a standalone top-level role switcher, a restrained sticky desktop chapter rail with a progress index, a semantic `ItemMedia` tint for the numbered chapter markers, and Selia `Item` rows, stacked mobile chapter navigation, default-open step details with a global collapse/expand control, status badges, expandable exception branches, and feature CTAs. Visibility is role-scoped: student → Student; tutor → Tutor + Student; admin → Admin + Tutor + Student. Important timing rules are rendered as bold copy from the typed content, including 7-day tutor invites, 12-hour response and room windows, H-2 (2 hours before start) self-service cutoffs, 24-hour reschedule proposals, 15-minute lateness, 5-minute meeting retries with 3 attempts, and the 30-minute / 4-hour support SLA. In development, the page mounts the anti-slop Tweaks Bar from `apps/web/public/tweaks-bar.js` for live visual tuning; it is not part of the production product surface. The guide is documentation of existing behavior and does not create a service module or API contract.
 
@@ -42,7 +57,7 @@ The shared frontend empty-state presentation is rendered by `apps/web/src/compon
 
 Theme selection is also frontend-only. `apps/web/src/components/mode-toggle.tsx` composes the `next-themes` provider with Light/Dark/System menu items and a `D` keydown handler that toggles the currently rendered light/dark mode outside editable fields. Theme preference persistence stays in `next-themes`; there is no service module, repository, event key, or API contract.
 
-The booking-detail overview keeps format/access and participant profile/name/status information together for quick scanning. Role-appropriate primary actions, including propose, cancel, review, and complete, sit directly below the status badge, while contextual actions remain in the sticky desktop rail or main flow. Admin review and override actions remain in the dedicated admin operations surface. Dashboard cards link to the existing feature routes where mutations and detailed workflows live.
+The booking-detail overview keeps format/access and participant profile/name/status information together for quick scanning. Role-appropriate primary actions, including propose, cancel, review, and complete, sit directly below the status badge, while contextual actions remain in the sticky desktop rail or main flow. The desktop overview/activity flow uses an independent left column from the sticky Actions/financial rail so rail height cannot create a blank row before Activity; narrow layouts keep actions/financial information before Activity. Tutors see IDR honorarium only; student/admin views retain Marks context. Admin review and override actions remain in the dedicated admin operations surface. Dashboard cards link to the existing feature routes where mutations and detailed workflows live. This layout refinement is presentation-only and does not add a service module, event key, or API contract.
 Editorial content integration is also read-only: Sanity remains the source of truth, while the app's API enforces session/role/Marks access before returning content or streaming Knowledge Bank files. The academy's bilingual presentation is resolved to English in the server projection; the authenticated app does not carry a locale selector for these surfaces.
 
 | File                  | Purpose                                                  |
@@ -68,7 +83,7 @@ Editorial content integration is also read-only: Sanity remains the source of tr
 - `content.handler.ts` — protected competition read and student-only Knowledge Bank threshold gate
 - `content.router.ts` — `content.listCompetitions` and `content.listStudentResources`
 - `index.ts` — `createContentModule({ wallet, client? })` composition factory
-- `apps/server/src/routes.ts` — authenticated PDF streaming proxy for resource files
+- `apps/server/src/routes.ts` — authenticated `/content/knowledge-bank/:resourceId/file` PDF streaming proxy for resource files
 
 **Service Methods:**
 
@@ -76,7 +91,7 @@ Editorial content integration is also read-only: Sanity remains the source of tr
 - `listStudentResources()` — returns resource metadata without asset URLs
 - `getStudentResourceFile(resourceId)` — resolves the published asset URL and file metadata for the already-authorized proxy
 
-The calendar frontend consumes `listCompetitions()` as a read-only projection. It mirrors the academy's month/agenda interaction model (multi-day spans, overflow popup, 30-day agenda, and event-details modal) while using Cogito App Selia components, design tokens, and Tabler icons. Its authenticated route is viewport-contained: the calendar card body owns vertical scrolling, while the month grid owns horizontal scrolling so the page shell and calendar toolbar do not scroll with the grid.
+The calendar frontend consumes `listCompetitions()` as a read-only projection. It mirrors the academy's month/agenda interaction model (multi-day spans, overflow popup, 30-day agenda, and event-details modal) while using Cogito App Selia components, design tokens, and Tabler icons. Its authenticated route is viewport-contained: the calendar card body owns vertical scrolling, while the month grid owns horizontal scrolling so the page shell and calendar toolbar do not scroll with the grid. The Knowledge Bank frontend is available at the authenticated `/knowledge-bank` route.
 
 **Business Rules:**
 
@@ -108,7 +123,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `update(userId, input)` — Updates with optimistic lock check (`input.version` + `input.data`)
 - `remove(userId, id, expectedVersion)` — Deletes with optimistic lock check
 - `adminList(input)` — Paginated list with optional status filter
-- `adminReview(id, status, adminNote?)` — Moderation action. **F12:** transition table — `pending`/`pending_review` → `approved`/`rejected`/`archived`; `approved`/`rejected` → `archived`; `archived` → `approved`/`rejected` (restore). Other transitions throw `AchievementNotEditableError`. Notifies the owner and writes an `achievement_{status}` audit record
+- `adminReview(id, status, adminNote?)` — Moderation action. **F12:** transition table — `pending`/`pending_review` → `approved`/`rejected`/`archived`; `approved`/`rejected` → `archived`; `archived` → `approved`/`rejected` (restore). Other transitions throw `AchievementNotEditableError`. Reads and updates inside one transaction using the current status/version as a compare-and-swap; a lost race throws `OptimisticLockError` before notification/audit side effects. Notifies the owner and writes an `achievement_{status}` audit record after success
 
 **Dependencies:** `AchievementRepo`
 
@@ -116,7 +131,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 
 - Achievements start in `pending` status
 - Only the owning student can create/update/delete their achievements
-- `awardingDate` is the canonical award date; `evidenceUrl` is private verification material available only to the owner/admin workflows, while `documentationUrl` is optional public-safe documentation
+- `awardingDate` is the canonical award date; `evidenceUrl` is private verification material available only to the owner/admin workflows, while `documentationUrl` is optional public-safe documentation. Both accept only HTTP(S) URLs up to 2048 characters
 - `listApprovedPublic()` must select only public-safe fields. It must not return `userId` or `evidenceUrl`; the public site uses `displayName` and `documentationUrl` when rendering an approved record.
 - The student achievement form uses shared Selia portal controls for Category, Level, and Awarding Date; those popups must remain above the modal dialog layer.
 - Optimistic locking prevents lost updates (`version` field)
@@ -130,11 +145,11 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 
 **Files:**
 
-- `admin.types.ts` — `listUsersInput`, `setRoleInput`, `adminGetWalletInput`, `adminListLedgerEntriesInput`, `adminGetTutorPayoutsInput`, `adminUpdateEconomySettingsInput`
-- `admin.errors.ts` — `UserNotFoundError`, `LastAdminError`, `OptimisticLockError`, `WalletNotFoundError`, `InvalidLedgerFilterError`, `EconomyConfigConflictError`
+- `admin.types.ts` — `listUsersInput`, `setRoleInput`, `adminGetWalletInput`, `adminListLedgerEntriesInput`, `adminGetTutorPayoutsInput`, `adminMarkTutorPayoutPaidInput`, `adminUpdateEconomySettingsInput`
+- `admin.errors.ts` — `UserNotFoundError`, `LastAdminError`, `OptimisticLockError`, `WalletNotFoundError`, `InvalidLedgerFilterError`, `EconomyConfigConflictError`, `TutorPayoutNotAvailableError`
 - `admin.repo.ts` — `findUserById`, `listUsers`, `listUserIdsByRole`, `updateUserRole`
-- `admin.service.ts` — `listUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getEconomySettings`, `updateEconomySettings`
-- `admin.handler.ts` — `listUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getEconomySettings`, `updateEconomySettings`
+- `admin.service.ts` — `listUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getPendingTutorPayouts`, `markTutorPayoutPaid`, `getEconomySettings`, `updateEconomySettings`
+- `admin.handler.ts` — `listUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getPendingTutorPayouts`, `markTutorPayoutPaid`, `getEconomySettings`, `updateEconomySettings`
 - `admin.router.ts` — Admin-only routes
 
 **Service Methods:**
@@ -143,7 +158,9 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `setRole(userId, role, adminId)` — Changes user role; throws `LastAdminError` if removing last admin; optimistic lock via `expectedRole`; records audit log
 - `getWallet({ userId })` — Returns any user's wallet balances; throws `WalletNotFoundError`
 - `listLedgerEntries(input)` — Paginated ledger filtered by wallet/user, entry type, date range, or booking; `walletId` and `userId` are mutually exclusive
-- `getTutorPayouts({ tutorId, dateFrom?, dateTo? })` — Delegates to the booking module's `getTutorPayouts` port
+- `getTutorPayouts({ tutorId, dateFrom?, dateTo? })` — Delegates to the booking module's all-completed-bookings reporting port
+- `getPendingTutorPayouts({ tutorId })` — Returns unpaid honorarium after the latest admin-paid cutoff
+- `markTutorPayoutPaid(adminId, { tutorId })` — Records a paid payout (gross, exact bank, non-BCA transfer fee, net, cutoff, and payer) and audits the immutable payout record; returns `TutorPayoutNotAvailableError` when the amount or required payout-account details are unavailable
 - `getEconomySettings()` — Returns the active computational Mark value and IDR schedules
 - `updateEconomySettings(adminId, input)` — Optimistically updates the four Cogito take fields, records an `economy_config_updated` audit event, and affects future booking/repricing snapshots only; identical values return the current config without a write. The tutor rate-change notification fan-out runs **after the config transaction commits** (best-effort, per-tutor catch+log): a notification failure never rolls back the config update or the audit row. The event key `economy_config_updated:{version}:{tutorId}` keeps retries idempotent per version
 
@@ -203,7 +220,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 **Files:**
 
 - `admin-tutor.types.ts` — Zod schemas for invite creation and profile review
-- `admin-tutor.errors.ts` — `InviteNotFoundError`, `TutorProfileNotFoundError`, `InvalidInviteActionError`, `DuplicateInviteError`
+- `admin-tutor.errors.ts` — `InviteNotFoundError`, `TutorProfileNotFoundError`, `TutorProfileOptimisticLockError`, `InvalidInviteActionError`, `DuplicateInviteError`
 - `admin-tutor.repo.ts` — Invite CRUD, tutor profile listing and review
 - `admin-tutor.service.ts` — `createInvite`, `resendInvite`, `revokeInvite`, `listInvites`, `listTutorProfiles`, `reviewTutorProfile`
 - `admin-tutor.handler.ts` — Maps handler input to service calls
@@ -216,7 +233,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `revokeInvite(inviteId, adminId, reason?)` — Marks invite as revoked
 - `listInvites(opts)` — Paginated invite list
 - `listTutorProfiles(opts)` — Paginated tutor profiles with status filter
-- `reviewTutorProfile(profileId, status, adminNote?)` — Approve/reject tutor profile. **F25 state machine (`validateReviewAction`):** each action is only allowed from specific onboarding statuses — `request_changes`/`approve_unpublished`/`publish` from `pending_review`/`changes_requested` (publish also from `approved_unpublished`); `request_changes` and `approve_unpublished` also support `suspended` for explicit admin restoration; `unpublish`/`suspend`/`approve_edits`/`request_edit_changes` only from `published`. Anything else throws `InvalidInviteActionError` (e.g. `publish` from `suspended`, `request_changes` from `published`). The tutor cannot self-restore via `submitForReview`, and restoring never blindly publishes a suspended profile.
+- `reviewTutorProfile(profileId, status, adminNote?, publicPhotoUrl?)` — Approve/reject tutor profile and optionally install an admin-edited public tutor photo. The tutor's `sourcePhotoUrl` remains separate and cannot directly become the public account image; both URLs accept HTTP(S) only. The profile status/version is updated atomically and a lost moderation race throws `TutorProfileOptimisticLockError` before photo, subject, notification, or audit writes. **F25 state machine (`validateReviewAction`):** each action is only allowed from specific onboarding statuses — `request_changes`/`approve_unpublished`/`publish` from `pending_review`/`changes_requested` (publish also from `approved_unpublished`); `request_changes` and `approve_unpublished` also support `suspended` for explicit admin restoration; `unpublish`/`suspend`/`approve_edits`/`request_edit_changes` only from `published`.
 
 **Dependencies:** `AdminTutorRepo`, `EmailPort`
 
@@ -284,6 +301,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - Production/staging startup and signup bootstrap matching `ADMIN_EMAILS` to the `admin` role is case-insensitive and additive: it never demotes existing admins; other admin addresses remain supported by the existing role-management procedures.
 - The web email sign-in/sign-up handoff awaits the Better Auth result, performs a fresh session read before choosing `/dashboard`, `/onboarding`, `/admin-tutors`, or a validated return path, and suppresses the overlapping client signal refresh so the login form does not flash back into the loader. When the fresh session has `emailVerified !== true`, email/password sign-in sends a verification OTP and routes to `/verify-email`; the Google callback applies the same rule. The validated post-login destination is carried through verification, and legacy accounts are not automatically marked verified. The authenticated shell uses the same fresh session source for its parent route guard.
 - The `/login` email forms run field-level validation on change/blur after a field is touched, show Selia inline errors and danger outlines for invalid fields, and mirror the sign-up password requirements enforced by the server. These checks are client-only and do not add an auth endpoint or persistence rule.
+- The server reads sign-up bodies through the request-size guard and safely parses the JSON before applying password policy. Malformed JSON returns HTTP 400 (`Invalid JSON request body`) rather than escaping as an internal error.
 - Email verification (G2, REVIEW-FIXES-4 P4.4): the `emailOTP` plugin sends a 6-digit OTP on sign-up (`sendVerificationOnSignUp`, 5 min expiry) via the shared email port (`setVerificationEmailSender` + `buildVerificationEmail`); unverified users, including legacy accounts created before this feature, receive a new OTP after email/password or Google sign-in and are routed to `/verify-email`; `POST /api/auth/email-otp/verify-email` marks the user verified; the web `/verify-email` route collects the code
 
 **Privacy boundary:** `auth.searchStudents` accepts an email query for an
@@ -296,6 +314,8 @@ recipient consent.
 ## Booking Module
 
 **Purpose:** Core booking lifecycle — solo, group, and series bookings with state machine transitions, reschedule approval, session notes, wallet holds, payouts, and meeting integration.
+
+Reschedule proposals must change the active booking or target-session start minute and cannot repeat the pending proposal for the same target. `proposeReschedule` serializes replacements with a booking-scoped transaction advisory lock; `reschedule_booking_pending_uniq` independently guarantees at most one pending proposal per booking.
 
 **Files:**
 
@@ -322,21 +342,21 @@ recipient consent.
 - `declineInvite(userId, bookingId, reason?)` — Invitee declines
 - `withdrawInvite(proposerId, bookingId, inviteeUserId, reason?)` — Proposer withdraws one pending group invite; marks the invitee `withdrawn_pre_h2`, leaves headcount/holds unchanged, and notifies the invitee. The user-supplied `reason` is HTML-escaped (`escapeHtml`) before interpolation into the notification/email body (F5 convention — user-supplied text must not inject markup)
 - `reconfirm(userId, bookingId, accept)` — Participant accepts/rejects the repriced offer after repricing. **F3 (headcount-change reprice):** when an accept lands and the confirmed headcount no longer matches the headcount the current snapshot was priced for (a participant declined or withdrew mid-cycle, e.g. withdrawing from `awaiting_reconfirmation` decrements the headcount without repricing), the booking does **not** finalize — all reconfirmed participants are reset to plain `confirmed` (`resetReconfirmedParticipants`), the group is repriced for the current headcount, every survivor gets a fresh 12h window, and a `reissue_reconfirm` notification is sent. The booking only moves to `AWAITING_TUTOR_REVIEW` when all confirmed participants reconfirm against the current snapshot. **N1:** when a flat or rounded price map produces the same per-student rate at two headcounts, `repriceGroupForHeadcount` still synchronizes `holdAmount` to the sum of participant-held amounts, preventing the reconfirmation mismatch from re-firing forever.
-- `withdraw(userId, bookingId, reason?)` — Participant withdraws; pre-H2 releases hold, post-H2 late-cancels; cancels group if below minimum; group-series (`type === "series" && targetGroupSize > 1`) is rejected with `BOOKING_SERIES_NO_OPT_OUT` (U4 no-opt-out rule)
-- `cancel(userId, bookingId, reason?)` — Cancels booking; releases all holds; late cancel becomes `late_cancelled`
+- `withdraw(userId, bookingId, reason?)` — Participant withdrawal closes at `scheduledStartAt`; before then, pre-H2 releases hold and post-H2 forfeits it, with group survival/repricing rules unchanged. At/after start it throws `BOOKING_CANCELLATION_DEADLINE_PASSED`; group-series (`type === "series" && targetGroupSize > 1`) remains rejected with `BOOKING_SERIES_NO_OPT_OUT` (U4 no-opt-out rule).
+- `cancel(userId, bookingId, reason?)` — Cancels a booking only before `scheduledStartAt`; releases holds before H-2, while a pre-start late cancel becomes `late_cancelled` and forfeits holds. At/after start it throws `BOOKING_CANCELLATION_DEADLINE_PASSED`, preserving the live booking for tutor completion and routing delivery disputes through support/admin review.
 - `tutorAccept(bookingId, tutorId)` — Tutor accepts booking; attempts meeting creation for online bookings and schedules on success, while a provider failure leaves the booking `CONFIRMED` for scheduler retry; sets room approval for offline. **F6:** whenever meeting creation fails (provider throw or `status === "failed"`), `finalizeMeetingSchedule` bumps `deadlineAt` to `scheduledEndAt + 24h` so the 5-minute retry window is respected — the old tutor-review `now+12h` deadline can never expire the booking (release holds) or no-show the session while a meeting retry is pending. The proposer notification distinguishes `scheduled` from `confirmed`/meeting-setup attention, so a provider failure is not presented as a scheduled session. The booking-detail UI confirms the scheduled date/time, modality, and attendance before invoking this method; cancel/complete actions use the same in-app confirmation pattern.
 - `tutorDecline(bookingId, tutorId, reason?)` — Tutor declines; releases all holds
 - `tutorSetMeetingLink(bookingId, tutorId, url)` — Assigned tutor adds or replaces a manual URL for an online `CONFIRMED`/`SCHEDULED` booking when automatic meeting setup is unavailable; updates the active meeting row, notifies confirmed participants, and records `tutor_set_meeting_link`
 - `completeSession(bookingId, tutorId, sessionId?)` — Marks a session complete; deducts held marks (sessionId for series children)
-- `cancelSession(userId, sessionId)` — Student cancels an individual series session (> 2h before start)
+- `cancelSession(userId, sessionId)` — Student cancels an individual series session only before that session starts; pre-H2 releases its hold, a pre-start post-H2 cancellation forfeits it, and at/after start the call throws `BOOKING_CANCELLATION_DEADLINE_PASSED`.
 - `proposeReschedule(actorId, actorRole, bookingId, sessionId, start, reason?)` — Shared service used by the student-proposer and tutor RPC routes; proposes a fixed 90-minute replacement for one session
-- `acceptReschedule(actorId, bookingId, proposalId?)` / `rejectReschedule(...)` — Records a required tutor/student vote against the active proposal; `proposalId` prevents stale UI actions from deciding a superseded proposal. Only unanimous acceptance applies the schedule, then the booking returns to its pre-proposal state; any rejection keeps the old schedule and also returns to that state. For booking-level offline proposals, the confirmed room assignment is synchronized with the new time on acceptance and restored to the original time on rejection/expiry. A missing or conflicting room returns the booking to `awaiting_admin_room_approval`, and the rollback path uses `roomPort.resyncRoomBookingToSchedule` so the room never stays blocked for the wrong window.
+- `acceptReschedule(actorId, bookingId, proposalId?)` / `rejectReschedule(...)` — Records a required tutor/student vote against the active, unexpired proposal under a booking advisory lock; `proposalId` prevents stale UI actions from deciding a superseded proposal. Final acceptance additionally locks the tutor and rechecks booking overlap, target-series ownership/state, and sibling-session overlap before applying the schedule. Only unanimous acceptance applies the schedule, then the booking returns to its pre-proposal state; any rejection keeps the old schedule and also returns to that state. For booking-level offline proposals, the confirmed room assignment is synchronized with the new time on acceptance and restored to the original time on rejection/expiry. A missing or conflicting room returns the booking to `awaiting_admin_room_approval`, and the rollback path uses `roomPort.resyncRoomBookingToSchedule` so the room never stays blocked for the wrong window.
 - `addSessionNote(userId, bookingId, content)` — Adds a server-sanitized HTML note to a completed session; the web editor emits only the supported paragraph/heading/emphasis/list/link markup
 - `getSessionNotes(userId, bookingId)` — Lists every party's notes for a completed session; the web client applies a DOMPurify allow-list before rendering
 - `markTutorAttendance(bookingId, tutorId, attendance)` — Marks tutor present/late; allowed only within `[scheduledStartAt ± 15 min]` (LATENESS_TOLERANCE_MS). Marking suppresses the lateness flag — unmarked sessions are surfaced to the admin queue (`tutor_lateness_pending`), never auto-cancelled. **F8:** the attendance row is inserted with `role='tutor'` and `confirmationState=confirmed`; `findConfirmedParticipants` excludes `role='tutor'` so the tutor row never inflates group repricing headcounts, hold recomputation, or no-show forfeit math
-- `markParticipantNoShow(bookingId, tutorId, participantUserId, sessionId?)` — Marks a participant as no-show 15 minutes after the session starts (U5/TC-30); forfeits the target's (per-session) hold and notifies them. Solo transitions to `no_show`; group stays live with only the target's hold forfeited and `holdAmount` recomputed (C1); series sessions keep their state so other participants are unaffected
+- `markParticipantNoShow(bookingId, tutorId, participantUserId, sessionId?)` — Marks a participant as no-show 15 minutes after the session starts (U5/TC-30); a series `sessionId` is first required to belong to `bookingId`, preventing cross-booking wallet/attendance mutation. It forfeits the target's (per-session) hold and notifies them. Solo transitions to `no_show`; group stays live with only the target's hold forfeited and `holdAmount` recomputed (C1); series sessions keep their state so other participants are unaffected
 - `listSessions(bookingId, userId)` — Lists sessions for a series booking
-- `getTutorPayouts({ tutorId, dateFrom?, dateTo? })` — Aggregates completed sessions → `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }`; new IDR bookings sum tutor honorarium snapshots and legacy bookings use a compatibility fallback. `totalMarks` reports the **split basis** (`priceSnapshot.baseline`) so the ledger columns reconcile: `totalMarks = cogitoTake + tutorPayout`. Students may be charged `actualMarksPooled ≥ baseline` due to per-student rounding (surplus ≤ headcount marks per booking); the surplus is currently unallocated — flagged for product decision (documentation only, per lead decision 2026-08-25)
+- `getTutorPayouts({ tutorId, dateFrom?, dateTo? })` — Aggregates completed sessions → `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }`; new IDR bookings sum tutor honorarium snapshots and legacy bookings use a compatibility fallback. `totalMarks` reports the **split basis** (`priceSnapshot.baseline`) so the ledger columns reconcile: `totalMarks = cogitoTake + tutorPayout`. Students may be charged `actualMarksPooled ≥ baseline` due to per-student rounding (surplus ≤ headcount marks per booking); the surplus is currently unallocated — flagged for product decision (documentation only, per lead decision 2026-08-25). The pending-payout path uses explicit completion timestamps (with a migration fallback for legacy completed rows), and completion is serialized with payout cutoff creation.
 - `expireBookings()` — Batch expiry job; routes to correct terminal state based on current state
 - `releaseExpiredHolds()` — Transition-or-skip (M4): transitions past-deadline bookings to their terminal target (shared `EXPIRY_TARGET` with `expireBookings`) FIRST, then releases holds (or forfeits for NO_SHOW); version conflicts / terminal / RESCHEDULE_PROPOSED bookings are skipped without touching the wallet
 - `checkTutorLateness()` — Flags scheduled bookings where the tutor never marked attendance past the 15-min lateness tolerance: keeps the booking SCHEDULED with holds intact, sets `overrideMeta.category = "tutor_lateness_pending"` (admin-queue surface), writes a `tutor_lateness_pending_review` audit record, and notifies proposer + tutor; returns `{ flagged, failed }` (no auto-cancel, no hold release). **F9:** applies to **offline and online** bookings alike — `findBookingsWithTutorLateness` has no modality filter, so an absent offline tutor is flagged too
@@ -478,7 +498,7 @@ chat directory.
 - OAuth refresh-token mode uses `GOOGLE_MEET_CLIENT_ID`, `GOOGLE_MEET_CLIENT_SECRET`, and `GOOGLE_MEET_REFRESH_TOKEN` to call Google Calendar API v3; `GOOGLE_CALENDAR_ID` defaults to `primary`. When the dedicated client variables are absent, the resolver falls back to `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, but the Calendar refresh token is still required.
 - Service-account mode uses `GOOGLE_CLIENT_EMAIL`, `GOOGLE_PRIVATE_KEY`, and `GOOGLE_IMPERSONATED_USER`; the impersonated user is required for Workspace domain-wide delegation. `GOOGLE_MEET_ENABLED=true` requires either the complete OAuth set or the complete service-account set.
 - OAuth setup and token rotation instructions live in [`docs/GOOGLE-MEET-SETUP.md`](GOOGLE-MEET-SETUP.md).
-- Booking scheduling supplies provider metadata: solo titles are `Solo session with {Tutor} & {Student}`; group/series titles name the tutor, while all resolved student names remain in the description alongside the booking's learning goal when present and the authenticated booking deep link. The same metadata is applied to both service-account and OAuth event insertion paths.
+- Booking creation validates `subjectId` against the tutor's active tracks and stores an immutable category/subcategory snapshot in `booking.session_topic`. Scheduling uses `Cogito - {Competition} | {Tutor} x {Student}` and appends `& Friends` for group/group-series events; MUN/WSC use abbreviations. Descriptions include Session Topic, all resolved students, Session Notes/reference links, and the booking deep link. The metadata reaches service-account and OAuth paths; `learning_goal` remains the Session Notes compatibility carrier.
 - Circuit breaker: 5 failures → open for 60 seconds
 - On failure, creates a `meetingEvent` record with `status: "failed"` and `errorReason`; the booking scheduler retries failed Google attempts every 5 minutes up to the configured retry budget
 - Manual-link entry updates the newest meeting-attempt row, matching the booking read model's newest-row selection after multiple provider attempts
@@ -551,7 +571,7 @@ chat directory.
 **Business Rules:**
 
 - Webhook signature verified via `verifyWebhook` (provider-specific) + timestamp window (5 min) + IP allowlist (honors `TRUST_PROXY`)
-- Webhook idempotency is atomic — `IdempotencyStore.claim` keyed on the verified payload event id, released on processing failure (#46)
+- Webhook idempotency is atomic — `IdempotencyStore.claim` keys lifecycle events by provider + verified payment/event id (or provider reference fallback) + normalized status. This prevents a PENDING event from suppressing a later PAID event for the same Xendit payment while still deduplicating provider retries of the same state; transient processing failures release the claim (#46)
 - Circuit breaker prevents cascading failures to the provider
 - Payment statuses: `PENDING` → `PAID`/`SETTLED`/`EXPIRED`/`FAILED`/`REFUNDED`
 - Payment/refund notifications are written per the PRD matrix (B6, #46); `PAYMENT_PROVIDER=xendit` requires Xendit credentials and an explicit `XENDIT_MODE` (no silent stub fallback)
@@ -672,6 +692,7 @@ chat directory.
 **Business Rules:**
 
 - Room bookings have status `requested`/`confirmed`/`relocated`/`cancelled`
+- Room conflict-check/write paths take a transaction-scoped advisory lock keyed by `roomId`. Both normal and `FOR UPDATE` repository checks use strict half-open overlap (`existing.start < requested.end AND existing.end > requested.start`). Migration `0038_room_booking_overlap_guard.sql` adds the matching database backstop: a partial GiST exclusion constraint rejects overlapping `[startAt,endAt)` ranges for `confirmed` rows in the same room while allowing adjacent sessions.
 - The admin pending-approval queue is sourced from offline bookings in `awaiting_admin_room_approval`; the requested room is optional because room creation can report a conflict and let the booking continue to admin review
 - G14 (assign → scheduled + notifications) fixed in #46
 - Offline booking-level reschedules keep the room assignment aligned with the booking schedule; conflict/missing results remain in the admin room-approval queue rather than reserving a room at a stale time
@@ -710,7 +731,7 @@ chat directory.
 **Business Rules:**
 
 - Expiry job every 5 min; hold-release every 10 min; lateness every 5 min; email every 60 s; SLA escalation every 15 min
-- Jobs use retry with exponential backoff (3 attempts); after attempts are exhausted the job is moved to the `cogito-jobs-dlq` dead-letter queue, whose worker logs the entry and keeps a bounded Redis list (`cogito:dlq`, max 100 entries) for inspection (M4)
+- Jobs use retry with exponential backoff (3 attempts); the failed-event handler compares `attemptsMade` with the job's configured `opts.attempts`, and only after that budget is exhausted copies the job to `cogito-jobs-dlq`. Intermediate failures remain eligible for BullMQ retry. The DLQ worker logs the entry and keeps a bounded Redis list (`cogito:dlq`, max 100 entries) for inspection (M4)
 - Circuit breaker state persisted in Redis (when available)
 
 ---
@@ -772,7 +793,7 @@ chat directory.
 - `createWeeklyAvailability(userId, input)` — Materializes weekly slots through `repeatUntil` (≤ 53 occurrences), rejecting overlaps
 - `replaceWeeklyAvailability(userId, input)` — Atomically replaces future recurring occurrences from weekday/time ranges; preserves one-off overrides and skips generated occurrences they supersede
 - `deleteAvailability(userId, slotId)` — Deactivates a slot (soft delete)
-- `getMyPayouts(userId, { dateFrom?, dateTo? })` — Delegates to the booking module's `getTutorPayouts` port
+- `getMyPayouts(userId, { dateFrom?, dateTo? })` — Delegates to the booking module's pending-cutoff payout path when no date filters are provided; explicit date filters use the reporting path. The tutor presentation is IDR-only even though internal split fields remain in the compatibility response.
 
 **Dependencies:** `TutorRepo`, `TutorPricingPort`, `TutorAuditPort`, `BookingPayoutPort`
 
@@ -784,6 +805,9 @@ chat directory.
 - `submitForReview` can only be called from `draft`/`changes_requested` status
 - Profile updates use optimistic locking (`version`)
 - New tutor pricing is stored as IDR base honoraria by modality (`baseRatesIdr`) and validated against the active economy minimum and Rp 5,000 increments; the legacy Marks map remains readable during migration
+- Tutor onboarding renders selected modalities in one combined six-row IDR group-size matrix using the same table structure as the student discovery drawer; this is presentation-only
+- Tutor achievements and experiences are separate multiline fields. Each section has its own optional proof URL list for admin verification; these lists are protected by profile review and never enter the public discovery projection. The legacy credential summary is read-only fallback data and migration 0032 copies it into achievements. Availability summaries and the old generic credential-proof URLs are retired from tutor editing.
+- Tutor payout calculations retain the internal split fields for accounting compatibility, but tutor-facing payout UI exposes only unpaid completed-session count and IDR honorarium. The private payout form collects bank name, account number, account-holder name, account-opening city/regency, ownership choice, and transfer-responsibility acknowledgment; submission requires all of them. Admin payout records advance the paid cutoff.
 - New tutor submissions must select at least one active child subject from the normalized catalog; mother categories cannot be selected directly
 - A normalized subject update replaces the tutor's join rows atomically and never accepts arbitrary legacy `expertise` strings as category ids
 
@@ -895,3 +919,7 @@ chat directory.
 - Idempotency via `eventKey` on ledger entries
 - Insufficient available balance throws `InsufficientBalanceError`
 - `hold`/`release`/`deduct`/`credit`/`compensate` are service-layer only — consumed via ports, not exposed over RPC
+
+## Tutor payout presentation (2026-08-28)
+
+Tutor financial presentation is denominated in IDR and must not expose Marks. The dashboard's honorarium is the unpaid balance since the latest admin-paid cutoff, not lifetime earnings or a calendar-reset balance. Admin payout records are immutable and contain the cutoff, gross, bank, transfer fee, net, paidAt, and paidBy. Only conventional BCA (the exact bank name `BCA`) has no transfer deduction; BCA Syariah, `blu` (BCA Digital), and other banks deduct Rp2,500 once per payout. Bank name, account number, account-holder name, account-opening city/regency, ownership, and the transfer disclaimer are private tutor-profile payout fields; all are required by onboarding submission validation and omitted from public discovery.

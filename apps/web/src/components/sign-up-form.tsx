@@ -132,7 +132,7 @@ export default function SignUpForm({
   }
 
   return (
-    <div className="w-full flex items-center justify-center p-4 lg:min-h-[calc(100svh-4rem)]">
+    <div className="w-full flex items-center justify-center p-4 lg:min-h-[calc(100svh-6rem)]">
       <Card className="w-full lg:w-5/12 xl:w-md">
         <CardHeader align="center">
           <CardTitle>Create your account</CardTitle>

@@ -5,6 +5,7 @@ import {
   adminGetWalletInput,
   adminListLedgerEntriesInput,
   adminGetTutorPayoutsInput,
+  adminMarkTutorPayoutPaidInput,
   adminUpdateEconomySettingsInput,
 } from "./admin.types";
 import type { AdminHandler } from "./admin.handler";
@@ -68,6 +69,30 @@ export function createAdminRouter(handler: AdminHandler) {
       })
       .input(adminGetTutorPayoutsInput)
       .handler(handler.getTutorPayouts),
+
+    getPendingTutorPayouts: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/payouts/tutor/pending",
+        tags: ["Admin"],
+        summary: "Get unpaid tutor honorarium",
+        description:
+          "Returns completed tutor honorarium since the last paid cutoff",
+      })
+      .input(adminMarkTutorPayoutPaidInput)
+      .handler(handler.getPendingTutorPayouts),
+
+    markTutorPayoutPaid: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/payouts/tutor/mark-paid",
+        tags: ["Admin"],
+        summary: "Mark unpaid tutor honorarium as paid",
+        description:
+          "Creates an immutable payout record and advances the tutor's paid cutoff",
+      })
+      .input(adminMarkTutorPayoutPaidInput)
+      .handler(handler.markTutorPayoutPaid),
 
     getEconomySettings: adminProcedure
       .route({

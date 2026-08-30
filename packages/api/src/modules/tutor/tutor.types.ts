@@ -1,11 +1,16 @@
 import { z } from "zod";
 import { MAX_TUTOR_SUBJECTS } from "../tutor-subjects/subject-selection";
+import { externalHttpUrl } from "../../lib/url-schema";
 
 export const updateMyProfileInput = z.object({
   version: z.number().int(),
   displayName: z.string().min(1).max(255).optional(),
   shortBio: z.string().max(2000).optional(),
-  credentialsSummary: z.string().max(2000).optional(),
+  achievements: z.string().max(5000).optional(),
+  experiences: z.string().max(5000).optional(),
+  achievementProofUrls: z.array(externalHttpUrl).max(20).optional(),
+  experienceProofUrls: z.array(externalHttpUrl).max(20).optional(),
+  sourcePhotoUrl: externalHttpUrl.optional(),
   expertise: z.array(z.string().max(255)).max(20).optional(),
   subjectIds: z
     .array(z.string().min(1).max(100))
@@ -27,6 +32,16 @@ export const updateMyProfileInput = z.object({
       { message: "baseRatesIdr must only contain online/offline keys" },
     )
     .optional(),
+  bankName: z.string().trim().min(2).max(100).optional(),
+  bankAccountNumber: z
+    .string()
+    .trim()
+    .regex(/^\d{6,30}$/, "Bank account number must contain 6-30 digits")
+    .optional(),
+  bankAccountHolderName: z.string().trim().min(2).max(100).optional(),
+  bankAccountOpeningCity: z.string().trim().min(2).max(100).optional(),
+  bankAccountOwnership: z.enum(["self", "trusted_person"]).optional(),
+  bankTransferDisclaimerAccepted: z.boolean().optional(),
   prices: z
     .record(z.string(), z.number())
     .refine(
@@ -37,8 +52,6 @@ export const updateMyProfileInput = z.object({
       { message: "prices must be keyed by group size 1-6" },
     )
     .optional(),
-  availabilitySummary: z.string().max(2000).optional(),
-  proofUrls: z.array(z.string().url().max(2048)).max(10).optional(),
 });
 
 export const getMyPayoutsInput = z.object({

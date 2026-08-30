@@ -52,6 +52,65 @@ function makeBookingRepo() {
 }
 
 describe("createBookingRepo", () => {
+  test("resolves active tutor subject topics and rejects inactive relations", async () => {
+    const repo = createBookingRepo({} as any);
+    const active = {
+      subject: {
+        id: "s1",
+        slug: "speech",
+        name: "Speech",
+        parentId: "c1",
+        isActive: true,
+        parent: { id: "c1", slug: "mun", name: "MUN", isActive: true },
+      },
+    };
+    const conn = {
+      query: {
+        tutorProfile: {
+          findFirst: mock(async () => ({
+            subjects: [{ subject: null }, active],
+          })),
+        },
+      },
+    } as any;
+    await expect(
+      repo.findTutorSubjectTopic(conn, "t1", "s1"),
+    ).resolves.toMatchObject({ subcategoryId: "s1", categoryId: "c1" });
+    await expect(
+      repo.findTutorSubjectTopic(conn, "t1", "missing"),
+    ).resolves.toBeNull();
+    await expect(
+      repo.findTutorSubjectTopic(
+        {
+          query: { tutorProfile: { findFirst: mock(async () => null) } },
+        } as any,
+        "t1",
+      ),
+    ).resolves.toBeNull();
+  });
+
+  test("filters completed payouts by completion dates", async () => {
+    const repo = createBookingRepo({} as any);
+    const conn = makeSelectConn([]) as any;
+    await repo.findCompletedBookingsByTutor(
+      conn,
+      "t1",
+      new Date("2026-08-01"),
+      new Date("2026-08-31"),
+      "completedAt",
+    );
+    expect(conn.where).toHaveBeenCalledTimes(1);
+  });
+
+  test("inserts and returns a tutor payout", async () => {
+    const row = { id: "p1" };
+    const conn = makeInsertConn([row]) as any;
+    const repo = createBookingRepo({} as any);
+    await expect(
+      repo.insertTutorPayout(conn, { tutorId: "t1" } as any),
+    ).resolves.toBe(row);
+  });
+
   test("returns object with all repo methods", () => {
     const repo = makeBookingRepo();
 

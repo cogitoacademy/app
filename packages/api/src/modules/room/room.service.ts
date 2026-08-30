@@ -15,6 +15,7 @@ import {
 } from "../../shared/constants";
 import { BOOKING_STATE } from "../booking/booking-state.types";
 import type { RoomBookingPort, RoomNotificationPort } from "./index";
+import { lockRoomForBooking } from "../../lib/locks";
 
 export type RoomService = ReturnType<typeof createRoomService>;
 
@@ -106,6 +107,8 @@ export function createRoomService(
     const roomRow = await repo.findRoomById(conn, params.roomId);
     if (!roomRow) return { available: false, reason: "room_not_found" };
 
+    await lockRoomForBooking(conn, params.roomId);
+
     const conflicting = await repo.findRoomBookings(
       conn,
       params.roomId,
@@ -137,6 +140,8 @@ export function createRoomService(
     return db.transaction(async (tx) => {
       const roomRow = await repo.findRoomById(tx, roomId);
       if (!roomRow) throw new RoomNotFoundError(roomId);
+
+      await lockRoomForBooking(tx, roomId);
 
       // F22: only offline bookings awaiting admin room approval may be
       // assigned a room. `reschedule_proposed` is the H3 carve-out — an admin
@@ -200,6 +205,8 @@ export function createRoomService(
     return db.transaction(async (tx) => {
       const roomRow = await repo.findRoomById(tx, roomId);
       if (!roomRow) throw new RoomNotFoundError(roomId);
+
+      await lockRoomForBooking(tx, roomId);
 
       const current = await repo.findActiveRoomBookingByBookingId(
         tx,
@@ -396,6 +403,8 @@ export function createRoomService(
       bookingId,
     );
     if (!current) return "missing";
+
+    await lockRoomForBooking(conn, current.roomId);
 
     const conflicting = await repo.findRoomBookingsForUpdate(
       conn,

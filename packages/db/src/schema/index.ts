@@ -14,3 +14,4 @@ export * from "./booking";
 export * from "./contact-request";
 export * from "./support-ticket";
 export * from "./economy-config";
+export * from "./tutor-payout";

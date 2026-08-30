@@ -2,10 +2,11 @@
 
 import { useMemo } from "react";
 import type { ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import {
   IconCalendarEvent,
+  IconChevronDown,
   IconInbox,
   IconRefresh,
   IconSearch,
@@ -17,12 +18,21 @@ import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
+import {
+  Select,
+  SelectItem,
+  SelectList,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@cogito-app/ui/components/selia/select";
 import { cn } from "@cogito-app/ui/lib/utils";
 
 import {
   BookingListCard,
   BookingListCardSkeleton,
   PENDING_BOOKING_STATES,
+  TERMINAL_BOOKING_STATES,
   type BookingListItem,
 } from "@/components/booking/booking-card";
 import { EmptyStateCard } from "@/components/empty-state";
@@ -31,46 +41,54 @@ import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
 
 export const BOOKING_TABS = [
+  { value: "action", label: "Needs action" },
   { value: "upcoming", label: "Upcoming" },
-  { value: "pending", label: "Pending" },
   { value: "recurring", label: "Recurring" },
-  { value: "past", label: "Past" },
-  { value: "cancelled", label: "Cancelled" },
+  { value: "history", label: "History" },
   { value: "all", label: "All" },
 ] as const;
 
 export type BookingTab = (typeof BOOKING_TABS)[number]["value"];
-
-const CANCELLED_STATES = new Set(["cancelled", "late_cancelled"]);
+export type BookingSort = "recommended" | "soonest" | "latest";
+const BOOKING_PAGE_SIZE = 20;
 
 export function BookingsPage() {
   const navigate = useNavigate();
-  const search = useSearch({ strict: false }) as { tab?: BookingTab };
+  const search = useSearch({ strict: false }) as {
+    tab?: BookingTab;
+    sort?: BookingSort;
+  };
   const requestedTab = isBookingTab(search.tab) ? search.tab : undefined;
+  const activeSort = isBookingSort(search.sort) ? search.sort : "recommended";
   const { role, isLoading: isRoleLoading } = useRole();
-  const bookingsQuery = useQuery(
-    orpc.booking.listMine.queryOptions({ input: { limit: 100 } }),
+  const bookingsQuery = useInfiniteQuery(
+    orpc.booking.listMine.infiniteOptions({
+      initialPageParam: null as string | null,
+      input: (cursor) => ({
+        limit: BOOKING_PAGE_SIZE,
+        ...(cursor ? { cursor } : {}),
+      }),
+      getNextPageParam: (lastPage) => lastPage.nextCursor,
+    }),
   );
 
   const bookings = useMemo(
-    () => (bookingsQuery.data?.items ?? []) as BookingListItem[],
-    [bookingsQuery.data?.items],
+    () =>
+      (bookingsQuery.data?.pages.flatMap((page) => page.items) ??
+        []) as BookingListItem[],
+    [bookingsQuery.data?.pages],
   );
   const now = Date.now();
   const tabCounts = useMemo(() => getTabCounts(bookings, now), [bookings, now]);
   const activeTab =
     requestedTab ??
-    getDefaultBookingTab(isRoleLoading ? undefined : role, tabCounts.pending);
+    getDefaultBookingTab(isRoleLoading ? undefined : role, tabCounts.action);
   const visibleBookings = useMemo(
     () =>
-      getBookingsForTab(bookings, activeTab, now).toSorted((left, right) => {
-        const leftTime = new Date(left.scheduledStartAt).getTime();
-        const rightTime = new Date(right.scheduledStartAt).getTime();
-        return activeTab === "past" || activeTab === "cancelled"
-          ? rightTime - leftTime
-          : leftTime - rightTime;
-      }),
-    [activeTab, bookings, now],
+      getBookingsForTab(bookings, activeTab, now).toSorted(
+        getBookingComparator(activeSort, activeTab),
+      ),
+    [activeSort, activeTab, bookings, now],
   );
   const groups = useMemo(
     () => groupBookingsByMonth(visibleBookings),
@@ -84,6 +102,13 @@ export function BookingsPage() {
     });
   }
 
+  function selectSort(sort: BookingSort) {
+    void navigate({
+      to: "/bookings",
+      search: (previous) => ({ ...previous, sort }),
+    });
+  }
+
   const pageDescription =
     role === "tutor"
       ? "Review requests, upcoming sessions, and your teaching history."
@@ -91,18 +116,22 @@ export function BookingsPage() {
         ? "Monitor every booking and open the detail view for operations."
         : "See your scheduled sessions, invitations, and booking history.";
   const isLoading = bookingsQuery.isPending || isRoleLoading;
+  const hasLoadedPages = (bookingsQuery.data?.pages.length ?? 0) > 0;
+  const isInitialError = bookingsQuery.isError && !hasLoadedPages;
 
   return (
     <Stack
       direction="column"
       spacing="lg"
-      className="w-full min-w-0 max-w-full"
+      className="w-full min-w-0 max-w-full overflow-visible"
     >
       <div className="flex w-full min-w-0 max-w-full flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0 max-w-full">
           <div className="flex items-center gap-2">
             <Heading size="md">Bookings</Heading>
-            {bookingsQuery.isFetching && !bookingsQuery.isPending ? (
+            {bookingsQuery.isFetching &&
+            !bookingsQuery.isPending &&
+            !bookingsQuery.isFetchingNextPage ? (
               <Badge variant="secondary" pill>
                 <IconRefresh className="animate-spin" /> Refreshing
               </Badge>
@@ -121,16 +150,20 @@ export function BookingsPage() {
         ) : null}
       </div>
 
-      <BookingTabBar
-        activeTab={activeTab}
-        counts={tabCounts}
-        onChange={selectTab}
-      />
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <BookingTabBar
+          activeTab={activeTab}
+          counts={tabCounts}
+          hasMore={bookingsQuery.hasNextPage}
+          onChange={selectTab}
+        />
+        <BookingSortSelect value={activeSort} onChange={selectSort} />
+      </div>
 
       {isLoading ? (
         <BookingListSkeleton />
-      ) : bookingsQuery.isError ? (
-        <Card>
+      ) : isInitialError ? (
+        <Card className="w-full min-w-0 max-w-full">
           <CardBody className="flex min-h-64 flex-col items-center justify-center text-center">
             <IconBox variant="danger-subtle" size="lg" className="mb-4">
               <IconCalendarEvent />
@@ -155,10 +188,16 @@ export function BookingsPage() {
         <EmptyStateCard
           icon={<IconInbox />}
           title={getEmptyStateTitle(activeTab)}
-          description={getEmptyStateDescription(activeTab, role)}
-          tone={activeTab === "pending" ? "warning" : "secondary"}
+          description={
+            bookingsQuery.hasNextPage
+              ? "No matching bookings in the loaded results yet. Load more to check the rest of your bookings."
+              : getEmptyStateDescription(activeTab, role)
+          }
+          tone={activeTab === "action" ? "warning" : "secondary"}
           action={
-            role === "student" && activeTab === "upcoming" ? (
+            !bookingsQuery.hasNextPage &&
+            role === "student" &&
+            activeTab === "upcoming" ? (
               <Button
                 render={<Link to="/tutors" aria-label="Browse tutors" />}
                 nativeButton={false}
@@ -169,11 +208,12 @@ export function BookingsPage() {
           }
         />
       ) : (
-        <div className="grid min-w-0 gap-6">
+        <div className="grid min-w-0 max-w-full gap-6">
           {groups.map((group) => (
             <section
               key={group.key}
               aria-labelledby={`booking-group-${group.key}`}
+              className="min-w-0 max-w-full"
             >
               <Heading
                 id={`booking-group-${group.key}`}
@@ -199,6 +239,27 @@ export function BookingsPage() {
           ))}
         </div>
       )}
+
+      {!isLoading && hasLoadedPages && bookingsQuery.hasNextPage ? (
+        <div className="flex flex-col items-center gap-2">
+          {bookingsQuery.isFetchNextPageError ? (
+            <Text className="text-center text-danger">
+              {getUserFacingError(
+                bookingsQuery.error,
+                "More bookings could not be loaded. Try again.",
+              )}
+            </Text>
+          ) : null}
+          <Button
+            variant="outline"
+            onClick={() => void bookingsQuery.fetchNextPage()}
+            progress={bookingsQuery.isFetchingNextPage}
+            disabled={bookingsQuery.isFetchingNextPage}
+          >
+            <IconChevronDown /> Load more bookings
+          </Button>
+        </div>
+      ) : null}
     </Stack>
   );
 }
@@ -206,21 +267,24 @@ export function BookingsPage() {
 function BookingTabBar({
   activeTab,
   counts,
+  hasMore,
   onChange,
 }: {
   activeTab: BookingTab;
   counts: Record<BookingTab, number>;
+  hasMore: boolean;
   onChange: (tab: BookingTab) => void;
 }) {
   return (
-    <div className="w-full min-w-0 max-w-full pb-1">
-      <div className="w-full min-w-0 max-w-full rounded-xl bg-accent/60 p-1 sm:w-fit">
+    <div className="w-full min-w-0 max-w-full overflow-visible pb-1">
+      <div className="w-full min-w-0 max-w-full overflow-visible rounded-full bg-accent/60 p-1 sm:w-fit">
         <div
-          className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain scrollbar-hidden sm:w-fit"
+          data-slot="booking-tab-scroller"
+          className="w-full min-w-0 max-w-full overflow-x-auto overflow-y-hidden overscroll-x-contain scrollbar-hidden sm:w-fit"
           role="tablist"
           aria-label="Booking status"
         >
-          <div className="flex min-w-max whitespace-nowrap">
+          <div className="flex min-w-max whitespace-nowrap px-1 py-1">
             {BOOKING_TABS.map((tab) => {
               const selected = activeTab === tab.value;
               return (
@@ -230,7 +294,7 @@ function BookingTabBar({
                   role="tab"
                   aria-selected={selected}
                   className={cn(
-                    "rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                    "rounded-full px-3 py-2 text-sm font-medium transition-colors",
                     "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
                     selected
                       ? "bg-background text-foreground shadow-sm"
@@ -241,6 +305,7 @@ function BookingTabBar({
                   {tab.label}
                   <span className="ml-1.5 text-xs text-dimmed">
                     {counts[tab.value]}
+                    {hasMore ? "+" : ""}
                   </span>
                 </button>
               );
@@ -254,13 +319,44 @@ function BookingTabBar({
 
 function BookingListSkeleton() {
   return (
-    <div className="grid gap-3" aria-label="Loading bookings">
+    <div
+      className="grid min-w-0 max-w-full gap-3"
+      aria-label="Loading bookings"
+    >
       {["booking-skeleton-primary", "booking-skeleton-secondary"].map(
         (placeholder) => (
           <BookingListCardSkeleton key={placeholder} />
         ),
       )}
     </div>
+  );
+}
+
+function BookingSortSelect({
+  value,
+  onChange,
+}: {
+  value: BookingSort;
+  onChange: (sort: BookingSort) => void;
+}) {
+  return (
+    <Select
+      value={value}
+      onValueChange={(nextValue) => {
+        if (isBookingSort(nextValue)) onChange(nextValue);
+      }}
+    >
+      <SelectTrigger className="w-full sm:w-44" aria-label="Sort bookings">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectPopup>
+        <SelectList>
+          <SelectItem value="recommended">Recommended</SelectItem>
+          <SelectItem value="soonest">Date: soonest</SelectItem>
+          <SelectItem value="latest">Date: latest</SelectItem>
+        </SelectList>
+      </SelectPopup>
+    </Select>
   );
 }
 
@@ -271,20 +367,18 @@ function getBookingsForTab(
 ) {
   return bookings.filter((booking) => {
     const isFuture = new Date(booking.scheduledEndAt).getTime() >= now;
-    const isCancelled = CANCELLED_STATES.has(booking.currentState);
+    const isTerminal = TERMINAL_BOOKING_STATES.has(booking.currentState);
     const isPending = PENDING_BOOKING_STATES.has(booking.currentState);
 
     switch (tab) {
-      case "upcoming":
-        return isFuture && !isCancelled && !isPending;
-      case "pending":
+      case "action":
         return isPending;
+      case "upcoming":
+        return isFuture && !isTerminal && !isPending;
       case "recurring":
-        return booking.type === "series" && !isCancelled;
-      case "past":
-        return !isFuture && !isCancelled;
-      case "cancelled":
-        return isCancelled;
+        return booking.type === "series" && !isTerminal;
+      case "history":
+        return isTerminal || (!isFuture && !isPending);
       case "all":
         return true;
     }
@@ -305,8 +399,28 @@ function getDefaultBookingTab(
   pendingCount: number,
 ): BookingTab {
   if (role === "admin") return "all";
-  if (role === "tutor" && pendingCount > 0) return "pending";
+  if (pendingCount > 0) return "action";
   return "upcoming";
+}
+
+function getBookingComparator(sort: BookingSort, tab: BookingTab) {
+  return (left: BookingListItem, right: BookingListItem) => {
+    const leftTime = new Date(left.scheduledStartAt).getTime();
+    const rightTime = new Date(right.scheduledStartAt).getTime();
+    if (sort === "soonest") return leftTime - rightTime;
+    if (sort === "latest") return rightTime - leftTime;
+    const rankDifference =
+      getBookingStateRank(left.currentState) -
+      getBookingStateRank(right.currentState);
+    if (rankDifference !== 0) return rankDifference;
+    return tab === "history" ? rightTime - leftTime : leftTime - rightTime;
+  };
+}
+
+function getBookingStateRank(state: string) {
+  if (PENDING_BOOKING_STATES.has(state)) return 0;
+  if (TERMINAL_BOOKING_STATES.has(state)) return 2;
+  return 1;
 }
 
 function groupBookingsByMonth(bookings: BookingListItem[]) {
@@ -336,29 +450,27 @@ function groupBookingsByMonth(bookings: BookingListItem[]) {
 }
 
 function shouldShowStatusBadge(state: string, tab: BookingTab) {
-  if (tab === "all" || tab === "pending" || tab === "cancelled") return true;
+  if (tab === "all" || tab === "action" || tab === "history") return true;
   return !["confirmed", "scheduled"].includes(state);
 }
 
 function getEmptyStateTitle(tab: BookingTab) {
   switch (tab) {
+    case "action":
+      return "Nothing needs your attention";
     case "upcoming":
       return "No upcoming bookings";
-    case "pending":
-      return "Nothing needs your attention";
     case "recurring":
       return "No recurring bookings";
-    case "past":
-      return "No past bookings";
-    case "cancelled":
-      return "No cancelled bookings";
+    case "history":
+      return "No booking history";
     case "all":
       return "No bookings yet";
   }
 }
 
 function getEmptyStateDescription(tab: BookingTab, role: string): ReactNode {
-  if (tab === "pending") {
+  if (tab === "action") {
     return role === "tutor"
       ? "New student requests and reschedule decisions will appear here."
       : "Requests, confirmations, and reschedule proposals will appear here.";
@@ -369,4 +481,8 @@ function getEmptyStateDescription(tab: BookingTab, role: string): ReactNode {
 
 function isBookingTab(value: unknown): value is BookingTab {
   return BOOKING_TABS.some((tab) => tab.value === value);
+}
+
+function isBookingSort(value: unknown): value is BookingSort {
+  return ["recommended", "soonest", "latest"].includes(String(value));
 }

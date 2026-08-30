@@ -53,7 +53,7 @@ function makeRepo(overrides: Partial<RoomRepo> = {}): RoomRepo {
 }
 
 function makeDb() {
-  const tx = {};
+  const tx = { execute: mock(async () => {}) };
   return {
     transaction: mock(async (fn: any) => fn(tx)),
   } as any;
@@ -593,7 +593,7 @@ describe("createRoomService", () => {
       const endAt = new Date("2024-01-01T13:00:00Z");
 
       const result = await service.syncRoomBookingScheduleForBooking(
-        {},
+        { execute: mock(async () => {}) } as any,
         "b1",
         startAt,
         endAt,
@@ -621,7 +621,7 @@ describe("createRoomService", () => {
       const service = createRoomService(repo, makeDb());
 
       const result = await service.syncRoomBookingScheduleForBooking(
-        {},
+        { execute: mock(async () => {}) } as any,
         "b1",
         new Date("2024-01-01T12:00:00Z"),
         new Date("2024-01-01T13:00:00Z"),

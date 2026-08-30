@@ -39,6 +39,8 @@ type PublishedTutor = {
   displayName: string | null;
   shortBio: string | null;
   credentialsSummary: string | null;
+  achievements: string | null;
+  experiences: string | null;
   expertise: string[];
   subjects?: TutorSubject[] | null;
   modality: string | null;
@@ -46,8 +48,6 @@ type PublishedTutor = {
   pricesByModality?: Partial<
     Record<"online" | "offline", Record<string, number>>
   > | null;
-  availabilitySummary: string | null;
-  proofUrls: string[] | null;
   publishedAt: Date | null;
   user: { name: string | null; image: string | null } | null;
 };
@@ -156,9 +156,6 @@ export function TutorsPageContent() {
 
     return () => window.clearTimeout(timer);
   }, [tutorListInput]);
-  const hasActiveFilter =
-    categoryIds.length > 0 || subjectIds.length > 0 || Boolean(modality);
-
   function handleCategoryChange(value: unknown) {
     const nextCategoryIds = getSelectItemValues(value);
     setCategoryIds(nextCategoryIds);
@@ -173,13 +170,17 @@ export function TutorsPageContent() {
     );
   }
 
-  const { data: tutors = [], isPending } = useQuery({
+  const {
+    data: tutors = [],
+    isFetching,
+    isPending,
+  } = useQuery({
     ...orpc.tutors.listPublished.queryOptions({
       input: debouncedTutorListInput,
     }),
-    // Keep search results stable while typing, but never show the previous
-    // unfiltered list while a category/subject/modality filter is loading.
-    placeholderData: hasActiveFilter ? undefined : keepPreviousData,
+    // Keep the current cards visible while search or filters load the next
+    // result set, so the page does not collapse between requests.
+    placeholderData: keepPreviousData,
   });
 
   const selected = selectedId
@@ -331,7 +332,10 @@ export function TutorsPageContent() {
           }
         />
       ) : (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <div
+          className="grid grid-cols-1 gap-4 xl:grid-cols-2"
+          aria-busy={isFetching}
+        >
           {tutors.map((tutor: PublishedTutor) => (
             <TutorCard
               key={tutor.id}

@@ -128,8 +128,19 @@ export function validateSubmitForReview(
   const requiredFields: { key: string; value: unknown }[] = [
     { key: "displayName", value: profile.displayName },
     { key: "shortBio", value: profile.shortBio },
-    { key: "credentialsSummary", value: profile.credentialsSummary },
+    { key: "achievements", value: profile.achievements },
+    { key: "experiences", value: profile.experiences },
+    { key: "sourcePhotoUrl", value: profile.sourcePhotoUrl },
     { key: "modality", value: profile.modality },
+    { key: "bankName", value: profile.bankName },
+    { key: "bankAccountNumber", value: profile.bankAccountNumber },
+    { key: "bankAccountHolderName", value: profile.bankAccountHolderName },
+    { key: "bankAccountOpeningCity", value: profile.bankAccountOpeningCity },
+    { key: "bankAccountOwnership", value: profile.bankAccountOwnership },
+    {
+      key: "bankTransferDisclaimerAccepted",
+      value: profile.bankTransferDisclaimerAccepted,
+    },
     {
       key: "baseRatesIdr",
       value: profile.baseRatesIdr ?? profile.prices,
@@ -234,12 +245,15 @@ export function createTutorService(deps: {
       profile!.onboardingStatus === ONBOARDING_STATUS.PUBLISHED;
     const protectedFields = [
       "displayName",
-      "credentialsSummary",
+      "achievements",
+      "experiences",
+      "achievementProofUrls",
+      "experienceProofUrls",
+      "sourcePhotoUrl",
       "expertise",
       "modality",
       "baseRatesIdr",
       "prices",
-      "proofUrls",
     ] as const;
     const directData: Omit<UpdateProfileInput, "version" | "subjectIds"> & {
       pendingProfileChanges?: Record<string, unknown>;
@@ -585,6 +599,9 @@ export function createTutorService(deps: {
     }
     if (input.dateTo && Number.isNaN(Date.parse(input.dateTo))) {
       throw new InvalidDateRangeError("dateTo");
+    }
+    if (!input.dateFrom && !input.dateTo && payout.getPendingTutorPayouts) {
+      return payout.getPendingTutorPayouts(userId);
     }
     return payout.getTutorPayouts({
       tutorId: userId,

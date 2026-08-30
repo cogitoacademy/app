@@ -4,6 +4,7 @@ import {
   TutorProfileNotFoundError,
   InvalidInviteActionError,
   DuplicateInviteError,
+  TutorProfileOptimisticLockError,
 } from "./admin-tutor.errors";
 import type { DbType } from "../../lib/db";
 import { hashInviteToken } from "../../lib/tokens";
@@ -124,6 +125,7 @@ type ReviewTutorProfileInput = z.infer<typeof reviewTutorProfileInput>;
 type InspectInviteeInput = z.infer<typeof inspectInviteeInput>;
 export interface TutorProfileSnapshot {
   id: string;
+  version: number;
   onboardingStatus: string;
   publishedAt: Date | null;
   pendingProfileChanges?: Record<string, unknown> | null;
@@ -514,7 +516,22 @@ export function createAdminTutorService(deps: {
         tx,
         input.tutorProfileId,
         updates,
+        existing.version,
       );
+      if (!row) {
+        throw new TutorProfileOptimisticLockError(
+          input.tutorProfileId,
+          existing.version,
+        );
+      }
+
+      if (input.publicPhotoUrl) {
+        await adminTutorRepo.updateTutorPublicPhoto(
+          tx,
+          profile!.userId,
+          input.publicPhotoUrl,
+        );
+      }
 
       if (pendingSubjectIds !== undefined) {
         await adminTutorRepo.replaceTutorProfileSubjects(

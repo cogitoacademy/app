@@ -202,7 +202,6 @@ describe("Tutor discovery", () => {
     expect(tutor!.expertise).toContain("Mathematics");
     expect(tutor!.modality).toBe("both");
     expect(tutor!.prices).toBeDefined();
-    expect(tutor!.availabilitySummary).toBe("Weekdays evenings");
   });
 
   test("getProfile returns published tutor with slots", async () => {

@@ -160,6 +160,8 @@ describe("Achievement Service", () => {
         "a1",
         "archived",
         undefined,
+        "approved",
+        undefined,
       );
       const notif = notificationPort.writeBestEffort.mock.calls[0][0];
       expect(notif.title).toBe("Achievement archived");
@@ -203,6 +205,8 @@ describe("Achievement Service", () => {
         expect.anything(),
         "a1",
         "approved",
+        undefined,
+        "archived",
         undefined,
       );
       const notif = notificationPort.writeBestEffort.mock.calls[0][0];

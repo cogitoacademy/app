@@ -11,14 +11,22 @@ export interface UpdateProfileInput {
   version: number;
   displayName?: string;
   shortBio?: string;
-  credentialsSummary?: string;
+  achievements?: string;
+  experiences?: string;
+  achievementProofUrls?: string[];
+  experienceProofUrls?: string[];
+  sourcePhotoUrl?: string;
   expertise?: string[];
   subjectIds?: string[];
   modality?: "online" | "offline" | "both";
   baseRatesIdr?: Partial<{ online: number; offline: number }>;
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankAccountHolderName?: string;
+  bankAccountOpeningCity?: string;
+  bankAccountOwnership?: "self" | "trusted_person";
+  bankTransferDisclaimerAccepted?: boolean;
   prices?: Record<string, number>;
-  availabilitySummary?: string;
-  proofUrls?: string[];
 }
 
 export interface PersistedProfileUpdate extends Omit<

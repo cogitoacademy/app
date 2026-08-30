@@ -1,8 +1,12 @@
 "use client";
 
 import { type ReactNode, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Avatar, AvatarFallback } from "@cogito-app/ui/components/selia/avatar";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@cogito-app/ui/components/selia/avatar";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
@@ -33,8 +37,8 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import {
   IconAlertTriangle,
-  IconCalendarClock,
   IconCertificate,
+  IconCoins,
   IconMail,
   IconSchool,
 } from "@tabler/icons-react";
@@ -58,6 +62,7 @@ const FLOOR_OFFLINE: Record<string, number> = {
   "5": 30,
   "6": 27,
 };
+const NON_BCA_TRANSFER_FEE_IDR = 2_500;
 
 const STATUS_BADGE: Record<
   string,
@@ -86,16 +91,27 @@ interface TutorReviewCardProps {
     displayName: string | null;
     shortBio: string | null;
     credentialsSummary: string | null;
+    achievements: string | null;
+    experiences: string | null;
+    achievementProofUrls: string[] | null;
+    experienceProofUrls: string[] | null;
     expertise: string[] | null;
     modality: string | null;
+    bankName: string | null;
+    bankAccountNumber: string | null;
+    bankAccountHolderName: string | null;
+    bankAccountOpeningCity: string | null;
+    bankAccountOwnership: "self" | "trusted_person" | null;
+    bankTransferDisclaimerAccepted: boolean | null;
     prices: Record<string, number> | null;
     availabilitySummary: string | null;
+    sourcePhotoUrl: string | null;
     onboardingStatus: string;
     adminReviewNote: string | null;
     pendingProfileChanges: Record<string, unknown> | null;
     profileEditStatus: string;
     profileEditAdminNote: string | null;
-    user?: { name: string; email: string } | null;
+    user?: { id: string; name: string; email: string } | null;
   };
   subjectLabels: ReadonlyMap<string, string>;
   onAction?: () => void;
@@ -167,10 +183,37 @@ export function TutorReviewCard({
   onAction,
 }: TutorReviewCardProps) {
   const queryClient = useQueryClient();
+  const pendingPayout = useQuery({
+    ...orpc.admin.getPendingTutorPayouts.queryOptions({
+      input: { tutorId: profile.user?.id ?? "" },
+    }),
+    enabled: Boolean(profile.user?.id),
+  });
+  const markPayoutMutation = useMutation(
+    orpc.admin.markTutorPayoutPaid.mutationOptions({
+      onSuccess: () => {
+        void queryClient.invalidateQueries({
+          queryKey: orpc.admin.getPendingTutorPayouts.key(),
+        });
+        toastManager.add({
+          title: "Tutor payout marked as paid",
+          type: "success",
+        });
+      },
+      onError: (error: unknown) => {
+        toastManager.add({
+          title: "Tutor payout could not be marked paid",
+          description: getUserFacingError(error),
+          type: "error",
+        });
+      },
+    }),
+  );
   const [noteAction, setNoteAction] = useState<
     "request_changes" | "request_edit_changes" | "suspend" | null
   >(null);
   const [adminNote, setAdminNote] = useState("");
+  const [publicPhotoUrl, setPublicPhotoUrl] = useState("");
   const reviewMutation = useMutation(
     orpc.adminTutor.reviewTutorProfile.mutationOptions({
       onSuccess: () => {
@@ -207,6 +250,7 @@ export function TutorReviewCard({
       tutorProfileId: profile.id,
       action,
       adminNote: note,
+      publicPhotoUrl: publicPhotoUrl.trim() || undefined,
     });
   }
 
@@ -229,12 +273,31 @@ export function TutorReviewCard({
   );
   const reviewAction = reviewMutation.variables?.action;
   const isPending = reviewMutation.isPending;
+  const hasCompletePayoutDetails = Boolean(
+    profile.bankName?.trim() &&
+    profile.bankAccountNumber?.trim() &&
+    profile.bankAccountHolderName?.trim() &&
+    profile.bankAccountOpeningCity?.trim() &&
+    profile.bankAccountOwnership &&
+    profile.bankTransferDisclaimerAccepted,
+  );
+  const pendingHonorarium = pendingPayout.data?.tutorPayoutIdr ?? 0;
+  const usesBca = profile.bankName?.trim().toUpperCase() === "BCA";
+  const transferFee =
+    pendingHonorarium > 0 && profile.bankName?.trim() && !usesBca
+      ? NON_BCA_TRANSFER_FEE_IDR
+      : 0;
+  const netHonorarium = Math.max(0, pendingHonorarium - transferFee);
 
   return (
     <>
       <Card className="flex h-full min-w-0 flex-col overflow-hidden">
         <CardHeader className="items-start">
           <Avatar>
+            <AvatarImage
+              src={profile.sourcePhotoUrl ?? undefined}
+              alt="Tutor source portrait"
+            />
             <AvatarFallback>
               {getInitials(profile.displayName ?? profile.user?.name)}
             </AvatarFallback>
@@ -278,18 +341,107 @@ export function TutorReviewCard({
                 }
                 capitalize={Boolean(profile.modality)}
               />
-              <ReviewDetail
-                icon={<IconCalendarClock />}
-                label="Availability"
-                value={profile.availabilitySummary ?? "Not specified"}
-              />
             </div>
+
+            <section className="rounded-lg border border-item-border bg-item p-3">
+              <div className="flex items-center gap-2">
+                <IconCoins className="size-4 text-muted" />
+                <Text className="text-xs font-semibold uppercase tracking-wide text-dimmed">
+                  Unpaid honorarium
+                </Text>
+              </div>
+              <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
+                <div className="min-w-0">
+                  <Text className="text-xs text-muted">
+                    {pendingPayout.data?.completedSessions ?? 0} completed
+                    session(s)
+                    {profile.bankName
+                      ? ` · ${profile.bankName}`
+                      : " · Bank not set"}
+                  </Text>
+                  <div className="mt-2 grid gap-1 text-sm">
+                    <div className="flex items-center justify-between gap-6">
+                      <Text className="text-muted">Gross honorarium</Text>
+                      <Text className="font-semibold">
+                        Rp{pendingHonorarium.toLocaleString("id-ID")}
+                      </Text>
+                    </div>
+                    <div className="flex items-center justify-between gap-6">
+                      <Text className="text-muted">Transfer fee</Text>
+                      <Text className="font-medium">
+                        {transferFee > 0
+                          ? `−Rp${transferFee.toLocaleString("id-ID")}`
+                          : "Rp0"}
+                      </Text>
+                    </div>
+                    <div className="flex items-center justify-between gap-6 border-t border-item-border pt-1">
+                      <Text className="font-medium">Net to transfer</Text>
+                      <Text className="font-semibold">
+                        Rp{netHonorarium.toLocaleString("id-ID")}
+                      </Text>
+                    </div>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  progress={markPayoutMutation.isPending}
+                  disabled={
+                    markPayoutMutation.isPending ||
+                    pendingHonorarium <= 0 ||
+                    !hasCompletePayoutDetails
+                  }
+                  onClick={() => {
+                    if (profile.user?.id) {
+                      markPayoutMutation.mutate({ tutorId: profile.user.id });
+                    }
+                  }}
+                >
+                  Mark as paid
+                </Button>
+              </div>
+              <Text className="mt-3 text-xs text-muted">
+                Only conventional BCA (enter BCA as the bank name) has no
+                transfer deduction. BCA Syariah, blu (BCA Digital), and other
+                banks deduct Rp2.500 once from this payout; mark as paid after
+                transferring the net amount.
+              </Text>
+              {profile.bankAccountNumber ? (
+                <Text className="mt-2 text-xs text-muted">
+                  Account ending in {profile.bankAccountNumber.slice(-4)}
+                </Text>
+              ) : null}
+              {profile.bankAccountHolderName ? (
+                <Text className="mt-1 text-xs text-muted">
+                  Account holder: {profile.bankAccountHolderName}
+                </Text>
+              ) : null}
+              {profile.bankAccountOpeningCity ? (
+                <Text className="mt-1 text-xs text-muted">
+                  Opened in: {profile.bankAccountOpeningCity}
+                </Text>
+              ) : null}
+              {profile.bankAccountOwnership ? (
+                <Text className="mt-1 text-xs text-muted">
+                  Ownership:{" "}
+                  {profile.bankAccountOwnership === "self"
+                    ? "Tutor's own account"
+                    : "Trusted person's account"}
+                </Text>
+              ) : null}
+              {!hasCompletePayoutDetails ? (
+                <Text className="mt-2 text-xs text-warning">
+                  Tutor must complete and confirm all payout account details
+                  before transfer.
+                </Text>
+              ) : null}
+            </section>
 
             <section>
               <div className="mb-2 flex items-center gap-2">
                 <IconCertificate className="size-4 text-muted" />
                 <Text className="text-xs font-semibold uppercase tracking-wide text-dimmed">
-                  Credentials
+                  Achievements
                 </Text>
               </div>
               <Text
@@ -299,7 +451,66 @@ export function TutorReviewCard({
                     : "text-sm italic text-dimmed"
                 }
               >
-                {profile.credentialsSummary ?? "No credentials provided."}
+                {profile.achievements ??
+                  profile.credentialsSummary ??
+                  "No achievements provided."}
+              </Text>
+            </section>
+
+            <ProofLinks
+              label="Achievement proof"
+              urls={profile.achievementProofUrls}
+            />
+
+            <section>
+              <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-dimmed">
+                Experiences
+              </Text>
+              <Text
+                className={
+                  profile.experiences
+                    ? "whitespace-pre-line text-sm"
+                    : "text-sm italic text-dimmed"
+                }
+              >
+                {profile.experiences ?? "No experiences provided."}
+              </Text>
+            </section>
+
+            <ProofLinks
+              label="Experience proof"
+              urls={profile.experienceProofUrls}
+            />
+
+            <section>
+              <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-dimmed">
+                Edited public photo
+              </Text>
+              {profile.sourcePhotoUrl ? (
+                <a
+                  href={profile.sourcePhotoUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-sm underline underline-offset-2"
+                >
+                  Download original tutor photo
+                </a>
+              ) : (
+                <Text className="text-sm italic text-dimmed">
+                  No source photo uploaded.
+                </Text>
+              )}
+              <Input
+                className="mt-2"
+                type="url"
+                value={publicPhotoUrl}
+                onChange={(event) => setPublicPhotoUrl(event.target.value)}
+                placeholder="Paste the edited public image URL"
+                aria-label="Edited public tutor photo URL"
+              />
+              <Text className="mt-1 text-xs text-muted">
+                Only this admin-provided image can replace the tutor's public
+                photo.
               </Text>
             </section>
 
@@ -594,5 +805,31 @@ function ReviewDetail({
         {value}
       </Text>
     </div>
+  );
+}
+
+function ProofLinks({ label, urls }: { label: string; urls: string[] | null }) {
+  if (!urls?.length) return null;
+
+  return (
+    <section>
+      <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-dimmed">
+        {label}
+      </Text>
+      <ul className="space-y-1">
+        {urls.map((url) => (
+          <li key={url}>
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="break-all text-sm underline underline-offset-2"
+            >
+              {url}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

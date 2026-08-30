@@ -12,6 +12,7 @@ import {
   lt,
   gt,
   sql,
+  isNull,
   getTableColumns,
   not,
   notExists,
@@ -29,7 +30,9 @@ import {
   tutorProfile,
   user,
   meetingEvent,
+  tutorPayout,
   type booking as bookingTable,
+  type BookingSessionTopic,
 } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
@@ -145,6 +148,60 @@ async function findTutorProfile(
       where: and(...conditions),
     })) ?? null
   );
+}
+
+/**
+ * Resolves one immutable booking-topic snapshot from the tutor's approved
+ * competition tracks. When no subject id is supplied, a single available
+ * track can be selected automatically for backward-compatible callers.
+ */
+async function findTutorSubjectTopic(
+  conn: DbOrTx,
+  tutorId: string,
+  subjectId?: string,
+): Promise<BookingSessionTopic | null> {
+  const profile = await conn.query.tutorProfile.findFirst({
+    where: eq(tutorProfile.userId, tutorId),
+    columns: { id: true },
+    with: {
+      subjects: {
+        with: {
+          subject: {
+            with: { parent: true },
+          },
+        },
+      },
+    },
+  });
+  if (!profile) return null;
+
+  const topics: BookingSessionTopic[] = [];
+  for (const relation of profile.subjects) {
+    const subject = relation.subject;
+    const category = subject?.parent;
+    if (
+      !subject ||
+      !category ||
+      !subject.parentId ||
+      !subject.isActive ||
+      !category.isActive
+    ) {
+      continue;
+    }
+    topics.push({
+      categoryId: category.id,
+      categorySlug: category.slug,
+      categoryName: category.name,
+      subcategoryId: subject.id,
+      subcategorySlug: subject.slug,
+      subcategoryName: subject.name,
+    });
+  }
+
+  if (subjectId) {
+    return topics.find((topic) => topic.subcategoryId === subjectId) ?? null;
+  }
+  return topics.length === 1 ? topics[0]! : null;
 }
 
 /**
@@ -634,10 +691,14 @@ async function cancelSession(conn: DbOrTx, sessionId: string) {
     .where(eq(bookingSession.id, sessionId));
 }
 
-async function completeSession(conn: DbOrTx, sessionId: string) {
+async function completeSession(
+  conn: DbOrTx,
+  sessionId: string,
+  completedAt = new Date(),
+) {
   await conn
     .update(bookingSession)
-    .set({ currentState: BOOKING_STATE.COMPLETED })
+    .set({ currentState: BOOKING_STATE.COMPLETED, completedAt })
     .where(eq(bookingSession.id, sessionId));
 }
 
@@ -889,21 +950,60 @@ async function findCompletedBookingsByTutor(
   tutorId: string,
   dateFrom?: Date,
   dateTo?: Date,
+  dateBasis: "scheduledStartAt" | "completedAt" = "scheduledStartAt",
 ): Promise<BookingRow[]> {
-  const conditions = [
+  const conditions: SQL[] = [
     eq(booking.tutorId, tutorId),
     eq(booking.currentState, BOOKING_STATE.COMPLETED),
   ];
   if (dateFrom) {
-    conditions.push(gte(booking.scheduledStartAt, dateFrom));
+    const condition =
+      dateBasis === "completedAt"
+        ? or(
+            gte(booking.completedAt, dateFrom),
+            and(
+              isNull(booking.completedAt),
+              gte(booking.scheduledStartAt, dateFrom),
+            ),
+          )
+        : gte(booking.scheduledStartAt, dateFrom);
+    if (condition) conditions.push(condition);
   }
   if (dateTo) {
-    conditions.push(lte(booking.scheduledStartAt, dateTo));
+    const condition =
+      dateBasis === "completedAt"
+        ? or(
+            lte(booking.completedAt, dateTo),
+            and(
+              isNull(booking.completedAt),
+              lte(booking.scheduledStartAt, dateTo),
+            ),
+          )
+        : lte(booking.scheduledStartAt, dateTo);
+    if (condition) conditions.push(condition);
   }
   return conn
     .select({ ...getTableColumns(booking) })
     .from(booking)
     .where(and(...conditions));
+}
+
+async function findLatestPaidTutorPayout(conn: DbOrTx, tutorId: string) {
+  const [row] = await conn
+    .select()
+    .from(tutorPayout)
+    .where(eq(tutorPayout.tutorId, tutorId))
+    .orderBy(desc(tutorPayout.cutoffAt))
+    .limit(1);
+  return row ?? null;
+}
+
+async function insertTutorPayout(
+  conn: DbOrTx,
+  input: typeof tutorPayout.$inferInsert,
+) {
+  const [row] = await conn.insert(tutorPayout).values(input).returning();
+  return row!;
 }
 
 /**
@@ -929,6 +1029,7 @@ async function updateBookingVersioned(
       | "holdAmount"
       | "confirmedHeadcount"
       | "overrideMeta"
+      | "completedAt"
     >
   >,
 ): Promise<{
@@ -1128,6 +1229,7 @@ export function createBookingRepo(db: DbType) {
     listBookingsByTutor,
     listBookingsForAccess,
     findTutorProfile,
+    findTutorSubjectTopic,
     findAvailabilitySlot,
     findAvailabilityWindowContaining,
     listActiveTutorAvailability,
@@ -1168,6 +1270,8 @@ export function createBookingRepo(db: DbType) {
     decrementBookingConfirmedHeadcount,
     cancelAllSessions,
     findCompletedBookingsByTutor,
+    findLatestPaidTutorPayout,
+    insertTutorPayout,
   };
 }
 

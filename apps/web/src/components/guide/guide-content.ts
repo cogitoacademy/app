@@ -51,7 +51,7 @@ export type GuideRoute =
   | "/calendar"
   | "/achievements"
   | "/tutors"
-  | "/student-resources"
+  | "/knowledge-bank"
   | "/notifications"
   | "/onboarding"
   | "/availability"
@@ -462,7 +462,7 @@ const studentContent: GuideContent = {
       icon: IconBook,
       steps: [
         {
-          id: "student-resources",
+          id: "knowledge-bank",
           title: "Use your learning tools",
           summary:
             "Check competitions, record achievements, and unlock Knowledge Bank resources when your Marks balance qualifies.",

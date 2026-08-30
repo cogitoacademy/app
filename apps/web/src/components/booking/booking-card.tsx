@@ -1,5 +1,6 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   IconChalkboardTeacher,
@@ -21,6 +22,10 @@ import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Separator } from "@cogito-app/ui/components/selia/separator";
 import { Text } from "@cogito-app/ui/components/selia/text";
+
+// Legacy snapshots predate tutorHonorariumIdr; keep their tutor-facing value
+// in IDR while new snapshots use the authoritative stored amount.
+const LEGACY_TUTOR_PAYOUT_RATE_IDR = 7_000;
 import { cn } from "@cogito-app/ui/lib/utils";
 
 import {
@@ -45,9 +50,14 @@ export type BookingCardData = {
   currentState: string;
   scheduledStartAt: string | Date;
   scheduledEndAt: string | Date;
+  deadlineAt?: string | Date | null;
   timezone: string;
   originalMarks: number;
-  priceSnapshot: { perStudent?: number; tutorShare?: number } | null;
+  priceSnapshot: {
+    perStudent?: number;
+    tutorShare?: number;
+    tutorHonorariumIdr?: number;
+  } | null;
   tutor: BookingCardPerson | null;
   proposer: BookingCardPerson | null;
   participants?: Array<{
@@ -92,12 +102,14 @@ export function BookingListCard({
   booking,
   viewerRole,
   showStatus = true,
+  showFinancialInfo = true,
   actionLabel,
   className,
 }: {
   booking: BookingCardData;
   viewerRole: string;
   showStatus?: boolean;
+  showFinancialInfo?: boolean;
   actionLabel?: string;
   className?: string;
 }) {
@@ -141,33 +153,53 @@ export function BookingListCard({
           </Text>
           <div className="mt-3 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
             <AvatarStack people={people} />
-            <Separator orientation="vertical" className="h-full" />
-            <BookingFinancialInfo booking={booking} viewerRole={viewerRole} />
-            {showStatus ? (
-              <BookingStatusBadge
-                bookingId={booking.id}
-                state={booking.currentState}
-              />
+            {showFinancialInfo ? (
+              <>
+                {people.length > 0 ? (
+                  <Separator orientation="vertical" className="h-full" />
+                ) : null}
+                <BookingFinancialInfo
+                  booking={booking}
+                  viewerRole={viewerRole}
+                />
+              </>
             ) : null}
+            <BookingTimeIndicator
+              booking={booking}
+              showDivider={people.length > 0 || showFinancialInfo}
+            />
           </div>
         </div>
 
-        <Button
-          variant={attention ? "primary" : "tertiary"}
-          size="sm"
-          className="w-full min-w-0 max-w-full md:w-auto md:justify-self-end"
-          render={
-            <Link
-              to="/bookings/$bookingId"
-              params={{ bookingId: booking.id }}
-              aria-label={`${resolvedActionLabel}: ${title}`}
-            />
-          }
-          nativeButton={false}
+        <div
+          className={cn(
+            "flex w-full min-w-0 max-w-full flex-col gap-2 md:w-auto md:self-stretch md:items-end md:gap-0",
+            showStatus ? "md:justify-between" : "md:justify-center",
+          )}
         >
-          {resolvedActionLabel}
-          <IconChevronRight />
-        </Button>
+          {showStatus ? (
+            <BookingStatusBadge
+              bookingId={booking.id}
+              state={booking.currentState}
+            />
+          ) : null}
+          <Button
+            variant={attention ? "primary" : "tertiary"}
+            size="sm"
+            className="w-full min-w-0 max-w-full md:w-auto"
+            render={
+              <Link
+                to="/bookings/$bookingId"
+                params={{ bookingId: booking.id }}
+                aria-label={`${resolvedActionLabel}: ${title}`}
+              />
+            }
+            nativeButton={false}
+          >
+            {resolvedActionLabel}
+            <IconChevronRight />
+          </Button>
+        </div>
       </div>
     </Card>
   );
@@ -234,6 +266,7 @@ export function NextLessonSection({
         <BookingListCard
           booking={booking}
           viewerRole={viewerRole}
+          showFinancialInfo={false}
           actionLabel="View lesson"
         />
       ) : (
@@ -297,6 +330,130 @@ function BookingMeta({
       </div>
     </div>
   );
+}
+
+const MINUTE_MS = 60_000;
+const HOUR_MS = 60 * MINUTE_MS;
+let clockSnapshot = Date.now();
+let clockTimer: ReturnType<typeof setInterval> | undefined;
+const clockSubscribers = new Set<() => void>();
+
+function subscribeToClock(callback: () => void) {
+  clockSnapshot = Date.now();
+  clockSubscribers.add(callback);
+  if (!clockTimer) {
+    clockTimer = setInterval(() => {
+      clockSnapshot = Date.now();
+      for (const subscriber of clockSubscribers) subscriber();
+    }, 30_000);
+  }
+
+  return () => {
+    clockSubscribers.delete(callback);
+    if (clockSubscribers.size === 0 && clockTimer) {
+      clearInterval(clockTimer);
+      clockTimer = undefined;
+    }
+  };
+}
+
+function getClockSnapshot() {
+  return clockSnapshot;
+}
+
+function BookingTimeIndicator({
+  booking,
+  showDivider,
+}: {
+  booking: BookingCardData;
+  showDivider: boolean;
+}) {
+  const now = useSyncExternalStore(
+    subscribeToClock,
+    getClockSnapshot,
+    getClockSnapshot,
+  );
+  const indicator = getTimeIndicator(booking, now);
+  if (!indicator) return null;
+
+  return (
+    <>
+      {showDivider ? (
+        <Separator orientation="vertical" className="h-full" />
+      ) : null}
+      <Badge variant={indicator.variant} size="sm" pill role="status">
+        <IconClock aria-hidden="true" />
+        {indicator.label}
+      </Badge>
+    </>
+  );
+}
+
+function getTimeIndicator(booking: BookingCardData, now: number) {
+  if (PENDING_BOOKING_STATES.has(booking.currentState)) {
+    const deadline = booking.deadlineAt
+      ? new Date(booking.deadlineAt).getTime()
+      : NaN;
+    if (!Number.isFinite(deadline)) return null;
+
+    const remaining = deadline - now;
+    if (remaining <= 0) {
+      return { label: "Response overdue", variant: "danger" as const };
+    }
+    return {
+      label: `Respond in ${formatCompactDuration(remaining)}`,
+      variant:
+        remaining <= 30 * MINUTE_MS
+          ? ("danger" as const)
+          : remaining <= 3 * HOUR_MS
+            ? ("warning" as const)
+            : ("info" as const),
+    };
+  }
+
+  if (!["confirmed", "scheduled"].includes(booking.currentState)) return null;
+  const startsAt = new Date(booking.scheduledStartAt).getTime();
+  const endsAt = new Date(booking.scheduledEndAt).getTime();
+  if (!Number.isFinite(startsAt) || !Number.isFinite(endsAt)) return null;
+  if (now >= startsAt && now < endsAt) {
+    return { label: "In progress", variant: "success" as const };
+  }
+
+  const untilStart = startsAt - now;
+  if (untilStart <= 0) return null;
+  if (untilStart <= 30 * MINUTE_MS) {
+    return { label: "Starting soon", variant: "warning" as const };
+  }
+  if (untilStart <= 3 * HOUR_MS) {
+    return {
+      label: `Starts in ${formatCompactDuration(untilStart)}`,
+      variant: "warning" as const,
+    };
+  }
+  if (isSameDateInTimeZone(startsAt, now, booking.timezone)) {
+    return { label: "Today", variant: "info" as const };
+  }
+  return null;
+}
+
+function formatCompactDuration(value: number) {
+  const minutes = Math.max(1, Math.ceil(value / MINUTE_MS));
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return remainingMinutes === 0
+    ? `${hours}h`
+    : `${hours}h ${remainingMinutes}m`;
+}
+
+function isSameDateInTimeZone(left: number, right: number, timeZone: string) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone,
+  });
+  return formatter.format(left) === formatter.format(right);
 }
 
 function DateTile({ date }: { date: ReturnType<typeof getDateParts> }) {
@@ -385,14 +542,17 @@ function BookingFinancialInfo({
       : total;
 
   if (viewerRole === "tutor") {
+    const honorariumIdr =
+      booking.priceSnapshot?.tutorHonorariumIdr ??
+      tutorShare * LEGACY_TUTOR_PAYOUT_RATE_IDR;
     return (
-      <div className="inline-flex flex-wrap items-center gap-1.5 text-sm font-medium">
-        <FinancialValue label="Earns" value={tutorShare} />
-        <span className="text-dimmed" aria-hidden="true">
-          ·
+      <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-medium">
+        <span className="text-muted">Honorarium</span>
+        <span>
+          Rp
+          {honorariumIdr.toLocaleString("id-ID")}
         </span>
-        <FinancialValue label="Total" value={total} />
-      </div>
+      </span>
     );
   }
 

@@ -47,9 +47,14 @@ import {
   BookingNotCompletedError,
   BookingSeriesNoOptOutError,
   BookingAcceptanceDeadlinePassedError,
+  BookingCancellationDeadlinePassedError,
 } from "./booking.errors";
 import { escapeHtml, sanitizeHtml } from "../../lib/sanitize";
-import { lockTutorForBooking } from "../../lib/locks";
+import {
+  lockBookingReschedule,
+  lockTutorForBooking,
+  lockTutorForPayout,
+} from "../../lib/locks";
 import { mapLimit } from "../../lib/concurrency";
 import { log } from "../../lib/logger";
 import {
@@ -81,9 +86,16 @@ const EXPIRY_TARGET: Record<string, BookingState> = {
   [BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL]: BOOKING_STATE.CANCELLED,
 };
 
+export const NON_BCA_TRANSFER_FEE_IDR = 2_500;
+
+export function getTutorPayoutTransferFeeIdr(bankName: string): number {
+  return bankName.trim().toUpperCase() === "BCA" ? 0 : NON_BCA_TRANSFER_FEE_IDR;
+}
+
 export interface CreateSoloInput {
   tutorId: string;
   availabilitySlotId: string;
+  subjectId?: string;
   modality: "online" | "offline";
   scheduledStartAt: Date;
   scheduledEndAt?: Date;
@@ -95,6 +107,7 @@ export interface CreateSoloInput {
 export interface CreateGroupInput {
   tutorId: string;
   availabilitySlotId: string;
+  subjectId?: string;
   modality: "online" | "offline";
   targetGroupSize: number;
   inviteeUserIds: string[];
@@ -108,6 +121,7 @@ export interface CreateGroupInput {
 export interface CreateSeriesInput {
   tutorId: string;
   availabilitySlotId: string;
+  subjectId?: string;
   modality: "online" | "offline";
   sessions: {
     availabilitySlotId?: string;
@@ -121,6 +135,7 @@ export interface CreateSeriesInput {
 export interface CreateGroupSeriesInput {
   tutorId: string;
   availabilitySlotId: string;
+  subjectId?: string;
   modality: "online" | "offline";
   targetGroupSize: number;
   inviteeUserIds: string[];
@@ -189,6 +204,20 @@ export type BookingService = ReturnType<typeof createBookingService>;
 type BookingRow = NonNullable<
   Awaited<ReturnType<BookingRepo["findBookingById"]>>
 >;
+
+const CALENDAR_COMPETITION_LABELS: Record<string, string> = {
+  "competition-model-united-nations": "MUN",
+  "model-united-nations": "MUN",
+  "competition-world-scholars-cup": "WSC",
+  "world-scholars-cup": "WSC",
+};
+
+function formatCalendarCompetitionLabel(
+  topic: BookingRow["sessionTopic"],
+): string {
+  if (!topic) return "Session";
+  return CALENDAR_COMPETITION_LABELS[topic.categorySlug] ?? topic.categoryName;
+}
 
 /**
  * Creates the booking service orchestrating bookings, wallet holds, pricing, notifications, and meeting creation.
@@ -276,6 +305,9 @@ export function createBookingService(deps: {
         currentState: toState,
         previousState: fromState,
         stateReason: params.reason ?? null,
+        ...(toState === BOOKING_STATE.COMPLETED
+          ? { completedAt: new Date() }
+          : {}),
       },
     );
     if (!versioned) {
@@ -514,36 +546,58 @@ export function createBookingService(deps: {
     return `${origin}/bookings/${bookingId}`;
   }
 
+  async function resolveSessionTopic(tutorId: string, subjectId?: string) {
+    const topic = await repo.findTutorSubjectTopic(db, tutorId, subjectId);
+    if (subjectId && !topic) {
+      throw new BookingNotEditableError(subjectId);
+    }
+    return topic;
+  }
+
   function buildMeetingEventDetails(
-    booking: Pick<BookingRow, "id" | "type" | "tutorId" | "learningGoal">,
+    booking: Pick<
+      BookingRow,
+      | "id"
+      | "tutorId"
+      | "proposerId"
+      | "targetGroupSize"
+      | "learningGoal"
+      | "sessionTopic"
+    >,
     users: { id: string; name: string }[],
   ) {
     const tutorName =
       users.find((user) => user.id === booking.tutorId)?.name.trim() ||
       "Cogito tutor";
-    const studentNames = users
-      .filter((user) => user.id !== booking.tutorId)
+    const proposerName =
+      users.find((user) => user.id === booking.proposerId)?.name.trim() || "";
+    const otherStudentNames = users
+      .filter(
+        (user) => user.id !== booking.tutorId && user.id !== booking.proposerId,
+      )
       .map((user) => user.name.trim())
       .filter(Boolean);
-    const sessionLabel =
-      booking.type === BOOKING_TYPE.GROUP
-        ? "Group session"
-        : booking.type === BOOKING_TYPE.SERIES
-          ? "Session series"
-          : "Solo session";
-    const title =
-      booking.type === BOOKING_TYPE.SOLO && studentNames[0]
-        ? `${sessionLabel} with ${tutorName} & ${studentNames[0]}`
-        : `${sessionLabel} with ${tutorName}`;
-    const learningGoal = booking.learningGoal?.trim();
+    const studentNames = [proposerName, ...otherStudentNames].filter(Boolean);
+    const primaryStudentName = proposerName || studentNames[0] || "Student";
+    const titleStudent =
+      booking.targetGroupSize > 1
+        ? `${primaryStudentName} & Friends`
+        : primaryStudentName;
+    const competitionLabel = formatCalendarCompetitionLabel(
+      booking.sessionTopic,
+    );
+    const title = `Cogito - ${competitionLabel} | ${tutorName} x ${titleStudent}`;
+    const sessionNotes = booking.learningGoal?.trim();
     const descriptionLines = [
       `Tutor: ${tutorName}`,
-      ...(studentNames.length
+      ...(studentNames.length ? [`Student: ${studentNames.join(", ")}`] : []),
+      ...(booking.sessionTopic
         ? [
-            `Student${studentNames.length === 1 ? "" : "s"}: ${studentNames.join(", ")}`,
+            "",
+            `Session Topic: ${competitionLabel} - ${booking.sessionTopic.subcategoryName}`,
           ]
         : []),
-      ...(learningGoal ? ["", `Learning goal: ${learningGoal}`] : []),
+      ...(sessionNotes ? ["", "Session Notes:", sessionNotes] : []),
       "",
       `Open this booking in Cogito: ${formatInviteCta(booking.id)}`,
     ];
@@ -805,6 +859,10 @@ export function createBookingService(deps: {
       publishedOnly: true,
     });
     if (!profile) throw new BookingNotFoundError(input.tutorId);
+    const sessionTopic = await resolveSessionTopic(
+      input.tutorId,
+      input.subjectId,
+    );
 
     const slot = await repo.findAvailabilitySlot(
       db,
@@ -878,6 +936,7 @@ export function createBookingService(deps: {
         scheduledEndAt: session.scheduledEndAt,
         timezone: input.timezone,
         learningGoal: input.learningGoal ?? "",
+        sessionTopic,
         priceSnapshot,
         originalMarks: totalMarks,
         holdAmount: totalMarks,
@@ -975,6 +1034,13 @@ export function createBookingService(deps: {
           "cancel",
           b.currentState,
         );
+      }
+
+      // Once teaching has started, cancellation is no longer a student-owned
+      // lifecycle action. Keep the booking live so the tutor can complete it;
+      // attendance or delivery problems must go through support/admin review.
+      if (Date.now() >= b.scheduledStartAt.getTime()) {
+        throw new BookingCancellationDeadlinePassedError(bookingId);
       }
 
       // M3: once a group series is past participant confirmation, the proposer
@@ -1322,6 +1388,10 @@ export function createBookingService(deps: {
       if (!b) throw new BookingNotFoundError(bookingId);
       if (b.tutorId !== tutorId)
         throw new BookingNotOwnedError(bookingId, tutorId);
+      // Serialize completion with admin payout cutoffs. A session that is
+      // completed while a payout is being marked must land wholly before or
+      // after that cutoff, never disappear between the two reads.
+      await lockTutorForPayout(tx, b.tutorId);
 
       if (b.type !== BOOKING_TYPE.SERIES) {
         return completeSingleSession(tx, b, bookingId, tutorId);
@@ -1652,6 +1722,10 @@ export function createBookingService(deps: {
         );
       }
 
+      if (Date.now() >= session.scheduledStartAt.getTime()) {
+        throw new BookingCancellationDeadlinePassedError(sessionId);
+      }
+
       const now = new Date();
       const h2 = new Date(
         session.scheduledStartAt.getTime() - LATE_CANCEL_THRESHOLD_MS,
@@ -1789,6 +1863,9 @@ export function createBookingService(deps: {
         : null;
       if (isSeries && !session)
         throw new BookingSessionNotFoundError(sessionId ?? "");
+      if (session && session.seriesBookingId !== bookingId) {
+        throw new BookingSessionNotFoundError(sessionId ?? "");
+      }
 
       const sessionStartAt = session?.scheduledStartAt ?? b.scheduledStartAt;
       const now = new Date();
@@ -1955,6 +2032,7 @@ export function createBookingService(deps: {
     sessionId?: string,
   ) {
     return db.transaction(async (tx) => {
+      await lockBookingReschedule(tx, bookingId);
       const b = await loadBookingAndAssertAccess(tx, userId, bookingId);
       if (b.tutorId !== userId && b.proposerId !== userId)
         throw new BookingNotOwnedError(bookingId, userId);
@@ -1967,6 +2045,26 @@ export function createBookingService(deps: {
       }
 
       const session = normalizeSession(proposedStartAt);
+      let existingSession: Awaited<
+        ReturnType<BookingRepo["findSessionById"]>
+      > | null = null;
+      if (sessionId) {
+        existingSession = await repo.findSessionById(tx, sessionId);
+        if (!existingSession || existingSession.seriesBookingId !== bookingId) {
+          throw new BookingSessionNotFoundError(sessionId);
+        }
+      }
+      const activeStartAt =
+        existingSession?.scheduledStartAt ?? b.scheduledStartAt;
+      if (
+        Math.floor(session.scheduledStartAt.getTime() / 60_000) ===
+        Math.floor(activeStartAt.getTime() / 60_000)
+      ) {
+        throw new BookingNotEditableError(
+          bookingId,
+          "Proposed time must be different from the current schedule",
+        );
+      }
       if (userId !== b.tutorId) {
         // C2: the current session must also still be beyond H-2 — a student
         // close to class cannot bypass the late-cancel penalty by proposing a
@@ -2008,10 +2106,6 @@ export function createBookingService(deps: {
         );
       }
       if (sessionId) {
-        const existingSession = await repo.findSessionById(tx, sessionId);
-        if (!existingSession || existingSession.seriesBookingId !== bookingId) {
-          throw new BookingSessionNotFoundError(sessionId);
-        }
         // U7: the booking-level overlap check cannot see sibling series
         // sessions — check them explicitly so a session cannot be moved onto
         // another session of the same series.
@@ -2048,6 +2142,16 @@ export function createBookingService(deps: {
 
       const pending = await repo.findPendingRescheduleProposal(tx, bookingId);
       if (pending) {
+        if (
+          (pending.sessionId ?? null) === (sessionId ?? null) &&
+          Math.floor(pending.proposedStartAt.getTime() / 60_000) ===
+            Math.floor(session.scheduledStartAt.getTime() / 60_000)
+        ) {
+          throw new BookingNotEditableError(
+            bookingId,
+            "Proposed time must be different from the pending proposal",
+          );
+        }
         await repo.updateRescheduleProposal(tx, pending.id, {
           status: "superseded",
           decidedAt: new Date(),
@@ -2118,6 +2222,7 @@ export function createBookingService(deps: {
   ) {
     const { proposal, updated, finalized } = await db.transaction(
       async (tx) => {
+        await lockBookingReschedule(tx, bookingId);
         const b = await repo.findBookingById(tx, bookingId);
         if (!b) throw new BookingNotFoundError(bookingId);
         await assertBookingAccess(b, userId, tx, bookingId);
@@ -2129,6 +2234,9 @@ export function createBookingService(deps: {
         if (!pending) throw new BookingRescheduleNotFoundError(bookingId);
         if (proposalId && pending.id !== proposalId) {
           throw new BookingRescheduleNotFoundError(bookingId);
+        }
+        if (pending.expiresAt && pending.expiresAt.getTime() <= Date.now()) {
+          throw new BookingRescheduleNotPendingError(bookingId);
         }
 
         const currentDecisions = pending.decisions ?? {
@@ -2154,6 +2262,53 @@ export function createBookingService(deps: {
 
         if (!allAccepted) {
           return { proposal: pending, updated: b, finalized: false };
+        }
+
+        await lockTutorForBooking(tx, b.tutorId);
+
+        if (pending.sessionId) {
+          const targetSession = await repo.findSessionById(
+            tx,
+            pending.sessionId,
+          );
+          if (
+            !targetSession ||
+            targetSession.seriesBookingId !== bookingId ||
+            targetSession.currentState !== BOOKING_STATE.SCHEDULED
+          ) {
+            throw new BookingSessionNotFoundError(pending.sessionId);
+          }
+
+          const siblings = await repo.listSessionsBySeriesId(tx, bookingId);
+          const overlappingSibling = siblings.find(
+            (sibling) =>
+              sibling.id !== pending.sessionId &&
+              sibling.currentState === BOOKING_STATE.SCHEDULED &&
+              sibling.scheduledStartAt < pending.proposedEndAt &&
+              sibling.scheduledEndAt > pending.proposedStartAt,
+          );
+          if (overlappingSibling) {
+            throw new BookingConflictError(
+              b.tutorId,
+              pending.proposedStartAt.toISOString(),
+              pending.proposedEndAt.toISOString(),
+            );
+          }
+        }
+
+        const overlapping = await repo.findOverlappingBookings(
+          tx,
+          b.tutorId,
+          pending.proposedStartAt,
+          pending.proposedEndAt,
+          { excludeBookingId: bookingId, excludeStates: [...TERMINAL_STATES] },
+        );
+        if (overlapping.length) {
+          throw new BookingConflictError(
+            b.tutorId,
+            pending.proposedStartAt.toISOString(),
+            pending.proposedEndAt.toISOString(),
+          );
         }
 
         if (pending.sessionId) {
@@ -2247,6 +2402,7 @@ export function createBookingService(deps: {
     proposalId?: string,
   ) {
     return db.transaction(async (tx) => {
+      await lockBookingReschedule(tx, bookingId);
       const b = await repo.findBookingById(tx, bookingId);
       if (!b) throw new BookingNotFoundError(bookingId);
       await assertBookingAccess(b, userId, tx, bookingId);
@@ -2258,6 +2414,9 @@ export function createBookingService(deps: {
       if (!proposal) throw new BookingRescheduleNotFoundError(bookingId);
       if (proposalId && proposal.id !== proposalId) {
         throw new BookingRescheduleNotFoundError(bookingId);
+      }
+      if (proposal.expiresAt && proposal.expiresAt.getTime() <= Date.now()) {
+        throw new BookingRescheduleNotPendingError(bookingId);
       }
 
       const currentDecisions = proposal.decisions ?? {
@@ -2357,6 +2516,10 @@ export function createBookingService(deps: {
       publishedOnly: true,
     });
     if (!profile) throw new BookingNotFoundError(input.tutorId);
+    const sessionTopic = await resolveSessionTopic(
+      input.tutorId,
+      input.subjectId,
+    );
 
     // Validate invitees: registered users (DL-19), no duplicates, no self-
     // invite, and the total headcount must fit the target group size.
@@ -2447,6 +2610,7 @@ export function createBookingService(deps: {
         scheduledEndAt: session.scheduledEndAt,
         timezone: input.timezone,
         learningGoal: input.learningGoal ?? "",
+        sessionTopic,
         priceSnapshot,
         originalMarks: totalMarks,
         holdAmount: totalMarks,
@@ -2914,6 +3078,10 @@ export function createBookingService(deps: {
         throw new BookingCancelledError(bookingId);
       }
 
+      if (Date.now() >= b.scheduledStartAt.getTime()) {
+        throw new BookingCancellationDeadlinePassedError(bookingId);
+      }
+
       const participant = await repo.findParticipant(tx, bookingId, userId);
       if (!participant) throw new BookingParticipantNotFoundError(userId);
 
@@ -3172,6 +3340,10 @@ export function createBookingService(deps: {
       publishedOnly: true,
     });
     if (!profile) throw new BookingNotFoundError(input.tutorId);
+    const sessionTopic = await resolveSessionTopic(
+      input.tutorId,
+      input.subjectId,
+    );
 
     if (
       input.sessions.length < MIN_SERIES_SESSIONS ||
@@ -3265,6 +3437,7 @@ export function createBookingService(deps: {
         scheduledEndAt: sessions[sessions.length - 1]!.scheduledEndAt,
         timezone: input.timezone,
         learningGoal: input.learningGoal ?? "",
+        sessionTopic,
         priceSnapshot,
         originalMarks: totalMarks,
         holdAmount: totalMarks,
@@ -3323,6 +3496,10 @@ export function createBookingService(deps: {
       publishedOnly: true,
     });
     if (!profile) throw new BookingNotFoundError(input.tutorId);
+    const sessionTopic = await resolveSessionTopic(
+      input.tutorId,
+      input.subjectId,
+    );
 
     if (
       input.sessions.length < MIN_SERIES_SESSIONS ||
@@ -3436,6 +3613,7 @@ export function createBookingService(deps: {
         scheduledEndAt: sessions[sessions.length - 1]!.scheduledEndAt,
         timezone: input.timezone,
         learningGoal: input.learningGoal ?? "",
+        sessionTopic,
         priceSnapshot,
         originalMarks: packageTotal,
         holdAmount: packageTotal,
@@ -3540,16 +3718,21 @@ export function createBookingService(deps: {
    * session; a series completed without session rows falls back to its
    * booking-level snapshot.
    */
-  async function getTutorPayouts(input: {
-    tutorId: string;
-    dateFrom?: Date;
-    dateTo?: Date;
-  }): Promise<TutorPayoutResult> {
+  async function aggregateTutorPayouts(
+    conn: DbOrTx,
+    input: {
+      tutorId: string;
+      dateFrom?: Date;
+      dateTo?: Date;
+      dateBasis?: "scheduledStartAt" | "completedAt";
+    },
+  ): Promise<TutorPayoutResult> {
     const bookings = await repo.findCompletedBookingsByTutor(
-      db,
+      conn,
       input.tutorId,
       input.dateFrom,
       input.dateTo,
+      input.dateBasis,
     );
 
     let completedSessions = 0;
@@ -3560,9 +3743,7 @@ export function createBookingService(deps: {
 
     for (const b of bookings) {
       if (b.type === BOOKING_TYPE.SERIES) {
-        // eslint-disable-next-line no-await-in-loop
-
-        const sessions = await repo.listSessionsBySeriesId(db, b.id);
+        const sessions = await repo.listSessionsBySeriesId(conn, b.id);
         const completed = sessions.filter(
           (s) => s.currentState === BOOKING_STATE.COMPLETED,
         );
@@ -3606,6 +3787,79 @@ export function createBookingService(deps: {
       tutorPayout,
       tutorPayoutIdr: Math.round(tutorPayoutIdr),
     };
+  }
+
+  async function getTutorPayouts(input: {
+    tutorId: string;
+    dateFrom?: Date;
+    dateTo?: Date;
+  }): Promise<TutorPayoutResult> {
+    return aggregateTutorPayouts(db, input);
+  }
+
+  async function getPendingTutorPayouts(tutorId: string) {
+    const lastPaid = await repo.findLatestPaidTutorPayout(db, tutorId);
+    const result = await aggregateTutorPayouts(db, {
+      tutorId,
+      dateFrom: lastPaid
+        ? new Date(lastPaid.cutoffAt.getTime() + 1)
+        : undefined,
+      dateBasis: "completedAt",
+    });
+    return { ...result, lastPaidAt: lastPaid?.paidAt ?? null };
+  }
+
+  async function markTutorPayoutPaid(tutorId: string, adminId: string) {
+    return db.transaction(async (tx) => {
+      await lockTutorForPayout(tx, tutorId);
+      const lastPaid = await repo.findLatestPaidTutorPayout(tx, tutorId);
+      const cutoffAt = new Date();
+      const result = await aggregateTutorPayouts(tx, {
+        tutorId,
+        dateFrom: lastPaid
+          ? new Date(lastPaid.cutoffAt.getTime() + 1)
+          : undefined,
+        dateTo: cutoffAt,
+        dateBasis: "completedAt",
+      });
+      if (result.completedSessions === 0 || result.tutorPayoutIdr <= 0) {
+        return null;
+      }
+      const profile = await repo.findTutorProfile(tx, tutorId);
+      if (
+        !profile?.bankName?.trim() ||
+        !profile.bankAccountNumber?.trim() ||
+        !profile.bankAccountHolderName?.trim() ||
+        !profile.bankAccountOpeningCity?.trim() ||
+        !profile.bankAccountOwnership ||
+        !profile.bankTransferDisclaimerAccepted
+      ) {
+        return null;
+      }
+      const bankName = profile.bankName.trim();
+      const transferFeeIdr = getTutorPayoutTransferFeeIdr(bankName);
+      const paidAt = new Date();
+      const row = await repo.insertTutorPayout(tx, {
+        tutorId,
+        cutoffAt,
+        grossHonorariumIdr: result.tutorPayoutIdr,
+        transferFeeIdr,
+        netHonorariumIdr: Math.max(0, result.tutorPayoutIdr - transferFeeIdr),
+        bankName,
+        status: "paid",
+        paidAt,
+        paidBy: adminId,
+      });
+      return {
+        id: row.id,
+        tutorId: row.tutorId,
+        grossHonorariumIdr: row.grossHonorariumIdr,
+        transferFeeIdr: row.transferFeeIdr,
+        netHonorariumIdr: row.netHonorariumIdr,
+        bankName: row.bankName,
+        paidAt: row.paidAt,
+      };
+    });
   }
 
   /**
@@ -4380,6 +4634,8 @@ export function createBookingService(deps: {
     getSessionNotes,
     listSessions,
     getTutorPayouts,
+    getPendingTutorPayouts,
+    markTutorPayoutPaid,
     expireBookings,
     releaseExpiredHolds,
     checkTutorLateness,
