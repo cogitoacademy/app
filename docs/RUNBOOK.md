@@ -917,12 +917,24 @@ surfaces manual/retry setup attention.
 
 The CD workflows (`cd-prod.yml`, `cd-staging.yml`) build both images (`apps/server/Dockerfile`, `apps/web/Dockerfile`) and push to `ghcr.io/cogitoacademy/app/{server,web}`.
 
-The production pipeline (`cd-prod.yml`) runs the full backup → migrate → deploy → health sequence through `scripts/migrate-and-deploy.sh`:
+The production pipeline (`cd-prod.yml`) builds and pushes images on a GitHub-hosted runner, then runs the backup → migrate → deploy → health sequence on the production VPS runner labelled `production`. `scripts/resolve-private-db-url.sh` converts the Coolify-only database hostname to its current VPS-local container IP for that job without publishing PostgreSQL, then `scripts/migrate-and-deploy.sh` performs the release:
 
 1. **Backup:** `pg_dump` snapshot of the production database, gzipped, uploaded to R2 as `pre-migrate-<GIT_SHA>.sql.gz` (aws CLI against the R2 S3 endpoint).
 2. **Migrate:** `bun run db:migrate` against the production `DATABASE_URL`.
 3. **Deploy:** POST the Coolify deploy webhook (`COOLIFY_PROD_SERVER_WEBHOOK`).
 4. **Health (sha-verified):** poll `https://api.cogitoacademy.id/health` until `version == GIT_SHA` (bounded 20×15s ≈ 5 min). On failure the script prints a clear rollback hint pointing at the previous immutable `v<prev-sha>` image.
+
+Runner triage:
+
+```bash
+sudo systemctl status 'actions.runner.cogitoacademy-app.cogito-prod.service'
+sudo journalctl -u 'actions.runner.cogitoacademy-app.cogito-prod.service' -n 100 --no-pager
+sudo -n docker inspect noxeaeuxfreq0axa9unpew5r --format '{{with index .NetworkSettings.Networks "coolify"}}{{.IPAddress}}{{end}}'
+```
+
+An indefinitely queued deploy means the runner is offline or lacks the
+`production` label. A database resolution error means the Coolify database
+container or network attachment changed; never expose port 5432 publicly.
 
 The server image is built with `--build-arg GIT_SHA=${{ github.sha }}`; the Dockerfile bakes it into `ENV GIT_SHA`, and `GET /health` returns it as `version` (`"dev"` when unset, e.g. local runs). The web image is built with `--build-arg VITE_SERVER_URL=https://api.cogitoacademy.id`.
 
