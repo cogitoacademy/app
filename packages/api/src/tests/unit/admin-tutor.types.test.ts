@@ -5,6 +5,7 @@ import {
   resendInviteInput,
   revokeInviteInput,
   reviewTutorProfileInput,
+  updateTutorAchievementsInput,
 } from "../../modules/admin-tutor/admin-tutor.types";
 
 describe("AdminTutor Types (Zod schemas)", () => {
@@ -64,5 +65,39 @@ describe("AdminTutor Types (Zod schemas)", () => {
         publicPhotoUrl: "javascript:alert(1)",
       }).success,
     ).toBe(false);
+  });
+
+  test("updateTutorAchievementsInput accepts the structured format", () => {
+    expect(
+      updateTutorAchievementsInput.safeParse({
+        tutorProfileId: "p1",
+        version: 4,
+        education: [
+          { university: "Universitas Gadjah Mada", degree: "Bachelor of Law" },
+        ],
+        competitionAchievements: [
+          {
+            competitionName: "Harvard Model United Nations",
+            year: 2019,
+            awards: ["Diplomatic Commendation"],
+          },
+        ],
+      }).success,
+    ).toBe(true);
+  });
+
+  test("updateTutorAchievementsInput enforces the education and achievement caps", () => {
+    const result = updateTutorAchievementsInput.safeParse({
+      tutorProfileId: "p1",
+      version: 4,
+      education: [
+        { university: "A", degree: "A" },
+        { university: "B", degree: "B" },
+        { university: "C", degree: "C" },
+      ],
+      competitionAchievements: [],
+    });
+
+    expect(result.success).toBe(false);
   });
 });

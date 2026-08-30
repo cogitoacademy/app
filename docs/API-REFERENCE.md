@@ -1,6 +1,6 @@
 # Cogito API Reference
 
-Last updated: 2026-08-28
+Last updated: 2026-08-31
 
 ## Stable collection transitions (2026-08-28)
 
@@ -326,6 +326,15 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Output:** `{ profile }`
 - **Errors:** `TUTOR_PROFILE_NOT_FOUND` (404), `INVALID_INVITE_ACTION` (400) when the action is not allowed from the profile's current onboarding status (F25 state machine: publish only from `pending_review`/`changes_requested`/`approved_unpublished`; unpublish/suspend/approve_edits/request_edit_changes only from `published`; request_changes only from `pending_review`/`changes_requested`), `TUTOR_PROFILE_OPTIMISTIC_LOCK` (409) if another moderator changed the profile first
 
+### `adminTutor.updateTutorAchievements`
+
+- **RPC path:** `/rpc/adminTutor/updateTutorAchievements`
+- **Auth:** Admin
+- **Input:** `{ tutorProfileId, version, education, competitionAchievements }`; `education` accepts up to 2 `{ university, degree }` entries and `competitionAchievements` accepts up to 5 `{ competitionName, year, awards }` entries, with awards as one or more full titles
+- **Output:** Updated `TutorProfile` row
+- **Errors:** `TUTOR_PROFILE_NOT_FOUND` (404), `OPTIMISTIC_LOCK` (409) when `version` no longer matches
+- **Description:** Lets an admin normalize education and competition copy during profile review. The update increments the profile version, records an audit event, and mirrors matching pending achievement fields when a published tutor has a pending edit proposal.
+
 ---
 
 ## Tutor (`tutor.*`)
@@ -340,10 +349,10 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `tutor.updateMyProfile`
 
 - **Auth:** Tutor
-- **Input:** `{ version, displayName?, shortBio?, achievements?, experiences?, achievementProofUrls?, experienceProofUrls?, sourcePhotoUrl?, expertise?, subjectIds?, modality?, baseRatesIdr?, bankName?, bankAccountNumber?, bankAccountHolderName?, bankAccountOpeningCity?, bankAccountOwnership?: "self" | "trusted_person", bankTransferDisclaimerAccepted?, prices? }`
+- **Input:** `{ version, displayName?, shortBio?, credentialsSummary?, achievements?, experiences?, achievementProofUrls?, experienceProofUrls?, sourcePhotoUrl?, education?, competitionAchievements?, expertise?, subjectIds?, modality?, baseRatesIdr?, bankName?, bankAccountNumber?, bankAccountHolderName?, bankAccountOpeningCity?, bankAccountOwnership?: "self" | "trusted_person", bankTransferDisclaimerAccepted?, prices? }`; `education` accepts up to 2 `{ university, degree }` entries and `competitionAchievements` accepts up to 5 `{ competitionName, year, awards }` entries, with awards persisted as an array
 - **Output:** `{ profile, subjects: [{ id, slug, name, description?, isSelectable, parent: { id, slug, name } }] }`
 - **Errors:** `OPTIMISTIC_LOCK` (409) on version mismatch, `INVALID_TUTOR_PRICING` (400) on floor-price violation, `INVALID_TUTOR_SUBJECT_SELECTION` (400) when ids are not active selectable child subjects or exceed 20
-- **Description:** Updates the tutor profile with optimistic locking. Achievements and experiences are separate multiline plain-text fields pending the client's final structured format. `achievementProofUrls`, `experienceProofUrls`, and `sourcePhotoUrl` accept only HTTP(S) URLs up to 2048 characters. Proof URLs are optional admin-verification evidence grouped by section; they are review-protected and excluded from public discovery responses. `sourcePhotoUrl` is the tutor-uploaded private editing source and never replaces the public account image; only an admin may set the edited public photo through tutor review. The retired generic credential-proof field is not accepted. `subjectIds` is the normalized child-category selection; draft selections are persisted atomically. Payout-account fields are private and capture the bank, account number, account-holder name, account-opening city/regency, whether the destination is the tutor's own account or a trusted person's account, and the tutor's transfer-responsibility acknowledgment. For published profiles, trust-sensitive changes wait in `pendingProfileChanges` for admin approval. The tutor editor's combined honorarium matrix and responsive section layout are presentation-only, while onboarding submission requires complete payout details and the acknowledgment.
+- **Description:** Updates the tutor profile with optimistic locking. General achievements and experiences remain separate multiline fields with section-specific private proof URLs, while education and competition achievements use the structured 2/5-entry format and render with bold first lines and comma-separated awards. `achievementProofUrls`, `experienceProofUrls`, and `sourcePhotoUrl` accept only bounded HTTP(S) URLs. `sourcePhotoUrl` is private editing input; only an admin may set the edited public photo through tutor review. `subjectIds` is the normalized child-category selection. Payout-account fields remain private. For published profiles, trust-sensitive changes—including structured achievements—wait in `pendingProfileChanges`; `credentialsSummary` remains a public fallback when no structured entries exist.
 
 ### `tutor.submitForReview`
 
@@ -414,15 +423,15 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 - **Auth:** Student
 - **Input:** `{ search?, expertise?, categoryId?, subjectId?, categoryIds?, subjectIds?, modality?, limit?, offset? }` (`limit` default 20, max 50)
-- **Output:** `{ items: TutorProfile[] }`; each profile includes `subjects: [{ id, slug, name, description?, isSelectable, parent }]` and computed `pricesByModality.online/offline` Marks maps when the profile has IDR base honoraria
-- **Description:** `categoryId`/`subjectId` remain supported for single-value clients. `categoryIds` and `subjectIds` accept up to 50 unique values and match any selected value within that facet; when both facets are present, the same normalized child-subject relation must satisfy the selected parent and child constraints. Search matches normalized child subject names as well as legacy profile text; no matching normalized relation returns an empty `items` array. Marks prices are derived from the active economy config; tutor IDR base honoraria are not exposed in this student response. The frontend may render the returned modality maps as one group-size matrix with separate Online and Offline columns, prefixing populated values with the Cogito Marks icon; this does not alter the RPC contract.
+- **Output:** `{ items: TutorProfile[] }`; each profile includes `education`, `competitionAchievements`, `subjects: [{ id, slug, name, description?, isSelectable, parent }]`, and computed `pricesByModality.online/offline` Marks maps when the profile has IDR base honoraria
+- **Description:** `categoryId`/`subjectId` remain supported for single-value clients. `categoryIds` and `subjectIds` accept up to 50 unique values and match any selected value within that facet; when both facets are present, the same normalized child-subject relation must satisfy the selected parent and child constraints. Search matches normalized child subject names as well as legacy profile text; no matching normalized relation returns an empty `items` array. Structured education and competition achievements are returned in their normalized arrays; older profiles may still rely on `credentialsSummary`. Marks prices are derived from the active economy config; tutor IDR base honoraria are not exposed in this student response. The frontend may render the returned modality maps as one group-size matrix with separate Online and Offline columns, prefixing populated values with the Cogito Marks icon; this does not alter the RPC contract.
 
 ### `tutors.getProfile`
 
 - **Auth:** Student
 - **Input:** `{ tutorId }`
 - **Output:** `{ profile }` with computed `pricesByModality` Marks maps
-- **Description:** Returns the published tutor profile and future availability slots for the booking form. Marks prices use the active economy config for new IDR profiles; legacy profiles continue to return their stored Marks map.
+- **Description:** Returns the published tutor profile and future availability slots for the booking form, including structured education and competition achievements. Marks prices use the active economy config for new IDR profiles; legacy profiles continue to return their stored Marks map.
 
 ---
 

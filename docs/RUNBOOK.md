@@ -1,6 +1,6 @@
 # Cogito Runbook
 
-Last updated: 2026-08-28
+Last updated: 2026-08-31
 
 ## Collection transition QA (2026-08-28)
 
@@ -62,7 +62,7 @@ After a web deployment, sign in once as each supported role and open `/dashboard
 - Tutor: the first dashboard row shows the same SVG welcome card visual plus teaching setup, and the next visible row shows requests to review plus next lesson before metrics/payout; actions link to `/bookings`, `/availability`, and `/onboarding`. Verify the review card keeps its empty/loading slot when there are no requests. When a tutor submits the initial onboarding form, confirm the app redirects to `/dashboard` and the browser Back button does not return to the submission form.
 - Admin: open `/admin` for the admin workspace and verify priority operations/moderation counts and links to `/admin-operations`, `/admin-tutors`, `/admin-achievements`, and `/admin-economy`. In `/admin-operations`, verify category, urgency, and SLA-status filters; open a queue item and confirm its reported reason/source, affected-user count, OQ-04 deadline, time-since-report, escalated badge, and WhatsApp escalation link. Confirm the hydrated participant wallet/booking-ledger cards and state-history timeline load, then use **Open override** to reach the existing preview/apply flow. In `/admin-economy`, verify the active schedule loads, edits persist after reload, and the preview updates.
 - In the Operations → Rooms tab, verify the pending offline room-approval queue loads. Use **Assign** for a requested room, **Choose another** to load a booking into the room form (which also exposes the existing relocate operation), and **Cancel** when no suitable room is available.
-- In `/admin-tutors`, open a profile with pending edits and confirm the proposed subject changes show readable category/subject labels instead of raw UUIDs. Resize to a narrow viewport and verify subject badges and other long pending values wrap without horizontal page overflow; the review request/response payloads must remain unchanged.
+- In `/admin-tutors`, open a profile with pending edits and confirm the proposed subject changes show readable category/subject labels instead of raw UUIDs. Resize to a narrow viewport and verify subject badges and other long pending values wrap without horizontal page overflow; use **Edit format** to correct structured education/competition entries, save, reload, and confirm the version-checked update and success toast. The review request/response payloads must remain unchanged.
 
 ### Theme shortcut smoke check
 
@@ -230,6 +230,10 @@ In the same dialog, select the booking's current date and start minute. Confirm 
 
 Open `/onboarding` as a tutor and verify the selector loads exactly seven active competition categories and 33 child subjects from `tutors.listSubjects`. All categories should be visible with keyboard-accessible checkboxes, no manual subject input, selected-subject chips, and a 20-subject limit. Select subjects from multiple categories, save a draft, and confirm the selections reload with the profile. A submission with no current child subject must be blocked; archived legacy subjects on an existing profile should remain visible as read-only labels. Published tutor discovery should expose current subjects and allow students to filter by mother category or child subject. On the tutor list page, category, child-subject, and modality filter triggers must show their labels rather than raw IDs or values. Confirm category and child-subject filters support multiple values, retain overlapping subjects while categories are added, remove subjects that are no longer available after a category is removed, and wait about 300 ms after typing/toggling before `listPublished` runs. Open a tutor drawer with both modalities and verify pricing appears in one table with `Group Size`, `Online (Marks)`, and `Offline (Marks)` columns; populated prices should have the Cogito Marks icon as a prefix, and a size available in only one modality should show an em dash in the other column.
 
+### Tutor achievement formatting smoke check
+
+Open `/onboarding` as a tutor and add two education entries and five competition achievements. Confirm the sixth row controls are disabled, incomplete rows are rejected on **Submit for review**, and the preview uses a bold first line, a muted detail line, visible spacing between bullets, and comma-separated award titles. Save a draft, reload, and verify the arrays persist. Open a published tutor in discovery and confirm the drawer shows the structured sections; for an old profile with only `credentialsSummary`, confirm the legacy credentials text remains visible. As an admin, open `/admin-tutors`, edit the structured entries with **Edit format**, save, reload, and verify the corrected values plus the audit event. Repeat with an intentionally stale review tab/version and confirm the API returns a conflict without overwriting the newer values.
+
 ### Profile UX smoke check
 
 Open `/profile` as a student and `/onboarding` as a tutor at desktop and narrow widths. Verify the account card shows the current name, profile image (or initials), and read-only sign-in email; changing the name or image enables only the account save action. On the student page, learning and parent/guardian fields use separate sections with one learning-profile save action. On the tutor page, profile status and review feedback remain visible, the public profile section is separated from the teaching setup row, the honorarium preview is one combined modality matrix, fields are grouped into public profile/teaching setup/availability sections, and the sticky action area offers draft save plus submit-for-review only when the profile is editable. In the payout-account form, verify all four account details plus ownership and disclaimer confirmation are required, the conventional-BCA/non-BCA fee copy is visible, and BCA Syariah and blu (BCA Digital) are not treated as fee-free. Confirm the browser console has no runtime errors and that the updated payout fields remain private to the tutor/admin surfaces.
@@ -287,6 +291,13 @@ If tutor discovery returns `500` with a missing `subject_category` or
 pending migration) and restart the server. `bun run db:push` can detect broad
 schema drift and ask ambiguous rename questions; review those prompts instead
 of accepting unrelated changes blindly.
+
+Tutor profile achievement fields require migration `0039_secret_blink.sql`.
+Run `bun run db:migrate` before starting an API build that includes the
+structured achievement editor; it adds JSONB `education` and
+`competition_achievements` columns with empty-array defaults. Existing
+`credentials_summary` text is intentionally preserved as the public fallback,
+so this migration does not require a data backfill.
 
 The IDR economy and admin rate-control surface require migration
 `0028_economy_config.sql`. Run `bun run db:migrate` before starting the server;

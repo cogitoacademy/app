@@ -14,6 +14,17 @@ import { uuidPrimaryKey } from "./auth";
 import { user } from "./auth";
 import { tutorInvite } from "./tutor-invite";
 
+export type TutorEducationEntry = {
+  university: string;
+  degree: string;
+};
+
+export type TutorCompetitionAchievement = {
+  competitionName: string;
+  year: number;
+  awards: string[];
+};
+
 export const tutorProfile = pgTable(
   "tutor_profile",
   {
@@ -37,6 +48,10 @@ export const tutorProfile = pgTable(
       .$type<string[]>()
       .default([]),
     sourcePhotoUrl: text("source_photo_url"),
+    education: jsonb("education").$type<TutorEducationEntry[]>().default([]),
+    competitionAchievements: jsonb("competition_achievements")
+      .$type<TutorCompetitionAchievement[]>()
+      .default([]),
     expertise: jsonb("expertise").$type<string[]>().default([]),
     modality: text("modality"),
     prices: jsonb("prices").$type<Record<string, number>>(),
@@ -67,6 +82,8 @@ export const tutorProfile = pgTable(
         achievementProofUrls: string[];
         experienceProofUrls: string[];
         sourcePhotoUrl: string;
+        education: TutorEducationEntry[];
+        competitionAchievements: TutorCompetitionAchievement[];
         expertise: string[];
         subjectIds: string[];
         modality: "online" | "offline" | "both";

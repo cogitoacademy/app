@@ -26,6 +26,11 @@ import { Link } from "@tanstack/react-router";
 import { CogitoMarks } from "@/components/cogito-marks";
 import { groupTutorSubjects, type TutorSubject } from "./subject-taxonomy";
 import { TutorPricingTable } from "./tutor-pricing-table";
+import {
+  TutorAchievementsDisplay,
+  type TutorCompetitionAchievement,
+  type TutorEducationEntry,
+} from "./tutor-achievements";
 
 const MODALITY_LABELS: Record<string, string> = {
   online: "Online",
@@ -58,6 +63,8 @@ type TutorDrawerProps = {
     credentialsSummary: string | null;
     achievements: string | null;
     experiences: string | null;
+    education: TutorEducationEntry[] | null;
+    competitionAchievements: TutorCompetitionAchievement[] | null;
     expertise: string[];
     subjects?: TutorSubject[] | null;
     modality: string | null;
@@ -205,7 +212,18 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
               </div>
             )}
 
-            {(t.achievements || t.credentialsSummary) && (
+            {selectedTutor.education?.length ||
+            selectedTutor.competitionAchievements?.length ? (
+              <div className="mb-4">
+                <TutorAchievementsDisplay
+                  education={selectedTutor.education}
+                  competitionAchievements={
+                    selectedTutor.competitionAchievements
+                  }
+                  idPrefix="tutor-drawer-achievements"
+                />
+              </div>
+            ) : t.achievements || t.credentialsSummary ? (
               <>
                 <Separator className="my-4" />
                 <div className="mb-4">
@@ -217,7 +235,7 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
                   </Text>
                 </div>
               </>
-            )}
+            ) : null}
             {t.experiences && (
               <>
                 <Separator className="my-4" />

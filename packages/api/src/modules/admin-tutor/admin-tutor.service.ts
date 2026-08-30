@@ -28,6 +28,7 @@ import {
   reviewTutorProfileInput,
   type ReviewAction,
   inspectInviteeInput,
+  updateTutorAchievementsInput,
 } from "./admin-tutor.types";
 import type { AdminTutorAuditPort } from "./index";
 import type { EmailPort } from "../email/email.service";
@@ -123,6 +124,9 @@ type ListInvitesInput = z.infer<typeof listInvitesInput>;
 type ListTutorProfilesInput = z.infer<typeof listTutorProfilesInput>;
 type ReviewTutorProfileInput = z.infer<typeof reviewTutorProfileInput>;
 type InspectInviteeInput = z.infer<typeof inspectInviteeInput>;
+type UpdateTutorAchievementsInput = z.infer<
+  typeof updateTutorAchievementsInput
+>;
 export interface TutorProfileSnapshot {
   id: string;
   version: number;
@@ -570,6 +574,88 @@ export function createAdminTutorService(deps: {
     });
   }
 
+  /**
+   * Lets an admin normalize tutor education and competition copy while
+   * reviewing a profile. If the tutor has already submitted protected edits,
+   * the corrected values are mirrored into the pending proposal as well.
+   */
+  async function updateTutorAchievements(
+    adminId: string,
+    input: UpdateTutorAchievementsInput,
+  ): Promise<TutorProfileRow> {
+    return db.transaction(async (tx) => {
+      const existing = await adminTutorRepo.getTutorProfileById(
+        tx,
+        input.tutorProfileId,
+      );
+      if (!existing) {
+        throw new TutorProfileNotFoundError(input.tutorProfileId);
+      }
+
+      const pendingProfileChanges = {
+        ...(existing.pendingProfileChanges as Record<string, unknown> | null),
+      };
+      const hasPendingEducation = Object.prototype.hasOwnProperty.call(
+        pendingProfileChanges,
+        "education",
+      );
+      const hasPendingCompetitionAchievements =
+        Object.prototype.hasOwnProperty.call(
+          pendingProfileChanges,
+          "competitionAchievements",
+        );
+      if (hasPendingEducation) {
+        pendingProfileChanges.education = input.education;
+      }
+      if (hasPendingCompetitionAchievements) {
+        pendingProfileChanges.competitionAchievements =
+          input.competitionAchievements;
+      }
+
+      const updates: TutorProfileUpdates = {};
+      if (!hasPendingEducation) updates.education = input.education;
+      if (!hasPendingCompetitionAchievements) {
+        updates.competitionAchievements = input.competitionAchievements;
+      }
+      if (hasPendingEducation || hasPendingCompetitionAchievements) {
+        updates.pendingProfileChanges = pendingProfileChanges;
+      }
+
+      const rows = await adminTutorRepo.updateTutorProfileWithVersion(
+        tx,
+        input.tutorProfileId,
+        input.version,
+        updates,
+      );
+      const [updated] = rows;
+      if (!updated) {
+        throw new TutorProfileOptimisticLockError(
+          input.tutorProfileId,
+          input.version,
+        );
+      }
+
+      await auditPort.record({
+        db: tx,
+        actorId: adminId,
+        actorType: USER_ROLE.ADMIN,
+        action: "tutor_achievements_updated",
+        targetId: input.tutorProfileId,
+        targetType: "tutor_profile",
+        beforeState: {
+          education: existing.education ?? [],
+          competitionAchievements: existing.competitionAchievements ?? [],
+        },
+        afterState: {
+          education: input.education,
+          competitionAchievements: input.competitionAchievements,
+        },
+      });
+
+      return updated;
+    });
+  }
+
   return {
     inspectInvitee,
     createInvite,
@@ -579,5 +665,6 @@ export function createAdminTutorService(deps: {
     revokeInvite,
     listTutorProfiles,
     reviewTutorProfile,
+    updateTutorAchievements,
   };
 }

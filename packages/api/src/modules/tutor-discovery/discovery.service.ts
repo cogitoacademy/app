@@ -39,6 +39,8 @@ export interface ProfileProjection {
   credentialsSummary: string | null;
   achievements: string | null;
   experiences: string | null;
+  education: TutorProfileRow["education"];
+  competitionAchievements: TutorProfileRow["competitionAchievements"];
   expertise: string[];
   subjects: NormalizedTutorSubject[];
   modality: string | null;
@@ -57,6 +59,8 @@ export function buildProjection(profile: ProfileWithUser): ProfileProjection {
     credentialsSummary: profile.credentialsSummary,
     achievements: profile.achievements,
     experiences: profile.experiences,
+    education: profile.education ?? [],
+    competitionAchievements: profile.competitionAchievements ?? [],
     expertise: profile.expertise ?? [],
     subjects: toNormalizedTutorSubjects(profile.subjects),
     modality: profile.modality,

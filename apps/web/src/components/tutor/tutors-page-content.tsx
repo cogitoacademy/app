@@ -31,6 +31,10 @@ import { EmptyStateCard } from "@/components/empty-state";
 import { orpc } from "@/utils/orpc";
 import { TutorCard } from "./tutor-card";
 import { TutorDrawer } from "./tutor-drawer";
+import type {
+  TutorCompetitionAchievement,
+  TutorEducationEntry,
+} from "./tutor-achievements";
 import { useSubjectTaxonomy, type TutorSubject } from "./subject-taxonomy";
 
 type PublishedTutor = {
@@ -41,6 +45,8 @@ type PublishedTutor = {
   credentialsSummary: string | null;
   achievements: string | null;
   experiences: string | null;
+  education: TutorEducationEntry[] | null;
+  competitionAchievements: TutorCompetitionAchievement[] | null;
   expertise: string[];
   subjects?: TutorSubject[] | null;
   modality: string | null;

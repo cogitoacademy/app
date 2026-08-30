@@ -1,6 +1,6 @@
 # Cogito Module Reference
 
-Last updated: 2026-08-28
+Last updated: 2026-08-31
 
 ## Collection transition behavior (2026-08-28)
 
@@ -219,10 +219,10 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 
 **Files:**
 
-- `admin-tutor.types.ts` — Zod schemas for invite creation and profile review
+- `admin-tutor.types.ts` — Zod schemas for invite creation, profile review, and structured achievement editing
 - `admin-tutor.errors.ts` — `InviteNotFoundError`, `TutorProfileNotFoundError`, `TutorProfileOptimisticLockError`, `InvalidInviteActionError`, `DuplicateInviteError`
-- `admin-tutor.repo.ts` — Invite CRUD, tutor profile listing and review
-- `admin-tutor.service.ts` — `createInvite`, `resendInvite`, `revokeInvite`, `listInvites`, `listTutorProfiles`, `reviewTutorProfile`
+- `admin-tutor.repo.ts` — Invite CRUD, tutor profile listing/review, and version-checked achievement updates
+- `admin-tutor.service.ts` — `createInvite`, `resendInvite`, `revokeInvite`, `listInvites`, `listTutorProfiles`, `reviewTutorProfile`, `updateTutorAchievements`
 - `admin-tutor.handler.ts` — Maps handler input to service calls
 - `admin-tutor.router.ts` — Admin-only routes
 
@@ -234,6 +234,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `listInvites(opts)` — Paginated invite list
 - `listTutorProfiles(opts)` — Paginated tutor profiles with status filter
 - `reviewTutorProfile(profileId, status, adminNote?, publicPhotoUrl?)` — Approve/reject tutor profile and optionally install an admin-edited public tutor photo. The tutor's `sourcePhotoUrl` remains separate and cannot directly become the public account image; both URLs accept HTTP(S) only. The profile status/version is updated atomically and a lost moderation race throws `TutorProfileOptimisticLockError` before photo, subject, notification, or audit writes. **F25 state machine (`validateReviewAction`):** each action is only allowed from specific onboarding statuses — `request_changes`/`approve_unpublished`/`publish` from `pending_review`/`changes_requested` (publish also from `approved_unpublished`); `request_changes` and `approve_unpublished` also support `suspended` for explicit admin restoration; `unpublish`/`suspend`/`approve_edits`/`request_edit_changes` only from `published`.
+- `updateTutorAchievements(adminId, input)` — Replaces structured education and competition achievements with optimistic locking, mirrors matching pending edit fields, and records the before/after values in the audit log.
 
 **Dependencies:** `AdminTutorRepo`, `EmailPort`
 
@@ -244,6 +245,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - Invitee-controlled display names, email addresses, and URLs are escaped before rendering into HTML
 - Approving published profile edits validates and applies pending `subjectIds` to the normalized tutor-subject join table in the same transaction as the profile update
 - The admin tutor review card maps pending `subjectIds` to active category/subject labels and wraps long pending values; this is presentation-only and does not change the admin API payload
+- Structured achievement corrections are limited to 2 education entries and 5 competition entries; a stale `version` returns `OPTIMISTIC_LOCK` and no audit record is written.
 
 ---
 
@@ -775,7 +777,7 @@ chat directory.
 
 **Files:**
 
-- `tutor.types.ts` — Zod schemas for profile fields, `getMyPayoutsInput`
+- `tutor.types.ts` — Zod schemas for profile fields and structured achievements, `getMyPayoutsInput`
 - `availability.types.ts` — Availability slot types (`upsert`, weekly-create, weekly-replace, delete)
 - `tutor.errors.ts` — `TutorProfileNotFoundError`, `TutorNotAvailableError`, `AvailabilitySlotOverlapError`, `InvalidTutorPricingError`, `OptimisticLockError`, `InvalidDateRangeError`, `WeeklyAvailabilityRangeError`
 - `tutor.repo.ts` — `findByUserId`, `create`, `update`, `upsertAvailability`
@@ -786,7 +788,7 @@ chat directory.
 **Service Methods:**
 
 - `getMyProfile(userId)` — Returns tutor profile
-- `updateMyProfile(userId, input)` — Updates profile fields with optimistic locking (`version`). Published profiles apply bio and availability-summary edits immediately, while trust-sensitive edits are stored as pending changes for admin review so discovery continues serving the approved values.
+- `updateMyProfile(userId, input)` — Updates profile fields with optimistic locking (`version`). Structured `education` is limited to 2 entries and `competitionAchievements` to 5 entries; each competition entry requires a year and at least one award. Published profiles apply bio and availability-summary edits immediately, while trust-sensitive edits—including structured achievements—are stored as pending changes for admin review so discovery continues serving the approved values.
 - `submitForReview(userId)` — Validates required fields + pricing, then sets `onboardingStatus` to `pending_review`; records audit log. The web onboarding form redirects to `/dashboard` after the mutation succeeds.
 - `listAvailability(userId)` — Lists the tutor's active future availability slots
 - `upsertAvailability(userId, input)` — Creates/updates a slot, rejecting overlaps
@@ -810,6 +812,7 @@ chat directory.
 - Tutor payout calculations retain the internal split fields for accounting compatibility, but tutor-facing payout UI exposes only unpaid completed-session count and IDR honorarium. The private payout form collects bank name, account number, account-holder name, account-opening city/regency, ownership choice, and transfer-responsibility acknowledgment; submission requires all of them. Admin payout records advance the paid cutoff.
 - New tutor submissions must select at least one active child subject from the normalized catalog; mother categories cannot be selected directly
 - A normalized subject update replaces the tutor's join rows atomically and never accepts arbitrary legacy `expertise` strings as category ids
+- Structured tutor achievements are stored in `tutor_profile.education` and `tutor_profile.competition_achievements` as JSONB arrays. Education has at most 2 entries; competition achievements have at most 5 entries, and each entry has a 1900–2100 year plus at least one award. Legacy `credentialsSummary` remains readable as a fallback when the arrays are empty.
 
 ## Tutor Subject Taxonomy Module
 
@@ -853,6 +856,7 @@ chat directory.
 - IDR profiles receive `pricesByModality` Marks maps computed from the active economy config; legacy profiles keep their stored Marks map and no student discovery response exposes the tutor's IDR base honorarium
 - Frontend filter selects normalize displayed objects back to primitive category/subject ID arrays or modality values before calling `listPublished`; empty arrays represent the corresponding “All” option, child-subject options are the union of the selected mother categories, and the query is debounced by 300 ms.
 - The student tutor drawer combines the available modality maps into one group-size pricing matrix with separate Online and Offline Marks columns, prefixing populated values with the Cogito Marks icon; missing modality/size combinations are display-only em dashes and do not change the response contract.
+- Published tutor projections include the structured education and competition achievement arrays. The student drawer renders each first line in a semibold hierarchy, separates achievement bullets with breathing room, and joins multiple awards with commas.
 
 **Dependencies:** `DiscoveryRepo`, `PricingPort`
 

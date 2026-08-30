@@ -185,6 +185,36 @@ describe("AdminTutorRepo", () => {
     });
   });
 
+  describe("updateTutorProfileWithVersion", () => {
+    test("updates achievements only when the expected version matches", async () => {
+      const { createAdminTutorRepo } =
+        await import("../../modules/admin-tutor/admin-tutor.repo");
+      const repo = createAdminTutorRepo();
+      const updated = { id: "tp1", version: 3 };
+      const returning = mock(async () => [updated]);
+      const where = mock(() => ({ returning }));
+      const set = mock(() => ({ where }));
+      const update = mock(() => ({ set }));
+      const conn = { update } as any;
+      const education = [{ university: "University", degree: "Degree" }];
+      const competitionAchievements = [
+        { competitionName: "Competition", year: 2020, awards: ["Champion"] },
+      ];
+
+      const result = await repo.updateTutorProfileWithVersion(conn, "tp1", 2, {
+        education,
+        competitionAchievements,
+      });
+
+      expect(result).toEqual([updated]);
+      expect(update).toHaveBeenCalledTimes(1);
+      expect(set).toHaveBeenCalledWith(
+        expect.objectContaining({ education, competitionAchievements }),
+      );
+      expect(where).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe("listTutorProfiles", () => {
     test("queries with status filter when status is provided", async () => {
       const { createAdminTutorRepo } =

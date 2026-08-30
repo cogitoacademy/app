@@ -48,6 +48,12 @@ import { AccountIdentityCard } from "@/components/profile/account-identity-card"
 import { getUserFacingError } from "@/lib/error-message";
 import { client, orpc } from "@/utils/orpc";
 import { TutorPricingFields } from "./tutor-pricing-fields";
+import {
+  TutorAchievementsEditor,
+  type TutorCompetitionAchievement,
+  type TutorEducationEntry,
+  validateTutorAchievementDraft,
+} from "./tutor-achievements";
 import { SubjectSelector, type TutorSubject } from "./subject-taxonomy";
 
 type Modality = "online" | "offline" | "both";
@@ -83,6 +89,8 @@ interface OnboardingFormProps {
     achievementProofUrls: string[] | null;
     experienceProofUrls: string[] | null;
     sourcePhotoUrl: string | null;
+    education: TutorEducationEntry[] | null;
+    competitionAchievements: TutorCompetitionAchievement[] | null;
     expertise: string[];
     subjects?: TutorSubject[] | null;
     modality: string | null;
@@ -103,6 +111,9 @@ interface OnboardingFormProps {
       achievementProofUrls: string[];
       experienceProofUrls: string[];
       sourcePhotoUrl: string;
+      credentialsSummary: string;
+      education: TutorEducationEntry[];
+      competitionAchievements: TutorCompetitionAchievement[];
       expertise: string[];
       subjectIds: string[];
       modality: Modality;
@@ -157,6 +168,9 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     experienceProofUrls:
       pending.experienceProofUrls ?? profile.experienceProofUrls ?? [],
     sourcePhotoUrl: pending.sourcePhotoUrl ?? profile.sourcePhotoUrl ?? "",
+    education: pending.education ?? profile.education ?? [],
+    competitionAchievements:
+      pending.competitionAchievements ?? profile.competitionAchievements ?? [],
     expertise: pending.expertise ?? profile.expertise ?? [],
     subjectIds: initialSubjectIds,
     modality: (pending.modality ?? profile.modality ?? "") as Modality | "",
@@ -242,7 +256,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       },
       onError: (error: unknown) => {
         toastManager.add({
-          title: "Availability could not be saved",
+          title: "Tutor profile could not be saved",
           description: getUserFacingError(error),
           type: "error",
         });
@@ -285,6 +299,8 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       achievementProofUrls?: string[];
       experienceProofUrls?: string[];
       sourcePhotoUrl?: string;
+      education?: TutorEducationEntry[];
+      competitionAchievements?: TutorCompetitionAchievement[];
       expertise?: string[];
       subjectIds?: string[];
       modality?: Modality;
@@ -302,6 +318,17 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     const achievements = form.achievements.trim();
     const experiences = form.experiences.trim();
     const sourcePhotoUrl = form.sourcePhotoUrl.trim();
+    const education = form.education.map((entry) => ({
+      university: entry.university.trim(),
+      degree: entry.degree.trim(),
+    }));
+    const competitionAchievements = form.competitionAchievements.map(
+      (entry) => ({
+        competitionName: entry.competitionName.trim(),
+        year: entry.year,
+        awards: entry.awards.map((award) => award.trim()),
+      }),
+    );
     const bankName = form.bankName.trim();
     const bankAccountNumber = form.bankAccountNumber.replaceAll(/\D/g, "");
     const bankAccountHolderName = form.bankAccountHolderName.trim();
@@ -314,6 +341,8 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     payload.achievementProofUrls = form.achievementProofUrls;
     payload.experienceProofUrls = form.experienceProofUrls;
     if (sourcePhotoUrl) payload.sourcePhotoUrl = sourcePhotoUrl;
+    payload.education = education;
+    payload.competitionAchievements = competitionAchievements;
     if (form.expertise.length > 0) payload.expertise = form.expertise;
     if (
       form.subjectIds.length > 0 &&
@@ -354,6 +383,13 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     if (!form.experiences.trim()) validationErrors.experiences = "Required";
     if (!form.sourcePhotoUrl.trim())
       validationErrors.sourcePhotoUrl = "Required";
+    Object.assign(
+      validationErrors,
+      validateTutorAchievementDraft(
+        form.education,
+        form.competitionAchievements,
+      ),
+    );
     if (!form.modality) validationErrors.modality = "Required";
     if (!form.bankName.trim()) validationErrors.bankName = "Required";
     if (!/^\d{6,30}$/.test(form.bankAccountNumber.replaceAll(/\D/g, ""))) {
@@ -398,7 +434,11 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       const focusTarget =
         firstError === "subjects"
           ? "tutor-subject-category"
-          : `tutor-${firstError}`;
+          : firstError === "education"
+            ? "tutor-achievements-university-0"
+            : firstError === "competitionAchievements"
+              ? "tutor-achievements-competition-0"
+              : `tutor-${firstError}`;
       window.setTimeout(() => document.getElementById(focusTarget)?.focus(), 0);
       return;
     }
@@ -640,8 +680,8 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                     Achievements <span aria-hidden="true">*</span>
                   </FieldLabel>
                   <FieldDescription>
-                    Add one achievement per line. A structured editor will
-                    replace this once the final client format is approved.
+                    Add one achievement per line. A structured editor will Add
+                    non-competition achievements here, one per line.
                   </FieldDescription>
                   <Textarea
                     id="tutor-achievements"
@@ -1053,6 +1093,40 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
               </CardBody>
             </Card>
           </div>
+
+          <Card className="min-w-0">
+            <CardHeader>
+              <IconBox variant="info-subtle">
+                <IconSchool aria-hidden="true" />
+              </IconBox>
+              <CardTitle>Tutor achievements</CardTitle>
+              <CardDescription>
+                Give students a clear, consistent record of your education and
+                strongest competition results.
+              </CardDescription>
+            </CardHeader>
+            <CardBody>
+              <TutorAchievementsEditor
+                education={form.education}
+                competitionAchievements={form.competitionAchievements}
+                onEducationChange={(education) => {
+                  setForm((current) => ({ ...current, education }));
+                  clearError("education");
+                }}
+                onCompetitionAchievementsChange={(competitionAchievements) => {
+                  setForm((current) => ({
+                    ...current,
+                    competitionAchievements,
+                  }));
+                  clearError("competitionAchievements");
+                }}
+                errors={{
+                  education: errors.education,
+                  competitionAchievements: errors.competitionAchievements,
+                }}
+              />
+            </CardBody>
+          </Card>
 
           <Card className="min-w-0">
             <CardHeader>

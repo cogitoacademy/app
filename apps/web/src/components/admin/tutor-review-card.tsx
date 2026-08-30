@@ -45,6 +45,13 @@ import {
 
 import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
+import {
+  TutorAchievementsDisplay,
+  TutorAchievementsEditor,
+  type TutorCompetitionAchievement,
+  type TutorEducationEntry,
+  validateTutorAchievementDraft,
+} from "@/components/tutor/tutor-achievements";
 
 const FLOOR_ONLINE: Record<string, number> = {
   "1": 42,
@@ -95,6 +102,8 @@ interface TutorReviewCardProps {
     experiences: string | null;
     achievementProofUrls: string[] | null;
     experienceProofUrls: string[] | null;
+    education: TutorEducationEntry[] | null;
+    competitionAchievements: TutorCompetitionAchievement[] | null;
     expertise: string[] | null;
     modality: string | null;
     bankName: string | null;
@@ -111,6 +120,7 @@ interface TutorReviewCardProps {
     pendingProfileChanges: Record<string, unknown> | null;
     profileEditStatus: string;
     profileEditAdminNote: string | null;
+    version: number;
     user?: { id: string; name: string; email: string } | null;
   };
   subjectLabels: ReadonlyMap<string, string>;
@@ -127,6 +137,52 @@ function getInitials(name?: string | null) {
     .toUpperCase();
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function readEducationEntries(value: unknown): TutorEducationEntry[] | null {
+  if (!Array.isArray(value)) return null;
+
+  const entries: TutorEducationEntry[] = [];
+  for (const entry of value) {
+    if (
+      !isRecord(entry) ||
+      typeof entry.university !== "string" ||
+      typeof entry.degree !== "string"
+    ) {
+      return null;
+    }
+    entries.push({ university: entry.university, degree: entry.degree });
+  }
+  return entries;
+}
+
+function readCompetitionAchievements(
+  value: unknown,
+): TutorCompetitionAchievement[] | null {
+  if (!Array.isArray(value)) return null;
+
+  const entries: TutorCompetitionAchievement[] = [];
+  for (const entry of value) {
+    if (
+      !isRecord(entry) ||
+      typeof entry.competitionName !== "string" ||
+      typeof entry.year !== "number" ||
+      !Array.isArray(entry.awards) ||
+      entry.awards.some((award) => typeof award !== "string")
+    ) {
+      return null;
+    }
+    entries.push({
+      competitionName: entry.competitionName,
+      year: entry.year,
+      awards: entry.awards,
+    });
+  }
+  return entries;
+}
+
 function formatPendingField(field: string) {
   if (field === "subjectIds") return "Subjects";
   return field.replace(/([A-Z])/g, " $1");
@@ -136,10 +192,12 @@ function PendingChangeValue({
   field,
   value,
   subjectLabels,
+  idPrefix,
 }: {
   field: string;
   value: unknown;
   subjectLabels: ReadonlyMap<string, string>;
+  idPrefix: string;
 }) {
   if (field === "subjectIds" && Array.isArray(value)) {
     return (
@@ -161,6 +219,32 @@ function PendingChangeValue({
         })}
       </div>
     );
+  }
+
+  if (field === "education") {
+    const entries = readEducationEntries(value);
+    if (entries) {
+      return (
+        <TutorAchievementsDisplay
+          education={entries}
+          competitionAchievements={[]}
+          idPrefix={`${idPrefix}-education`}
+        />
+      );
+    }
+  }
+
+  if (field === "competitionAchievements") {
+    const entries = readCompetitionAchievements(value);
+    if (entries) {
+      return (
+        <TutorAchievementsDisplay
+          education={[]}
+          competitionAchievements={entries}
+          idPrefix={`${idPrefix}-competition`}
+        />
+      );
+    }
   }
 
   const displayValue =
@@ -234,6 +318,80 @@ export function TutorReviewCard({
       },
     }),
   );
+  const [achievementsEditOpen, setAchievementsEditOpen] = useState(false);
+  const [achievementDraft, setAchievementDraft] = useState({
+    education: [] as TutorEducationEntry[],
+    competitionAchievements: [] as TutorCompetitionAchievement[],
+  });
+  const achievementsUpdateMutation = useMutation(
+    orpc.adminTutor.updateTutorAchievements.mutationOptions({
+      onSuccess: () => {
+        setAchievementsEditOpen(false);
+        void queryClient.invalidateQueries({
+          queryKey: orpc.adminTutor.listTutorProfiles.key(),
+        });
+        toastManager.add({
+          title: "Tutor achievements updated",
+          description: "The corrected format is now ready for review.",
+          type: "success",
+        });
+        onAction?.();
+      },
+      onError: (error: unknown) => {
+        toastManager.add({
+          title: "Tutor achievements could not be updated",
+          description: getUserFacingError(error),
+          type: "error",
+        });
+      },
+    }),
+  );
+
+  function openAchievementsEditor() {
+    const pendingEducation = readEducationEntries(
+      profile.pendingProfileChanges?.education,
+    );
+    const pendingCompetitionAchievements = readCompetitionAchievements(
+      profile.pendingProfileChanges?.competitionAchievements,
+    );
+    setAchievementDraft({
+      education: pendingEducation ?? profile.education ?? [],
+      competitionAchievements:
+        pendingCompetitionAchievements ?? profile.competitionAchievements ?? [],
+    });
+    setAchievementsEditOpen(true);
+  }
+
+  function saveAchievements() {
+    const validation = validateTutorAchievementDraft(
+      achievementDraft.education,
+      achievementDraft.competitionAchievements,
+    );
+    if (validation.education || validation.competitionAchievements) {
+      toastManager.add({
+        title: "Check the achievement entries",
+        description: validation.education ?? validation.competitionAchievements,
+        type: "error",
+      });
+      return;
+    }
+
+    achievementsUpdateMutation.mutate({
+      tutorProfileId: profile.id,
+      version: profile.version,
+      education: achievementDraft.education.map((entry) => ({
+        university: entry.university.trim(),
+        degree: entry.degree.trim(),
+      })),
+      competitionAchievements: achievementDraft.competitionAchievements.map(
+        (entry) => ({
+          competitionName: entry.competitionName.trim(),
+          year: entry.year,
+          awards: entry.awards.map((award) => award.trim()),
+        }),
+      ),
+    });
+  }
 
   function handleAction(
     action:
@@ -515,6 +673,28 @@ export function TutorReviewCard({
             </section>
 
             <section>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <Text className="text-xs font-semibold uppercase tracking-wide text-dimmed">
+                  Tutor achievements
+                </Text>
+                <Button
+                  type="button"
+                  variant="plain"
+                  size="xs"
+                  onClick={openAchievementsEditor}
+                >
+                  Edit format
+                </Button>
+              </div>
+              <TutorAchievementsDisplay
+                education={profile.education}
+                competitionAchievements={profile.competitionAchievements}
+                idPrefix={`admin-${profile.id}-achievements`}
+                emptyMessage="No structured education or competition achievements provided."
+              />
+            </section>
+
+            <section>
               <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-dimmed">
                 Expertise
               </Text>
@@ -606,6 +786,7 @@ export function TutorReviewCard({
                           field={field}
                           value={value}
                           subjectLabels={subjectLabels}
+                          idPrefix={`admin-${profile.id}-pending-${field}`}
                         />
                       </div>
                     ),
@@ -770,6 +951,58 @@ export function TutorReviewCard({
               disabled={!adminNote.trim() || isPending}
             >
               {noteAction === "suspend" ? "Suspend tutor" : "Send request"}
+            </Button>
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
+
+      <Dialog
+        open={achievementsEditOpen}
+        onOpenChange={(open) => {
+          if (!achievementsUpdateMutation.isPending)
+            setAchievementsEditOpen(open);
+        }}
+      >
+        <DialogPopup className="max-w-4xl">
+          <DialogHeader className="flex-col items-start gap-1.5">
+            <DialogTitle>Edit tutor achievements</DialogTitle>
+            <DialogDescription>
+              Normalize the education and competition entries before approving
+              this tutor profile.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody className="min-h-0">
+            <TutorAchievementsEditor
+              education={achievementDraft.education}
+              competitionAchievements={achievementDraft.competitionAchievements}
+              onEducationChange={(education) =>
+                setAchievementDraft((current) => ({ ...current, education }))
+              }
+              onCompetitionAchievementsChange={(competitionAchievements) =>
+                setAchievementDraft((current) => ({
+                  ...current,
+                  competitionAchievements,
+                }))
+              }
+              idPrefix={`admin-edit-${profile.id}-achievements`}
+            />
+          </DialogBody>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setAchievementsEditOpen(false)}
+              disabled={achievementsUpdateMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={saveAchievements}
+              progress={achievementsUpdateMutation.isPending}
+              disabled={achievementsUpdateMutation.isPending}
+            >
+              Save achievements
             </Button>
           </DialogFooter>
         </DialogPopup>
