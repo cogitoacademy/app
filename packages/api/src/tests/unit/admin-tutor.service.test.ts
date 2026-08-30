@@ -20,6 +20,7 @@ function makeProfile(
 ): TutorProfileSnapshot {
   return {
     id: "p1",
+    userId: "u1",
     version: 1,
     onboardingStatus: "pending_review",
     publishedAt: null,
@@ -703,18 +704,24 @@ describe("AdminTutor Service", () => {
           onboardingStatus: "published",
         }),
       );
+      const updateTutorPublicPhoto = mock(async () => ({}));
       const deps = makeDeps({
         adminTutorRepo: {
           ...makeDeps().adminTutorRepo,
           getTutorProfileById: mock(async () =>
             makeProfile({
               onboardingStatus: "published",
-              pendingProfileChanges: { bio: "updated", subjectIds: ["s1"] },
+              pendingProfileChanges: {
+                bio: "updated",
+                subjectIds: ["s1"],
+                publicPhotoUrl: "https://example.com/photo.jpg",
+              },
             }),
           ),
           listActiveChildSubjects,
           replaceTutorProfileSubjects,
           updateTutorProfile,
+          updateTutorPublicPhoto,
         },
       });
       const service = createAdminTutorService(deps as any);
@@ -722,6 +729,7 @@ describe("AdminTutor Service", () => {
       const result = await service.reviewTutorProfile("admin1", {
         tutorProfileId: "p1",
         action: "approve_edits",
+        publicPhotoUrl: "https://example.com/photo.jpg",
       });
 
       expect(result.onboardingStatus).toBe("published");
@@ -742,6 +750,11 @@ describe("AdminTutor Service", () => {
           profileEditStatus: "none",
         }),
         1,
+      );
+      expect(updateTutorPublicPhoto).toHaveBeenCalledWith(
+        expect.anything(),
+        "u1",
+        "https://example.com/photo.jpg",
       );
     });
 

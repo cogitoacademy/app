@@ -3,6 +3,7 @@ import {
   UserNotFoundError,
   LastAdminError,
   OptimisticLockError,
+  TutorPayoutNotAvailableError,
   mapAdminError,
 } from "../../modules/admin/admin.errors";
 import { DomainError } from "../../lib/domain-errors";
@@ -45,6 +46,11 @@ describe("admin.errors", () => {
   });
 
   describe("mapAdminError", () => {
+    test("maps unavailable tutor payouts to NOT_FOUND", () => {
+      const err = new TutorPayoutNotAvailableError("t1");
+      expect(err.details).toEqual({ tutorId: "t1" });
+      expect(mapAdminError(err).status).toBe(400);
+    });
     test("maps UserNotFoundError to NOT_FOUND", () => {
       const err = new UserNotFoundError("u1");
       const result = mapAdminError(err);

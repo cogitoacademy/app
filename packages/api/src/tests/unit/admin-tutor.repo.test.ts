@@ -409,4 +409,19 @@ describe("AdminTutorRepo", () => {
       expect(insert).not.toHaveBeenCalled();
     });
   });
+
+  test("updates the tutor public photo", async () => {
+    const { createAdminTutorRepo } =
+      await import("../../modules/admin-tutor/admin-tutor.repo");
+    const row = { id: "u1", image: "https://example.com/photo.jpg" };
+    const returning = mock(async () => [row]);
+    const where = mock(() => ({ returning }));
+    const set = mock(() => ({ where }));
+    const update = mock(() => ({ set }));
+    const repo = createAdminTutorRepo();
+    await expect(
+      repo.updateTutorPublicPhoto({ update } as any, "u1", row.image),
+    ).resolves.toEqual(row);
+    expect(set).toHaveBeenCalledWith({ image: row.image });
+  });
 });

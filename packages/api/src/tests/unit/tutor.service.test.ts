@@ -750,6 +750,30 @@ describe("Tutor Service", () => {
       ).rejects.toThrow(InvalidDateRangeError);
     });
 
+    test("getMyPayouts uses pending totals by default and dated totals for filters", async () => {
+      const payout = {
+        getPendingTutorPayouts: mock(async () => ({ completedSessions: 2 })),
+        getTutorPayouts: mock(async () => ({ completedSessions: 1 })),
+      };
+      const service = createTutorService(makeDeps({ payout }) as any);
+      await expect(service.getMyPayouts("u1", {})).resolves.toEqual({
+        completedSessions: 2,
+      });
+      await expect(
+        service.getMyPayouts("u1", {
+          dateFrom: "2026-08-01T00:00:00Z",
+          dateTo: "2026-08-31T00:00:00Z",
+        }),
+      ).resolves.toEqual({ completedSessions: 1 });
+      expect(payout.getTutorPayouts).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tutorId: "u1",
+          dateFrom: expect.any(Date),
+          dateTo: expect.any(Date),
+        }),
+      );
+    });
+
     test("deleteAvailability throws TutorProfileNotFoundError when slot not found", async () => {
       const deps = makeDeps({
         tutorRepo: {
