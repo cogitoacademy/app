@@ -323,6 +323,9 @@ message and exits 1 (readable failure instead of a bare `curl exit 6`).
    as `version`), so a green deploy means the _new_ image is serving. On
    timeout the script prints a rollback hint pointing at the previous immutable
    `v<prev-sha>` image.
+   The migration task allowlists `DATABASE_URL` in `turbo.json`; this is required
+   because Turbo's strict environment mode otherwise filters the URL before it
+   reaches `drizzle-kit`.
 6. Check both Coolify deployment logs and the public smoke checks below.
 
 For staging, use the `cogito-staging` project, `:staging` image tags,

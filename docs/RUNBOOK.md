@@ -921,6 +921,8 @@ The production pipeline (`cd-prod.yml`) builds and pushes images on a GitHub-hos
 
 1. **Backup:** `pg_dump` snapshot of the production database, gzipped, uploaded to R2 as `pre-migrate-<GIT_SHA>.sql.gz` (aws CLI against the R2 S3 endpoint).
 2. **Migrate:** `bun run db:migrate` against the production `DATABASE_URL`.
+   Turbo allowlists this variable for the `db:migrate` task so strict env mode
+   passes it through to `drizzle-kit`.
 3. **Deploy:** POST the Coolify deploy webhook (`COOLIFY_PROD_SERVER_WEBHOOK`).
 4. **Health (sha-verified):** poll `https://api.cogitoacademy.id/health` until `version == GIT_SHA` (bounded 20×15s ≈ 5 min). On failure the script prints a clear rollback hint pointing at the previous immutable `v<prev-sha>` image.
 
