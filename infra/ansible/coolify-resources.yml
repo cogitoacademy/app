@@ -92,21 +92,30 @@
   gather_facts: false
 
   vars:
-    # Tailnet hostname of the VPS — the Coolify API is tailnet-only.
-    coolify_api_url: "http://cogito-vps.tail674634.ts.net:8000/api/v1"
-    vault_path: "infra/secrets/prod.env" # SOPS-encrypted, relative to repo root
+    # Coolify API endpoint. The Coolify container publishes :8000 on
+    # 127.0.0.1 ONLY (verified live 2026-08-31: `127.0.0.1:8000->8080/tcp`),
+    # so the control node must reach it via an SSH tunnel:
+    #   ssh -i ~/.ssh/cogito_vps -f -N -L 8000:127.0.0.1:8000 ubuntu@<tailnet-ip>
+    # Default to the tunnel; override with the tailnet URL for other setups.
+    coolify_api_url: "http://localhost:8000/api/v1"
+    # SOPS-encrypted vault, resolved relative to the playbook so the
+    # decrypt task works from any cwd (the command module does not inherit
+    # the operator's working directory).
+    vault_path: "{{ playbook_dir }}/../secrets/prod.env"
     project_name: "cogito"
     environment_name: "production"
     server_ip: "15.235.186.159"
 
     # --- Declared resources (drift-check source of truth) ---
+    # Names/images match the LIVE Coolify resources (verified 2026-08-31) —
+    # the playbook declares what exists, it never renames or recreates.
     databases:
-      - name: "cogito-postgres"
+      - name: "cogito-prod-db"
         type: "postgres"
         image: "postgres:16-alpine"
-      - name: "cogito-redis"
+      - name: "cogito-prod-redis"
         type: "redis"
-        image: "redis:7"
+        image: "redis:7.2"
 
     applications:
       - name: "cogito-api"
@@ -342,7 +351,11 @@
 
     - name: Resolve the VPS server UUID
       ansible.builtin.set_fact:
-        server_uuid: "{{ (servers.json | selectattr('ip', 'equalto', server_ip) | first).uuid }}"
+        # The Coolify host server is registered as "localhost" with
+        # ip=host.docker.internal (verified live 2026-08-31) — matching on
+        # server_ip finds nothing. Match the Coolify-host server instead;
+        # fall back to an IP match for multi-server setups.
+        server_uuid: "{{ (servers.json | selectattr('is_coolify_host', 'equalto', true) | first).uuid if (servers.json | selectattr('is_coolify_host', 'equalto', true) | list | length) > 0 else (servers.json | selectattr('ip', 'equalto', server_ip) | first).uuid }}"
 
     # --- 2. Databases: re-declare, NEVER recreate -------------------------
     - name: List Coolify databases
@@ -352,7 +365,7 @@
         headers:
           Authorization: "Bearer {{ vault_env.COOLIFY_API_TOKEN }}"
         status_code: 200
-      register: databases
+      register: databases_live
       no_log: true
 
     - name: Re-declare each database (create only when missing, with warning)
@@ -369,7 +382,7 @@
         headers:
           Authorization: "Bearer {{ vault_env.COOLIFY_API_TOKEN }}"
         status_code: 200
-      register: applications
+      register: applications_live
       no_log: true
 
     - name: Re-declare each application

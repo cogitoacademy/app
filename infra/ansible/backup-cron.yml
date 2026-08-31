@@ -45,7 +45,7 @@
     backup_script_src: ../backup.sh
     backup_script_dest: /usr/local/bin/cogito-backup.sh
     backup_env_dest: /etc/cogito/backup.env
-    backup_env_src: infra/secrets/prod.env # SOPS-encrypted, relative to the control node cwd (repo root)
+    backup_env_src: "{{ playbook_dir }}/../secrets/prod.env" # SOPS-encrypted, resolved relative to the playbook
     backup_log: /var/log/cogito-backup.log
     backup_env_file_mode: "0600"
 

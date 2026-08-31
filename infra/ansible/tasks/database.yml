@@ -8,7 +8,7 @@
 ---
 - name: Find the database by name
   ansible.builtin.set_fact:
-    db_found: "{{ databases.json | selectattr('name', 'equalto', db_spec.name) | list }}"
+    db_found: "{{ databases_live.json | selectattr('name', 'equalto', db_spec.name) | list }}"
 
 - name: Database exists — compare image (drift check, no changes)
   ansible.builtin.debug:
