@@ -11,6 +11,14 @@ section-level achievement errors. Violating this invariant triggers Base UI
 error #28 during rendering; the fix is frontend-only and adds no service,
 repository, event-key, or API contract.
 
+## CI coverage gate (2026-08-31)
+
+The CI coverage comment reads the generated lcov artifact and enforces 100%
+for `packages/api` lines, overall lines, functions, and branches. A 0/0 branch
+total is treated as 100%; the gate is configured by
+`.github/workflows/ci.yml` and implemented in
+`.github/scripts/coverage-comment.ts`.
+
 ## Collection transition behavior (2026-08-28)
 
 The web collection layer uses `keepPreviousData` for server-backed admin tutor

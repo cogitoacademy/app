@@ -271,6 +271,27 @@ describe("XenditPaymentProvider (2024-11-11 API)", () => {
     ).rejects.toThrow("Payment provider error: 500 Internal Server Error");
   });
 
+  test("createIntent handles an unreadable error response body", async () => {
+    globalThis.fetch = mock(() =>
+      Promise.resolve({
+        ok: false,
+        status: 502,
+        statusText: "Bad Gateway",
+        text: async () => {
+          throw new Error("response body unavailable");
+        },
+      }),
+    ) as never;
+
+    await expect(
+      provider.createIntent({
+        paymentId: "pay_unreadable",
+        amountIdr: 50000,
+        providerReference: "xendit-pay-unreadable",
+      }),
+    ).rejects.toThrow("Payment provider error: 502 Bad Gateway");
+  });
+
   test("createIntent retries transient network failures", async () => {
     globalThis.fetch = mock(() => {
       throw new TypeError("network failure");
@@ -545,6 +566,24 @@ describe("XenditPaymentProvider refund", () => {
 
     await expect(provider.refund("pr_123", 43_000)).rejects.toThrow(
       "Payment provider refund error: 503 Service Unavailable",
+    );
+  });
+
+  test("handles an unreadable refund error response body", async () => {
+    globalThis.fetch = mock(() =>
+      Promise.resolve({
+        ok: false,
+        status: 502,
+        statusText: "Bad Gateway",
+        text: async () => {
+          throw new Error("response body unavailable");
+        },
+      }),
+    ) as never;
+    const provider = createXenditPaymentProvider(opts);
+
+    await expect(provider.refund("pr_123", 43_000)).rejects.toThrow(
+      "Payment provider refund error: 502 Bad Gateway",
     );
   });
 

@@ -119,4 +119,72 @@ describe("ResendEmailProvider", () => {
 
     globalThis.fetch = origFetch;
   });
+
+  test("opens the circuit after repeated provider failures", async () => {
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = mock(async () => {
+      throw new Error("provider unavailable");
+    }) as any;
+
+    try {
+      const provider = createResendEmailProvider(
+        "test-api-key",
+        "noreply@example.com",
+      );
+      const message = {
+        to: "user@example.com",
+        subject: "Test",
+        html: "<p>Hello</p>",
+        category: "test",
+      };
+
+      for (let attempt = 0; attempt < 3; attempt++) {
+        await expect(provider.send(message)).rejects.toThrow(
+          "provider unavailable",
+        );
+      }
+      await expect(provider.send(message)).rejects.toThrow(
+        "Circuit breaker is open",
+      );
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  test("runs the request timeout callback and still clears the timer", async () => {
+    const origFetch = globalThis.fetch;
+    const origSetTimeout = globalThis.setTimeout;
+    let timeoutCallbacks = 0;
+    globalThis.fetch = mock(async () => ({
+      ok: true,
+      json: async () => ({ id: "re_timeout" }),
+      text: async () => "",
+    })) as any;
+    globalThis.setTimeout = ((callback: TimerHandler) => {
+      if (typeof callback === "function") {
+        timeoutCallbacks++;
+        callback();
+      }
+      return 0 as unknown as ReturnType<typeof setTimeout>;
+    }) as typeof setTimeout;
+
+    try {
+      const provider = createResendEmailProvider(
+        "test-api-key",
+        "noreply@example.com",
+      );
+      await expect(
+        provider.send({
+          to: "user@example.com",
+          subject: "Test",
+          html: "<p>Hello</p>",
+          category: "test",
+        }),
+      ).resolves.toEqual({ messageId: "re_timeout" });
+      expect(timeoutCallbacks).toBe(1);
+    } finally {
+      globalThis.setTimeout = origSetTimeout;
+      globalThis.fetch = origFetch;
+    }
+  });
 });

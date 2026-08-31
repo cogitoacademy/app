@@ -241,6 +241,7 @@ describe("Redis client helpers", () => {
     expect(await client.pttl("value")).toBeGreaterThan(0);
     expect(await client.ttl("missing")).toBe(-2);
     expect(await client.pttl("missing")).toBe(-2);
+    expect(await client.llen("list")).toBe(0);
     expect(await client.expire("missing", 1)).toBe(0);
     expect(await client.pexpire("missing", 1)).toBe(0);
 
@@ -326,6 +327,10 @@ describe("Redis client helpers", () => {
         calls.push(["hdel", key, ...fields]);
         return fields.length;
       },
+      llen: async (key: string) => {
+        calls.push(["llen", key]);
+        return 0;
+      },
       eval: async (
         script: string,
         keyCount: number,
@@ -365,10 +370,11 @@ describe("Redis client helpers", () => {
     await adapter.hget("hash", "field");
     await adapter.hgetall("hash");
     await adapter.hdel("hash", "field");
+    await adapter.llen("list");
     await adapter.eval("return 1", ["key"], ["arg"]);
     await adapter.ping();
     await adapter.quit();
-    expect(calls).toHaveLength(16);
+    expect(calls).toHaveLength(17);
 
     expect(fresh.redisRetryStrategy(1)).toBe(200);
     expect(fresh.redisRetryStrategy(11)).toBeNull();

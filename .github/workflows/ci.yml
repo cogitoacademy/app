@@ -185,3 +185,5 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           COVERAGE_API_THRESHOLD: 100
           COVERAGE_OVERALL_THRESHOLD: 100
+          COVERAGE_FUNCTIONS_THRESHOLD: 100
+          COVERAGE_BRANCHES_THRESHOLD: 100

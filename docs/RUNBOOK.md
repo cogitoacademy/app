@@ -565,7 +565,7 @@ bun scripts/run-test-suite.mjs api packages/api/src/tests/integration/contact-sh
 bun scripts/run-test-suite.mjs e2e --grep "identity surfaces"
 ```
 
-The workflow also runs the server suite in a separate process because its webhook test uses module mocking. The coverage comment script enforces 100% line coverage for `packages/api` and 100% line coverage overall from `coverage/lcov.info`; the Bun command's own function/statement threshold is a separate diagnostic and is not the CI gate.
+The workflow also runs the server suite in a separate process because its webhook test uses module mocking. The coverage comment script enforces 100% coverage for `packages/api` lines, overall lines, functions, and branches from `coverage/lcov.info`; a 0/0 branch total is treated as 100%. If this gate fails, inspect the missing function/line records in the generated lcov report and add a behavior-level test before pushing. The Bun command's own function/statement output is diagnostic; the lcov gate is authoritative.
 
 ## Common Errors
 

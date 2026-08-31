@@ -84,7 +84,7 @@ Sanity is queried only by the API server. The browser receives normalized conten
 
 ### Verification
 
-CI runs the API integration/unit suite together with the env, auth, and database package tests. The coverage gate requires 100% line coverage for `packages/api` and 100% line coverage overall; coverage is reported from the same lcov artifact used by `.github/scripts/coverage-comment.ts`.
+CI runs the API integration/unit suite together with the env, auth, and database package tests. The coverage gate requires 100% coverage for `packages/api` lines, overall lines, functions, and branches; a file set with no instrumented branches is reported as 100% for that metric. Coverage is reported from the same lcov artifact used by `.github/scripts/coverage-comment.ts`.
 
 ### Auth Levels
 

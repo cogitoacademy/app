@@ -230,12 +230,17 @@ describe("createGoogleMeetingProvider", () => {
 
     logCaptures = [];
     const provider = createGoogleMeetingProvider(config, db);
-    const result = await provider.createEvent("b1");
+    const result = await provider.createEvent("b1", undefined, undefined, [
+      { email: "student@example.com" },
+    ]);
 
     expect(result.bookingId).toBe("b1");
     expect(result.provider).toBe("google_meet");
     expect(result.status).toBe("failed");
     expect(result.errorReason).toBeDefined();
+    expect(values.mock.calls[0]?.[0]).toMatchObject({
+      attendeeEmails: ["student@example.com"],
+    });
 
     const errorLog = logCaptures.find(
       (e) => e.action === "google_meet_create_failed",
@@ -797,6 +802,120 @@ describe("createGoogleMeetingProvider timeout", () => {
       (e) => e.action === "google_meet_create_failed",
     );
     expect(errorLog).toBeDefined();
+  });
+
+  test("executes the service-account timeout callback", async () => {
+    const originalSetTimeout = globalThis.setTimeout;
+    globalThis.setTimeout = ((
+      callback: TimerHandler,
+      delay?: number,
+      ...args: unknown[]
+    ) => {
+      if (delay === 30_000 && typeof callback === "function") {
+        callback(...(args as []));
+        return 0 as unknown as ReturnType<typeof setTimeout>;
+      }
+      return originalSetTimeout(callback, delay, ...(args as []));
+    }) as typeof setTimeout;
+
+    const failedRow = {
+      id: "me_timeout_callback",
+      bookingId: "b1",
+      provider: "google_meet",
+      externalEventId: null,
+      meetingUrl: null,
+      status: "failed",
+      errorReason: "Error: Google Meet API timeout after 30s",
+    };
+    const returning = mock(async () => [failedRow]);
+    const values = mock(() => ({ returning }));
+    const insert = mock(() => ({ values }));
+
+    try {
+      mockCalendarEventsInsert.mockImplementationOnce(async () => ({
+        data: { id: "evt_timeout_callback" },
+      }));
+      const provider = createGoogleMeetingProvider(config, { insert } as any);
+      const result = await provider.createEvent("b1");
+
+      expect(result.status).toBe("failed");
+      expect(result.errorReason).toContain("timeout");
+    } finally {
+      globalThis.setTimeout = originalSetTimeout;
+    }
+  });
+
+  test("executes the OAuth fetch timeout callback", async () => {
+    const originalSetTimeout = globalThis.setTimeout;
+    globalThis.setTimeout = ((
+      callback: TimerHandler,
+      delay?: number,
+      ...args: unknown[]
+    ) => {
+      if (delay === 30_000 && typeof callback === "function") {
+        callback(...(args as []));
+        return 0 as unknown as ReturnType<typeof setTimeout>;
+      }
+      return originalSetTimeout(callback, delay, ...(args as []));
+    }) as typeof setTimeout;
+
+    const oauthConfig = {
+      authType: "oauth_refresh_token" as const,
+      clientId: "oauth-client-id",
+      clientSecret: "oauth-client-secret",
+      refreshToken: "oauth-refresh-token",
+      calendarId: "primary",
+    };
+    const row = {
+      id: "me_oauth_timeout_callback",
+      bookingId: "b1",
+      provider: "google_meet",
+      externalEventId: "evt_oauth_timeout_callback",
+      meetingUrl: "https://meet.google.com/timeout-callback",
+      status: "created",
+      errorReason: null,
+    };
+    const returning = mock(async () => [row]);
+    const values = mock(() => ({ returning }));
+    const insert = mock(() => ({ values }));
+
+    try {
+      globalThis.fetch = mock(async (input: unknown) => {
+        const url = String(input);
+        if (url === "https://oauth2.googleapis.com/token") {
+          return new Response(JSON.stringify({ access_token: "t-timeout" }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return new Response(
+          JSON.stringify({
+            id: "evt_oauth_timeout_callback",
+            conferenceData: {
+              entryPoints: [
+                {
+                  entryPointType: "video",
+                  uri: "https://meet.google.com/timeout-callback",
+                },
+              ],
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }) as typeof globalThis.fetch;
+
+      const provider = createGoogleMeetingProvider(oauthConfig, {
+        insert,
+      } as any);
+      const result = await provider.createEvent("b1");
+
+      expect(result.status).toBe("created");
+      expect(result.meetingUrl).toBe(
+        "https://meet.google.com/timeout-callback",
+      );
+    } finally {
+      globalThis.setTimeout = originalSetTimeout;
+    }
   });
 });
 
