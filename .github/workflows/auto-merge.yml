@@ -14,7 +14,7 @@ jobs:
       contents: write
     steps:
       # Durable gate: enable "Require status checks" branch protection for main with CI required.
-      - uses: fastify/github-action-merge-dependabot@v3
+      - uses: fastify/github-action-merge-dependabot@v3.15.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           merge-method: squash
