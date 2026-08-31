@@ -22,15 +22,17 @@
 #       R2_STATE_ENDPOINT        https://<accountid>.r2.cloudflarestorage.com
 #
 #     Fail-loud policy (F1, CI-SANITY plan):
-#       - Non-fork PRs (github.event.pull_request.head.repo.fork == false):
-#         when ANY of the four credentials is unset, the credential-check
-#         step FAILS the job with the remediation message below. There is
-#         no "skip because secrets are missing" path — a silently-skipped
-#         plan is a false green (the F1/F2 failure class in
-#         docs/plans/active/CI-SANITY.md).
-#       - Fork PRs: fork pull_request events do not receive repository
-#         secrets, so plan can never run there; the skip path is kept
-#         exclusively for forks (validate still runs, job exits 0).
+#       - Non-fork, non-Dependabot PRs: when ANY of the four credentials is
+#         unset, the credential-check step FAILS the job with the
+#         remediation message below. There is no "skip because secrets are
+#         missing" path for human branches — a silently-skipped plan is a
+#         false green (the F1/F2 failure class in docs/plans/active/CI-SANITY.md).
+#       - Fork PRs AND Dependabot PRs: GitHub does not pass repository
+#         secrets to pull_request events from fork repos or from
+#         Dependabot's `dependabot/*` branches (both are untrusted
+#         read-only event classes), so plan can never run there; the skip
+#         path is kept exclusively for those events (validate still runs,
+#         job exits 0).
 #   - A 403 from the state bucket (wrong-scoped token, bucket renamed,
 #     endpoint drift — the real 2026-08-31 F2 breakage) is a terraform
 #     failure and now surfaces as a red job; nothing swallows it.
@@ -76,12 +78,16 @@ jobs:
       - name: Terraform validate
         run: terraform validate
 
-      # Fail-loud credential gate (F1). Non-fork PRs REQUIRE the four
-      # plan credentials: a missing one fails the job with a precise
+      # Fail-loud credential gate (F1). Non-fork, non-Dependabot PRs REQUIRE
+      # the four plan credentials: a missing one fails the job with a precise
       # remediation message instead of silently skipping the plan (the
       # F1/F2 false-green class; 403s on the state bucket must likewise
-      # surface as failures). Fork PRs cannot read repo secrets, so they
-      # keep the skip path.
+      # surface as failures). Fork PRs AND Dependabot PRs cannot read repo
+      # secrets (GitHub denies secrets to pull_request events from fork
+      # repos and from Dependabot's untrusted branch class — same-repo
+      # `dependabot/*` branches included, verified 2026-09-01: PRs #142/#144
+      # failed the gate with all four secrets "unset"), so both keep the
+      # skip path. Human branches still fail loud.
       - name: Check read-only plan credentials
         id: check-creds
         shell: bash
@@ -91,6 +97,7 @@ jobs:
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_STATE_ENDPOINT: ${{ secrets.R2_STATE_ENDPOINT }}
           IS_FORK: ${{ github.event.pull_request.head.repo.fork == false && 'false' || 'true' }}
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
           missing=()
           [ -z "$CLOUDFLARE_API_TOKEN" ] && missing+=("CLOUDFLARE_API_TOKEN")
@@ -101,7 +108,7 @@ jobs:
             echo "skip-plan=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if [ "$IS_FORK" == "false" ]; then
+          if [ "$IS_FORK" == "false" ] && [[ "$HEAD_BRANCH" != dependabot/* ]]; then
             {
               echo "::error title=Terraform plan credentials missing::${missing[*]} are unset on a non-fork PR"
               echo "Terraform plan credentials are not configured: ${missing[*]}"
@@ -118,7 +125,11 @@ jobs:
             exit 1
           fi
           echo "skip-plan=true" >> "$GITHUB_OUTPUT"
-          echo "reason=fork PR — repository secrets are not available to fork events, plan is skipped (validate still ran)"
+          if [ "$IS_FORK" == "true" ]; then
+            echo "reason=fork PR — repository secrets are not available to fork events, plan is skipped (validate still ran)"
+          else
+            echo "reason=dependabot PR — GitHub denies repository secrets to Dependabot pull_request events, plan is skipped (validate still ran)"
+          fi
 
       - name: Terraform plan (read-only)
         if: steps.check-creds.outputs.skip-plan == 'false'
@@ -190,10 +201,10 @@ jobs:
           echo "::error title=Terraform plan failed::not a pre-bootstrap missing-bucket case — see the init/plan error above. Check token scope (Object Read/Write on cogito-infra-state)."
           exit 1
 
-      - name: Terraform plan skipped (fork PR — no secret access)
+      - name: Terraform plan skipped (fork / dependabot PR — no secret access)
         if: steps.check-creds.outputs.skip-plan == 'true'
         run: |
-          echo "::notice title=Terraform plan skipped::${{ steps.check-creds.outputs.reason }} — validate passed. Skip is exclusive to fork PRs; non-fork PRs fail loudly when plan credentials are missing (CI-SANITY F1)."
+          echo "::notice title=Terraform plan skipped::${{ steps.check-creds.outputs.reason }} — validate passed. The skip path is exclusive to fork and Dependabot PRs (GitHub denies repository secrets to both); human branches fail loudly when plan credentials are missing (CI-SANITY F1)."
 
       - name: Upload plan artifact
         if: steps.check-creds.outputs.skip-plan == 'false'
