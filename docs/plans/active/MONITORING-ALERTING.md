@@ -1,11 +1,11 @@
 # Monitoring & DLQ Alerting — Plan
 
-| Field      | Value                                                                               |
-| ---------- | ----------------------------------------------------------------------------------- |
+| Field      | Value                                                                                                                                                           |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Status     | **Active — item 3 (DLQ age-aware health) DONE + merged 2026-08-31 (#130)**; Uptime Kuma + Discord alerting next (box is now wired — apply completed 2026-08-31) |
-| Created    | 2026-08-31                                                                          |
-| Depends on | DEPLOYMENT-WAVE-2 (#121/#122) merged; infra apply (Terraform + Ansible) in progress |
-| Scope      | Uptime Kuma + Discord alerting, DLQ age-aware health, ops visibility                |
+| Created    | 2026-08-31                                                                                                                                                      |
+| Depends on | DEPLOYMENT-WAVE-2 (#121/#122) merged; infra apply (Terraform + Ansible) in progress                                                                             |
+| Scope      | Uptime Kuma + Discord alerting, DLQ age-aware health, ops visibility                                                                                            |
 
 ## Why
 

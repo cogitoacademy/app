@@ -1,11 +1,11 @@
 # Deployment Wave 2 — Finalized Plan & Dispatch (rev. 1)
 
-| Field      | Value                                                                                                                                                                                                                                                                               |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Field      | Value                                                                                                                                                                                                                                                  |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Status     | **APPLIED 2026-08-31** — Terraform imports + Ansible apply completed via `infra/apply.sh` (with live-API fixes #136/#137); vault refreshed (R2/Coolify tokens rotated, DATABASE_URL host-reachable); GitHub secrets updated; deploy-webhook route live |
-| Created    | 2026-08-28                                                                                                                                                                                                                                                                          |
-| Depends on | main `151fd2a` (#115–#118 merged; **#120 Xendit Test Mode merged 2026-08-28**; deployment wave state synced in #119)                                                                                                                                                                |
-| Scope      | Repo work only: `coolify-resources.yml` (Coolify API playbook + deploy-webhook route fix), drift-check + docs, plan-only CI audit. **No secrets values needed — names only.**                                                                                                       |
+| Created    | 2026-08-28                                                                                                                                                                                                                                             |
+| Depends on | main `151fd2a` (#115–#118 merged; **#120 Xendit Test Mode merged 2026-08-28**; deployment wave state synced in #119)                                                                                                                                   |
+| Scope      | Repo work only: `coolify-resources.yml` (Coolify API playbook + deploy-webhook route fix), drift-check + docs, plan-only CI audit. **No secrets values needed — names only.**                                                                          |
 
 ---
 
