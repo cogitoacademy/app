@@ -524,6 +524,149 @@ Backups are retained 30 days; a restore older than that requires the R2
 bucket's lifecycle configuration to have kept the object, so verify any
 emergency restore against the actual object list first.
 
+## Monitoring & Alerting (Uptime Kuma + Discord + disk watchdog)
+
+### What is wired
+
+- **Uptime Kuma** runs as a Coolify **service** (`cogito-uptime-kuma`,
+  `louislam/uptime-kuma:2`, port 3001, volume `uptime-kuma-data:/app/data`)
+  at **https://status.cogitoacademy.id** (DNS `status.` record is
+  Terraform-owned). It is declared **declaratively through the Coolify API**
+  by [`infra/ansible/uptime-kuma.yml`](../infra/ansible/uptime-kuma.yml) —
+  the same control-node pattern as `coolify-resources.yml` (tunnel to
+  `localhost:8000`, SOPS decrypt on the control node, idempotent, drift
+  PATCHed). Nothing is installed on the VPS host directly.
+- **Discord alerting**: the webhook URL is a bearer secret stored in the
+  SOPS vault as `DISCORD_WEBHOOK_URL` (operator console bit — see
+  [Operator follow-ups](#operator-follow-ups) below). Kuma posts monitor
+  alerts to the ops Discord channel; the disk watchdog posts disk warnings.
+- **Disk watchdog**: [`infra/ansible/disk-watchdog.yml`](../infra/ansible/disk-watchdog.yml)
+  installs `/usr/local/bin/cogito-disk-watchdog.sh` + a nightly cron
+  (**03:30 WIB**) that warns at **≥ 85%** disk and auto-prunes at **≥ 92%**
+  (see [Disk thresholds & auto-prune](#disk-thresholds--auto-prune)).
+
+### Setup steps (one-time, operator)
+
+1. **Add `DISCORD_WEBHOOK_URL` to the SOPS vault** (the playbooks print this
+   instruction loudly when the key is missing; they never invent a URL):
+   ```bash
+   sops infra/secrets/prod.env
+   # add: DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+   ```
+   Create the webhook first: ops Discord server → channel (e.g.
+   `#cogito-alerts`) → Settings → Integrations → Webhooks → New Webhook.
+2. **Declare the Kuma service** (tunnel up, from the repo root):
+   ```bash
+   ssh -i ~/.ssh/cogito_vps -f -N -L 8000:127.0.0.1:8000 ubuntu@<tailnet-ip>
+   ansible-playbook -i infra/ansible/inventory.ini infra/ansible/uptime-kuma.yml
+   ```
+   The playbook creates the service from the built-in `uptime-kuma`
+   one-click template, applies `https://status.cogitoacademy.id`, starts it,
+   and probes the domain. Re-runs are no-ops (drift-checked).
+3. **Install the disk watchdog**:
+   ```bash
+   ansible-playbook -i infra/ansible/inventory.ini \
+     infra/ansible/disk-watchdog.yml --ask-become-pass
+   ```
+4. **Configure Kuma** (first-run admin account at
+   https://status.cogitoacademy.id) — the Coolify API cannot express Kuma's
+   monitors, so this is a one-time UI step (printed by the playbook too):
+   - **Monitors** (60s interval unless noted):
+     - `api /health` — HTTP(s) `https://api.cogitoacademy.id/health`,
+       keyword `"status":"ok"`.
+     - `app URL` — HTTP(s) `https://app.cogitoacademy.id`.
+     - `Cert expiry` — Certificate Info monitors for `api.` and `app.`
+       (alert before expiry).
+     - `dlqDepth` — HTTP(s) keyword monitor on `/health`, keyword
+       `"dlqDepth":0` (fails only when a **fresh** DLQ failure exists; the
+       age-aware health from MONITORING-ALERTING item 3 keeps stale
+       pre-`failedAt` entries quiet).
+   - **Notifications** → New Notification → **Discord**, paste
+     `DISCORD_WEBHOOK_URL` from the vault; attach to every monitor.
+   - **Status page** (optional): Status Pages → New Status Page → add the
+     monitors → publish at `status.cogitoacademy.id`.
+
+### What alerts arrive
+
+| Alert | Source | Meaning | Response |
+| ----- | ------ | ------- | -------- |
+| Kuma: api /health down | Kuma monitor | API unreachable or `status != ok` (DB/Redis/scheduler degraded) | `./ops.sh health`, `./ops.sh status`, check Coolify logs |
+| Kuma: app down | Kuma monitor | Web app unreachable | `curl -sI https://app.cogitoacademy.id`, Coolify web resource |
+| Kuma: cert expiring | Kuma monitor | TLS cert for `api.`/`app.` near expiry | Traefik/Let's Encrypt renewal check |
+| Kuma: dlqDepth > 0 | Kuma keyword monitor | A **fresh** DLQ failure landed in the last 24h | `./ops.sh dlq` to see what failed |
+| Discord: "VPS disk at N%" | disk watchdog | Disk ≥ 85% | `./ops.sh disk`; plan cleanup |
+| Discord: "CRITICAL: VPS disk still at N% after auto-prune" | disk watchdog | Disk ≥ 92% **after** the prune ladder | Operator action required — see below |
+
+### Disk thresholds & auto-prune
+
+The watchdog (`/usr/local/bin/cogito-disk-watchdog.sh`, cron 03:30 WIB,
+log `/var/log/cogito-disk-gc.log`, rotated 7):
+
+- **≥ 85%**: posts `VPS disk at N% — cleanup recommended` to Discord.
+- **≥ 92%**: runs the prune ladder, then re-checks:
+  1. `docker image prune -f` (dangling images only);
+  2. `docker image prune -af --filter until=48h` (unused images older than
+     48h);
+  3. re-tags the newest 1–2 local `ghcr.io/cogitoacademy/app` images as
+     `rollback-keep-*` so the CD rollback candidates survive (GHCR remains
+     the authoritative rollback source — `migrate-and-deploy.sh` re-pulls
+     `v<PREV_GIT_SHA>`).
+- **NEVER deletes**: volumes, active containers' images, postgres data
+  (`docker image prune` semantics + the explicit keep-list). A `--dry-run`
+  mode prints the exact commands without executing or posting:
+  ```bash
+  /usr/local/bin/cogito-disk-watchdog.sh --dry-run
+  ```
+- Rationale: Coolify's built-in `docker_cleanup` (threshold 80, daily)
+  failed to prevent the 2026-08-31 incident (99% disk: 28GB of dangling
+  images, Redis `MISCONF` stop-writes-on-bgsave-error, failed image
+  extraction, a stalled Coolify deployment). This watchdog is the
+  independent second line.
+
+If the CRITICAL alert fires, act: `./ops.sh disk` to see what is large,
+then remove the offender (e.g. old backups, large volumes — never the
+postgres volume) and re-run the watchdog manually.
+
+### Redeploy / retry procedure (the 'CD red but box recovered' case)
+
+The 2026-08-31 disk event showed the exact failure shape: the CD deploy
+step went red because the queued Coolify deployment failed on a full disk
+(image extraction failed), while the box itself was healthy. The recovery
+flow, verified in that event:
+
+1. **Confirm the box recovered**: `./ops.sh health` (all `ok`) and
+   `./ops.sh disk` (usage back under the thresholds).
+2. **Re-run the failed CD run from the GitHub Actions UI** — this is **safe**
+   because the pipeline is idempotent:
+   - `pg_dump` snapshot → R2 (`pre-migrate-<GIT_SHA>.sql.gz`) — a re-run
+     overwrites the same key; no data loss.
+   - `bun run db:migrate` — Drizzle migrations are journaled; already-applied
+     migrations are no-ops.
+   - Coolify deploy webhook — re-POSTing the same image is a no-op redeploy.
+   - sha-verified health poll — the gate that proves the new image serves.
+   In the Actions UI: failed run → **Re-run failed jobs** (or Re-run all
+   jobs). Alternatively, one command:
+   ```bash
+   ./ops.sh deploy-retry    # gh run rerun for the last CD run; falls back to
+                            # POSTing the Coolify deploy webhook with the
+                            # vault Bearer token (never echoed)
+   ```
+3. **Verify**: `curl -s https://api.cogitoacademy.id/health` — `version`
+   must equal the merged commit sha, and `checks.*` all `ok`.
+
+> **Never** "fix" a red CD by deploying manually from a laptop while the
+> runner is mid-flight — the `production-deploy` concurrency group would
+> queue a second migration. Re-run the failed run instead.
+
+### Operator follow-ups
+
+- Add `DISCORD_WEBHOOK_URL` to the SOPS vault (step 1 above) — required for
+  any Discord alert to fire.
+- Kuma UI paste for monitors + Discord notification (step 4 above) — the
+  Coolify API cannot express Kuma's monitors.
+- Optional: add `DISCORD_WEBHOOK_URL` as a GitHub secret if the CD should
+  post deploy failures to Discord (not wired — noted only).
+
 ## Redis
 
 ### Check Redis Connection
