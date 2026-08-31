@@ -61,9 +61,9 @@ jobs:
       run:
         working-directory: infra/terraform
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v3.1.2
         with:
           terraform_version: 1.16.0
 
@@ -197,7 +197,7 @@ jobs:
 
       - name: Upload plan artifact
         if: steps.check-creds.outputs.skip-plan == 'false'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: terraform-plan
           # terraform show writes tfplan.txt relative to the job's
@@ -214,7 +214,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # ansible-core + community.general: host-hardening.yml uses the ufw
       # module; --syntax-check resolves module FQCNs, so the collection must
@@ -250,7 +250,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Verify Plan-only audit docs section
         run: |
           if ! grep -q "^## Plan-only audit" docs/DEPLOYMENT.md; then

@@ -37,7 +37,7 @@
 #   /usr/local/bin/cogito-backup.sh --dry-run
 ---
 - name: Install the nightly PostgreSQL backup cron
-  hosts: cogito-vps
+  hosts: cogito_vps
   become: true
   gather_facts: true
 
