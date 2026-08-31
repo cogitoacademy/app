@@ -15,10 +15,12 @@ terraform {
     bucket                      = "cogito-infra-state"
     key                         = "terraform.tfstate"
     region                      = "auto"
-    endpoint                    = "https://f43b8a87deeed597ecd8b4a1119d09b5.r2.cloudflarestorage.com"
     skip_credentials_validation = true
     skip_region_validation      = true
     skip_requesting_account_id  = true
     use_path_style              = true
+    endpoints = {
+      s3 = "https://f43b8a87deeed597ecd8b4a1119d09b5.r2.cloudflarestorage.com"
+    }
   }
 }
