@@ -4,13 +4,14 @@ import {
   countUsers,
   getById,
   countAdmins,
+  getDashboardAnalytics,
   updateRoleWithExpected,
   createAdminRepo,
 } from "../../modules/admin/admin.repo";
 
 function makeQueryChain(resolvedValue: any) {
   const chain: any = {};
-  const methods = ["from", "where", "limit", "offset", "orderBy"];
+  const methods = ["from", "where", "limit", "offset", "orderBy", "groupBy"];
   const promise = Promise.resolve(resolvedValue);
 
   for (const method of methods) {
@@ -29,6 +30,50 @@ function makeSelectConn(resolvedValue: any) {
   const select = mock(() => promise);
   return { select, chain };
 }
+
+function makeSelectSequence(results: any[]) {
+  let index = 0;
+  const select = mock(() => {
+    const { promise } = makeQueryChain(results[index++] ?? []);
+    return promise;
+  });
+  return select;
+}
+
+describe("getDashboardAnalytics", () => {
+  test("loads each aggregate view in parallel", async () => {
+    const bookingSummary = {
+      bookings: 4,
+      completed: 2,
+      exceptions: 1,
+      activeLearners: 3,
+      grossMarks: 120,
+      platformTakeMarks: 24,
+    };
+    const select = makeSelectSequence([
+      [bookingSummary],
+      [{ newStudents: 3, newTutors: 1 }],
+      [{ date: "2026-08-31", bookings: 2 }],
+      [{ date: "2026-08-31", students: 3, tutors: 1 }],
+      [{ state: "completed", count: 2 }],
+      [{ modality: "online", count: 4 }],
+      [{ category: "Mathematics", bookings: 4, completed: 2 }],
+    ]);
+    const conn: any = { select };
+
+    const result = await getDashboardAnalytics(conn, {
+      periodStart: new Date("2026-08-01T00:00:00.000Z"),
+      periodEnd: new Date("2026-08-31T00:00:00.000Z"),
+    });
+
+    expect(select).toHaveBeenCalledTimes(7);
+    expect(result.bookingSummary).toEqual(bookingSummary);
+    expect(result.userSummary).toEqual({ newStudents: 3, newTutors: 1 });
+    expect(result.categoryBreakdown).toEqual([
+      { category: "Mathematics", bookings: 4, completed: 2 },
+    ]);
+  });
+});
 
 describe("listUsers", () => {
   test("selects users with limit and offset", async () => {
@@ -119,6 +164,7 @@ describe("createAdminRepo", () => {
     expect(repo).toHaveProperty("countUsers");
     expect(repo).toHaveProperty("getById");
     expect(repo).toHaveProperty("countAdmins");
+    expect(repo).toHaveProperty("getDashboardAnalytics");
     expect(repo).toHaveProperty("updateRoleWithExpected");
   });
 });

@@ -51,6 +51,19 @@ function makeWalletPort() {
 }
 
 describe("AdminHandler", () => {
+  test("delegates dashboard analytics to the admin service", async () => {
+    const service = {
+      getDashboardAnalytics: mock(async (period: string) => ({ period })),
+    } as any;
+    const handler = createAdminHandler(service);
+    const context = { session: { user: { id: "admin1" } } } as any;
+
+    await expect(
+      handler.getDashboardAnalytics({ context, input: { period: "7d" } }),
+    ).resolves.toEqual({ period: "7d" });
+    expect(service.getDashboardAnalytics).toHaveBeenCalledWith("7d");
+  });
+
   test("delegates tutor payout reads and payment marking", async () => {
     const service = {
       getPendingTutorPayouts: mock(async () => ({ total: 10 })),

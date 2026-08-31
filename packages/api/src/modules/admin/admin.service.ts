@@ -19,6 +19,51 @@ import {
 import type { EconomyService } from "../economy";
 import { log } from "../../lib/logger";
 
+export const DASHBOARD_ANALYTICS_PERIODS = ["7d", "30d", "90d"] as const;
+export type DashboardAnalyticsPeriod =
+  (typeof DASHBOARD_ANALYTICS_PERIODS)[number];
+
+const DASHBOARD_PERIOD_DAYS: Record<DashboardAnalyticsPeriod, number> = {
+  "7d": 7,
+  "30d": 30,
+  "90d": 90,
+};
+
+const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export interface DashboardAnalytics {
+  period: DashboardAnalyticsPeriod;
+  periodStart: string;
+  periodEnd: string;
+  summary: {
+    bookings: number;
+    completedBookings: number;
+    resolvedBookings: number;
+    completionRate: number;
+    activeLearners: number;
+    newStudents: number;
+    newTutors: number;
+    grossMarks: number;
+    platformTakeMarks: number;
+  };
+  bookingTrend: Array<{
+    date: string;
+    bookings: number;
+    completed: number;
+    grossMarks: number;
+    platformTakeMarks: number;
+  }>;
+  userTrend: Array<{ date: string; students: number; tutors: number }>;
+  stateBreakdown: Array<{ state: string; count: number }>;
+  modalityBreakdown: Array<{ modality: string; count: number }>;
+  categoryBreakdown: Array<{
+    category: string;
+    bookings: number;
+    completed: number;
+  }>;
+}
+
 export interface ListUsersInput {
   limit?: number;
   offset?: number;
@@ -73,6 +118,51 @@ function assertValidDateFilter(value: string, field: string): Date {
   return parsed;
 }
 
+function toNumber(value: number | string | null | undefined): number {
+  const result = Number(value ?? 0);
+  return Number.isFinite(result) ? result : 0;
+}
+
+function getWibDayStart(date: Date): Date {
+  const wibDate = new Date(date.getTime() + WIB_OFFSET_MS);
+  wibDate.setUTCHours(0, 0, 0, 0);
+  return new Date(wibDate.getTime() - WIB_OFFSET_MS);
+}
+
+function getWibDateKey(date: Date): string {
+  const wibDate = new Date(date.getTime() + WIB_OFFSET_MS);
+  return [
+    wibDate.getUTCFullYear(),
+    String(wibDate.getUTCMonth() + 1).padStart(2, "0"),
+    String(wibDate.getUTCDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function buildPeriodDateKeys(periodStart: Date, periodEnd: Date): string[] {
+  const todayStart = getWibDayStart(periodEnd).getTime();
+  const keys: string[] = [];
+  for (
+    let cursor = periodStart.getTime();
+    cursor <= todayStart;
+    cursor += DAY_MS
+  ) {
+    keys.push(getWibDateKey(new Date(cursor)));
+  }
+  return keys;
+}
+
+function toAnalyticsWindow(
+  period: DashboardAnalyticsPeriod,
+  now = new Date(),
+): { periodStart: Date; periodEnd: Date } {
+  const periodEnd = new Date(now);
+  const periodStart = new Date(
+    getWibDayStart(periodEnd).getTime() -
+      (DASHBOARD_PERIOD_DAYS[period] - 1) * DAY_MS,
+  );
+  return { periodStart, periodEnd };
+}
+
 export interface GetTutorPayoutsInput {
   tutorId: string;
   dateFrom?: string;
@@ -115,6 +205,80 @@ export function createAdminService(deps: {
     ]);
 
     return { users, total, limit, offset };
+  }
+
+  async function getDashboardAnalytics(
+    period: DashboardAnalyticsPeriod = "30d",
+  ): Promise<DashboardAnalytics> {
+    const { periodStart, periodEnd } = toAnalyticsWindow(period);
+    const raw = await adminRepo.getDashboardAnalytics(db, {
+      periodStart,
+      periodEnd,
+    });
+    const bookingSummary = raw.bookingSummary;
+    const userSummary = raw.userSummary;
+    const bookings = toNumber(bookingSummary.bookings);
+    const completedBookings = toNumber(bookingSummary.completed);
+    const exceptionBookings = toNumber(bookingSummary.exceptions);
+    const resolvedBookings = completedBookings + exceptionBookings;
+    const dateKeys = buildPeriodDateKeys(periodStart, periodEnd);
+    const bookingTrendByDate = new Map(
+      raw.bookingTrend.map((row) => [row.date, row]),
+    );
+    const userTrendByDate = new Map(
+      raw.userTrend.map((row) => [row.date, row]),
+    );
+
+    return {
+      period,
+      periodStart: periodStart.toISOString(),
+      periodEnd: periodEnd.toISOString(),
+      summary: {
+        bookings,
+        completedBookings,
+        resolvedBookings,
+        completionRate:
+          resolvedBookings > 0
+            ? Math.round((completedBookings / resolvedBookings) * 1000) / 10
+            : 0,
+        activeLearners: toNumber(bookingSummary.activeLearners),
+        newStudents: toNumber(userSummary.newStudents),
+        newTutors: toNumber(userSummary.newTutors),
+        grossMarks: toNumber(bookingSummary.grossMarks),
+        platformTakeMarks: toNumber(bookingSummary.platformTakeMarks),
+      },
+      bookingTrend: dateKeys.map((date) => {
+        const row = bookingTrendByDate.get(date);
+        return {
+          date,
+          bookings: toNumber(row?.bookings),
+          completed: toNumber(row?.completed),
+          grossMarks: toNumber(row?.grossMarks),
+          platformTakeMarks: toNumber(row?.platformTakeMarks),
+        };
+      }),
+      userTrend: dateKeys.map((date) => {
+        const row = userTrendByDate.get(date);
+        return {
+          date,
+          students: toNumber(row?.students),
+          tutors: toNumber(row?.tutors),
+        };
+      }),
+      stateBreakdown: raw.stateBreakdown.map((row) => ({
+        state: row.state,
+        count: toNumber(row.count),
+      })),
+      modalityBreakdown: raw.modalityBreakdown.map((row) => ({
+        modality: row.modality,
+        count: toNumber(row.count),
+      })),
+      categoryBreakdown: raw.categoryBreakdown.map((row) => ({
+        category: row.category,
+        bookings: toNumber(row.bookings),
+        completed: toNumber(row.completed),
+      })),
+    };
   }
 
   async function setRole(
@@ -384,6 +548,7 @@ export function createAdminService(deps: {
 
   return {
     listUsers,
+    getDashboardAnalytics,
     setRole,
     getWallet,
     listLedgerEntries,

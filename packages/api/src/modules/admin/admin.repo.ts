@@ -1,7 +1,12 @@
-import { count, desc, eq, and } from "drizzle-orm";
-import { user } from "@cogito-app/db/schema";
+import { asc, and, count, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { booking, user } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
 import { USER_ROLE } from "../../shared/constants";
+
+export interface DashboardAnalyticsQuery {
+  periodStart: Date;
+  periodEnd: Date;
+}
 
 export type UserRole = "student" | "tutor" | "admin";
 export type UserRow = typeof user.$inferSelect;
@@ -36,6 +41,129 @@ export async function listUsers(
 export async function countUsers(conn: DbOrTx): Promise<number> {
   const [row] = await conn.select({ count: count() }).from(user);
   return row?.count ?? 0;
+}
+
+/**
+ * Reads the aggregate rows used by the admin business dashboard.
+ *
+ * Date-based metrics use booking/user creation time in the requested window.
+ * The current booking state mix intentionally has no date filter: it describes
+ * the live portfolio an admin has to operate, while the trend rows describe
+ * demand and audience movement during the selected period.
+ */
+export async function getDashboardAnalytics(
+  conn: DbOrTx,
+  query: DashboardAnalyticsQuery,
+) {
+  const periodFilter = and(
+    gte(booking.createdAt, query.periodStart),
+    lte(booking.createdAt, query.periodEnd),
+  );
+  const userPeriodFilter = and(
+    gte(user.createdAt, query.periodStart),
+    lte(user.createdAt, query.periodEnd),
+  );
+  const bookingDay = sql<string>`to_char(${booking.createdAt} AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD')`;
+  const userDay = sql<string>`to_char(${user.createdAt} AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD')`;
+  const bookingCount = sql<number>`count(*)::int`;
+  const completedCount = sql<number>`count(*) FILTER (WHERE ${booking.currentState} = 'completed')::int`;
+  const exceptionCount = sql<number>`count(*) FILTER (WHERE ${booking.currentState} IN ('declined', 'cancelled', 'late_cancelled', 'no_show', 'expired'))::int`;
+  const grossMarks = sql<number>`coalesce(sum(${booking.originalMarks}), 0)::int`;
+  const platformTakeMarks = sql<number>`coalesce(sum(coalesce(nullif(${booking.priceSnapshot}->>'cogitoTake', '')::numeric, 0)), 0)::int`;
+  const studentCount = sql<number>`count(*) FILTER (WHERE ${user.role} = 'student')::int`;
+  const tutorCount = sql<number>`count(*) FILTER (WHERE ${user.role} = 'tutor')::int`;
+
+  const [
+    bookingSummaryRows,
+    userSummaryRows,
+    bookingTrend,
+    userTrend,
+    stateBreakdown,
+    modalityBreakdown,
+    categoryBreakdown,
+  ] = await Promise.all([
+    conn
+      .select({
+        bookings: bookingCount,
+        completed: completedCount,
+        exceptions: exceptionCount,
+        activeLearners: sql<number>`count(distinct ${booking.proposerId})::int`,
+        grossMarks,
+        platformTakeMarks,
+      })
+      .from(booking)
+      .where(periodFilter),
+    conn
+      .select({
+        newStudents: studentCount,
+        newTutors: tutorCount,
+      })
+      .from(user)
+      .where(userPeriodFilter),
+    conn
+      .select({
+        date: bookingDay,
+        bookings: bookingCount,
+        completed: completedCount,
+        grossMarks,
+        platformTakeMarks,
+      })
+      .from(booking)
+      .where(periodFilter)
+      .groupBy(bookingDay)
+      .orderBy(asc(bookingDay)),
+    conn
+      .select({
+        date: userDay,
+        students: studentCount,
+        tutors: tutorCount,
+      })
+      .from(user)
+      .where(userPeriodFilter)
+      .groupBy(userDay)
+      .orderBy(asc(userDay)),
+    conn
+      .select({ state: booking.currentState, count: bookingCount })
+      .from(booking)
+      .groupBy(booking.currentState)
+      .orderBy(desc(bookingCount)),
+    conn
+      .select({ modality: booking.modality, count: bookingCount })
+      .from(booking)
+      .where(periodFilter)
+      .groupBy(booking.modality)
+      .orderBy(desc(bookingCount)),
+    conn
+      .select({
+        category: sql<string>`coalesce(nullif(${booking.sessionTopic}->>'categoryName', ''), 'Other')`,
+        bookings: bookingCount,
+        completed: completedCount,
+      })
+      .from(booking)
+      .where(periodFilter)
+      .groupBy(
+        sql<string>`coalesce(nullif(${booking.sessionTopic}->>'categoryName', ''), 'Other')`,
+      )
+      .orderBy(desc(bookingCount))
+      .limit(5),
+  ]);
+
+  return {
+    bookingSummary: bookingSummaryRows[0] ?? {
+      bookings: 0,
+      completed: 0,
+      exceptions: 0,
+      activeLearners: 0,
+      grossMarks: 0,
+      platformTakeMarks: 0,
+    },
+    userSummary: userSummaryRows[0] ?? { newStudents: 0, newTutors: 0 },
+    bookingTrend,
+    userTrend,
+    stateBreakdown,
+    modalityBreakdown,
+    categoryBreakdown,
+  };
 }
 
 /**
@@ -130,6 +258,7 @@ export function createAdminRepo() {
   return {
     listUsers,
     countUsers,
+    getDashboardAnalytics,
     getById,
     countAdmins,
     listUserIdsByRole,

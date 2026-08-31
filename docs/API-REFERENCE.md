@@ -53,7 +53,7 @@ Auth signup hook. This is operational role initialization, not a new RPC or
 auth request/response field; other admins can still be managed through the
 existing admin role-management flow.
 
-The web dashboard has no aggregate endpoint. Its role-specific views compose existing procedures: the shared booking list uses protected `booking.listMine` for student, tutor, and admin visibility (with admin seeing all bookings), while tutor discovery remains student-only (`tutors.listPublished`) and tutor/admin dashboards compose their remaining role-specific procedures. Student and tutor next-lesson sections derive the nearest future non-terminal, non-pending item client-side and reuse the booking-list card; the tutor dashboard's above-the-fold ordering of welcome/setup, review requests, and next lesson is presentation-only. Student and tutor welcome cards also share one frontend visual component with role-specific copy and links. On narrow screens, the rounded booking status-tab strip fills the available page width and only its inner tab list scrolls horizontally inside a scrollbar-hidden region; internal paint padding keeps selected-tab shadows and focus rings visible, while shared empty-state cards preserve their rounded glow and card shadow without widening the page. These are presentation-only details and add no RPC endpoint or input/output change.
+The web dashboard mostly composes existing procedures: the shared booking list uses protected `booking.listMine` for student, tutor, and admin visibility (with admin seeing all bookings), while tutor discovery remains student-only (`tutors.listPublished`) and tutor/admin dashboards compose their remaining role-specific procedures. The admin dashboard's Business insights section additionally calls the admin-only `admin.getDashboardAnalytics` aggregate procedure for 7/30/90-day WIB metrics and a live booking-state portfolio. Student and tutor next-lesson sections derive the nearest future non-terminal, non-pending item client-side and reuse the booking-list card; the tutor dashboard's above-the-fold ordering of welcome/setup, review requests, and next lesson is presentation-only. Student and tutor welcome cards also share one frontend visual component with role-specific copy and links. On narrow screens, the rounded booking status-tab strip fills the available page width and only its inner tab list scrolls horizontally inside a scrollbar-hidden region; internal paint padding keeps selected-tab shadows and focus rings visible, while shared empty-state cards preserve their rounded glow and card shadow without widening the page. These are presentation-only details except for the documented admin analytics read.
 
 The authenticated `/guide` (`How Cogito Works`) route is frontend-only. Its typed journey content is bundled with the web app, is role-filtered in the route UI, and adds no RPC procedure, request input, response output, or persistence contract. The centered `max-w-6xl` shell, Selia-composed chapter rail, and bold timing callouts are presentation-only; the callouts restate existing 7-day, 12-hour, H-2, 15-minute, 24-hour, meeting-retry, and support-SLA rules. The development-only anti-slop Tweaks Bar is a static browser asset and does not change the production API surface.
 
@@ -245,6 +245,13 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ---
 
 ## Admin (`admin.*`)
+
+### `admin.getDashboardAnalytics`
+
+- **Auth:** Admin
+- **Input:** `{ period?: "7d" | "30d" | "90d" }` (default `"30d"`)
+- **Output:** `{ period, periodStart, periodEnd, summary, bookingTrend, userTrend, stateBreakdown, modalityBreakdown, categoryBreakdown }`
+- **Description:** Returns the aggregate data used by the admin Business insights section. Period metrics use booking/user creation time and WIB calendar days; `summary` includes booking volume, resolved-booking completion rate, active learners, new students/tutors, gross Marks, and platform-take Marks. `stateBreakdown` is the live all-bookings state mix, while modality/category breakdowns are scoped to the selected period. Missing trend days are returned as zero rows so charts stay continuous.
 
 ### `admin.listUsers`
 

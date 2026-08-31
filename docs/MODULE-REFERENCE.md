@@ -158,20 +158,21 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 
 ## Admin Module
 
-**Purpose:** System administration — user management, role assignment, wallet/ledger lookup, payout summaries, and active economy schedule management.
+**Purpose:** System administration — user management, role assignment, wallet/ledger lookup, payout summaries, active economy schedule management, and aggregate business analytics.
 
 **Files:**
 
-- `admin.types.ts` — `listUsersInput`, `setRoleInput`, `adminGetWalletInput`, `adminListLedgerEntriesInput`, `adminGetTutorPayoutsInput`, `adminMarkTutorPayoutPaidInput`, `adminUpdateEconomySettingsInput`
+- `admin.types.ts` — `dashboardAnalyticsInput`, `listUsersInput`, `setRoleInput`, `adminGetWalletInput`, `adminListLedgerEntriesInput`, `adminGetTutorPayoutsInput`, `adminMarkTutorPayoutPaidInput`, `adminUpdateEconomySettingsInput`
 - `admin.errors.ts` — `UserNotFoundError`, `LastAdminError`, `OptimisticLockError`, `WalletNotFoundError`, `InvalidLedgerFilterError`, `EconomyConfigConflictError`, `TutorPayoutNotAvailableError`
-- `admin.repo.ts` — `findUserById`, `listUsers`, `listUserIdsByRole`, `updateUserRole`
-- `admin.service.ts` — `listUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getPendingTutorPayouts`, `markTutorPayoutPaid`, `getEconomySettings`, `updateEconomySettings`
-- `admin.handler.ts` — `listUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getPendingTutorPayouts`, `markTutorPayoutPaid`, `getEconomySettings`, `updateEconomySettings`
+- `admin.repo.ts` — `getById`, `listUsers`, `getDashboardAnalytics`, `listUserIdsByRole`, `updateRoleWithExpected`
+- `admin.service.ts` — `getDashboardAnalytics`, `listUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getPendingTutorPayouts`, `markTutorPayoutPaid`, `getEconomySettings`, `updateEconomySettings`
+- `admin.handler.ts` — `getDashboardAnalytics`, `listUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getPendingTutorPayouts`, `markTutorPayoutPaid`, `getEconomySettings`, `updateEconomySettings`
 - `admin.router.ts` — Admin-only routes
 
 **Service Methods:**
 
-- `listUsers(opts)` — Paginated user list with role filter
+- `getDashboardAnalytics(period?)` — Returns normalized 7/30/90-day booking and audience trends, a live booking-state portfolio, period modality/category breakdowns, and Marks-based summary KPIs; trend dates are filled with zero rows using WIB calendar boundaries
+- `listUsers(opts)` — Paginated user list
 - `setRole(userId, role, adminId)` — Changes user role; throws `LastAdminError` if removing last admin; optimistic lock via `expectedRole`; records audit log
 - `getWallet({ userId })` — Returns any user's wallet balances; throws `WalletNotFoundError`
 - `listLedgerEntries(input)` — Paginated ledger filtered by wallet/user, entry type, date range, or booking; `walletId` and `userId` are mutually exclusive
@@ -185,6 +186,8 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 
 **Business Rules:**
 
+- Dashboard period metrics are based on booking/user creation time; the live state portfolio is intentionally all-time so it reflects current admin workload
+- The completion rate is `completed / (completed + terminal exception bookings)` for bookings created in the selected period, and Marks figures come from locked booking price snapshots
 - Cannot remove the last admin role from the system
 - Role changes are audit-logged
 - Ledger filters must target exactly one wallet (`walletId` or `userId`, not both)

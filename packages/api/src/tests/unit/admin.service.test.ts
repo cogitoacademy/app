@@ -18,6 +18,105 @@ function makeTarget(overrides: Partial<TargetUser> = {}): TargetUser {
 }
 
 describe("Admin Service", () => {
+  describe("dashboard analytics", () => {
+    test("normalizes aggregate rows and fills missing WIB days", async () => {
+      const repo = {
+        getDashboardAnalytics: mock(async () => ({
+          bookingSummary: {
+            bookings: "4",
+            completed: "2",
+            exceptions: "1",
+            activeLearners: "3",
+            grossMarks: "120",
+            platformTakeMarks: "24",
+          },
+          userSummary: { newStudents: "3", newTutors: "1" },
+          bookingTrend: [
+            {
+              date: "2026-08-31",
+              bookings: "2",
+              completed: "1",
+              grossMarks: "60",
+              platformTakeMarks: "12",
+            },
+          ],
+          userTrend: [{ date: "2026-08-31", students: "3", tutors: "1" }],
+          stateBreakdown: [{ state: "completed", count: "2" }],
+          modalityBreakdown: [{ modality: "online", count: "4" }],
+          categoryBreakdown: [
+            { category: "Mathematics", bookings: "4", completed: "2" },
+          ],
+        })),
+      };
+      const service = createAdminService({
+        adminRepo: repo as any,
+        auditPort: {} as any,
+        db: {} as any,
+        wallet: {} as any,
+        payout: {} as any,
+      });
+
+      const result = await service.getDashboardAnalytics("7d");
+
+      expect(result.period).toBe("7d");
+      expect(result.bookingTrend).toHaveLength(7);
+      expect(result.bookingTrend.at(-1)).toEqual({
+        date: expect.any(String),
+        bookings: expect.any(Number),
+        completed: expect.any(Number),
+        grossMarks: expect.any(Number),
+        platformTakeMarks: expect.any(Number),
+      });
+      expect(result.summary).toEqual({
+        bookings: 4,
+        completedBookings: 2,
+        resolvedBookings: 3,
+        completionRate: 66.7,
+        activeLearners: 3,
+        newStudents: 3,
+        newTutors: 1,
+        grossMarks: 120,
+        platformTakeMarks: 24,
+      });
+      expect(result.bookingTrend.some((row) => row.bookings === 0)).toBe(true);
+      expect(result.stateBreakdown).toEqual([{ state: "completed", count: 2 }]);
+      expect(repo.getDashboardAnalytics).toHaveBeenCalledWith(
+        expect.anything(),
+        {
+          periodStart: expect.any(Date),
+          periodEnd: expect.any(Date),
+        },
+      );
+    });
+
+    test("uses the 30-day period by default", async () => {
+      const repo = {
+        getDashboardAnalytics: mock(async () => ({
+          bookingSummary: {},
+          userSummary: {},
+          bookingTrend: [],
+          userTrend: [],
+          stateBreakdown: [],
+          modalityBreakdown: [],
+          categoryBreakdown: [],
+        })),
+      };
+      const service = createAdminService({
+        adminRepo: repo as any,
+        auditPort: {} as any,
+        db: {} as any,
+        wallet: {} as any,
+        payout: {} as any,
+      });
+
+      const result = await service.getDashboardAnalytics();
+
+      expect(result.period).toBe("30d");
+      expect(result.bookingTrend).toHaveLength(30);
+      expect(result.summary.completionRate).toBe(0);
+    });
+  });
+
   describe("tutor payout settlement", () => {
     const makeService = (
       payout: any,

@@ -24,6 +24,7 @@ import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
+import { lazy, Suspense } from "react";
 
 import {
   formatBookingDate,
@@ -32,6 +33,12 @@ import {
 } from "@/components/booking/booking-ui";
 import { EmptyState } from "@/components/empty-state";
 import { orpc } from "@/utils/orpc";
+
+const AdminAnalytics = lazy(() =>
+  import("./admin-analytics").then(({ AdminAnalytics: Component }) => ({
+    default: Component,
+  })),
+);
 
 export function AdminDashboardPage({ adminName }: { adminName: string }) {
   const bookingQueue = useQuery(
@@ -123,6 +130,10 @@ export function AdminDashboardPage({ adminName }: { adminName: string }) {
           tone="info-subtle"
         />
       </div>
+
+      <Suspense fallback={<AnalyticsLoading />}>
+        <AdminAnalytics />
+      </Suspense>
 
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]">
         <Card>
@@ -239,6 +250,15 @@ export function AdminDashboardPage({ adminName }: { adminName: string }) {
         </Card>
       </div>
     </Stack>
+  );
+}
+
+function AnalyticsLoading() {
+  return (
+    <div
+      className="h-48 animate-pulse rounded-xl bg-accent"
+      aria-label="Loading business insights"
+    />
   );
 }
 
