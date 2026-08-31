@@ -177,6 +177,16 @@ failed Google attempts remain `confirmed` for the 5-minute retry job. Manual
 admin links update the newest meeting-attempt row so the detail read remains
 consistent after retries.
 
+### Admin booking-detail modal readability follow-up (2026-08-31)
+
+The admin Operations booking-detail modal now uses an admin-only responsive
+width override, so it opens as a wide desktop inspector without changing the
+shared/student dialog sizing. Its content area remains vertically scrollable,
+the header and footer stay stable, summary metrics step down from four columns
+to two on smaller screens, and participant/wallet cards use a non-stretching
+responsive split. This is presentation-only; no RPC, schema, or persistence
+contract changed.
+
 ---
 
 ## Current Frontend State

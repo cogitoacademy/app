@@ -477,15 +477,15 @@ function AdminBookingDetailDialog({
 
   return (
     <Dialog open={booking !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogPopup className="max-w-4xl">
-        <DialogHeader className="flex-col items-start gap-1">
+      <DialogPopup className="sm:max-w-[calc(100%-2rem)]! xl:max-w-6xl!">
+        <DialogHeader className="shrink-0 flex-col items-start gap-1 border-b border-dialog-border">
           <DialogTitle>Booking detail</DialogTitle>
           <DialogDescription className="break-all">
             {booking?.id} · admin review context
           </DialogDescription>
         </DialogHeader>
         {booking ? (
-          <DialogBody className="space-y-4">
+          <DialogBody className="min-h-0 space-y-4">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant={getBookingStateVariant(booking.currentState)}>
                 {getBookingStateLabel(booking.currentState)}
@@ -499,7 +499,7 @@ function AdminBookingDetailDialog({
               </Text>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <AdminMetricCard
                 label="Session"
                 value={formatBookingDate(
@@ -587,7 +587,7 @@ function AdminBookingDetailDialog({
               </CardBody>
             </Card>
 
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]">
               <Card>
                 <CardHeader>
                   <IconBox variant="secondary-subtle" size="sm">
@@ -723,7 +723,7 @@ function AdminBookingDetailDialog({
             </Card>
           </DialogBody>
         ) : null}
-        <DialogFooter>
+        <DialogFooter className="shrink-0">
           <Button variant="secondary" onClick={onClose}>
             Close
           </Button>

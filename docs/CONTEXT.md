@@ -621,6 +621,8 @@ The 2026-08-26 browser rerun passed all 10 tests across the six `packages/e2e` s
 
 Booking detail uses a task-detail layout shared by student and tutor views: a compact identity-and-status header, role-appropriate primary actions directly below the status badge, a primary content flow for overview, series sessions, notes/reports, and activity, plus a sticky metadata rail for contextual actions and role-appropriate financial information. The overview keeps participant names and profile images visible without a separate low-priority rail card. All existing lifecycle actions and data remain available without changing the booking API. Admin review and override actions remain on the dedicated admin operations surface.
 
+The admin Operations booking-detail modal uses its own wide responsive layout: it expands to a roomy desktop inspector for participant, wallet, report, and history review, keeps the content area vertically scrollable with stable header/footer actions, and falls back to a two-column/tablet or single-column/mobile layout as space narrows. The shared booking-detail page and student-facing dialogs keep their existing sizing. This is presentation-only; no RPC, schema, or persistence contract changed.
+
 Tutor booking review uses a compact responsive accept/decline dialog. The accept path shows the scheduled date/time, modality, attendance, and the next state transition before calling the existing tutor action; the dialog is informational and does not add a new backend procedure.
 
 Booking cancellation and session completion also use in-app Selia confirmation dialogs. Global success/error toasts render above dialog layers so mutation feedback remains visible while a modal is open; native browser confirmation prompts are not used.
