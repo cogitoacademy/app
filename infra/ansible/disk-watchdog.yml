@@ -1,0 +1,154 @@
+# disk-watchdog.yml — installs the nightly disk watchdog (cron + script +
+# env), same pattern as backup-cron.yml.
+#
+# What this playbook does (all idempotent, safe to re-run):
+#   1. Installs infra/disk-watchdog.sh as /usr/local/bin/cogito-disk-watchdog.sh
+#      (root-owned, 0700).
+#   2. Decrypts infra/secrets/prod.env with SOPS on the CONTROL NODE (the age
+#      key lives on the operator machine, never on the VPS) and writes
+#      /etc/cogito/disk.env (root:root 0600) as the cron's environment. The
+#      file contains DISCORD_WEBHOOK_URL (and the threshold overrides).
+#   3. Installs the nightly cron: 03:30 Asia/Jakarta (WIB), logs to
+#      /var/log/cogito-disk-gc.log.
+#   4. Logrotate config so the log file cannot grow unbounded (7 kept).
+#
+# SECRET DISCIPLINE: DISCORD_WEBHOOK_URL is a bearer secret. It is decrypted
+# on the control node, written to /etc/cogito/disk.env (root 0600) on the
+# VPS, and never echoed by any task (no_log on every secret-bearing call).
+# If the vault key is absent, the playbook prints a loud operator instruction
+# and still installs the watchdog (it will log "webhook not set" instead of
+# posting) — it never invents a URL.
+#
+# SAFETY: the watchdog's prune ladder NEVER deletes volumes, active
+# containers' images, or postgres data (docker image prune semantics + the
+# explicit cogitoacademy/app rollback keep-list in the script). A --dry-run
+# mode prints the exact commands without executing or posting.
+#
+# Run (from the repository root; sops must be installed on the control node):
+#   ansible-playbook -i infra/ansible/inventory.ini \
+#     infra/ansible/disk-watchdog.yml --ask-become-pass
+#
+# Manual test (no credentials needed, prints the commands):
+#   /usr/local/bin/cogito-disk-watchdog.sh --dry-run
+---
+- name: Install the nightly disk watchdog cron
+  hosts: cogito_vps
+  become: true
+  gather_facts: true
+
+  vars:
+    watchdog_script_src: ../disk-watchdog.sh
+    watchdog_script_dest: /usr/local/bin/cogito-disk-watchdog.sh
+    watchdog_env_dest: /etc/cogito/disk.env
+    watchdog_env_src: "{{ playbook_dir }}/../secrets/prod.env" # SOPS-encrypted, resolved relative to the playbook
+    watchdog_log: /var/log/cogito-disk-gc.log
+    watchdog_env_file_mode: "0600"
+
+  tasks:
+    - name: Install the disk watchdog script
+      ansible.builtin.copy:
+        src: "{{ watchdog_script_src }}"
+        dest: "{{ watchdog_script_dest }}"
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Decrypt prod env on the control node (SOPS; age key stays local)
+      ansible.builtin.command: sops -d {{ watchdog_env_src }}
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      no_log: true
+      register: watchdog_env_plaintext
+      environment:
+        PATH: "{{ lookup('env', 'PATH') }}:/opt/homebrew/bin:/usr/local/bin"
+        SOPS_AGE_KEY_FILE: "{{ lookup('env', 'SOPS_AGE_KEY_FILE') | default(lookup('env', 'HOME') + '/.config/sops/age/keys.txt', true) }}"
+
+    - name: Ensure the cron env directory exists
+      ansible.builtin.file:
+        path: "{{ watchdog_env_dest | dirname }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    # The env file carries the full vault (the watchdog only reads
+    # DISCORD_WEBHOOK_URL / WARN_THRESHOLD / PRUNE_THRESHOLD; the rest is
+    # inert). Writing the whole decrypted vault keeps the pattern identical
+    # to backup-cron.yml and avoids a second decrypt pipeline.
+    - name: Write the cron environment file (root-only)
+      ansible.builtin.copy:
+        dest: "{{ watchdog_env_dest }}"
+        content: "{{ watchdog_env_plaintext.stdout }}\n"
+        owner: root
+        group: root
+        mode: "{{ watchdog_env_file_mode }}"
+      no_log: true
+
+    - name: Check whether DISCORD_WEBHOOK_URL is in the vault
+      ansible.builtin.command: grep -c '^DISCORD_WEBHOOK_URL=' {{ watchdog_env_dest }}
+      register: discord_key_check
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: OPERATOR ACTION REQUIRED — add DISCORD_WEBHOOK_URL to the vault
+      ansible.builtin.debug:
+        msg: |-
+          !!! DISCORD_WEBHOOK_URL is NOT in the SOPS vault
+          ({{ watchdog_env_src }}). The watchdog is installed and will run,
+          but it can only LOG "webhook not set" — no Discord alerts will
+          fire until the operator:
+            1. Creates a webhook in the ops Discord server (#cogito-alerts
+               or the channel of choice): Discord → channel → Settings →
+               Integrations → Webhooks → New Webhook → copy the URL.
+            2. Adds it to the vault (the URL is a bearer secret — never
+               commit it anywhere else):
+                 sops infra/secrets/prod.env
+                 # add: DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+            3. Re-runs this playbook to refresh /etc/cogito/disk.env.
+          This playbook never invents or echoes the URL.
+      when: discord_key_check.rc != 0
+
+    - name: Install the nightly cron (03:30 Asia/Jakarta)
+      ansible.builtin.cron:
+        name: cogito-disk-watchdog
+        minute: "30"
+        hour: "3"
+        job: >-
+          /bin/bash -c 'set -a; . {{ watchdog_env_dest }}; set +a;
+          {{ watchdog_script_dest }} >> {{ watchdog_log }} 2>&1'
+        state: present
+
+    # Debian/Ubuntu vixie-cron honors CRON_TZ, so the job above always fires
+    # at 03:30 WIB even if the host clock is set to UTC.
+    - name: Set cron timezone to Asia/Jakarta
+      ansible.builtin.cron:
+        name: CRON_TZ
+        env: true
+        job: Asia/Jakarta
+        state: present
+
+    - name: Rotate the watchdog log (keep 7 days)
+      ansible.builtin.copy:
+        dest: /etc/logrotate.d/cogito-disk-gc
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          {{ watchdog_log }} {
+            daily
+            rotate 7
+            compress
+            missingok
+            notifempty
+          }
+
+    - name: Show the resulting cron entry
+      ansible.builtin.command: crontab -l -u root
+      register: root_crontab
+      changed_when: false
+
+    - name: Print root crontab
+      ansible.builtin.debug:
+        var: root_crontab.stdout_lines
