@@ -9,6 +9,7 @@
 | [CONTACT-SHARING.md](active/CONTACT-SHARING.md)       | `f/contact-sharing-flow` | #108      | Implemented — consent-based post-session contact request/share-email flow with privacy and leak-regression coverage                                                              |
 | [DEPLOYMENT-PLAN.md](active/DEPLOYMENT-PLAN.md)       | main (merged #115–#118)  | —         | **Active (rev. 2)** — infra scaffold (#115), DLQ health (#116), backups (#117), CD pipeline (#118) merged; operator apply + secrets pending                                      |
 | [DEPLOYMENT-WAVE-2.md](active/DEPLOYMENT-WAVE-2.md)   | main (merged #121–#122)  | #121–#122 | **Active (wave-2, 2026-08-28)** — Coolify resources, Traefik routing, drift check, plan-only CI, and production backup/env wiring merged; operator apply + vault/secrets pending |
+| [MONITORING-ALERTING.md](active/MONITORING-ALERTING.md) | —                      | —         | **Active (planned 2026-08-31)** — Uptime Kuma + Discord alerting, DLQ age-aware health, ops visibility; dispatch-ready                                                        |
 
 ## Completed (merged to main)
 
