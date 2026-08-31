@@ -1000,7 +1000,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Errors:** `SUPPORT_TICKET_NOT_FOUND` (404), `SUPPORT_TICKET_ALREADY_RESOLVED` (409)
 - **Description:** Resolves a ticket, assigns the admin, notifies the reporter, and records an audit log
 
-> SLA auto-escalation: the `escalate-support-tickets` scheduler job (15 min) marks open tickets past `slaDeadline` as `in_progress` + escalated (OQ-04 in-app part, #46). Business-hours SLA windows (30 min / 4 h) + WhatsApp escalation tracked U9 in `PRD-GAPS-PHASE3.md`.
+> SLA auto-escalation: the `escalate-support-tickets` scheduler job (15 min) marks open tickets past `slaDeadline` as `in_progress` + escalated (OQ-04 in-app part, #46), with `whatsappTarget: "+62881011990195"` in the escalation notification metadata for the future adapter. The web support actions confirm `+62 881-0119-90195` before opening WhatsApp in a new tab.
 
 ---
 

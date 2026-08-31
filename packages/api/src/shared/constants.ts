@@ -14,6 +14,7 @@ export const SUPPORT_SLA_OFF_HOURS_HOURS = 4;
 export const SUPPORT_BUSINESS_START_HOUR_WIB = 9;
 export const SUPPORT_BUSINESS_END_HOUR_WIB = 21;
 export const SUPPORT_BUSINESS_DAYS = [1, 2, 3, 4, 5, 6] as const;
+export const COGITO_SUPPORT_WHATSAPP_NUMBER = "+62881011990195";
 export const MIN_GROUP_HEADCOUNT = 2;
 export const MIN_SERIES_SESSIONS = 2;
 export const MAX_SERIES_SESSIONS = 4;

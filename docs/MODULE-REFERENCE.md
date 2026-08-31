@@ -765,7 +765,7 @@ chat directory.
 - `listTickets(userId, { status?, limit? })` — The user's own tickets
 - `adminList({ status?, limit?, offset? })` — All tickets sorted by SLA urgency (earliest deadline first)
 - `adminResolveTicket(adminId, { ticketId, resolution })` — Sets `resolved` + assignee, notifies the reporter, records an audit log; throws `SupportTicketAlreadyResolvedError` if already resolved/closed
-- `escalatePastSlaTickets()` — Called by the `escalate-support-tickets` scheduler job; marks open tickets past `slaDeadline` as `in_progress` + escalated, records an audit log, and emits a `support.{id}.escalated` notification row (metadata `whatsappTarget: +6288101190195`, `escalate: true`) as the hook point a future WhatsApp adapter consumes (OQ-04; #46, P2.8)
+- `escalatePastSlaTickets()` — Called by the `escalate-support-tickets` scheduler job; marks open tickets past `slaDeadline` as `in_progress` + escalated, records an audit log, and emits a `support.{id}.escalated` notification row (metadata `whatsappTarget: +62881011990195`, `escalate: true`) as the hook point a future WhatsApp adapter consumes (OQ-04; #46, P2.8)
 
 **Dependencies:** `SupportRepo`, `SupportNotificationPort`, `SupportAuditPort`
 
@@ -775,6 +775,7 @@ chat directory.
 - SLA deadline per OQ-04 (REVIEW-FIXES-4 P2.8): 30 min during business hours (Mon–Sat 09:00–21:00 WIB, UTC+7), 4 h otherwise — wall-clock rule computed by `computeSlaDeadline`
 - Auto-acknowledgement notification on ticket creation (OQ-04)
 - Escalation emits a `support.{id}.escalated` notification row that a future WhatsApp adapter consumes; WhatsApp itself is out of scope until an integration is approved (OQ-04)
+- Web support actions display a confirmation dialog with `+62 881-0119-90195` before opening the support conversation in a new tab.
 - Lateness reports are time-gated (15 min after scheduled start)
 
 ---

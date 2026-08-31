@@ -348,18 +348,19 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-14, OQ-04, prd.tex:1260
 
-**Current state:** **CLOSED (2026-08-14).** WhatsApp support link (`wa.me/6288101190195`) is present in the authenticated sidebar and on the dashboard. The unused app marketing landing page is archived; no work remains here.
+**Current state:** **CLOSED (2026-08-31).** WhatsApp support actions use `wa.me/62881011990195` in the authenticated sidebar, dashboard, admin escalation surface, and archived marketing landing page. Each action first opens a confirmation dialog that shows `+62 881-0119-90195`; the conversation opens in a new tab only after confirmation.
 
 **Required:**
 
 1. Add WhatsApp support button to student dashboard sidebar or footer
-2. Links to `https://wa.me/6288101190195` (or equivalent wa.me link for +62 881-0119-90195)
+2. Links to `https://wa.me/62881011990195` (the wa.me link for +62 881-0119-90195)
 3. Visible to all authenticated users
 
 **Acceptance:**
 
 - WhatsApp button visible on dashboard
-- Clicking opens WhatsApp with the support number
+- Clicking opens a confirmation dialog with the support number
+- Cancel leaves the user in Cogito; Continue opens WhatsApp with the support number
 
 ---
 

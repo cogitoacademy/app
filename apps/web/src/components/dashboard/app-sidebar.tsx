@@ -41,6 +41,7 @@ import {
   IconUsersGroup,
 } from "@tabler/icons-react";
 import { authClient } from "@/lib/auth-client";
+import { WhatsAppSupportDialog } from "@/components/whatsapp-support-dialog";
 
 const studentNavItems = [
   { to: "/dashboard", label: "Dashboard", icon: IconHome },
@@ -217,19 +218,14 @@ export function AppSidebar({
                 );
               })}
               <SidebarItem>
-                <SidebarItemButton
-                  render={
-                    <a
-                      href="https://wa.me/6288101190195"
-                      target="_blank"
-                      rel="noreferrer"
-                      aria-label="WhatsApp Support"
-                    />
+                <WhatsAppSupportDialog
+                  trigger={
+                    <SidebarItemButton aria-label="WhatsApp Support">
+                      <IconBrandWhatsapp />
+                      WhatsApp Support
+                    </SidebarItemButton>
                   }
-                >
-                  <IconBrandWhatsapp />
-                  WhatsApp Support
-                </SidebarItemButton>
+                />
               </SidebarItem>
             </SidebarList>
           </SidebarGroup>
