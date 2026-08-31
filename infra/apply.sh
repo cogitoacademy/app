@@ -197,12 +197,22 @@ ensure_tf_init() {
 
 phase_import() {
   say ""
-  say "=== import: R2 bucket + custom domain (pre-created) ==="
+  say "=== import: R2 bucket (pre-created) ==="
   require_terraform_key
   require_tool terraform " Install it (brew install terraform / hashicorp/tap)."
   ensure_tf_init
-  if ! run_exec "terraform -chdir=$TERRAFORM_DIR import cloudflare_r2_bucket.uploads cogito-bucket" \
-      terraform -chdir="$TERRAFORM_DIR" import cloudflare_r2_bucket.uploads cogito-bucket 2>"$STATE_DIR/import-bucket.log"; then
+  # Provider v5 import ID format: <account_id>/<bucket_name>/<jurisdiction>
+  # (verified against cloudflare/terraform-provider-cloudflare v5.24.0 source,
+  # internal/services/r2_bucket/resource.go — a bare bucket name fails with
+  # 'expected urlencoded segments "<account_id>/<bucket_name>/<jurisdiction>"').
+  local account_id
+  account_id="$(grep -E '^cloudflare_account_id' "$TERRAFORM_DIR/terraform.tfvars" 2>/dev/null | head -1 | cut -d= -f2- | tr -d ' "')"
+  if [[ -z "$account_id" ]]; then
+    die_multi "ERROR: " "cloudflare_account_id not found in $TERRAFORM_DIR/terraform.tfvars — the v5 import ID needs it." \
+      "Add: cloudflare_account_id = \"<id>\" (see terraform.tfvars.example)."
+  fi
+  if ! run_exec "terraform -chdir=$TERRAFORM_DIR import cloudflare_r2_bucket.uploads $account_id/cogito-bucket/default" \
+      terraform -chdir="$TERRAFORM_DIR" import cloudflare_r2_bucket.uploads "$account_id/cogito-bucket/default" 2>"$STATE_DIR/import-bucket.log"; then
     if grep -qiE "already (managed by terraform|in state|exists)" "$STATE_DIR/import-bucket.log"; then
       say "  bucket already in state — nothing to do (noted)."
     else
@@ -211,16 +221,10 @@ phase_import() {
       return 1
     fi
   fi
-  if ! run_exec "terraform -chdir=$TERRAFORM_DIR import cloudflare_r2_custom_domain.uploads r2bucket.cogitoacademy.id" \
-      terraform -chdir="$TERRAFORM_DIR" import cloudflare_r2_custom_domain.uploads r2bucket.cogitoacademy.id 2>"$STATE_DIR/import-domain.log"; then
-    if grep -qiE "already (managed by terraform|in state|exists)" "$STATE_DIR/import-domain.log"; then
-      say "  custom domain already in state — nothing to do (noted)."
-    else
-      die_multi "ERROR: " "cloudflare_r2_custom_domain.uploads import failed:" \
-        "$(tail -5 "$STATE_DIR/import-domain.log")"
-      return 1
-    fi
-  fi
+  # NOTE: cloudflare_r2_custom_domain has NO import support in provider v5
+  # (verified 2026-08-31 against the provider source) and the domain already
+  # exists in the dashboard — it is console-managed; the resource was removed
+  # from main.tf. See APPLY-RUNBOOK.md §2.
   marker_set tf-imported
   return 0
 }
