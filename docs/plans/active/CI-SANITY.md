@@ -1,11 +1,11 @@
 # CI Sanity & False-Positive Elimination — Plan
 
-| Field      | Value                                                                                                                             |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Status     | **Active — F1/F3/F4/F5/F7 implemented 2026-08-31** (`ops/ci-deploy-verify`); F2/F6/F8/F9/F10 + DLQ age-aware health remain        |
-| Created    | 2026-08-31                                                                                                                        |
-| Depends on | #126 merged (ops.sh + APPLY-RUNBOOK + this plan's trigger); main `85841b0`                                                        |
-| Scope      | CI workflow fixes (fail-loud infra-plan, web-deploy verification, auto-rollback, dedupe, staging decision) + DLQ age-aware health |
+| Field      | Value                                                                                                                                               |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status     | **F1–F7 implemented + merged 2026-08-31** (#130, #132–#137); F8 (e2e in CI) + F10 (branch protection) remain; F9 (ACTIONS_BOT_PAT) operator console |
+| Created    | 2026-08-31                                                                                                                                          |
+| Depends on | #126 merged (ops.sh + APPLY-RUNBOOK + this plan's trigger); main `85841b0`                                                                          |
+| Scope      | CI workflow fixes (fail-loud infra-plan, web-deploy verification, auto-rollback, dedupe, staging decision) + DLQ age-aware health                   |
 
 ## Why
 

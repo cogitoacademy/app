@@ -279,7 +279,9 @@ UUID.
 > operator must recreate `COOLIFY_PROD_SERVER_WEBHOOK` /
 > `COOLIFY_PROD_WEBHOOK` with the `cl.cogitoacademy.id` URLs above. (The
 > Coolify bundled proxy is **Traefik v3.6**, verified 2026-08-28 — not
-> Caddy.)
+> Caddy.) **Route verified live 2026-08-31:** the deploy-webhook probe
+> returns 401 (auth-required form) — the route is up; the CD pipeline sends
+> `Authorization: Bearer <COOLIFY_API_TOKEN>`.
 
 Current Coolify versions label this endpoint **Deploy Webhook (auth
 required)**. The URL identifies the target, while a Coolify API token with the

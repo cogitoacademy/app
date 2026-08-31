@@ -38,6 +38,18 @@ Do not point the apex DNS record at the OVH VPS. Configure only the `api` and
 `app` subdomains to the VPS; keep Coolify administration private through an
 SSH tunnel rather than exposing port `8000`.
 
+**Coolify API access (verified 2026-08-31):** the Coolify container publishes
+`:8000` on `127.0.0.1` only (`127.0.0.1:8000->8080/tcp`), so the control node
+must tunnel before running `coolify-resources.yml` / `drift-check.yml`:
+
+```bash
+ssh -i ~/.ssh/cogito_vps -f -N -L 8000:127.0.0.1:8000 ubuntu@100.124.43.19
+```
+
+The playbooks default to `http://localhost:8000/api/v1` (the tunnel). The
+Coolify host server is registered as `localhost` (`ip=host.docker.internal`),
+matched via `is_coolify_host` — not by IP.
+
 For Terraform bootstrap, first-time provisioning, normal releases, and the
 manual GHCR/Coolify fallback when CI quota is unavailable, see
 [Setup and Deployment](./DEPLOYMENT.md).
@@ -411,7 +423,7 @@ Every night at **02:00 WIB** (`Asia/Jakarta`) a cron job on the VPS runs
    under `s3://cogito-backups/backups/YYYY-MM-DD.sql.gz`.
 3. Prunes R2 objects older than `RETENTION_DAYS` (default **30 days**).
 
-The cron job, the `pg_dump`/`aws` CLI packages, the decrypted credential file
+The cron job, the `pg_dump` package, the decrypted credential file
 (`/etc/cogito/backup.env`, root-only `0600`, decrypted from the SOPS vault on
 the control node — the age key never reaches the VPS) and log rotation
 (`/var/log/cogito-backup.log`, 7 daily files) are all installed by the
@@ -421,6 +433,14 @@ idempotent playbook [`infra/ansible/backup-cron.yml`](../infra/ansible/backup-cr
 ansible-playbook -i infra/ansible/inventory.ini \
   infra/ansible/backup-cron.yml --ask-become-pass
 ```
+
+**AWS CLI note (verified 2026-08-31):** Ubuntu noble dropped the `awscli` apt
+package, so the playbook detects the existing AWS CLI v2 at
+`/opt/cogito-actions-tools/bin/aws` (installed for the CD runner) instead of
+apt-installing it. The vault `DATABASE_URL` must be **host-reachable** — it
+uses the container IP `10.0.1.8:5432` (the app keeps the private hostname
+`noxeaeuxfreq0axa9unpew5r`; the cron runs on the VPS host, outside the Docker
+network).
 
 (Or, during an apply window, `./infra/apply.sh backup-cron` — same playbook
 with the DATABASE_URL reachability gate built in; see

@@ -131,13 +131,21 @@ ansible-playbook -i infra/ansible/inventory.ini infra/ansible/host-hardening.yml
   --ask-become-pass
 
 # 4. Coolify resources — the env switch (maintenance window; API restarts)
+#    FIRST: open the SSH tunnel — the Coolify container publishes :8000 on
+#    127.0.0.1 only (verified 2026-08-31), so the playbook (which defaults
+#    to http://localhost:8000/api/v1) needs it:
+ssh -i ~/.ssh/cogito_vps -f -N -L 8000:127.0.0.1:8000 ubuntu@100.124.43.19
 ansible-playbook -i infra/ansible/inventory.ini infra/ansible/coolify-resources.yml \
   --ask-become-pass
 #    → prints the Traefik dynamic config; paste into Coolify UI → Servers →
 #      cogito-vps → Proxy → Custom Configuration, then re-run to see the
-#      probe flip from 404 → 401/405
+#      probe flip from 404 → 401/405 (route is live: probe returns 401 =
+#      auth-required form, CD sends Authorization: Bearer)
 
-# 5. Backup cron (needs DATABASE_URL resolvable from the VPS host)
+# 5. Backup cron (needs DATABASE_URL resolvable from the VPS host — the
+#    vault uses the container IP 10.0.1.8:5432; the app keeps the private
+#    hostname). AWS CLI v2 is detected at /opt/cogito-actions-tools/bin/aws
+#    (noble dropped the apt package).
 ansible-playbook -i infra/ansible/inventory.ini infra/ansible/backup-cron.yml \
   --ask-become-pass
 
