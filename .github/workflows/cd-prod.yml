@@ -53,13 +53,15 @@ jobs:
           docker push ghcr.io/${{ github.repository }}/web:v${{ github.sha }}
 
   deploy:
-    name: Backup, migrate, deploy, and verify
+    name: Backup, migrate, deploy, and verify (API + web)
     needs: build-and-push
     # The production database is intentionally private to Coolify's Docker
     # network. This runner lives on the production VPS; cloud-hosted runners
     # cannot resolve or reach the database hostname.
     runs-on: [self-hosted, linux, x64, production]
-    timeout-minutes: 15
+    # timeout raised (F3): the job now includes the bounded web health poll
+    # (up to ~5 min) after the API backup/migrate/deploy/verify sequence.
+    timeout-minutes: 25
     permissions:
       contents: read
     steps:
@@ -78,17 +80,22 @@ jobs:
         #   2. bun run db:migrate against the production DATABASE_URL
         #   3. POST the Coolify server deploy webhook
         #   4. Poll /health until `version == GIT_SHA` (bounded 20x15s)
-        #   5. On failure: clear rollback hint (previous v<prev-sha> image)
+        #   5. On timeout: best-effort Coolify API auto-rollback to
+        #      v<prev-sha> (PATCH resource + redeploy trigger), then the
+        #      manual rollback hint; the job still exits 1 (F4).
+        # The web deploy is verified separately below (F3, --poll-web).
         # The script fails loudly when any required env is unset.
         #
         # Secrets required (operator adds them in repo Settings → Secrets):
         #   COOLIFY_PROD_SERVER_WEBHOOK — resolvable Coolify deploy webhook URL
-        #     (https://coolify.cogitoacademy.id/api/v1/deploy?uuid=...)
+        #     (https://cl.cogitoacademy.id/api/v1/deploy?uuid=...)
         #   COOLIFY_API_TOKEN — (optional) Coolify API token; when set, the
         #     deploy curl sends `Authorization: Bearer <token>` (some Coolify
         #     versions label the endpoint "Deploy Webhook (auth required)" and
-        #     401 requests without it — docs/DEPLOYMENT.md §5). Unset = no
-        #     header, behavior unchanged.
+        #     401 requests without it — docs/DEPLOYMENT.md §5), and the
+        #     best-effort auto-rollback API calls are enabled. Unset = no
+        #     header + rollback prints a skip reason instead (docs/DEPLOYMENT.md
+        #     §5). Never auto-restores DB snapshots.
         #   PROD_DATABASE_URL, R2_ACCOUNT_ID, R2_ACCESS_KEY_ID,
         #   R2_SECRET_ACCESS_KEY, R2_BACKUP_BUCKET — backup target credentials
         #   (R2_BACKUP_BUCKET is the PRIVATE bucket; the app's R2_BUCKET is
@@ -96,18 +103,37 @@ jobs:
         env:
           COOLIFY_WEBHOOK: ${{ secrets.COOLIFY_PROD_SERVER_WEBHOOK }}
           COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
+          # (optional) pin the API resource UUID to skip rollback domain
+          # matching; env override for the Coolify API host used by the
+          # rollback calls (default https://cl.cogitoacademy.id)
+          # COOLIFY_APP_UUID / COOLIFY_API_BASE_URL
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_BACKUP_BUCKET: ${{ secrets.R2_BACKUP_BUCKET }}
           GIT_SHA: ${{ github.sha }}
           HEALTH_URL: https://api.cogitoacademy.id/health
-          # Previous commit on the push = the last deployed sha (rollback hint).
+          # Previous commit on the push = the last deployed sha (rollback target).
           PREV_GIT_SHA: ${{ github.event.before }}
         run: |
           bash scripts/migrate-and-deploy.sh
 
-      - name: Trigger Coolify web deploy
+      - name: Deploy and verify web (POST webhook + HTTP 200 poll)
+        # F3 (CI-SANITY): the web deploy used to end at the webhook POST —
+        # a broken web image deployed silently. Coolify runs this step
+        # ASYNCHRONOUSLY: the POST returns before the container restarts,
+        # so verification must happen in a separate step. The script runs
+        # in --poll-web mode (verification-only): bounded poll of
+        # HEALTH_URL_WEB for plain HTTP 200. The web image is static nginx
+        # with NO version marker (no /health endpoint, no version-bearing
+        # page — see the header of scripts/migrate-and-deploy.sh for the
+        # rationale), so HTTP 200 is the strongest available signal. A
+        # poll timeout exits 1 and turns this job red.
+        env:
+          HEALTH_URL_WEB: https://app.cogitoacademy.id
+          # Previous commit on the push = the rollback-hint tag shown on
+          # poll failure (v<prev-sha>).
+          PREV_GIT_SHA: ${{ github.event.before }}
         run: |
           if [ -z "${{ secrets.COOLIFY_PROD_WEBHOOK }}" ]; then
             echo "COOLIFY_PROD_WEBHOOK is unset — configure the Coolify resource webhook and add it as a GitHub secret" >&2
@@ -123,3 +149,4 @@ jobs:
           else
             curl --fail --max-time 30 -X POST ${{ secrets.COOLIFY_PROD_WEBHOOK }}
           fi
+          bash scripts/migrate-and-deploy.sh --poll-web
