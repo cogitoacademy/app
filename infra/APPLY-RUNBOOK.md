@@ -19,19 +19,19 @@ credentials (section 1) and run — from the repo root:
 
 Subcommands (`./infra/apply.sh help` for the full list):
 
-| Subcommand         | Wraps (runbook §)                | Gate                                              |
-| ------------------ | -------------------------------- | ------------------------------------------------- |
-| `import`           | §2 imports                        | `terraform init` on first run; already-in-state  |
-|                    |                                  | imports are caught and noted                      |
-| `tf-plan`          | §2 `terraform plan -out=tfplan`  | needs `import` first (manual order is yours)      |
-| `tf-apply`         | §2 `terraform apply`             | requires the `tfplan` file + explicit y/N         |
-| `tailscale`        | §3 step 1 (join)                 | `TS_AUTH_KEY` decrypted from the SOPS vault       |
-| `tailscale-verify` | §3 step 2 (SSH proof)            | creates the `tailscale-verified` marker           |
-| `harden`           | §3 step 3 (host hardening)       | **refuses** without `tailscale-verified`          |
-| `resources`        | §3 step 4 (Coolify sync)         | reminds to paste the Traefik config on a 404      |
-| `backup-cron`      | §3 step 5 (backup cron)          | DATABASE_URL reachability check + y/N             |
-| `verify`           | §4 checks                        | asserts `version` on `/health`, 302 on `cl.`      |
-| `status`           | —                                | shows markers / credential presence               |
+| Subcommand         | Wraps (runbook §)               | Gate                                            |
+| ------------------ | ------------------------------- | ----------------------------------------------- |
+| `import`           | §2 imports                      | `terraform init` on first run; already-in-state |
+|                    |                                 | imports are caught and noted                    |
+| `tf-plan`          | §2 `terraform plan -out=tfplan` | needs `import` first (manual order is yours)    |
+| `tf-apply`         | §2 `terraform apply`            | requires the `tfplan` file + explicit y/N       |
+| `tailscale`        | §3 step 1 (join)                | `TS_AUTH_KEY` decrypted from the SOPS vault     |
+| `tailscale-verify` | §3 step 2 (SSH proof)           | creates the `tailscale-verified` marker         |
+| `harden`           | §3 step 3 (host hardening)      | **refuses** without `tailscale-verified`        |
+| `resources`        | §3 step 4 (Coolify sync)        | reminds to paste the Traefik config on a 404    |
+| `backup-cron`      | §3 step 5 (backup cron)         | DATABASE_URL reachability check + y/N           |
+| `verify`           | §4 checks                       | asserts `version` on `/health`, 302 on `cl.`    |
+| `status`           | —                               | shows markers / credential presence             |
 
 `all` runs the phases in the order above the line, pausing for explicit
 confirmation between phases, skipping phases whose `infra/.apply-state/`
