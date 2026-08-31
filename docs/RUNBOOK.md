@@ -588,14 +588,14 @@ emergency restore against the actual object list first.
 
 ### What alerts arrive
 
-| Alert | Source | Meaning | Response |
-| ----- | ------ | ------- | -------- |
-| Kuma: api /health down | Kuma monitor | API unreachable or `status != ok` (DB/Redis/scheduler degraded) | `./ops.sh health`, `./ops.sh status`, check Coolify logs |
-| Kuma: app down | Kuma monitor | Web app unreachable | `curl -sI https://app.cogitoacademy.id`, Coolify web resource |
-| Kuma: cert expiring | Kuma monitor | TLS cert for `api.`/`app.` near expiry | Traefik/Let's Encrypt renewal check |
-| Kuma: dlqDepth > 0 | Kuma keyword monitor | A **fresh** DLQ failure landed in the last 24h | `./ops.sh dlq` to see what failed |
-| Discord: "VPS disk at N%" | disk watchdog | Disk ≥ 85% | `./ops.sh disk`; plan cleanup |
-| Discord: "CRITICAL: VPS disk still at N% after auto-prune" | disk watchdog | Disk ≥ 92% **after** the prune ladder | Operator action required — see below |
+| Alert                                                      | Source               | Meaning                                                         | Response                                                      |
+| ---------------------------------------------------------- | -------------------- | --------------------------------------------------------------- | ------------------------------------------------------------- |
+| Kuma: api /health down                                     | Kuma monitor         | API unreachable or `status != ok` (DB/Redis/scheduler degraded) | `./ops.sh health`, `./ops.sh status`, check Coolify logs      |
+| Kuma: app down                                             | Kuma monitor         | Web app unreachable                                             | `curl -sI https://app.cogitoacademy.id`, Coolify web resource |
+| Kuma: cert expiring                                        | Kuma monitor         | TLS cert for `api.`/`app.` near expiry                          | Traefik/Let's Encrypt renewal check                           |
+| Kuma: dlqDepth > 0                                         | Kuma keyword monitor | A **fresh** DLQ failure landed in the last 24h                  | `./ops.sh dlq` to see what failed                             |
+| Discord: "VPS disk at N%"                                  | disk watchdog        | Disk ≥ 85%                                                      | `./ops.sh disk`; plan cleanup                                 |
+| Discord: "CRITICAL: VPS disk still at N% after auto-prune" | disk watchdog        | Disk ≥ 92% **after** the prune ladder                           | Operator action required — see below                          |
 
 ### Disk thresholds & auto-prune
 
@@ -644,8 +644,8 @@ flow, verified in that event:
      migrations are no-ops.
    - Coolify deploy webhook — re-POSTing the same image is a no-op redeploy.
    - sha-verified health poll — the gate that proves the new image serves.
-   In the Actions UI: failed run → **Re-run failed jobs** (or Re-run all
-   jobs). Alternatively, one command:
+     In the Actions UI: failed run → **Re-run failed jobs** (or Re-run all
+     jobs). Alternatively, one command:
    ```bash
    ./ops.sh deploy-retry    # gh run rerun for the last CD run; falls back to
                             # POSTing the Coolify deploy webhook with the

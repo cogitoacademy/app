@@ -1,11 +1,11 @@
 # Monitoring & DLQ Alerting — Plan
 
-| Field      | Value                                                                                                                                                           |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Field      | Value                                                                                                                                                                                                               |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Status     | **Active — items 1–2 DONE (playbooks delivered 2026-09-01, `ops/monitoring-discord`); operator console bits remain (vault webhook + Kuma UI paste)**; item 3 (DLQ age-aware health) DONE + merged 2026-08-31 (#130) |
-| Created    | 2026-08-31                                                                                                                                                      |
-| Depends on | DEPLOYMENT-WAVE-2 (#121/#122) merged; infra apply (Terraform + Ansible) in progress                                                                             |
-| Scope      | Uptime Kuma + Discord alerting, DLQ age-aware health, ops visibility                                                                                            |
+| Created    | 2026-08-31                                                                                                                                                                                                          |
+| Depends on | DEPLOYMENT-WAVE-2 (#121/#122) merged; infra apply (Terraform + Ansible) in progress                                                                                                                                 |
+| Scope      | Uptime Kuma + Discord alerting, DLQ age-aware health, ops visibility                                                                                                                                                |
 
 ## Why
 
@@ -66,7 +66,7 @@ scheduler.service.ts` (`DLQ_PUSH_LUA` = LPUSH + LTRIM only). Failures from
    `status`, `health` already provide manual visibility while Kuma is not
    live. ✅ **2026-09-01 additions:** `disk` (df -h /, docker system df, top
    containers by size) + `deploy-retry` (re-run the last CD via `gh run
-   rerun`, else POST the Coolify deploy webhook with the vault Bearer token —
+rerun`, else POST the Coolify deploy webhook with the vault Bearer token —
    never echoed).
 5. **Disk watchdog** (new, 2026-09-01 — the 2026-08-31 disk incident
    follow-up): `infra/ansible/disk-watchdog.yml` installs
