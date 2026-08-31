@@ -74,6 +74,11 @@
       changed_when: false
       no_log: true
       register: backup_env_plaintext
+      # Non-interactive shell: inherit PATH (sops may be in /opt/homebrew/bin)
+      # and SOPS_AGE_KEY_FILE explicitly (sops >= 3.13 requires it).
+      environment:
+        PATH: "{{ ansible_env.PATH }}:/opt/homebrew/bin:/usr/local/bin"
+        SOPS_AGE_KEY_FILE: "{{ lookup('env', 'SOPS_AGE_KEY_FILE') | default(ansible_env.HOME + '/.config/sops/age/keys.txt', true) }}"
 
     - name: Write the cron environment file (root-only)
       ansible.builtin.copy:
