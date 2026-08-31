@@ -16,17 +16,17 @@
     "test": "bun ../../scripts/run-test-suite.mjs api"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1110.0",
-    "@aws-sdk/s3-request-presigner": "^3.1110.0",
+    "@aws-sdk/client-s3": "^3.1120.0",
+    "@aws-sdk/s3-request-presigner": "^3.1120.0",
     "@cogito-app/auth": "workspace:*",
     "@cogito-app/db": "workspace:*",
     "@cogito-app/env": "workspace:*",
     "@orpc/server": "catalog:",
-    "@sanity/client": "^8.2.0",
+    "@sanity/client": "^8.4.0",
     "bullmq": "^6",
     "drizzle-orm": "catalog:",
-    "googleapis": "^174.0.1",
-    "groq": "^6.10.1",
+    "googleapis": "^176.0.0",
+    "groq": "^6.11.0",
     "ioredis": "^6.0.0",
     "zod": "catalog:"
   },
