@@ -49,7 +49,7 @@ jobs:
         # must create the secret (or enable the repo setting "Allow GitHub
         # Actions to create and approve pull requests").
         if: "${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.commit-check.outputs.last-commit-msg != 'style: apply automated lint and format fixes' }}"
-        uses: stefanzweifel/git-auto-commit-action@v5
+        uses: stefanzweifel/git-auto-commit-action@v7
         with:
           commit_message: "style: apply automated lint and format fixes"
           commit_options: "--no-verify"
