@@ -1,6 +1,7 @@
 "use client";
 
 import { type ReactNode, useState } from "react";
+import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Avatar,
@@ -12,7 +13,6 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
-  CardFooter,
   CardHeader,
   CardHeaderAction,
   CardTitle,
@@ -130,6 +130,7 @@ interface TutorReviewCardProps {
   };
   subjectLabels: ReadonlyMap<string, string>;
   onAction?: () => void;
+  footerTarget?: HTMLElement | null;
 }
 
 function getInitials(name?: string | null) {
@@ -308,6 +309,7 @@ export function TutorReviewCard({
   profile,
   subjectLabels,
   onAction,
+  footerTarget,
 }: TutorReviewCardProps) {
   const queryClient = useQueryClient();
   const pendingPayout = useQuery({
@@ -492,7 +494,7 @@ export function TutorReviewCard({
 
   return (
     <>
-      <Card className="flex h-full min-w-0 flex-col overflow-hidden">
+      <Card className="flex min-w-0 flex-col overflow-hidden">
         <CardHeader className="items-start">
           <Avatar>
             <AvatarImage
@@ -852,93 +854,100 @@ export function TutorReviewCard({
           </Stack>
         </CardBody>
 
-        <CardFooter className="flex-wrap gap-2">
-          {profile.onboardingStatus === "published" &&
-          profile.profileEditStatus === "pending_review" ? (
-            <>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => setNoteAction("request_edit_changes")}
-                disabled={isPending}
-              >
-                Request revision
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => handleAction("approve_edits")}
-                progress={isPending && reviewAction === "approve_edits"}
-                disabled={isPending}
-              >
-                Approve changes
-              </Button>
-            </>
-          ) : null}
-          {profile.onboardingStatus === "pending_review" ? (
-            <>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => setNoteAction("request_changes")}
-                disabled={isPending}
-              >
-                Request changes
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => handleAction("approve_unpublished")}
-                progress={isPending && reviewAction === "approve_unpublished"}
-                disabled={isPending}
-              >
-                Approve profile
-              </Button>
-            </>
-          ) : null}
+        {footerTarget
+          ? createPortal(
+              <>
+                {profile.onboardingStatus === "published" &&
+                profile.profileEditStatus === "pending_review" ? (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setNoteAction("request_edit_changes")}
+                      disabled={isPending}
+                    >
+                      Request revision
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => handleAction("approve_edits")}
+                      progress={isPending && reviewAction === "approve_edits"}
+                      disabled={isPending}
+                    >
+                      Approve changes
+                    </Button>
+                  </>
+                ) : null}
+                {profile.onboardingStatus === "pending_review" ? (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setNoteAction("request_changes")}
+                      disabled={isPending}
+                    >
+                      Request changes
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => handleAction("approve_unpublished")}
+                      progress={
+                        isPending && reviewAction === "approve_unpublished"
+                      }
+                      disabled={isPending}
+                    >
+                      Approve profile
+                    </Button>
+                  </>
+                ) : null}
 
-          {profile.onboardingStatus === "approved_unpublished" ? (
-            <>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => setNoteAction("request_changes")}
-                disabled={isPending}
-              >
-                Request changes
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => handleAction("publish")}
-                progress={isPending && reviewAction === "publish"}
-                disabled={isPending}
-              >
-                Publish profile
-              </Button>
-            </>
-          ) : null}
+                {profile.onboardingStatus === "approved_unpublished" ? (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setNoteAction("request_changes")}
+                      disabled={isPending}
+                    >
+                      Request changes
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => handleAction("publish")}
+                      progress={isPending && reviewAction === "publish"}
+                      disabled={isPending}
+                    >
+                      Publish profile
+                    </Button>
+                  </>
+                ) : null}
 
-          {profile.onboardingStatus === "published" &&
-          profile.profileEditStatus !== "pending_review" ? (
-            <>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => handleAction("unpublish")}
-                progress={isPending && reviewAction === "unpublish"}
-                disabled={isPending}
-              >
-                Unpublish
-              </Button>
-              <Button
-                size="sm"
-                variant="danger"
-                onClick={() => setNoteAction("suspend")}
-                disabled={isPending}
-              >
-                Suspend
-              </Button>
-            </>
-          ) : null}
-        </CardFooter>
+                {profile.onboardingStatus === "published" &&
+                profile.profileEditStatus !== "pending_review" ? (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => handleAction("unpublish")}
+                      progress={isPending && reviewAction === "unpublish"}
+                      disabled={isPending}
+                    >
+                      Unpublish
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={() => setNoteAction("suspend")}
+                      disabled={isPending}
+                    >
+                      Suspend
+                    </Button>
+                  </>
+                ) : null}
+              </>,
+              footerTarget,
+            )
+          : null}
       </Card>
 
       <Dialog

@@ -16,6 +16,10 @@ fieldsets use their own content height and the action bar no longer adds an
 extra bottom gap. This is presentation-only; no RPC path, request envelope,
 response shape, schema, or persistence contract changed.
 
+## Tutor profile drawers (2026-08-31)
+
+The student tutor-discovery drawer and admin tutor-review drawer keep their header/action regions outside the scroll container while `Drawer.Content` owns the single vertical scroll region for long profile content. The body may overscroll locally, but that motion is contained and cannot move the fixed regions. This is client-side presentation only; no RPC path, request envelope, response shape, schema, or persistence contract changed.
+
 ## Stable collection transitions (2026-08-28)
 
 Pagination and filter-transition stability is client-side only. The admin tutor

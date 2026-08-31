@@ -1,3 +1,4 @@
+import * as React from "react";
 import { Drawer as BaseDrawer } from "@base-ui/react/drawer";
 import { cva, type VariantProps } from "class-variance-authority";
 import { buttonVariants } from "./button";
@@ -193,7 +194,7 @@ export function DrawerHeader({
       data-slot="drawer-header"
       {...props}
       className={cn(
-        "px-6 pt-4.5 flex items-center gap-3.5 cursor-default",
+        "shrink-0 px-6 pt-4.5 flex items-center gap-3.5 cursor-default",
         className,
       )}
     >
@@ -226,7 +227,7 @@ export function DrawerBody({
   return (
     <BaseDrawer.Content
       className={cn(
-        "flex-1 min-h-0 overscroll-contain",
+        "flex-1 min-h-0 overflow-y-auto overscroll-contain",
         "transition-opacity duration-[300ms] ease-[cubic-bezier(0.45,1.005,0,1.005)]",
         "group-data-[nested-drawer-open]/popup:opacity-0",
         "group-data-[nested-drawer-swiping]/popup:opacity-100",
@@ -235,10 +236,7 @@ export function DrawerBody({
       <div
         data-slot="drawer-body"
         {...props}
-        className={cn(
-          "px-6 py-4.5 space-y-1.5 h-full overflow-y-auto",
-          className,
-        )}
+        className={cn("px-6 py-4.5 space-y-1.5", className)}
       >
         {children}
       </div>
@@ -262,17 +260,17 @@ export function DrawerDescription({
   );
 }
 
-export function DrawerFooter({
-  className,
-  children,
-  ...props
-}: React.ComponentProps<"footer">) {
+export const DrawerFooter = React.forwardRef<
+  HTMLElement,
+  React.ComponentProps<"footer">
+>(function DrawerFooter({ className, children, ...props }, ref) {
   return (
     <footer
+      ref={ref}
       data-slot="drawer-footer"
       {...props}
       className={cn(
-        "flex items-center justify-end gap-1.5 mt-auto",
+        "flex shrink-0 items-center justify-end gap-1.5 mt-auto",
         "px-6 py-3.5 bg-drawer-footer border-t border-drawer-border",
         className,
       )}
@@ -280,7 +278,7 @@ export function DrawerFooter({
       {children}
     </footer>
   );
-}
+});
 
 export function DrawerClose({
   className,

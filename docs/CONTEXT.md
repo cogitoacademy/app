@@ -422,6 +422,7 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 - `listPublished`, `getProfile` (student-only; supports single or multi-value `categoryId`/`subjectId` filters via normalized subject joins; a missing match returns an empty list)
 - Shared Selia controls keep category/subject IDs and modality values for query inputs while rendering labels; tutor onboarding shows all competition categories with checkboxes, while the tutor list allows multiple mother categories and child subjects, with empty arrays meaning “All”. Search and filter changes debounce `listPublished` by 300 ms so rapid typing or multi-select toggles coalesce into one request.
 - The student-facing tutor drawer renders available pricing maps as one group-size matrix with separate Online and Offline Marks columns, prefixing populated price cells with the Cogito Marks icon. This is presentation-only; the discovery response and pricing contracts remain unchanged.
+- The student-facing tutor drawer keeps its header and booking footer outside the profile body's single vertical scroll container; the body may overscroll locally without moving those fixed regions, so long structured profiles remain reachable on short viewports. This is presentation-only; the discovery response and pricing contracts remain unchanged.
 
 ### Invite Module (public + protected)
 

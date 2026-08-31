@@ -1071,6 +1071,13 @@ If a push fails with `denied: installation not allowed to Create organization pa
    ```
    After the packages exist, the workflows push without org changes.
 
+## Tutor drawer scroll smoke check
+
+Open a long tutor profile in the student discovery drawer and in the admin review
+drawer on a short viewport. Scroll and overscroll the profile body; it may bounce
+locally, but the header and booking/review footer must remain visible and must not
+move with the body.
+
 ## Tutor payout operations (2026-08-28)
 
 Apply migrations `0034_faulty_richard_fisk.sql`, `0035_ordinary_lyja.sql`, and `0036_worried_groot.sql` before deploying the tutor payout-account UI. Operations may process tutor honoraria weekly, but the balance does not reset on a calendar boundary. Review the unpaid amount, transfer the net amount, then call the admin mark-paid procedure; this advances the completion-time cutoff and clears only the sessions included in that payout. Completion and mark-paid operations are serialized per tutor to avoid a boundary race. Only conventional BCA (exact bank name `BCA`) is fee-free; BCA Syariah, blu (BCA Digital), and any other destination incur Rp2,500 once on that payout. The application records the payment audit trail but does not execute a bank transfer. Confirm the tutor's account number, holder name, opening city/regency, ownership choice, and transfer disclaimer before initiating the transfer.

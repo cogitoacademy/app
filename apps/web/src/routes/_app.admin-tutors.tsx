@@ -40,6 +40,7 @@ import {
   DrawerBody,
   DrawerClose,
   DrawerDescription,
+  DrawerFooter,
   DrawerHeader,
   DrawerPopup,
   DrawerTitle,
@@ -108,6 +109,8 @@ function RouteComponent() {
   const [selectedProfile, setSelectedProfile] = useState<TutorProfile | null>(
     null,
   );
+  const [reviewFooterTarget, setReviewFooterTarget] =
+    useState<HTMLElement | null>(null);
   const [latestInviteLinks, setLatestInviteLinks] = useState<
     Record<string, string>
   >({});
@@ -571,6 +574,7 @@ function RouteComponent() {
                       : null,
                 }}
                 subjectLabels={subjectLabels}
+                footerTarget={reviewFooterTarget}
                 onAction={() => {
                   void refetchProfiles();
                   setSelectedProfile(null);
@@ -578,6 +582,10 @@ function RouteComponent() {
               />
             ) : null}
           </DrawerBody>
+          <DrawerFooter
+            ref={setReviewFooterTarget}
+            className="flex-wrap gap-2"
+          />
         </DrawerPopup>
       </Drawer>
     </div>

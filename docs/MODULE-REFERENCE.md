@@ -882,6 +882,7 @@ chat directory.
 - Frontend filter selects normalize displayed objects back to primitive category/subject ID arrays or modality values before calling `listPublished`; empty arrays represent the corresponding “All” option, child-subject options are the union of the selected mother categories, and the query is debounced by 300 ms.
 - The student tutor drawer combines the available modality maps into one group-size pricing matrix with separate Online and Offline Marks columns, prefixing populated values with the Cogito Marks icon; missing modality/size combinations are display-only em dashes and do not change the response contract.
 - Published tutor projections include the structured education and competition achievement arrays. The student drawer renders each first line in a semibold hierarchy, separates achievement bullets with breathing room, and joins multiple awards with commas.
+- Long student and admin tutor profiles scroll inside the drawer content area while header/action regions stay outside that scroll area; local body overscroll is contained and cannot move the fixed regions. This is presentation-only and does not change the discovery or review contracts.
 
 **Dependencies:** `DiscoveryRepo`, `PricingPort`
 
