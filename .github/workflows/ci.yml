@@ -67,8 +67,8 @@ jobs:
           commit_user_name: cogito-bot
           commit_user_email: bot@cogitoacademy.id
           commit_author: cogito-bot <bot@cogitoacademy.id>
-      - name: Verify lint
-        run: bunx oxlint --format=github
+      - name: Verify lint (errors fail; desceded web findings checked against baseline)
+        run: .github/lint/check-baseline.sh
       - name: Verify formatting
         run: bunx oxfmt --check
 
