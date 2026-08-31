@@ -458,6 +458,43 @@ describe("createSchedulerService", () => {
     expect(commandName).toBe("cogitoDlqPush");
     expect(args[0]).toBe("cogito:dlq");
     expect(args[2]).toBe("100");
+    // Age-aware health: entries are stamped at push time (epoch ms) so
+    // checkDlqHealth can count only fresh failures. The failed-job payload
+    // never carries failedAt itself, so the worker must add it.
+    const entry = JSON.parse(args[1] as string);
+    expect(typeof entry.failedAt).toBe("number");
+    expect(Number(entry.failedAt)).toBeLessThanOrEqual(Date.now());
+    expect(entry).toMatchObject({
+      originalJobId: "job-1",
+      failedReason: "boom",
+    });
+  });
+
+  test("M4: DLQ entry keeps existing failedAt from the payload (override-guard)", async () => {
+    createSchedulerService("redis://localhost:6379", {
+      onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
+      onReleaseHolds: mock(async () => ({ released: 0 })),
+      onCheckTutorLateness: mock(async () => ({ flagged: 0, failed: 0 })),
+      onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
+      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
+    });
+
+    expect(capturedDlqJobHandler).not.toBeNull();
+
+    logCaptures = [];
+    const staleTs = 1_700_000_000_000;
+    await capturedDlqJobHandler!({
+      id: "dlq-2",
+      name: "expire-bookings",
+      data: {
+        originalJobId: "job-2",
+        failedReason: "boom",
+        failedAt: staleTs,
+      },
+    });
+
+    const [, args] = mockRunCommand.mock.calls.at(-1)!;
+    expect(JSON.parse(args[1] as string).failedAt).toBe(Number(staleTs));
   });
 
   test("logs when the DLQ Redis list cannot be updated", async () => {

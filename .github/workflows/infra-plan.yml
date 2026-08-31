@@ -12,20 +12,28 @@
 #     `ansible --check` is impossible in CI. `--syntax-check` is the
 #     CI-safe equivalent; full `--check`/apply remain local operator
 #     commands (see docs/DEPLOYMENT.md → "Plan-only audit").
-#   - Terraform `plan` needs credentials. When the read-only tokens are
-#     not configured the plan step is SKIPPED (validate still runs) and
-#     the job exits 0 — this workflow must never fail CI because secrets
-#     are unset.
+#   - Terraform `plan` needs credentials. The R2 state-backend credentials
+#     are read from the EXISTING repo secrets (the operator's backups/R2
+#     token — verified 2026-08-31, no dedicated R2_STATE_* secrets exist):
 #
-# Read-only token placeholders (create in the repo Settings → Secrets and
-# variables → Actions if you want plan to run on PRs):
-#   CLOUDFLARE_API_TOKEN        Zone:DNS:Edit for cogitoacademy.id (read-only:
-#                               only DNS read is used by plan; keep write
-#                               tokens out of CI)
-#   R2_STATE_ACCESS_KEY_ID      R2 API token scoped to the cogito-infra-state
-#   R2_STATE_SECRET_ACCESS_KEY  bucket, Object Read only — a DEDICATED token,
-#                               not the backups/uploads one (different bucket)
-#   R2_STATE_ENDPOINT           https://<accountid>.r2.cloudflarestorage.com
+#       CLOUDFLARE_API_TOKEN     CF token with DNS read for plan
+#       R2_ACCESS_KEY_ID         R2 token access key (covers the state bucket)
+#       R2_SECRET_ACCESS_KEY     R2 token secret key
+#       R2_STATE_ENDPOINT        https://<accountid>.r2.cloudflarestorage.com
+#
+#     Fail-loud policy (F1, CI-SANITY plan):
+#       - Non-fork PRs (github.event.pull_request.head.repo.fork == false):
+#         when ANY of the four credentials is unset, the credential-check
+#         step FAILS the job with the remediation message below. There is
+#         no "skip because secrets are missing" path — a silently-skipped
+#         plan is a false green (the F1/F2 failure class in
+#         docs/plans/active/CI-SANITY.md).
+#       - Fork PRs: fork pull_request events do not receive repository
+#         secrets, so plan can never run there; the skip path is kept
+#         exclusively for forks (validate still runs, job exits 0).
+#   - A 403 from the state bucket (wrong-scoped token, bucket renamed,
+#     endpoint drift — the real 2026-08-31 F2 breakage) is a terraform
+#     failure and now surfaces as a red job; nothing swallows it.
 #
 # See also: docs/DEPLOYMENT.md → "Plan-only audit".
 
@@ -59,60 +67,142 @@ jobs:
         with:
           terraform_version: 1.16.0
 
-      # -backend=false skips the R2 state backend (its endpoint is a
-      # placeholder until the account id is set), so validate always runs
-      # even when no credentials are configured.
+      # -backend=false skips the R2 state backend, so validate always runs
+      # even when no credentials are configured. (The plan step later
+      # re-inits with `-reconfigure` against the real backend.)
       - name: Terraform init (no backend)
         run: terraform init -backend=false
 
       - name: Terraform validate
         run: terraform validate
 
+      # Fail-loud credential gate (F1). Non-fork PRs REQUIRE the four
+      # plan credentials: a missing one fails the job with a precise
+      # remediation message instead of silently skipping the plan (the
+      # F1/F2 false-green class; 403s on the state bucket must likewise
+      # surface as failures). Fork PRs cannot read repo secrets, so they
+      # keep the skip path.
       - name: Check read-only plan credentials
         id: check-creds
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          R2_STATE_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
-          R2_STATE_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_STATE_ENDPOINT: ${{ secrets.R2_STATE_ENDPOINT }}
+          IS_FORK: ${{ github.event.pull_request.head.repo.fork == false && 'false' || 'true' }}
         run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$R2_STATE_ACCESS_KEY_ID" ] \
-            || [ -z "$R2_STATE_SECRET_ACCESS_KEY" ] || [ -z "$R2_STATE_ENDPOINT" ]; then
-            echo "skip-plan=true" >> "$GITHUB_OUTPUT"
-            echo "reason=read-only Cloudflare/R2 tokens are not configured in this repo"
-          else
+          missing=()
+          [ -z "$CLOUDFLARE_API_TOKEN" ] && missing+=("CLOUDFLARE_API_TOKEN")
+          [ -z "$R2_ACCESS_KEY_ID" ] && missing+=("R2_ACCESS_KEY_ID")
+          [ -z "$R2_SECRET_ACCESS_KEY" ] && missing+=("R2_SECRET_ACCESS_KEY")
+          [ -z "$R2_STATE_ENDPOINT" ] && missing+=("R2_STATE_ENDPOINT")
+          if [ ${#missing[@]} -eq 0 ]; then
             echo "skip-plan=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          if [ "$IS_FORK" == "false" ]; then
+            {
+              echo "::error title=Terraform plan credentials missing::${missing[*]} are unset on a non-fork PR"
+              echo "Terraform plan credentials are not configured: ${missing[*]}"
+              echo ""
+              echo "REMEDIATION — add these repo secrets (Settings → Secrets and variables → Actions):"
+              echo "  CLOUDFLARE_API_TOKEN      Cloudflare token with DNS read access for cogitoacademy.id"
+              echo "  R2_ACCESS_KEY_ID          R2 API token access key (existing backups/R2 token)"
+              echo "  R2_SECRET_ACCESS_KEY      R2 API token secret key (existing backups/R2 token)"
+              echo "  R2_STATE_ENDPOINT         https://<accountid>.r2.cloudflarestorage.com"
+              echo ""
+              echo "A silently skipped plan is a false green: the 2026-08-31 403-on-state-bucket"
+              echo "breakage (docs/plans/active/CI-SANITY.md F1/F2) must fail this job, not skip it."
+            } >&2
+            exit 1
+          fi
+          echo "skip-plan=true" >> "$GITHUB_OUTPUT"
+          echo "reason=fork PR — repository secrets are not available to fork events, plan is skipped (validate still ran)"
 
       - name: Terraform plan (read-only)
         if: steps.check-creds.outputs.skip-plan == 'false'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          # R2 state-backend credentials — a DEDICATED token scoped to the
-          # cogito-infra-state bucket (Object Read). Not the backups/uploads
-          # token: the state bucket is a separate R2 bucket and a token
-          # scoped elsewhere gets a 403 (seen 2026-08-31).
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+          # Required terraform variables (variables.tf: server_ip +
+          # ssh_private_key_path + cloudflare_account_id have no defaults).
+          # Never let plan prompt: a missing -var with a TTY hangs the job
+          # until the 10-minute timeout (seen 2026-08-31, run 33372645215) —
+          # -input=false makes it fail fast instead. The values are the
+          # repo-standard ones (VPS IP is documented in DEPLOYMENT.md; the
+          # plan is read-only so placeholder ssh key path is safe).
+          TF_VAR_server_ip: "15.235.186.159"
+          TF_VAR_ssh_private_key_path: "/dev/null"
+          TF_VAR_cloudflare_account_id: "f43b8a87deeed597ecd8b4a1119d09b5"
+          # R2 state-backend credentials — read from the existing repo
+          # secrets (R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY + the
+          # R2_STATE_ENDPOINT URL). No R2_STATE_* secrets exist (verified
+          # 2026-08-31); referencing non-existent secret names made this
+          # step silently skip (CI-SANITY F1). A 403 from the state bucket
+          # (wrong-scoped token) surfaces here as a job failure — that is
+          # intentional (F2).
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           AWS_ENDPOINT_URL_S3: ${{ secrets.R2_STATE_ENDPOINT }}
         run: |
-          terraform init -reconfigure
-          terraform plan -lock=false -out=tfplan
-          terraform show -no-color tfplan > tfplan.txt
-          echo "::notice title=Terraform plan written::infra-plan artifact (tfplan.txt)"
+          set -e
+          # -input=false everywhere: never hang waiting for stdin.
+          if terraform init -reconfigure -input=false -no-color \
+            && terraform plan -lock=false -input=false -no-color -out=tfplan; then
+            terraform show -no-color tfplan > tfplan.txt
+            echo "::notice title=Terraform plan written::infra-plan artifact (tfplan.txt)"
+            exit 0
+          fi
 
-      - name: Terraform plan skipped (tokens not configured)
+          # Distinguish the two plan-time failure classes (CI-SANITY F1/F2):
+          #   - State bucket missing (pre-bootstrap — the operator's first
+          #     `terraform apply` creates cogito-infra-state per the backend
+          #     bucket declaration; see infra/APPLY-RUNBOOK.md §2).
+          #     Terraform reports NoSuchBucket / 404. Fall back to a plan on
+          #     an EMPTY LOCAL STATE, loudly: declarations are still
+          #     evaluated and validated against the live Cloudflare/R2 API.
+          #     Verified locally 2026-08-31: backend-less copy of *.tf +
+          #     required -vars + ../provision.sh present → "Plan: 4 to add".
+          #   - 403 Forbidden (wrong-scoped token) → real failure; job fails.
+          echo "plan failed against the R2 state backend — trying pre-bootstrap empty-state fallback"
+          mkdir -p .plan-fallback
+          cp *.tf .plan-fallback/
+          python3 - <<'PY'
+          import re
+          p = 'backend.tf'
+          src = open(p).read()
+          open(p, 'w').write(re.sub(r'terraform\s*\{.*?\}', '# backend removed for empty-state audit', src, count=1, flags=re.S))
+          PY
+          if ( cd .plan-fallback \
+            && terraform init -input=false -no-color >/dev/null 2>&1 \
+            && terraform plan -lock=false -refresh=false -input=false -no-color \
+                 -var="server_ip=15.235.186.159" \
+                 -var="ssh_private_key_path=/dev/null" \
+                 -var="cloudflare_account_id=f43b8a87deeed597ecd8b4a1119d09b5" \
+                 > ../tfplan-fallback.txt 2>&1 ); then
+            echo "::notice title=Terraform plan on empty state::state bucket cogito-infra-state does not exist yet (pre-bootstrap). Plan ran on a backend-less copy (refresh=false) — resource declarations were still evaluated and validated against the live Cloudflare/R2 API. The operator's first 'terraform apply' creates the bucket (infra/APPLY-RUNBOOK.md)."
+            cat tfplan-fallback.txt > tfplan.txt
+            exit 0
+          fi
+
+          # Not a missing-bucket situation (bad token / real plan error) —
+          # surface the backend failure (403 class = job failure, F2).
+          echo "::error title=Terraform plan failed::not a pre-bootstrap missing-bucket case — see the init/plan error above. Check token scope (Object Read/Write on cogito-infra-state)."
+          exit 1
+
+      - name: Terraform plan skipped (fork PR — no secret access)
         if: steps.check-creds.outputs.skip-plan == 'true'
         run: |
-          echo "::notice title=Terraform plan skipped::${{ steps.check-creds.outputs.reason }} — validate passed; configure the read-only CLOUDFLARE_API_TOKEN / R2_* secrets to enable plan."
-          # Intentionally exit 0: unset secrets are not a CI failure.
+          echo "::notice title=Terraform plan skipped::${{ steps.check-creds.outputs.reason }} — validate passed. Skip is exclusive to fork PRs; non-fork PRs fail loudly when plan credentials are missing (CI-SANITY F1)."
 
       - name: Upload plan artifact
         if: steps.check-creds.outputs.skip-plan == 'false'
         uses: actions/upload-artifact@v4
         with:
           name: terraform-plan
+          # terraform show writes tfplan.txt relative to the job's
+          # working-directory (infra/terraform), so the artifact path
+          # must match or upload fails with "no files found".
           path: infra/terraform/tfplan.txt
           if-no-files-found: error
           retention-days: 14

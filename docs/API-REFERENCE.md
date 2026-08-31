@@ -109,6 +109,27 @@ CI runs the API integration/unit suite together with the env, auth, and database
 - **Output:** `"OK"`
 - **Description:** Returns OK if server is running
 
+### `GET /health`
+
+- **Auth:** Public
+- **Input:** None
+- **Output:** `{ status: "ok" | "degraded" | "error", checks: { database, redis, scheduler?, dlq }, dlqDepth, timestamp, version }`
+- **Description:** Readiness + alerting probe. `database` (SELECT 1 <1s),
+  `redis` (ping <1s), and `scheduler` (Redis reachability — the BullMQ
+  jobs ride the same Redis) feed the overall status (`degraded`→503,
+  `error`→503). `checks.dlq` + `dlqDepth` are **alert-only** and never flip
+  the overall status. `dlqDepth` counts **fresh** DLQ failures only: entries
+  in the `cogito:dlq` ledger whose `failedAt` (epoch ms, stamped at push
+  time since 2026-08-31) is within the freshness window — `DLQ_FRESH_WINDOW_MS`
+  (24h default, overridable via the `DLQ_FRESH_WINDOW_HOURS` env var, invalid
+  values fall back to 24h). Ledger entries without `failedAt` (the
+  pre-2026-08-31 ledger) and non-JSON entries are treated as stale and never
+  count, so a stale list no longer trips the monitor forever; the full
+  ledger stays in Redis for inspection. `dlqDepth === -1` means depth could
+  not be determined (Redis unreachable during the check). `version` is the
+  deployed image sha (`GIT_SHA`, `"dev"` when unset) and the CD pipeline
+  polls until it matches the merged commit.
+
 ---
 
 ## Auth (`auth.*`)

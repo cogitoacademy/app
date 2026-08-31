@@ -524,6 +524,19 @@ job has exhausted its configured BullMQ attempt count. A failure with retries
 remaining is intentionally absent from the DLQ; inspect the source queue's
 attempt counter and backoff state instead.
 
+**DLQ depth is age-aware (fresh failures only).** Since 2026-08-31 each entry
+pushed to `cogito:dlq` carries `failedAt` (epoch ms, stamped at push time by
+the DLQ worker). `/health` `dlqDepth` counts only entries whose `failedAt` is
+within the freshness window — default **24 hours**, overridable via the
+`DLQ_FRESH_WINDOW_HOURS` env var (plain integer; an invalid, zero/negative,
+or > 1-year value falls back to 24h). **Entries without `failedAt` — the
+pre-2026-08-31 ledger — and any non-JSON payload are treated as STALE and
+never count**, so an old batch (e.g. the 2026-08-25 one) no longer trips the
+alert forever. This is alert hygiene, not data loss: the full ledger remains
+in Redis for `ops.sh dlq` inspection and `dlq-clear` still removes it. An
+entry exactly 24h old counts as stale (the window is a strict `failedAt >
+now − window` comparison).
+
 **Scheduler boot failure mode:** with `SCHEDULER_ENABLED=true`, `initScheduler()` pings Redis first and **throws if unreachable — the API boot aborts**. This is intentional: a silently dead scheduler (no expiry/hold-release/email jobs) is worse than a failed deploy. Fix Redis (or set `SCHEDULER_ENABLED=false` for a scheduler-less instance) and redeploy.
 
 Redis is **mandatory** (`REDIS_URL` is required — the server won't boot without it). The in-memory stores are defensive fallbacks only when a configured Redis call fails at runtime; they are per-process and degrade cross-instance guarantees.
@@ -867,7 +880,7 @@ The production env schema requires all four `R2_*` vars together **and** `R2_PUB
 
 ## Deploy Secrets (CD webhooks)
 
-The CD workflows (`cd-staging.yml` / `cd-prod.yml`) trigger Coolify deploys via webhook. Since P4 (C3) the trigger **fails loudly** (`curl --fail --max-time 30`, no `|| true`) — if the webhook secret is missing or the request fails, the build goes red instead of silently doing nothing. Since the CD-pipeline hardening (2026-08-27) `cd-prod.yml` also **guards the secrets explicitly**: an unset `COOLIFY_PROD_SERVER_WEBHOOK` / `COOLIFY_PROD_WEBHOOK` prints a clear message ("... is unset — configure the Coolify resource webhook and add it as a GitHub secret") and exits 1 before any curl runs, so the failure mode is a readable message, not a bare `curl exit 6`.
+The CD workflow (`cd-prod.yml`) triggers Coolify deploys via webhook. (`cd-staging.yml` was **deleted on 2026-08-31** — locked decision: prod-first, no staging exists; see below.) Since P4 (C3) the trigger **fails loudly** (`curl --fail --max-time 30`, no `|| true`) — if the webhook secret is missing or the request fails, the build goes red instead of silently doing nothing. Since the CD-pipeline hardening (2026-08-27) `cd-prod.yml` also **guards the secrets explicitly**: an unset `COOLIFY_PROD_SERVER_WEBHOOK` / `COOLIFY_PROD_WEBHOOK` prints a clear message ("... is unset — configure the Coolify resource webhook and add it as a GitHub secret") and exits 1 before any curl runs, so the failure mode is a readable message, not a bare `curl exit 6`.
 
 **Setup (one-time, user action):**
 
@@ -900,18 +913,34 @@ The CD workflows (`cd-staging.yml` / `cd-prod.yml`) trigger Coolify deploys via 
    > production deploy.
 
 3. GitHub → repo **Settings → Secrets and variables → Actions**:
-   - `COOLIFY_STAGING_SERVER_WEBHOOK` — full staging API resource URL
-   - `COOLIFY_STAGING_WEBHOOK` — full staging web resource URL
    - `COOLIFY_PROD_SERVER_WEBHOOK` — full production API resource URL
    - `COOLIFY_PROD_WEBHOOK` — full production web resource URL
+   - (The staging webhook secrets are gone with `cd-staging.yml`, deleted
+     2026-08-31 — see the staging note below. Do not recreate them.)
 4. Current Coolify versions require a separate API token with the `deploy`
    permission. Store it as another Actions secret and have the workflow send
    `Authorization: Bearer <token>`; never append the token to the URL. See
    [Setup and Deployment](./DEPLOYMENT.md#5-configure-deploy-webhooks) for the
    full format and distinction from Manual Git Webhooks.
-5. Push to `staging` (or `main`) and verify the "Trigger Coolify deploy" step is green.
+5. Push to `main` and verify the "Trigger Coolify deploy" step is green.
 
 Until the secrets are set, CD pushes will fail at the trigger step by design (a silent no-op deploy is worse than a red build).
+
+### Staging CD removed (2026-08-31, locked decision)
+
+`.github/workflows/cd-staging.yml` was **deleted** (CI-SANITY F7, locked:
+"prod first, no staging"). Rationale:
+
+- No staging infrastructure exists — no staging host in Terraform/DNS, no
+  staging Coolify project.
+- The `COOLIFY_STAGING_SERVER_WEBHOOK` / `COOLIFY_STAGING_WEBHOOK` secrets
+  were never set, and the documented example URLs pointed at the **same
+  public Coolify host as prod** (`cl.cogitoacademy.id`). Had anyone set
+  them, a "staging deploy" would have redeployed over the production
+  Coolify instance.
+- Pushing to the `staging` branch now runs **no CD at all** (CI PR runs
+  still cover it). If staging is ever reintroduced, it returns with its
+  own host and its own Coolify instance — never shared webhooks with prod.
 
 ## Test Environment
 
@@ -962,16 +991,19 @@ surfaces manual/retry setup attention.
 
 ## GHCR / Docker Deploy (CD)
 
-The CD workflows (`cd-prod.yml`, `cd-staging.yml`) build both images (`apps/server/Dockerfile`, `apps/web/Dockerfile`) and push to `ghcr.io/cogitoacademy/app/{server,web}`.
+The CD workflow (`cd-prod.yml`; `cd-staging.yml` was deleted 2026-08-31 — see
+[Deploy Secrets](#deploy-secrets-cd-webhooks) → "Staging CD removed") builds both images (`apps/server/Dockerfile`, `apps/web/Dockerfile`) and pushes to `ghcr.io/cogitoacademy/app/{server,web}`.
 
 The production pipeline (`cd-prod.yml`) builds and pushes images on a GitHub-hosted runner, then runs the backup → migrate → deploy → health sequence on the production VPS runner labelled `production`. `scripts/resolve-private-db-url.sh` converts the Coolify-only database hostname to its current VPS-local container IP for that job without publishing PostgreSQL, then `scripts/migrate-and-deploy.sh` performs the release:
 
-1. **Backup:** `pg_dump` snapshot of the production database, gzipped, uploaded to R2 as `pre-migrate-<GIT_SHA>.sql.gz` (aws CLI against the R2 S3 endpoint).
+1. **Backup:** `pg_dump` snapshot of the production database, gzipped, uploaded to R2 as `pre-migrate-<GIT_SHA>.sql.gz` (aws CLI against the R2 S3 endpoint). **Databases are never restored automatically** — the snapshot exists purely for a reviewed, operator-driven restore/rollback decision.
 2. **Migrate:** `bun run db:migrate` against the production `DATABASE_URL`.
    Turbo allowlists this variable for the `db:migrate` task so strict env mode
    passes it through to `drizzle-kit`.
 3. **Deploy:** POST the Coolify deploy webhook (`COOLIFY_PROD_SERVER_WEBHOOK`).
-4. **Health (sha-verified):** poll `https://api.cogitoacademy.id/health` until `version == GIT_SHA` (bounded 20×15s ≈ 5 min). On failure the script prints a clear rollback hint pointing at the previous immutable `v<prev-sha>` image.
+4. **Health (sha-verified):** poll `https://api.cogitoacademy.id/health` until `version == GIT_SHA` (bounded 20×15s ≈ 5 min).
+5. **Auto-rollback (best-effort, F4 2026-08-31):** on poll timeout the script attempts a Coolify API rollback when `COOLIFY_API_TOKEN` is set: resolve the application UUID (env `COOLIFY_APP_UUID`, else match the API domain on `GET /api/v1/applications`), `PATCH /api/v1/applications/<uuid>` to `docker_registry_image_tag: v<PREV_GIT_SHA>` (override the API host with `COOLIFY_API_BASE_URL`, default `https://cl.cogitoacademy.id`), then `POST /api/v1/deploy?uuid=<uuid>&force=false`. Every API failure prints its HTTP code and the script ALWAYS ends with the manual rollback hint and exit 1 — a rollback failure never masks the deploy failure. Without `COOLIFY_API_TOKEN` or `PREV_GIT_SHA` the auto-rollback is skipped with a reason and only the manual hint applies.
+6. **Web verification (F3 2026-08-31):** a separate step POSTs the web deploy webhook (`COOLIFY_PROD_WEBHOOK`) and immediately runs `scripts/migrate-and-deploy.sh --poll-web`, which polls `HEALTH_URL_WEB` (default `https://app.cogitoacademy.id`) for plain **HTTP 200** (bounded 20×15s). The web image is static nginx with no version marker, so HTTP 200 is the verification signal; a poll timeout fails the job with a manual web-rollback hint (the web resource is not auto-rolled back — it would need a `COOLIFY_WEB_APP_UUID` secret that does not exist).
 
 Runner triage:
 
