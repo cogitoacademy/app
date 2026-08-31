@@ -20,6 +20,13 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
+        # git-auto-commit-action v7 restored detached-HEAD detection (v6/v5
+        # tolerated it): PR checkouts default to a detached HEAD and the
+        # v7 commit step fails with "ref HEAD is not a symbolic ref".
+        # Checking out the head ref keeps a real branch checked out so the
+        # auto-fix commit + push works exactly as it did on v5.
+        with:
+          ref: ${{ github.head_ref }}
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - uses: actions/cache@v4
@@ -56,10 +63,6 @@ jobs:
           commit_user_name: cogito-bot
           commit_user_email: bot@cogitoacademy.id
           commit_author: cogito-bot <bot@cogitoacademy.id>
-          # Fall back to the default GITHUB_TOKEN when the PAT secret is
-          # unset — an empty token would fail the push and break the lint
-          # job on every PR until the operator creates the secret.
-          token: ${{ secrets.ACTIONS_BOT_PAT || github.token }}
       - name: Verify lint
         run: bunx oxlint --format=github
       - name: Verify formatting

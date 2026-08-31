@@ -252,8 +252,8 @@ For this deployment, the values look like this (replace the placeholders with
 the real Coolify resource UUIDs; do not include `<` or `>`):
 
 ```text
-COOLIFY_PROD_SERVER_WEBHOOK=https://coolify.cogitoacademy.id/api/v1/deploy?uuid=<prod-api-resource-uuid>&force=false
-COOLIFY_PROD_WEBHOOK=https://coolify.cogitoacademy.id/api/v1/deploy?uuid=<prod-web-resource-uuid>&force=false
+COOLIFY_PROD_SERVER_WEBHOOK=https://cl.cogitoacademy.id/api/v1/deploy?uuid=<prod-api-resource-uuid>&force=false
+COOLIFY_PROD_WEBHOOK=https://cl.cogitoacademy.id/api/v1/deploy?uuid=<prod-web-resource-uuid>&force=false
 COOLIFY_STAGING_SERVER_WEBHOOK=https://cl.cogitoacademy.id/api/v1/deploy?uuid=<staging-api-resource-uuid>&force=false
 COOLIFY_STAGING_WEBHOOK=https://cl.cogitoacademy.id/api/v1/deploy?uuid=<staging-web-resource-uuid>&force=false
 ```
@@ -263,15 +263,18 @@ question marks. The hostname must be publicly DNS-resolvable from a GitHub
 hosted runner. The `uuid` is the Coolify **resource** UUID, not a deployment
 UUID.
 
-> **Production host (2026-08-27, S7):** the Coolify control plane is
-> tailnet-only, so the production webhook host is `coolify.cogitoacademy.id` —
-> a DNS record + Traefik route expose **only** the `/api/v1/deploy/*` path
+> **Production host (canonical: `cl.cogitoacademy.id`, renamed from
+> `coolify.cogitoacademy.id` on 2026-08-31):** the Coolify control plane is
+> tailnet-only, so the production webhook host is `cl.cogitoacademy.id` — a
+> DNS record + Traefik route expose **only** the `/api/v1/deploy/*` path
 > (the per-resource UUID is the bearer secret); the Coolify UI stays
-> tailnet-only. The old `cl.cogitoacademy.id` host had no DNS record, which is
-> why `Deploy Production` failed with `curl exit 6 "Could not resolve host"`.
-> The operator recreates `COOLIFY_PROD_SERVER_WEBHOOK` / `COOLIFY_PROD_WEBHOOK`
-> with the resolvable URL above. (The Coolify bundled proxy is **Traefik
-> v3.6**, verified 2026-08-28 — not Caddy.)
+> tailnet-only. Earlier docs and the existing prod webhook secrets
+> (2026-08-27, S7) used `coolify.cogitoacademy.id`, but the live Coolify host
+> was verified (2026-08-31) as `cl.cogitoacademy.id` (302 → /login). The
+> operator must recreate `COOLIFY_PROD_SERVER_WEBHOOK` /
+> `COOLIFY_PROD_WEBHOOK` with the `cl.cogitoacademy.id` URLs above. (The
+> Coolify bundled proxy is **Traefik v3.6**, verified 2026-08-28 — not
+> Caddy.)
 
 Current Coolify versions label this endpoint **Deploy Webhook (auth
 required)**. The URL identifies the target, while a Coolify API token with the
@@ -283,7 +286,7 @@ not append it to the URL. The workflow must send it as an
 > accepts the URL alone or requires `Authorization: Bearer <coolify-api-token>`
 > depends on the Coolify version. If the webhook returns `401`, try the Bearer
 > variant first (token with the `deploy` permission); if it still returns
-> `401`/`404`, the Traefik route for `coolify.cogitoacademy.id/api/v1/deploy/*`
+> `401`/`404`, the Traefik route for `cl.cogitoacademy.id/api/v1/deploy/*`
 > is missing (declared in `infra/ansible/coolify-resources.yml`). Both causes
 > are documented in RUNBOOK → Xendit webhook wiring → "Webhook 401
 > investigation".
@@ -632,6 +635,11 @@ operator machine that can reach the tailnet):
 for pb in infra/ansible/*.yml; do
   ansible-playbook -i infra/ansible/inventory.ini "$pb" --check
 done
+
+# Or use the one-command apply wrapper (credentials + gates built in, see
+# infra/APPLY-RUNBOOK.md §0):
+./infra/apply.sh --dry-run all    # print the full ordered plan, nothing runs
+./infra/apply.sh all              # run everything with per-phase pauses
 
 # Terraform plan/apply with the real state backend (R2 credentials in env):
 #   R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY, plus AWS_ENDPOINT_URL_S3 set

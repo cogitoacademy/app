@@ -66,8 +66,8 @@
     "@types/bun": "catalog:",
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "lefthook": "^2.1.9",
-    "oxfmt": "^0.65.0",
-    "oxlint": "^1.80.0",
+    "oxfmt": "0.63.0",
+    "oxlint": "1.78.0",
     "turbo": "^2.10.9",
     "typescript": "catalog:"
   },

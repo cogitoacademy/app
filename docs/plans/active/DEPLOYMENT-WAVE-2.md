@@ -1,11 +1,11 @@
 # Deployment Wave 2 — Finalized Plan & Dispatch (rev. 1)
 
-| Field      | Value                                                                                                                                                                         |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status     | **Repo work MERGED (#121 + #122, 2026-08-28)** — vault filled+encrypted+committed, GitHub secrets set, R2 created; operator apply (Terraform imports + Ansible) pending       |
-| Created    | 2026-08-28                                                                                                                                                                    |
-| Depends on | main `151fd2a` (#115–#118 merged; **#120 Xendit Test Mode merged 2026-08-28**; deployment wave state synced in #119)                                                          |
-| Scope      | Repo work only: `coolify-resources.yml` (Coolify API playbook + deploy-webhook route fix), drift-check + docs, plan-only CI audit. **No secrets values needed — names only.** |
+| Field      | Value                                                                                                                                                                                                                                                                               |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status     | **Repo work MERGED (#121 + #122, 2026-08-28)** — vault filled+encrypted+committed, GitHub secrets set, R2 created; operator apply tooling added (`ops/apply-tooling` — `infra/apply.sh` one-command wrapper, 2026-08-31); Terraform imports + Ansible apply pending on the operator |
+| Created    | 2026-08-28                                                                                                                                                                                                                                                                          |
+| Depends on | main `151fd2a` (#115–#118 merged; **#120 Xendit Test Mode merged 2026-08-28**; deployment wave state synced in #119)                                                                                                                                                                |
+| Scope      | Repo work only: `coolify-resources.yml` (Coolify API playbook + deploy-webhook route fix), drift-check + docs, plan-only CI audit. **No secrets values needed — names only.**                                                                                                       |
 
 ---
 
@@ -87,7 +87,7 @@ written as a Traefik route**, not a Caddy route.
 
 This changes Task 0.2's implementation: the `coolify-resources.yml` playbook
 must drive the **Coolify API / Traefik labels** for
-`coolify.cogitoacademy.id` → only `/api/v1/deploy/*` proxied, everything else 404. Worker W1 owns this and the doc corrections.
+`cl.cogitoacademy.id` → only `/api/v1/deploy/*` proxied, everything else 404. Worker W1 owns this and the doc corrections.
 
 ---
 
@@ -271,7 +271,7 @@ the two example files and W2 mirrors it), `packages/env/src/server.ts` +
 `docs/RUNBOOK.md`, `docs/DEPLOYMENT.md`.
 
 **Key points:** Traefik, not Caddy — route
-`coolify.cogitoacademy.id/api/v1/deploy/*` only; everything else on that host 404. Env values come from `sops -d` on the control node (never written to
+`cl.cogitoacademy.id/api/v1/deploy/*` only; everything else on that host 404. Env values come from `sops -d` on the control node (never written to
 disk on the VPS). Playbook is idempotent + dry-runnable. `--syntax-check`
 passes. This is the 401 fix.
 

@@ -32,7 +32,7 @@
 #     relations. Verify `postgres_prod_data` / `redis_prod_data` exist and
 #     are attached: `docker volume ls` + `docker inspect <container>` on the
 #     VPS (or Coolify UI → resource → Volumes).
-#   - Traefik route for `coolify.cogitoacademy.id/api/v1/deploy/*` (custom
+#   - Traefik route for `cl.cogitoacademy.id/api/v1/deploy/*` (custom
 #     proxy config; not exposed via the public API). Verify by curling the
 #     webhook URL from a public client: 2xx = routed, 404 = route missing,
 #     401 = route present but the `Authorization: Bearer` token is missing.
@@ -139,9 +139,9 @@
     # Keep the placeholder `<...>` until the operator fills the real UUIDs.
     declared_webhooks:
       - name: cogito-api
-        url: "https://coolify.cogitoacademy.id/api/v1/deploy?uuid=<prod-api-resource-uuid>&force=false"
+        url: "https://cl.cogitoacademy.id/api/v1/deploy?uuid=<prod-api-resource-uuid>&force=false"
       - name: cogito-web
-        url: "https://coolify.cogitoacademy.id/api/v1/deploy?uuid=<prod-web-resource-uuid>&force=false"
+        url: "https://cl.cogitoacademy.id/api/v1/deploy?uuid=<prod-web-resource-uuid>&force=false"
 
   tasks:
     - name: Require a Coolify API token

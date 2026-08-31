@@ -6,6 +6,45 @@ before running anything. Companion to `docs/DEPLOYMENT.md`,
 
 ---
 
+## 0. One-command flow (recommended)
+
+[`infra/apply.sh`](./apply.sh) wraps the manual sequence below. Bring the
+credentials (section 1) and run — from the repo root:
+
+```bash
+./infra/apply.sh --dry-run all   # print the full ordered plan (no execution, safe)
+./infra/apply.sh all             # run everything, pausing between phases, with
+                                 # completion markers in infra/.apply-state/
+```
+
+Subcommands (`./infra/apply.sh help` for the full list):
+
+| Subcommand         | Wraps (runbook §)               | Gate                                            |
+| ------------------ | ------------------------------- | ----------------------------------------------- |
+| `import`           | §2 imports                      | `terraform init` on first run; already-in-state |
+|                    |                                 | imports are caught and noted                    |
+| `tf-plan`          | §2 `terraform plan -out=tfplan` | needs `import` first (manual order is yours)    |
+| `tf-apply`         | §2 `terraform apply`            | requires the `tfplan` file + explicit y/N       |
+| `tailscale`        | §3 step 1 (join)                | `TS_AUTH_KEY` decrypted from the SOPS vault     |
+| `tailscale-verify` | §3 step 2 (SSH proof)           | creates the `tailscale-verified` marker         |
+| `harden`           | §3 step 3 (host hardening)      | **refuses** without `tailscale-verified`        |
+| `resources`        | §3 step 4 (Coolify sync)        | reminds to paste the Traefik config on a 404    |
+| `backup-cron`      | §3 step 5 (backup cron)         | DATABASE_URL reachability check + y/N           |
+| `verify`           | §4 checks                       | asserts `version` on `/health`, 302 on `cl.`    |
+| `status`           | —                               | shows markers / credential presence             |
+
+`all` runs the phases in the order above the line, pausing for explicit
+confirmation between phases, skipping phases whose `infra/.apply-state/`
+markers show completion, and aborting on the first failure.
+
+**Do not run `harden` directly after a fresh clone** — the `tailscale-verified`
+marker is local to your machine and must be re-created via
+`tailscale-verify` (or `all`) before hardening will run.
+
+The manual sequence below remains the reference and applies unchanged.
+
+---
+
 ## 1. Credentials (never commit these)
 
 | File (gitignored)         | Contains                                                                                                         |

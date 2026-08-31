@@ -1,0 +1,6 @@
+# apply.sh state markers — never commit (they are completion bookkeeping)
+# for THE operator machine, not facts about the repo
+.apply-state/
+
+# Terraform plan binary — operator-generated, machine/account-specific
+terraform/tfplan

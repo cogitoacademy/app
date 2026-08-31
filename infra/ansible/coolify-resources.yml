@@ -20,7 +20,7 @@
 #      on the VPS. Only the keys in `app_env_keys` are applied (ops-only keys
 #      like TS_AUTH_KEY / COOLIFY_API_TOKEN stay out of the app env).
 #   4. The Traefik route for the deploy webhook host
-#      (coolify.cogitoacademy.id → ONLY /api/v1/deploy/*, everything else
+#      (cl.cogitoacademy.id → ONLY /api/v1/deploy/*, everything else
 #      404). The Coolify API cannot express a proxy route for the Coolify
 #      instance itself, so this is a documented UI fallback + drift-check note
 #      (DEPLOYMENT-PLAN risk note): the operator pastes the Traefik dynamic
@@ -34,7 +34,7 @@
 #     http:
 #       routers:
 #         coolify-deploy-webhook:
-#           rule: "Host(`coolify.cogitoacademy.id`) && PathPrefix(`/api/v1/deploy`)"
+#           rule: "Host(`cl.cogitoacademy.id`) && PathPrefix(`/api/v1/deploy`)"
 #           service: coolify
 #           entryPoints: [https]
 #           tls:
@@ -45,7 +45,7 @@
 #             servers:
 #               - url: "http://coolify:8000"
 #
-#   Everything else on coolify.cogitoacademy.id returns 404 (no other router
+#   Everything else on cl.cogitoacademy.id returns 404 (no other router
 #   matches). The per-resource UUID in the webhook URL is the bearer secret;
 #   the Coolify UI itself stays tailnet-only.
 #
@@ -387,7 +387,7 @@
           http:
             routers:
               coolify-deploy-webhook:
-                rule: "Host(`coolify.cogitoacademy.id`) && PathPrefix(`/api/v1/deploy`)"
+                rule: "Host(`cl.cogitoacademy.id`) && PathPrefix(`/api/v1/deploy`)"
                 service: coolify
                 entryPoints: [https]
                 tls:
@@ -398,13 +398,13 @@
                   servers:
                     - url: "http://coolify:8000"
 
-          Everything else on coolify.cogitoacademy.id returns 404 (no other
+          Everything else on cl.cogitoacademy.id returns 404 (no other
           router matches). The per-resource UUID in the webhook URL is the
           bearer secret; the Coolify UI stays tailnet-only.
 
     - name: Verify the deploy-webhook route (report-only, never triggers a deploy)
       ansible.builtin.uri:
-        url: "https://coolify.cogitoacademy.id/api/v1/deploy?uuid=probe&force=false"
+        url: "https://cl.cogitoacademy.id/api/v1/deploy?uuid=probe&force=false"
         method: GET # GET never deploys; we only read the status code
         status_code: [200, 401, 403, 404, 405]
         validate_certs: true

@@ -52,14 +52,15 @@ resource "cloudflare_dns_record" "status" {
   proxied = true
 }
 
-# coolify.cogitoacademy.id — exposes ONLY the Coolify deploy-webhook path
-# (https://coolify.cogitoacademy.id/api/v1/deploy/*) so GitHub Actions can
-# trigger deployments; the Coolify UI itself stays tailnet-only. The
-# per-resource UUID in the webhook URL is the bearer secret. (DEPLOYMENT-PLAN
-# Task 0.2, Option A — locked 2026-08-27.)
+# cl (Coolify UI + deploy webhook host) — exposes the Coolify deploy-webhook
+# path (https://cl.cogitoacademy.id/api/v1/deploy/*) so GitHub Actions can
+# trigger deployments. The per-resource UUID in the webhook URL is the bearer
+# secret. (DEPLOYMENT-PLAN Task 0.2, Option A — locked 2026-08-27; canonical
+# host renamed `coolify.cogitoacademy.id` → `cl.cogitoacademy.id` 2026-08-31,
+# the live Coolify host.)
 resource "cloudflare_dns_record" "coolify" {
   zone_id = data.cloudflare_zone.cogito.id
-  name    = "coolify"
+  name    = "cl"
   content = var.server_ip
   type    = "A"
   ttl     = 1 # automatic (Cloudflare-proxied)

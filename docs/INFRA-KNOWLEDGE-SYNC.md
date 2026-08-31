@@ -150,7 +150,7 @@ User browser
        api.cogitoacademy.id    → server container :3001
        app.cogitoacademy.id    → web nginx container :80
        status.cogitoacademy.id → Uptime Kuma
-       coolify.cogitoacademy.id→ ONLY /api/v1/deploy/* → Coolify backend
+       cl.cogitoacademy.id→ ONLY /api/v1/deploy/* → Coolify backend
   → container → Postgres/Redis on the private Docker network
 ```
 

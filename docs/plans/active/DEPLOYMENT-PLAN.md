@@ -2,7 +2,7 @@
 
 | Field       | Value                                                                                                                                                                                                                                                                                       |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status      | Active — Phase 0/1 repo work merged (#115–#118); operator apply + secrets pending                                                                                                                                                                                                           |
+| Status      | Active — Phase 0/1 repo work merged (#115–#118); operator apply tooling added (`ops/apply-tooling`, 2026-08-31); operator apply + secrets pending                                                                                                                                           |
 | Created     | 2026-08-26 (rev. 2: 2026-08-27 — Tailscale control plane, Uptime Kuma only, prod-first, no staging, Ansible replaces provision.sh)                                                                                                                                                          |
 | Branch      | `deploy/production-readiness`                                                                                                                                                                                                                                                               |
 | Depends on  | PR #106, #107 (merged); PR #102 (Terraform + runbook, **merged #115**); main synced to `ca34d9d` (deployment wave: #115 infra scaffold, #116 DLQ health, #117 backups, #118 CD pipeline)                                                                                                    |
@@ -12,7 +12,7 @@
 ## 0. Locked decisions (confirmed with user)
 
 - **Control plane: Tailscale** (not CF Zero Trust). VPS joins the existing tailnet (`argyavityasy1208@gmail.com`, `tail674634.ts.net`). Coolify UI + SSH reachable **only** via tailnet. No `coolify.*` DNS record at all.
-- **Deploy trigger: Option A — expose ONLY the Coolify deploy-webhook path publicly** (decided 2026-08-27). The CI pipeline (GitHub Actions, cloud-hosted) cannot reach a tailnet-only Coolify. Instead of opening the whole Coolify UI, add a DNS record + Traefik route for `coolify.cogitoacademy.id/api/v1/deploy/*` only. The URL contains a per-resource UUID that acts as the bearer secret; nothing else on the domain is exposed, and the Coolify UI itself stays tailnet-only. This is Coolify's standard deployment model. (Rejected Option B: SSH-from-Actions deploy key — more moving parts, no public surface; kept as documented fallback.)
+- **Deploy trigger: Option A — expose ONLY the Coolify deploy-webhook path publicly** (decided 2026-08-27). The CI pipeline (GitHub Actions, cloud-hosted) cannot reach a tailnet-only Coolify. Instead of opening the whole Coolify UI, add a DNS record + Traefik route for `cl.cogitoacademy.id/api/v1/deploy/*` only. The URL contains a per-resource UUID that acts as the bearer secret; nothing else on the domain is exposed, and the Coolify UI itself stays tailnet-only. This is Coolify's standard deployment model. (Rejected Option B: SSH-from-Actions deploy key — more moving parts, no public surface; kept as documented fallback.)
 - **Tailscale ACL is declarative**: committed `infra/tailscale/acl.hujson`, pasted into the admin console, versioned in git. Default allow-all is NOT safe for a server node.
 - **Reverse proxy / LB**: Coolify's bundled proxy (Traefik v3.6 — verified live on the VPS as `coolify-proxy|traefik:v3.6`) terminates TLS and routes `api.*` → :3001, `app.*` → :80. No extra proxy on a single VPS. LB deferred (scale lever, documented).
 - **Monitoring: Uptime Kuma + Telegram alerts only.** No Prometheus/Grafana (overkill for 3.7GB RAM; 2.27GB available, verified 2026-08-28). Log tracing via Coolify json-file 10m×3 + structured JSON logs.
@@ -78,9 +78,9 @@ VPS (OVH 2vCPU/3.7GB/38GB, Ubuntu; ufw: 80/443 public, 22+8000+6001+6002 tailnet
 
 **Files:** `.github/workflows/cd-prod.yml`, `infra/terraform/main.tf` (DNS record), `infra/ansible/coolify-resources.yml` (Traefik route)
 
-- [x] **DNS (Terraform):** `coolify` A record → VPS, proxied — **declared in #115** (`cloudflare_record.coolify`). The Coolify UI stays tailnet-only (no other routes exposed).
-- [ ] **Traefik route (Ansible → Coolify):** route `coolify.cogitoacademy.id/api/v1/deploy/*` → Coolify proxy; everything else on that host returns 404/denied. The per-resource UUID in the webhook URL is the bearer secret — never put it in a public doc. **PENDING — user reports the webhook returns 401; two candidate causes: (a) this route missing, and (b) the endpoint is "Deploy Webhook (auth required)" per docs/DEPLOYMENT.md §5 — the request needs `Authorization: Bearer <coolify-api-token>`, but cd-prod.yml sends no header. The route is declared in `infra/ansible/coolify-resources.yml` (the Coolify API cannot express a proxy route for the Coolify instance itself, so the playbook prints the Traefik dynamic config as a UI fallback + report-only probe); the Bearer header is added guarded in `scripts/migrate-and-deploy.sh` + `cd-prod.yml` (only when `COOLIFY_API_TOKEN` is set).**
-- [ ] **Secrets:** recreate `COOLIFY_PROD_SERVER_WEBHOOK` + `COOLIFY_PROD_WEBHOOK` with the resolvable URL (`https://coolify.cogitoacademy.id/api/v1/deploy?uuid=...`). Keep them in GitHub Actions secrets (this is the deliberate exception; real credentials stay in SOPS). **PENDING (operator)** — existing secrets point at the unresolvable host.
+- [x] **DNS (Terraform):** `cl` A record → VPS, proxied — **declared in #115 as `coolify` (`cloudflare_record.coolify`), renamed to `cl` on 2026-08-31** (canonical host now `cl.cogitoacademy.id`). The Coolify UI stays tailnet-only (no other routes exposed).
+- [ ] **Traefik route (Ansible → Coolify):** route `cl.cogitoacademy.id/api/v1/deploy/*` → Coolify proxy; everything else on that host returns 404/denied. The per-resource UUID in the webhook URL is the bearer secret — never put it in a public doc. **PENDING — user reports the webhook returns 401; two candidate causes: (a) this route missing, and (b) the endpoint is "Deploy Webhook (auth required)" per docs/DEPLOYMENT.md §5 — the request needs `Authorization: Bearer <coolify-api-token>`, but cd-prod.yml sends no header. The route is declared in `infra/ansible/coolify-resources.yml` (the Coolify API cannot express a proxy route for the Coolify instance itself, so the playbook prints the Traefik dynamic config as a UI fallback + report-only probe); the Bearer header is added guarded in `scripts/migrate-and-deploy.sh` + `cd-prod.yml` (only when `COOLIFY_API_TOKEN` is set).**
+- [ ] **Secrets:** recreate `COOLIFY_PROD_SERVER_WEBHOOK` + `COOLIFY_PROD_WEBHOOK` with the resolvable URL (`https://cl.cogitoacademy.id/api/v1/deploy?uuid=...`). Keep them in GitHub Actions secrets (this is the deliberate exception; real credentials stay in SOPS). **PENDING (operator)** — existing secrets point at the old `coolify.cogitoacademy.id` host (canonical host renamed to `cl.cogitoacademy.id` 2026-08-31).
 - [x] Guard the Coolify webhook steps (empty secret → clear error, not curl exit 6) — **#118**.
 - [x] Add `version` (image sha) to the `/health` response (`apps/server/src/routes.ts` + test) so the poll verifies the **deployed sha**, not just "some container is up" — **#118**.
 - [x] Health poll checks `version == <sha>` — **#118** (`scripts/migrate-and-deploy.sh`).
@@ -106,7 +106,16 @@ VPS (OVH 2vCPU/3.7GB/38GB, Ubuntu; ufw: 80/443 public, 22+8000+6001+6002 tailnet
 4. **Xendit Test Mode wiring (#120)**: set `XENDIT_MODE=test` + Test Mode `XENDIT_SECRET_KEY`/`XENDIT_WEBHOOK_TOKEN` + `XENDIT_TEST_ALLOWED_EMAILS` (UAT accounts) in the vault. `WEBHOOK_ALLOWED_IPS` stays optional (2026-08-28 decision: Xendit publishes no stable source IP list; the `x-callback-token` signature is the primary gate — a wrong allowlist silently 403s webhooks and payments never credit).
 5. **Backup DATABASE_URL host-reachability**: the vault `DATABASE_URL` must resolve from the VPS host (Coolify's Postgres lives on a private Docker network; use `127.0.0.1:<published-port>` or the container IP) — otherwise the nightly backup cron (Task 3.1) and the CD pre-migrate snapshot fail.
 6. **Seed packages before real payments**: run the package seed against production once (with `SEED_ALLOWED_IN_PROD` + `SEED_ADMIN_PASSWORD` per the seed guard) so purchasable Mark packages exist before the first real transaction.
-7. **Apply the playbooks** (from the repo root, control node on the tailnet):
+7. **Apply the playbooks** — prefer the one-command wrapper (added 2026-08-31 on `ops/apply-tooling`):
+   ```bash
+   ./infra/apply.sh --dry-run all   # review the full ordered plan first
+   ./infra/apply.sh all             # pausing between phases, marker-gated
+   ```
+   This runs the manual sequence below in runbook order (import → tf-plan →
+   tf-apply → tailscale → tailscale-verify → harden → resources →
+   backup-cron → verify), skipping completed phases via `infra/.apply-state/`
+   markers and refusing to harden until `tailscale-verify` creates its marker.
+   The manual commands remain valid:
    ```bash
    ansible-playbook -i infra/ansible/inventory.ini infra/ansible/host-hardening.yml --ask-become-pass
    ansible-playbook -i infra/ansible/inventory.ini infra/ansible/tailscale.yml --ask-become-pass
@@ -114,8 +123,8 @@ VPS (OVH 2vCPU/3.7GB/38GB, Ubuntu; ufw: 80/443 public, 22+8000+6001+6002 tailnet
    ansible-playbook -i infra/ansible/inventory.ini infra/ansible/backup-cron.yml --ask-become-pass
    ```
    `coolify-resources.yml` prints the Traefik dynamic config for the deploy-webhook host — paste it into Coolify UI → Servers → cogito-vps → Proxy → Custom Configuration (the API cannot express it; the playbook's probe verifies the route afterwards).
-8. **GitHub secrets**: add `COOLIFY_PROD_SERVER_WEBHOOK` + `COOLIFY_PROD_WEBHOOK` (resolvable `https://coolify.cogitoacademy.id/api/v1/deploy?uuid=...` URLs), `PROD_DATABASE_URL`, `R2_*`, and optionally `COOLIFY_API_TOKEN` (enables the Bearer header on the deploy curl — required if the endpoint is in its "Deploy Webhook (auth required)" form per docs/DEPLOYMENT.md §5).
-9. **Verify**: `curl -fsS https://api.cogitoacademy.id/health` shows the deployed sha; a `GET https://coolify.cogitoacademy.id/api/v1/deploy?uuid=probe` returns 401/405 (route live) not 404 (route missing); public `:8000` refused; app `/health` ok.
+8. **GitHub secrets**: add `COOLIFY_PROD_SERVER_WEBHOOK` + `COOLIFY_PROD_WEBHOOK` (resolvable `https://cl.cogitoacademy.id/api/v1/deploy?uuid=...` URLs), `PROD_DATABASE_URL`, `R2_*`, and optionally `COOLIFY_API_TOKEN` (enables the Bearer header on the deploy curl — required if the endpoint is in its "Deploy Webhook (auth required)" form per docs/DEPLOYMENT.md §5).
+9. **Verify**: `curl -fsS https://api.cogitoacademy.id/health` shows the deployed sha; a `GET https://cl.cogitoacademy.id/api/v1/deploy?uuid=probe` returns 401/405 (route live) not 404 (route missing); public `:8000` refused; app `/health` ok.
 
 ---
 

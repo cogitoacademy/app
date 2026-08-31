@@ -57,7 +57,7 @@ Cloudflare (DNS + proxy + WAF) — cogitoacademy.id zone
   ├── api.cogitoacademy.id    → A 15.235.186.159 (proxied)  → Traefik → API :3001
   ├── app.cogitoacademy.id    → A 15.235.186.159 (proxied)  → Traefik → web :80
   ├── status.cogitoacademy.id → A 15.235.186.159 (proxied)  → Traefik → Uptime Kuma
-  └── coolify.cogitoacademy.id→ A 15.235.186.159 (proxied)  → Traefik → ONLY
+  └── cl.cogitoacademy.id→ A 15.235.186.159 (proxied)  → Traefik → ONLY
         /api/v1/deploy/* (the deploy webhook path; everything else 404)
 ```
 
@@ -239,7 +239,7 @@ merge to main
       3. scripts/migrate-and-deploy.sh:
            a. pg_dump snapshot → gzip → R2 pre-migrate-<sha>.sql.gz   (backup)
            b. bun run db:migrate against PROD_DATABASE_URL           (migrate)
-           c. POST https://coolify.cogitoacademy.id/api/v1/deploy?uuid=... (deploy)
+           c. POST https://cl.cogitoacademy.id/api/v1/deploy?uuid=... (deploy)
            d. poll https://api.cogitoacademy.id/health until version == <sha>
               (20 × 15s)                                             (verify)
            e. on failure: rollback hint naming v<prev-sha> + snapshot (rollback)
