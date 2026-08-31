@@ -14,7 +14,7 @@ export const JOB_RETENTION = {
 // of vanishing. A dedicated worker logs each entry and keeps a bounded Redis
 // list (cogito:dlq) for quick inspection.
 const DLQ_QUEUE_NAME = "cogito-jobs-dlq";
-const DLQ_LIST_KEY = "cogito:dlq";
+export const DLQ_LIST_KEY = "cogito:dlq";
 const DLQ_LIST_MAX = 100;
 // Atomic bounded push: LPUSH then LTRIM to the last DLQ_LIST_MAX entries.
 const DLQ_PUSH_LUA = `
@@ -63,7 +63,11 @@ export function createSchedulerService(
         job: { id: job.id, name: job.name, data: job.data },
       });
 
-      // Keep a bounded Redis list of DLQ entries for quick inspection.
+      // Keep a bounded Redis list of DLQ entries for quick inspection. Each
+      // entry carries `failedAt` (epoch ms, stamped at push time) so the
+      // health check can distinguish fresh failures from a stale ledger —
+      // `/health` `dlqDepth` counts only entries inside the freshness window
+      // (see `DLQ_FRESH_WINDOW_MS` in db-health.ts).
       try {
         const client = await dlqQueue.backend.client;
         client.defineCommand("cogitoDlqPush", {
@@ -72,7 +76,10 @@ export function createSchedulerService(
         });
         await client.runCommand("cogitoDlqPush", [
           DLQ_LIST_KEY,
-          JSON.stringify(job.data),
+          JSON.stringify({
+            failedAt: Date.now(),
+            ...job.data,
+          }),
           String(DLQ_LIST_MAX),
         ]);
       } catch (error) {

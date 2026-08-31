@@ -39,7 +39,7 @@ lists, workflow sources) — not assumed.
 3. **F4 — auto-rollback action**: add an `if: failure()` CD step that calls the Coolify API (via `COOLIFY_API_TOKEN`) to repoint the failing resource at `v<prev-sha>`; keep the printed hint as fallback copy. Never auto-restore DB snapshots (locked decision).
 4. **F5 — CI dedupe**: drop the `push: [main, staging]` trigger from `ci.yml` (PR runs already gate every merge) or use `paths-filter`/concurrency dedup — pick and document.
 5. **F7 — staging decision**: default = **delete `cd-staging.yml`** (locked: "prod first, no staging"). If user wants staging later, it returns with its own host.
-6. **DLQ age-aware health** (folded from MONITORING-ALERTING): `checkDlqHealth` counts only entries younger than N hours; `/health` `dlqDepth` returns 0 for the currently-stale-100 ledger. Files: `packages/api/src/lib/db-health.ts` + tests (100% line gate applies).
+6. **DLQ age-aware health** (folded from MONITORING-ALERTING): **DONE 2026-08-31 on `f/dlq-age-health`** — `checkDlqHealth` counts only entries with push-time `failedAt` newer than the freshness window (24h default, `DLQ_FRESH_WINDOW_HOURS` override); the stale pre-timestamp ledger reports `dlqDepth: 0`. Files: `packages/api/src/lib/db-health.ts` + `scheduler.service.ts` (failedAt stamp) + tests (100% line gate applies).
 7. **F8 — e2e in CI**: out of scope here (needs runner + seeded DB wiring); tracked under MONITORING-ALERTING follow-ups.
 
 ## Operator console actions (user, not code)

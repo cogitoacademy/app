@@ -524,6 +524,19 @@ job has exhausted its configured BullMQ attempt count. A failure with retries
 remaining is intentionally absent from the DLQ; inspect the source queue's
 attempt counter and backoff state instead.
 
+**DLQ depth is age-aware (fresh failures only).** Since 2026-08-31 each entry
+pushed to `cogito:dlq` carries `failedAt` (epoch ms, stamped at push time by
+the DLQ worker). `/health` `dlqDepth` counts only entries whose `failedAt` is
+within the freshness window — default **24 hours**, overridable via the
+`DLQ_FRESH_WINDOW_HOURS` env var (plain integer; an invalid, zero/negative,
+or > 1-year value falls back to 24h). **Entries without `failedAt` — the
+pre-2026-08-31 ledger — and any non-JSON payload are treated as STALE and
+never count**, so an old batch (e.g. the 2026-08-25 one) no longer trips the
+alert forever. This is alert hygiene, not data loss: the full ledger remains
+in Redis for `ops.sh dlq` inspection and `dlq-clear` still removes it. An
+entry exactly 24h old counts as stale (the window is a strict `failedAt >
+now − window` comparison).
+
 **Scheduler boot failure mode:** with `SCHEDULER_ENABLED=true`, `initScheduler()` pings Redis first and **throws if unreachable — the API boot aborts**. This is intentional: a silently dead scheduler (no expiry/hold-release/email jobs) is worse than a failed deploy. Fix Redis (or set `SCHEDULER_ENABLED=false` for a scheduler-less instance) and redeploy.
 
 Redis is **mandatory** (`REDIS_URL` is required — the server won't boot without it). The in-memory stores are defensive fallbacks only when a configured Redis call fails at runtime; they are per-process and degrade cross-instance guarantees.
