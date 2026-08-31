@@ -796,7 +796,8 @@ chat directory.
 
 **Files:**
 
-- `tutor.types.ts` — Zod schemas for profile fields and structured achievements, `getMyPayoutsInput`
+- `tutor.types.ts` — Zod schemas for profile fields and structured achievements/experiences, `getMyPayoutsInput`
+- `tutor-experiences.ts` — Structured experience entry validation and limits
 - `availability.types.ts` — Availability slot types (`upsert`, weekly-create, weekly-replace, delete)
 - `tutor.errors.ts` — `TutorProfileNotFoundError`, `TutorNotAvailableError`, `AvailabilitySlotOverlapError`, `InvalidTutorPricingError`, `OptimisticLockError`, `InvalidDateRangeError`, `WeeklyAvailabilityRangeError`
 - `tutor.repo.ts` — `findByUserId`, `create`, `update`, `upsertAvailability`
@@ -807,8 +808,8 @@ chat directory.
 **Service Methods:**
 
 - `getMyProfile(userId)` — Returns tutor profile
-- `updateMyProfile(userId, input)` — Updates profile fields with optimistic locking (`version`). The tutor editor uses one structured achievement section backed by `competitionAchievements` (up to 5 entries); each competition entry requires a year and at least one award. Legacy `achievements` text remains accepted for older profiles. Published profiles apply bio and `baseRatesIdr` edits immediately; a changed honorarium is used only for future bookings, while each existing booking's price snapshot remains authoritative for payout. Other trust-sensitive edits—including structured achievements—are stored as pending changes for admin review so discovery continues serving the approved values.
-- `submitForReview(userId)` — Validates required fields + pricing, then sets `onboardingStatus` to `pending_review`; records audit log. The web tutor profile form at `/profile` redirects to `/dashboard` after the mutation succeeds.
+- `updateMyProfile(userId, input)` — Updates profile fields with optimistic locking (`version`). The tutor editor uses one structured achievement section backed by `competitionAchievements` (up to 5 entries) and one structured experience section backed by `experienceEntries` (up to 5 entries). Experience entries require a role, organization, start year, valid end year or null for ongoing work, and a brief description; year values are stored as ungrouped integers. Legacy `achievements` and `experiences` text remains accepted for older profiles. Published profiles apply bio and `baseRatesIdr` edits immediately; a changed honorarium is used only for future bookings, while each existing booking's price snapshot remains authoritative for payout. Other trust-sensitive edits—including structured achievements and experiences—are stored as pending changes for admin review so discovery continues serving the approved values.
+- `submitForReview(userId)` — Validates required fields + pricing, accepting either structured or legacy achievement/experience data, then sets `onboardingStatus` to `pending_review`; records audit log. The web tutor profile form at `/profile` redirects to `/dashboard` after the mutation succeeds.
 - `listAvailability(userId)` — Lists the tutor's active future availability slots
 - `upsertAvailability(userId, input)` — Creates/updates a slot, rejecting overlaps
 - `createWeeklyAvailability(userId, input)` — Materializes weekly slots through `repeatUntil` (≤ 53 occurrences), rejecting overlaps
@@ -827,12 +828,13 @@ chat directory.
 - Profile updates use optimistic locking (`version`)
 - New tutor pricing is stored as IDR base honoraria by modality (`baseRatesIdr`) and validated against the active economy minimum and Rp 5,000 increments; published tutors may change these rates at any time, new bookings use the new rate, and existing booking snapshots remain authoritative for payout. The legacy Marks map remains readable during migration
 - The tutor profile editor at `/profile` renders selected modalities in one combined six-row IDR group-size matrix using the same table structure as the student discovery drawer; this is presentation-only. The legacy `/onboarding` path redirects to `/profile` for tutors.
-- The tutor profile editor exposes one structured achievement section and one multiline experiences field. The achievement section supports education plus competition entries; its optional proof URL list is protected by profile review and never enters the public discovery projection. Legacy `achievements` and credential-summary text remain readable fallback data, and migration 0032 copies the credential summary into achievements for older rows. Availability summaries and the old generic credential-proof URLs are retired from tutor editing.
+- The tutor profile editor exposes one structured achievement section and one structured experience section. The achievement section supports education plus competition entries; the experience section supports up to five role/organization/year/description entries and its optional proof URL list is protected by profile review and never enters the public discovery projection. Legacy `achievements`, credential-summary, and `experiences` text remain readable fallback data, and migration 0032 copies the credential summary into achievements for older rows. Availability summaries and the old generic credential-proof URLs are retired from tutor editing.
 - The tutor profile editor owns the single vertical scroll container for the tutor `/profile` route while the authenticated shell is contained; subject-category fieldsets keep their natural height and the sticky action bar has no extra bottom gap. This is presentation-only and does not change the tutor RPC contract.
 - Tutor payout calculations retain the internal split fields for accounting compatibility, but tutor-facing payout UI exposes only unpaid completed-session count and IDR honorarium. The private payout form collects bank name, account number, account-holder name, account-opening city/regency, ownership choice, and transfer-responsibility acknowledgment; submission requires all of them. Admin payout records advance the paid cutoff.
 - New tutor submissions must select at least one active child subject from the normalized catalog; mother categories cannot be selected directly
 - A normalized subject update replaces the tutor's join rows atomically and never accepts arbitrary legacy `expertise` strings as category ids
 - Structured tutor achievements are stored in `tutor_profile.education` and `tutor_profile.competition_achievements` as JSONB arrays. Education has at most 2 entries; the single achievement section can contain at most 5 competition entries, and each entry has a 1900–2100 year plus at least one award. Legacy `achievements`/`credentialsSummary` remains readable as a fallback when no structured competition achievements exist.
+- Structured tutor experiences are stored in `tutor_profile.experience_entries` as a JSONB array with at most 5 entries. Each entry has a role, organization, 1900–2100 start year, nullable 1900–2100 end year, and brief description; end year cannot precede start year. Legacy `experiences` remains readable as a fallback when no structured experience entries exist. Migration `0040_colossal_morlun.sql` adds the array with an empty-array default.
 
 ## Tutor Subject Taxonomy Module
 

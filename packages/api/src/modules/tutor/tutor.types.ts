@@ -5,6 +5,7 @@ import {
   tutorCompetitionAchievementsInput,
   tutorEducationInput,
 } from "./tutor-achievements";
+import { tutorExperienceEntriesInput } from "./tutor-experiences";
 
 export const updateMyProfileInput = z.object({
   version: z.number().int(),
@@ -18,6 +19,7 @@ export const updateMyProfileInput = z.object({
   credentialsSummary: z.string().max(2000).optional(),
   education: tutorEducationInput.optional(),
   competitionAchievements: tutorCompetitionAchievementsInput.optional(),
+  experienceEntries: tutorExperienceEntriesInput.optional(),
   expertise: z.array(z.string().max(255)).max(20).optional(),
   subjectIds: z
     .array(z.string().min(1).max(100))

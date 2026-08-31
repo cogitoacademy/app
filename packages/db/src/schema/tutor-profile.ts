@@ -25,6 +25,14 @@ export type TutorCompetitionAchievement = {
   awards: string[];
 };
 
+export type TutorExperienceEntry = {
+  role: string;
+  organization: string;
+  startYear: number;
+  endYear: number | null;
+  description: string;
+};
+
 export const tutorProfile = pgTable(
   "tutor_profile",
   {
@@ -51,6 +59,9 @@ export const tutorProfile = pgTable(
     education: jsonb("education").$type<TutorEducationEntry[]>().default([]),
     competitionAchievements: jsonb("competition_achievements")
       .$type<TutorCompetitionAchievement[]>()
+      .default([]),
+    experienceEntries: jsonb("experience_entries")
+      .$type<TutorExperienceEntry[]>()
       .default([]),
     expertise: jsonb("expertise").$type<string[]>().default([]),
     modality: text("modality"),
@@ -84,6 +95,7 @@ export const tutorProfile = pgTable(
         sourcePhotoUrl: string;
         education: TutorEducationEntry[];
         competitionAchievements: TutorCompetitionAchievement[];
+        experienceEntries: TutorExperienceEntry[];
         expertise: string[];
         subjectIds: string[];
         modality: "online" | "offline" | "both";

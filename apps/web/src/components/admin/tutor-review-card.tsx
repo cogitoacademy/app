@@ -52,6 +52,10 @@ import {
   type TutorEducationEntry,
   validateTutorAchievementDraft,
 } from "@/components/tutor/tutor-achievements";
+import {
+  TutorExperiencesDisplay,
+  type TutorExperienceEntry,
+} from "@/components/tutor/tutor-experiences";
 
 const FLOOR_ONLINE: Record<string, number> = {
   "1": 42,
@@ -104,6 +108,7 @@ interface TutorReviewCardProps {
     experienceProofUrls: string[] | null;
     education: TutorEducationEntry[] | null;
     competitionAchievements: TutorCompetitionAchievement[] | null;
+    experienceEntries: TutorExperienceEntry[] | null;
     expertise: string[] | null;
     modality: string | null;
     bankName: string | null;
@@ -183,6 +188,32 @@ function readCompetitionAchievements(
   return entries;
 }
 
+function readExperienceEntries(value: unknown): TutorExperienceEntry[] | null {
+  if (!Array.isArray(value)) return null;
+
+  const entries: TutorExperienceEntry[] = [];
+  for (const entry of value) {
+    if (
+      !isRecord(entry) ||
+      typeof entry.role !== "string" ||
+      typeof entry.organization !== "string" ||
+      typeof entry.startYear !== "number" ||
+      (entry.endYear !== null && typeof entry.endYear !== "number") ||
+      typeof entry.description !== "string"
+    ) {
+      return null;
+    }
+    entries.push({
+      role: entry.role,
+      organization: entry.organization,
+      startYear: entry.startYear,
+      endYear: entry.endYear,
+      description: entry.description,
+    });
+  }
+  return entries;
+}
+
 function formatPendingField(field: string) {
   if (field === "subjectIds") return "Subjects";
   return field.replace(/([A-Z])/g, " $1");
@@ -242,6 +273,18 @@ function PendingChangeValue({
           education={[]}
           competitionAchievements={entries}
           idPrefix={`${idPrefix}-competition`}
+        />
+      );
+    }
+  }
+
+  if (field === "experienceEntries") {
+    const entries = readExperienceEntries(value);
+    if (entries) {
+      return (
+        <TutorExperiencesDisplay
+          experienceEntries={entries}
+          idPrefix={`${idPrefix}-experiences`}
         />
       );
     }
@@ -620,20 +663,27 @@ export function TutorReviewCard({
               urls={profile.achievementProofUrls}
             />
 
-            <section>
-              <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-dimmed">
-                Experiences
-              </Text>
-              <Text
-                className={
-                  profile.experiences
-                    ? "whitespace-pre-line text-sm"
-                    : "text-sm italic text-dimmed"
-                }
-              >
-                {profile.experiences ?? "No experiences provided."}
-              </Text>
-            </section>
+            {profile.experienceEntries?.length ? (
+              <TutorExperiencesDisplay
+                experienceEntries={profile.experienceEntries}
+                idPrefix={`admin-${profile.id}-experiences`}
+              />
+            ) : (
+              <section>
+                <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-dimmed">
+                  Experiences
+                </Text>
+                <Text
+                  className={
+                    profile.experiences
+                      ? "whitespace-pre-line text-sm"
+                      : "text-sm italic text-dimmed"
+                  }
+                >
+                  {profile.experiences ?? "No experiences provided."}
+                </Text>
+              </section>
+            )}
 
             <ProofLinks
               label="Experience proof"

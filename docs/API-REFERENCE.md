@@ -392,12 +392,14 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Errors:** `OPTIMISTIC_LOCK` (409) on version mismatch, `INVALID_TUTOR_PRICING` (400) on floor-price violation, `INVALID_TUTOR_SUBJECT_SELECTION` (400) when ids are not active selectable child subjects or exceed 20
 - **Description:** Updates the tutor profile with optimistic locking. The tutor editor presents one structured achievement section plus one multiline experiences field; each competition entry stores a name, year, and one or more award titles. Legacy `achievements`/`credentialsSummary` text remains readable and is used as a fallback when no structured competition achievements exist. `achievementProofUrls`, `experienceProofUrls`, and `sourcePhotoUrl` accept only bounded HTTP(S) URLs. `sourcePhotoUrl` is private editing input; only an admin may set the edited public photo through tutor review. `subjectIds` is the normalized child-category selection. Payout-account fields remain private. A published tutor's `baseRatesIdr` takes effect immediately for future bookings; existing bookings retain their stored price snapshot for payout. Other trust-sensitive changes—including structured achievements—wait in `pendingProfileChanges`.
 
+Structured tutor experience fields are submitted through `experienceEntries` as up to five `{ role, organization, startYear, endYear, description }` entries. Years are plain integers; `endYear` may be `null` for an ongoing role and cannot precede `startYear`. Legacy `experiences` text remains accepted for older profiles.
+
 ### `tutor.submitForReview`
 
 - **Auth:** Tutor
 - **Input:** None
 - **Output:** `{ profile }`
-- **Description:** Submits a draft profile for admin review. The required achievement may come from the structured competition-achievement entries or from legacy achievement text retained on an older profile.
+- **Description:** Submits a draft profile for admin review. The required achievement may come from the structured competition-achievement entries or from legacy achievement text retained on an older profile. The required experience may come from `experienceEntries` or legacy experience text retained on an older profile.
 
 ### `tutor.listAvailability`
 

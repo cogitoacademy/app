@@ -15,6 +15,7 @@ import {
   tutorCompetitionAchievementsInput,
   tutorEducationInput,
 } from "../../modules/tutor/tutor-achievements";
+import { tutorExperienceEntriesInput } from "../../modules/tutor/tutor-experiences";
 import { upsertAvailabilityInput } from "../../modules/tutor/availability.types";
 import { achievementInput } from "../../modules/achievement/achievement.types";
 import { createInviteInput } from "../../modules/admin-tutor/admin-tutor.types";
@@ -79,6 +80,30 @@ describe("Validation bounds — string .max()", () => {
       tutorCompetitionAchievementsInput.safeParse([
         { competitionName: "Competition", year: 2020, awards: [] },
       ]).success,
+    ).toBe(false);
+  });
+
+  test("Tutor experiences enforce the five-entry cap and chronological years", () => {
+    const validEntry = {
+      role: "Mathematics Tutor",
+      organization: "Cogito Academy",
+      startYear: 2024,
+      endYear: null,
+      description: "Guided students through olympiad preparation.",
+    };
+    expect(
+      tutorExperienceEntriesInput.safeParse(
+        Array.from({ length: 6 }, () => validEntry),
+      ).success,
+    ).toBe(false);
+    expect(
+      tutorExperienceEntriesInput.safeParse([
+        { ...validEntry, startYear: 2025, endYear: 2024 },
+      ]).success,
+    ).toBe(false);
+    expect(
+      tutorExperienceEntriesInput.safeParse([{ ...validEntry, role: "" }])
+        .success,
     ).toBe(false);
   });
 

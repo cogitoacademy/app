@@ -19,6 +19,7 @@ function makeProfile(
     credentialsSummary: "PhD Math",
     achievements: "National medalist",
     experiences: "Math tutor",
+    experienceEntries: [],
     expertise: ["algebra", "calculus"],
     modality: "online",
     prices: { "1": 50, "2": 40 },
@@ -58,6 +59,7 @@ describe("Discovery Service", () => {
       expect(result.credentialsSummary).toBe("PhD Math");
       expect(result.achievements).toBe("National medalist");
       expect(result.experiences).toBe("Math tutor");
+      expect(result.experienceEntries).toEqual([]);
       expect(result.expertise).toEqual(["algebra", "calculus"]);
       expect(result.modality).toBe("online");
       expect(result.prices).toEqual({ "1": 50, "2": 40 });
@@ -82,6 +84,20 @@ describe("Discovery Service", () => {
     test("defaults expertise to empty array when null", () => {
       const result = buildProjection(makeProfile({ expertise: null as any }));
       expect(result.expertise).toEqual([]);
+    });
+
+    test("maps structured experiences to the public projection", () => {
+      const experienceEntries = [
+        {
+          role: "Mathematics Tutor",
+          organization: "Cogito Academy",
+          startYear: 2024,
+          endYear: null,
+          description: "Guided students through olympiad preparation.",
+        },
+      ];
+      const result = buildProjection(makeProfile({ experienceEntries }));
+      expect(result.experienceEntries).toEqual(experienceEntries);
     });
   });
 

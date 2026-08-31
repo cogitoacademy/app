@@ -12,6 +12,7 @@ import { INVITE_STATUS } from "../../shared/constants";
 import type {
   TutorCompetitionAchievement,
   TutorEducationEntry,
+  TutorExperienceEntry,
 } from "@cogito-app/db/schema";
 
 export type TutorInviteRow = typeof tutorInvite.$inferSelect;
@@ -68,6 +69,7 @@ export interface TutorProfileUpdates {
   experienceProofUrls?: string[] | null;
   education?: TutorEducationEntry[] | null;
   competitionAchievements?: TutorCompetitionAchievement[] | null;
+  experienceEntries?: TutorExperienceEntry[] | null;
   expertise?: string[] | null;
   modality?: string | null;
   prices?: Record<string, number> | null;

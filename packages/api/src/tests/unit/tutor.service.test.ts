@@ -221,6 +221,35 @@ describe("Tutor Service", () => {
       ).toThrow(TutorProfileIncompleteError);
     });
 
+    test("accepts structured experiences without legacy text", () => {
+      expect(() =>
+        validateSubmitForReview(
+          makeProfile({
+            experiences: null,
+            experienceEntries: [
+              {
+                role: "Mathematics Tutor",
+                organization: "Cogito Academy",
+                startYear: 2024,
+                endYear: null,
+                description: "Guided students through olympiad preparation.",
+              },
+            ],
+          }),
+          mockPricingPort,
+        ),
+      ).not.toThrow();
+    });
+
+    test("requires an experience when legacy and structured values are empty", () => {
+      expect(() =>
+        validateSubmitForReview(
+          makeProfile({ experiences: null, experienceEntries: [] }),
+          mockPricingPort,
+        ),
+      ).toThrow(TutorProfileIncompleteError);
+    });
+
     test("requires payout account ownership and transfer disclaimer confirmation", () => {
       expect(() =>
         validateSubmitForReview(
@@ -433,6 +462,51 @@ describe("Tutor Service", () => {
       >;
       expect(updateArgs.education).toBeUndefined();
       expect(updateArgs.competitionAchievements).toBeUndefined();
+    });
+
+    test("published profile stores structured experiences as pending edits", async () => {
+      const profile = makeProfile({
+        onboardingStatus: "published",
+        experienceEntries: [],
+      });
+      const updateProfileWithVersion = mock(async () => [profile]);
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => profile),
+          updateProfileWithVersion,
+        },
+      });
+      const service = createTutorService(deps as any);
+      const experienceEntries = [
+        {
+          role: "Mathematics Tutor",
+          organization: "Cogito Academy",
+          startYear: 2024,
+          endYear: null,
+          description: "Guided students through olympiad preparation.",
+        },
+      ];
+
+      await service.updateMyProfile("u1", {
+        version: 1,
+        experienceEntries,
+      });
+
+      expect(updateProfileWithVersion).toHaveBeenCalledWith(
+        deps.db,
+        "u1",
+        1,
+        expect.objectContaining({
+          pendingProfileChanges: { experienceEntries },
+          profileEditStatus: "pending_review",
+        }),
+      );
+      const updateArgs = updateProfileWithVersion.mock.calls[0][3] as Record<
+        string,
+        unknown
+      >;
+      expect(updateArgs.experienceEntries).toBeUndefined();
     });
 
     test("published profile applies a changed IDR base honorarium immediately", async () => {

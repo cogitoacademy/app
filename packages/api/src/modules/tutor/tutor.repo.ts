@@ -9,6 +9,7 @@ import type { DbOrTx } from "../../lib/tx";
 import type {
   TutorCompetitionAchievement,
   TutorEducationEntry,
+  TutorExperienceEntry,
 } from "@cogito-app/db/schema";
 
 export interface UpdateProfileInput {
@@ -23,6 +24,7 @@ export interface UpdateProfileInput {
   credentialsSummary?: string;
   education?: TutorEducationEntry[];
   competitionAchievements?: TutorCompetitionAchievement[];
+  experienceEntries?: TutorExperienceEntry[];
   expertise?: string[];
   subjectIds?: string[];
   modality?: "online" | "offline" | "both";

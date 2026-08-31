@@ -36,6 +36,7 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import {
   IconAlertTriangle,
+  IconBriefcase,
   IconBuildingBank,
   IconPhoto,
   IconSchool,
@@ -54,6 +55,11 @@ import {
   type TutorEducationEntry,
   validateTutorAchievementDraft,
 } from "./tutor-achievements";
+import {
+  TutorExperiencesEditor,
+  type TutorExperienceEntry,
+  validateTutorExperienceDraft,
+} from "./tutor-experiences";
 import { SubjectSelector, type TutorSubject } from "./subject-taxonomy";
 
 type Modality = "online" | "offline" | "both";
@@ -91,6 +97,7 @@ interface OnboardingFormProps {
     sourcePhotoUrl: string | null;
     education: TutorEducationEntry[] | null;
     competitionAchievements: TutorCompetitionAchievement[] | null;
+    experienceEntries: TutorExperienceEntry[] | null;
     expertise: string[];
     subjects?: TutorSubject[] | null;
     modality: string | null;
@@ -114,6 +121,7 @@ interface OnboardingFormProps {
       credentialsSummary: string;
       education: TutorEducationEntry[];
       competitionAchievements: TutorCompetitionAchievement[];
+      experienceEntries: TutorExperienceEntry[];
       expertise: string[];
       subjectIds: string[];
       modality: Modality;
@@ -171,6 +179,8 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     education: pending.education ?? profile.education ?? [],
     competitionAchievements:
       pending.competitionAchievements ?? profile.competitionAchievements ?? [],
+    experienceEntries:
+      pending.experienceEntries ?? profile.experienceEntries ?? [],
     expertise: pending.expertise ?? profile.expertise ?? [],
     subjectIds: initialSubjectIds,
     modality: (pending.modality ?? profile.modality ?? "") as Modality | "",
@@ -301,6 +311,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       sourcePhotoUrl?: string;
       education?: TutorEducationEntry[];
       competitionAchievements?: TutorCompetitionAchievement[];
+      experienceEntries?: TutorExperienceEntry[];
       expertise?: string[];
       subjectIds?: string[];
       modality?: Modality;
@@ -329,6 +340,13 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
         awards: entry.awards.map((award) => award.trim()),
       }),
     );
+    const experienceEntries = form.experienceEntries.map((entry) => ({
+      role: entry.role.trim(),
+      organization: entry.organization.trim(),
+      startYear: entry.startYear,
+      endYear: entry.endYear,
+      description: entry.description.trim(),
+    }));
     const bankName = form.bankName.trim();
     const bankAccountNumber = form.bankAccountNumber.replaceAll(/\D/g, "");
     const bankAccountHolderName = form.bankAccountHolderName.trim();
@@ -343,6 +361,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     if (sourcePhotoUrl) payload.sourcePhotoUrl = sourcePhotoUrl;
     payload.education = education;
     payload.competitionAchievements = competitionAchievements;
+    payload.experienceEntries = experienceEntries;
     if (form.expertise.length > 0) payload.expertise = form.expertise;
     if (
       form.subjectIds.length > 0 &&
@@ -385,7 +404,9 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     ) {
       validationErrors.competitionAchievements = "Add at least one achievement";
     }
-    if (!form.experiences.trim()) validationErrors.experiences = "Required";
+    if (!form.experiences.trim() && form.experienceEntries.length === 0) {
+      validationErrors.experienceEntries = "Add at least one experience";
+    }
     if (!form.sourcePhotoUrl.trim())
       validationErrors.sourcePhotoUrl = "Required";
     Object.assign(
@@ -394,6 +415,10 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
         form.education,
         form.competitionAchievements,
       ),
+    );
+    Object.assign(
+      validationErrors,
+      validateTutorExperienceDraft(form.experienceEntries),
     );
     if (!form.modality) validationErrors.modality = "Required";
     if (!form.bankName.trim()) validationErrors.bankName = "Required";
@@ -445,7 +470,11 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
               ? form.competitionAchievements.length > 0
                 ? "tutor-achievements-competition-0"
                 : "tutor-achievements-competition-add"
-              : `tutor-${firstError}`;
+              : firstError === "experienceEntries"
+                ? form.experienceEntries.length > 0
+                  ? "tutor-experiences-role-0"
+                  : "tutor-experiences-add"
+                : `tutor-${firstError}`;
       window.setTimeout(() => document.getElementById(focusTarget)?.focus(), 0);
       return;
     }
@@ -680,60 +709,6 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                   {errors.displayName ? (
                     <FieldError>{errors.displayName}</FieldError>
                   ) : null}
-                </Field>
-
-                <Field className="sm:col-span-2">
-                  <FieldLabel htmlFor="tutor-experiences">
-                    Experiences <span aria-hidden="true">*</span>
-                  </FieldLabel>
-                  <FieldDescription>
-                    Add one experience per line.
-                  </FieldDescription>
-                  <Textarea
-                    id="tutor-experiences"
-                    name="experiences"
-                    rows={6}
-                    value={form.experiences}
-                    onChange={(event) => {
-                      setForm((current) => ({
-                        ...current,
-                        experiences: event.target.value,
-                      }));
-                      clearError("experiences");
-                    }}
-                    placeholder="Legal GRC Intern, PT Pelindo Energi Logistik (Surabaya, 2025)"
-                    aria-invalid={Boolean(errors.experiences)}
-                  />
-                  {errors.experiences ? (
-                    <FieldError>{errors.experiences}</FieldError>
-                  ) : null}
-                </Field>
-
-                <Field className="sm:col-span-2">
-                  <FieldLabel htmlFor="tutor-experience-proofs">
-                    Experience proof links
-                  </FieldLabel>
-                  <FieldDescription>
-                    Optional. Add one public reference, portfolio, or supporting
-                    URL per line. These links are only used for admin
-                    verification.
-                  </FieldDescription>
-                  <Textarea
-                    id="tutor-experience-proofs"
-                    name="experienceProofUrls"
-                    rows={3}
-                    value={form.experienceProofUrls.join("\n")}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        experienceProofUrls: event.target.value
-                          .split(/\r?\n/)
-                          .map((url) => url.trim())
-                          .filter(Boolean),
-                      }))
-                    }
-                    placeholder="https://example.com/reference"
-                  />
                 </Field>
 
                 <Field className="sm:col-span-2">
@@ -1099,6 +1074,59 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                     }))
                   }
                   placeholder="https://example.com/certificate"
+                />
+              </Field>
+            </CardBody>
+          </Card>
+
+          <Card className="min-w-0">
+            <CardHeader>
+              <IconBox variant="secondary-subtle">
+                <IconBriefcase aria-hidden="true" />
+              </IconBox>
+              <CardTitle>Experiences</CardTitle>
+              <CardDescription>
+                Add your most relevant teaching, work, or mentoring experience
+                in one place.
+              </CardDescription>
+            </CardHeader>
+            <CardBody>
+              <TutorExperiencesEditor
+                experienceEntries={form.experienceEntries}
+                legacyText={form.experiences}
+                onExperienceEntriesChange={(experienceEntries) => {
+                  setForm((current) => ({
+                    ...current,
+                    experienceEntries,
+                  }));
+                  clearError("experienceEntries");
+                }}
+                errors={{ experienceEntries: errors.experienceEntries }}
+              />
+              <Field className="mt-6">
+                <FieldLabel htmlFor="tutor-experience-proofs">
+                  Experience proof links
+                </FieldLabel>
+                <FieldDescription>
+                  Optional. Add one public reference, portfolio, or supporting
+                  URL per line. These links are only used for admin
+                  verification.
+                </FieldDescription>
+                <Textarea
+                  id="tutor-experience-proofs"
+                  name="experienceProofUrls"
+                  rows={3}
+                  value={form.experienceProofUrls.join("\n")}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      experienceProofUrls: event.target.value
+                        .split(/\r?\n/)
+                        .map((url) => url.trim())
+                        .filter(Boolean),
+                    }))
+                  }
+                  placeholder="https://example.com/reference"
                 />
               </Field>
             </CardBody>

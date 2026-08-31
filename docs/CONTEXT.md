@@ -411,7 +411,7 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 ### Tutor Module (tutor)
 
 - `getMyProfile`, `updateMyProfile`, `submitForReview`
-- Tutor profiles store structured `education` (maximum 2 entries) and one structured achievement section backed by `competitionAchievements` (maximum 5 entries, each with comma-separated award titles); the web editor previews the bold first line and the public discovery drawer renders the normalized format.
+- Tutor profiles store structured `education` (maximum 2 entries), one structured achievement section backed by `competitionAchievements` (maximum 5 entries, each with comma-separated award titles), and one structured experience section backed by `experienceEntries` (maximum 5 role/organization/year/description entries); the web editor previews the normalized format and the public discovery drawer renders it without year grouping dots.
 - `subjectIds` uses the normalized competition mother-category/child-subject taxonomy; drafts may save without subjects, but review submission requires at least one active current child subject. Archived legacy subjects remain readable but cannot be newly selected.
 - `listAvailability`, `upsertAvailability`, `createWeeklyAvailability`, `deleteAvailability`
 - `getMyPayouts`

@@ -130,11 +130,16 @@ export function validateSubmitForReview(
       profile.achievements.trim().length > 0) ||
     (Array.isArray(profile.competitionAchievements) &&
       profile.competitionAchievements.length > 0);
+  const hasExperience =
+    (typeof profile.experiences === "string" &&
+      profile.experiences.trim().length > 0) ||
+    (Array.isArray(profile.experienceEntries) &&
+      profile.experienceEntries.length > 0);
   const requiredFields: { key: string; value: unknown }[] = [
     { key: "displayName", value: profile.displayName },
     { key: "shortBio", value: profile.shortBio },
     { key: "achievements", value: hasAchievement },
-    { key: "experiences", value: profile.experiences },
+    { key: "experiences", value: hasExperience },
     { key: "sourcePhotoUrl", value: profile.sourcePhotoUrl },
     { key: "modality", value: profile.modality },
     { key: "bankName", value: profile.bankName },
@@ -258,6 +263,7 @@ export function createTutorService(deps: {
       "credentialsSummary",
       "education",
       "competitionAchievements",
+      "experienceEntries",
       "expertise",
       "modality",
       "prices",
