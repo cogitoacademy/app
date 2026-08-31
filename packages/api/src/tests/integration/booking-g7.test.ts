@@ -129,7 +129,9 @@ describe("G7: session notes with sanitization", () => {
 
     const tutorCookie = await signInAndGetCookie(tutorEmail, "Test1234!");
     const tutorCtx = await createTestContext(tutorCookie);
-    tutorUserId = tutorCtx.session?.user.id!;
+    if (!tutorCtx.session?.user)
+      throw new Error("test setup: expected tutor session user");
+    tutorUserId = tutorCtx.session.user.id;
     tutorClient = createTestClient(tutorCtx);
   });
 

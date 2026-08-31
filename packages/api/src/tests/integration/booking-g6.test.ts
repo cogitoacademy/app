@@ -124,7 +124,9 @@ describe("G6: tutor reschedule with student approval", () => {
       await createTestContext(studentRes.cookie),
     );
     const studentCtx = await createTestContext(studentRes.cookie);
-    studentId = studentCtx.session?.user.id!;
+    if (!studentCtx.session?.user)
+      throw new Error("test setup: expected student session user");
+    studentId = studentCtx.session.user.id;
     await creditWallet(studentId, 200);
 
     const tutorCookie = await signInAndGetCookie(tutorEmail, "Test1234!");

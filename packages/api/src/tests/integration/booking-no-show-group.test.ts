@@ -137,7 +137,9 @@ describe("Group no-show only forfeits the target participant's hold (C1)", () =>
       await createTestContext(proposerRes.cookie),
     );
     const proposerCtx = await createTestContext(proposerRes.cookie);
-    proposerId = proposerCtx.session?.user.id!;
+    if (!proposerCtx.session?.user)
+      throw new Error("test setup: expected proposer session user");
+    proposerId = proposerCtx.session.user.id;
     await creditWallet(proposerId, 500);
 
     const inviteeRes = await signUpAndSignIn(
@@ -149,7 +151,9 @@ describe("Group no-show only forfeits the target participant's hold (C1)", () =>
       await createTestContext(inviteeRes.cookie),
     );
     const inviteeCtx = await createTestContext(inviteeRes.cookie);
-    inviteeId = inviteeCtx.session?.user.id!;
+    if (!inviteeCtx.session?.user)
+      throw new Error("test setup: expected invitee session user");
+    inviteeId = inviteeCtx.session.user.id;
     await creditWallet(inviteeId, 500);
   });
 
