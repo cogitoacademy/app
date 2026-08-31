@@ -23,7 +23,14 @@ import { useForm } from "@tanstack/react-form";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
+import type { CogitoUser } from "@cogito-app/auth";
+
 import { authClient } from "@/lib/auth-client";
+import {
+  getPostLoginDestination,
+  readTutorOnboardingStatus,
+} from "@/lib/post-login-redirect";
+import { client } from "@/utils/orpc";
 
 import { getAuthErrorMessage } from "./auth-error-message";
 import {
@@ -87,10 +94,17 @@ export default function SignUpForm({
           return;
         }
 
-        const sessionUser = session.data.user as
-          | { emailVerified?: boolean; role?: string }
-          | undefined;
+        const sessionUser = session.data.user as CogitoUser | undefined;
         const role = sessionUser?.role;
+        const tutorOnboardingStatus =
+          role === "tutor" && !redirectPath
+            ? await readTutorOnboardingStatus(() => client.tutor.getMyProfile())
+            : undefined;
+        const destination = getPostLoginDestination({
+          role,
+          tutorOnboardingStatus,
+          redirectPath,
+        });
         toastManager.add({ title: "Sign up successful", type: "success" });
 
         if (sessionUser && !sessionUser.emailVerified) {
@@ -98,21 +112,13 @@ export default function SignUpForm({
             to: "/verify-email",
             search: {
               email: value.email.trim(),
-              ...(redirectPath ? { redirect: redirectPath } : {}),
+              redirect: destination,
             },
           });
           return;
         }
 
-        if (redirectPath) {
-          await navigate({ to: redirectPath });
-        } else if (role === "tutor") {
-          await navigate({ to: "/profile" });
-        } else if (role === "admin") {
-          await navigate({ to: "/admin-tutors" });
-        } else {
-          await navigate({ to: "/dashboard" });
-        }
+        await navigate({ to: destination });
       } catch (error) {
         toastManager.add({
           title: getAuthErrorMessage(error, "sign-up"),

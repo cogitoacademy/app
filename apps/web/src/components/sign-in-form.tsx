@@ -27,6 +27,11 @@ import type { CogitoUser } from "@cogito-app/auth";
 
 import { authClient } from "@/lib/auth-client";
 import { getUserFacingError } from "@/lib/error-message";
+import {
+  getPostLoginDestination,
+  readTutorOnboardingStatus,
+} from "@/lib/post-login-redirect";
+import { client } from "@/utils/orpc";
 
 import { getAuthErrorMessage } from "./auth-error-message";
 import {
@@ -93,13 +98,15 @@ export default function SignInForm({
 
         const sessionUser = session.data.user as CogitoUser | undefined;
         const role = sessionUser?.role;
-        const destination = redirectPath
-          ? redirectPath
-          : role === "tutor"
-            ? "/profile"
-            : role === "admin"
-              ? "/admin-tutors"
-              : "/dashboard";
+        const tutorOnboardingStatus =
+          role === "tutor" && !redirectPath
+            ? await readTutorOnboardingStatus(() => client.tutor.getMyProfile())
+            : undefined;
+        const destination = getPostLoginDestination({
+          role,
+          tutorOnboardingStatus,
+          redirectPath,
+        });
         toastManager.add({ title: "Sign in successful", type: "success" });
 
         if (sessionUser?.emailVerified !== true) {

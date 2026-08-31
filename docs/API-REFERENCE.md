@@ -149,6 +149,15 @@ CI runs the API integration/unit suite together with the env, auth, and database
 
 The auth endpoints do not grandfather existing users by changing `emailVerified`. The web sign-in handoff applies the same verification requirement to new and legacy unverified users; the OTP is requested through Better Auth's `/api/auth/email-otp/send-verification-otp` endpoint and completed through `/api/auth/email-otp/verify-email`.
 
+The default web post-login destination is role- and onboarding-aware. A tutor
+without a profile, or with `draft`/`changes_requested` onboarding status, goes
+to `/profile`; a tutor whose onboarding has moved into review, approval,
+publication, or suspension goes to `/dashboard`. Admins and students default to
+`/dashboard`. A validated `redirect` query remains an explicit return path.
+Email/password and Google sign-in carry the selected destination through
+`/verify-email` when email verification is still required. This is frontend
+routing behavior and does not add an RPC or persistence contract.
+
 ### `auth.getProfile`
 
 - **Auth:** Protected

@@ -36,6 +36,17 @@ short categories do not create large blank areas, and the action bar has no
 extra bottom gap. This is presentation-only and does not change any API or
 database contract.
 
+### Role-aware login destination follow-up (2026-08-31)
+
+The web login handoff now reads the existing tutor profile onboarding status
+before selecting the default destination. Tutors without a profile, or with
+`draft`/`changes_requested` status, go to `/profile` so they can complete or
+correct onboarding. Tutors whose profile has moved into review, approval,
+publication, or suspension, along with admins and students, go to
+`/dashboard`. A validated `redirect` query remains an explicit return path,
+and the same destination is preserved through `/verify-email` for unverified
+accounts. This is frontend routing only and adds no API or database contract.
+
 ### Tutor profile and payout privacy follow-up (2026-08-28)
 
 Tutor onboarding now has one structured Achievements section and one multiline Experiences field, with legacy achievement/credential text retained as a fallback. Availability-summary and credential-proof inputs are retired. Base honorarium is adjusted only through Rp 5,000 minus/plus controls and its six group-size outcomes are shown in tables. Tutor portraits use a source-upload/admin-edited-public-photo workflow. Tutor payout details expose only completed sessions and IDR honorarium, removing take-rate and Marks terminology from the tutor interface.
@@ -756,6 +767,8 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 ---
 
 ### Version Notes
+
+- v1.46 (2026-08-31): Made the post-login destination role/onboarding-aware: incomplete or changes-requested tutors go to `/profile`, tutors past onboarding and admins go to `/dashboard`, and the selected destination is preserved through email verification. No API or schema contract changed.
 
 - v1.42 (2026-08-31): Contained tutor `/profile` scrolling to one route-owned vertical scroller, removed the action-bar bottom gap, and kept subject-category fieldsets at natural heights. No RPC, schema, or persistence contract changed.
 

@@ -226,7 +226,7 @@ async function seed() {
   const admin = await ensureUser(adminEmail, adminPassword, "Admin User");
   await db
     .update(user)
-    .set({ role: USER_ROLE.ADMIN })
+    .set({ role: USER_ROLE.ADMIN, emailVerified: true })
     .where(eq(user.id, admin.id));
   console.log("Admin user ready:", admin.id);
 
@@ -242,7 +242,7 @@ async function seed() {
   );
   await db
     .update(user)
-    .set({ role: USER_ROLE.TUTOR })
+    .set({ role: USER_ROLE.TUTOR, emailVerified: true })
     .where(eq(user.id, tutorUser.id));
 
   const existingProfile = await db

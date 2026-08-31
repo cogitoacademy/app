@@ -24,7 +24,7 @@ async function login(page: Page, email: string, password: string) {
   await page.locator("input#email").fill(email);
   await page.locator("input#password").fill(password);
   await page.getByRole("button", { name: "Sign In", exact: true }).click();
-  await page.waitForURL(/\/(dashboard|profile|admin-tutors)(?:$|\/)/);
+  await page.waitForURL(/\/(dashboard|profile)(?:$|\/)/);
   expect(pathsAfterLoginPage).not.toContain("/login");
 }
 
@@ -66,6 +66,7 @@ test("tutor sees IDR honorarium setup without the old Marks cash-out copy", asyn
   page,
 }) => {
   await login(page, TUTOR_EMAIL, TUTOR_PASSWORD);
+  await expect(page).toHaveURL(/\/dashboard(?:$|\/)/);
 
   await page.goto("/profile");
   await expect(
@@ -93,6 +94,7 @@ test("admin can review and update the future-booking Cogito take schedule", asyn
   page,
 }) => {
   await login(page, ADMIN_EMAIL, ADMIN_PASSWORD);
+  await expect(page).toHaveURL(/\/dashboard(?:$|\/)/);
 
   await page.goto("/admin-economy");
   await expect(
