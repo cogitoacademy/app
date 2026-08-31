@@ -124,6 +124,16 @@ jobs:
         if: steps.check-creds.outputs.skip-plan == 'false'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          # Required terraform variables (variables.tf: server_ip +
+          # ssh_private_key_path + cloudflare_account_id have no defaults).
+          # Never let plan prompt: a missing -var with a TTY hangs the job
+          # until the 10-minute timeout (seen 2026-08-31, run 33372645215) —
+          # -input=false makes it fail fast instead. The values are the
+          # repo-standard ones (VPS IP is documented in DEPLOYMENT.md; the
+          # plan is read-only so placeholder ssh key path is safe).
+          TF_VAR_server_ip: "15.235.186.159"
+          TF_VAR_ssh_private_key_path: "/dev/null"
+          TF_VAR_cloudflare_account_id: "f43b8a87deeed597ecd8b4a1119d09b5"
           # R2 state-backend credentials — read from the existing repo
           # secrets (R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY + the
           # R2_STATE_ENDPOINT URL). No R2_STATE_* secrets exist (verified
@@ -136,8 +146,9 @@ jobs:
           AWS_ENDPOINT_URL_S3: ${{ secrets.R2_STATE_ENDPOINT }}
         run: |
           set -e
-          if terraform init -reconfigure \
-            && terraform plan -lock=false -out=tfplan; then
+          # -input=false everywhere: never hang waiting for stdin.
+          if terraform init -reconfigure -input=false -no-color \
+            && terraform plan -lock=false -input=false -no-color -out=tfplan; then
             terraform show -no-color tfplan > tfplan.txt
             echo "::notice title=Terraform plan written::infra-plan artifact (tfplan.txt)"
             exit 0
