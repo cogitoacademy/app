@@ -65,6 +65,8 @@ does not fall into the generic error screen, and the browser console has no
 `FieldError` has been rendered outside a Selia `Field` root; inspect the affected
 form composition before checking the API or database.
 
+For Google sign-in, start from `https://app.cogitoacademy.id/login` in a clean browser and confirm the provider callback is `https://api.cogitoacademy.id/api/auth/callback/google`, followed by the frontend route `/auth/callback` and the role-appropriate destination. In DevTools, the initial auth response must set `better-auth.state` with `Secure`, `HttpOnly`, and `SameSite=Lax`; the callback request must include that cookie and its `state` query parameter. Keep the Google Cloud OAuth client configured with the frontend origin `https://app.cogitoacademy.id` and the API redirect URI `https://api.cogitoacademy.id/api/auth/callback/google`.
+
 ### Dashboard smoke check
 
 After a web deployment, sign in once as each supported role and open `/dashboard`. Verify the sidebar user menu shows the authenticated profile image when one is configured and uses initials when it is not:
@@ -557,6 +559,20 @@ bun scripts/run-test-suite.mjs e2e --grep "identity surfaces"
 The workflow also runs the server suite in a separate process because its webhook test uses module mocking. The coverage comment script enforces 100% line coverage for `packages/api` and 100% line coverage overall from `coverage/lcov.info`; the Bun command's own function/statement threshold is a separate diagnostic and is not the CI gate.
 
 ## Common Errors
+
+### Google OAuth `state_mismatch`
+
+This means Better Auth could not validate the short-lived OAuth state. Confirm
+the browser received `better-auth.state` from the API before navigating to
+Google and sent it back on `GET /api/auth/callback/google`. In production the
+session cookies remain `SameSite=Strict`, but the OAuth state cookie must be
+`SameSite=Lax` because Google returns through a top-level `GET` navigation.
+Clear cookies for `api.cogitoacademy.id` and retry once in a clean browser;
+do not open multiple Google sign-in attempts in parallel or refresh the
+callback URL. If the cookie is present but the error persists, verify that
+`BETTER_AUTH_SECRET` is stable across the deployment and that the shared
+database contains the verification record. Do not disable
+`skipStateCookieCheck`/CSRF checks as a workaround.
 
 ### `BOOKING_CONFLICT` (409)
 

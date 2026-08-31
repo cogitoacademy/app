@@ -161,6 +161,7 @@ VPS (OVH 2vCPU/3.7GB/38GB, Ubuntu; ufw: 80/443 public, 22+8000+6001+6002 tailnet
 
 - [ ] Ansible applies the decrypted vault to the API resource env (incl. `NODE_ENV=production`, `SCHEDULER_ENABLED=true`, `TRUST_PROXY=true`, `DB_SSL_ENABLED=false`, `BETTER_AUTH_URL=https://api.cogitoacademy.id`, `CORS_ORIGIN=https://app.cogitoacademy.id`).
 - [ ] Add `COOLIFY_PROD_SERVER_WEBHOOK`/`COOLIFY_PROD_WEBHOOK` as GH secrets (from Coolify resource webhooks) — unblocks S7.
+- [x] Repo fix: keep production session cookies `SameSite=Strict` while overriding Better Auth's short-lived OAuth state cookie to `SameSite=Lax`, so the Google top-level callback can complete state verification without disabling CSRF checks (2026-08-31).
 - [ ] Google OAuth: verify `/api/auth/callback/google` redirect URI in console.
 - [ ] Google Meet: run the OAuth helper locally → `GOOGLE_MEET_REFRESH_TOKEN` → verify boot probe.
 - [ ] R2: uploads now land in R2 (env guard requires all vars in prod — verified).
