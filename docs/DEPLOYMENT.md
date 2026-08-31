@@ -636,6 +636,11 @@ for pb in infra/ansible/*.yml; do
   ansible-playbook -i infra/ansible/inventory.ini "$pb" --check
 done
 
+# Or use the one-command apply wrapper (credentials + gates built in, see
+# infra/APPLY-RUNBOOK.md §0):
+./infra/apply.sh --dry-run all    # print the full ordered plan, nothing runs
+./infra/apply.sh all              # run everything with per-phase pauses
+
 # Terraform plan/apply with the real state backend (R2 credentials in env):
 #   R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY, plus AWS_ENDPOINT_URL_S3 set
 #   to https://<accountid>.r2.cloudflarestorage.com and CLOUDFLARE_API_TOKEN.

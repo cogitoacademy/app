@@ -422,6 +422,10 @@ ansible-playbook -i infra/ansible/inventory.ini \
   infra/ansible/backup-cron.yml --ask-become-pass
 ```
 
+(Or, during an apply window, `./infra/apply.sh backup-cron` — same playbook
+with the DATABASE_URL reachability gate built in; see
+[`infra/APPLY-RUNBOOK.md`](../infra/APPLY-RUNBOOK.md) §0.)
+
 The playbook runs the backup as **root** (documented in the playbook header):
 the single-tenant VPS is already root-managed, and the script needs the full
 `DATABASE_URL` plus the R2 token either way, so a dedicated `backup` user

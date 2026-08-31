@@ -2,7 +2,7 @@
 
 | Field       | Value                                                                                                                                                                                                                                                                                       |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status      | Active — Phase 0/1 repo work merged (#115–#118); operator apply + secrets pending                                                                                                                                                                                                           |
+| Status      | Active — Phase 0/1 repo work merged (#115–#118); operator apply tooling added (`ops/apply-tooling`, 2026-08-31); operator apply + secrets pending                                                                                                                                                                                                        |
 | Created     | 2026-08-26 (rev. 2: 2026-08-27 — Tailscale control plane, Uptime Kuma only, prod-first, no staging, Ansible replaces provision.sh)                                                                                                                                                          |
 | Branch      | `deploy/production-readiness`                                                                                                                                                                                                                                                               |
 | Depends on  | PR #106, #107 (merged); PR #102 (Terraform + runbook, **merged #115**); main synced to `ca34d9d` (deployment wave: #115 infra scaffold, #116 DLQ health, #117 backups, #118 CD pipeline)                                                                                                    |
@@ -106,7 +106,16 @@ VPS (OVH 2vCPU/3.7GB/38GB, Ubuntu; ufw: 80/443 public, 22+8000+6001+6002 tailnet
 4. **Xendit Test Mode wiring (#120)**: set `XENDIT_MODE=test` + Test Mode `XENDIT_SECRET_KEY`/`XENDIT_WEBHOOK_TOKEN` + `XENDIT_TEST_ALLOWED_EMAILS` (UAT accounts) in the vault. `WEBHOOK_ALLOWED_IPS` stays optional (2026-08-28 decision: Xendit publishes no stable source IP list; the `x-callback-token` signature is the primary gate — a wrong allowlist silently 403s webhooks and payments never credit).
 5. **Backup DATABASE_URL host-reachability**: the vault `DATABASE_URL` must resolve from the VPS host (Coolify's Postgres lives on a private Docker network; use `127.0.0.1:<published-port>` or the container IP) — otherwise the nightly backup cron (Task 3.1) and the CD pre-migrate snapshot fail.
 6. **Seed packages before real payments**: run the package seed against production once (with `SEED_ALLOWED_IN_PROD` + `SEED_ADMIN_PASSWORD` per the seed guard) so purchasable Mark packages exist before the first real transaction.
-7. **Apply the playbooks** (from the repo root, control node on the tailnet):
+7. **Apply the playbooks** — prefer the one-command wrapper (added 2026-08-31 on `ops/apply-tooling`):
+   ```bash
+   ./infra/apply.sh --dry-run all   # review the full ordered plan first
+   ./infra/apply.sh all             # pausing between phases, marker-gated
+   ```
+   This runs the manual sequence below in runbook order (import → tf-plan →
+   tf-apply → tailscale → tailscale-verify → harden → resources →
+   backup-cron → verify), skipping completed phases via `infra/.apply-state/`
+   markers and refusing to harden until `tailscale-verify` creates its marker.
+   The manual commands remain valid:
    ```bash
    ansible-playbook -i infra/ansible/inventory.ini infra/ansible/host-hardening.yml --ask-become-pass
    ansible-playbook -i infra/ansible/inventory.ini infra/ansible/tailscale.yml --ask-become-pass
