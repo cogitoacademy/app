@@ -95,26 +95,24 @@ resource "cloudflare_r2_bucket" "backups" {
 # bucket with a public custom domain (the nightly dump URL would be
 # guessable).
 #
-# NOTE: this bucket + custom domain were created manually in the Cloudflare
-# dashboard (2026-08-28) with the values already in the SOPS vault
-# (R2_BUCKET=cogito-bucket, R2_PUBLIC_URL=https://r2bucket.cogitoacademy.id).
-# The operator must `terraform import` them before the first apply, otherwise
-# Terraform will try to create a second bucket/domain:
-#   terraform import cloudflare_r2_bucket.uploads <bucket-name>
-#   terraform import cloudflare_r2_custom_domain.uploads <domain>
+# NOTE: this bucket was created manually in the Cloudflare dashboard
+# (2026-08-28) with the value already in the SOPS vault
+# (R2_BUCKET=cogito-bucket). The operator must `terraform import` it before
+# the first apply, otherwise Terraform will try to create a second bucket.
+# Provider v5 import ID format: <account_id>/<bucket_name>/<jurisdiction>
+#   terraform import cloudflare_r2_bucket.uploads <account_id>/cogito-bucket/default
 resource "cloudflare_r2_bucket" "uploads" {
   account_id = var.cloudflare_account_id
   name       = "cogito-bucket"
   location   = "APAC"
 }
 
-resource "cloudflare_r2_custom_domain" "uploads" {
-  account_id  = var.cloudflare_account_id
-  bucket_name = cloudflare_r2_bucket.uploads.name
-  domain      = "r2bucket.cogitoacademy.id"
-  enabled     = true
-  zone_id     = data.cloudflare_zone.cogito.id
-}
+# NOTE: the r2bucket.cogitoacademy.id custom domain is NOT managed by
+# Terraform. Provider v5 (cloudflare/cloudflare ~> 5.0) has no import
+# support for cloudflare_r2_custom_domain (verified 2026-08-31 against the
+# provider source), and the domain already exists in the dashboard — a
+# managed resource would 409 on apply. It is console-managed; the app's
+# R2_PUBLIC_URL points at it. See APPLY-RUNBOOK.md §2.
 
 # NOTE: no separate DNS record for r2.cogitoacademy.id is created here. For a
 # zone hosted on Cloudflare, the R2 custom domain provisions its own DNS route

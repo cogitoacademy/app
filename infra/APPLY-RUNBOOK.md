@@ -89,9 +89,12 @@ export AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=...
 terraform init
 
 # import pre-created resources BEFORE apply (else Terraform tries to
-# duplicate them — the bucket + custom domain already exist in the dashboard)
-terraform import cloudflare_r2_bucket.uploads cogito-bucket
-terraform import cloudflare_r2_custom_domain.uploads r2bucket.cogitoacademy.id
+# duplicate them — the bucket already exists in the dashboard)
+# Provider v5 import ID format: <account_id>/<bucket_name>/<jurisdiction>
+terraform import cloudflare_r2_bucket.uploads <account_id>/cogito-bucket/default
+# NOTE: the r2bucket.cogitoacademy.id custom domain is console-managed —
+# provider v5 has no import for cloudflare_r2_custom_domain (verified
+# 2026-08-31); it already exists in the dashboard and is not in main.tf.
 
 # plan (review the diff — the R2 buckets + DNS records + custom domain)
 export CLOUDFLARE_API_TOKEN=...
