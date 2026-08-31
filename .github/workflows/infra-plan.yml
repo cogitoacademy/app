@@ -19,12 +19,13 @@
 #
 # Read-only token placeholders (create in the repo Settings → Secrets and
 # variables → Actions if you want plan to run on PRs):
-#   CLOUDFLARE_API_TOKEN       Zone:DNS:Edit for cogitoacademy.id (read-only:
-#                              only DNS read is used by plan; keep write tokens
-#                              out of CI)
-#   R2_ACCESS_KEY_ID           R2 API token scoped to the cogito-infra-state
-#   R2_SECRET_ACCESS_KEY       bucket, Object Read only
-#   R2_STATE_ENDPOINT          https://<accountid>.r2.cloudflarestorage.com
+#   CLOUDFLARE_API_TOKEN        Zone:DNS:Edit for cogitoacademy.id (read-only:
+#                               only DNS read is used by plan; keep write
+#                               tokens out of CI)
+#   R2_STATE_ACCESS_KEY_ID      R2 API token scoped to the cogito-infra-state
+#   R2_STATE_SECRET_ACCESS_KEY  bucket, Object Read only — a DEDICATED token,
+#                               not the backups/uploads one (different bucket)
+#   R2_STATE_ENDPOINT           https://<accountid>.r2.cloudflarestorage.com
 #
 # See also: docs/DEPLOYMENT.md → "Plan-only audit".
 
@@ -72,12 +73,12 @@ jobs:
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_STATE_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          R2_STATE_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
           R2_STATE_ENDPOINT: ${{ secrets.R2_STATE_ENDPOINT }}
         run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$R2_ACCESS_KEY_ID" ] \
-            || [ -z "$R2_SECRET_ACCESS_KEY" ] || [ -z "$R2_STATE_ENDPOINT" ]; then
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$R2_STATE_ACCESS_KEY_ID" ] \
+            || [ -z "$R2_STATE_SECRET_ACCESS_KEY" ] || [ -z "$R2_STATE_ENDPOINT" ]; then
             echo "skip-plan=true" >> "$GITHUB_OUTPUT"
             echo "reason=read-only Cloudflare/R2 tokens are not configured in this repo"
           else
@@ -88,10 +89,12 @@ jobs:
         if: steps.check-creds.outputs.skip-plan == 'false'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          # R2 state-backend credentials (s3-compatible backend reads
-          # AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY).
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          # R2 state-backend credentials — a DEDICATED token scoped to the
+          # cogito-infra-state bucket (Object Read). Not the backups/uploads
+          # token: the state bucket is a separate R2 bucket and a token
+          # scoped elsewhere gets a 403 (seen 2026-08-31).
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
           AWS_ENDPOINT_URL_S3: ${{ secrets.R2_STATE_ENDPOINT }}
         run: |
           terraform init -reconfigure
