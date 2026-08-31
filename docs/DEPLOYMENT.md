@@ -254,9 +254,14 @@ the real Coolify resource UUIDs; do not include `<` or `>`):
 ```text
 COOLIFY_PROD_SERVER_WEBHOOK=https://cl.cogitoacademy.id/api/v1/deploy?uuid=<prod-api-resource-uuid>&force=false
 COOLIFY_PROD_WEBHOOK=https://cl.cogitoacademy.id/api/v1/deploy?uuid=<prod-web-resource-uuid>&force=false
-COOLIFY_STAGING_SERVER_WEBHOOK=https://cl.cogitoacademy.id/api/v1/deploy?uuid=<staging-api-resource-uuid>&force=false
-COOLIFY_STAGING_WEBHOOK=https://cl.cogitoacademy.id/api/v1/deploy?uuid=<staging-web-resource-uuid>&force=false
 ```
+
+> The `COOLIFY_STAGING_SERVER_WEBHOOK` / `COOLIFY_STAGING_WEBHOOK` entries that
+> used to be listed here are gone: `cd-staging.yml` was deleted on
+> 2026-08-31 (locked decision — prod-first, no staging exists; a staging
+> webhook pointing at `cl.cogitoacademy.id` would redeploy over the
+> production Coolify instance). See RUNBOOK → "Deploy Secrets" → "Staging CD
+> removed".
 
 Keep the `&` literal: do not add a backslash, backticks, quotes, or trailing
 question marks. The hostname must be publicly DNS-resolvable from a GitHub
@@ -308,34 +313,38 @@ message and exits 1 (readable failure instead of a bare `curl exit 6`).
    bun run build:web
    ```
 
-2. Open a PR, wait for CI, merge to `main` for production or `staging` for
-   staging.
+2. Open a PR, wait for CI, merge to `main` for production. (`cd-staging.yml`
+   was deleted 2026-08-31 — pushing to `staging` triggers no CD; see RUNBOOK →
+   "Deploy Secrets" → "Staging CD removed".)
 3. `cd-prod.yml` builds and pushes the server and web images on a GitHub-hosted
    runner. Its dependent `deploy` job runs only on the VPS runner labelled
-   `production`; staging remains GitHub-hosted.
+   `production`.
 4. Production receives both `latest` and immutable `v<full-commit-sha>` tags.
-   Staging receives the `staging` tag.
+   (No staging tags exist — the staging CD pipeline was removed 2026-08-31.)
 5. On the VPS runner, `scripts/resolve-private-db-url.sh` resolves the private
    Coolify PostgreSQL container to its current VPS-local IP without publishing
    port 5432. The workflow takes the R2 snapshot, applies migrations, calls the
-   API and web Coolify webhooks, then polls the API
-   health endpoint for up to approximately five minutes. The production poll is
-   **sha-verified**: `scripts/migrate-and-deploy.sh` requires
-   `GET /health` to return `version == <commit-sha>` (the server image is
-   built with `--build-arg GIT_SHA=${{ github.sha }}` and `/health` surfaces it
-   as `version`), so a green deploy means the _new_ image is serving. On
-   timeout the script prints a rollback hint pointing at the previous immutable
-   `v<prev-sha>` image.
+   API Coolify webhook, then polls the API health endpoint for up to
+   approximately five minutes. The production poll is **sha-verified**:
+   `scripts/migrate-and-deploy.sh` requires `GET /health` to return
+   `version == <commit-sha>` (the server image is built with
+   `--build-arg GIT_SHA=${{ github.sha }}` and `/health` surfaces it as
+   `version`), so a green deploy means the _new_ image is serving. On timeout
+   the script first attempts a **best-effort auto-rollback** via the Coolify
+   API (`COOLIFY_API_TOKEN` set: resolve the app UUID by `COOLIFY_APP_UUID` or
+   domain match, `PATCH` the resource image tag to `v<prev-sha>`, trigger the
+   redeploy; Databases are NEVER restored automatically), then prints the
+   rollback hint and exits 1.
    The migration task allowlists `DATABASE_URL` in `turbo.json`; this is required
    because Turbo's strict environment mode otherwise filters the URL before it
    reaches `drizzle-kit`.
-6. Check both Coolify deployment logs and the public smoke checks below.
-
-For staging, use the `cogito-staging` project, `:staging` image tags,
-`staging.cogitoacademy.id` for the API, and
-`staging-app.cogitoacademy.id` for the web app. The staging web image must be
-built with `VITE_SERVER_URL=https://staging.cogitoacademy.id`; the staging
-workflow already supplies that build argument.
+6. A separate step POSTs the web Coolify webhook and immediately verifies the
+   web surface: `scripts/migrate-and-deploy.sh --poll-web` polls
+   `https://app.cogitoacademy.id` for HTTP 200 (bounded 20×15s). The web image
+   is static nginx with no version marker, so HTTP 200 is the verification
+   signal; a timeout turns CD red with a manual web-rollback hint (no
+   auto-rollback for the web resource).
+7. Check both Coolify deployment logs and the public smoke checks below.
 
 Database migrations are not run automatically by the server container. If a
 release contains a migration, take the normal database backup and apply the
@@ -597,7 +606,7 @@ What it runs:
 
 | Job       | Checks                                                                                                                                                                                                                                                              |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Terraform | `terraform init -backend=false` + `terraform validate` (always). `terraform plan` (read-only) runs only when the read-only tokens below are configured; otherwise the plan step prints a clear "skipped" notice and exits 0 — unset secrets are never a CI failure. |
+| Terraform | `terraform init -backend=false` + `terraform validate` (always). `terraform plan` (read-only) runs when the credentials below are configured; on a **non-fork** PR a missing credential **fails the job** with a remediation message (a silently skipped plan is a false green — CI-SANITY F1/F2, 2026-08-31). Fork PRs cannot read repo secrets, so plan is skipped there (`validate` still runs). A 403 from the state bucket always fails the job. |
 | Ansible   | `ansible-playbook --syntax-check -i infra/ansible/inventory.ini` on **every** playbook under `infra/ansible/*.yml` (glob, so new playbooks are picked up automatically).                                                                                            |
 | Docs      | Verifies this `## Plan-only audit` section still exists.                                                                                                                                                                                                            |
 
@@ -624,7 +633,10 @@ bucket; it must never be given write-scoped tokens):
 | `R2_STATE_ENDPOINT`    | `https://<accountid>.r2.cloudflarestorage.com`        |
 
 Without them the Terraform job still runs `validate` (it is the
-always-on gate) and reports plan as skipped.
+always-on gate). On **non-fork** PRs the credential check fails the job with
+the remediation message — the plan may no longer silently vanish behind a
+green check (the 2026-08-31 skip/403 false-positive class, CI-SANITY F1/F2).
+Fork PRs keep the skip (fork events never receive repository secrets).
 
 Local operator commands (full verification is only possible from an
 operator machine that can reach the tailnet):

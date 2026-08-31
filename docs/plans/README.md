@@ -9,6 +9,7 @@
 | [CONTACT-SHARING.md](active/CONTACT-SHARING.md)         | `f/contact-sharing-flow` | #108      | Implemented — consent-based post-session contact request/share-email flow with privacy and leak-regression coverage                                                                                       |
 | [DEPLOYMENT-PLAN.md](active/DEPLOYMENT-PLAN.md)         | main (merged #115–#118)  | —         | **Active (rev. 2)** — infra scaffold (#115), DLQ health (#116), backups (#117), CD pipeline (#118) merged; operator apply + secrets pending                                                               |
 | [DEPLOYMENT-WAVE-2.md](active/DEPLOYMENT-WAVE-2.md)     | main (merged #121–#122)  | #121–#122 | **Active (wave-2, 2026-08-28)** — Coolify resources, Traefik routing, drift check, plan-only CI, and production backup/env wiring merged; operator apply + vault/secrets pending                          |
+| [CI-SANITY.md](active/CI-SANITY.md)                     | `ops/ci-deploy-verify`   | —         | **Active — F1/F3/F4/F5/F7 implemented 2026-08-31** (fail-loud infra-plan, web-deploy verification, best-effort auto-rollback, CI dedupe, staging CD removed); F2/F6/F8/F9/F10 remain                      |
 | [MONITORING-ALERTING.md](active/MONITORING-ALERTING.md) | `f/dlq-age-health`       | —         | **Active — item 3 done (2026-08-31)** — DLQ age-aware health implemented (`failedAt` stamp + Lua fresh-depth, 24h window with `DLQ_FRESH_WINDOW_HOURS` override); Uptime Kuma + Discord alerting deferred |
 
 ## Completed (merged to main)
