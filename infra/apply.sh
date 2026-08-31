@@ -130,9 +130,17 @@ require_terraform_key() {
   fi
   # shellcheck source=/dev/null
   . "$TERRAFORM_KEY_TXT"
-  if [[ -z "$CLOUDFLARE_API_TOKEN" ]]; then
-    die_multi "ERROR: " "$TERRAFORM_KEY_TXT exists but does not set CLOUDFLARE_API_TOKEN. Add a line:" \
-      "  CLOUDFLARE_API_TOKEN=<token>   (Zone:DNS:Edit + R2 Admin)"
+  # set -u guard: read with :- default and report WHICH vars are missing.
+  # (A bare "$CLOUDFLARE_API_TOKEN" under `set -u` aborts with an unhelpful
+  # "unbound variable" when the key file didn't define it — e.g. CRLF line
+  # endings make bash parse `CLOUDFLARE_API_TOKEN=...\r` as the variable
+  # name `CLOUDFLARE_API_TOKEN=$'\r'...`-adjacent tokens and the export
+  # never lands. Verified live 2026-08-31.)
+  if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+    die_multi "ERROR: " "$TERRAFORM_KEY_TXT exists but CLOUDFLARE_API_TOKEN is not set. Add one line:" \
+      "  CLOUDFLARE_API_TOKEN=<token>   (Zone:DNS:Edit + R2 Admin)" \
+      "If the line looks correct, check for: CRLF line endings (run: dos2unix $TERRAFORM_KEY_TXT)," \
+      "spaces around '=', or values containing quotes that swallowed the rest of the file."
   fi
   export CLOUDFLARE_API_TOKEN
   # R2 state-backend vars: map the R2_* convention onto the AWS_* names the
