@@ -132,7 +132,7 @@ Decision (user principle: _correct & secure, no premature churn_), per category:
 - [ ] **Step 2:** Document the _intentional_ warning classes in `docs/plans/active/CI-SANITY.md` (F-list) so they never read as unsurfaced errors.
 - [ ] **Step 3:** Commit + docs.
 
-## Task 6: CI/Actions deprecation + hygiene (E3, E4)
+## Task 6: CI/Actions deprecation + hygiene (E3, E4) — DONE (#139)
 
 **Files:** `.github/workflows/*.yml` (checkout v4→v7 where compatible), `infra/ansible/inventory.ini`.
 
