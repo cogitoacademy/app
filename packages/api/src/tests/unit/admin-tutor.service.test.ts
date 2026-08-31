@@ -634,6 +634,92 @@ describe("AdminTutor Service", () => {
       );
     });
 
+    test("updateTutorAchievements throws when profile not found", async () => {
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getTutorProfileById: mock(async () => null),
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+
+      await expect(
+        service.updateTutorAchievements("admin1", {
+          tutorProfileId: "p1",
+          version: 1,
+          education: [],
+          competitionAchievements: [],
+        }),
+      ).rejects.toThrow(TutorProfileNotFoundError);
+    });
+
+    test("updateTutorAchievements mirrors into pending when competitionAchievements already pending", async () => {
+      const profile = {
+        ...makeProfile(),
+        version: 2,
+        education: [],
+        competitionAchievements: [
+          {
+            competitionName: "Old Comp",
+            year: 2020,
+            awards: ["Winner"],
+          },
+        ],
+        pendingProfileChanges: {
+          competitionAchievements: [
+            {
+              competitionName: "Old Comp",
+              year: 2020,
+              awards: ["Winner"],
+            },
+          ],
+        },
+      };
+      const updated = { ...profile, version: 3 };
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getTutorProfileById: mock(async () => profile),
+          updateTutorProfileWithVersion: mock(async () => [updated]),
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+      const competitionAchievements = [
+        {
+          competitionName: "New Comp",
+          year: 2024,
+          awards: ["Best Delegate"],
+        },
+      ];
+
+      await expect(
+        service.updateTutorAchievements("admin1", {
+          tutorProfileId: "p1",
+          version: 2,
+          education: [],
+          competitionAchievements,
+        }),
+      ).resolves.toBe(updated);
+
+      expect(
+        deps.adminTutorRepo.updateTutorProfileWithVersion,
+      ).toHaveBeenCalledWith(
+        {},
+        "p1",
+        2,
+        expect.objectContaining({
+          education: [],
+          pendingProfileChanges: expect.objectContaining({
+            competitionAchievements,
+          }),
+        }),
+      );
+      const updateArgs = (
+        deps.adminTutorRepo.updateTutorProfileWithVersion as any
+      ).mock.calls[0][3];
+      expect(updateArgs.competitionAchievements).toBeUndefined();
+    });
+
     test("updateTutorAchievements rejects a stale profile version", async () => {
       const profile = {
         ...makeProfile(),

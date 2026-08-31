@@ -371,7 +371,9 @@ export function TutorAchievementsEditor({
             Add education
           </Button>
           {errors?.education ? (
-            <FieldError>{errors.education}</FieldError>
+            <Field className="gap-0">
+              <FieldError>{errors.education}</FieldError>
+            </Field>
           ) : null}
         </section>
 
@@ -495,7 +497,9 @@ export function TutorAchievementsEditor({
             Add achievement
           </Button>
           {errors?.competitionAchievements ? (
-            <FieldError>{errors.competitionAchievements}</FieldError>
+            <Field className="gap-0">
+              <FieldError>{errors.competitionAchievements}</FieldError>
+            </Field>
           ) : null}
         </section>
       </div>

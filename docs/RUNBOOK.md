@@ -54,6 +54,17 @@ Open `/login` in a clean browser and sign in as a student, tutor, and admin. The
 
 Also verify the client validation feedback: blur an empty or malformed email, a short password, and (on sign-up) a short name or password missing uppercase/lowercase/digit requirements. Each invalid field should show its own Selia inline error and danger outline; submitting incomplete data should reveal the field errors and must not call `/api/auth`. Correcting the values should clear the errors and re-enable the normal auth request. An API-level malformed JSON request to `/api/auth/sign-up/email` must return 400, never 500.
 
+### Profile and tutor-onboarding smoke check
+
+After a web deployment, sign in as a student and open `/profile`; then sign in
+as a tutor and open `/profile` (the tutor route should redirect to `/onboarding`).
+Submit incomplete forms and confirm validation messages remain inline, the page
+does not fall into the generic error screen, and the browser console has no
+`Base UI error #28`. A `500` shown by the client error page together with
+`FieldRootContext is missing` means a `FieldLabel`, `FieldDescription`, or
+`FieldError` has been rendered outside a Selia `Field` root; inspect the affected
+form composition before checking the API or database.
+
 ### Dashboard smoke check
 
 After a web deployment, sign in once as each supported role and open `/dashboard`. Verify the sidebar user menu shows the authenticated profile image when one is configured and uses initials when it is not:

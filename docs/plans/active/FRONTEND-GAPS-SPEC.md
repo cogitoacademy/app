@@ -719,6 +719,7 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 
 ### Version Notes
 
+- v1.39 (2026-08-31): Kept profile contact-privacy and tutor-onboarding validation parts under Selia `Field` roots, including structured-achievement section errors, so Base UI error #28 cannot turn an inline validation state into a generic client-side 500. No RPC, schema, persistence, or URL contract changed.
 - v1.38 (2026-08-31): Added structured tutor education and competition achievements with 2/5 entry caps, bold-first-line public rendering, legacy `credentialsSummary` fallback, migration `0039_secret_blink.sql`, and admin correction through `adminTutor.updateTutorAchievements` with optimistic locking and audit logging.
 
 - v1.37 (2026-08-28): Updated the shared `/bookings` page to consume the existing `booking.listMine` cursor contract in batches of 20 with an append-only **Load more bookings** flow. Existing cards stay visible during next-page loading, and tab counts show `+` while more pages remain. Mutation invalidation now targets the procedure key so all cached infinite pages refresh. No API or schema contract changed.

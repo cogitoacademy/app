@@ -2,6 +2,14 @@
 
 Last updated: 2026-08-31
 
+## Profile and tutor-onboarding validation (2026-08-31)
+
+Profile and tutor-onboarding field validation is client-side presentation logic.
+Selia field parts remain nested under their `Field` roots, including checkbox
+copy and section-level errors, so validation renders inline without a runtime
+exception. No RPC path, request envelope, response shape, schema, or persistence
+contract changed.
+
 ## Stable collection transitions (2026-08-28)
 
 Pagination and filter-transition stability is client-side only. The admin tutor
