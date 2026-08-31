@@ -50,14 +50,34 @@
     backup_env_file_mode: "0600"
 
   tasks:
-    - name: Install pg_dump and aws CLI
+    - name: Install pg_dump (postgresql-client)
       ansible.builtin.apt:
         name:
           - postgresql-client # pg_dump
-          - awscli # S3-compatible client for R2 (v2 recommended; v1 works with --endpoint-url)
         state: present
         update_cache: true
         cache_valid_time: 3600
+
+    # Ubuntu noble dropped the `awscli` apt package; the VPS already has
+    # AWS CLI v2 at /opt/cogito-actions-tools/bin/aws (installed for the CD
+    # runner, verified 2026-08-31). Detect it instead of apt-installing.
+    - name: Verify the AWS CLI is present
+      ansible.builtin.command: aws --version
+      register: aws_check
+      changed_when: false
+      failed_when: aws_check.rc != 0
+      environment:
+        PATH: "/usr/local/bin:/opt/cogito-actions-tools/bin:{{ lookup('env', 'PATH') }}"
+      ignore_errors: true
+
+    - name: Fail with install guidance when the AWS CLI is missing
+      ansible.builtin.fail:
+        msg: >-
+          AWS CLI v2 not found on the VPS. Install it once:
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+          && unzip -o /tmp/awscliv2.zip -d /tmp && sudo /tmp/aws/install
+          (or ensure /opt/cogito-actions-tools/bin is on PATH).
+      when: aws_check.rc != 0
 
     - name: Install the backup script
       ansible.builtin.copy:
@@ -80,6 +100,14 @@
       environment:
         PATH: "{{ lookup('env', 'PATH') }}:/opt/homebrew/bin:/usr/local/bin"
         SOPS_AGE_KEY_FILE: "{{ lookup('env', 'SOPS_AGE_KEY_FILE') | default(lookup('env', 'HOME') + '/.config/sops/age/keys.txt', true) }}"
+
+    - name: Ensure the cron env directory exists
+      ansible.builtin.file:
+        path: "{{ backup_env_dest | dirname }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
 
     - name: Write the cron environment file (root-only)
       ansible.builtin.copy:
