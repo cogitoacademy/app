@@ -10,6 +10,7 @@ Before non-trivial coding, review/load the relevant skills:
 - `git-pr-workflow` for commits and pull requests.
 - `parallel-worktrees` whenever dispatching concurrent write-capable agents/subagents.
 - `production-reliability` for production, infrastructure, persistence, deployment, or reliability work.
+- `error-propagation` before running any playbook/CD/automation and before declaring automation 'green' — a tool's exit code is not evidence; read the effect back from the target system (verified rule 2026-08-31 after the env false-green).
 - `wave-finalization` when finishing a herd wave — closing worker panes, removing worker worktrees/branches, and syncing the plans/docs after merged PRs.
 
 ## Project conventions
