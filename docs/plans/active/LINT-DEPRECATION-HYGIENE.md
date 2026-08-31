@@ -16,27 +16,28 @@
 - Conventional Commits; worker branches cut from `origin/main` AFTER `git fetch`; PRs only, squash-merge; lead integrates (CONVENTIONS.md).
 - Coverage gate: 100% lines for `packages/api` and overall — any test-file change must keep the gate green (CI quirks: prefer class-field arrow functions for trivial methods).
 - UI work: Selia components only (`@cogito-app/ui/components/selia/*`), OKLCH tokens, `use client` on component files.
-- No premature optimization: clear *obvious* warnings/deprecations only; leave `no-await-in-loop` (53 hits, intentional sequential money/db semantics) and `consistent-function-scoping` (35, mostly tests) unless a 1-line fix is obviously correct — document anything intentionally disabled (config-level disable with a comment, never inline `# eslint-disable` churn).
+- No premature optimization: clear _obvious_ warnings/deprecations only; leave `no-await-in-loop` (53 hits, intentional sequential money/db semantics) and `consistent-function-scoping` (35, mostly tests) unless a 1-line fix is obviously correct — document anything intentionally disabled (config-level disable with a comment, never inline `# eslint-disable` churn).
 - Priority order per user: correctness & security first, deprecations cleared (not prematurely optimized), warnings must end at 0 or be explicitly documented.
 
 ---
 
 ## Evidence base (verified 2026-08-31)
 
-| # | Finding | Count | Where |
-| --- | --- | --- | --- |
-| E1 | oxlint 1.80 **errors** blocking the re-bump | 81 | 45 `tutor-drawer.tsx` react(refs); 20 test `no-non-null-asserted-optional-chain`; 8 `react(purity)` Date.now-in-render; 8 `react(set-state-in-effect)`; 1 misc |
-| E2 | oxlint 1.78 **warnings** (visible in CI today) | 123 | 53 `no-await-in-loop`, 35 `consistent-function-scoping`, 13 `no-underscore-dangle`, 11 `prefer-add-event-listener`, rest misc |
-| E3 | GitHub Actions **Node 20 deprecation** warnings | every CI job | `oven-sh/setup-bun@v2` + `actions/checkout@v4` (checkout v6+ runs Node 24) |
-| E4 | Ansible **"Invalid characters in group names"** warning | every ansible run | `infra/ansible/inventory.ini` group name `[cogito-vps]` contains a hyphen |
-| E5 | Terraform `endpoint` **deprecated parameter** (backend s3) | terraform init | `infra/terraform/backend.tf` — already fixed to `endpoints.s3` by the user's commit `6c5d092` (merged); verified no warning in latest run — DO NOT touch |
-| E6 | AWS CLI on VPS at `/opt/cogito-actions-tools/bin/aws`; noble dropped apt `awscli` | handled | #137 merged |
-| E7 | Dependabot alerts (open) | 0 | clean |
-| E8 | 100%-coverage gate still green; `console.warn` audit: only logger + tests | — | no stray runtime warnings on the server |
+| #   | Finding                                                                           | Count             | Where                                                                                                                                                          |
+| --- | --------------------------------------------------------------------------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| E1  | oxlint 1.80 **errors** blocking the re-bump                                       | 81                | 45 `tutor-drawer.tsx` react(refs); 20 test `no-non-null-asserted-optional-chain`; 8 `react(purity)` Date.now-in-render; 8 `react(set-state-in-effect)`; 1 misc |
+| E2  | oxlint 1.78 **warnings** (visible in CI today)                                    | 123               | 53 `no-await-in-loop`, 35 `consistent-function-scoping`, 13 `no-underscore-dangle`, 11 `prefer-add-event-listener`, rest misc                                  |
+| E3  | GitHub Actions **Node 20 deprecation** warnings                                   | every CI job      | `oven-sh/setup-bun@v2` + `actions/checkout@v4` (checkout v6+ runs Node 24)                                                                                     |
+| E4  | Ansible **"Invalid characters in group names"** warning                           | every ansible run | `infra/ansible/inventory.ini` group name `[cogito-vps]` contains a hyphen                                                                                      |
+| E5  | Terraform `endpoint` **deprecated parameter** (backend s3)                        | terraform init    | `infra/terraform/backend.tf` — already fixed to `endpoints.s3` by the user's commit `6c5d092` (merged); verified no warning in latest run — DO NOT touch       |
+| E6  | AWS CLI on VPS at `/opt/cogito-actions-tools/bin/aws`; noble dropped apt `awscli` | handled           | #137 merged                                                                                                                                                    |
+| E7  | Dependabot alerts (open)                                                          | 0                 | clean                                                                                                                                                          |
+| E8  | 100%-coverage gate still green; `console.warn` audit: only logger + tests         | —                 | no stray runtime warnings on the server                                                                                                                        |
 
 ## Files per task
 
 Task-by-task file map is inline in each task (Create/Modify/Test lines). No task touches another task's files except:
+
 - Task 4 (re-bump) owns `package.json` + `bun.lock`; Task 1–3 own source tests/components.
 - Task 5 (docs sync) touches only `docs/`.
 - Worker file sets are disjoint (worker A: web components; worker B: api tests + workflows; worker C: ansible + monitoring).
@@ -46,10 +47,12 @@ Task-by-task file map is inline in each task (Create/Modify/Test lines). No task
 ## Task 1 — `tutor-drawer.tsx` refs-during-render refactor (45 hits → 0)
 
 **Files:**
+
 - Modify: `apps/web/src/components/tutor/tutor-drawer.tsx`
 - Test: `bun run check-types` + vite build stays clean; manual smoke of the drawer.
 
 **Interfaces:**
+
 - Consumes: existing Selia components; the drawer's props/state as-is.
 - Produces: same rendered output; refs only touched in handlers/effects (`useEffect` pre-commit hooks or `requestAnimationFrame` where needed).
 
@@ -77,6 +80,7 @@ git commit -m "fix(web): stop accessing refs during render in tutor-drawer"
 ## Task 2: Small react correctness fixes (purity / setState-in-effect, ~14 sites across 9 files)
 
 **Files:**
+
 - Modify: `apps/web/src/components/tutor/tutor-achievements.tsx` (2× refs), `availability-page.tsx` (2 purity + 1 setState-in-effect), `apps/web/src/components/booking/booking-detail-page.tsx` (2× purity), `booking-reschedule-action.tsx` (1), `booking-lifecycle-actions.tsx` (1), `manual-meeting-link-dialog.tsx` (1), `dashboard/student-dashboard-page.tsx` (1), `dashboard/pages/bookings-page.tsx` (1), `dashboard/pages/profile-page.tsx` (1), `dashboard/achievement-banner.tsx` (1), `content/calendar-month-view.tsx` (1), `admin/economy-settings-page.tsx` (1), `guide/guide-page.tsx` (1)
 
 **Interfaces:** none change — internal-only refactors (Date.now in render → `useEffect`+state or the existing shared 30s clock; setState-in-effect → derive during render or initialize state).
@@ -116,7 +120,8 @@ git add package.json bun.lock . && git commit -m "chore(repo): re-bump oxlint to
 
 ## Task 5: Warning-hygiene triage (E2 categories — config-level, lead-owned)
 
-Decision (user principle: *correct & secure, no premature churn*), per category:
+Decision (user principle: _correct & secure, no premature churn_), per category:
+
 - `no-await-in-loop` (53): **intentional** — sequential money/DB writes; do NOT parallelize (money correctness). Add a category-wide comment in CI lint step docs, or demote in CI via `--config` if it can be scoped to tests; otherwise leave as warnings and document in CI-SANITY.
 - `consistent-function-scoping` (35): triage only where the scoped function touches closures incorrectly; otherwise documented as style. No churn.
 - `no-underscore-dangle` (13): leave (convention for `_`-prefixed internals).
@@ -124,7 +129,7 @@ Decision (user principle: *correct & secure, no premature churn*), per category:
 - `no-useless-constructor` (4), `no-shadow` (2), singletons (1 each): fix opportunistically in the same PR as tasks above.
 
 - [ ] **Step 1:** Fix `tweaks-bar.js` addEventListener (11 warnings) + the 4 useless constructors + 2 shadows in the same worker PR as Task 2/3.
-- [ ] **Step 2:** Document the *intentional* warning classes in `docs/plans/active/CI-SANITY.md` (F-list) so they never read as unsurfaced errors.
+- [ ] **Step 2:** Document the _intentional_ warning classes in `docs/plans/active/CI-SANITY.md` (F-list) so they never read as unsurfaced errors.
 - [ ] **Step 3:** Commit + docs.
 
 ## Task 6: CI/Actions deprecation + hygiene (E3, E4)
@@ -144,12 +149,12 @@ Update in the same PRs as the code (workers do this per task): CONTEXT.md (lint-
 
 ## Execution order & workers
 
-| Order | Worker | Branch | Tasks | Files (overlap-safe) |
-| --- | --- | --- | --- | --- |
-| 1 | W1 `lint-drawer` | `f/lint-drawer` | Task 1 | `tutor-drawer.tsx` only |
-| 2 | W2 `lint-web-misc` | `f/lint-web-misc` | Task 2 + Task 5 Step 1 (tweaks-bar, small fixes) | all other `apps/web/**` listed + `packages/api/src/tests/**` |
-| 3 | W3 `ci-hygiene` | `ops/ci-deprecation` | Task 6 + Task 5 Step 2 docs | `.github/workflows/**`, `infra/ansible/inventory.ini`, docs |
-| 4 | lead | `ops/lint-rebump` | Task 4 (after 1–2 merge) + final docs sync | `package.json`, `bun.lock`, plan docs |
+| Order | Worker             | Branch               | Tasks                                            | Files (overlap-safe)                                         |
+| ----- | ------------------ | -------------------- | ------------------------------------------------ | ------------------------------------------------------------ |
+| 1     | W1 `lint-drawer`   | `f/lint-drawer`      | Task 1                                           | `tutor-drawer.tsx` only                                      |
+| 2     | W2 `lint-web-misc` | `f/lint-web-misc`    | Task 2 + Task 5 Step 1 (tweaks-bar, small fixes) | all other `apps/web/**` listed + `packages/api/src/tests/**` |
+| 3     | W3 `ci-hygiene`    | `ops/ci-deprecation` | Task 6 + Task 5 Step 2 docs                      | `.github/workflows/**`, `infra/ansible/inventory.ini`, docs  |
+| 4     | lead               | `ops/lint-rebump`    | Task 4 (after 1–2 merge) + final docs sync       | `package.json`, `bun.lock`, plan docs                        |
 
 Merge order: W1 → W2 → W3 → lead re-bump (each gated by CI green; the pin holds until Task 4 so every intermediate PR stays green).
 
