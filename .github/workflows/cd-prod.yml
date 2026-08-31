@@ -4,12 +4,14 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    # Build+push (~3 min) + migrate-and-deploy (backup, migrate, deploy,
-    # sha-verified health poll up to 20x15s ≈ 5 min) need headroom.
-    timeout-minutes: 20
+    timeout-minutes: 10
     # Required so the GITHUB_TOKEN can push images to GHCR. Without this the
     # push fails with "denied: installation not allowed to Create organization
     # package" (the org must also allow Actions package creation).
@@ -50,6 +52,26 @@ jobs:
           docker push ghcr.io/${{ github.repository }}/web:latest
           docker push ghcr.io/${{ github.repository }}/web:v${{ github.sha }}
 
+  deploy:
+    name: Backup, migrate, deploy, and verify
+    needs: build-and-push
+    # The production database is intentionally private to Coolify's Docker
+    # network. This runner lives on the production VPS; cloud-hosted runners
+    # cannot resolve or reach the database hostname.
+    runs-on: [self-hosted, linux, x64, production]
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+
+      - name: Resolve private production database host
+        env:
+          PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+        run: bash scripts/resolve-private-db-url.sh
+
       - name: Backup, migrate, deploy, sha-verified health poll
         # Full production pipeline via scripts/migrate-and-deploy.sh:
         #   1. pg_dump snapshot → gzip → R2 (pre-migrate-<sha>.sql.gz)
@@ -74,7 +96,6 @@ jobs:
         env:
           COOLIFY_WEBHOOK: ${{ secrets.COOLIFY_PROD_SERVER_WEBHOOK }}
           COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
-          PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}

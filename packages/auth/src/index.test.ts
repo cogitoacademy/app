@@ -214,3 +214,16 @@ describe("resolveGoogleSocialProviders", () => {
     });
   });
 });
+
+describe("OAuth state cookie security", () => {
+  test("allows the provider callback while keeping state cookie overrides scoped", () => {
+    const advanced = (auth as any).options.advanced;
+
+    expect(advanced.defaultCookieAttributes.sameSite).toBeDefined();
+    expect(advanced.defaultCookieAttributes.httpOnly).toBe(true);
+    expect(advanced.cookies.state.attributes).toEqual({ sameSite: "lax" });
+    expect(advanced.cookies.oauth_state.attributes).toEqual({
+      sameSite: "lax",
+    });
+  });
+});

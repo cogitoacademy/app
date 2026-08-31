@@ -31,6 +31,7 @@ import {
   IconWallet,
 } from "@tabler/icons-react";
 
+import { WhatsAppSupportDialog } from "@/components/whatsapp-support-dialog";
 import { StatCard } from "./stat-card";
 
 const milestones = [
@@ -192,21 +193,17 @@ function SupportCard() {
         </CardDescription>
       </CardHeader>
       <CardBody className="flex flex-col gap-3">
-        <Button
-          variant="outline"
-          nativeButton={false}
-          render={
-            <a
-              href="https://wa.me/6288101190195"
-              target="_blank"
-              rel="noreferrer"
+        <WhatsAppSupportDialog
+          trigger={
+            <Button
+              variant="outline"
               aria-label="Contact Cogito through WhatsApp"
-            />
+            >
+              WhatsApp Support
+              <IconBrandWhatsapp />
+            </Button>
           }
-        >
-          WhatsApp Support
-          <IconBrandWhatsapp />
-        </Button>
+        />
         <Button
           variant="outline"
           nativeButton={false}

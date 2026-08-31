@@ -317,6 +317,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 
 - Wallet is lazily created on first `me` call
 - Better Auth handles session management, password hashing, and session cookies
+- Google OAuth starts on the API and returns through `/api/auth/callback/google`; the frontend callback route is the post-login destination. Production session cookies remain `SameSite=Strict`, while Better Auth's short-lived signed OAuth state cookie uses `SameSite=Lax` so the provider's top-level callback GET can return it. The state cookie remains `Secure`/`HttpOnly`, and Better Auth verifies it against the database-backed verification record before creating a session.
 - Production/staging startup and signup bootstrap matching `ADMIN_EMAILS` to the `admin` role is case-insensitive and additive: it never demotes existing admins; other admin addresses remain supported by the existing role-management procedures.
 - The web email sign-in/sign-up handoff awaits the Better Auth result, performs a fresh session read before choosing `/dashboard`, `/onboarding`, `/admin-tutors`, or a validated return path, and suppresses the overlapping client signal refresh so the login form does not flash back into the loader. When the fresh session has `emailVerified !== true`, email/password sign-in sends a verification OTP and routes to `/verify-email`; the Google callback applies the same rule. The validated post-login destination is carried through verification, and legacy accounts are not automatically marked verified. The authenticated shell uses the same fresh session source for its parent route guard.
 - The `/login` email forms run field-level validation on change/blur after a field is touched, show Selia inline errors and danger outlines for invalid fields, and mirror the sign-up password requirements enforced by the server. These checks are client-only and do not add an auth endpoint or persistence rule.
@@ -774,7 +775,7 @@ chat directory.
 - `listTickets(userId, { status?, limit? })` — The user's own tickets
 - `adminList({ status?, limit?, offset? })` — All tickets sorted by SLA urgency (earliest deadline first)
 - `adminResolveTicket(adminId, { ticketId, resolution })` — Sets `resolved` + assignee, notifies the reporter, records an audit log; throws `SupportTicketAlreadyResolvedError` if already resolved/closed
-- `escalatePastSlaTickets()` — Called by the `escalate-support-tickets` scheduler job; marks open tickets past `slaDeadline` as `in_progress` + escalated, records an audit log, and emits a `support.{id}.escalated` notification row (metadata `whatsappTarget: +6288101190195`, `escalate: true`) as the hook point a future WhatsApp adapter consumes (OQ-04; #46, P2.8)
+- `escalatePastSlaTickets()` — Called by the `escalate-support-tickets` scheduler job; marks open tickets past `slaDeadline` as `in_progress` + escalated, records an audit log, and emits a `support.{id}.escalated` notification row (metadata `whatsappTarget: +62881011990195`, `escalate: true`) as the hook point a future WhatsApp adapter consumes (OQ-04; #46, P2.8)
 
 **Dependencies:** `SupportRepo`, `SupportNotificationPort`, `SupportAuditPort`
 
@@ -784,6 +785,7 @@ chat directory.
 - SLA deadline per OQ-04 (REVIEW-FIXES-4 P2.8): 30 min during business hours (Mon–Sat 09:00–21:00 WIB, UTC+7), 4 h otherwise — wall-clock rule computed by `computeSlaDeadline`
 - Auto-acknowledgement notification on ticket creation (OQ-04)
 - Escalation emits a `support.{id}.escalated` notification row that a future WhatsApp adapter consumes; WhatsApp itself is out of scope until an integration is approved (OQ-04)
+- Web support actions display a confirmation dialog with `+62 881-0119-90195` before opening the support conversation in a new tab.
 - Lateness reports are time-gated (15 min after scheduled start)
 
 ---

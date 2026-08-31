@@ -307,11 +307,15 @@ message and exits 1 (readable failure instead of a bare `curl exit 6`).
 
 2. Open a PR, wait for CI, merge to `main` for production or `staging` for
    staging.
-3. `cd-prod.yml` or `cd-staging.yml` builds the server and web images, logs in
-   to GHCR, and pushes them.
+3. `cd-prod.yml` builds and pushes the server and web images on a GitHub-hosted
+   runner. Its dependent `deploy` job runs only on the VPS runner labelled
+   `production`; staging remains GitHub-hosted.
 4. Production receives both `latest` and immutable `v<full-commit-sha>` tags.
    Staging receives the `staging` tag.
-5. The workflow calls the API and web Coolify webhooks, then polls the API
+5. On the VPS runner, `scripts/resolve-private-db-url.sh` resolves the private
+   Coolify PostgreSQL container to its current VPS-local IP without publishing
+   port 5432. The workflow takes the R2 snapshot, applies migrations, calls the
+   API and web Coolify webhooks, then polls the API
    health endpoint for up to approximately five minutes. The production poll is
    **sha-verified**: `scripts/migrate-and-deploy.sh` requires
    `GET /health` to return `version == <commit-sha>` (the server image is
@@ -319,6 +323,9 @@ message and exits 1 (readable failure instead of a bare `curl exit 6`).
    as `version`), so a green deploy means the _new_ image is serving. On
    timeout the script prints a rollback hint pointing at the previous immutable
    `v<prev-sha>` image.
+   The migration task allowlists `DATABASE_URL` in `turbo.json`; this is required
+   because Turbo's strict environment mode otherwise filters the URL before it
+   reaches `drizzle-kit`.
 6. Check both Coolify deployment logs and the public smoke checks below.
 
 For staging, use the `cogito-staging` project, `:staging` image tags,
@@ -346,6 +353,32 @@ Remove-Item Env:ENV_FILE
 
 Use a one-off Coolify task or a secured operator machine for production. Do
 not use `db:push` as an unreviewed production migration mechanism.
+
+### Production self-hosted runner
+
+The repository runner named `cogito-prod` runs as a systemd service on the
+production VPS and has the custom `production` label. Only the production
+deploy job targets it via `runs-on: [self-hosted, linux, x64, production]`;
+builds and pull-request CI remain on isolated GitHub-hosted runners. Required
+host tools are PostgreSQL client 16, Python 3, AWS CLI, and Docker. Its dedicated
+service account belongs to the `docker` group so it can inspect the private
+database network without general sudo access. The runner makes outbound
+connections to GitHub; no inbound runner port or public PostgreSQL port is
+required.
+
+In GitHub, verify the runner under **Settings → Actions → Runners**. On the VPS:
+
+```bash
+sudo systemctl status 'actions.runner.cogitoacademy-app.cogito-prod.service'
+pg_dump --version
+aws --version
+sudo -n docker inspect noxeaeuxfreq0axa9unpew5r >/dev/null
+```
+
+If a deploy stays queued at `Backup, migrate, deploy, and verify`, the runner is
+offline or missing the `production` label. If private DB resolution fails, check
+that the database container remains attached to Docker network `coolify`; do not
+work around it by exposing PostgreSQL publicly.
 
 A nightly PostgreSQL backup runs on the VPS at 02:00 WIB and uploads to
 Cloudflare R2 (`cogito-backups`, the **private** `R2_BACKUP_BUCKET`) with

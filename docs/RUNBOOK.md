@@ -65,13 +65,15 @@ does not fall into the generic error screen, and the browser console has no
 `FieldError` has been rendered outside a Selia `Field` root; inspect the affected
 form composition before checking the API or database.
 
+For Google sign-in, start from `https://app.cogitoacademy.id/login` in a clean browser and confirm the provider callback is `https://api.cogitoacademy.id/api/auth/callback/google`, followed by the frontend route `/auth/callback` and the role-appropriate destination. In DevTools, the initial auth response must set `better-auth.state` with `Secure`, `HttpOnly`, and `SameSite=Lax`; the callback request must include that cookie and its `state` query parameter. Keep the Google Cloud OAuth client configured with the frontend origin `https://app.cogitoacademy.id` and the API redirect URI `https://api.cogitoacademy.id/api/auth/callback/google`.
+
 ### Dashboard smoke check
 
 After a web deployment, sign in once as each supported role and open `/dashboard`. Verify the sidebar user menu shows the authenticated profile image when one is configured and uses initials when it is not:
 
 - Student: learning welcome, next lesson, Knowledge Bank/calendar, and tutor recommendations. Confirm the welcome card shows the SVG illustration and shared spacing/sizing used by the tutor dashboard. If a booking exists, confirm the next-lesson card matches the booking-list date tile, participant metadata, Marks display, status tooltip, and detail action.
 - Tutor: the first dashboard row shows the same SVG welcome card visual plus teaching setup, and the next visible row shows requests to review plus next lesson before metrics/payout; actions link to `/bookings`, `/availability`, and `/onboarding`. Verify the review card keeps its empty/loading slot when there are no requests. When a tutor submits the initial onboarding form, confirm the app redirects to `/dashboard` and the browser Back button does not return to the submission form.
-- Admin: open `/admin` for the admin workspace and verify priority operations/moderation counts and links to `/admin-operations`, `/admin-tutors`, `/admin-achievements`, and `/admin-economy`. In `/admin-operations`, verify category, urgency, and SLA-status filters; open a queue item and confirm its reported reason/source, affected-user count, OQ-04 deadline, time-since-report, escalated badge, and WhatsApp escalation link. Confirm the hydrated participant wallet/booking-ledger cards and state-history timeline load, then use **Open override** to reach the existing preview/apply flow. In `/admin-economy`, verify the active schedule loads, edits persist after reload, and the preview updates.
+- Admin: open `/admin` for the admin workspace and verify priority operations/moderation counts and links to `/admin-operations`, `/admin-tutors`, `/admin-achievements`, and `/admin-economy`. In `/admin-operations`, verify category, urgency, and SLA-status filters; open a queue item and confirm its reported reason/source, affected-user count, OQ-04 deadline, time-since-report, escalated badge, and WhatsApp escalation action. Clicking the escalation action must show the confirmation modal; Cancel keeps the admin page in place, while Continue opens the Cogito support conversation at `+62 881-0119-90195` in a new tab. Confirm the hydrated participant wallet/booking-ledger cards and state-history timeline load, then use **Open override** to reach the existing preview/apply flow. In `/admin-economy`, verify the active schedule loads, edits persist after reload, and the preview updates.
 - In the Operations → Rooms tab, verify the pending offline room-approval queue loads. Use **Assign** for a requested room, **Choose another** to load a booking into the room form (which also exposes the existing relocate operation), and **Cancel** when no suitable room is available.
 - In `/admin-tutors`, open a profile with pending edits and confirm the proposed subject changes show readable category/subject labels instead of raw UUIDs. Resize to a narrow viewport and verify subject badges and other long pending values wrap without horizontal page overflow; use **Edit format** to correct structured education/competition entries, save, reload, and confirm the version-checked update and success toast. The review request/response payloads must remain unchanged.
 
@@ -569,6 +571,20 @@ The workflow also runs the server suite in a separate process because its webhoo
 
 ## Common Errors
 
+### Google OAuth `state_mismatch`
+
+This means Better Auth could not validate the short-lived OAuth state. Confirm
+the browser received `better-auth.state` from the API before navigating to
+Google and sent it back on `GET /api/auth/callback/google`. In production the
+session cookies remain `SameSite=Strict`, but the OAuth state cookie must be
+`SameSite=Lax` because Google returns through a top-level `GET` navigation.
+Clear cookies for `api.cogitoacademy.id` and retry once in a clean browser;
+do not open multiple Google sign-in attempts in parallel or refresh the
+callback URL. If the cookie is present but the error persists, verify that
+`BETTER_AUTH_SECRET` is stable across the deployment and that the shared
+database contains the verification record. Do not disable
+`skipStateCookieCheck`/CSRF checks as a workaround.
+
 ### `BOOKING_CONFLICT` (409)
 
 Two bookings overlap the same tutor time slot. The overlap check uses an exclusion constraint on `tutor_id` + time range. Wait for the other booking to expire or cancel.
@@ -939,12 +955,26 @@ surfaces manual/retry setup attention.
 
 The CD workflows (`cd-prod.yml`, `cd-staging.yml`) build both images (`apps/server/Dockerfile`, `apps/web/Dockerfile`) and push to `ghcr.io/cogitoacademy/app/{server,web}`.
 
-The production pipeline (`cd-prod.yml`) runs the full backup → migrate → deploy → health sequence through `scripts/migrate-and-deploy.sh`:
+The production pipeline (`cd-prod.yml`) builds and pushes images on a GitHub-hosted runner, then runs the backup → migrate → deploy → health sequence on the production VPS runner labelled `production`. `scripts/resolve-private-db-url.sh` converts the Coolify-only database hostname to its current VPS-local container IP for that job without publishing PostgreSQL, then `scripts/migrate-and-deploy.sh` performs the release:
 
 1. **Backup:** `pg_dump` snapshot of the production database, gzipped, uploaded to R2 as `pre-migrate-<GIT_SHA>.sql.gz` (aws CLI against the R2 S3 endpoint).
 2. **Migrate:** `bun run db:migrate` against the production `DATABASE_URL`.
+   Turbo allowlists this variable for the `db:migrate` task so strict env mode
+   passes it through to `drizzle-kit`.
 3. **Deploy:** POST the Coolify deploy webhook (`COOLIFY_PROD_SERVER_WEBHOOK`).
 4. **Health (sha-verified):** poll `https://api.cogitoacademy.id/health` until `version == GIT_SHA` (bounded 20×15s ≈ 5 min). On failure the script prints a clear rollback hint pointing at the previous immutable `v<prev-sha>` image.
+
+Runner triage:
+
+```bash
+sudo systemctl status 'actions.runner.cogitoacademy-app.cogito-prod.service'
+sudo journalctl -u 'actions.runner.cogitoacademy-app.cogito-prod.service' -n 100 --no-pager
+sudo -n docker inspect noxeaeuxfreq0axa9unpew5r --format '{{with index .NetworkSettings.Networks "coolify"}}{{.IPAddress}}{{end}}'
+```
+
+An indefinitely queued deploy means the runner is offline or lacks the
+`production` label. A database resolution error means the Coolify database
+container or network attachment changed; never expose port 5432 publicly.
 
 The server image is built with `--build-arg GIT_SHA=${{ github.sha }}`; the Dockerfile bakes it into `ENV GIT_SHA`, and `GET /health` returns it as `version` (`"dev"` when unset, e.g. local runs). The web image is built with `--build-arg VITE_SERVER_URL=https://api.cogitoacademy.id`.
 

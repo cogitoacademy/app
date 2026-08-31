@@ -13,6 +13,7 @@ import {
   SUPPORT_BUSINESS_START_HOUR_WIB,
   SUPPORT_BUSINESS_END_HOUR_WIB,
   SUPPORT_BUSINESS_DAYS,
+  COGITO_SUPPORT_WHATSAPP_NUMBER,
 } from "../../shared/constants";
 import type { SupportRepo } from "./support.repo";
 import type { SupportNotificationPort, SupportAuditPort } from "./index";
@@ -208,7 +209,7 @@ export function createSupportService(deps: {
           metadata: {
             ticketId: ticket.id,
             slaDeadline: ticket.slaDeadline.toISOString(),
-            whatsappTarget: "+6288101190195",
+            whatsappTarget: COGITO_SUPPORT_WHATSAPP_NUMBER,
             escalate: true,
           },
         });

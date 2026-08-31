@@ -374,7 +374,7 @@ describe("SupportService", () => {
       });
       expect(hook.metadata).toMatchObject({
         ticketId: "t1",
-        whatsappTarget: "+6288101190195",
+        whatsappTarget: "+62881011990195",
         escalate: true,
       });
     });

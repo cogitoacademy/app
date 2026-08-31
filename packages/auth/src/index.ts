@@ -181,6 +181,20 @@ export function createAuth() {
         secure: isProductionLike(env.NODE_ENV),
         httpOnly: true,
       },
+      // The OAuth callback is a top-level GET navigation from the provider.
+      // Keep session cookies Strict, but allow Better Auth's short-lived,
+      // signed state cookie to return with that callback. The database state
+      // strategy still verifies the value against the verification record.
+      cookies: {
+        state: {
+          attributes: { sameSite: "lax" },
+        },
+        // Future-proof the cookie strategy as well; the current database
+        // adapter uses `state`, while cookie-backed state uses `oauth_state`.
+        oauth_state: {
+          attributes: { sameSite: "lax" },
+        },
+      },
     },
     plugins: [
       // G2: email verification via OTP (better-auth email-otp plugin). The

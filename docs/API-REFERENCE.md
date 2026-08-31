@@ -37,6 +37,8 @@ enabled.
 
 Email/password sign-in and sign-up use Better Auth endpoints under `/api/auth`. The server's sign-up password-policy preflight returns 400 for malformed JSON instead of allowing a parser exception to become a 500. The web client validates the email forms on the client and surfaces invalid fields with Selia's inline error state and danger outline, waits for the successful auth response and a fresh session read before entering an authenticated route, and the authenticated route guard also reads the non-cookie-cached session so role-based redirects do not briefly fall back to `/login`. If that fresh session has `emailVerified !== true`, the web client requests an email-verification OTP and routes the user to `/verify-email` before the normal role/return-path destination; this also covers legacy accounts created before verification was introduced. The validated destination is preserved after verification. This changes no successful request or response shape.
 
+Google sign-in starts through Better Auth on the API and uses `GET /api/auth/callback/google` as the provider callback (`BETTER_AUTH_URL`), then redirects the browser to the frontend callback route supplied by the web client (`https://app.cogitoacademy.id/auth/callback`). In production, session cookies remain `SameSite=Strict`; Better Auth's short-lived signed OAuth state cookie is scoped to `SameSite=Lax` so a top-level `GET` callback from Google can return it for state verification. The state cookie remains `Secure`/`HttpOnly`, and the database-backed state record plus signed cookie must both validate before a session is created. This changes no endpoint input or output shape.
+
 Production and staging server bootstrap also reconcile `ADMIN_EMAILS` before
 serving traffic (default: `itcogitoacademy01@gmail.com`). Matching addresses
 are compared case-insensitively and promoted to `admin`; existing admins are
@@ -1007,7 +1009,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Errors:** `SUPPORT_TICKET_NOT_FOUND` (404), `SUPPORT_TICKET_ALREADY_RESOLVED` (409)
 - **Description:** Resolves a ticket, assigns the admin, notifies the reporter, and records an audit log
 
-> SLA auto-escalation: the `escalate-support-tickets` scheduler job (15 min) marks open tickets past `slaDeadline` as `in_progress` + escalated (OQ-04 in-app part, #46). Business-hours SLA windows (30 min / 4 h) + WhatsApp escalation tracked U9 in `PRD-GAPS-PHASE3.md`.
+> SLA auto-escalation: the `escalate-support-tickets` scheduler job (15 min) marks open tickets past `slaDeadline` as `in_progress` + escalated (OQ-04 in-app part, #46), with `whatsappTarget: "+62881011990195"` in the escalation notification metadata for the future adapter. The web support actions confirm `+62 881-0119-90195` before opening WhatsApp in a new tab.
 
 ---
 

@@ -86,6 +86,7 @@ import { ManualMeetingLinkDialog } from "@/components/booking/manual-meeting-lin
 import { client, orpc } from "@/utils/orpc";
 import { getUserFacingError } from "@/lib/error-message";
 import { CrossBrowserDateTimeInput } from "@/components/booking/minute-time-input";
+import { WhatsAppSupportDialog } from "@/components/whatsapp-support-dialog";
 
 const OVERRIDE_CATEGORIES = [
   "tutor_no_show",
@@ -1690,15 +1691,18 @@ function SlaStatus({
         {formatTimeSince(item.reportedAt)}
       </Text>
       {item.escalated ? (
-        <a
-          className="text-xs font-medium text-primary underline underline-offset-2"
-          href="https://wa.me/62881011990195"
-          target="_blank"
-          rel="noreferrer"
-          aria-label="Escalate this booking via WhatsApp"
-        >
-          WhatsApp escalation
-        </a>
+        <WhatsAppSupportDialog
+          trigger={
+            <Button
+              variant="underline"
+              size="xs"
+              aria-label="Escalate this booking via WhatsApp"
+              className="text-xs font-medium"
+            >
+              WhatsApp escalation
+            </Button>
+          }
+        />
       ) : null}
     </div>
   );
