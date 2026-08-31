@@ -1,17 +1,17 @@
 # Monitoring & DLQ Alerting — Plan
 
-| Field      | Value |
-| ---------- | ----- |
-| Status     | Active — planned 2026-08-31; dispatch-ready |
-| Created    | 2026-08-31 |
+| Field      | Value                                                                               |
+| ---------- | ----------------------------------------------------------------------------------- |
+| Status     | Active — planned 2026-08-31; dispatch-ready                                         |
+| Created    | 2026-08-31                                                                          |
 | Depends on | DEPLOYMENT-WAVE-2 (#121/#122) merged; infra apply (Terraform + Ansible) in progress |
-| Scope      | Uptime Kuma + Discord alerting, DLQ age-aware health, ops visibility |
+| Scope      | Uptime Kuma + Discord alerting, DLQ age-aware health, ops visibility                |
 
 ## Why
 
 - The DLQ (`cogito:dlq`) is a **bounded ledger with no TTL and no age
   awareness** — verified in `packages/api/src/modules/scheduler/
-  scheduler.service.ts` (`DLQ_PUSH_LUA` = LPUSH + LTRIM only). Failures from
+scheduler.service.ts` (`DLQ_PUSH_LUA` = LPUSH + LTRIM only). Failures from
   days ago (the 2026-08-25 batch, all `Failed query` on scheduler jobs) sit
   in the list forever, so `/health` reports `dlq: error, dlqDepth: 100`
   indefinitely even though every scheduler job has completed successfully
