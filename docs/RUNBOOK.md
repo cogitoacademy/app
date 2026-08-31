@@ -1,6 +1,6 @@
 # Cogito Runbook
 
-Last updated: 2026-08-31
+Last updated: 2026-09-01
 
 ## Collection transition QA (2026-08-28)
 
@@ -267,6 +267,17 @@ Open `/profile` as a tutor and verify the selector loads exactly seven active co
 Open `/profile` as a tutor and confirm the Public profile has no duplicate free-text Achievements or Experiences fields. In the single Achievements section, add two education entries and five competition achievements. In the single Experiences section, add up to five role/organization/year/description entries, leaving End year blank for an ongoing role. Confirm the sixth row controls are disabled, incomplete rows and an end year before the start year are rejected on **Submit for review**, and every year field displays plain digits without grouping dots. Save a draft, reload, and verify the structured arrays persist. Open a published tutor in discovery and confirm the drawer shows the structured sections; for an old profile with only legacy achievement or experience text, confirm the fallback remains visible. As an admin, open `/admin-tutors` and verify structured experience entries render readably in the review card and pending-change panel. Repeat the same short-viewport check in the admin tutor-review drawer; long profile content must scroll without hiding the review actions. Repeat with an intentionally stale review tab/version and confirm the API returns a conflict without overwriting the newer values.
 
 ### Profile UX smoke check
+
+As a student, choose a JPG, PNG, or WebP profile photo up to 5 MB. Confirm the
+crop dialog shows a circular guide, dragging repositions the image, and zoom
+changes the visible area. Choose **Use this photo**, confirm the account card
+shows the uploaded-photo state, then select **Save account details**. Reload the
+page and verify the cropped image appears in the account card and authenticated
+sidebar avatar. In R2 mode, the network request should be a `PUT` to the
+presigned S3 endpoint and return success; a CORS failure means the bucket policy
+does not include the current frontend origin. Confirm an unsupported file type
+or oversized file is rejected, and that cancelling the crop leaves the previous
+photo unchanged.
 
 ### Tutor experience formatting smoke check
 
@@ -914,7 +925,25 @@ The production env schema requires all four `R2_*` vars together **and** `R2_PUB
 1. Cloudflare dashboard → **R2** → create a bucket (region `auto`).
 2. **Manage R2 API Tokens** → create a token with Object Read & Write on the bucket → copy `ACCESS_KEY_ID` + `SECRET_ACCESS_KEY` into `R2_ACCOUNT_ID` (your Cloudflare account id), `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`.
 3. Set `R2_PUBLIC_URL` to the public object URL (e.g. `https://media.cogitoacademy.id` via a custom domain, or the `r2.cloudflarestorage.com` endpoint). `GET /uploads/*` is disabled whenever `R2_PUBLIC_URL` is set (objects are served from R2 instead).
-4. Verify an upload → the returned key resolves under `R2_PUBLIC_URL`.
+4. In the bucket's **CORS Policy** JSON tab, allow the frontend origins and the presigned PUT flow:
+
+   ```json
+   [
+     {
+       "AllowedOrigins": [
+         "http://localhost:3000",
+         "http://127.0.0.1:3000",
+         "https://app.cogitoacademy.id"
+       ],
+       "AllowedMethods": ["GET", "PUT", "HEAD"],
+       "AllowedHeaders": ["Content-Type"],
+       "ExposeHeaders": ["ETag"],
+       "MaxAgeSeconds": 3600
+     }
+   ]
+   ```
+
+5. Verify an upload → the returned key resolves under `R2_PUBLIC_URL`.
 
 ## Deploy Secrets (CD webhooks)
 

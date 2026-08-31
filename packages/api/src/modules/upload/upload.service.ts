@@ -34,6 +34,7 @@ export function createUploadService(deps: { storage: StoragePort }) {
     const signed = await deps.storage.getSignedUploadUrl(
       key,
       input.contentType,
+      input.contentLength,
     );
 
     return {

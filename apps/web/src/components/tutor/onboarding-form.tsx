@@ -493,23 +493,25 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       const signed = await client.upload.createUploadUrl({
         filename: file.name,
         contentType: file.type as "image/png" | "image/jpeg" | "image/webp",
+        contentLength: file.size,
       });
       if (file.size > signed.maxBytes)
         throw new Error("Photo is larger than 5 MB");
-      if (signed.method === "POST") {
+      if (Object.keys(signed.fields ?? {}).length > 0) {
         const body = new FormData();
         Object.entries(signed.fields ?? {}).forEach(([key, value]) =>
           body.append(key, value),
         );
         body.append("file", file);
         const response = await fetch(signed.uploadUrl, {
-          method: "POST",
+          method: signed.method,
           body,
         });
         if (!response.ok) throw new Error("Photo upload failed");
       } else {
         const response = await fetch(signed.uploadUrl, {
           method: signed.method,
+          credentials: signed.uploadUrl.startsWith("/") ? "include" : "omit",
           headers: { "content-type": file.type },
           body: file,
         });

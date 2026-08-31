@@ -15,12 +15,20 @@ describe("uploadHandler", () => {
     const handler = createUploadHandler({ uploadService: service as never });
     const result = await handler.createUploadUrl({
       context: { session: { user: { id: "u1" } } } as never,
-      input: { filename: "a.png", contentType: "image/png" } as never,
+      input: {
+        filename: "a.png",
+        contentType: "image/png",
+        contentLength: 1024,
+      } as never,
     });
 
     expect(calledWith).toEqual({
       userId: "u1",
-      input: { filename: "a.png", contentType: "image/png" },
+      input: {
+        filename: "a.png",
+        contentType: "image/png",
+        contentLength: 1024,
+      },
     });
     expect(result).toEqual({ uploadUrl: "/uploads/k", key: "k", maxBytes: 1 });
   });
@@ -35,7 +43,11 @@ describe("uploadHandler", () => {
     await expect(
       handler.createUploadUrl({
         context: { session: { user: { id: "u1" } } } as never,
-        input: { filename: "a.txt", contentType: "text/plain" } as never,
+        input: {
+          filename: "a.txt",
+          contentType: "text/plain",
+          contentLength: 1024,
+        } as never,
       }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });

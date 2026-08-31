@@ -1,6 +1,6 @@
 # Cogito API Reference
 
-Last updated: 2026-08-31
+Last updated: 2026-09-01
 
 ## Profile and tutor-onboarding validation (2026-08-31)
 
@@ -176,7 +176,7 @@ routing behavior and does not add an RPC or persistence contract.
 - **Input:** `{ phoneNumber?, schoolName?, gradeLevel?, parentName?, parentPhone?, parentEmail?, allowContactRequests? }`
 - **Output:** `{ user, profile }`
 - **Description:** Creates or updates the authenticated user's student profile fields
-- **Account identity:** The student profile page also uses Better Auth `updateUser` to update the signed-in user's `name` and optional `image`; email remains read-only on this surface.
+- **Account identity:** The student profile page also uses Better Auth `updateUser` to update the signed-in user's `name` and optional `image`; email remains read-only on this surface. The student UI selects a JPG/PNG/WebP file, crops it to a square in the browser through a circular drag/zoom editor, uploads the resulting JPEG through `upload.createUploadUrl`, and sends the returned `publicUrl` to Better Auth only when the account details are saved.
 
 ### `auth.searchStudents`
 
@@ -1068,10 +1068,10 @@ Structured tutor experience fields are submitted through `experienceEntries` as 
 ### `upload.createUploadUrl`
 
 - **Auth:** Protected (F19 — intentionally NOT student-only: any authenticated role may mint a bounded upload URL; the tutor proof-file path needs it)
-- **Input:** `{ filename, contentType }` (`contentType` one of `image/png`/`image/jpeg`/`image/webp`/`image/gif`/`application/pdf`; `filename` max 255 chars, no `..`/leading `/`)
-- **Output:** `{ uploadUrl, key, publicUrl, contentType, maxBytes, method, fields }` (`maxBytes` 5 MB; `method: "POST"`; `fields` carries the S3/R2 presigned-POST policy fields — or is `{}` in local mode)
+- **Input:** `{ filename, contentType, contentLength }` (`contentType` one of `image/png`/`image/jpeg`/`image/webp`/`image/gif`/`application/pdf`; `filename` max 255 chars, no `..`/leading `/`; `contentLength` is an integer from 1 byte through 5 MB)
+- **Output:** `{ uploadUrl, key, publicUrl, contentType, maxBytes, method, fields }` (`maxBytes` 5 MB; `method: "PUT"` for R2 and `"POST"` for local mode; `fields` is `{}` for both current backends)
 - **Errors:** `INVALID_CONTENT_TYPE` (400), `INVALID_FILENAME` (400)
-- **Description:** Returns a presigned POST URL (Cloudflare R2, size-bounded via `content-length-range` in the policy) or a local URL (dev, `POST /uploads/*` with a session) for uploading a file; uploaded objects are referenced by `key`/`publicUrl` (e.g. private achievement `evidenceUrl`, public `documentationUrl`, or user avatar). Local files are served via `GET /uploads/*` when `R2_PUBLIC_URL` is unset
+- **Description:** Returns a Cloudflare R2 presigned PUT URL whose key, content type, and declared content length are signed, or a local URL (dev, authenticated `POST /uploads/*`) for uploading a file. Browser clients using R2 require bucket CORS for the frontend origin. Uploaded objects are referenced by `key`/`publicUrl` (e.g. private achievement `evidenceUrl`, public `documentationUrl`, or user avatar). Local files are served via `GET /uploads/*` when `R2_PUBLIC_URL` is unset
 
 ## Tutor payout profile fields (2026-08-28)
 

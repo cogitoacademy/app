@@ -1,6 +1,6 @@
 # Cogito Module Reference
 
-Last updated: 2026-08-31
+Last updated: 2026-09-01
 
 ## Selia field-context invariant (2026-08-31)
 
@@ -311,7 +311,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `me(userId)` — Returns user + profile + tutorProfile + wallet (creates wallet if missing); used by role-aware aggregate surfaces
 - `getProfile(userId)` — Returns only the authenticated student's profile and raises `ProfileNotFoundError` when the row does not exist; the student `/profile` page treats that state as an empty form
 - `updateProfile(userId, input)` — Creates or updates student profile fields (phone, school, grade, parent contacts, and `allowContactRequests`)
-- Student account `name` and optional `image` are edited from the same UI through Better Auth `updateUser`; email is displayed read-only and is not part of `auth.updateProfile`.
+- Student account `name` and optional `image` are edited from the same UI through Better Auth `updateUser`; email is displayed read-only and is not part of `auth.updateProfile`. The student photo picker validates JPG/PNG/WebP files in the browser, provides circular drag/zoom cropping, uploads a 512px square JPEG through the protected Upload Module, and saves the returned public URL with the account identity update.
 - `searchStudents(requesterId, query, limit)` — ILIKE search of `student`-role users by name/email, excluding the requester, up to 10 safe identity results (`id`, `name`, `image`); email is a repository-only lookup key. Exposed via `studentProcedure` so tutors/admins get FORBIDDEN (F16 — the lookup exists for the group-booking invite UI)
 
 **Dependencies:** `AuthRepo`, `WalletPort` (for lazy wallet creation)
@@ -890,11 +890,11 @@ chat directory.
 
 ## Upload Module
 
-**Purpose:** Secure file uploads for achievement proofs and avatars — signed PUT URLs via Cloudflare R2 (production) or local-disk fallback (dev).
+**Purpose:** Secure file uploads for achievement proofs and avatars — signed PUT uploads via Cloudflare R2 (production) or an authenticated local-disk fallback (dev).
 
 **Files:**
 
-- `upload.types.ts` — `createUploadUrlInput` (filename sanitized + bounded, `contentType` allowlist: png/jpeg/webp/gif/pdf); `MAX_UPLOAD_BYTES` = 5 MB
+- `upload.types.ts` — `createUploadUrlInput` (filename sanitized + bounded, `contentType` allowlist: png/jpeg/webp/gif/pdf, `contentLength` bounded to `MAX_UPLOAD_BYTES`); `MAX_UPLOAD_BYTES` = 5 MB
 - `upload.errors.ts` — `InvalidContentTypeError`, `InvalidFilenameError`
 - `upload.service.ts` — `createUploadUrl`, `resolvePublicUrl`
 - `upload.handler.ts` — `createUploadUrl`
@@ -904,13 +904,14 @@ chat directory.
 
 **Service Methods:**
 
-- `createUploadUrl(userId, { filename, contentType })` — Returns `{ uploadUrl, key, publicUrl, contentType, maxBytes }`; key = `{userId}/{uuid}-{sanitizedFilename}`
+- `createUploadUrl(userId, { filename, contentType, contentLength })` — Returns `{ uploadUrl, key, publicUrl, contentType, maxBytes, method, fields }`; key = `{userId}/{uuid}-{sanitizedFilename}`. R2 signs a PUT request for the exact content type and declared length; local mode returns the authenticated raw-body POST route. The student profile photo flow sends a client-cropped square JPEG through this method before calling Better Auth `updateUser`.
 - `resolvePublicUrl(key)` — Key → public URL helper (used by `createUploadUrl` output)
 
 **Business Rules:**
 
-- When all `R2_*` vars are set → R2 signed-URL uploads; otherwise local storage served via `GET /uploads/*` (with path-traversal guard) when `R2_PUBLIC_URL` is unset
-- Content types restricted to the allowlist; 5 MB size cap; filenames sanitized (no `..`, no leading `/`)
+- When all `R2_*` vars are set → R2 presigned PUT uploads; otherwise local storage served via `GET /uploads/*` (with path-traversal guard) when `R2_PUBLIC_URL` is unset
+- Content types restricted to the allowlist; declared content length is 1 byte–5 MB and is signed for R2; filenames sanitized (no `..`, no leading `/`)
+- Browser R2 uploads require bucket CORS allowing the app origin, `PUT`, and the request's `Content-Type` header
 
 ---
 

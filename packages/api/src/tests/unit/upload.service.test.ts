@@ -49,6 +49,7 @@ describe("upload service createUploadUrl", () => {
     const res = await service.createUploadUrl("user-1", {
       filename: "avatar.png",
       contentType: "image/png",
+      contentLength: 1024,
     });
 
     expect(res.maxBytes).toBe(MAX_UPLOAD_BYTES);
@@ -64,6 +65,7 @@ describe("upload service createUploadUrl", () => {
     const res = await service.createUploadUrl("user-1", {
       filename: "a/b/photo.png",
       contentType: "image/png",
+      contentLength: 1024,
     });
 
     expect(res.key).toMatch(/^user-1\/[0-9a-f-]{36}-photo\.png$/);
@@ -76,6 +78,7 @@ describe("upload service createUploadUrl", () => {
       service.createUploadUrl("user-1", {
         filename: "notes.txt",
         contentType: "text/plain",
+        contentLength: 1024,
       }),
     ).rejects.toThrow(UnsupportedContentTypeError);
   });
@@ -86,21 +89,25 @@ describe("upload service createUploadUrl", () => {
       service.createUploadUrl("user-1", {
         filename: "../evil.png",
         contentType: "image/png",
+        contentLength: 1024,
       }),
     ).rejects.toThrow(InvalidFilenameError);
     await expect(
       service.createUploadUrl("user-1", {
         filename: "/etc/passwd",
         contentType: "image/png",
+        contentLength: 1024,
       }),
     ).rejects.toThrow(InvalidFilenameError);
   });
 
   test("uses the storage signed-URL result and public URL resolution", async () => {
     let signedKey = "";
+    let signedContentLength = 0;
     const storage = makeStorage({
-      getSignedUploadUrl: async (key) => {
+      getSignedUploadUrl: async (key, _contentType, contentLength) => {
         signedKey = key;
+        signedContentLength = contentLength ?? 0;
         return {
           url: `https://signed.example/${key}?sig=abc`,
           method: "POST" as const,
@@ -113,9 +120,11 @@ describe("upload service createUploadUrl", () => {
     const res = await service.createUploadUrl("user-1", {
       filename: "report.pdf",
       contentType: "application/pdf",
+      contentLength: 2048,
     });
 
     expect(signedKey).toBe(res.key);
+    expect(signedContentLength).toBe(2048);
     expect(res.uploadUrl).toBe(`https://signed.example/${res.key}?sig=abc`);
     expect(res.publicUrl).toBe(`https://cdn.example/${res.key}`);
   });

@@ -2,10 +2,10 @@
 
 | Field      | Value                                                                                                                                                                                                                                                          |
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status     | Living gap inventory (updated 2026-08-31; F1/F8/F9/F13/F14/F18 closed; F16 scope retired; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F12 closed; competition taxonomy and tutor-achievement-format follow-ups implemented; meeting fallback follow-up added) |
+| Status     | Living gap inventory (updated 2026-09-01; F1/F8/F9/F13/F14/F18 closed; F16 scope retired; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F12 closed; competition taxonomy and tutor-achievement-format follow-ups implemented; meeting fallback follow-up added) |
 | Branch     | `f/frontend-prd-gaps` (merged #55); `f/competition-taxonomy` (PR pending)                                                                                                                                                                                      |
 | Created    | 2026-07-29                                                                                                                                                                                                                                                     |
-| Audited    | 2026-08-31                                                                                                                                                                                                                                                     |
+| Audited    | 2026-09-01                                                                                                                                                                                                                                                     |
 | Depends on | Backend PRD gaps (G1-G19) where API is needed                                                                                                                                                                                                                  |
 | Scope      | Frontend surfaces plus the admin queue projection needed for SLA detail (`apps/web/`, `packages/api/`)                                                                                                                                                         |
 
@@ -90,6 +90,25 @@ The authenticated shell's existing Light/Dark/System menu now also responds to `
 ### Profile UX follow-up (2026-08-22)
 
 The student profile and tutor onboarding surfaces now share a responsive account-identity editor. Student learning and parent/guardian fields are separated into clear cards with a completion indicator and one learning-profile save action. Tutor onboarding keeps profile status and review feedback visible, groups public profile/teaching setup/availability fields, presents pricing in a compact responsive grid, and consolidates draft/save/submit actions into a sticky footer. No profile or auth API contracts changed.
+
+### Student profile photo crop follow-up (2026-08-31)
+
+The student account-identity editor now accepts a local JPG, PNG, or WebP upload
+instead of a manually entered image URL. A circular crop dialog supports pointer
+dragging and zoom before producing a 512px square JPEG. The client uploads that
+asset through the existing protected `upload.createUploadUrl` flow, keeps the
+returned URL in the account form, and only applies it through Better Auth when
+the student saves account details. The existing upload RPC now also receives the
+cropped blob's `contentLength`; no new RPC or persistence contract was added.
+
+### R2 browser upload follow-up (2026-09-01)
+
+The shared upload module now uses the Cloudflare-supported presigned `PUT`
+flow for R2; the previous multipart-form `POST` flow returned
+`501 NotImplemented`. Upload requests carry the exact cropped file length so
+the presigned request remains bounded to the 5 MB module limit. The upload
+bucket also has CORS rules for the local and production frontend origins,
+allowing `GET`, `PUT`, and `HEAD` with `Content-Type`.
 
 ### Auth form validation follow-up (2026-08-25)
 
@@ -770,6 +789,7 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 
 - v1.46 (2026-08-31): Made the post-login destination role/onboarding-aware: incomplete or changes-requested tutors go to `/profile`, tutors past onboarding and admins go to `/dashboard`, and the selected destination is preserved through email verification. No API or schema contract changed.
 
+- v1.47 (2026-09-01): Switched R2 uploads from unsupported multipart-form POST to presigned PUT, added exact content-length input/signing, fixed local raw-body upload credentials for the tutor flow, and configured bucket CORS for browser uploads.
 - v1.42 (2026-08-31): Contained tutor `/profile` scrolling to one route-owned vertical scroller, removed the action-bar bottom gap, and kept subject-category fieldsets at natural heights. No RPC, schema, or persistence contract changed.
 
 - v1.40 (2026-08-31): Tightened CI coverage enforcement so `packages/api` lines, overall lines, overall functions, and overall branches must each reach 100% from the shared lcov artifact. The 0/0 branch case is treated as 100%; no runtime or API contract changed.
