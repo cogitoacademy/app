@@ -16,6 +16,10 @@
 #   ./ops.sh studio           # Drizzle Studio GUI via SSH tunnel
 #   ./ops.sh logs [lines]     # tail the API container logs
 #   ./ops.sh backup           # run the nightly backup script manually
+#   ./ops.sh disk             # disk usage at a glance (df, docker system df,
+#                             # top containers by size)
+#   ./ops.sh deploy-retry     # re-run the last CD deploy (gh run rerun, or
+#                             # POST the Coolify deploy webhook with Bearer)
 #   ./ops.sh tunnel 5433      # forward a port (default 5433→5432 local)
 #
 # Env (optional overrides):
@@ -119,6 +123,56 @@ backup() {
   "${SSH[@]}" "sudo -n /usr/local/bin/cogito-backup.sh 2>/dev/null || echo 'backup script not installed yet — run the backup-cron playbook first (see ops/README.md or docs/RUNBOOK.md)'"
 }
 
+disk() {
+  echo "=== df -h / ==="
+  "${SSH[@]}" "df -h /"
+  echo ""
+  echo "=== docker system df ==="
+  "${SSH[@]}" "sudo -n docker system df 2>/dev/null"
+  echo ""
+  echo "=== top containers by size ==="
+  "${SSH[@]}" "sudo -n docker ps -a --format '{{.Names}}\t{{.Size}}' 2>/dev/null | sort -k2 -hr | head -10"
+}
+
+deploy_retry() {
+  # Re-run the last CD deploy. Two paths:
+  #   1. gh run rerun for the most recent failed CD run (the 'CD red but box
+  #      recovered' case — re-running is SAFE: snapshot/migrate/deploy are
+  #      idempotent, see docs/RUNBOOK.md → Monitoring → Redeploy/retry).
+  #   2. If no CD run is available (or gh is not authed), POST the Coolify
+  #      deploy webhook directly with the Bearer token from the SOPS vault.
+  #      The webhook URL is a GitHub secret (COOLIFY_PROD_SERVER_WEBHOOK) —
+  #      resolve it from the vault COOLIFY_API_TOKEN + the resource UUID via
+  #      the Coolify API; never echo the token.
+  local run_id
+  run_id="$(gh run list --workflow=cd-prod.yml --limit 1 --json databaseId,conclusion --jq '.[0].databaseId' 2>/dev/null || true)"
+  if [[ -n "$run_id" ]]; then
+    echo "Re-running the last CD run (id=$run_id) — snapshot/migrate/deploy are idempotent, safe to re-run."
+    gh run rerun "$run_id"
+    return 0
+  fi
+  echo "No CD run found via gh — falling back to the Coolify deploy webhook."
+  local token uuid
+  token="$(sops -d infra/secrets/prod.env 2>/dev/null | grep '^COOLIFY_API_TOKEN=' | cut -d= -f2- || true)"
+  if [[ -z "$token" ]]; then
+    echo "ERROR: COOLIFY_API_TOKEN not in the SOPS vault — cannot retry the deploy." >&2
+    return 1
+  fi
+  # Resolve the cogito-api resource UUID live (never hardcode it).
+  uuid="$(curl -s --max-time 8 http://localhost:8000/api/v1/applications -H "Authorization: Bearer $token" \
+    | python3 -c "import json,sys; d=json.load(sys.stdin); print([a['uuid'] for a in d if a.get('name')=='cogito-api'][0])" 2>/dev/null || true)"
+  if [[ -z "$uuid" ]]; then
+    echo "ERROR: could not resolve the cogito-api UUID (is the Coolify tunnel up? ssh -L 8000:127.0.0.1:8000 ...)." >&2
+    return 1
+  fi
+  echo "POSTing the deploy webhook for cogito-api (uuid=$uuid) — token never echoed."
+  curl --fail --silent --show-error --max-time 30 \
+    -X POST "https://cl.cogitoacademy.id/api/v1/deploy?uuid=$uuid&force=false" \
+    -H "Authorization: Bearer $token"
+  echo ""
+  echo "Deploy queued — verify: curl -s https://api.cogitoacademy.id/health (version must match the intended sha)."
+}
+
 studio() {
   local port="${1:-5433}"
   local dbc pass
@@ -145,7 +199,7 @@ tunnel() {
 }
 
 usage() {
-  sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 case "${1:-}" in
@@ -157,6 +211,8 @@ case "${1:-}" in
   dlq-clear) dlq_clear ;;
   logs) shift; logs "${1:-}" ;;
   backup) backup ;;
+  disk) disk ;;
+  deploy-retry) deploy_retry ;;
   studio) shift; studio "${1:-}" ;;
   tunnel) shift; tunnel "${1:-}" ;;
   help|-h|--help) usage ;;
