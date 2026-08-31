@@ -39,6 +39,7 @@ export type TutorAchievementDraftErrors = {
 const MAX_EDUCATION_ENTRIES = 2;
 const MAX_COMPETITION_ACHIEVEMENTS = 5;
 const CURRENT_YEAR = new Date().getFullYear();
+const YEAR_FORMAT: Intl.NumberFormatOptions = { useGrouping: false };
 
 let nextDraftKey = 0;
 
@@ -443,6 +444,7 @@ export function TutorAchievementsEditor({
                       min={1900}
                       max={2100}
                       step={1}
+                      format={YEAR_FORMAT}
                       allowOutOfRange
                       onValueChange={(value) =>
                         updateCompetition(index, { year: value ?? 0 })
@@ -483,6 +485,7 @@ export function TutorAchievementsEditor({
             variant="outline"
             size="sm"
             className="self-start"
+            id={`${idPrefix}-competition-add`}
             disabled={
               competitionAchievements.length >= MAX_COMPETITION_ACHIEVEMENTS
             }

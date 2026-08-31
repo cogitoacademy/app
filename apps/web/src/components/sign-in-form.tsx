@@ -96,7 +96,7 @@ export default function SignInForm({
         const destination = redirectPath
           ? redirectPath
           : role === "tutor"
-            ? "/onboarding"
+            ? "/profile"
             : role === "admin"
               ? "/admin-tutors"
               : "/dashboard";

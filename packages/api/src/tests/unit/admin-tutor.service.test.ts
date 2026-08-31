@@ -937,6 +937,47 @@ describe("AdminTutor Service", () => {
       );
     });
 
+    test("does not approve a legacy queued tutor honorarium", async () => {
+      const updateTutorProfile = mock(async () =>
+        makeProfile({ onboardingStatus: "published" }),
+      );
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getTutorProfileById: mock(async () =>
+            makeProfile({
+              onboardingStatus: "published",
+              pendingProfileChanges: {
+                baseRatesIdr: { online: 190_000 },
+              },
+            }),
+          ),
+          updateTutorProfile,
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+
+      await service.reviewTutorProfile("admin1", {
+        tutorProfileId: "p1",
+        action: "approve_edits",
+      });
+
+      expect(updateTutorProfile).toHaveBeenCalledWith(
+        {},
+        "p1",
+        expect.objectContaining({
+          onboardingStatus: "published",
+          pendingProfileChanges: null,
+        }),
+        1,
+      );
+      const updates = updateTutorProfile.mock.calls[0]?.[2] as Record<
+        string,
+        unknown
+      >;
+      expect(updates.baseRatesIdr).toBeUndefined();
+    });
+
     test("requests edit changes only when pending changes exist", async () => {
       const deps = makeDeps({
         adminTutorRepo: {

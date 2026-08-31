@@ -20,7 +20,7 @@ const routeTitles: Record<string, string> = {
   "/achievements": "Achievements",
   "/tutors": "Tutors",
   "/profile": "Profile",
-  "/onboarding": "Tutor Onboarding",
+  "/onboarding": "Tutor Profile",
   "/availability": "Availability",
   "/notifications": "Notifications",
   "/admin-tutors": "Manage Tutors",
@@ -61,25 +61,31 @@ function RouteComponent() {
     return null;
   }
 
-  const title = pathname.startsWith("/bookings/")
-    ? "Booking Details"
-    : pathname.startsWith("/tutors/")
-      ? "Book a Session"
-      : (routeTitles[pathname] ?? "Dashboard");
+  const role = (session.data.user as CogitoUser).role;
+  const isTutorProfile = pathname === "/profile" && role === "tutor";
+  const title = isTutorProfile
+    ? "Tutor Profile"
+    : pathname.startsWith("/bookings/")
+      ? "Booking Details"
+      : pathname.startsWith("/tutors/")
+        ? "Book a Session"
+        : (routeTitles[pathname] ?? "Dashboard");
 
   return (
     <Layout
-      contentScrollMode={pathname === "/calendar" ? "contained" : "page"}
+      contentScrollMode={
+        pathname === "/calendar" || isTutorProfile ? "contained" : "page"
+      }
       title={title}
       sidebar={
         <AppSidebar
           userEmail={session.data.user.email}
           userImage={session.data.user.image}
           userName={session.data.user.name}
-          role={(session.data.user as CogitoUser).role}
+          role={role}
         />
       }
-      role={(session.data.user as CogitoUser).role}
+      role={role}
       sessionExpiresAt={session.data.session.expiresAt}
     >
       <Outlet />

@@ -7580,6 +7580,46 @@ describe("BookingService additional coverage paths", () => {
     expect(result.tutorPayoutIdr).toBe(400_000);
   });
 
+  test("uses each booking snapshot's honorarium after a tutor changes fee", async () => {
+    const oldBooking = makeBooking({
+      id: "old-booking",
+      currentState: "completed",
+      priceSnapshot: {
+        baseline: 40,
+        cogitoTake: 8,
+        tutorShare: 32,
+        tutorBaseRateIdr: 175_000,
+        tutorHonorariumIdr: 175_000,
+      },
+    });
+    const newBooking = makeBooking({
+      id: "new-booking",
+      currentState: "completed",
+      priceSnapshot: {
+        baseline: 50,
+        cogitoTake: 10,
+        tutorShare: 40,
+        tutorBaseRateIdr: 225_000,
+        tutorHonorariumIdr: 225_000,
+      },
+    });
+    const { service } = createService({
+      repo: {
+        findCompletedBookingsByTutor: mock(async () => [
+          oldBooking,
+          newBooking,
+        ]),
+      },
+    });
+
+    await expect(
+      service.getTutorPayouts({ tutorId: "tutor1" }),
+    ).resolves.toMatchObject({
+      completedSessions: 2,
+      tutorPayoutIdr: 400_000,
+    });
+  });
+
   test("reconciles series session payouts the same way (baseline basis, not pooled)", async () => {
     const series = makeBooking({
       id: "series-ledger",
@@ -8013,7 +8053,10 @@ describe("BookingService coverage paths", () => {
           ]),
           findTutorProfile: mock(async () =>
             makeTutorProfile({
-              baseRatesIdr: { online: 125_000, offline: 150_000 },
+              // The live profile has changed since this booking was created;
+              // repricing must continue from the booking snapshot's original
+              // tutor base rate.
+              baseRatesIdr: { online: 300_000, offline: 350_000 },
             }),
           ),
         },
@@ -8027,6 +8070,8 @@ describe("BookingService coverage paths", () => {
     }
 
     expect(computeEconomics).toHaveBeenCalledTimes(2);
+    expect(computeEconomics.mock.calls[0]?.[1]).toBe(125_000);
+    expect(computeEconomics.mock.calls[1]?.[1]).toBe(125_000);
     expect(computeEconomics.mock.calls[0]?.[3]).toEqual(
       expect.objectContaining({
         version: 7,

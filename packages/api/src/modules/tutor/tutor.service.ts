@@ -125,10 +125,15 @@ export function validateSubmitForReview(
     throw new InvalidTutorStatusError(profile.id, profile.onboardingStatus);
   }
 
+  const hasAchievement =
+    (typeof profile.achievements === "string" &&
+      profile.achievements.trim().length > 0) ||
+    (Array.isArray(profile.competitionAchievements) &&
+      profile.competitionAchievements.length > 0);
   const requiredFields: { key: string; value: unknown }[] = [
     { key: "displayName", value: profile.displayName },
     { key: "shortBio", value: profile.shortBio },
-    { key: "achievements", value: profile.achievements },
+    { key: "achievements", value: hasAchievement },
     { key: "experiences", value: profile.experiences },
     { key: "sourcePhotoUrl", value: profile.sourcePhotoUrl },
     { key: "modality", value: profile.modality },
@@ -255,11 +260,10 @@ export function createTutorService(deps: {
       "competitionAchievements",
       "expertise",
       "modality",
-      "baseRatesIdr",
       "prices",
     ] as const;
     const directData: Omit<UpdateProfileInput, "version" | "subjectIds"> & {
-      pendingProfileChanges?: Record<string, unknown>;
+      pendingProfileChanges?: Record<string, unknown> | null;
       profileEditStatus?: string;
       profileEditAdminNote?: null;
     } = { ...data };
@@ -268,6 +272,25 @@ export function createTutorService(deps: {
       const pendingProfileChanges = {
         ...(profile!.pendingProfileChanges as Record<string, unknown> | null),
       };
+      // Tutor honoraria are effective immediately for future bookings. Older
+      // versions routed this field through profile review; promote any such
+      // leftover proposal to the live rate and remove it from the review
+      // payload so an admin cannot later overwrite a newer tutor-set fee.
+      const pendingBaseRatesIdr = pendingProfileChanges.baseRatesIdr;
+      const hadPendingBaseRatesIdr = Object.prototype.hasOwnProperty.call(
+        pendingProfileChanges,
+        "baseRatesIdr",
+      );
+      delete pendingProfileChanges.baseRatesIdr;
+      if (
+        data.baseRatesIdr === undefined &&
+        pendingBaseRatesIdr !== undefined
+      ) {
+        directData.baseRatesIdr = pendingBaseRatesIdr as Partial<{
+          online: number;
+          offline: number;
+        }>;
+      }
       for (const field of protectedFields) {
         if (
           data[field] !== undefined &&
@@ -280,6 +303,10 @@ export function createTutorService(deps: {
       if (Object.keys(pendingProfileChanges).length > 0) {
         directData.pendingProfileChanges = pendingProfileChanges;
         directData.profileEditStatus = "pending_review";
+        directData.profileEditAdminNote = null;
+      } else if (hadPendingBaseRatesIdr) {
+        directData.pendingProfileChanges = null;
+        directData.profileEditStatus = "none";
         directData.profileEditAdminNote = null;
       }
       if (subjectIds !== undefined) {

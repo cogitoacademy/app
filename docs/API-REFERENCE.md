@@ -10,6 +10,12 @@ copy and section-level errors, so validation renders inline without a runtime
 exception. No RPC path, request envelope, response shape, schema, or persistence
 contract changed.
 
+The tutor profile editor is rendered inside one route-owned vertical scroll
+container while the authenticated shell is contained for that route. Category
+fieldsets use their own content height and the action bar no longer adds an
+extra bottom gap. This is presentation-only; no RPC path, request envelope,
+response shape, schema, or persistence contract changed.
+
 ## Stable collection transitions (2026-08-28)
 
 Pagination and filter-transition stability is client-side only. The admin tutor
@@ -147,8 +153,9 @@ The auth endpoints do not grandfather existing users by changing `emailVerified`
 
 - **Auth:** Protected
 - **Input:** None
-- **Output:** `{ user, profile, tutorProfile }`
-- **Description:** Returns user profile
+- **Output:** `StudentProfileRow`
+- **Errors:** `NOT_FOUND` when the authenticated student has not created a profile row yet
+- **Description:** Returns only the authenticated student's profile. The student `/profile` page uses this focused procedure and treats `NOT_FOUND` as an empty editable profile; the aggregate `auth.me` procedure remains available for role-aware surfaces that need wallet data.
 
 ### `auth.updateProfile`
 
@@ -375,22 +382,22 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Tutor
 - **Input:** None
 - **Output:** `{ profile }`
-- **Description:** Returns the authenticated tutor's profile
+- **Description:** Returns the authenticated tutor's profile. The web app presents this tutor-owned profile editor at `/profile`; the legacy `/onboarding` URL redirects there. This route change does not alter the RPC contract.
 
 ### `tutor.updateMyProfile`
 
 - **Auth:** Tutor
-- **Input:** `{ version, displayName?, shortBio?, credentialsSummary?, achievements?, experiences?, achievementProofUrls?, experienceProofUrls?, sourcePhotoUrl?, education?, competitionAchievements?, expertise?, subjectIds?, modality?, baseRatesIdr?, bankName?, bankAccountNumber?, bankAccountHolderName?, bankAccountOpeningCity?, bankAccountOwnership?: "self" | "trusted_person", bankTransferDisclaimerAccepted?, prices? }`; `education` accepts up to 2 `{ university, degree }` entries and `competitionAchievements` accepts up to 5 `{ competitionName, year, awards }` entries, with awards persisted as an array
+- **Input:** `{ version, displayName?, shortBio?, credentialsSummary?, achievements?, experiences?, achievementProofUrls?, experienceProofUrls?, sourcePhotoUrl?, education?, competitionAchievements?, expertise?, subjectIds?, modality?, baseRatesIdr?, bankName?, bankAccountNumber?, bankAccountHolderName?, bankAccountOpeningCity?, bankAccountOwnership?: "self" | "trusted_person", bankTransferDisclaimerAccepted?, prices? }`; the tutor editor exposes one structured achievement section backed by up to 5 `{ competitionName, year, awards }` entries, while `education` accepts up to 2 `{ university, degree }` entries. The legacy `achievements`/`credentialsSummary` values remain accepted for older profiles.
 - **Output:** `{ profile, subjects: [{ id, slug, name, description?, isSelectable, parent: { id, slug, name } }] }`
 - **Errors:** `OPTIMISTIC_LOCK` (409) on version mismatch, `INVALID_TUTOR_PRICING` (400) on floor-price violation, `INVALID_TUTOR_SUBJECT_SELECTION` (400) when ids are not active selectable child subjects or exceed 20
-- **Description:** Updates the tutor profile with optimistic locking. General achievements and experiences remain separate multiline fields with section-specific private proof URLs, while education and competition achievements use the structured 2/5-entry format and render with bold first lines and comma-separated awards. `achievementProofUrls`, `experienceProofUrls`, and `sourcePhotoUrl` accept only bounded HTTP(S) URLs. `sourcePhotoUrl` is private editing input; only an admin may set the edited public photo through tutor review. `subjectIds` is the normalized child-category selection. Payout-account fields remain private. For published profiles, trust-sensitive changes—including structured achievements—wait in `pendingProfileChanges`; `credentialsSummary` remains a public fallback when no structured entries exist.
+- **Description:** Updates the tutor profile with optimistic locking. The tutor editor presents one structured achievement section plus one multiline experiences field; each competition entry stores a name, year, and one or more award titles. Legacy `achievements`/`credentialsSummary` text remains readable and is used as a fallback when no structured competition achievements exist. `achievementProofUrls`, `experienceProofUrls`, and `sourcePhotoUrl` accept only bounded HTTP(S) URLs. `sourcePhotoUrl` is private editing input; only an admin may set the edited public photo through tutor review. `subjectIds` is the normalized child-category selection. Payout-account fields remain private. A published tutor's `baseRatesIdr` takes effect immediately for future bookings; existing bookings retain their stored price snapshot for payout. Other trust-sensitive changes—including structured achievements—wait in `pendingProfileChanges`.
 
 ### `tutor.submitForReview`
 
 - **Auth:** Tutor
 - **Input:** None
 - **Output:** `{ profile }`
-- **Description:** Submits a draft profile for admin review
+- **Description:** Submits a draft profile for admin review. The required achievement may come from the structured competition-achievement entries or from legacy achievement text retained on an older profile.
 
 ### `tutor.listAvailability`
 

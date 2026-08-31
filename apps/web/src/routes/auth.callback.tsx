@@ -18,7 +18,7 @@ export const Route = createFileRoute("/auth/callback")({
     const role = sessionUser.role;
     const destination =
       role === "tutor"
-        ? "/onboarding"
+        ? "/profile"
         : role === "admin"
           ? "/admin-tutors"
           : (search.redirect ?? "/dashboard");

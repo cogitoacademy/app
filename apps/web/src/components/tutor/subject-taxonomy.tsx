@@ -206,7 +206,7 @@ export function SubjectSelector({
 
       {categories.length > 0 ? (
         <div
-          className="grid gap-3 md:grid-cols-2"
+          className="grid items-start gap-3 md:grid-cols-2"
           aria-label="Competition categories"
         >
           {categories.map((category) => (

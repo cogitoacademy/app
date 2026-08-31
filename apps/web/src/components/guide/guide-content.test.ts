@@ -62,7 +62,7 @@ describe("guide content", () => {
       "/tutors",
       "/knowledge-bank",
       "/notifications",
-      "/onboarding",
+      "/profile",
       "/availability",
       "/admin",
       "/admin-tutors",

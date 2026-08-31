@@ -107,7 +107,7 @@ export default function SignUpForm({
         if (redirectPath) {
           await navigate({ to: redirectPath });
         } else if (role === "tutor") {
-          await navigate({ to: "/onboarding" });
+          await navigate({ to: "/profile" });
         } else if (role === "admin") {
           await navigate({ to: "/admin-tutors" });
         } else {

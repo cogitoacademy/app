@@ -1,29 +1,58 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { ORPCError } from "@orpc/client";
+import { useQuery } from "@tanstack/react-query";
 import type { CogitoUser } from "@cogito-app/auth";
 
 import { ProfilePage } from "@/components/dashboard/pages/profile-page";
-import { useRole } from "@/hooks/use-role";
+import { TutorProfilePage } from "@/components/tutor/tutor-profile-page";
+import { client, orpc } from "@/utils/orpc";
 
 export const Route = createFileRoute("/_app/profile")({
   component: RouteComponent,
   beforeLoad: ({ context }) => {
     const user = context.session?.data?.user as CogitoUser | undefined;
-    if (user?.role === "tutor") throw redirect({ to: "/onboarding" });
     if (user?.role === "admin") throw redirect({ to: "/dashboard" });
   },
 });
 
 function RouteComponent() {
   const { session } = Route.useRouteContext();
-  const { profile, user, isLoading } = useRole();
   const sessionUser = session.data?.user as CogitoUser | undefined;
-  const profileUser = user
-    ? {
-        name: user.name || sessionUser?.name || "",
-        email: user.email || sessionUser?.email || "",
-        image: user.image ?? sessionUser?.image ?? null,
+
+  if (sessionUser?.role === "tutor") {
+    return (
+      <TutorProfilePage
+        accountUser={{
+          name: sessionUser.name,
+          email: sessionUser.email,
+          image: sessionUser.image,
+        }}
+      />
+    );
+  }
+
+  return <StudentProfileRoute sessionUser={sessionUser} />;
+}
+
+function StudentProfileRoute({
+  sessionUser,
+}: {
+  sessionUser: CogitoUser | undefined;
+}) {
+  const { data: profile, isLoading } = useQuery({
+    queryKey: orpc.auth.getProfile.key(),
+    queryFn: async () => {
+      try {
+        return await client.auth.getProfile();
+      } catch (error) {
+        // A new student has no row yet; that is a valid empty profile state.
+        if (error instanceof ORPCError && error.code === "NOT_FOUND") {
+          return null;
+        }
+        throw error;
       }
-    : sessionUser;
+    },
+  });
   const profileRecord:
     | Record<string, string | boolean | null | undefined>
     | undefined = profile
@@ -40,7 +69,7 @@ function RouteComponent() {
   return (
     <ProfilePage
       profile={profileRecord}
-      user={profileUser}
+      user={sessionUser}
       isLoading={isLoading}
     />
   );

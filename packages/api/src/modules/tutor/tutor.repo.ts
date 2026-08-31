@@ -40,7 +40,7 @@ export interface PersistedProfileUpdate extends Omit<
   UpdateProfileInput,
   "version" | "subjectIds"
 > {
-  pendingProfileChanges?: Record<string, unknown>;
+  pendingProfileChanges?: Record<string, unknown> | null;
   profileEditStatus?: string;
   profileEditAdminNote?: string | null;
 }

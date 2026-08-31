@@ -96,7 +96,7 @@ export function InviteClaimPage({ token }: { token: string }) {
         description: "Complete your tutor profile to continue.",
         type: "success",
       });
-      window.location.assign("/onboarding");
+      window.location.assign("/profile");
     } catch (error: unknown) {
       const message =
         error && typeof error === "object" && "message" in error

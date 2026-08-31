@@ -53,6 +53,7 @@ const studentNavItems = [
 
 const tutorNavItems = [
   { to: "/dashboard", label: "Dashboard", icon: IconHome },
+  { to: "/profile", label: "Tutor Profile", icon: IconUser },
   { to: "/availability", label: "Availability", icon: IconTimelineEventText },
   { to: "/bookings", label: "Bookings", icon: IconCalendarEvent },
 ] as const;
@@ -110,8 +111,6 @@ export function AppSidebar({
       : role === "tutor"
         ? tutorNavItems
         : studentNavItems;
-  const profilePath = role === "tutor" ? "/onboarding" : "/profile";
-  const profileLabel = role === "tutor" ? "My Profile" : "Profile";
   const visibleResourceItems =
     role === "student" ? resourceItems : resourceItems.slice(0, 2);
 
@@ -262,12 +261,14 @@ export function AppSidebar({
                   }
                 />
                 <MenuPopup className="w-(--anchor-width)" side="top">
-                  <Link to={profilePath}>
-                    <MenuItem>
-                      <IconUser />
-                      {profileLabel}
-                    </MenuItem>
-                  </Link>
+                  {role === "student" ? (
+                    <Link to="/profile">
+                      <MenuItem>
+                        <IconUser />
+                        Profile
+                      </MenuItem>
+                    </Link>
+                  ) : null}
                   <MenuItem onClick={signOut}>
                     <IconLogout />
                     Sign out

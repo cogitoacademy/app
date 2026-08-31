@@ -245,7 +245,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
               : "Progress saved",
           description:
             profile.onboardingStatus === "published"
-              ? "Public details were updated. Verified details are waiting for admin review."
+              ? "Public details were updated. Honorarium changes apply to future bookings; verified details may wait for admin review."
               : undefined,
           type: "success",
         });
@@ -379,7 +379,12 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     const validationErrors: Record<string, string> = {};
     if (!form.displayName.trim()) validationErrors.displayName = "Required";
     if (!form.shortBio.trim()) validationErrors.shortBio = "Required";
-    if (!form.achievements.trim()) validationErrors.achievements = "Required";
+    if (
+      !form.achievements.trim() &&
+      form.competitionAchievements.length === 0
+    ) {
+      validationErrors.competitionAchievements = "Add at least one achievement";
+    }
     if (!form.experiences.trim()) validationErrors.experiences = "Required";
     if (!form.sourcePhotoUrl.trim())
       validationErrors.sourcePhotoUrl = "Required";
@@ -437,7 +442,9 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
           : firstError === "education"
             ? "tutor-achievements-university-0"
             : firstError === "competitionAchievements"
-              ? "tutor-achievements-competition-0"
+              ? form.competitionAchievements.length > 0
+                ? "tutor-achievements-competition-0"
+                : "tutor-achievements-competition-add"
               : `tutor-${firstError}`;
       window.setTimeout(() => document.getElementById(focusTarget)?.focus(), 0);
       return;
@@ -519,10 +526,10 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
         ? "Your profile has been approved and is waiting for publication by an admin."
         : profile.onboardingStatus === "published"
           ? profile.profileEditStatus === "pending_review"
-            ? "Your profile is live. Important changes are waiting for admin review; students still see the approved version."
+            ? "Your profile is live. Honorarium changes apply to future bookings; other important changes are waiting for admin review."
             : profile.profileEditStatus === "changes_requested"
               ? "Your profile is live, but the admin requested revisions to your proposed changes."
-              : "Your tutor profile is live. You can update it anytime; important changes are reviewed before going live."
+              : "Your tutor profile is live. You can update it anytime. Honorarium changes apply to future bookings; other important changes are reviewed before going live."
           : profile.onboardingStatus === "suspended"
             ? "Your tutor profile has been suspended. Please contact admin for details."
             : "Your profile status will appear here as it moves through review.";
@@ -673,61 +680,6 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                   {errors.displayName ? (
                     <FieldError>{errors.displayName}</FieldError>
                   ) : null}
-                </Field>
-
-                <Field className="sm:col-span-2">
-                  <FieldLabel htmlFor="tutor-achievements">
-                    Achievements <span aria-hidden="true">*</span>
-                  </FieldLabel>
-                  <FieldDescription>
-                    Add one achievement per line. A structured editor will Add
-                    non-competition achievements here, one per line.
-                  </FieldDescription>
-                  <Textarea
-                    id="tutor-achievements"
-                    name="achievements"
-                    value={form.achievements}
-                    onChange={(event) => {
-                      setForm((current) => ({
-                        ...current,
-                        achievements: event.target.value,
-                      }));
-                      clearError("achievements");
-                    }}
-                    rows={8}
-                    placeholder="Mahasiswa Berprestasi Universitas Airlangga (Surabaya, 2025)"
-                    aria-invalid={Boolean(errors.achievements)}
-                  />
-                  {errors.achievements ? (
-                    <FieldError>{errors.achievements}</FieldError>
-                  ) : null}
-                </Field>
-
-                <Field className="sm:col-span-2">
-                  <FieldLabel htmlFor="tutor-achievement-proofs">
-                    Achievement proof links
-                  </FieldLabel>
-                  <FieldDescription>
-                    Optional. Add one public certificate, result, or portfolio
-                    URL per line. These links are only used for admin
-                    verification.
-                  </FieldDescription>
-                  <Textarea
-                    id="tutor-achievement-proofs"
-                    name="achievementProofUrls"
-                    rows={3}
-                    value={form.achievementProofUrls.join("\n")}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        achievementProofUrls: event.target.value
-                          .split(/\r?\n/)
-                          .map((url) => url.trim())
-                          .filter(Boolean),
-                      }))
-                    }
-                    placeholder="https://example.com/certificate"
-                  />
                 </Field>
 
                 <Field className="sm:col-span-2">
@@ -1099,10 +1051,9 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
               <IconBox variant="info-subtle">
                 <IconSchool aria-hidden="true" />
               </IconBox>
-              <CardTitle>Tutor achievements</CardTitle>
+              <CardTitle>Achievements</CardTitle>
               <CardDescription>
-                Give students a clear, consistent record of your education and
-                strongest competition results.
+                Add your education and competition achievements in one place.
               </CardDescription>
             </CardHeader>
             <CardBody>
@@ -1125,6 +1076,31 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                   competitionAchievements: errors.competitionAchievements,
                 }}
               />
+              <Field className="mt-6">
+                <FieldLabel htmlFor="tutor-achievement-proofs">
+                  Achievement proof links
+                </FieldLabel>
+                <FieldDescription>
+                  Optional. Add one public certificate, result, or portfolio URL
+                  per line. These links are only used for admin verification.
+                </FieldDescription>
+                <Textarea
+                  id="tutor-achievement-proofs"
+                  name="achievementProofUrls"
+                  rows={3}
+                  value={form.achievementProofUrls.join("\n")}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      achievementProofUrls: event.target.value
+                        .split(/\r?\n/)
+                        .map((url) => url.trim())
+                        .filter(Boolean),
+                    }))
+                  }
+                  placeholder="https://example.com/certificate"
+                />
+              </Field>
             </CardBody>
           </Card>
 
@@ -1172,7 +1148,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
             </CardBody>
           </Card>
 
-          <Card className="sticky bottom-4 z-10 overflow-hidden">
+          <Card className="sticky bottom-0 z-10 overflow-hidden">
             <CardFooter className="flex-col items-stretch gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <Text className="font-medium">

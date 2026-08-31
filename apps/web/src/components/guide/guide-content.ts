@@ -53,7 +53,7 @@ export type GuideRoute =
   | "/tutors"
   | "/knowledge-bank"
   | "/notifications"
-  | "/onboarding"
+  | "/profile"
   | "/availability"
   | "/admin"
   | "/admin-tutors"
@@ -538,7 +538,7 @@ const tutorContent: GuideContent = {
             { label: "Invitation sent", variant: "info" },
             { label: "Invitation accepted", variant: "success" },
           ],
-          cta: { label: "Open tutor profile", to: "/onboarding" },
+          cta: { label: "Open tutor profile", to: "/profile" },
         },
         {
           id: "tutor-profile",
@@ -561,7 +561,7 @@ const tutorContent: GuideContent = {
               outcome:
                 "The profile returns to an editable state with review feedback. Update it and submit again.",
               variant: "warning",
-              cta: { label: "Update my profile", to: "/onboarding" },
+              cta: { label: "Update my profile", to: "/profile" },
             },
             {
               title: "Your published profile is edited",
@@ -572,7 +572,7 @@ const tutorContent: GuideContent = {
               variant: "info",
             },
           ],
-          cta: { label: "Set up my profile", to: "/onboarding" },
+          cta: { label: "Set up my profile", to: "/profile" },
         },
         {
           id: "tutor-review",
@@ -592,7 +592,7 @@ const tutorContent: GuideContent = {
             { label: "Published", variant: "success" },
             { label: "Suspended", variant: "danger" },
           ],
-          cta: { label: "Check profile status", to: "/onboarding" },
+          cta: { label: "Check profile status", to: "/profile" },
         },
       ],
     },

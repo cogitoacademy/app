@@ -194,6 +194,33 @@ describe("Tutor Service", () => {
       ).toThrow(TutorProfileIncompleteError);
     });
 
+    test("accepts a structured competition achievement without legacy text", () => {
+      expect(() =>
+        validateSubmitForReview(
+          makeProfile({
+            achievements: null,
+            competitionAchievements: [
+              {
+                competitionName: "Harvard Model United Nations",
+                year: 2025,
+                awards: ["Best Delegate"],
+              },
+            ],
+          }),
+          mockPricingPort,
+        ),
+      ).not.toThrow();
+    });
+
+    test("requires an achievement when legacy and structured values are empty", () => {
+      expect(() =>
+        validateSubmitForReview(
+          makeProfile({ achievements: null, competitionAchievements: [] }),
+          mockPricingPort,
+        ),
+      ).toThrow(TutorProfileIncompleteError);
+    });
+
     test("requires payout account ownership and transfer disclaimer confirmation", () => {
       expect(() =>
         validateSubmitForReview(
@@ -406,6 +433,62 @@ describe("Tutor Service", () => {
       >;
       expect(updateArgs.education).toBeUndefined();
       expect(updateArgs.competitionAchievements).toBeUndefined();
+    });
+
+    test("published profile applies a changed IDR base honorarium immediately", async () => {
+      const profile = makeProfile({
+        onboardingStatus: "published",
+        baseRatesIdr: { online: 175_000 },
+        pendingProfileChanges: null,
+      });
+      const updateProfileWithVersion = mock(async () => [profile]);
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => profile),
+          updateProfileWithVersion,
+        },
+        pricingPort: idrPricingPort,
+      });
+      const service = createTutorService(deps as any);
+
+      await service.updateMyProfile("u1", {
+        version: 1,
+        baseRatesIdr: { online: 200_000 },
+      });
+
+      expect(updateProfileWithVersion).toHaveBeenCalledWith(deps.db, "u1", 1, {
+        baseRatesIdr: { online: 200_000 },
+      });
+    });
+
+    test("published profile clears a legacy pending honorarium proposal", async () => {
+      const profile = makeProfile({
+        onboardingStatus: "published",
+        baseRatesIdr: { online: 175_000 },
+        pendingProfileChanges: {
+          baseRatesIdr: { online: 190_000 },
+        },
+        profileEditStatus: "pending_review",
+      });
+      const updateProfileWithVersion = mock(async () => [profile]);
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => profile),
+          updateProfileWithVersion,
+        },
+      });
+      const service = createTutorService(deps as any);
+
+      await service.updateMyProfile("u1", { version: 1 });
+
+      expect(updateProfileWithVersion).toHaveBeenCalledWith(deps.db, "u1", 1, {
+        baseRatesIdr: { online: 190_000 },
+        pendingProfileChanges: null,
+        profileEditStatus: "none",
+        profileEditAdminNote: null,
+      });
     });
 
     test("published profile removes an unchanged subject edit", async () => {

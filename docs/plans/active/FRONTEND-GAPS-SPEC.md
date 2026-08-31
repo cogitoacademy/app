@@ -13,15 +13,38 @@ This document catalogs all PRD-required frontend surfaces that are not yet imple
 
 The backend spec is `docs/plans/completed/PRD-GAPS-SPEC.md` (backend-only). This is the frontend counterpart.
 
+### Tutor profile route follow-up (2026-08-31)
+
+The tutor-owned profile editor is now presented at the canonical `/profile`
+route and is labeled **Tutor Profile** in the authenticated shell and tutor
+sidebar. It is the same editable surface for draft, review, changes-requested,
+and published states, so the label does not change after onboarding. The old
+`/onboarding` route remains as a compatibility redirect to `/profile` for
+tutors and `/dashboard` for other roles. The student avatar menu keeps its
+**Profile** item; tutor and admin menus omit a profile item because tutors use
+the primary sidebar link and admins use the dedicated Manage Tutors surface.
+The student profile route uses the focused `auth.getProfile` response instead
+of the wallet/tutor aggregate, while a missing student row is treated as the
+initial empty form. No API or database shape changed. Published tutors may update `baseRatesIdr`
+from this surface at any time; the new rate applies to future bookings while
+existing booking snapshots remain authoritative for weekly payout.
+
+The tutor profile route now uses one route-owned vertical scroll container while
+the authenticated shell is contained, preventing the form and shell from
+scrolling independently. Subject-category fieldsets retain natural heights so
+short categories do not create large blank areas, and the action bar has no
+extra bottom gap. This is presentation-only and does not change any API or
+database contract.
+
 ### Tutor profile and payout privacy follow-up (2026-08-28)
 
-Tutor onboarding now has separate multiline Achievements and Experiences fields, with the legacy credential summary migrated into Achievements. Availability-summary and credential-proof inputs are retired. Base honorarium is adjusted only through Rp 5,000 minus/plus controls and its six group-size outcomes are shown in tables. Tutor portraits use a source-upload/admin-edited-public-photo workflow. Tutor payout details expose only completed sessions and IDR honorarium, removing take-rate and Marks terminology from the tutor interface.
+Tutor onboarding now has one structured Achievements section and one multiline Experiences field, with legacy achievement/credential text retained as a fallback. Availability-summary and credential-proof inputs are retired. Base honorarium is adjusted only through Rp 5,000 minus/plus controls and its six group-size outcomes are shown in tables. Tutor portraits use a source-upload/admin-edited-public-photo workflow. Tutor payout details expose only completed sessions and IDR honorarium, removing take-rate and Marks terminology from the tutor interface.
 
 Achievement and Experience sections now each accept an optional list of supporting proof URLs. They are visible to admins during review, participate in the protected edit-review flow, and are intentionally omitted from public tutor discovery.
 
 ### Tutor achievement formatting follow-up (2026-08-31)
 
-Tutor onboarding captures structured education (up to 2 entries) and competition achievements (up to 5 entries) alongside general achievements and experiences. Each competition entry stores a name, year, and one or more award titles; the editor accepts comma-separated awards and previews the public format with a bold first line and readable spacing. Published tutor discovery returns the structured arrays and falls back to `credentialsSummary` for older profiles. Admin tutor review includes an **Edit format** action backed by `adminTutor.updateTutorAchievements`, optimistic `version` checks, and an audit event for corrections. Migration `0039_secret_blink.sql` adds the two JSONB fields after the migrations already present on `main`.
+Tutor onboarding captures structured education (up to 2 entries) and one structured competition-achievement section (up to 5 entries) alongside one multiline Experiences field. Each competition entry stores a name, year, and one or more award titles; the editor accepts comma-separated awards, keeps year values ungrouped, and previews the public format with a bold first line and readable spacing. Published tutor discovery returns the structured arrays and falls back to legacy achievement/credential text for older profiles. Admin tutor review includes an **Edit format** action backed by `adminTutor.updateTutorAchievements`, optimistic `version` checks, and an audit event for corrections. Migration `0039_secret_blink.sql` adds the two JSONB fields after the migrations already present on `main`.
 
 ### Subject taxonomy follow-up (2026-08-25)
 
@@ -165,32 +188,32 @@ Booking type is derived from invitees (none = solo, one or more = group), so
 students no longer need to select a separate solo/group mode before searching
 for classmates.
 
-| Route                        | Component                       | Status                                                                                                                                                                                 |
-| ---------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/` (index)                  | Landing redirect                | Exists                                                                                                                                                                                 |
-| `/login`                     | sign-in-form.tsx                | Exists                                                                                                                                                                                 |
-| `/auth/callback`             | auth callback                   | Exists                                                                                                                                                                                 |
-| `/invite`                    | invite-claim-page.tsx           | Exists                                                                                                                                                                                 |
-| `/_app`                      | App layout + sidebar            | Exists                                                                                                                                                                                 |
-| `/_app/dashboard`            | role-specific dashboard pages   | Complete — student, tutor, and admin next-action views using existing oRPC data                                                                                                        |
-| `/_app/balance`              | balance-page.tsx                | Exists (wallet + Knowledge Bank card)                                                                                                                                                  |
-| `/_app/calendar`             | competition-calendar-page.tsx   | Complete — authenticated, English-only read-only calendar backed by published Sanity content                                                                                           |
-| `/_app/knowledge-bank`       | knowledge-bank-page.tsx         | Complete — student-only 35-Mark gate, metadata search/filter, and protected PDF preview                                                                                                |
-| `/_app/bookings`             | bookings-page.tsx               | Exists (role-scoped list and lifecycle entry points)                                                                                                                                   |
-| `/_app/bookings/$bookingId`  | booking-detail-page.tsx         | Complete baseline — detail, lifecycle, reschedule, reporting, invites, notes, history                                                                                                  |
-| `/_app/tutors`               | tutors-page-content.tsx         | Exists (discovery list)                                                                                                                                                                |
-| `/_app/tutors/$tutorId/book` | create-booking-page.tsx         | Exists (solo/group/series creation)                                                                                                                                                    |
-| `/_app/achievements`         | achivements-page.tsx            | Exists (submission + list)                                                                                                                                                             |
-| `/_app/profile`              | profile-page.tsx                | Complete — responsive account identity, completion indicator, learning profile, and parent/guardian sections                                                                           |
-| `/_app/onboarding`           | onboarding-form.tsx             | Complete — responsive tutor profile sections, structured achievement formatting (2 education / 5 competitions), visible review status/feedback, pricing grid, and consolidated actions |
-| `/_app/tutor-bookings`       | tutor-bookings-page.tsx         | Compatibility redirect to the shared `/bookings` list                                                                                                                                  |
-| `/_app/availability`         | availability-page.tsx           | Complete baseline — Calendly-style weekly hours, date overrides, rules summary, and week preview                                                                                       |
-| `/_app/notifications`        | notifications-page.tsx          | Exists (full page)                                                                                                                                                                     |
-| `/_app/admin`                | admin-dashboard-page.tsx        | Complete F1 admin workspace entry point                                                                                                                                                |
-| `/_app/admin-operations`     | admin-operations-page.tsx       | Complete F1 queue/detail surface — filters, hydrated participants/wallets/ledger, override, rooms, and wallet lookup                                                                   |
-| `/_app/admin-tutors`         | admin tutor invite + review     | Complete — invite/review queue plus version-checked structured achievement correction                                                                                                  |
-| `/_app/admin-achievements`   | achievement-moderation-page.tsx | Exists (moderation UI)                                                                                                                                                                 |
-| `/_app/admin-economy`        | economy-settings-page.tsx       | Complete — admin-managed Cogito take schedule with validation, preview, optimistic versioning, and audit-backed persistence                                                            |
+| Route                        | Component                                 | Status                                                                                                                                                               |
+| ---------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/` (index)                  | Landing redirect                          | Exists                                                                                                                                                               |
+| `/login`                     | sign-in-form.tsx                          | Exists                                                                                                                                                               |
+| `/auth/callback`             | auth callback                             | Exists                                                                                                                                                               |
+| `/invite`                    | invite-claim-page.tsx                     | Exists                                                                                                                                                               |
+| `/_app`                      | App layout + sidebar                      | Exists                                                                                                                                                               |
+| `/_app/dashboard`            | role-specific dashboard pages             | Complete — student, tutor, and admin next-action views using existing oRPC data                                                                                      |
+| `/_app/balance`              | balance-page.tsx                          | Exists (wallet + Knowledge Bank card)                                                                                                                                |
+| `/_app/calendar`             | competition-calendar-page.tsx             | Complete — authenticated, English-only read-only calendar backed by published Sanity content                                                                         |
+| `/_app/knowledge-bank`       | knowledge-bank-page.tsx                   | Complete — student-only 35-Mark gate, metadata search/filter, and protected PDF preview                                                                              |
+| `/_app/bookings`             | bookings-page.tsx                         | Exists (role-scoped list and lifecycle entry points)                                                                                                                 |
+| `/_app/bookings/$bookingId`  | booking-detail-page.tsx                   | Complete baseline — detail, lifecycle, reschedule, reporting, invites, notes, history                                                                                |
+| `/_app/tutors`               | tutors-page-content.tsx                   | Exists (discovery list)                                                                                                                                              |
+| `/_app/tutors/$tutorId/book` | create-booking-page.tsx                   | Exists (solo/group/series creation)                                                                                                                                  |
+| `/_app/achievements`         | achivements-page.tsx                      | Exists (submission + list)                                                                                                                                           |
+| `/_app/profile`              | profile-page.tsx + tutor-profile-page.tsx | Complete — role-aware student profile and tutor profile editor; tutor state, review feedback, pricing, and consolidated actions are available at the canonical route |
+| `/_app/onboarding`           | compatibility redirect                    | Complete — legacy tutor links redirect to `/profile`; other roles redirect to `/dashboard`                                                                           |
+| `/_app/tutor-bookings`       | tutor-bookings-page.tsx                   | Compatibility redirect to the shared `/bookings` list                                                                                                                |
+| `/_app/availability`         | availability-page.tsx                     | Complete baseline — Calendly-style weekly hours, date overrides, rules summary, and week preview                                                                     |
+| `/_app/notifications`        | notifications-page.tsx                    | Exists (full page)                                                                                                                                                   |
+| `/_app/admin`                | admin-dashboard-page.tsx                  | Complete F1 admin workspace entry point                                                                                                                              |
+| `/_app/admin-operations`     | admin-operations-page.tsx                 | Complete F1 queue/detail surface — filters, hydrated participants/wallets/ledger, override, rooms, and wallet lookup                                                 |
+| `/_app/admin-tutors`         | admin tutor invite + review               | Complete — invite/review queue plus version-checked structured achievement correction                                                                                |
+| `/_app/admin-achievements`   | achievement-moderation-page.tsx           | Exists (moderation UI)                                                                                                                                               |
+| `/_app/admin-economy`        | economy-settings-page.tsx                 | Complete — admin-managed Cogito take schedule with validation, preview, optimistic versioning, and audit-backed persistence                                          |
 
 ### Remaining gaps (no complete surface yet)
 
@@ -720,7 +743,10 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 
 ### Version Notes
 
+- v1.42 (2026-08-31): Contained tutor `/profile` scrolling to one route-owned vertical scroller, removed the action-bar bottom gap, and kept subject-category fieldsets at natural heights. No RPC, schema, or persistence contract changed.
+
 - v1.40 (2026-08-31): Tightened CI coverage enforcement so `packages/api` lines, overall lines, overall functions, and overall branches must each reach 100% from the shared lcov artifact. The 0/0 branch case is treated as 100%; no runtime or API contract changed.
+- v1.41 (2026-08-31): Simplified tutor profile input to one structured Achievements section plus one Experiences field, kept legacy achievement text as a fallback, and disabled grouping separators in competition-achievement years. The submit validator accepts either structured competition achievements or legacy achievement text.
 - v1.39 (2026-08-31): Kept profile contact-privacy and tutor-onboarding validation parts under Selia `Field` roots, including structured-achievement section errors, so Base UI error #28 cannot turn an inline validation state into a generic client-side 500. No RPC, schema, persistence, or URL contract changed.
 - v1.38 (2026-08-31): Added structured tutor education and competition achievements with 2/5 entry caps, bold-first-line public rendering, legacy `credentialsSummary` fallback, migration `0039_secret_blink.sql`, and admin correction through `adminTutor.updateTutorAchievements` with optimistic locking and audit logging.
 

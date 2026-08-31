@@ -67,7 +67,8 @@ export function TutorPricingFields({
         <Text className="font-medium">Base honorarium</Text>
         <Text className="mt-1 text-sm text-muted">
           Adjust your one-student IDR honorarium with the minus and plus
-          controls. Each step is Rp 5,000.
+          controls. Each step is Rp 5,000. Changes apply to new bookings;
+          existing bookings keep their original honorarium for payout.
         </Text>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">

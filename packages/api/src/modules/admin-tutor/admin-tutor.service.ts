@@ -471,6 +471,10 @@ export function createAdminTutorService(deps: {
         const pendingProfileChanges = {
           ...existing.pendingProfileChanges,
         };
+        // Published tutor honoraria are no longer review-gated. Ignore a
+        // legacy queued base rate so approving unrelated profile edits cannot
+        // overwrite the tutor's current fee.
+        delete pendingProfileChanges.baseRatesIdr;
         const rawSubjectIds = pendingProfileChanges.subjectIds;
         if (rawSubjectIds !== undefined) {
           if (

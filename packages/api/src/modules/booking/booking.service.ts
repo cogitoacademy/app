@@ -624,8 +624,8 @@ export function createBookingService(deps: {
 
   /**
    * New tutor profiles use IDR base honoraria. Legacy profiles keep the old
-   * Marks map until they are edited through onboarding, so existing bookings
-   * and migrations remain readable while the new economy rolls out.
+   * Marks map until they are migrated to IDR, so existing bookings and
+   * migrations remain readable while the new economy rolls out.
    */
   async function computePriceSnapshot(
     conn: DbOrTx,

@@ -24,7 +24,7 @@ async function login(page: Page, email: string, password: string) {
   await page.locator("input#email").fill(email);
   await page.locator("input#password").fill(password);
   await page.getByRole("button", { name: "Sign In", exact: true }).click();
-  await page.waitForURL(/\/(dashboard|onboarding|admin-tutors)(?:$|\/)/);
+  await page.waitForURL(/\/(dashboard|profile|admin-tutors)(?:$|\/)/);
   expect(pathsAfterLoginPage).not.toContain("/login");
 }
 
@@ -67,7 +67,10 @@ test("tutor sees IDR honorarium setup without the old Marks cash-out copy", asyn
 }) => {
   await login(page, TUTOR_EMAIL, TUTOR_PASSWORD);
 
-  await page.goto("/onboarding");
+  await page.goto("/profile");
+  await expect(
+    page.getByRole("heading", { name: "Tutor Profile", exact: true }).last(),
+  ).toBeVisible();
   await expect(page.getByText("Base honorarium")).toBeVisible();
   await expectNumberFieldValue(
     page.locator("#tutor-base-rate-online"),
@@ -78,6 +81,12 @@ test("tutor sees IDR honorarium setup without the old Marks cash-out copy", asyn
     225_000,
   );
   await expect(page.getByText(/7,000|cash[- ]out/i)).toHaveCount(0);
+
+  await page.goto("/onboarding");
+  await page.waitForURL("/profile");
+  await expect(
+    page.getByRole("heading", { name: "Tutor Profile", exact: true }).last(),
+  ).toBeVisible();
 });
 
 test("admin can review and update the future-booking Cogito take schedule", async ({

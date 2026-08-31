@@ -251,9 +251,7 @@ function TeachingSetupCard({ profileStatus }: { profileStatus: string }) {
             variant="outline"
             block
             nativeButton={false}
-            render={
-              <Link to="/onboarding" aria-label="Complete tutor profile" />
-            }
+            render={<Link to="/profile" aria-label="Complete tutor profile" />}
           >
             Complete tutor profile <IconArrowRight />
           </Button>
