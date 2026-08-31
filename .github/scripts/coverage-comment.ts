@@ -9,6 +9,10 @@
  *       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
  *       LCOV_FILE: ./coverage/lcov.info
  *       PR_NUMBER: ${{ github.event.pull_request.number }}
+ *       COVERAGE_API_THRESHOLD: 100
+ *       COVERAGE_OVERALL_THRESHOLD: 100
+ *       COVERAGE_FUNCTIONS_THRESHOLD: 100
+ *       COVERAGE_BRANCHES_THRESHOLD: 100
  *
  * If PR_NUMBER is not set (push to main), prints coverage to stdout only.
  */
@@ -158,12 +162,24 @@ async function main() {
   const branchesPct = pct(totals.branchesHit, totals.branchesFound);
 
   // --- Coverage gate (enforced) ---
-  // Thresholds configurable via env; defaults match docs/plans/FOUNDATION-HARDENING.md.
-  const apiThreshold = Number(process.env.COVERAGE_API_THRESHOLD ?? 90);
-  const overallThreshold = Number(process.env.COVERAGE_OVERALL_THRESHOLD ?? 80);
+  // Thresholds are configurable for local diagnostics, but the CI workflow
+  // sets every metric to 100% so a green job cannot hide untested functions or
+  // branches behind a line-only result.
+  const apiThreshold = Number(process.env.COVERAGE_API_THRESHOLD ?? 100);
+  const overallThreshold = Number(
+    process.env.COVERAGE_OVERALL_THRESHOLD ?? 100,
+  );
+  const functionsThreshold = Number(
+    process.env.COVERAGE_FUNCTIONS_THRESHOLD ?? 100,
+  );
+  const branchesThreshold = Number(
+    process.env.COVERAGE_BRANCHES_THRESHOLD ?? 100,
+  );
 
   const apiPct = pctNum(apiLines.linesHit, apiLines.linesFound);
   const overallPct = pctNum(overallLines.linesHit, overallLines.linesFound);
+  const functionsPctNum = pctNum(totals.functionsHit, totals.functionsFound);
+  const branchesPctNum = pctNum(totals.branchesHit, totals.branchesFound);
 
   const gateFailures: string[] = [];
   if (apiPct < apiThreshold) {
@@ -176,19 +192,29 @@ async function main() {
       `overall lines ${overallPct.toFixed(1)}% < ${overallThreshold}% threshold`,
     );
   }
+  if (functionsPctNum < functionsThreshold) {
+    gateFailures.push(
+      `overall functions ${functionsPctNum.toFixed(1)}% < ${functionsThreshold}% threshold`,
+    );
+  }
+  if (branchesPctNum < branchesThreshold) {
+    gateFailures.push(
+      `overall branches ${branchesPctNum.toFixed(1)}% < ${branchesThreshold}% threshold`,
+    );
+  }
 
   const header = `## 📊 Coverage Report`;
   const gateLine =
     gateFailures.length === 0
-      ? `> ✅ Coverage gate passed (api ≥ ${apiThreshold}%, overall ≥ ${overallThreshold}%)`
+      ? `> ✅ Coverage gate passed (api lines ≥ ${apiThreshold}%, overall lines ≥ ${overallThreshold}%, functions ≥ ${functionsThreshold}%, branches ≥ ${branchesThreshold}%)`
       : `> ❌ Coverage gate FAILED: ${gateFailures.join("; ")}`;
   const summaryTable = [
     `| Metric | Coverage |`,
     `|--------|----------|`,
     `| packages/api lines | ${pct(apiLines.linesHit, apiLines.linesFound)} (${apiLines.linesHit}/${apiLines.linesFound}) — gate ${apiThreshold}% |`,
     `| Overall lines | ${pct(overallLines.linesHit, overallLines.linesFound)} (${overallLines.linesHit}/${overallLines.linesFound}) — gate ${overallThreshold}% |`,
-    `| Functions | ${functionsPct} (${totals.functionsHit}/${totals.functionsFound}) |`,
-    `| Branches | ${branchesPct} (${totals.branchesHit}/${totals.branchesFound}) |`,
+    `| Functions | ${functionsPct} (${totals.functionsHit}/${totals.functionsFound}) — gate ${functionsThreshold}% |`,
+    `| Branches | ${branchesPct} (${totals.branchesHit}/${totals.branchesFound}) — gate ${branchesThreshold}% |`,
   ].join("\n");
 
   const perFileRows = records

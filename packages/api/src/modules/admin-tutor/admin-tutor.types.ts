@@ -1,5 +1,9 @@
 import { z } from "zod";
 import { externalHttpUrl } from "../../lib/url-schema";
+import {
+  tutorCompetitionAchievementsInput,
+  tutorEducationInput,
+} from "../tutor/tutor-achievements";
 
 export const createInviteInput = z.object({
   email: z.string().email().max(320),
@@ -62,4 +66,11 @@ export const reviewTutorProfileInput = z.object({
   ]),
   adminNote: z.string().max(2000).optional(),
   publicPhotoUrl: externalHttpUrl.optional(),
+});
+
+export const updateTutorAchievementsInput = z.object({
+  tutorProfileId: z.string().max(100),
+  version: z.number().int(),
+  education: tutorEducationInput,
+  competitionAchievements: tutorCompetitionAchievementsInput,
 });

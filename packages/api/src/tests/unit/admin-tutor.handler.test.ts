@@ -77,6 +77,49 @@ describe("AdminTutorHandler", () => {
     expect(service.sendInviteAgain).toHaveBeenCalledWith("admin-1", "inv-1");
   });
 
+  test("routes updateTutorAchievements through the domain mapper", async () => {
+    const service = {
+      updateTutorAchievements: mock(
+        async (adminId: string, input: unknown) => ({
+          adminId,
+          input,
+          id: "p1",
+        }),
+      ),
+    } as any;
+    const handler = createAdminTutorHandler(service);
+    const context = {
+      session: { user: { id: "admin-1" } },
+    } as any;
+
+    const result = await handler.updateTutorAchievements({
+      context,
+      input: {
+        tutorProfileId: "p1",
+        version: 2,
+        education: [{ university: "UGM", degree: "Law" }],
+        competitionAchievements: [],
+      },
+    });
+
+    expect(result).toEqual({
+      adminId: "admin-1",
+      input: {
+        tutorProfileId: "p1",
+        version: 2,
+        education: [{ university: "UGM", degree: "Law" }],
+        competitionAchievements: [],
+      },
+      id: "p1",
+    });
+    expect(service.updateTutorAchievements).toHaveBeenCalledWith("admin-1", {
+      tutorProfileId: "p1",
+      version: 2,
+      education: [{ university: "UGM", degree: "Law" }],
+      competitionAchievements: [],
+    });
+  });
+
   describe("listInvites with default empty input", () => {
     test("calls adminTutorService.listInvites with default empty object", async () => {
       const listInvites = mock(async () => []);

@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { MAX_TUTOR_SUBJECTS } from "../tutor-subjects/subject-selection";
 import { externalHttpUrl } from "../../lib/url-schema";
+import {
+  tutorCompetitionAchievementsInput,
+  tutorEducationInput,
+} from "./tutor-achievements";
 
 export const updateMyProfileInput = z.object({
   version: z.number().int(),
@@ -11,6 +15,9 @@ export const updateMyProfileInput = z.object({
   achievementProofUrls: z.array(externalHttpUrl).max(20).optional(),
   experienceProofUrls: z.array(externalHttpUrl).max(20).optional(),
   sourcePhotoUrl: externalHttpUrl.optional(),
+  credentialsSummary: z.string().max(2000).optional(),
+  education: tutorEducationInput.optional(),
+  competitionAchievements: tutorCompetitionAchievementsInput.optional(),
   expertise: z.array(z.string().max(255)).max(20).optional(),
   subjectIds: z
     .array(z.string().min(1).max(100))

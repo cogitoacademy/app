@@ -9,6 +9,10 @@ import {
 } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
 import { INVITE_STATUS } from "../../shared/constants";
+import type {
+  TutorCompetitionAchievement,
+  TutorEducationEntry,
+} from "@cogito-app/db/schema";
 
 export type TutorInviteRow = typeof tutorInvite.$inferSelect;
 export type TutorProfileRow = typeof tutorProfile.$inferSelect;
@@ -62,6 +66,8 @@ export interface TutorProfileUpdates {
   experiences?: string | null;
   achievementProofUrls?: string[] | null;
   experienceProofUrls?: string[] | null;
+  education?: TutorEducationEntry[] | null;
+  competitionAchievements?: TutorCompetitionAchievement[] | null;
   expertise?: string[] | null;
   modality?: string | null;
   prices?: Record<string, number> | null;
@@ -241,6 +247,25 @@ async function updateTutorPublicPhoto(
 }
 
 /**
+ * Updates admin-correctable profile content with optimistic concurrency.
+ * Returning no rows means another admin or the tutor changed the profile.
+ */
+async function updateTutorProfileWithVersion(
+  conn: DbOrTx,
+  id: string,
+  expectedVersion: number,
+  updates: TutorProfileUpdates,
+) {
+  return conn
+    .update(tutorProfile)
+    .set({ ...updates, version: sql`${tutorProfile.version} + 1` })
+    .where(
+      and(eq(tutorProfile.id, id), eq(tutorProfile.version, expectedVersion)),
+    )
+    .returning();
+}
+
+/**
  * Lists tutor profiles with pagination and optional onboarding status filter, including the user.
  *
  * @param conn - the database connection or active transaction
@@ -314,6 +339,7 @@ export function createAdminTutorRepo() {
     replaceTutorProfileSubjects,
     updateTutorProfile,
     updateTutorPublicPhoto,
+    updateTutorProfileWithVersion,
     listTutorProfiles,
   };
 }

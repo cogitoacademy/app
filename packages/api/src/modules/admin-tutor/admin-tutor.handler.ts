@@ -11,6 +11,7 @@ import {
   listTutorProfilesInput,
   reviewTutorProfileInput,
   inspectInviteeInput,
+  updateTutorAchievementsInput,
 } from "./admin-tutor.types";
 
 type CreateInviteInput = z.infer<typeof createInviteInput>;
@@ -20,6 +21,9 @@ type RevokeInviteInput = z.infer<typeof revokeInviteInput>;
 type ListTutorProfilesInput = z.infer<typeof listTutorProfilesInput>;
 type ReviewTutorProfileInput = z.infer<typeof reviewTutorProfileInput>;
 type InspectInviteeInput = z.infer<typeof inspectInviteeInput>;
+type UpdateTutorAchievementsInput = z.infer<
+  typeof updateTutorAchievementsInput
+>;
 
 export type AdminTutorHandler = ReturnType<typeof createAdminTutorHandler>;
 
@@ -137,6 +141,23 @@ export function createAdminTutorHandler(adminTutorService: AdminTutorService) {
       return withDomainMap(
         () =>
           adminTutorService.reviewTutorProfile(context.session!.user.id, input),
+        mapAdminTutorError,
+      );
+    },
+
+    updateTutorAchievements: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: UpdateTutorAchievementsInput;
+    }) => {
+      return withDomainMap(
+        () =>
+          adminTutorService.updateTutorAchievements(
+            context.session!.user.id,
+            input,
+          ),
         mapAdminTutorError,
       );
     },

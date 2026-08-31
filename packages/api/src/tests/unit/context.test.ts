@@ -1,4 +1,5 @@
 import { describe, test, expect, mock } from "bun:test";
+import { auth } from "@cogito-app/auth";
 import { createContext, refreshSessionUser } from "../../context";
 
 describe("refreshSessionUser (N4)", () => {
@@ -118,5 +119,24 @@ describe("createContext (N4 wiring)", () => {
 
     expect(ctx.session).toBeNull();
     expect(ctx.services).toBeDefined();
+  });
+
+  test("uses the default auth session resolver when no override is provided", async () => {
+    const originalGetSession = (auth.api as any).getSession;
+    const getSession = mock(async () => null);
+    (auth.api as any).getSession = getSession;
+
+    try {
+      const ctx = await createContext({
+        context: {
+          request: new Request("http://localhost/rpc/auth.getSession"),
+        },
+      } as any);
+
+      expect(ctx.session).toBeNull();
+      expect(getSession).toHaveBeenCalledTimes(1);
+    } finally {
+      (auth.api as any).getSession = originalGetSession;
+    }
   });
 });

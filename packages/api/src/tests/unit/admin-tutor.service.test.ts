@@ -55,6 +55,7 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
       listInvites: mock(async () => [invite]),
       getTutorProfileById: mock(async () => profile),
       updateTutorProfile: mock(async () => profile),
+      updateTutorProfileWithVersion: mock(async () => [profile]),
       listTutorProfiles: mock(async () => [profile]),
     },
     auditPort: { record: mock(async () => {}) },
@@ -566,6 +567,184 @@ describe("AdminTutor Service", () => {
         adminNote: "Please update bio",
       });
       expect(result.id).toBe("p1");
+    });
+
+    test("updateTutorAchievements normalizes entries and records an audit", async () => {
+      const profile = {
+        ...makeProfile(),
+        version: 2,
+        education: [{ university: "Old University", degree: "Old Degree" }],
+        competitionAchievements: [],
+        pendingProfileChanges: {
+          education: [{ university: "Old University", degree: "Old Degree" }],
+        },
+      };
+      const updated = { ...profile, version: 3 };
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getTutorProfileById: mock(async () => profile),
+          updateTutorProfileWithVersion: mock(async () => [updated]),
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+      const education = [
+        { university: "Universitas Gadjah Mada", degree: "Bachelor of Law" },
+      ];
+      const competitionAchievements = [
+        {
+          competitionName: "Harvard Model United Nations",
+          year: 2019,
+          awards: ["Diplomatic Commendation", "Best Delegate"],
+        },
+      ];
+
+      await expect(
+        service.updateTutorAchievements("admin1", {
+          tutorProfileId: "p1",
+          version: 2,
+          education,
+          competitionAchievements,
+        }),
+      ).resolves.toBe(updated);
+
+      expect(
+        deps.adminTutorRepo.updateTutorProfileWithVersion,
+      ).toHaveBeenCalledWith(
+        {},
+        "p1",
+        2,
+        expect.objectContaining({
+          competitionAchievements,
+          pendingProfileChanges: expect.objectContaining({
+            education,
+          }),
+        }),
+      );
+      const updateArgs = (
+        deps.adminTutorRepo.updateTutorProfileWithVersion as any
+      ).mock.calls[0][3];
+      expect(updateArgs.education).toBeUndefined();
+      expect(deps.auditPort.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "tutor_achievements_updated",
+          actorId: "admin1",
+          targetId: "p1",
+        }),
+      );
+    });
+
+    test("updateTutorAchievements throws when profile not found", async () => {
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getTutorProfileById: mock(async () => null),
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+
+      await expect(
+        service.updateTutorAchievements("admin1", {
+          tutorProfileId: "p1",
+          version: 1,
+          education: [],
+          competitionAchievements: [],
+        }),
+      ).rejects.toThrow(TutorProfileNotFoundError);
+    });
+
+    test("updateTutorAchievements mirrors into pending when competitionAchievements already pending", async () => {
+      const profile = {
+        ...makeProfile(),
+        version: 2,
+        education: [],
+        competitionAchievements: [
+          {
+            competitionName: "Old Comp",
+            year: 2020,
+            awards: ["Winner"],
+          },
+        ],
+        pendingProfileChanges: {
+          competitionAchievements: [
+            {
+              competitionName: "Old Comp",
+              year: 2020,
+              awards: ["Winner"],
+            },
+          ],
+        },
+      };
+      const updated = { ...profile, version: 3 };
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getTutorProfileById: mock(async () => profile),
+          updateTutorProfileWithVersion: mock(async () => [updated]),
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+      const competitionAchievements = [
+        {
+          competitionName: "New Comp",
+          year: 2024,
+          awards: ["Best Delegate"],
+        },
+      ];
+
+      await expect(
+        service.updateTutorAchievements("admin1", {
+          tutorProfileId: "p1",
+          version: 2,
+          education: [],
+          competitionAchievements,
+        }),
+      ).resolves.toBe(updated);
+
+      expect(
+        deps.adminTutorRepo.updateTutorProfileWithVersion,
+      ).toHaveBeenCalledWith(
+        {},
+        "p1",
+        2,
+        expect.objectContaining({
+          education: [],
+          pendingProfileChanges: expect.objectContaining({
+            competitionAchievements,
+          }),
+        }),
+      );
+      const updateArgs = (
+        deps.adminTutorRepo.updateTutorProfileWithVersion as any
+      ).mock.calls[0][3];
+      expect(updateArgs.competitionAchievements).toBeUndefined();
+    });
+
+    test("updateTutorAchievements rejects a stale profile version", async () => {
+      const profile = {
+        ...makeProfile(),
+        version: 2,
+        education: [],
+        competitionAchievements: [],
+      };
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getTutorProfileById: mock(async () => profile),
+          updateTutorProfileWithVersion: mock(async () => []),
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+
+      await expect(
+        service.updateTutorAchievements("admin1", {
+          tutorProfileId: "p1",
+          version: 1,
+          education: [],
+          competitionAchievements: [],
+        }),
+      ).rejects.toThrow(TutorProfileOptimisticLockError);
+      expect(deps.auditPort.record).not.toHaveBeenCalled();
     });
 
     test("N2: approve_unpublished restores a suspended profile", async () => {

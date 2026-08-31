@@ -6,6 +6,10 @@ import {
   tutorProfileSubject,
 } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
+import type {
+  TutorCompetitionAchievement,
+  TutorEducationEntry,
+} from "@cogito-app/db/schema";
 
 export interface UpdateProfileInput {
   version: number;
@@ -16,6 +20,9 @@ export interface UpdateProfileInput {
   achievementProofUrls?: string[];
   experienceProofUrls?: string[];
   sourcePhotoUrl?: string;
+  credentialsSummary?: string;
+  education?: TutorEducationEntry[];
+  competitionAchievements?: TutorCompetitionAchievement[];
   expertise?: string[];
   subjectIds?: string[];
   modality?: "online" | "offline" | "both";

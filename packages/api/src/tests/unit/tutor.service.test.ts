@@ -365,6 +365,49 @@ describe("Tutor Service", () => {
       );
     });
 
+    test("published profile stores structured achievements as pending edits", async () => {
+      const profile = makeProfile({
+        onboardingStatus: "published",
+        education: [],
+        competitionAchievements: [],
+      });
+      const updateProfileWithVersion = mock(async () => [profile]);
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => profile),
+          updateProfileWithVersion,
+        },
+      });
+      const service = createTutorService(deps as any);
+      const education = [{ university: "University", degree: "Degree" }];
+      const competitionAchievements = [
+        { competitionName: "Competition", year: 2020, awards: ["Champion"] },
+      ];
+
+      await service.updateMyProfile("u1", {
+        version: 1,
+        education,
+        competitionAchievements,
+      });
+
+      expect(updateProfileWithVersion).toHaveBeenCalledWith(
+        deps.db,
+        "u1",
+        1,
+        expect.objectContaining({
+          pendingProfileChanges: { education, competitionAchievements },
+          profileEditStatus: "pending_review",
+        }),
+      );
+      const updateArgs = updateProfileWithVersion.mock.calls[0][3] as Record<
+        string,
+        unknown
+      >;
+      expect(updateArgs.education).toBeUndefined();
+      expect(updateArgs.competitionAchievements).toBeUndefined();
+    });
+
     test("published profile removes an unchanged subject edit", async () => {
       const profile = makeProfile({
         onboardingStatus: "published",

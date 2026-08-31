@@ -4,6 +4,7 @@ import {
   InviteNotFoundError,
   TutorProfileNotFoundError,
   InvalidInviteActionError,
+  TutorProfileOptimisticLockError,
   mapAdminTutorError,
 } from "../../modules/admin-tutor/admin-tutor.errors";
 
@@ -72,6 +73,12 @@ describe("admin-tutor.errors", () => {
     it("should map InvalidInviteActionError to CONFLICT", () => {
       const result = mapAdminTutorError(
         new InvalidInviteActionError("inv_1", "resend"),
+      );
+      expect(result.status).toBe(409);
+    });
+    it("should map TutorProfileOptimisticLockError to CONFLICT", () => {
+      const result = mapAdminTutorError(
+        new TutorProfileOptimisticLockError("tp_1", 2),
       );
       expect(result.status).toBe(409);
     });

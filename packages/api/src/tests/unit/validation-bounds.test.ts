@@ -11,6 +11,10 @@ import {
   listMineInput,
 } from "../../modules/booking/booking.types";
 import { updateMyProfileInput } from "../../modules/tutor/tutor.types";
+import {
+  tutorCompetitionAchievementsInput,
+  tutorEducationInput,
+} from "../../modules/tutor/tutor-achievements";
 import { upsertAvailabilityInput } from "../../modules/tutor/availability.types";
 import { achievementInput } from "../../modules/achievement/achievement.types";
 import { createInviteInput } from "../../modules/admin-tutor/admin-tutor.types";
@@ -46,6 +50,38 @@ const LONG_SEARCH = "a".repeat(201);
 const LONG_TIMEZONE = "a".repeat(51);
 
 describe("Validation bounds — string .max()", () => {
+  test("Tutor achievements enforce the two education and five competition caps", () => {
+    expect(
+      tutorEducationInput.safeParse([
+        { university: "A", degree: "A" },
+        { university: "B", degree: "B" },
+        { university: "C", degree: "C" },
+      ]).success,
+    ).toBe(false);
+
+    expect(
+      tutorCompetitionAchievementsInput.safeParse(
+        Array.from({ length: 6 }, (_, index) => ({
+          competitionName: `Competition ${index + 1}`,
+          year: 2020,
+          awards: ["Champion"],
+        })),
+      ).success,
+    ).toBe(false);
+  });
+
+  test("Tutor achievements require a full entry and at least one award", () => {
+    expect(
+      tutorEducationInput.safeParse([{ university: "", degree: "Degree" }])
+        .success,
+    ).toBe(false);
+    expect(
+      tutorCompetitionAchievementsInput.safeParse([
+        { competitionName: "Competition", year: 2020, awards: [] },
+      ]).success,
+    ).toBe(false);
+  });
+
   test("baseRatesIdr accepts online/offline keys and rejects other keys", () => {
     expect(
       updateMyProfileInput.safeParse({
