@@ -1,6 +1,6 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-08-29
+Last updated: 2026-08-31
 
 ## Website audit P2 hardening
 
@@ -83,6 +83,8 @@ The authenticated `/guide` route is the product-facing **How Cogito Works** guid
 The app-wide TanStack Router pending state is rendered by `apps/web/src/components/loader.tsx` as a visible token-based loading ring with a contrasting track, the local Selia `Spinner` component as its primary progress arc, a loading label, and reduced-motion behavior. It is presentation-only and keeps the same router/onboarding/auth loading entry points.
 
 Unknown client-side paths render the branded `NotFoundPage` from the root route instead of TanStack Router's generic `Not Found` fallback. Route and outer-boundary failures use the matching `ErrorPage` status treatment with a single tertiary browser-back action. Network failures across query and auth surfaces are normalized by `apps/web/src/lib/error-message.ts`; technical messages such as `Failed to fetch` become plain-language connection guidance without changing any API or persistence contract.
+
+The profile and tutor-onboarding routes keep every Selia `FieldLabel`, `FieldDescription`, and `FieldError` under a `Field` root, including checkbox copy and section-level validation messages. This preserves Base UI field context when validation errors render; otherwise Base UI error #28 reaches the outer error page and can look like a misleading 500. This is frontend-only and does not change an API or persistence contract.
 
 Collection empty states use the shared presentation component at `apps/web/src/components/empty-state.tsx`. `EmptyStateCard` is used for page and card-level states, while `EmptyState` supports `default`, `compact`, and `inline` density for calendars, menus, dialogs, fields, and embedded lists. Empty copy distinguishes a genuinely empty collection from a filtered no-match state; the component uses Selia tokens and provides success, warning, secondary, and danger tones without changing any API or persistence contract. The audit covers calendar periods, resource and tutor discovery, bookings, notifications, session/activity history, Marks ledgers, subject selection, tutor proof links, and availability previews.
 

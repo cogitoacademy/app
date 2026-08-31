@@ -1,6 +1,15 @@
 # Cogito Module Reference
 
-Last updated: 2026-08-28
+Last updated: 2026-08-31
+
+## Selia field-context invariant (2026-08-31)
+
+The profile and tutor-onboarding compositions place every `FieldLabel`,
+`FieldDescription`, and `FieldError` under a Selia `Field` root. This includes
+the profile contact-privacy checkbox, the tutor payout disclaimer, and
+section-level achievement errors. Violating this invariant triggers Base UI
+error #28 during rendering; the fix is frontend-only and adds no service,
+repository, event-key, or API contract.
 
 ## Collection transition behavior (2026-08-28)
 

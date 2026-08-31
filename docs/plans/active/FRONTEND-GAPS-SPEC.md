@@ -715,6 +715,7 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 
 ### Version Notes
 
+- v1.38 (2026-08-31): Kept profile contact-privacy and tutor-onboarding validation parts under Selia `Field` roots so Base UI error #28 cannot turn an inline validation state into a generic client-side 500. No RPC, schema, persistence, or URL contract changed.
 - v1.37 (2026-08-28): Updated the shared `/bookings` page to consume the existing `booking.listMine` cursor contract in batches of 20 with an append-only **Load more bookings** flow. Existing cards stay visible during next-page loading, and tab counts show `+` while more pages remain. Mutation invalidation now targets the procedure key so all cached infinite pages refresh. No API or schema contract changed.
 - v1.36 (2026-08-28): Stabilized server-backed collection transitions with TanStack Query `keepPreviousData` for admin tutor pagination, tutor discovery search/filters, and the admin booking queue. Admin tutor pagination scrolls to the selected table card by DOM ID and disables controls while loading. No RPC, schema, persistence, or URL search contract changed.
 - v1.35 (2026-08-28): Kept the booking-detail overview/activity flow independent from the sticky desktop Actions/Marks rail so rail height cannot create a blank row before Activity; narrow layouts retain actions/Marks before Activity. No RPC, schema, or persistence contract changed.

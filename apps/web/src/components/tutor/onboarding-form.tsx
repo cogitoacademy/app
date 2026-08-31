@@ -1033,7 +1033,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                       clearError("bankTransferDisclaimerAccepted");
                     }}
                   />
-                  <div className="min-w-0">
+                  <Field className="min-w-0">
                     <FieldLabel htmlFor="tutor-bankTransferDisclaimerAccepted">
                       I confirm the account can receive Cogito transfers
                     </FieldLabel>
@@ -1048,7 +1048,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                         {errors.bankTransferDisclaimerAccepted}
                       </FieldError>
                     ) : null}
-                  </div>
+                  </Field>
                 </div>
               </CardBody>
             </Card>

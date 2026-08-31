@@ -416,7 +416,7 @@ export function ProfilePage({
                         field.handleChange(checked === true)
                       }
                     />
-                    <div className="min-w-0">
+                    <Field className="min-w-0 gap-0">
                       <FieldLabel htmlFor="allow-contact-requests">
                         Allow contact requests
                       </FieldLabel>
@@ -426,7 +426,7 @@ export function ProfilePage({
                         blocks new requests; an email already shared cannot be
                         recalled.
                       </FieldDescription>
-                    </div>
+                    </Field>
                   </div>
                 )}
               </form.Field>

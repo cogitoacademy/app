@@ -1,6 +1,6 @@
 # Cogito Runbook
 
-Last updated: 2026-08-28
+Last updated: 2026-08-31
 
 ## Collection transition QA (2026-08-28)
 
@@ -53,6 +53,17 @@ Coolify checks from causing a false `Connection refused` status.
 Open `/login` in a clean browser and sign in as a student, tutor, and admin. The email button may show progress while the auth request and fresh session read complete; it must then go directly to `/dashboard`, `/onboarding`, or `/admin-tutors` without an intermediate `/login` navigation. Verify a wrong password returns the form with an error and the button is usable again. For a return link such as `/login?redirect=/bookings`, verify it lands on the validated target after the same handoff.
 
 Also verify the client validation feedback: blur an empty or malformed email, a short password, and (on sign-up) a short name or password missing uppercase/lowercase/digit requirements. Each invalid field should show its own Selia inline error and danger outline; submitting incomplete data should reveal the field errors and must not call `/api/auth`. Correcting the values should clear the errors and re-enable the normal auth request. An API-level malformed JSON request to `/api/auth/sign-up/email` must return 400, never 500.
+
+### Profile and tutor-onboarding smoke check
+
+After a web deployment, sign in as a student and open `/profile`; then sign in
+as a tutor and open `/profile` (the tutor route should redirect to `/onboarding`).
+Submit incomplete forms and confirm validation messages remain inline, the page
+does not fall into the generic error screen, and the browser console has no
+`Base UI error #28`. A `500` shown by the client error page together with
+`FieldRootContext is missing` means a `FieldLabel`, `FieldDescription`, or
+`FieldError` has been rendered outside a Selia `Field` root; inspect the affected
+form composition before checking the API or database.
 
 ### Dashboard smoke check
 
