@@ -5,7 +5,7 @@
 ---
 - name: Find the application by name
   ansible.builtin.set_fact:
-    app_found: "{{ applications.json | selectattr('name', 'equalto', app_spec.name) | list }}"
+    app_found: "{{ applications_live.json | selectattr('name', 'equalto', app_spec.name) | list }}"
 
 - name: Application missing — create it
   ansible.builtin.uri:
