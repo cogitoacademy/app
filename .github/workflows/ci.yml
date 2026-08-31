@@ -1,8 +1,12 @@
 name: CI
+# F5 (CI-SANITY): pull_request-only (+ manual dispatch). The old
+# `push: [main, staging]` trigger re-ran the full 4-job suite on every
+# squash-merge commit even though every merge commit is already gated by
+# its PR run — pure duplicate CI spend. Required check contexts (lint,
+# Type Check, Build, Test + Coverage) and the other workflow triggers
+# (labeler / semantic-pr / infra-plan / auto-merge) are unaffected.
 on:
   pull_request:
-    branches: [main, staging]
-  push:
     branches: [main, staging]
   workflow_dispatch:
 
