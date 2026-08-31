@@ -75,3 +75,6 @@ infra/terraform/crash.*.log
 # commits. Edit the vault with `sops infra/secrets/prod.env` (in-memory
 # decrypt/re-encrypt) or `sops set ...` — never keep a plaintext copy.
 infra/secrets/prod.env
+
+terraform_key.txt
+ansible_key.txt
