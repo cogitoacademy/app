@@ -85,7 +85,7 @@ Never put dumps in the public bucket — a guessable URL leaks the whole DB.
 
 - **`PROD_DATABASE_URL is unset`** → GitHub secret missing; add it.
 - **Webhook 401** → two causes: (a) Traefik route for
-  `coolify.cogitoacademy.id/api/v1/deploy/*` not applied (paste the dynamic
+  `cl.cogitoacademy.id/api/v1/deploy/*` not applied (paste the dynamic
   config from the playbook output), (b) endpoint is "auth required" — set
   `COOLIFY_API_TOKEN` secret (Bearer header).
 - **Deploy fails after push** → rollback: Coolify → resource → Rollback to

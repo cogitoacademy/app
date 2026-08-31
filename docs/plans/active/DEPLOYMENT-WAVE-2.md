@@ -87,7 +87,7 @@ written as a Traefik route**, not a Caddy route.
 
 This changes Task 0.2's implementation: the `coolify-resources.yml` playbook
 must drive the **Coolify API / Traefik labels** for
-`coolify.cogitoacademy.id` → only `/api/v1/deploy/*` proxied, everything else 404. Worker W1 owns this and the doc corrections.
+`cl.cogitoacademy.id` → only `/api/v1/deploy/*` proxied, everything else 404. Worker W1 owns this and the doc corrections.
 
 ---
 
@@ -271,7 +271,7 @@ the two example files and W2 mirrors it), `packages/env/src/server.ts` +
 `docs/RUNBOOK.md`, `docs/DEPLOYMENT.md`.
 
 **Key points:** Traefik, not Caddy — route
-`coolify.cogitoacademy.id/api/v1/deploy/*` only; everything else on that host 404. Env values come from `sops -d` on the control node (never written to
+`cl.cogitoacademy.id/api/v1/deploy/*` only; everything else on that host 404. Env values come from `sops -d` on the control node (never written to
 disk on the VPS). Playbook is idempotent + dry-runnable. `--syntax-check`
 passes. This is the 401 fix.
 

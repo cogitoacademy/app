@@ -23,13 +23,15 @@ environment-specific items below still require confirmation in GitHub/Coolify.
       into the production Vite image.
 - [x] Configure the two Coolify resource domains and add the API + web deploy
       webhook secrets in GitHub Actions — **webhook secrets exist but point at
-      the unresolvable `coolify.cogitoacademy.id` host (S7); the CD pipeline
-      now guards them (#118) and the operator must recreate them with the
-      resolvable `https://coolify.cogitoacademy.id/api/v1/deploy?uuid=...`
+      the old `coolify.cogitoacademy.id` host (S7; canonical host renamed
+      `coolify.cogitoacademy.id` → `cl.cogitoacademy.id` 2026-08-31 — the live
+      Coolify host); the CD pipeline now guards them (#118) and the operator
+      must recreate them with the resolvable
+      `https://cl.cogitoacademy.id/api/v1/deploy?uuid=...`
       URL (Option A, DEPLOYMENT-PLAN Task 0.2). Webhook 401 → **wave-2
       (DEPLOYMENT-WAVE-2.md): Traefik route + optional Bearer** — the 401 has
       two candidate causes: a missing Traefik route for
-      `coolify.cogitoacademy.id/api/v1/deploy/*` (declared in
+      `cl.cogitoacademy.id/api/v1/deploy/*` (declared in
       `coolify-resources.yml`) and/or a missing `Authorization: Bearer
 <coolify-api-token>` header (Deploy Webhook is auth-required in current
       Coolify versions). Both documented in RUNBOOK → Xendit webhook wiring.**

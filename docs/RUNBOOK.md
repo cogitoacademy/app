@@ -872,7 +872,7 @@ The CD workflows (`cd-staging.yml` / `cd-prod.yml`) trigger Coolify deploys via 
    Secret. Use this format:
 
    ```text
-   https://coolify.cogitoacademy.id/api/v1/deploy?uuid=<resource-uuid>&force=false
+   https://cl.cogitoacademy.id/api/v1/deploy?uuid=<resource-uuid>&force=false
    ```
 
    Replace `<resource-uuid>` with the Coolify resource UUID and remove the
@@ -880,15 +880,20 @@ The CD workflows (`cd-staging.yml` / `cd-prod.yml`) trigger Coolify deploys via 
    trailing `??`. The URL host must be publicly DNS-resolvable from GitHub
    Actions.
 
-   > **Why `coolify.cogitoacademy.id` (2026-08-27, S7):** the Coolify control
-   > plane is tailnet-only — the UI and SSH are reachable only over Tailscale,
-   > and the old webhook host (`cl.cogitoacademy.id`) had no DNS record, so
-   > GitHub Actions (cloud) failed with `curl exit 6 "Could not resolve host"`.
-   > Option A exposes **only** the deploy-webhook path: a DNS record + Caddy
-   > route for `coolify.cogitoacademy.id/api/v1/deploy/*` (the per-resource UUID
-   > in the URL is the bearer secret); everything else on that host returns
-   > 404/denied and the Coolify UI stays tailnet-only. The operator must
-   > recreate the two production secrets with the resolvable URL above.
+   > **Canonical host: `cl.cogitoacademy.id`** (renamed from
+   > `coolify.cogitoacademy.id` on 2026-08-31 — the live Coolify host,
+   > verified: 302 → /login). The Coolify control plane is tailnet-only — the
+   > UI and SSH are reachable only over Tailscale — so a DNS record + Traefik
+   > route expose **only** the deploy-webhook path on this host
+   > (`cl.cogitoacademy.id/api/v1/deploy/*`; the per-resource UUID in the URL
+   > is the bearer secret); everything else on that host returns 404/denied
+   > and the Coolify UI stays tailnet-only.
+
+   > **REQUIRED-OPERATOR-ACTION (2026-08-31):** the two GitHub secrets
+   > `COOLIFY_PROD_SERVER_WEBHOOK` + `COOLIFY_PROD_WEBHOOK` currently point at
+   > `https://coolify.cogitoacademy.id/...` and must be recreated with
+   > `https://cl.cogitoacademy.id/api/v1/deploy?uuid=...` before the next
+   > production deploy.
 
 3. GitHub → repo **Settings → Secrets and variables → Actions**:
    - `COOLIFY_STAGING_SERVER_WEBHOOK` — full staging API resource URL
