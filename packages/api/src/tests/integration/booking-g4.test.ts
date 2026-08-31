@@ -136,25 +136,33 @@ describe("G4: group repricing on headcount change", () => {
       await createTestContext(proposerRes.cookie),
     );
     const proposerCtx = await createTestContext(proposerRes.cookie);
-    proposerId = proposerCtx.session?.user.id!;
+    if (!proposerCtx.session?.user)
+      throw new Error("test setup: expected proposer session user");
+    proposerId = proposerCtx.session.user.id;
     await creditWallet(proposerId, 200);
 
     const i1Res = await signUpAndSignIn(i1Email, "Test1234!", "Invitee1 G4");
     i1Client = createTestClient(await createTestContext(i1Res.cookie));
     const i1Ctx = await createTestContext(i1Res.cookie);
-    i1Id = i1Ctx.session?.user.id!;
+    if (!i1Ctx.session?.user)
+      throw new Error("test setup: expected invitee1 session user");
+    i1Id = i1Ctx.session.user.id;
     await creditWallet(i1Id, 200);
 
     const i2Res = await signUpAndSignIn(i2Email, "Test1234!", "Invitee2 G4");
     i2Client = createTestClient(await createTestContext(i2Res.cookie));
     const i2Ctx = await createTestContext(i2Res.cookie);
-    i2Id = i2Ctx.session?.user.id!;
+    if (!i2Ctx.session?.user)
+      throw new Error("test setup: expected invitee2 session user");
+    i2Id = i2Ctx.session.user.id;
     await creditWallet(i2Id, 200);
 
     const i3Res = await signUpAndSignIn(i3Email, "Test1234!", "Invitee3 G4");
     i3Client = createTestClient(await createTestContext(i3Res.cookie));
     const i3Ctx = await createTestContext(i3Res.cookie);
-    i3Id = i3Ctx.session?.user.id!;
+    if (!i3Ctx.session?.user)
+      throw new Error("test setup: expected invitee3 session user");
+    i3Id = i3Ctx.session.user.id;
     await creditWallet(i3Id, 200);
   });
 

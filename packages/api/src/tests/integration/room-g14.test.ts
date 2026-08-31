@@ -145,10 +145,10 @@ describe("G14 admin room relocate and cancel", () => {
       const res = await signUpAndSignIn(email, "Test1234!", name);
       const client = createTestClient(await createTestContext(res.cookie));
       const ctx = await createTestContext(res.cookie);
-      if (ctx.session?.user) {
-        await creditWallet(ctx.session.user.id, 200);
-      }
-      return { client, userId: ctx.session?.user.id! };
+      if (!ctx.session?.user)
+        throw new Error("test setup: expected student session user");
+      await creditWallet(ctx.session.user.id, 200);
+      return { client, userId: ctx.session.user.id };
     }
 
     const s1 = await setupStudent(
