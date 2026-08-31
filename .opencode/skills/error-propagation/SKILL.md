@@ -22,8 +22,8 @@ live API response — never the wrapper's own report).
 1. **Loops that filter by `when:` can skip everything and still exit 0.**
    Any loop whose items are gated by a `when` condition MUST be followed by an
    assertion that the expected number of writes actually occurred
-   (`applied == declared`). "Applied N" debug output that counts the *payload*
-   instead of the *writes* is a false-green generator (this exact bug: env.yml
+   (`applied == declared`). "Applied N" debug output that counts the _payload_
+   instead of the _writes_ is a false-green generator (this exact bug: env.yml
    reported "Applied 47 env vars" while the DB showed 0 writes).
 
 2. **`no_log: true` censors failures, not just secrets.** Any task that both
@@ -38,8 +38,8 @@ live API response — never the wrapper's own report).
    - Coolify state: the resource GET (or the coolify-db table when the API
      token is under-scoped)
    - app surface: `/health` version field, or the specific env's effect.
-   The playbook must include this read-back step; the lead must run it again
-   after integration.
+     The playbook must include this read-back step; the lead must run it again
+     after integration.
 
 4. **Secrets vs surfacing:** `no_log: true` protects values, not success. When
    a task must hide secrets, still return a COUNT or a checksum of
@@ -56,7 +56,7 @@ live API response — never the wrapper's own report).
   (with a named message), `git rebase --abort`, `git reset --hard origin/main`,
   then `git stash pop`. If the stash is already dropped: `git fsck --unreachable`,
   find the 3-parent commit whose body matches the stash message, and `git
-  checkout <stash> -- <path>` (done twice this session — it works).
+checkout <stash> -- <path>` (done twice this session — it works).
 - **Vault/key files are never echoed** — verify changes by key names, value
   shapes (lengths), and API status codes only.
 
