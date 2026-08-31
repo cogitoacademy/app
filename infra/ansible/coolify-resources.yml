@@ -216,10 +216,12 @@
       # The command module runs in a non-interactive shell: it does not
       # inherit the operator's PATH (sops may live in /opt/homebrew/bin) nor
       # SOPS_AGE_KEY_FILE (required by sops >= 3.13). Provide both explicitly
-      # so the playbook works regardless of how it was invoked.
+      # so the playbook works regardless of how it was invoked. Uses
+      # lookup('env') — NOT ansible_env — because this play runs with
+      # gather_facts: false (ansible_env would be undefined).
       environment:
-        PATH: "{{ ansible_env.PATH }}:/opt/homebrew/bin:/usr/local/bin"
-        SOPS_AGE_KEY_FILE: "{{ lookup('env', 'SOPS_AGE_KEY_FILE') | default(ansible_env.HOME + '/.config/sops/age/keys.txt', true) }}"
+        PATH: "{{ lookup('env', 'PATH') }}:/opt/homebrew/bin:/usr/local/bin"
+        SOPS_AGE_KEY_FILE: "{{ lookup('env', 'SOPS_AGE_KEY_FILE') | default(lookup('env', 'HOME') + '/.config/sops/age/keys.txt', true) }}"
 
     - name: Create a temp file for the decrypted vault
       ansible.builtin.tempfile:
