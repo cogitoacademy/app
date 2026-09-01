@@ -1,11 +1,11 @@
 # Deferred Operations Tasks
 
-| Field      | Value                    |
-| ---------- | ------------------------ |
-| Status     | Active                   |
-| Created    | 2026-07-29               |
-| Depends on | #18 + #19 merged to main |
-| Scope      | Ops + code gaps          |
+| Field      | Value                                                                                                                                                        |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Status     | Active — §0/§1 resolved; §4.3/§4.4 secret-scanning + branch protection remain (operator console); §2 + §3 deliberately deferred (recorded for future agents) |
+| Created    | 2026-07-29                                                                                                                                                   |
+| Depends on | #18 + #19 merged to main                                                                                                                                     |
+| Scope      | Ops + code gaps                                                                                                                                              |
 
 Tasks deferred from production-readiness (#18) and infrastructure (#19) that could not be completed without a live production environment or were identified as gaps during the post-merge audit.
 
@@ -22,19 +22,11 @@ environment-specific items below still require confirmation in GitHub/Coolify.
 - [x] Route `app.cogitoacademy.id` to the frontend and bake the API subdomain
       into the production Vite image.
 - [x] Configure the two Coolify resource domains and add the API + web deploy
-      webhook secrets in GitHub Actions — **webhook secrets exist but point at
-      the old `coolify.cogitoacademy.id` host (S7; canonical host renamed
-      `coolify.cogitoacademy.id` → `cl.cogitoacademy.id` 2026-08-31 — the live
-      Coolify host); the CD pipeline now guards them (#118) and the operator
-      must recreate them with the resolvable
-      `https://cl.cogitoacademy.id/api/v1/deploy?uuid=...`
-      URL (Option A, DEPLOYMENT-PLAN Task 0.2). Webhook 401 → **wave-2
-      (DEPLOYMENT-WAVE-2.md): Traefik route + optional Bearer** — the 401 has
-      two candidate causes: a missing Traefik route for
-      `cl.cogitoacademy.id/api/v1/deploy/*` (declared in
-      `coolify-resources.yml`) and/or a missing `Authorization: Bearer
-<coolify-api-token>` header (Deploy Webhook is auth-required in current
-      Coolify versions). Both documented in RUNBOOK → Xendit webhook wiring.**
+      webhook secrets in GitHub Actions — **RESOLVED 2026-09-01.** Secrets are
+      recreated on the resolvable `https://cl.cogitoacademy.id/api/v1/deploy?uuid=...`
+      URL with the `COOLIFY_API_TOKEN` Bearer guard; the Traefik route is live
+      and CD is proven green end-to-end (`/health` `version` == main HEAD,
+      web 200, 2026-09-01).
 
 ---
 
@@ -93,18 +85,27 @@ Create `docker-compose.test.yml` for test-specific PostgreSQL.
 
 ## 2. Redis Session Caching (from PRODUCTION-READINESS-PLAN 2.2)
 
-> **Deferred / needs separate plan.** Not implemented.
+> **Deferred by explicit user decision (2026-09-01) — for future agents to
+> resolve when perf justifies it.** Not implemented; correctness does not
+> depend on it (cookieCache + DB adapter works, Redis is mandatory for
+> idempotency/rate-limit/circuit-breaker/BullMQ already).
 
-Better Auth currently uses cookieCache + DB adapter. Implement Redis-backed session storage with DB fallback.
+Better Auth currently uses cookieCache + DB adapter. When picked up: implement
+Redis-backed session storage with DB fallback, behind a fresh plan in
+`docs/plans/active/`.
 
 ---
 
 ## 3. Manual Verification (requires running env)
 
-- Redis integration test (with/without Redis, kill mid-request)
-- EXPLAIN ANALYZE on 5 key queries
-- Manual smoke test (auth, wallet, booking, admin, discovery, scheduler)
-- Performance baseline (p95 < 500ms)
+> **Deferred by explicit user decision (2026-09-01) — production is live, so
+> these are now possible; future agents pick them up as a perf/verification
+> session. Not correctness-blocking.**
+
+- [ ] Redis integration test (with/without Redis, kill mid-request)
+- [ ] EXPLAIN ANALYZE on 5 key queries
+- [ ] Manual smoke test (auth, wallet, booking, admin, discovery, scheduler)
+- [ ] Performance baseline (p95 < 500ms)
 
 ---
 
@@ -125,18 +126,19 @@ Better Auth currently uses cookieCache + DB adapter. Implement Redis-backed sess
 - [x] Configure domains + auto-HTTPS in Coolify — **api/app live; `coolify` webhook
       host DNS declared in Terraform (#115), Traefik route pending (wave-2)**
 - [x] Configure Hostinger DNS (api.cogitoacademy.id, app.cogitoacademy.id → VPS IP)
-- [ ] Verify Coolify auto-deploys on new image push — **blocked on the webhook
-      401 (wave-2: Traefik route + optional Bearer)**
+- [x] Verify Coolify auto-deploys on new image push — **PROVEN 2026-09-01:
+      main HEAD `2a4bfad` deployed via the webhook chain and sha-verified on
+      `/health`.**
 - [x] Verify both domains serve with HTTPS
 
 ### 4.2 CI/CD Secrets
 
 - [x] Add GHCR secrets to GitHub repo
-- [ ] Add Coolify webhook URLs to GitHub secrets — **secrets exist but point at
-      the unresolvable host; recreate with the resolvable URL (operator);
-      webhook 401 → wave-2 (Traefik route + optional Bearer)**
-- [ ] Verify CD builds and pushes to GHCR on push to staging — **pipeline merged
-      (#118); live verification pending the webhook fix**
+- [x] Add Coolify webhook URLs to GitHub secrets — **DONE (recreated on the
+      `cl.` host; CD green 2026-09-01)**
+- [x] Verify CD builds and pushes to GHCR on merge to main — **pipeline merged
+      (#118); PROVEN GREEN 2026-09-01 (sha-verified deploy). Staging was removed
+      entirely (CI-SANITY F7 locked decision: prod-first, no staging).**
 
 ### 4.3 Monitoring
 
@@ -150,10 +152,12 @@ Better Auth currently uses cookieCache + DB adapter. Implement Redis-backed sess
 
 ### 4.4 Security
 
-- [ ] Enable GitHub secret scanning (repo settings)
-- [ ] Keep the Coolify localhost SSH path key-only: root password login remains
+- [ ] Enable GitHub secret scanning (repo settings) — **verified still disabled
+      2026-09-01 (`security_and_analysis: null`); operator console**
+- [x] Keep the Coolify localhost SSH path key-only: root password login remains
       disabled, and Docker's private `10.0.0.0/8` range stays excluded from the
-      SSH fail2ban jail — **host-hardening playbook merged (#115); apply pending**
+      SSH fail2ban jail — **DONE 2026-08-31 (host-hardening applied;
+      `.apply-state/hardened`).**
 
 ### 4.5 Docker Build Verification
 

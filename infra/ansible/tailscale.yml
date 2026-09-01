@@ -6,7 +6,7 @@
 #        -e "ts_auth_key=$(sops -d infra/secrets/prod.env | grep TS_AUTH_KEY | cut -d= -f2-)"
 ---
 - name: Join the Cogito VPS to the tailnet
-  hosts: cogito-vps
+  hosts: cogito_vps
   become: true
 
   tasks:

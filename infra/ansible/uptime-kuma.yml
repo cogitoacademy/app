@@ -1,0 +1,406 @@
+# uptime-kuma.yml — declare the Uptime Kuma monitoring service via the Coolify
+# API, idempotently (same declarative pattern as coolify-resources.yml).
+#
+# WHAT THIS PLAYBOOK DECLARES (drift-check source of truth):
+#   1. A Coolify *service* named `cogito-uptime-kuma` in the `cogito` project /
+#      `production` environment (the same project the app resources live in),
+#      created from the built-in one-click template `uptime-kuma`:
+#        - image: louislam/uptime-kuma:2  (pinned by the template in this
+#          Coolify build — verified 2026-09-01 in
+#          templates/compose/uptime-kuma.yaml; the template is the
+#          declarative source, NOT a host-level install)
+#        - container port 3001, volume `uptime-kuma-data:/app/data` (both
+#          come from the template)
+#        - domain: https://status.cogitoacademy.id (DNS `status.` record
+#          already exists via Terraform)
+#   2. Drift: if the service already exists, the playbook compares the
+#      declared name + domain against the live state and PATCHes drift.
+#      Deploys are NOT re-triggered on drift (only on first creation, via
+#      instant_deploy).
+#
+# WHY CONTROL-NODE DRIVEN: identical to coolify-resources.yml — the Coolify
+# API (:8000) is reachable only from the tailnet/tunnel, and the SOPS Age key
+# lives on the operator machine. This playbook runs entirely on the control
+# node (hosts: localhost) and never SSH-installs anything onto the VPS.
+#
+# COOLIFY API SURFACE NOTES (verified live 2026-09-01 against the running
+# v4.3.14 container — routes/api.php + ServicesController.php):
+#   - GET  /api/v1/services                     -> list (name, uuid, service_type, status)
+#   - GET  /api/v1/services/{uuid}             -> detail incl. applications[] (name, fqdn, image)
+#   - POST /api/v1/services                    -> create; body fields: type (one-click
+#        template key), name, project_uuid, environment_name, server_uuid,
+#        urls [{name, url}], instant_deploy, force_domain_override, ...
+#        `type` and `docker_compose_raw` are mutually exclusive.
+#   - PATCH /api/v1/services/{uuid}            -> update; allowed fields: name,
+#        description, instant_deploy, docker_compose_raw, urls, ...
+#   - The `uptime-kuma` one-click template EXISTS in this build
+#     (templates/compose/uptime-kuma.yaml) — no docker_compose_raw needed.
+#   - The service endpoint set is live: the pre-existing `cogito-studio`
+#     service (drizzle-gateway) is served by the same routes.
+#   - Kuma's *monitors* and the Discord notification live in Kuma's own
+#     database — the Coolify API cannot express them. The playbook prints the
+#     exact Kuma UI steps (monitors + Discord webhook) as a runbook step.
+#
+# ALERTING SECRET: the Discord webhook URL is read from the SOPS vault key
+# DISCORD_WEBHOOK_URL (decrypted on the control node, never written to the
+# VPS, never echoed). If the key is absent the playbook prints a loud operator
+# instruction — it never invents a URL. The URL is pasted into the Kuma UI
+# (Notifications -> Discord) by the operator; Kuma stores it in its own DB.
+#
+# RUN (from the repository root; sops + python3 on the control node, tunnel up):
+#   ssh -i ~/.ssh/cogito_vps -f -N -L 8000:127.0.0.1:8000 ubuntu@<tailnet-ip>
+#   ansible-playbook --syntax-check -i infra/ansible/inventory.ini \
+#     infra/ansible/uptime-kuma.yml
+#   ansible-playbook -i infra/ansible/inventory.ini \
+#     infra/ansible/uptime-kuma.yml --check   # structure only (uri makes no
+#                                             # requests in check mode)
+#   ansible-playbook -i infra/ansible/inventory.ini \
+#     infra/ansible/uptime-kuma.yml           # idempotent apply
+#
+# IDEMPOTENCE: every write is conditional on a prior GET, so re-runs change
+# nothing once the service matches the declaration.
+---
+- name: Declare the Uptime Kuma monitoring service (control-node driven)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    # Coolify API endpoint via the SSH tunnel (same as coolify-resources.yml).
+    coolify_api_url: "http://localhost:8000/api/v1"
+    # SOPS-encrypted vault, resolved relative to the playbook.
+    vault_path: "{{ playbook_dir }}/../secrets/prod.env"
+    project_name: "cogito-prod"
+    environment_name: "production"
+    server_ip: "15.235.186.159"
+
+    # --- Declared service (drift-check source of truth) ---
+    kuma_service_name: "cogito-uptime-kuma"
+    kuma_domain: "https://status.cogitoacademy.id"
+    # The compose service name inside the one-click template (verified in
+    # templates/compose/uptime-kuma.yaml: `services: uptime-kuma:`). The
+    # `urls[].name` must match it or the API rejects the request.
+    kuma_compose_service: "uptime-kuma"
+
+  tasks:
+    # Check mode: the `uri` module performs no requests in check mode, so the
+    # API flow cannot run. `--check` validates structure and ends cleanly.
+    - name: Check mode — structure validated, API flow skipped
+      ansible.builtin.debug:
+        msg: >-
+          Running with --check: the Coolify API flow is skipped (uri performs
+          no requests in check mode). This run validated the playbook
+          structure only. Run without --check to apply.
+      when: ansible_check_mode
+
+    - name: End the play in check mode
+      ansible.builtin.meta: end_play
+      when: ansible_check_mode
+
+    # --- 0. Vault: decrypt + parse on the control node (never on the VPS) ---
+    - name: Decrypt the SOPS vault on the control node
+      ansible.builtin.command: sops -d {{ vault_path }}
+      changed_when: false
+      no_log: true
+      register: vault_plaintext
+      environment:
+        PATH: "{{ lookup('env', 'PATH') }}:/opt/homebrew/bin:/usr/local/bin"
+        SOPS_AGE_KEY_FILE: "{{ lookup('env', 'SOPS_AGE_KEY_FILE') | default(lookup('env', 'HOME') + '/.config/sops/age/keys.txt', true) }}"
+
+    - name: Create a temp file for the decrypted vault
+      ansible.builtin.tempfile:
+        state: file
+        suffix: .env
+      register: vault_tmpfile
+
+    - name: Write the decrypted vault to the temp file
+      ansible.builtin.copy:
+        dest: "{{ vault_tmpfile.path }}"
+        content: "{{ vault_plaintext.stdout }}"
+      no_log: true
+
+    - name: Parse the vault into a JSON fact
+      ansible.builtin.command: >-
+        python3 -c "import json,sys;
+        print(json.dumps({l.split('=',1)[0].strip(): l.split('=',1)[1].strip().strip(chr(34)).strip(chr(39))
+        for l in open(sys.argv[1])
+        if l.strip() and not l.strip().startswith('#') and '=' in l}))"
+        {{ vault_tmpfile.path }}
+      changed_when: false
+      no_log: true
+      register: vault_json
+
+    - name: Remove the temp vault file
+      ansible.builtin.file:
+        path: "{{ vault_tmpfile.path }}"
+        state: absent
+
+    - name: Load the vault as a fact
+      ansible.builtin.set_fact:
+        vault_env: "{{ vault_json.stdout | from_json }}"
+
+    - name: Require COOLIFY_API_TOKEN in the vault
+      ansible.builtin.assert:
+        that:
+          - vault_env.COOLIFY_API_TOKEN is defined
+          - vault_env.COOLIFY_API_TOKEN | length > 0
+        fail_msg: >-
+          COOLIFY_API_TOKEN is missing from {{ vault_path }} — create a Coolify
+          API token (Coolify UI → Keys & Tokens → API tokens, `deploy`
+          permission) and add it to the SOPS vault.
+
+    # --- 0b. Discord webhook: read the key name from the vault (never echo) ---
+    - name: Check whether DISCORD_WEBHOOK_URL is in the vault
+      ansible.builtin.set_fact:
+        discord_webhook_present: "{{ vault_env.DISCORD_WEBHOOK_URL is defined and vault_env.DISCORD_WEBHOOK_URL | length > 0 }}"
+
+    - name: OPERATOR ACTION REQUIRED — add DISCORD_WEBHOOK_URL to the vault
+      ansible.builtin.debug:
+        msg: |-
+          !!! DISCORD_WEBHOOK_URL is NOT in the SOPS vault ({{ vault_path }}).
+          The Kuma service can be declared without it, but NO Discord alerts
+          will fire until the operator:
+            1. Creates a webhook in the ops Discord server (#cogito-alerts or
+               the channel of choice): Discord → channel → Settings →
+               Integrations → Webhooks → New Webhook → copy the URL.
+            2. Adds it to the vault (the URL is a bearer secret — never
+               commit it anywhere else):
+                 sops infra/secrets/prod.env
+                 # add: DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+            3. Re-runs this playbook, then pastes the URL into the Kuma UI
+               (Notifications → Discord) per the runbook steps below.
+          This playbook never invents or echoes the URL.
+      when: not discord_webhook_present
+
+    # --- 1. Project + environment + server lookup (create if missing) ---
+    - name: List Coolify projects
+      ansible.builtin.uri:
+        url: "{{ coolify_api_url }}/projects"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ vault_env.COOLIFY_API_TOKEN }}"
+        status_code: 200
+      register: projects
+      no_log: true
+
+    - name: Find the project by name
+      ansible.builtin.set_fact:
+        project_found: "{{ projects.json | selectattr('name', 'equalto', project_name) | list }}"
+
+    - name: Create the project if missing
+      ansible.builtin.uri:
+        url: "{{ coolify_api_url }}/projects"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ vault_env.COOLIFY_API_TOKEN }}"
+        body:
+          name: "{{ project_name }}"
+        body_format: json
+        status_code: 201
+      register: project_created
+      no_log: true
+      when: project_found | length == 0
+
+    - name: Resolve the project UUID
+      ansible.builtin.set_fact:
+        project_uuid: "{{ project_found[0].uuid if project_found | length > 0 else project_created.json.uuid }}"
+
+    - name: List environments in the project
+      ansible.builtin.uri:
+        url: "{{ coolify_api_url }}/projects/{{ project_uuid }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ vault_env.COOLIFY_API_TOKEN }}"
+        status_code: 200
+      register: project_detail
+      no_log: true
+
+    - name: Find the production environment
+      ansible.builtin.set_fact:
+        env_found: "{{ project_detail.json.environments | default([]) | selectattr('name', 'equalto', environment_name) | list }}"
+
+    - name: Create the production environment if missing
+      ansible.builtin.uri:
+        url: "{{ coolify_api_url }}/projects/{{ project_uuid }}/environments"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ vault_env.COOLIFY_API_TOKEN }}"
+        body:
+          name: "{{ environment_name }}"
+        body_format: json
+        status_code: 201
+      register: env_created
+      no_log: true
+      when: env_found | length == 0
+
+    - name: Resolve the environment UUID
+      ansible.builtin.set_fact:
+        environment_uuid: "{{ env_found[0].uuid if env_found | length > 0 else env_created.json.uuid }}"
+
+    - name: List Coolify servers
+      ansible.builtin.uri:
+        url: "{{ coolify_api_url }}/servers"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ vault_env.COOLIFY_API_TOKEN }}"
+        status_code: 200
+      register: servers
+      no_log: true
+
+    - name: Resolve the VPS server UUID
+      ansible.builtin.set_fact:
+        # The Coolify host server is registered as "localhost" with
+        # ip=host.docker.internal (verified live 2026-08-31) — match the
+        # Coolify-host server; fall back to an IP match for multi-server setups.
+        server_uuid: "{{ (servers.json | selectattr('is_coolify_host', 'equalto', true) | first).uuid if (servers.json | selectattr('is_coolify_host', 'equalto', true) | list | length) > 0 else (servers.json | selectattr('ip', 'equalto', server_ip) | first).uuid }}"
+
+    # --- 2. The Uptime Kuma service: create when missing, PATCH drift -------
+    - name: List Coolify services
+      ansible.builtin.uri:
+        url: "{{ coolify_api_url }}/services"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ vault_env.COOLIFY_API_TOKEN }}"
+        status_code: 200
+      register: services_live
+      no_log: true
+
+    - name: Find the Kuma service by name
+      ansible.builtin.set_fact:
+        kuma_found: "{{ services_live.json | selectattr('name', 'equalto', kuma_service_name) | list }}"
+
+    - name: Create the Uptime Kuma service (one-click template, starts it)
+      ansible.builtin.uri:
+        url: "{{ coolify_api_url }}/services"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ vault_env.COOLIFY_API_TOKEN }}"
+        body:
+          type: "uptime-kuma"
+          name: "{{ kuma_service_name }}"
+          project_uuid: "{{ project_uuid }}"
+          environment_name: "{{ environment_name }}"
+          server_uuid: "{{ server_uuid }}"
+          urls:
+            - name: "{{ kuma_compose_service }}"
+              url: "{{ kuma_domain }}"
+          instant_deploy: true
+          force_domain_override: false
+        body_format: json
+        status_code: 201
+      register: kuma_created
+      no_log: true
+      when: kuma_found | length == 0
+
+    - name: Resolve the Kuma service UUID
+      ansible.builtin.set_fact:
+        kuma_uuid: "{{ kuma_found[0].uuid if kuma_found | length > 0 else kuma_created.json.uuid }}"
+
+    - name: Fetch the Kuma service detail (drift comparison)
+      ansible.builtin.uri:
+        url: "{{ coolify_api_url }}/services/{{ kuma_uuid }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ vault_env.COOLIFY_API_TOKEN }}"
+        status_code: 200
+      register: kuma_detail
+      no_log: true
+
+    - name: Build the drift comparison for an existing service
+      ansible.builtin.set_fact:
+        kuma_live_fqdn: "{{ (kuma_detail.json.applications | default([]) | selectattr('name', 'equalto', kuma_compose_service) | first | default(none)).fqdn | default('') }}"
+        kuma_drift: >-
+          {%- set ns = namespace(parts=[]) -%}
+          {%- if kuma_detail.json.name is defined and kuma_detail.json.name != kuma_service_name -%}{%- set ns.parts = ns.parts + ['name: ' ~ kuma_detail.json.name ~ ' != ' ~ kuma_service_name] -%}{%- endif -%}
+          {%- if kuma_live_fqdn | length > 0 and kuma_domain not in kuma_live_fqdn -%}{%- set ns.parts = ns.parts + ['domain: ' ~ kuma_live_fqdn ~ ' != ' ~ kuma_domain] -%}{%- endif -%}
+          {{- ns.parts | join('; ') -}}
+      when: kuma_found | length > 0
+
+    - name: PATCH drifted fields on an existing service
+      ansible.builtin.uri:
+        url: "{{ coolify_api_url }}/services/{{ kuma_uuid }}"
+        method: PATCH
+        headers:
+          Authorization: "Bearer {{ vault_env.COOLIFY_API_TOKEN }}"
+        body:
+          name: "{{ kuma_service_name }}"
+          urls:
+            - name: "{{ kuma_compose_service }}"
+              url: "{{ kuma_domain }}"
+        body_format: json
+        status_code: 200
+      no_log: true
+      when: kuma_found | length > 0 and kuma_drift | length > 0
+
+    - name: Report the Kuma service state
+      ansible.builtin.debug:
+        msg: >-
+          Service {{ kuma_service_name }} (uuid={{ kuma_uuid }}):
+          {% if kuma_found | length == 0 %}created from the uptime-kuma
+          one-click template (louislam/uptime-kuma:2, port 3001, volume
+          uptime-kuma-data:/app/data) with instant_deploy — Coolify is
+          starting it now.{% elif kuma_drift | length > 0 %}drift patched:
+          {{ kuma_drift }}.{% else %}no drift — matches the declaration
+          (domain {{ kuma_domain }}).{% endif %}
+
+    # --- 3. Verify the service is reachable (report-only, honest) -----------
+    - name: Probe status.cogitoacademy.id (report-only; Kuma may still be booting)
+      ansible.builtin.uri:
+        url: "{{ kuma_domain }}"
+        method: GET
+        status_code: [200, 401, 403, 404, 502, 503, 504]
+        validate_certs: true
+        timeout: 15
+      register: kuma_probe
+      retries: 10
+      delay: 10
+      until: kuma_probe.status == 200
+      ignore_errors: true
+
+    - name: Interpret the Kuma probe
+      ansible.builtin.debug:
+        msg: >-
+          GET {{ kuma_domain }} -> {{ kuma_probe.status | default('no response') }}.
+          {% if kuma_probe.status == 200 %}Kuma is up (login page).{% elif
+          kuma_probe.status in [502, 503, 504] %}Kuma is still starting
+          (Traefik has no healthy upstream yet) — wait a minute and re-run
+          this playbook; the service was just created.{% else %}Unexpected
+          status — check the Coolify UI (service logs) and the Traefik route
+          for status.cogitoacademy.id.{% endif %}
+
+    # --- 4. Runbook steps: monitors + Discord notification (Kuma UI) --------
+    - name: Print the monitor + Discord setup steps (Kuma UI, not API-expressible)
+      ansible.builtin.debug:
+        msg: |-
+          Kuma monitors and the Discord notification live in Kuma's own
+          database — the Coolify API cannot express them. After the service
+          is up, open https://status.cogitoacademy.id (first-run admin
+          account) and create:
+
+          1. Monitors (60s interval unless noted):
+             - api /health:  HTTP(s) monitor, URL https://api.cogitoacademy.id/health,
+               keyword "status":"ok" (fails when the API is down or degraded).
+             - app URL:      HTTP(s) monitor, URL https://app.cogitoacademy.id
+               (fails when the web app is unreachable).
+             - Cert expiry:  Certificate Info monitor for api.cogitoacademy.id
+               AND app.cogitoacademy.id (alert before expiry).
+             - dlqDepth:     HTTP(s) keyword monitor, URL
+               https://api.cogitoacademy.id/health, keyword "dlqDepth":0
+               (fails whenever a FRESH DLQ failure exists — the age-aware
+               health from MONITORING-ALERTING item 3; stale pre-failedAt
+               entries never trip it).
+          2. Notifications: Notifications -> New Notification -> Discord,
+             paste the DISCORD_WEBHOOK_URL from the SOPS vault (key
+             DISCORD_WEBHOOK_URL; the operator adds it — see the vault
+             instruction above). Attach it to every monitor.
+          3. Status page (optional): Status Pages -> New Status Page, add the
+             monitors, publish at https://status.cogitoacademy.id.
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg: >-
+          Declared service {{ kuma_service_name }} (uuid={{ kuma_uuid }}) in
+          project={{ project_name }} env={{ environment_name }} server={{ server_uuid }}.
+          Domain {{ kuma_domain }}. Discord alerting:
+          {{ 'webhook present in the vault — paste it into the Kuma UI per the steps above' if discord_webhook_present else 'MISSING — operator must add DISCORD_WEBHOOK_URL to the SOPS vault (see the loud instruction above)' }}.
+          Monitors are configured in the Kuma UI (runbook steps above).

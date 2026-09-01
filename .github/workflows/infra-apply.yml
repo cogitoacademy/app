@@ -1,0 +1,223 @@
+# Infra apply automation — Terraform + Ansible applies on merge to main.
+#
+# Design: docs/plans/active/INFRA-AUTOMATION.md (user-approved 2026-09-01:
+# full automation; the SOPS Age private key lives as the SOPS_AGE_KEY secret
+# because collaborators are internal-only and secret scanning + push
+# protection + branch protection are enabled).
+#
+#   - Job "terraform" (ubuntu runner): init → plan -detailed-exitcode →
+#     apply -auto-approve ONLY when the plan reports real drift (exit 2).
+#     Never runs on PRs — the read-only plan stays in infra-plan.yml.
+#   - Job "ansible" (the cogito-prod self-hosted runner, which runs ON the
+#     VPS as user `github-runner`): the Age key is materialized from the
+#     SOPS_AGE_KEY secret to a 0600 temp file (masked, deleted in an
+#     always() step), the vault is decrypted in-memory, the drift-check
+#     reports first, then only the playbooks whose files changed run.
+#   - EXCLUDED from automation: host-hardening.yml (SSH lockout risk —
+#     manual + tailscale-verify-gated per infra/apply.sh §3) and
+#     tailscale.yml join (one-time, auth-key rotation semantics).
+#   - The VPS runner reaches the Coolify API at http://127.0.0.1:8000
+#     directly (loopback publish — no tunnel needed in the box).
+#   - Concurrency: one infra apply at a time; never overlaps CD's
+#     production-deploy group.
+#
+# One-time runner prep (VPS, operator — see infra/runner-prep.sh):
+#   sops + age binaries on PATH for github-runner, a pinned ansible-core
+#   venv, and passwordless sudo for the playbook tasks (targeted NOPASSWD).
+#
+# Break-glass (runner down / key rotation / DR): ./infra/apply.sh from the
+# operator machine remains the documented manual path (INFRA-PLAYBOOK §3).
+
+name: Infra Apply (auto)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "infra/terraform/**"
+      - "infra/ansible/**"
+      - "infra/disk-watchdog.sh"
+      - ".github/workflows/infra-apply.yml"
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Why are you forcing this apply? (run-log only)"
+        required: false
+        default: "manual re-apply"
+
+concurrency:
+  group: infra-apply
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  detect:
+    name: Detect changed infra surfaces
+    runs-on: ubuntu-latest
+    outputs:
+      terraform: ${{ steps.filter.outputs.terraform }}
+      coolify-resources: ${{ steps.filter.outputs.coolify-resources }}
+      backup-cron: ${{ steps.filter.outputs.backup-cron }}
+      disk-watchdog: ${{ steps.filter.outputs.disk-watchdog }}
+      uptime-kuma: ${{ steps.filter.outputs.uptime-kuma }}
+      any: ${{ steps.filter.outputs.any }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3.0.2
+        id: filter
+        with:
+          # push events diff against the previous push's sha — correct for
+          # "what changed in this merge".
+          filters: |
+            terraform:
+              - 'infra/terraform/**'
+            coolify-resources:
+              - 'infra/ansible/coolify-resources.yml'
+            backup-cron:
+              - 'infra/ansible/backup-cron.yml'
+            disk-watchdog:
+              - 'infra/ansible/disk-watchdog.yml'
+              - 'infra/disk-watchdog.sh'
+            uptime-kuma:
+              - 'infra/ansible/uptime-kuma.yml'
+            any:
+              - 'infra/ansible/coolify-resources.yml'
+              - 'infra/ansible/backup-cron.yml'
+              - 'infra/ansible/disk-watchdog.yml'
+              - 'infra/disk-watchdog.sh'
+              - 'infra/ansible/uptime-kuma.yml'
+
+  terraform:
+    name: Terraform apply (only on real drift)
+    needs: detect
+    if: needs.detect.outputs.terraform == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hashicorp/setup-terraform@v3.1.2
+        with:
+          terraform_version: 1.16.0
+      - name: Terraform init (R2 state backend)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_URL_S3: ${{ secrets.R2_STATE_ENDPOINT }}
+        run: terraform init -input=false -no-color
+      - name: Terraform plan (drift detection)
+        id: plan
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TF_VAR_server_ip: "15.235.186.159"
+          TF_VAR_ssh_private_key_path: "/dev/null"
+          TF_VAR_cloudflare_account_id: "f43b8a87deeed597ecd8b4a1119d09b5"
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_URL_S3: ${{ secrets.R2_STATE_ENDPOINT }}
+        # -detailed-exitcode: 0 = no changes → skip apply; 1 = error; 2 = drift
+        run: |
+          set +e
+          terraform plan -detailed-exitcode -lock=false -input=false -no-color -out=tfplan
+          code=$?
+          echo "exitcode=$code" >> "$GITHUB_OUTPUT"
+          if [ "$code" -eq 1 ]; then exit 1; fi
+          exit 0
+      - name: Terraform apply (only when the plan has changes)
+        if: steps.plan.outputs.exitcode == 2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_URL_S3: ${{ secrets.R2_STATE_ENDPOINT }}
+        run: terraform apply -input=false -no-color -auto-approve tfplan
+
+  ansible:
+    name: Ansible apply (changed playbooks)
+    if: needs.detect.outputs.any == 'true'
+    needs: detect
+    # The cogito-prod runner runs ON the VPS: it reaches the Coolify API on
+    # loopback and holds no secrets except what the job materializes.
+    runs-on: [self-hosted, linux, x64, production]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Ensure sops + age are available (runner prep, idempotent)
+        run: |
+          if ! command -v sops >/dev/null 2>&1; then
+            echo "::notice::installing sops into ~/.local/bin (one-time)"
+            mkdir -p "$HOME/.local/bin"
+            curl -fsSL -o /tmp/sops.deb https://github.com/getsops/sops/releases/download/v3.13.0/sops_3.13.0_amd64.deb
+            sudo dpkg -i /tmp/sops.deb && rm -f /tmp/sops.deb
+          fi
+          sops --version
+
+      - name: Materialize the SOPS Age key (0600, masked, deleted after)
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+        run: |
+          if [ -z "$SOPS_AGE_KEY" ]; then
+            echo "::error title=SOPS_AGE_KEY unset::Add the Age private key (exact contents of ~/.config/sops/age/keys.txt) as the SOPS_AGE_KEY repo secret."
+            exit 1
+          fi
+          KEYFILE="$(mktemp /tmp/age-key.XXXXXX)"
+          chmod 600 "$KEYFILE"
+          printf '%s\n' "$SOPS_AGE_KEY" > "$KEYFILE"
+          echo "SOPS_AGE_KEY_FILE=$KEYFILE" >> "$GITHUB_ENV"
+          # Mask the key material so it can never leak into job logs.
+          while IFS= read -r line; do
+            [ -n "$line" ] && echo "::add-mask::$line"
+          done < "$KEYFILE"
+
+      - name: Decrypt the vault (in-memory only; never written to disk)
+        run: |
+          export SOPS_AGE_KEY_FILE="${{ env.SOPS_AGE_KEY_FILE }}"
+          sops -d infra/secrets/prod.env | grep -q '=' \
+            || { echo "::error::vault decrypt failed"; exit 1; }
+
+      - name: Drift-check (report-only, never blocks)
+        run: |
+          ansible-playbook -i infra/ansible/inventory.ini infra/ansible/drift-check.yml \
+            -e coolify_api_base="http://127.0.0.1:8000/api/v1" \
+            -e coolify_api_token="$(sops -d infra/secrets/prod.env | grep '^COOLIFY_API_TOKEN=' | cut -d= -f2-)" \
+            -e drift_check_dry_run=true \
+          || echo "::warning::drift detected pre-apply (report-only; the apply below re-syncs declared state)"
+
+      - name: Apply — coolify-resources (env + resources, includes restart)
+        if: needs.detect.outputs.coolify-resources == 'true'
+        run: |
+          ansible-playbook -i infra/ansible/inventory.ini infra/ansible/coolify-resources.yml \
+            -e coolify_api_url="http://127.0.0.1:8000/api/v1"
+
+      - name: Apply — backup-cron
+        if: needs.detect.outputs.backup-cron == 'true'
+        run: ansible-playbook -i infra/ansible/inventory.ini infra/ansible/backup-cron.yml
+
+      - name: Apply — disk-watchdog
+        if: needs.detect.outputs.disk-watchdog == 'true'
+        run: ansible-playbook -i infra/ansible/inventory.ini infra/ansible/disk-watchdog.yml
+
+      - name: Apply — uptime-kuma
+        if: needs.detect.outputs.uptime-kuma == 'true'
+        run:
+          ansible-playbook -i infra/ansible/inventory.ini infra/ansible/uptime-kuma.yml \
+          -e coolify_api_url="http://127.0.0.1:8000/api/v1"
+
+      - name: Post-apply verification
+        run: |
+          curl -fsS --max-time 10 https://api.cogitoacademy.id/health | grep -q '"version"' \
+            || { echo "::error::post-apply /health verification failed"; exit 1; }
+          echo "health OK"
+
+      - name: Cleanup — delete the Age key file
+        if: always()
+        run: |
+          [ -n "${{ env.SOPS_AGE_KEY_FILE }}" ] && rm -f "${{ env.SOPS_AGE_KEY_FILE }}" || true

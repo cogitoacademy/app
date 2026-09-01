@@ -1,6 +1,10 @@
 # Cogito Setup and Deployment
 
-Last updated: 2026-08-28
+Last updated: 2026-09-01
+
+> Quick entry: [INFRA-PLAYBOOK.md](./INFRA-PLAYBOOK.md) — the scenario →
+> command decision table for day-to-day infra operation (env changes, code
+> deploys, migrations, DR). This document covers the full setup detail.
 
 This is the operational guide for the current production setup. It covers the
 first-time VPS/Coolify setup, the normal GitHub Actions deployment, and the
@@ -669,3 +673,8 @@ Related references:
 - [`infra/coolify-setup.md`](../infra/coolify-setup.md) — Coolify UI setup
 - [`infra/.env.prod.example`](../infra/.env.prod.example) — production variable checklist
 - [`.github/workflows/cd-prod.yml`](../.github/workflows/cd-prod.yml) — source of truth for the production CD steps
+- **Monitoring**: Uptime Kuma (Coolify service at `status.cogitoacademy.id`,
+  declared via `infra/ansible/uptime-kuma.yml`) + the disk watchdog
+  (`infra/ansible/disk-watchdog.yml`) + Discord alerting — setup, alert
+  table, disk thresholds, and the redeploy/retry procedure live in
+  [`docs/RUNBOOK.md`](./RUNBOOK.md) → **Monitoring & Alerting**.

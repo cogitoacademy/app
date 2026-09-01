@@ -5,7 +5,7 @@
 #        infra/ansible/host-hardening.yml --ask-become-pass
 ---
 - name: Harden the Cogito VPS host
-  hosts: cogito-vps
+  hosts: cogito_vps
   become: true
   gather_facts: true
 

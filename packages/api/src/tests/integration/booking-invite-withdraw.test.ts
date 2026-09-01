@@ -60,7 +60,9 @@ describe("Booking invite withdrawal", () => {
     await signUpAndSignIn(tutorEmail, "Test1234!", "Tutor Withdraw");
     const tutorCookie = await signInAndGetCookie(tutorEmail, "Test1234!");
     const tutorContext = await createTestContext(tutorCookie ?? "");
-    tutorId = tutorContext.session?.user.id!;
+    if (!tutorContext.session?.user)
+      throw new Error("test setup: expected tutor session user");
+    tutorId = tutorContext.session.user.id;
     await setUserRole(tutorId, "tutor");
 
     const [invite] = await db
@@ -107,7 +109,9 @@ describe("Booking invite withdrawal", () => {
     );
     const proposerContext = await createTestContext(proposer.cookie);
     proposerClient = createTestClient(proposerContext);
-    await creditWallet(proposerContext.session?.user.id!, 300);
+    if (!proposerContext.session?.user)
+      throw new Error("test setup: expected proposer session user");
+    await creditWallet(proposerContext.session.user.id, 300);
 
     const invitee = await signUpAndSignIn(
       inviteeEmail,
@@ -115,7 +119,9 @@ describe("Booking invite withdrawal", () => {
       "Invitee Withdraw",
     );
     const inviteeContext = await createTestContext(invitee.cookie);
-    inviteeId = inviteeContext.session?.user.id!;
+    if (!inviteeContext.session?.user)
+      throw new Error("test setup: expected invitee session user");
+    inviteeId = inviteeContext.session.user.id;
     await creditWallet(inviteeId, 100);
 
     const otherInvitee = await signUpAndSignIn(
@@ -124,7 +130,9 @@ describe("Booking invite withdrawal", () => {
       "Other Invitee",
     );
     const otherContext = await createTestContext(otherInvitee.cookie);
-    await creditWallet(otherContext.session?.user.id!, 100);
+    if (!otherContext.session?.user)
+      throw new Error("test setup: expected other invitee session user");
+    await creditWallet(otherContext.session.user.id, 100);
   });
 
   test("proposer can withdraw one pending invite without changing headcount", async () => {

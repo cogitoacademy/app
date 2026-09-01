@@ -102,7 +102,7 @@
     # decrypt task works from any cwd (the command module does not inherit
     # the operator's working directory).
     vault_path: "{{ playbook_dir }}/../secrets/prod.env"
-    project_name: "cogito"
+    project_name: "cogito-prod"
     environment_name: "production"
     server_ip: "15.235.186.159"
 

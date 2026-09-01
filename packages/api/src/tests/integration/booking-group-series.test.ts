@@ -167,8 +167,12 @@ describe("Booking group flow", () => {
     const invitee2Ctx = await createTestContext(
       (await signInAndGetCookie(invitee2Email, "Test1234!")) ?? "",
     );
-    const invitee1Id = invitee1Ctx.session?.user.id!;
-    const invitee2Id = invitee2Ctx.session?.user.id!;
+    if (!invitee1Ctx.session?.user)
+      throw new Error("test setup: expected invitee1 session user");
+    if (!invitee2Ctx.session?.user)
+      throw new Error("test setup: expected invitee2 session user");
+    const invitee1Id = invitee1Ctx.session.user.id;
+    const invitee2Id = invitee2Ctx.session.user.id;
 
     const b = await proposerClient.booking.createGroup({
       tutorId,
@@ -312,7 +316,9 @@ describe("Booking group series flow (FR-20)", () => {
       await createTestContext(proposerRes.cookie),
     );
     const proposerCtx = await createTestContext(proposerRes.cookie);
-    proposerId = proposerCtx.session?.user.id!;
+    if (!proposerCtx.session?.user)
+      throw new Error("test setup: expected proposer session user");
+    proposerId = proposerCtx.session.user.id;
     await creditWallet(proposerId, 500);
 
     const i1Res = await signUpAndSignIn(
@@ -322,7 +328,9 @@ describe("Booking group series flow (FR-20)", () => {
     );
     invitee1Client = createTestClient(await createTestContext(i1Res.cookie));
     const i1Ctx = await createTestContext(i1Res.cookie);
-    invitee1Id = i1Ctx.session?.user.id!;
+    if (!i1Ctx.session?.user)
+      throw new Error("test setup: expected invitee1 session user");
+    invitee1Id = i1Ctx.session.user.id;
     await creditWallet(invitee1Id, 500);
 
     const i2Res = await signUpAndSignIn(
@@ -332,7 +340,9 @@ describe("Booking group series flow (FR-20)", () => {
     );
     invitee2Client = createTestClient(await createTestContext(i2Res.cookie));
     const i2Ctx = await createTestContext(i2Res.cookie);
-    invitee2Id = i2Ctx.session?.user.id!;
+    if (!i2Ctx.session?.user)
+      throw new Error("test setup: expected invitee2 session user");
+    invitee2Id = i2Ctx.session.user.id;
     await creditWallet(invitee2Id, 500);
   });
 

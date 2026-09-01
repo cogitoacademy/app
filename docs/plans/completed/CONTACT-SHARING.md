@@ -1,6 +1,8 @@
 # Consent-based contact sharing
 
-Status: implementation complete on `f/contact-sharing-flow`; PR #108 to `main`.
+Status: **Completed — merged to main via #108 (2026-08-26).** Moved from
+`docs/plans/active/` to `docs/plans/completed/` on 2026-09-01 (plans index
+sync).
 
 ## Product decision
 
@@ -46,5 +48,5 @@ numbers, or a full chat feature.
 
 ## Follow-up
 
-After the PR is merged, move this plan to `docs/plans/completed/` and record the
-merge number in the plans index.
+Done: merged via #108 (2026-08-26); moved to `docs/plans/completed/` and the
+plans index records the merge number (2026-09-01).
