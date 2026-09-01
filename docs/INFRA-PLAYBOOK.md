@@ -21,17 +21,18 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8000/api/v1/health  # 
 
 ## 1. "I changed an env var / secret in the vault"
 
-| Step   | Command                                                                                | Proves                                                  |
-| ------ | -------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| Edit   | `sops infra/secrets/prod.env` (or `sops set infra/secrets/prod.env '["KEY"]' "value"`) | —                                                       |
-| Apply  | `./infra/apply.sh resources`                                                           | playbook patches env via Coolify API + restarts the app |
-| Verify | `curl -s https://api.cogitoacademy.id/health \| jq -r .version`                        | sha matches main HEAD                                   |
+| Step   | Command                                                                                                                                                                                      | Proves                |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| Edit   | `sops infra/secrets/prod.env` (or `sops set infra/secrets/prod.env '["KEY"]' "value"`)                                                                                                       | —                     |
+| Apply  | **automatic**: commit the vault via PR → merge → `infra-apply.yml` re-applies `coolify-resources.yml` on the VPS runner (env patch + restart). Manual fallback: `./infra/apply.sh resources` | workflow run green    |
+| Verify | `curl -s https://api.cogitoacademy.id/health \| jq -r .version`                                                                                                                              | sha matches main HEAD |
 
 Notes: new keys must be added to `.sops.yaml` `encrypted_regex` or they save
-as plaintext (this bit us once — #149). Commit the vault with
-`git add -f infra/secrets/prod.env` (the pre-commit `sops-plaintext-guard`
-hook is your safety net). Webhook/GitHub-secret values (GH secrets) are
-separate from the vault — update in repo Settings too.
+as plaintext (this bit us once — #149). The pre-commit `sops-plaintext-guard`
+hook is your safety net. Webhook/GitHub-secret values (GH secrets) are
+separate from the vault — update in repo Settings too. Automation
+prerequisites (one-time): `SOPS_AGE_KEY` GitHub secret +
+`sudo bash infra/runner-prep.sh` on the VPS (INFRA-AUTOMATION plan).
 
 ## 2. Deploy code (merge to main)
 
@@ -51,13 +52,50 @@ safe: snapshot/migrate/deploy are idempotent). Bad release live?
 
 ## 3. Infra code changed under `infra/`
 
-| You touched                                                 | Run                                                                                                                                                                                                                                 | Notes                                                |
-| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| `infra/terraform/**` (DNS/R2)                               | `./infra/apply.sh tf-plan` → **review diff** → `./infra/apply.sh tf-apply`                                                                                                                                                          | rare; CI also runs a read-only plan on PRs           |
-| any playbook under `infra/ansible/`                         | the matching `./infra/apply.sh <phase>` or `ansible-playbook -i infra/ansible/inventory.ini infra/ansible/<file>.yml` (add `--ask-become-pass` for host playbooks)                                                                  | all playbooks are idempotent                         |
-| `coolify-resources.yml` / env shape                         | `./infra/apply.sh resources`                                                                                                                                                                                                        | restarts the API — expect a few seconds of downtime  |
-| `uptime-kuma.yml` / `disk-watchdog.yml` / `backup-cron.yml` | run that playbook directly (tunnel up; kuma/disk read the vault)                                                                                                                                                                    | kuma is control-node only; disk/backup touch the VPS |
-| after any manual Coolify-UI fiddling                        | `ansible-playbook -i infra/ansible/inventory.ini infra/ansible/drift-check.yml -e coolify_api_base=http://localhost:8000/api/v1 -e coolify_api_token="$(sops -d infra/secrets/prod.env \| grep COOLIFY_API_TOKEN \| cut -d= -f2-)"` | read-only; exit 1 = drift found                      |
+**Default: automatic.** A merge to `main` touching `infra/**` triggers
+`infra-apply.yml`: Terraform applies only on real plan drift (exit 2), and
+the Ansible job runs **only the playbooks whose files changed** on the
+self-hosted VPS runner (drift-check reports first, post-apply `/health`
+verify last). `host-hardening.yml` and `tailscale.yml` are **excluded** from
+auto-apply (lockout risk / one-time semantics) — they remain manual phases
+of `./infra/apply.sh`.
+
+| You touched                                                                      | What happens on merge                                                 | Manual fallback                                                        |
+| -------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `infra/terraform/**` (DNS/R2)                                                    | `terraform plan -detailed-exitcode` → apply only on real drift        | `./infra/apply.sh tf-plan` → review → `tf-apply`                       |
+| `coolify-resources.yml` / env shape                                              | re-applied + API restart (seconds of downtime)                        | `./infra/apply.sh resources`                                           |
+| `backup-cron.yml` / `disk-watchdog.yml` / `disk-watchdog.sh` / `uptime-kuma.yml` | that playbook runs on the runner                                      | run it directly from the operator machine (tunnel up)                  |
+| after any manual Coolify-UI fiddling                                             | — (push a no-op commit or `workflow_dispatch` infra-apply to re-sync) | `ansible-playbook ... drift-check.yml ...` (read-only; exit 1 = drift) |
+
+Break-glass (runner down, key rotation, DR): run `./infra/apply.sh` from the
+operator machine as before — §0 prerequisites still apply.
+
+## 3b. Uptime Kuma one-time UI pass (the only buttons you need to touch)
+
+Kuma's monitors/notifications live in its own SQLite DB — the Coolify API
+cannot express them, so this is a one-time ~10-minute UI pass (revisit only
+when adding a monitor):
+
+1. Open `https://status.cogitoacademy.id` → sign in (admin account exists;
+   if the service was ever recreated, create it again — first-run screen).
+2. **Notifications → Setup Notifications → Discord**: paste the
+   `DISCORD_WEBHOOK_URL` from the vault
+   (`sops -d infra/secrets/prod.env | grep DISCORD_WEBHOOK_URL | cut -d= -f2-`)
+   → **Test** (a message must land in your Discord channel) → Save.
+3. **Add New Monitor** (each, 60s interval, "Apply on all existing…"
+   unchecked; attach the Discord notification to each):
+   - `api-health` — HTTP(s): `https://api.cogitoacademy.id/health`,
+     Keyword **`"status":"ok"`** (down on 5xx/degraded).
+   - `web-app` — HTTP(s): `https://app.cogitoacademy.id`.
+   - `api-cert` / `app-cert` — HTTP(s) - Certificate Info for
+     `api.cogitoacademy.id` / `app.cogitoacademy.id` (alerts before expiry).
+   - `dlq-depth` — HTTP(s) keyword on `https://api.cogitoacademy.id/health`,
+     Keyword **`"dlqDepth":0`** — DOWN = fresh DLQ failures exist
+     (age-aware; stale entries never trip it). Heartbeat retry: 3.
+4. **Test each monitor** (the "Test" button) — a Discord post should arrive.
+5. Optional: **Status Pages → New Status Page** (slug `cogito`), add the
+   monitors, publish — this IS the dashboard served at
+   `status.cogitoacademy.id`.
 
 ## 4. Database changes (migrations)
 
