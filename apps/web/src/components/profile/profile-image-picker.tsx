@@ -6,6 +6,7 @@ import {
   useState,
   type ChangeEvent,
   type PointerEvent as ReactPointerEvent,
+  type ReactNode,
   type SyntheticEvent,
 } from "react";
 import { Button } from "@cogito-app/ui/components/selia/button";
@@ -28,6 +29,7 @@ import { Input } from "@cogito-app/ui/components/selia/input";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { cn } from "@cogito-app/ui/lib/utils";
+import { IconPencil } from "@tabler/icons-react";
 
 import { getUserFacingError } from "@/lib/error-message";
 import { client } from "@/utils/orpc";
@@ -202,13 +204,16 @@ export function ProfileImagePicker({
   onImageChange,
   onUploadingChange,
   disabled = false,
+  compactTrigger,
 }: {
   id: string;
   image: string;
   onImageChange: (value: string) => void;
   onUploadingChange?: (uploading: boolean) => void;
   disabled?: boolean;
+  compactTrigger?: ReactNode;
 }) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const cropViewportRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const dragRef = useRef<DragState | null>(null);
@@ -389,27 +394,51 @@ export function ProfileImagePicker({
 
   return (
     <>
-      <Field>
-        <FieldLabel htmlFor={id}>Profile photo</FieldLabel>
+      <Field className={compactTrigger ? "w-fit" : undefined}>
+        <FieldLabel
+          htmlFor={id}
+          className={compactTrigger ? "sr-only" : undefined}
+        >
+          Profile photo
+        </FieldLabel>
         <Input
+          ref={fileInputRef}
           id={id}
           name={id}
           type="file"
           accept={PROFILE_IMAGE_TYPES.join(",")}
           disabled={disabled || isUploading}
           aria-invalid={error ? true : undefined}
+          className={compactTrigger ? "sr-only" : undefined}
           onChange={handleFileChange}
         />
-        <FieldDescription>
-          JPG, PNG, or WebP, maximum 5 MB. After choosing a photo, drag and zoom
-          until the part you want sits inside the circle.
-        </FieldDescription>
+        {compactTrigger ? (
+          <Button
+            type="button"
+            variant="plain"
+            className="group size-auto rounded-full p-0!"
+            aria-label="Change profile photo"
+            disabled={disabled || isUploading}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {compactTrigger}
+            <span className="absolute -bottom-0.5 -right-0.5 flex size-6 items-center justify-center rounded-full border border-card-border bg-card text-foreground shadow transition-colors group-hover:bg-accent">
+              <IconPencil className="size-3.5" aria-hidden="true" />
+            </span>
+          </Button>
+        ) : null}
+        {!compactTrigger ? (
+          <FieldDescription>
+            JPG, PNG, or WebP, maximum 5 MB. After choosing a photo, drag and
+            zoom until the part you want sits inside the circle.
+          </FieldDescription>
+        ) : null}
         {photoReadyToSave ? (
           <Text className="text-sm text-success">
             Photo uploaded. Save account details to apply it.
           </Text>
         ) : null}
-        {image && !disabled ? (
+        {image && !disabled && !compactTrigger ? (
           <Button
             type="button"
             variant="plain"
