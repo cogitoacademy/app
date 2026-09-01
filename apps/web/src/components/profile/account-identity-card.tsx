@@ -24,6 +24,7 @@ import {
 import { Input } from "@cogito-app/ui/components/selia/input";
 import { Text } from "@cogito-app/ui/components/selia/text";
 
+import { resolveProfileImageUrl } from "@/lib/profile-image-url";
 import { ProfileImagePicker } from "./profile-image-picker";
 
 function getInitials(name: string) {
@@ -72,13 +73,22 @@ export function AccountIdentityCard({
   return (
     <Card className="overflow-hidden">
       <CardHeader className="grid-cols-[auto_1fr] items-start">
-        <Avatar size="lg">
-          <AvatarImage
-            src={image.trim() || undefined}
-            alt={`${displayName} avatar`}
-          />
-          <AvatarFallback>{getInitials(name)}</AvatarFallback>
-        </Avatar>
+        <ProfileImagePicker
+          id={`${idPrefix}-image`}
+          image={image}
+          onImageChange={onImageChange}
+          onUploadingChange={setIsUploadingImage}
+          disabled={!imageEditable}
+          compactTrigger={
+            <Avatar size="lg">
+              <AvatarImage
+                src={resolveProfileImageUrl(image)}
+                alt={`${displayName} avatar`}
+              />
+              <AvatarFallback>{getInitials(name)}</AvatarFallback>
+            </Avatar>
+          }
+        />
         <div className="min-w-0">
           <CardTitle>Account identity</CardTitle>
           <CardDescription>
@@ -103,14 +113,7 @@ export function AccountIdentityCard({
             />
           </Field>
         ) : null}
-        <ProfileImagePicker
-          id={`${idPrefix}-image`}
-          image={image}
-          onImageChange={onImageChange}
-          onUploadingChange={setIsUploadingImage}
-          disabled={!imageEditable}
-        />
-        <Field className="md:col-span-2">
+        <Field>
           <FieldLabel htmlFor={`${idPrefix}-email`}>Sign-in email</FieldLabel>
           <Input
             id={`${idPrefix}-email`}
@@ -122,7 +125,7 @@ export function AccountIdentityCard({
             disabled
           />
           <FieldDescription>
-            Your sign-in email cannot be changed from this page.
+            Your sign-in email cannot be changed.
           </FieldDescription>
         </Field>
       </CardBody>

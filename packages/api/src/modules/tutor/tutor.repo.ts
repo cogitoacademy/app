@@ -1,10 +1,11 @@
-import { eq, and, gte, sql, asc, inArray, isNotNull } from "drizzle-orm";
+import { eq, and, gte, sql, asc, desc, inArray, isNotNull } from "drizzle-orm";
 import {
   user,
   tutorProfile,
   availabilitySlot,
   subjectCategory,
   tutorProfileSubject,
+  auditLog,
 } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
 import type {
@@ -77,6 +78,20 @@ export async function getByUserId(conn: DbOrTx, userId: string) {
           },
         },
       },
+    },
+  });
+}
+
+export async function listProfileHistory(conn: DbOrTx, tutorProfileId: string) {
+  return conn.query.auditLog.findMany({
+    where: and(
+      eq(auditLog.targetType, "tutor_profile"),
+      eq(auditLog.targetId, tutorProfileId),
+    ),
+    orderBy: [desc(auditLog.createdAt), desc(auditLog.id)],
+    limit: 50,
+    with: {
+      actor: { columns: { id: true, name: true, email: true } },
     },
   });
 }
@@ -317,6 +332,7 @@ export async function deactivateFutureRecurringAvailability(
 export function createTutorRepo() {
   return {
     getByUserId,
+    listProfileHistory,
     listActiveChildSubjects,
     replaceProfileSubjects,
     updateProfileImage,

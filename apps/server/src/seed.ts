@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { asc, eq, isNotNull } from "drizzle-orm";
 
 import { auth } from "@cogito-app/auth";
 import { db } from "@cogito-app/db";
@@ -6,11 +6,14 @@ import { env } from "@cogito-app/env/server";
 import { isProductionLike } from "@cogito-app/env/node-env";
 import {
   user,
+  account,
   tutorInvite,
   tutorProfile,
   availabilitySlot,
   markPackage,
   economyConfig,
+  subjectCategory,
+  tutorProfileSubject,
 } from "@cogito-app/db/schema";
 import {
   INVITE_EXPIRY_DAYS,
@@ -18,10 +21,7 @@ import {
 } from "@cogito-app/api/shared/constants";
 import { DEFAULT_ECONOMY_CONFIG } from "@cogito-app/api/modules/economy/economy.types";
 import { hashInviteToken } from "@cogito-app/api/lib/tokens";
-import {
-  DEFAULT_PRODUCTION_ADMIN_EMAIL,
-  parseConfiguredAdminEmails,
-} from "@cogito-app/env/admin";
+import { parseConfiguredAdminEmails } from "@cogito-app/env/admin";
 
 const SEED_SUFFIX = "seed";
 const SEED_DISPLAY_TAG = "[seed]";
@@ -41,14 +41,21 @@ export function seedAdminPassword(value: string | undefined): string | null {
 
 export function resolveSeedAdminEmail(
   nodeEnv: string,
-  configuredEmails?: string,
+  reviewEmail?: string,
 ): string {
   if (!isProductionLike(nodeEnv)) return "admin@cogitoacademy.id";
+  return reviewEmail?.trim().toLowerCase() || "review.admin@cogitoacademy.id";
+}
 
-  return (
-    parseConfiguredAdminEmails(configuredEmails)[0] ??
-    DEFAULT_PRODUCTION_ADMIN_EMAIL
-  );
+export function assertReviewAdminIsSeparate(
+  reviewEmail: string,
+  configuredAdminEmails?: string,
+) {
+  if (parseConfiguredAdminEmails(configuredAdminEmails).includes(reviewEmail)) {
+    throw new Error(
+      "SEED_REVIEW_ADMIN_EMAIL must not be an operator email from ADMIN_EMAILS",
+    );
+  }
 }
 
 function demoPassword(envValue: string | undefined, fallback: string): string {
@@ -59,6 +66,17 @@ function demoPassword(envValue: string | undefined, fallback: string): string {
     );
   }
   return envValue;
+}
+
+export function requireProductionReviewPassword(
+  nodeEnv: string,
+  name: string,
+  value: string | undefined,
+) {
+  if (!isProductionLike(nodeEnv)) return;
+  if (!value || value.length < 12) {
+    throw new Error(`${name} is required and must be at least 12 characters`);
+  }
 }
 
 const PACKAGES = [
@@ -74,7 +92,21 @@ async function ensureUser(email: string, password: string, name: string) {
     .from(user)
     .where(eq(user.email, email))
     .limit(1);
-  if (existing[0]) return existing[0];
+  if (existing[0]) {
+    const linkedAccounts = await db
+      .select({ providerId: account.providerId })
+      .from(account)
+      .where(eq(account.userId, existing[0].id));
+    const localCredential = linkedAccounts.some(
+      (linked) => linked.providerId === "credential",
+    );
+    if (!localCredential) {
+      throw new Error(
+        `Review user ${email} already exists without a local credential; choose a fresh SEED_REVIEW_*_EMAIL instead of reusing a Google-only account`,
+      );
+    }
+    return existing[0];
+  }
 
   const result = await auth.api.signUpEmail({
     body: { email, password, name },
@@ -146,7 +178,14 @@ async function ensureSeedAvailability(tutorId: string) {
     .from(availabilitySlot)
     .where(eq(availabilitySlot.tutorId, tutorId));
 
-  if (slots.length === 0) {
+  const now = Date.now();
+  const hasFutureBookableSlot = slots.some(
+    (slot) =>
+      slot.startDate.getTime() > now &&
+      slot.endDate.getTime() - slot.startDate.getTime() >= 90 * 60_000,
+  );
+
+  if (!hasFutureBookableSlot) {
     const base = new Date();
     base.setHours(10, 0, 0, 0);
     for (let i = 1; i <= 5; i++) {
@@ -160,14 +199,16 @@ async function ensureSeedAvailability(tutorId: string) {
         modality: "both",
       });
     }
-    return;
   }
 
   // The booking flow uses a fixed 90-minute session. Repair legacy seed rows
   // that were created with one-hour windows so the deterministic demo account
   // always has at least one valid start time.
   for (const slot of slots) {
-    if (slot.endDate.getTime() - slot.startDate.getTime() < 90 * 60_000) {
+    if (
+      slot.startDate.getTime() > now &&
+      slot.endDate.getTime() - slot.startDate.getTime() < 90 * 60_000
+    ) {
       // eslint-disable-next-line no-await-in-loop
       await db
         .update(availabilitySlot)
@@ -177,6 +218,33 @@ async function ensureSeedAvailability(tutorId: string) {
         .where(eq(availabilitySlot.id, slot.id));
     }
   }
+}
+
+async function ensureSeedTutorSubjects(profileId: string) {
+  const existing = await db
+    .select({ id: tutorProfileSubject.id })
+    .from(tutorProfileSubject)
+    .where(eq(tutorProfileSubject.tutorProfileId, profileId))
+    .limit(1);
+  if (existing[0]) return;
+
+  const subjects = await db
+    .select({ id: subjectCategory.id })
+    .from(subjectCategory)
+    .where(isNotNull(subjectCategory.parentId))
+    .orderBy(asc(subjectCategory.sortOrder), asc(subjectCategory.name))
+    .limit(2);
+  if (subjects.length === 0) {
+    throw new Error(
+      "Cannot seed the review tutor before the subject taxonomy migration is applied",
+    );
+  }
+  await db.insert(tutorProfileSubject).values(
+    subjects.map((subject) => ({
+      tutorProfileId: profileId,
+      subjectId: subject.id,
+    })),
+  );
 }
 
 async function resetTestEconomy() {
@@ -217,11 +285,27 @@ async function seed() {
       "SEED_ADMIN_PASSWORD required (min 12 chars) in this environment",
     );
   }
+  requireProductionReviewPassword(
+    env.NODE_ENV,
+    "SEED_TUTOR_PASSWORD",
+    process.env.SEED_TUTOR_PASSWORD,
+  );
+  requireProductionReviewPassword(
+    env.NODE_ENV,
+    "SEED_STUDENT_PASSWORD",
+    process.env.SEED_STUDENT_PASSWORD,
+  );
 
   await resetTestEconomy();
   await seedPackages();
 
-  const adminEmail = resolveSeedAdminEmail(env.NODE_ENV, env.ADMIN_EMAILS);
+  const adminEmail = resolveSeedAdminEmail(
+    env.NODE_ENV,
+    process.env.SEED_REVIEW_ADMIN_EMAIL,
+  );
+  if (isProductionLike(env.NODE_ENV)) {
+    assertReviewAdminIsSeparate(adminEmail, env.ADMIN_EMAILS);
+  }
 
   const admin = await ensureUser(adminEmail, adminPassword, "Admin User");
   await db
@@ -230,7 +314,9 @@ async function seed() {
     .where(eq(user.id, admin.id));
   console.log("Admin user ready:", admin.id);
 
-  const tutorEmail = `tutor.${SEED_SUFFIX}@cogitoacademy.id`;
+  const tutorEmail =
+    process.env.SEED_REVIEW_TUTOR_EMAIL?.trim().toLowerCase() ||
+    `tutor.${SEED_SUFFIX}@cogitoacademy.id`;
   const tutorPassword = demoPassword(
     process.env.SEED_TUTOR_PASSWORD,
     "tutor123",
@@ -274,9 +360,34 @@ async function seed() {
         userId: tutorUser.id,
         inviteId: invite!.id,
         displayName: `${SEED_DISPLAY_TAG} Tutor`,
-        shortBio: "Seed tutor for local development",
-        credentialsSummary: "Seed credentials",
-        expertise: ["Mathematics", "Physics"],
+        shortBio:
+          "Competition mentor for the Cogito verification environment. This profile contains review-only demonstration data.",
+        credentialsSummary:
+          "Experienced competition mentor with structured teaching and olympiad preparation experience.",
+        education: [
+          {
+            university: "Cogito Review University",
+            degree: "B.Sc. Mathematics",
+          },
+        ],
+        competitionAchievements: [
+          {
+            competitionName: "National Mathematics Review Competition",
+            year: 2025,
+            awards: ["Gold Medal"],
+          },
+        ],
+        experienceEntries: [
+          {
+            role: "Competition Tutor",
+            organization: "Cogito Academy Review Team",
+            startYear: 2023,
+            endYear: null,
+            description:
+              "Guides students through problem solving, practice sessions, and competition preparation.",
+          },
+        ],
+        expertise: ["Mathematics", "Competition preparation"],
         modality: "both",
         baseRatesIdr: { online: 175_000, offline: 225_000 },
         prices: { "1": 50, "2": 45, "3": 40, "4": 35, "5": 30, "6": 28 },
@@ -286,19 +397,57 @@ async function seed() {
       })
       .returning();
 
+    await ensureSeedTutorSubjects(profile!.id);
     console.log("Seed tutor profile ready:", profile!.id);
   } else {
     await db
       .update(tutorProfile)
-      .set({ baseRatesIdr: { online: 175_000, offline: 225_000 } })
+      .set({
+        displayName: `${SEED_DISPLAY_TAG} Tutor`,
+        shortBio:
+          "Competition mentor for the Cogito verification environment. This profile contains review-only demonstration data.",
+        credentialsSummary:
+          "Experienced competition mentor with structured teaching and olympiad preparation experience.",
+        education: [
+          {
+            university: "Cogito Review University",
+            degree: "B.Sc. Mathematics",
+          },
+        ],
+        competitionAchievements: [
+          {
+            competitionName: "National Mathematics Review Competition",
+            year: 2025,
+            awards: ["Gold Medal"],
+          },
+        ],
+        experienceEntries: [
+          {
+            role: "Competition Tutor",
+            organization: "Cogito Academy Review Team",
+            startYear: 2023,
+            endYear: null,
+            description:
+              "Guides students through problem solving, practice sessions, and competition preparation.",
+          },
+        ],
+        expertise: ["Mathematics", "Competition preparation"],
+        modality: "both",
+        baseRatesIdr: { online: 175_000, offline: 225_000 },
+        availabilitySummary: "Weekdays 10:00–12:00 WIB",
+        onboardingStatus: "published",
+        publishedAt: existingProfile[0].publishedAt ?? new Date(),
+      })
       .where(eq(tutorProfile.userId, tutorUser.id));
+    await ensureSeedTutorSubjects(existingProfile[0].id);
     console.log("Seed tutor profile already exists:", existingProfile[0].id);
   }
 
   await ensureSeedAvailability(tutorUser.id);
 
   await seedDemoStudent(
-    `student.${SEED_SUFFIX}@cogitoacademy.id`,
+    process.env.SEED_REVIEW_STUDENT_EMAIL?.trim().toLowerCase() ||
+      `student.${SEED_SUFFIX}@cogitoacademy.id`,
     demoPassword(process.env.SEED_STUDENT_PASSWORD, "student123"),
     `${SEED_DISPLAY_TAG} Student`,
   );

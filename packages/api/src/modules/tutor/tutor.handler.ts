@@ -34,6 +34,13 @@ export function createTutorHandler(tutorService: TutorService) {
       );
     },
 
+    getMyProfileHistory: async ({ context }: { context: Context }) => {
+      return withDomainMap(
+        () => tutorService.getMyProfileHistory(context.session!.user.id),
+        mapTutorError,
+      );
+    },
+
     updateMyProfile: async ({
       context,
       input,

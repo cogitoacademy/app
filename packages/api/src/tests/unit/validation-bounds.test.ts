@@ -45,6 +45,14 @@ const pastDate = () => {
 const LONG_ID = "a".repeat(101);
 const LONG_SHORT_TEXT = "a".repeat(256);
 const LONG_LONG_TEXT = "a".repeat(2001);
+const TOO_MANY_TUTOR_BIO_WORDS = Array.from(
+  { length: 51 },
+  (_, index) => `word${index + 1}`,
+).join(" ");
+const EXACTLY_FIFTY_TUTOR_BIO_WORDS = Array.from(
+  { length: 50 },
+  (_, index) => `word${index + 1}`,
+).join(" ");
 const LONG_URL = "https://example.com/" + "a".repeat(2048);
 const LONG_TOKEN = "a".repeat(257);
 const LONG_SEARCH = "a".repeat(201);
@@ -152,6 +160,27 @@ describe("Validation bounds — string .max()", () => {
     }
   });
 
+  test("Short bio rejects more than 50 words", () => {
+    const result = updateMyProfileInput.safeParse({
+      version: 1,
+      shortBio: TOO_MANY_TUTOR_BIO_WORDS,
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(
+        result.error.issues.some((issue) => /50 words/i.test(issue.message)),
+      ).toBe(true);
+    }
+  });
+
+  test("Short bio allows exactly 50 words", () => {
+    const result = updateMyProfileInput.safeParse({
+      version: 1,
+      shortBio: EXACTLY_FIFTY_TUTOR_BIO_WORDS,
+    });
+    expect(result.success).toBe(true);
+  });
+
   test("URL: achievement proof item rejects >2048 chars", () => {
     const result = updateMyProfileInput.safeParse({
       version: 1,
@@ -161,6 +190,21 @@ describe("Validation bounds — string .max()", () => {
     if (!result.success) {
       expect(result.error.issues[0].message).toMatch(/<=2048/i);
     }
+  });
+
+  test("Profile photo accepts local upload paths but rejects traversal", () => {
+    expect(
+      updateMyProfileInput.safeParse({
+        version: 1,
+        profileImageUrl: "/uploads/tutor/profile.jpg",
+      }).success,
+    ).toBe(true);
+    expect(
+      updateMyProfileInput.safeParse({
+        version: 1,
+        profileImageUrl: "/uploads/../profile.jpg",
+      }).success,
+    ).toBe(false);
   });
 
   test("Email: createInviteInput email rejects >320 chars", () => {

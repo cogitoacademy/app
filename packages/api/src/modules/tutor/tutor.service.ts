@@ -241,6 +241,12 @@ export function createTutorService(deps: {
     return projectTutorProfile(profile);
   }
 
+  async function getMyProfileHistory(userId: string) {
+    const profile = await tutorRepo.getByUserId(db, userId);
+    if (!profile) throw new TutorProfileNotFoundError(userId);
+    return tutorRepo.listProfileHistory(db, profile.id);
+  }
+
   /**
    * Updates the tutor profile with optimistic concurrency via version.
    *
@@ -262,6 +268,12 @@ export function createTutorService(deps: {
     }
     const isPublished =
       profile!.onboardingStatus === ONBOARDING_STATUS.PUBLISHED;
+    const previousProfileImageUrl = (
+      profile as TutorProfileWithSubjectRelations
+    ).user?.image;
+    const previousPendingProfileImageUrl = (
+      profile!.pendingProfileChanges as Record<string, unknown> | null
+    )?.profileImageUrl;
     const protectedFields = [
       "displayName",
       "achievements",
@@ -371,6 +383,29 @@ export function createTutorService(deps: {
       }
 
       const updated = await tutorRepo.getByUserId(conn, userId);
+      if (
+        isPublished &&
+        profileImageUrl !== undefined &&
+        profileImageUrl !== previousProfileImageUrl &&
+        profileImageUrl !== previousPendingProfileImageUrl
+      ) {
+        await auditPort.record({
+          db: conn,
+          actorId: userId,
+          actorType: ACTOR_TYPE.TUTOR,
+          action: "tutor_profile_photo_proposed",
+          targetId: profile!.id,
+          targetType: "tutor_profile",
+          beforeState: {
+            profileImageUrl: previousProfileImageUrl ?? null,
+          },
+          afterState: { profileImageUrl },
+          details: {
+            stage: "proposed",
+            reviewStatus: "pending_review",
+          },
+        });
+      }
       return projectTutorProfile(updated ?? rows[0]!);
     };
 
@@ -414,6 +449,11 @@ export function createTutorService(deps: {
         targetType: "tutor_profile",
         beforeState: { onboardingStatus: profile!.onboardingStatus },
         afterState: { onboardingStatus: ONBOARDING_STATUS.PENDING_REVIEW },
+        details: {
+          profileImageUrl:
+            (profile as TutorProfileWithSubjectRelations).user?.image ?? null,
+          stage: "source_submitted",
+        },
       });
 
       return row
@@ -679,6 +719,7 @@ export function createTutorService(deps: {
 
   return {
     getMyProfile,
+    getMyProfileHistory,
     updateMyProfile,
     submitForReview,
     listAvailability,

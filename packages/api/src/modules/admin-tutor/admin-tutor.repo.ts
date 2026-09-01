@@ -5,6 +5,7 @@ import {
   tutorInvite,
   tutorProfile,
   tutorProfileSubject,
+  auditLog,
   user,
 } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
@@ -191,14 +192,12 @@ async function listInvites(
  * @param id - the profile id
  * @returns the profile row, or null
  */
-async function getTutorProfileById(
-  conn: DbOrTx,
-  id: string,
-): Promise<TutorProfileRow | null> {
+async function getTutorProfileById(conn: DbOrTx, id: string) {
   return (
     (await conn.query.tutorProfile.findFirst({
       where: eq(tutorProfile.id, id),
       with: {
+        user: true,
         subjects: { with: { subject: { with: { parent: true } } } },
       },
     })) ?? null
@@ -291,6 +290,20 @@ async function listTutorProfiles(
   });
 }
 
+async function listTutorProfileHistory(conn: DbOrTx, tutorProfileId: string) {
+  return conn.query.auditLog.findMany({
+    where: and(
+      eq(auditLog.targetType, "tutor_profile"),
+      eq(auditLog.targetId, tutorProfileId),
+    ),
+    orderBy: [desc(auditLog.createdAt), desc(auditLog.id)],
+    limit: 50,
+    with: {
+      actor: { columns: { id: true, name: true, email: true } },
+    },
+  });
+}
+
 async function listActiveChildSubjects(
   conn: DbOrTx,
   subjectIds: readonly string[],
@@ -342,6 +355,7 @@ export function createAdminTutorRepo() {
     updateTutorProfileImage,
     updateTutorProfileWithVersion,
     listTutorProfiles,
+    listTutorProfileHistory,
   };
 }
 

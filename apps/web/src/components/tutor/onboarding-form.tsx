@@ -40,6 +40,10 @@ import {
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import {
+  countTutorShortBioWords,
+  MAX_TUTOR_SHORT_BIO_WORDS,
+} from "@cogito-app/api/modules/tutor/tutor.types";
+import {
   IconAlertTriangle,
   IconBuildingBank,
   IconPhoto,
@@ -50,7 +54,9 @@ import {
 
 import { getUserFacingError } from "@/lib/error-message";
 import { authClient } from "@/lib/auth-client";
+import { resolveProfileImageUrl } from "@/lib/profile-image-url";
 import { ProfileImagePicker } from "@/components/profile/profile-image-picker";
+import { ProfilePhotoPreview } from "@/components/profile/profile-photo-preview";
 import { orpc } from "@/utils/orpc";
 import { TutorPricingFields } from "./tutor-pricing-fields";
 import {
@@ -71,6 +77,10 @@ import {
   SubjectSelector,
   type TutorSubject,
 } from "./subject-taxonomy";
+import {
+  ProfilePhotoHistory,
+  type ProfilePhotoHistoryEntry,
+} from "./profile-photo-history";
 
 type Modality = "online" | "offline" | "both";
 type BankAccountOwnership = "self" | "trusted_person";
@@ -88,6 +98,7 @@ const TUTOR_STATUS_BADGES: Record<string, TutorStatusBadge> = {
   published: { label: "Published", variant: "success" },
   suspended: { label: "Suspended", variant: "danger" },
 };
+const EMPTY_PROFILE_HISTORY: ProfilePhotoHistoryEntry[] = [];
 
 interface OnboardingFormProps {
   accountUser: {
@@ -142,6 +153,7 @@ interface OnboardingFormProps {
     profileEditAdminNote: string | null;
     version: number;
   };
+  profileHistory?: ProfilePhotoHistoryEntry[];
 }
 
 function haveSameSubjectIds(left: readonly string[], right: readonly string[]) {
@@ -303,6 +315,7 @@ function getTutorErrorFocusTarget(
       ? "tutor-experiences-role-0"
       : "tutor-experiences-add";
   }
+  if (field === "shortBio") return "tutor-short-bio";
   if (field === "profileImageUrl") return "tutor-profile-image";
   if (field.startsWith("achievementProofUrls.")) {
     return "tutor-achievement-proofs";
@@ -372,7 +385,11 @@ function readServerFieldErrors(error: unknown) {
   return fieldErrors;
 }
 
-export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
+export function OnboardingForm({
+  accountUser,
+  profile,
+  profileHistory = EMPTY_PROFILE_HISTORY,
+}: OnboardingFormProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const pending = profile.pendingProfileChanges ?? {};
@@ -490,6 +507,9 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
         void queryClient.invalidateQueries({
           queryKey: orpc.tutor.getMyProfile.key(),
         });
+        void queryClient.invalidateQueries({
+          queryKey: orpc.tutor.getMyProfileHistory.key(),
+        });
         void queryClient.invalidateQueries({ queryKey: orpc.auth.me.key() });
       },
       onError: (error: unknown) => {
@@ -520,6 +540,9 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
         await Promise.all([
           queryClient.invalidateQueries({
             queryKey: orpc.tutor.getMyProfile.key(),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: orpc.tutor.getMyProfileHistory.key(),
           }),
           queryClient.invalidateQueries({ queryKey: orpc.auth.me.key() }),
         ]);
@@ -645,6 +668,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       addError("name", "Use 255 characters or fewer.");
     }
     const shortBio = form.shortBio.trim();
+    const shortBioWordCount = countTutorShortBioWords(form.shortBio);
     const achievements = form.achievements.trim();
     const experiences = form.experiences.trim();
     const profileImageUrl = form.profileImageUrl.trim();
@@ -654,6 +678,9 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     const bankAccountOpeningCity = form.bankAccountOpeningCity.trim();
 
     if (requireComplete && !shortBio) addError("shortBio", "Required.");
+    if (shortBioWordCount > MAX_TUTOR_SHORT_BIO_WORDS) {
+      addError("shortBio", `Use ${MAX_TUTOR_SHORT_BIO_WORDS} words or fewer.`);
+    }
     if (form.shortBio.length > 2_000) {
       addError("shortBio", "Use 2,000 characters or fewer.");
     }
@@ -924,11 +951,15 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     (profile.profileEditAdminNote &&
       profile.profileEditStatus === "changes_requested");
   const visibleValidationErrors = getVisibleTutorErrors(errors);
-  const currentProfileImageUrl =
+  const currentProfileImageValue =
     profile.user?.image?.trim() || accountUser.image?.trim() || "";
-  const selectedProfileImageUrl = form.profileImageUrl.trim();
+  const selectedProfileImageValue = form.profileImageUrl.trim();
+  const currentProfileImageUrl =
+    resolveProfileImageUrl(currentProfileImageValue) ?? "";
+  const selectedProfileImageUrl =
+    resolveProfileImageUrl(selectedProfileImageValue) ?? "";
   const hasProposedProfileImage =
-    Boolean(selectedProfileImageUrl) &&
+    Boolean(selectedProfileImageValue) &&
     selectedProfileImageUrl !== currentProfileImageUrl;
 
   return (
@@ -1029,6 +1060,51 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
         </Card>
       ) : null}
 
+      {!isEditable ? (
+        <Card>
+          <CardHeader>
+            <IconBox variant="tertiary-subtle">
+              <IconPhoto aria-hidden="true" />
+            </IconBox>
+            <CardTitle>Profile photo review</CardTitle>
+            <CardDescription>
+              Your submitted photo stays unchanged until the Cogito team
+              finishes its review and publishes any edited version.
+            </CardDescription>
+          </CardHeader>
+          <CardBody className="flex flex-wrap items-start gap-6">
+            <div className="flex flex-col items-center gap-2 text-center">
+              <Avatar size="lg" className="size-20!">
+                <AvatarImage
+                  src={currentProfileImageUrl || undefined}
+                  alt="Submitted tutor profile"
+                />
+                <AvatarFallback>
+                  {(accountUser.name.slice(0, 2) || "TU").toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex items-center gap-1">
+                <Text className="text-sm font-medium">Submitted photo</Text>
+                <ProfilePhotoPreview
+                  label="Submitted photo"
+                  description="This is the source photo currently on your tutor profile."
+                  imageUrl={currentProfileImageUrl || null}
+                  fallback={(
+                    accountUser.name.slice(0, 2) || "TU"
+                  ).toUpperCase()}
+                />
+              </div>
+            </div>
+            <div className="basis-full">
+              <ProfilePhotoHistory
+                entries={profileHistory}
+                title="Photo & review history"
+              />
+            </div>
+          </CardBody>
+        </Card>
+      ) : null}
+
       {isEditable ? (
         <form
           onSubmit={(event) => {
@@ -1063,7 +1139,20 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <Text className="text-sm font-medium">Current photo</Text>
+                      <div className="flex items-center justify-center gap-1">
+                        <Text className="text-sm font-medium">
+                          Current photo
+                        </Text>
+                        <ProfilePhotoPreview
+                          label="Current photo"
+                          description="This photo is visible to students right now."
+                          imageUrl={currentProfileImageUrl || null}
+                          fallback={(
+                            accountUser.name.slice(0, 2) || "TU"
+                          ).toUpperCase()}
+                          tone="success"
+                        />
+                      </div>
                       <Text className="text-xs text-muted">
                         Visible to students
                       </Text>
@@ -1098,13 +1187,40 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                     }
                   />
                   <div>
-                    <Text className="text-sm font-medium">
-                      {profile.onboardingStatus === "published"
-                        ? hasProposedProfileImage
-                          ? "Proposed photo"
-                          : "Change photo"
-                        : "Profile photo"}
-                    </Text>
+                    <div className="flex items-center justify-center gap-1">
+                      <Text className="text-sm font-medium">
+                        {profile.onboardingStatus === "published"
+                          ? hasProposedProfileImage
+                            ? "Proposed photo"
+                            : "Change photo"
+                          : "Profile photo"}
+                      </Text>
+                      {selectedProfileImageUrl ? (
+                        <ProfilePhotoPreview
+                          label={
+                            profile.onboardingStatus === "published" &&
+                            hasProposedProfileImage
+                              ? "Proposed photo"
+                              : "Profile photo"
+                          }
+                          description={
+                            profile.onboardingStatus === "published"
+                              ? "This replacement stays private until an admin approves it."
+                              : "This is the photo that will be submitted with your tutor profile."
+                          }
+                          imageUrl={selectedProfileImageUrl}
+                          fallback={(
+                            accountUser.name.slice(0, 2) || "TU"
+                          ).toUpperCase()}
+                          tone={
+                            profile.onboardingStatus === "published" &&
+                            hasProposedProfileImage
+                              ? "warning"
+                              : "info"
+                          }
+                        />
+                      ) : null}
+                    </div>
                     <Text className="max-w-56 text-xs text-muted">
                       {profile.onboardingStatus === "published"
                         ? "Changes become public after admin approval."
@@ -1127,6 +1243,12 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                     </FieldError>
                   </Field>
                 ) : null}
+                <div className="basis-full">
+                  <ProfilePhotoHistory
+                    entries={profileHistory}
+                    title="Photo & review history"
+                  />
+                </div>
               </CardBody>
             </Card>
 
@@ -1141,7 +1263,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                   teaching style.
                 </CardDescription>
               </CardHeader>
-              <CardBody className="grid gap-5 sm:grid-cols-2">
+              <CardBody className="grid gap-5 sm:grid-cols-[1fr_2fr]">
                 <Field>
                   <FieldLabel htmlFor="tutor-name">
                     Name <span aria-hidden="true">*</span>
@@ -1170,12 +1292,14 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                   ) : null}
                 </Field>
 
-                <Field className="sm:col-span-2">
+                <Field>
                   <FieldLabel htmlFor="tutor-short-bio">
                     Short bio <span aria-hidden="true">*</span>
                   </FieldLabel>
                   <FieldDescription>
-                    A concise introduction students can scan before booking.
+                    Share anything about yourself as a person, including things
+                    beyond the competition field such as your hobbies and
+                    favorite books.
                   </FieldDescription>
                   <Textarea
                     id="tutor-short-bio"
@@ -1196,6 +1320,18 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                       errors.shortBio ? "tutor-short-bio-error" : undefined
                     }
                   />
+                  <Text
+                    className={`text-right text-xs ${
+                      countTutorShortBioWords(form.shortBio) >
+                      MAX_TUTOR_SHORT_BIO_WORDS
+                        ? "text-danger"
+                        : "text-muted"
+                    }`}
+                    aria-live="polite"
+                  >
+                    {countTutorShortBioWords(form.shortBio)}/
+                    {MAX_TUTOR_SHORT_BIO_WORDS} words
+                  </Text>
                   {errors.shortBio ? (
                     <FieldError id="tutor-short-bio-error">
                       {errors.shortBio}
@@ -1583,8 +1719,10 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                   Achievement proof links
                 </FieldLabel>
                 <FieldDescription>
-                  Optional. Add one public certificate, result, or portfolio URL
-                  per line. These links are only used for admin verification.
+                  Optional. If possible, put your achievement and experience
+                  proof in one Google Drive folder and use the “Anyone with the
+                  link can view” setting. These links are only used for admin
+                  verification.
                 </FieldDescription>
                 <Textarea
                   id="tutor-achievement-proofs"
@@ -1653,9 +1791,10 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                     Experience proof links
                   </FieldLabel>
                   <FieldDescription>
-                    Optional. Add one public reference, portfolio, or supporting
-                    URL per line. These links are only used for admin
-                    verification.
+                    Optional. If possible, put your achievement and experience
+                    proof in one Google Drive folder and use the “Anyone with
+                    the link can view” setting. These links are only used for
+                    admin verification.
                   </FieldDescription>
                   <Textarea
                     id="tutor-experience-proofs"

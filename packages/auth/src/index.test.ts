@@ -200,7 +200,7 @@ describe("resolveGoogleSocialProviders", () => {
     );
   });
 
-  test("returns the configured Google provider", () => {
+  test("returns the configured Google provider with a consent prompt", () => {
     expect(
       resolveGoogleSocialProviders({
         clientId: "google-id",
@@ -210,6 +210,7 @@ describe("resolveGoogleSocialProviders", () => {
       google: {
         clientId: "google-id",
         clientSecret: "google-secret",
+        prompt: "consent",
       },
     });
   });

@@ -1,21 +1,35 @@
 import { z } from "zod";
 import { MAX_TUTOR_SUBJECTS } from "../tutor-subjects/subject-selection";
-import { externalHttpUrl } from "../../lib/url-schema";
+import { externalHttpUrl, profileImageUrl } from "../../lib/url-schema";
 import {
   tutorCompetitionAchievementsInput,
   tutorEducationInput,
 } from "./tutor-achievements";
 import { tutorExperienceEntriesInput } from "./tutor-experiences";
 
+export const MAX_TUTOR_SHORT_BIO_WORDS = 50;
+
+export function countTutorShortBioWords(value: string) {
+  const trimmed = value.trim();
+  return trimmed ? trimmed.split(/\s+/u).length : 0;
+}
+
 export const updateMyProfileInput = z.object({
   version: z.number().int(),
   displayName: z.string().min(1).max(255).optional(),
-  shortBio: z.string().max(2000).optional(),
+  shortBio: z
+    .string()
+    .max(2000)
+    .refine(
+      (value) => countTutorShortBioWords(value) <= MAX_TUTOR_SHORT_BIO_WORDS,
+      { message: `Use ${MAX_TUTOR_SHORT_BIO_WORDS} words or fewer.` },
+    )
+    .optional(),
   achievements: z.string().max(5000).optional(),
   experiences: z.string().max(5000).optional(),
   achievementProofUrls: z.array(externalHttpUrl).max(20).optional(),
   experienceProofUrls: z.array(externalHttpUrl).max(20).optional(),
-  profileImageUrl: externalHttpUrl.optional(),
+  profileImageUrl: profileImageUrl.optional(),
   credentialsSummary: z.string().max(2000).optional(),
   education: tutorEducationInput.optional(),
   competitionAchievements: tutorCompetitionAchievementsInput.optional(),

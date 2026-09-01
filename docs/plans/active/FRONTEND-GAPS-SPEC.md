@@ -71,9 +71,9 @@ accounts. This is frontend routing only and adds no API or database contract.
 
 ### Tutor profile and payout privacy follow-up (2026-08-28)
 
-Tutor onboarding now has one structured Achievements section and one structured Experiences section, with legacy achievement/credential/experience text retained as a fallback. Achievement and experience entries use repeatable cards with bounded year fields; year values remain ungrouped, and an ongoing experience leaves End year blank. Availability-summary and credential-proof inputs are retired. Base honorarium is adjusted only through Rp 5,000 minus/plus controls and its six group-size outcomes are shown in tables. Tutor portraits use one canonical profile image: the tutor submits one image, then an admin applies the standard background and updates that same image. Tutor payout details expose only completed sessions and IDR honorarium, removing take-rate and Marks terminology from the tutor interface.
+Tutor onboarding now has one structured Achievements section and one structured Experiences section, with legacy achievement/credential/experience text retained as a fallback. Achievement and experience entries use repeatable cards with bounded year fields; year values remain ungrouped, and an ongoing experience leaves End year blank. Availability-summary and credential-proof inputs are retired. Base honorarium is adjusted only through Rp 5,000 minus/plus controls and its six group-size outcomes are shown in tables. Tutor portraits use a staged source-to-final workflow: the tutor submits one uploaded source image, an admin uploads the background-standardized replacement, and approval/publication promotes that replacement to the canonical public image; the tutor/admin surfaces expose the review history. Tutor payout details expose only completed sessions and IDR honorarium, removing take-rate and Marks terminology from the tutor interface.
 
-Achievement and Experience sections now each accept an optional list of supporting proof URLs. They are visible to admins during review, participate in the protected edit-review flow, and are intentionally omitted from public tutor discovery.
+Achievement and Experience sections retain separate optional proof URL fields for compatibility. The tutor-facing copy recommends putting both evidence types in one Google Drive folder with the “Anyone with the link can view” setting. The URLs remain visible to admins during review, participate in the protected edit-review flow, and are intentionally omitted from public tutor discovery.
 
 ### Tutor experience formatting follow-up (2026-08-31)
 
@@ -113,7 +113,7 @@ The authenticated shell's existing Light/Dark/System menu now also responds to `
 
 The student profile and tutor onboarding surfaces now share a responsive account-identity editor. Student learning and parent/guardian fields are separated into clear cards with a completion indicator and one learning-profile save action. Tutor onboarding keeps profile status and review feedback visible, groups public profile/teaching setup/availability fields, presents pricing in a compact responsive grid, and consolidates draft/save/submit actions into a sticky footer. No profile or auth API contracts changed.
 
-The tutor profile photo upload now appears before the rest of the editable profile fields and uses the same compact clickable-avatar crop interaction as the student editor. Published tutors see current and proposed photos separately, with explicit review messaging. The admin review drawer compares those assets side by side and approval promotes the proposed URL through the existing pending-change contract.
+The tutor profile photo upload now appears before the rest of the editable profile fields and uses the same compact clickable-avatar crop interaction as the student editor. Published tutors see current and proposed photos separately, with explicit review messaging; full image previews open on demand through the shared Selia `InfoPreview` popover. The admin review drawer compares those assets side by side and approval promotes the proposed URL through the existing pending-change contract.
 
 The admin tutor index now surfaces the edit-review state in its status badge: a published tutor with submitted changes is shown as **Edit review**, while a returned edit is shown as **Revision requested**, so pending work is visible without opening each drawer.
 
@@ -270,7 +270,7 @@ for classmates.
 | `/_app/dashboard`            | role-specific dashboard pages             | Complete — student, tutor, and admin next-action views using existing oRPC data                                                                                      |
 | `/_app/balance`              | balance-page.tsx                          | Exists (wallet + Knowledge Bank card)                                                                                                                                |
 | `/_app/calendar`             | competition-calendar-page.tsx             | Complete — authenticated, English-only read-only calendar backed by published Sanity content                                                                         |
-| `/_app/knowledge-bank`       | knowledge-bank-page.tsx                   | Complete — student 35-Mark gate plus unrestricted tutor/admin access, metadata search/filter, and protected PDF preview                                               |
+| `/_app/knowledge-bank`       | knowledge-bank-page.tsx                   | Complete — student 35-Mark gate plus unrestricted tutor/admin access, metadata search/filter, and protected PDF preview                                              |
 | `/_app/bookings`             | bookings-page.tsx                         | Exists (role-scoped list and lifecycle entry points)                                                                                                                 |
 | `/_app/bookings/$bookingId`  | booking-detail-page.tsx                   | Complete baseline — detail, lifecycle, reschedule, reporting, invites, notes, history                                                                                |
 | `/_app/tutors`               | tutors-page-content.tsx                   | Exists (discovery list)                                                                                                                                              |
@@ -816,6 +816,8 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 ---
 
 ### Version Notes
+
+- v1.56 (2026-09-01): Limited tutor short bios to 50 whitespace-delimited words, added a live word counter and matching API validation, and updated achievement/experience proof guidance to recommend one shared Google Drive folder with the “Anyone with the link can view” setting. The RPC shape and database schema are unchanged.
 
 - v1.55 (2026-09-01): Standardized every role on Better Auth `user.name`, removed the tutor-profile name input/payload from onboarding, switched tutor search and visible tutor surfaces to the user record, and retained `tutorProfile.displayName` only as legacy compatibility data. No schema field was removed.
 

@@ -234,7 +234,7 @@ export function ProfilePage({
 
   if (isLoading) {
     return (
-      <Card className="mx-auto w-full max-w-6xl">
+      <Card className="mx-auto w-full">
         <CardBody>
           <Text className="text-muted">Loading your profile...</Text>
         </CardBody>
@@ -243,7 +243,7 @@ export function ProfilePage({
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="mx-auto w-full">
       <div className="flex flex-col gap-6">
         <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
@@ -433,7 +433,7 @@ export function ProfilePage({
             </CardBody>
           </Card>
 
-          <Card>
+          <Card className="*:border-none overflow-hidden mb-6">
             <CardFooter className="flex-col items-stretch gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start gap-3">
                 <IconBox variant="info-subtle" size="sm">

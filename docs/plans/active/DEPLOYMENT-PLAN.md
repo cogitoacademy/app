@@ -105,7 +105,7 @@ VPS (OVH 2vCPU/3.7GB/38GB, Ubuntu; ufw: 80/443 public, 22+8000+6001+6002 tailnet
 3. **Google Meet**: run the OAuth helper locally (`scripts/google-meet-auth.ts`) → `GOOGLE_MEET_REFRESH_TOKEN` → add to the vault. If the OAuth client was published to Google Meet after the last refresh token was issued, **regenerate the refresh token** (a published client invalidates previously issued tokens).
 4. **Xendit Test Mode wiring (#120)**: set `XENDIT_MODE=test` + Test Mode `XENDIT_SECRET_KEY`/`XENDIT_WEBHOOK_TOKEN` + `XENDIT_TEST_ALLOWED_EMAILS` (UAT accounts) in the vault. `WEBHOOK_ALLOWED_IPS` stays optional (2026-08-28 decision: Xendit publishes no stable source IP list; the `x-callback-token` signature is the primary gate — a wrong allowlist silently 403s webhooks and payments never credit).
 5. **Backup DATABASE_URL host-reachability**: the vault `DATABASE_URL` must resolve from the VPS host (Coolify's Postgres lives on a private Docker network; use `127.0.0.1:<published-port>` or the container IP) — otherwise the nightly backup cron (Task 3.1) and the CD pre-migrate snapshot fail.
-6. **Seed packages before real payments**: run the package seed against production once (with `SEED_ALLOWED_IN_PROD` + `SEED_ADMIN_PASSWORD` per the seed guard) so purchasable Mark packages exist before the first real transaction.
+6. **Seed packages before real payments**: run the package seed against production once (with `SEED_ALLOWED_IN_PROD` + the three review-role passwords per the seed guard) so purchasable Mark packages and isolated local-login reviewer accounts exist before verification. `SEED_REVIEW_ADMIN_EMAIL` must remain separate from `ADMIN_EMAILS`; remove the seed flag and passwords immediately afterward.
 7. **Apply the playbooks** — prefer the one-command wrapper (added 2026-08-31 on `ops/apply-tooling`):
    ```bash
    ./infra/apply.sh --dry-run all   # review the full ordered plan first
@@ -171,6 +171,7 @@ VPS (OVH 2vCPU/3.7GB/38GB, Ubuntu; ufw: 80/443 public, 22+8000+6001+6002 tailnet
 - [ ] Ansible applies the decrypted vault to the API resource env (incl. `NODE_ENV=production`, `SCHEDULER_ENABLED=true`, `TRUST_PROXY=true`, `DB_SSL_ENABLED=false`, `BETTER_AUTH_URL=https://api.cogitoacademy.id`, `CORS_ORIGIN=https://app.cogitoacademy.id`).
 - [ ] Add `COOLIFY_PROD_SERVER_WEBHOOK`/`COOLIFY_PROD_WEBHOOK` as GH secrets (from Coolify resource webhooks) — unblocks S7.
 - [x] Repo fix: keep production session cookies `SameSite=Strict` while overriding Better Auth's short-lived OAuth state cookie to `SameSite=Lax`, so the Google top-level callback can complete state verification without disabling CSRF checks (2026-08-31).
+- [x] Repo fix: configure Google sign-in with `prompt=consent` so the OAuth permission screen is visible in verification evidence; keep the broader Calendar scope isolated to the dedicated Meet OAuth flow (2026-09-01).
 - [ ] Google OAuth: verify `/api/auth/callback/google` redirect URI in console.
 - [ ] Google Meet: run the OAuth helper locally → `GOOGLE_MEET_REFRESH_TOKEN` → verify boot probe.
 - [ ] R2: uploads now land in R2 (env guard requires all vars in prod — verified).

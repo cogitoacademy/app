@@ -32,6 +32,7 @@ import { cn } from "@cogito-app/ui/lib/utils";
 import { IconPencil } from "@tabler/icons-react";
 
 import { getUserFacingError } from "@/lib/error-message";
+import { resolveProfileImageUrl } from "@/lib/profile-image-url";
 import { client } from "@/utils/orpc";
 
 const PROFILE_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
@@ -169,6 +170,9 @@ async function uploadProfileImage(blob: Blob): Promise<string> {
     throw new Error("Photo is larger than 5 MB after cropping.");
   }
 
+  const uploadUrl =
+    resolveProfileImageUrl(signed.uploadUrl) ?? signed.uploadUrl;
+  const isLocalUpload = signed.uploadUrl.startsWith("/");
   const fields = signed.fields ?? {};
   let response: Response;
 
@@ -176,16 +180,16 @@ async function uploadProfileImage(blob: Blob): Promise<string> {
     const body = new FormData();
     Object.entries(fields).forEach(([key, value]) => body.append(key, value));
     body.append("file", blob, "profile-image.jpg");
-    response = await fetch(signed.uploadUrl, {
+    response = await fetch(uploadUrl, {
       method: signed.method,
       body,
     });
   } else {
     // Local development storage accepts the raw request body. Include the
     // session cookie because the web app and API commonly use different ports.
-    response = await fetch(signed.uploadUrl, {
+    response = await fetch(uploadUrl, {
       method: signed.method,
-      credentials: signed.uploadUrl.startsWith("/") ? "include" : "omit",
+      credentials: isLocalUpload ? "include" : "omit",
       headers: { "content-type": "image/jpeg" },
       body: blob,
     });
@@ -195,7 +199,7 @@ async function uploadProfileImage(blob: Blob): Promise<string> {
     throw new Error("Photo upload failed.");
   }
 
-  return signed.publicUrl;
+  return resolveProfileImageUrl(signed.publicUrl) ?? signed.publicUrl;
 }
 
 export function ProfileImagePicker({

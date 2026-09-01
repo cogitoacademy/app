@@ -168,18 +168,23 @@ for issues after transfer to the provided account. Verify the copy identifies on
 conventional BCA as fee-free; BCA Syariah and blu (BCA Digital) must be treated as
 non-BCA and charged Rp2,500 per payout.
 
-Tutor portrait operations use one canonical profile image: the tutor uploads one image
-through `upload.createUploadUrl`, and the tutor profile stores it as `profileImageUrl`
-backed by `user.image`. For a published tutor, a changed image is staged for review.
-After applying the standard background, an admin pastes the finished URL into the tutor
-review card and completes an allowed review action, which updates that same canonical
-image. Do not maintain separate source/public photo fields.
+Tutor portrait operations use a staged source-to-final workflow. The tutor uploads one
+source image through `upload.createUploadUrl`; draft/source profiles store it through
+`user.image`, while a published tutor's replacement is staged in
+`pendingProfileChanges.profileImageUrl`. In the admin review drawer, upload the edited
+background-standardized asset (a hosted URL remains available as a fallback), then use
+an approve/publish action to promote it to `user.image`. Requesting changes must leave
+the current public photo untouched. On the tutor surface, verify the compact photo info
+preview opens on demand instead of keeping a large preview card in the form. Verify the
+photo/review history timeline in both
+tutor and admin surfaces after submit, revision, approval, and publication.
 
 Achievement and experience proof URLs are verification-only tutor-profile data.
 All user/admin-supplied external links in achievement evidence/documentation,
 tutor proof/profile-image fields, and manual meeting-link dialogs must use
-`http://` or `https://`; schemes such as `javascript:`, `data:`, and `file:` must
-be rejected by the API even if client validation is bypassed.
+`http://` or `https://`; generated local profile assets may use the bounded
+`/uploads/...` storage path. Schemes such as `javascript:`, `data:`, and `file:`
+must be rejected by the API even if client validation is bypassed.
 Operators may open them from the admin tutor review card, but they must not be added
 to public discovery projections, marketing exports, or student-facing interfaces.
 
@@ -273,7 +278,7 @@ Open `/profile` as a tutor and verify the selector loads exactly seven active co
 
 ### Tutor achievement and experience formatting smoke check
 
-The tutor editor uses one combined **Achievements & experience** card and one public preview for all three structured subsections; keep the education/achievement and experience proof-link fields separate.
+The tutor editor uses one combined **Achievements & experience** card and one public preview for all three structured subsections. The proof-link fields remain separate for compatibility, but the form recommends putting both achievement and experience proof in one Google Drive folder with the “Anyone with the link can view” setting.
 
 Open `/profile` as a tutor and confirm the Public profile has no duplicate free-text Achievements or Experiences fields. In the combined Achievements & experience section, add two education entries and five competition achievements. Type a comma after one award before entering the next title and confirm the comma remains visible; verify a comma in an experience role, organization, or description also remains visible. Add up to five role/organization/year/description entries, leaving End year blank for an ongoing role. Confirm the sixth row controls are disabled, incomplete rows and an end year before the start year are rejected on **Submit for review**, and every year field displays plain digits without grouping dots. Save a draft, reload, and verify the structured arrays persist. Open a published tutor in discovery and confirm the drawer shows the structured sections; for an old profile with only legacy achievement or experience text, confirm the fallback remains visible. As an admin, open `/admin-tutors` and verify structured experience entries render readably in the review card and pending-change panel. Repeat the same short-viewport check in the admin tutor-review drawer; body overscroll may bounce locally, but the header and review actions must remain fixed. Repeat with an intentionally stale review tab/version and confirm the API returns a conflict without overwriting the newer values.
 
@@ -281,15 +286,17 @@ Open `/profile` as a tutor and confirm the Public profile has no duplicate free-
 
 Open `/profile` as a tutor with a draft or changes-requested profile. Leave one
 required top-level field empty and click **Save draft**; confirm the profile
-progress saves without submitting for review. Enter an invalid URL, an invalid
-year, or an invalid honorarium and confirm the exact control receives the red
-invalid state and inline message, while the validation summary lists the same
-field. Click **Submit for review** with multiple missing fields and confirm all
-missing fields are listed and the first invalid control receives focus. Fix the
-fields, submit again, and verify the existing review transition and redirect to
-`/dashboard` still occur. For a server-side rejection, confirm the returned
-missing-field or pricing detail highlights the corresponding form area rather
-than showing only a generic toast.
+progress saves without submitting for review. Enter a short bio with 51 words
+and confirm the counter, inline error, and validation summary say to use 50
+words or fewer. Enter an invalid URL, an invalid year, or an invalid honorarium
+and confirm the exact control receives the red invalid state and inline message,
+while the validation summary lists the same field. Click **Submit for review**
+with multiple missing fields and confirm all missing fields are listed and the
+first invalid control receives focus. Fix the fields, submit again, and verify
+the existing review transition and redirect to `/dashboard` still occur. For a
+server-side rejection, confirm the returned missing-field, word-count, or
+pricing detail highlights the corresponding form area rather than showing only
+a generic toast.
 
 Open a published tutor with **Changes under review**, edit another profile
 field, and confirm **Save profile changes** remains enabled and updates the
@@ -875,7 +882,7 @@ Key environment variables (see `.env.example` for full list):
 | `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` / `R2_PUBLIC_URL` | No       | Cloudflare R2 upload backend (required in production/staging — P4.3)                                                                                                                                                                                                             |
 | `R2_BACKUP_BUCKET`                                                                            | No       | Private R2 bucket used only for database backups; keep separate from the public upload bucket                                                                                                                                                                                    |
 | `SEED_ALLOWED_IN_PROD`                                                                        | No       | Seed-script production guard                                                                                                                                                                                                                                                     |
-| `SEED_REVIEW_ADMIN_EMAIL` / `SEED_REVIEW_TUTOR_EMAIL` / `SEED_REVIEW_STUDENT_EMAIL`          | No       | Dedicated local-login reviewer identities. The review admin must not be present in `ADMIN_EMAILS`; never use the Google Calendar operator account.                                                                                                                               |
+| `SEED_REVIEW_ADMIN_EMAIL` / `SEED_REVIEW_TUTOR_EMAIL` / `SEED_REVIEW_STUDENT_EMAIL`           | No       | Dedicated local-login reviewer identities. The review admin must not be present in `ADMIN_EMAILS`; never use the Google Calendar operator account.                                                                                                                               |
 | `SEED_ADMIN_PASSWORD` / `SEED_TUTOR_PASSWORD` / `SEED_STUDENT_PASSWORD`                       | No       | One-time seed inputs, all required in production/staging with at least 12 characters. Remove them from the deployment environment immediately after seeding.                                                                                                                     |
 | `STUB_WEBHOOK_ALLOWED`                                                                        | No       | Stub-checkout E2E flag; the stub checkout endpoint only serves `development`/`test` — staging always returns 404 (prod-fixes C2)                                                                                                                                                 |
 

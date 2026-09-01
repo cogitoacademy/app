@@ -10,7 +10,7 @@ Use the OAuth refresh-token setup when the calendar belongs to a normal Gmail ac
 
 Use the service-account setup only when a Google Workspace administrator can configure domain-wide delegation. A service account without `GOOGLE_IMPERSONATED_USER` is not a valid Cogito configuration.
 
-The OAuth client used for Meet may be separate from the client used for Sign in with Google. A separate client is recommended so Calendar consent and login consent can be managed independently. If the dedicated Meet client variables are empty, the backend falls back to `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` for the OAuth client credentials, but it still requires a separate Calendar refresh token.
+The OAuth client used for Meet may be separate from the client used for Sign in with Google. A separate client is recommended so Calendar consent and login consent can be managed independently. The Sign in with Google provider forces `prompt=consent` so its identity permission screen is visible for verification evidence, but it intentionally does not request the broad Calendar scope from every user. If the dedicated Meet client variables are empty, the backend falls back to `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` for the OAuth client credentials, but it still requires a separate Calendar refresh token.
 
 ## OAuth refresh-token setup
 

@@ -44,7 +44,8 @@ import {
 } from "@tabler/icons-react";
 
 import { getUserFacingError } from "@/lib/error-message";
-import { orpc } from "@/utils/orpc";
+import { resolveProfileImageUrl } from "@/lib/profile-image-url";
+import { client, orpc } from "@/utils/orpc";
 import {
   TutorAchievementsDisplay,
   TutorAchievementsEditor,
@@ -56,6 +57,7 @@ import {
   TutorExperiencesDisplay,
   type TutorExperienceEntry,
 } from "@/components/tutor/tutor-experiences";
+import { ProfilePhotoHistory } from "@/components/tutor/profile-photo-history";
 
 const FLOOR_ONLINE: Record<string, number> = {
   "1": 42,
@@ -168,6 +170,8 @@ function PhotoReviewPanel({
   fallback: string;
   proposed?: boolean;
 }) {
+  const resolvedImageUrl = resolveProfileImageUrl(imageUrl);
+
   return (
     <div className="rounded-lg border border-item-border bg-item p-3">
       <div className="mb-3 flex items-center justify-between gap-2">
@@ -181,10 +185,10 @@ function PhotoReviewPanel({
           </Badge>
         ) : null}
       </div>
-      {imageUrl ? (
-        <a href={imageUrl} target="_blank" rel="noreferrer">
+      {resolvedImageUrl ? (
+        <a href={resolvedImageUrl} target="_blank" rel="noreferrer">
           <img
-            src={imageUrl}
+            src={resolvedImageUrl}
             alt={label}
             className="aspect-square w-full rounded-lg object-cover"
           />
@@ -369,6 +373,11 @@ export function TutorReviewCard({
     }),
     enabled: Boolean(profile.user?.id),
   });
+  const { data: profileHistory = [] } = useQuery(
+    orpc.adminTutor.listTutorProfileHistory.queryOptions({
+      input: { tutorProfileId: profile.id },
+    }),
+  );
   const markPayoutMutation = useMutation(
     orpc.admin.markTutorPayoutPaid.mutationOptions({
       onSuccess: () => {
@@ -394,6 +403,7 @@ export function TutorReviewCard({
   >(null);
   const [adminNote, setAdminNote] = useState("");
   const [profileImageUrl, setProfileImageUrl] = useState("");
+  const [isUploadingProfilePhoto, setIsUploadingProfilePhoto] = useState(false);
   const reviewMutation = useMutation(
     orpc.adminTutor.reviewTutorProfile.mutationOptions({
       onSuccess: () => {
@@ -401,6 +411,9 @@ export function TutorReviewCard({
         setAdminNote("");
         void queryClient.invalidateQueries({
           queryKey: orpc.adminTutor.listTutorProfiles.key(),
+        });
+        void queryClient.invalidateQueries({
+          queryKey: orpc.adminTutor.listTutorProfileHistory.key(),
         });
         toastManager.add({ title: "Tutor profile updated", type: "success" });
         onAction?.();
@@ -500,12 +513,86 @@ export function TutorReviewCard({
       | "request_edit_changes",
     note?: string,
   ) {
+    if (isUploadingProfilePhoto) {
+      toastManager.add({
+        title: "Photo upload still in progress",
+        description: "Wait for the edited photo to finish uploading first.",
+        type: "info",
+      });
+      return;
+    }
     reviewMutation.mutate({
       tutorProfileId: profile.id,
       action,
       adminNote: note,
       profileImageUrl: profileImageUrl.trim() || undefined,
     });
+  }
+
+  async function uploadEditedProfilePhoto(file: File) {
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      toastManager.add({
+        title: "Unsupported photo format",
+        description: "Choose a JPG, PNG, or WebP image.",
+        type: "error",
+      });
+      return;
+    }
+
+    setIsUploadingProfilePhoto(true);
+    try {
+      const signed = await client.upload.createUploadUrl({
+        filename: `tutor-${profile.id}-edited.${file.type.split("/")[1]}`,
+        contentType: file.type as "image/png" | "image/jpeg" | "image/webp",
+        contentLength: file.size,
+      });
+      if (file.size > signed.maxBytes) {
+        throw new Error("Photo must be 5 MB or smaller.");
+      }
+
+      const uploadUrl =
+        resolveProfileImageUrl(signed.uploadUrl) ?? signed.uploadUrl;
+      const isLocalUpload = signed.uploadUrl.startsWith("/");
+      const fields = signed.fields ?? {};
+      let response: Response;
+      if (Object.keys(fields).length > 0) {
+        const body = new FormData();
+        Object.entries(fields).forEach(([key, value]) =>
+          body.append(key, value),
+        );
+        body.append("file", file);
+        response = await fetch(uploadUrl, {
+          method: signed.method,
+          body,
+        });
+      } else {
+        response = await fetch(uploadUrl, {
+          method: signed.method,
+          credentials: isLocalUpload ? "include" : "omit",
+          headers: { "content-type": file.type },
+          body: file,
+        });
+      }
+      if (!response.ok) throw new Error("Photo upload failed.");
+
+      setProfileImageUrl(
+        resolveProfileImageUrl(signed.publicUrl) ?? signed.publicUrl,
+      );
+      toastManager.add({
+        title: "Edited profile photo uploaded",
+        description: "Approve or publish the profile to apply this photo.",
+        type: "success",
+      });
+    } catch (error) {
+      toastManager.add({
+        title: "Edited photo could not be uploaded",
+        description: getUserFacingError(error),
+        type: "error",
+      });
+    } finally {
+      setIsUploadingProfilePhoto(false);
+    }
   }
 
   function submitNoteAction() {
@@ -546,6 +633,7 @@ export function TutorReviewCard({
     profile.pendingProfileChanges?.profileImageUrl,
   );
   const currentProfileImageUrl = profile.user?.image ?? null;
+  const editedProfileImageUrl = resolveProfileImageUrl(profileImageUrl);
   const pendingChangesWithoutPhoto = Object.entries(
     profile.pendingProfileChanges ?? {},
   ).filter(([field]) => field !== "profileImageUrl");
@@ -556,7 +644,7 @@ export function TutorReviewCard({
         <CardHeader className="items-start">
           <Avatar>
             <AvatarImage
-              src={currentProfileImageUrl ?? undefined}
+              src={resolveProfileImageUrl(currentProfileImageUrl)}
               alt="Tutor profile"
             />
             <AvatarFallback>{getInitials(profile.user?.name)}</AvatarFallback>
@@ -769,18 +857,55 @@ export function TutorReviewCard({
                   />
                 ) : null}
               </div>
-              <Input
-                className="mt-2"
-                type="url"
-                value={profileImageUrl}
-                onChange={(event) => setProfileImageUrl(event.target.value)}
-                placeholder="Paste the edited profile image URL"
-                aria-label="Edited tutor profile image URL"
-              />
-              <Text className="mt-1 text-xs text-muted">
-                After applying the standard background, paste the final URL to
-                update this same profile photo.
-              </Text>
+              <div className="mt-4 grid gap-3">
+                <Field>
+                  <FieldLabel htmlFor={`admin-${profile.id}-edited-photo`}>
+                    Upload edited photo
+                  </FieldLabel>
+                  <Input
+                    id={`admin-${profile.id}-edited-photo`}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    disabled={isUploadingProfilePhoto}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.currentTarget.value = "";
+                      if (file) void uploadEditedProfilePhoto(file);
+                    }}
+                  />
+                  <FieldDescription>
+                    Upload the Cogito-standardized version. It will be applied
+                    only when the review action is approved.
+                  </FieldDescription>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor={`admin-${profile.id}-edited-photo-url`}>
+                    Or paste edited photo URL
+                  </FieldLabel>
+                  <Input
+                    id={`admin-${profile.id}-edited-photo-url`}
+                    type="url"
+                    value={profileImageUrl}
+                    onChange={(event) => setProfileImageUrl(event.target.value)}
+                    placeholder="https://..."
+                  />
+                  <FieldDescription>
+                    Use this only when the edited asset is already hosted.
+                  </FieldDescription>
+                </Field>
+                {editedProfileImageUrl ? (
+                  <div className="rounded-lg border border-success-border bg-success/5 p-3">
+                    <Text className="text-xs font-semibold uppercase tracking-wide text-success">
+                      Edited photo ready
+                    </Text>
+                    <img
+                      src={editedProfileImageUrl}
+                      alt="Edited tutor profile preview"
+                      className="mt-2 aspect-square w-full max-w-48 rounded-lg object-cover"
+                    />
+                  </div>
+                ) : null}
+              </div>
             </section>
 
             <section>
@@ -908,6 +1033,10 @@ export function TutorReviewCard({
                 ) : null}
               </section>
             ) : null}
+            <ProfilePhotoHistory
+              entries={profileHistory}
+              title="Photo & review history"
+            />
           </Stack>
         </CardBody>
 
