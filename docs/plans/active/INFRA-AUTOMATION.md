@@ -1,10 +1,10 @@
 # Infra Automation & Coolify Unification — Wave Plan
 
-| Field      | Value |
-| ---------- | ----- |
-| Status     | Active |
-| Created    | 2026-09-01 |
-| Depends on | #148 (monitoring wave), #149 (vault), #150 (INFRA-PLAYBOOK); infra applied 2026-08-31 |
+| Field      | Value                                                                                                                                                            |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status     | Active                                                                                                                                                           |
+| Created    | 2026-09-01                                                                                                                                                       |
+| Depends on | #148 (monitoring wave), #149 (vault), #150 (INFRA-PLAYBOOK); infra applied 2026-08-31                                                                            |
 | Scope      | (1) Coolify project unification, (2) Kuma recreate in the right project, (3) full CI-driven Terraform + Ansible applies via the VPS self-hosted runner, (4) docs |
 
 ## Background (live-verified 2026-09-01)
@@ -25,7 +25,7 @@
   correct project; the volume dies with the service, which is desired here.
 - **Runner:** a self-hosted GitHub runner `cogito-prod` already exists on the
   VPS (registered 2026-08-31 for the CD migrate/deploy job — `[self-hosted,
-  linux, x64, production]`). Full automation can reuse it; no new runner.
+linux, x64, production]`). Full automation can reuse it; no new runner.
 - **Tailnet (verified live):** 3 nodes — laptop (operator), iPhone (offline),
   cogito-vps. Inbound to VPS via tailnet: 22 (Tailscale SSH check), 8000
   (Coolify UI), 6001/6002 (realtime). Everything app-facing is
@@ -71,7 +71,7 @@ service (zero config inside) and the empty `cogito` project itself.
   - Trigger: `push` to `main` touching `infra/**` + `workflow_dispatch`.
   - Job A **terraform** (ubuntu runner, existing secrets
     `CLOUDFLARE_API_TOKEN`/`R2_*`/`R2_STATE_ENDPOINT`): `init` → `plan
-    -detailed-exitcode` → `apply -auto-approve` only when the plan is
+-detailed-exitcode` → `apply -auto-approve` only when the plan is
     non-empty; uploads the plan as artifact; **never applies on PRs**.
   - Job B **ansible** (the existing `cogito-prod` VPS runner, which is on
     the tailnet and can reach `127.0.0.1:8000` directly — no tunnel):
@@ -100,14 +100,15 @@ service (zero config inside) and the empty `cogito` project itself.
 
 **Security analysis (explicit, for the record):**
 
-| Risk | Mitigation |
-|---|---|
-| Age key in GitHub secrets | repo is internal-collaborator; secret scanning + push protection on; the key can be rotated by re-encrypting the vault (`sops updatekeys`) if GitHub is ever suspected |
-| Runner on the VPS executing infra code | the runner already runs CD (it can already deploy prod); it gains no new blast radius beyond ansible become |
-| Malicious PR modifying playbooks | applies only run on `push: main` (post-merge); branch protection requires review + green CI; internal-only collaborators |
-| Lockout (hardening automation) | `host-hardening.yml` is EXCLUDED from auto-apply triggers (manual, tailscale-verify-gated) |
+| Risk                                   | Mitigation                                                                                                                                                             |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Age key in GitHub secrets              | repo is internal-collaborator; secret scanning + push protection on; the key can be rotated by re-encrypting the vault (`sops updatekeys`) if GitHub is ever suspected |
+| Runner on the VPS executing infra code | the runner already runs CD (it can already deploy prod); it gains no new blast radius beyond ansible become                                                            |
+| Malicious PR modifying playbooks       | applies only run on `push: main` (post-merge); branch protection requires review + green CI; internal-only collaborators                                               |
+| Lockout (hardening automation)         | `host-hardening.yml` is EXCLUDED from auto-apply triggers (manual, tailscale-verify-gated)                                                                             |
 
 **Operator actions required to enable Wave 2:**
+
 1. Create GitHub secret `SOPS_AGE_KEY` = contents of
    `~/.config/sops/age/keys.txt` (operator console; the lead never reads it).
 2. Optional: `DISCORD_WEBHOOK_URL` as a repo secret for apply-result pings.
@@ -120,6 +121,17 @@ service (zero config inside) and the empty `cogito` project itself.
 - `docs/INFRA-PLAYBOOK.md` (automation section replaces manual §1/§3 paths where applicable)
 - `docs/RUNBOOK.md`, `docs/DEPLOYMENT.md`, `docs/plans/README.md`, `docs/CONTEXT.md` (statuses)
 - this plan
+
+## Progress log
+
+- 2026-09-01 (lead): **Wave 1 DONE + verified** — playbooks repointed to
+  `cogito-prod`; wrong-project Kuma service deleted; empty `cogito` project
+  deleted (only `cogito-prod` remains); Kuma recreated in
+  `cogito-prod`/production (env id 1, healthy, `status.` 302). Wave 2
+  implemented in the same PR: `infra-apply.yml` + `infra/runner-prep.sh`.
+  Pending operator: `gh secret set SOPS_AGE_KEY < ~/.config/sops/age/keys.txt`
+  - `sudo bash infra/runner-prep.sh` on the VPS; then the Kuma UI pass
+    (INFRA-PLAYBOOK §3b).
 
 ## Exit gates
 
