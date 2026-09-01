@@ -8,6 +8,12 @@ export const Route = createFileRoute("/_app/knowledge-bank")({
   component: KnowledgeBankPage,
   beforeLoad: ({ context }) => {
     const user = context.session?.data?.user as CogitoUser | undefined;
-    if (user?.role !== "student") throw redirect({ to: "/dashboard" });
+    if (
+      user?.role !== "student" &&
+      user?.role !== "tutor" &&
+      user?.role !== "admin"
+    ) {
+      throw redirect({ to: "/dashboard" });
+    }
   },
 });

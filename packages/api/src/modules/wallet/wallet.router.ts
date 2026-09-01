@@ -1,4 +1,4 @@
-import { protectedProcedure, studentProcedure } from "../../procedures";
+import { protectedProcedure } from "../../procedures";
 import { listLedgerInput } from "./wallet.types";
 import type { WalletHandler } from "./wallet.handler";
 
@@ -32,9 +32,7 @@ export function createWalletRouter(handler: WalletHandler) {
       })
       .handler(handler.listPackages),
 
-    // M9: PRD FR-12 is student-facing — tutors/admins with >= threshold Marks
-    // must not pass the Knowledge Bank gate.
-    knowledgeBankEligible: studentProcedure
+    knowledgeBankEligible: protectedProcedure
       .route({
         method: "POST",
         path: "/wallet/knowledge-bank",

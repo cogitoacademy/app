@@ -112,7 +112,9 @@ export function AppSidebar({
         ? tutorNavItems
         : studentNavItems;
   const visibleResourceItems =
-    role === "student" ? resourceItems : resourceItems.slice(0, 2);
+    role === "student" || role === "tutor" || role === "admin"
+      ? resourceItems
+      : resourceItems.slice(0, 2);
 
   function signOut() {
     authClient.signOut({

@@ -82,17 +82,17 @@ Sanity is queried only by the API server. The browser receives normalized conten
 
 ### `content.listStudentResources`
 
-- **Auth:** Student
+- **Auth:** Protected (student, tutor, or admin)
 - **Input:** None
 - **Output:** `{ items: [{ id, title, description, category }], access: { eligible, balance, threshold } }`
-- **Description:** Returns published Knowledge Bank metadata for the authenticated `/knowledge-bank` app route only when the student's total Marks balance meets the 35-Mark threshold. Held Marks count toward eligibility. Below the threshold, `items` is empty and the access state explains the lock.
+- **Description:** Returns published Knowledge Bank metadata for the authenticated `/knowledge-bank` app route. Students must meet the 35-Mark total-balance threshold (held Marks count toward eligibility); below the threshold, `items` is empty and the access state explains the lock. Tutors and admins are eligible regardless of wallet balance.
 
 ### `GET /content/knowledge-bank/:resourceId/file`
 
-- **Auth:** Student with current total balance at or above the threshold
+- **Auth:** Student with current total balance at or above the threshold, Tutor, or Admin
 - **Input:** `resourceId` path parameter
 - **Output:** Streamed Sanity file, normally `application/pdf`
-- **Description:** Revalidates the session and Knowledge Bank eligibility, resolves the asset server-side, and streams it with `Cache-Control: private, no-store`. This is an Elysia file route, not an oRPC procedure.
+- **Description:** Revalidates the student/tutor/admin role and Knowledge Bank eligibility, resolves the asset server-side, and streams it with `Cache-Control: private, no-store`. Tutors and admins bypass the student wallet threshold. This is an Elysia file route, not an oRPC procedure.
 
 ### Verification
 
@@ -591,10 +591,10 @@ Structured tutor experience fields are submitted through `experienceEntries` as 
 
 ### `wallet.knowledgeBankEligible`
 
-- **Auth:** Student
+- **Auth:** Protected (student, tutor, or admin)
 - **Input:** None
 - **Output:** `{ eligible, balance, threshold }`
-- **Description:** Checks Knowledge Bank gating (min balance threshold); eligibility and `balance` use the **total balance** (held Marks count toward the 35-Mark threshold, per PRD DL-16 / U13). No Marks are deducted.
+- **Description:** Checks Knowledge Bank access without changing the wallet. Students must meet the 35-Mark threshold, and eligibility plus `balance` use the **total balance** (held Marks count, per PRD DL-16 / U13). Tutors and admins are eligible regardless of wallet balance; `balance` is still returned when a wallet exists and is `0` when no wallet exists. No Marks are deducted.
 
 > Note: `hold`/`release`/`deduct`/`credit`/`compensate` are service-layer methods only — they are not exposed over RPC; other modules call them via consumer-driven ports.
 

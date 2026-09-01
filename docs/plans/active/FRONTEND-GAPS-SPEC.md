@@ -242,7 +242,7 @@ for classmates.
 | `/_app/dashboard`            | role-specific dashboard pages             | Complete — student, tutor, and admin next-action views using existing oRPC data                                                                                      |
 | `/_app/balance`              | balance-page.tsx                          | Exists (wallet + Knowledge Bank card)                                                                                                                                |
 | `/_app/calendar`             | competition-calendar-page.tsx             | Complete — authenticated, English-only read-only calendar backed by published Sanity content                                                                         |
-| `/_app/knowledge-bank`       | knowledge-bank-page.tsx                   | Complete — student-only 35-Mark gate, metadata search/filter, and protected PDF preview                                                                              |
+| `/_app/knowledge-bank`       | knowledge-bank-page.tsx                   | Complete — student 35-Mark gate plus unrestricted tutor/admin access, metadata search/filter, and protected PDF preview                                               |
 | `/_app/bookings`             | bookings-page.tsx                         | Exists (role-scoped list and lifecycle entry points)                                                                                                                 |
 | `/_app/bookings/$bookingId`  | booking-detail-page.tsx                   | Complete baseline — detail, lifecycle, reschedule, reporting, invites, notes, history                                                                                |
 | `/_app/tutors`               | tutors-page-content.tsx                   | Exists (discovery list)                                                                                                                                              |
@@ -283,7 +283,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 | F12 | Admin room approval UI                        | FR-22                  | G14                                                    | 1d     | **Closed (room approval queue)**                                                                                               |
 | F13 | Tutor payout view                             | DL-11                  | G16 (`tutor.getMyPayouts` exists since #43)            | 0.5d   | **Closed (REVIEW-FIXES-3 P6)**                                                                                                 |
 | F14 | Group series no opt-out disclaimer display    | FR-20                  | G15                                                    | 0.5d   | **Closed (REVIEW-FIXES-3 P6)**                                                                                                 |
-| F15 | Knowledge Bank gating flow (full)             | FR-12                  | Sanity content module + protected file proxy           | 1.5d   | **Closed (student-only app content with protected files)**                                                                     |
+| F15 | Knowledge Bank gating flow (full)             | FR-12                  | Sanity content module + protected file proxy           | 1.5d   | **Closed (student-gated and tutor/admin-accessible app content with protected files)**                                         |
 | F16 | Achievements public landing surfacing         | FR-18                  | No active app landing route; public procedure retained | 1d     | **Scope retired (2026-08-23)**                                                                                                 |
 | F17 | Booking detail page (implemented baseline)    | FR-07, FR-08           | G6, G11                                                | 2d     | Closed                                                                                                                         |
 | F18 | Group invite accept/decline/reconfirm UI      | FR-20, TC-25           | G15                                                    | 1d     | **Closed** — invitee actions plus proposer-side pending-invite withdrawal                                                      |
@@ -639,7 +639,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-12, DL-16
 
-**Current state:** **CLOSED (2026-08-23).** The balance page and authenticated Knowledge Bank route use the server-side `wallet.knowledgeBankEligible` rule. Eligible students see published Sanity resource metadata and protected PDF previews; below-threshold students remain in the app with a top-up CTA.
+**Current state:** **CLOSED (2026-08-23; tutor/admin access expanded 2026-09-01).** The authenticated Knowledge Bank route uses the server-side `wallet.knowledgeBankEligible` rule. Eligible students (at least 35 total Marks), all authenticated tutors, and all authenticated admins see published Sanity resource metadata and protected PDF previews; below-threshold students remain in the app with a top-up CTA.
 
 **Required:**
 
@@ -652,6 +652,8 @@ Full override form per PRD §Emergency Override UI/UX:
 
 - Student with ≥35 Marks → can open Knowledge Bank, no deduction
 - Student with <35 Marks → blocked, prompted to top up
+- Tutor with 0 Marks → can open Knowledge Bank and protected files, no threshold
+- Admin with 0 Marks → can open Knowledge Bank and protected files, no threshold
 - Copy is parent-legible (prd.tex:315)
 - Resource files are streamed through the authenticated app server; Sanity asset URLs are not exposed to the browser
 

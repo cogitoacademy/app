@@ -503,6 +503,34 @@ describe("WalletService", () => {
       });
     });
 
+    test("returns eligible for a tutor without a wallet balance", async () => {
+      const repo = makeRepo({ getByUserId: mock(async () => null) });
+      const service = createWalletService(repo as any, makeDb());
+
+      const result = await service.knowledgeBankEligible("user1", "tutor");
+      expect(result).toEqual({
+        eligible: true,
+        balance: 0,
+        threshold: 35,
+      });
+    });
+
+    test("returns eligible for an admin without a wallet threshold", async () => {
+      const repo = makeRepo({
+        getByUserId: mock(async () =>
+          makeWallet({
+            totalBalance: 50,
+            heldBalance: 0,
+            availableBalance: 50,
+          }),
+        ),
+      });
+      const service = createWalletService(repo as any, makeDb());
+
+      const result = await service.knowledgeBankEligible("user1", "admin");
+      expect(result.eligible).toBe(true);
+    });
+
     test("returns not eligible when balance below threshold", async () => {
       const repo = makeRepo({
         getByUserId: mock(async () =>

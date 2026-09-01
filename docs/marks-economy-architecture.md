@@ -118,7 +118,7 @@ The source blueprint states that under Bank Indonesia regulations (including PBI
 
 - **Unilateral closed-loop prepaid utility:** Define Marks in the platform Terms of Service as non-refundable digital access credits/study vouchers. Marks have no cash surrender value and cannot be transferred between users or withdrawn into fiat currency by students.
 - **No direct inter-user monetary exchange:** Tutors do not receive, hold, or convert Marks. They work under an independent service/honorarium agreement and are paid in IDR from Cogito's corporate operating account through standard banking/disbursement APIs.
-- **Access gating:** A minimum balance, such as 35 Marks for the Knowledge Bank, functions as a loyalty or membership rule. Marks remain owned and spendable by the student.
+- **Access gating:** For students, a minimum balance such as 35 Marks for the Knowledge Bank functions as a loyalty or membership rule. Authenticated tutors and admins can access the Knowledge Bank without that student wallet threshold. Marks remain owned and spendable by the student.
 - **Revenue accounting:** Student top-ups are recorded as deferred revenue for digital services. Tutor payouts are recorded as cost of goods sold (COGS)/instructor fees.
 
 > The regulatory points above are reproduced from the source blueprint and should be validated with qualified Indonesian legal and financial counsel before production launch.
@@ -161,15 +161,17 @@ const marksPerStudent = Math.ceil(totalMarks / N);
 
 Students should see only the final **Marks per Student** required to join the session, with a clear class-size indicator: `N = 1 … 6`.
 
-Knowledge Bank gating:
+Knowledge Bank gating for students:
 
 ```ts
 student.wallet.marks >= 35;
 ```
 
+Authenticated tutors and admins bypass the student wallet threshold.
+
 The UI should state:
 
-> Knowledge Bank is unlocked while your account holds at least 35 Marks. No Marks are deducted to view it.
+> For students, Knowledge Bank is unlocked while the account holds at least 35 Marks. Tutors and admins can access it without a wallet threshold. No Marks are deducted to view it.
 
 ### 4.3 System Architecture Summary
 

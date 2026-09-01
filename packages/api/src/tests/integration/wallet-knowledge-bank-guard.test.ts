@@ -21,7 +21,7 @@ async function creditWallet(userId: string, amount: number) {
     .where(eq(wallet.id, w.id));
 }
 
-describe("M9: Knowledge Bank eligibility is student-only (PRD FR-12)", () => {
+describe("Knowledge Bank eligibility by role (PRD FR-12)", () => {
   beforeAll(async () => {
     await resetDatabase();
   });
@@ -53,15 +53,15 @@ describe("M9: Knowledge Bank eligibility is student-only (PRD FR-12)", () => {
     const tutorCtx = await createTestContext(tutorRes.cookie);
     if (!tutorCtx.session?.user) throw new Error("Tutor session missing");
     await setUserRole(tutorCtx.session.user.id, "tutor");
-    // A tutor with >= threshold marks must NOT pass the gate.
-    await creditWallet(tutorCtx.session.user.id, 100);
+    // Tutors have access without the student wallet threshold.
+    await creditWallet(tutorCtx.session.user.id, 0);
     tutorClient = createTestClient(await createTestContext(tutorRes.cookie));
 
     const adminRes = await signUpAndSignIn(adminEmail, "Test1234!", "Admin M9");
     const adminCtx = await createTestContext(adminRes.cookie);
     if (!adminCtx.session?.user) throw new Error("Admin session missing");
     await setUserRole(adminCtx.session.user.id, "admin");
-    await creditWallet(adminCtx.session.user.id, 100);
+    await creditWallet(adminCtx.session.user.id, 0);
     adminClient = createTestClient(await createTestContext(adminRes.cookie));
   });
 
@@ -70,16 +70,16 @@ describe("M9: Knowledge Bank eligibility is student-only (PRD FR-12)", () => {
     expect(result.eligible).toBe(true);
   });
 
-  test("tutor with >= threshold marks is FORBIDDEN", async () => {
-    await expect(
-      tutorClient.wallet.knowledgeBankEligible({}),
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  test("tutor is eligible without the student Marks threshold", async () => {
+    const result = await tutorClient.wallet.knowledgeBankEligible({});
+    expect(result.eligible).toBe(true);
+    expect(result.balance).toBe(0);
   });
 
-  test("admin with >= threshold marks is FORBIDDEN", async () => {
-    await expect(
-      adminClient.wallet.knowledgeBankEligible({}),
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  test("admin is eligible without the student Marks threshold", async () => {
+    const result = await adminClient.wallet.knowledgeBankEligible({});
+    expect(result.eligible).toBe(true);
+    expect(result.balance).toBe(0);
   });
 
   test("unauthenticated request is UNAUTHORIZED", async () => {

@@ -99,7 +99,7 @@ Editorial content integration is also read-only: Sanity remains the source of tr
 
 - `content.types.ts` — normalized competition/resource/file projections and the resource-id input shape
 - `content.service.ts` — server-side Sanity client, published-perspective GROQ queries, English localization fallback, and asset metadata lookup
-- `content.handler.ts` — protected competition read and student-only Knowledge Bank threshold gate
+- `content.handler.ts` — protected competition read and role-aware Knowledge Bank access gate
 - `content.router.ts` — `content.listCompetitions` and `content.listStudentResources`
 - `index.ts` — `createContentModule({ wallet, client? })` composition factory
 - `apps/server/src/routes.ts` — authenticated `/content/knowledge-bank/:resourceId/file` PDF streaming proxy for resource files
@@ -116,7 +116,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 
 - Sanity is queried with `perspective: "published"`; the API token, if used, stays server-side.
 - Competition Calendar requires an authenticated session but is not Marks-gated.
-- Knowledge Bank requires the student role and `wallet.knowledgeBankEligible`; the existing 35-Mark total-balance rule includes held Marks.
+- Knowledge Bank is available to students, tutors, and admins through `wallet.knowledgeBankEligible`. Students must meet the existing 35-Mark total-balance rule, including held Marks; tutors and admins bypass that wallet threshold.
 - Resource files are streamed through the app with private/no-store headers. Raw Sanity asset URLs are never returned by the list procedure.
 
 ---
@@ -940,7 +940,7 @@ chat directory.
 - `credit(db, params)` — Atomically credits available balance (payment received)
 - `compensate(db, params)` — Compensation operation (positive or negative)
 - `listLedger(walletId, opts)` — Paginated ledger with `bookingId` and `eventKey` filters
-- `knowledgeBankEligible(userId)` — Returns `{ eligible, balance, threshold }`; eligibility and `balance` use the **total balance** (held Marks count toward the 35-Mark threshold, PRD DL-16 / U13)
+- `knowledgeBankEligible(userId, viewerRole?)` — Returns `{ eligible, balance, threshold }`; students use the **total balance** (held Marks count toward the 35-Mark threshold, PRD DL-16 / U13), while tutors and admins are eligible without a wallet threshold. The optional role is supplied by authenticated handlers and the file proxy.
 - `listActivePackages()` — Returns active mark packages
 
 **Dependencies:** `WalletRepo`

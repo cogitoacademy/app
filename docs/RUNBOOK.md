@@ -109,7 +109,7 @@ The route selects the dashboard from the authenticated session role. A tutor or 
 
 ### Knowledge Bank smoke check
 
-As an authenticated student, open `/knowledge-bank`. With at least 35 total Marks, confirm published Sanity resource metadata loads, search/category filtering works, and the PDF preview opens through the authenticated `/content/knowledge-bank/:resourceId/file` proxy. Below 35 Marks, confirm the page stays locked and offers the balance/top-up action; opening the Knowledge Bank must not create a Marks deduction.
+As an authenticated student, open `/knowledge-bank`. With at least 35 total Marks, confirm published Sanity resource metadata loads, search/category filtering works, and the PDF preview opens through the authenticated `/content/knowledge-bank/:resourceId/file` proxy. Below 35 Marks, confirm the page stays locked and offers the balance/top-up action. Then sign in as a tutor and an admin with no Marks balance and confirm each role sees Knowledge Bank in the sidebar, the route loads resources, and the PDF preview opens without a wallet threshold. Opening the Knowledge Bank as an eligible student, tutor, or admin must not create a Marks deduction.
 
 ### Empty-state consistency smoke check
 

@@ -17,8 +17,10 @@ export function createContentHandler(deps: {
 
   async function listStudentResources({ context }: { context: Context }) {
     return withDomainMap(async () => {
+      const user = context.session!.user as { id: string; role?: string };
       const access = await deps.wallet.knowledgeBankEligible(
-        context.session!.user.id,
+        user.id,
+        user.role,
       );
 
       if (!access.eligible) {
