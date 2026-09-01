@@ -1,6 +1,11 @@
 # Cogito Runbook
 
-Last updated: 2026-08-31
+Last updated: 2026-09-01
+
+> **Quick entry:** for "I want to change X → which commands do I run", use
+> [INFRA-PLAYBOOK.md](./INFRA-PLAYBOOK.md) (scenario → command decision
+> table, incl. deploy/migration/disaster-recovery flows). This document
+> holds the detailed procedures behind it.
 
 ## Collection transition QA (2026-08-28)
 
