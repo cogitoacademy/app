@@ -74,7 +74,6 @@ export interface TutorProfileUpdates {
   modality?: string | null;
   prices?: Record<string, number> | null;
   proofUrls?: string[] | null;
-  sourcePhotoUrl?: string | null;
   pendingProfileChanges?: Record<string, unknown> | null;
   profileEditStatus?: string;
   profileEditAdminNote?: string | null;
@@ -235,7 +234,7 @@ async function updateTutorProfile(
   return row;
 }
 
-async function updateTutorPublicPhoto(
+async function updateTutorProfileImage(
   conn: DbOrTx,
   userId: string,
   image: string,
@@ -340,7 +339,7 @@ export function createAdminTutorRepo() {
     listActiveChildSubjects,
     replaceTutorProfileSubjects,
     updateTutorProfile,
-    updateTutorPublicPhoto,
+    updateTutorProfileImage,
     updateTutorProfileWithVersion,
     listTutorProfiles,
   };

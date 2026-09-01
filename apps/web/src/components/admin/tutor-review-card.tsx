@@ -119,14 +119,18 @@ interface TutorReviewCardProps {
     bankTransferDisclaimerAccepted: boolean | null;
     prices: Record<string, number> | null;
     availabilitySummary: string | null;
-    sourcePhotoUrl: string | null;
     onboardingStatus: string;
     adminReviewNote: string | null;
     pendingProfileChanges: Record<string, unknown> | null;
     profileEditStatus: string;
     profileEditAdminNote: string | null;
     version: number;
-    user?: { id: string; name: string; email: string } | null;
+    user?: {
+      id: string;
+      name: string;
+      email: string;
+      image: string | null;
+    } | null;
   };
   subjectLabels: ReadonlyMap<string, string>;
   onAction?: () => void;
@@ -145,6 +149,10 @@ function getInitials(name?: string | null) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function readProfileImageUrl(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null;
 }
 
 function readEducationEntries(value: unknown): TutorEducationEntry[] | null {
@@ -342,7 +350,7 @@ export function TutorReviewCard({
     "request_changes" | "request_edit_changes" | "suspend" | null
   >(null);
   const [adminNote, setAdminNote] = useState("");
-  const [publicPhotoUrl, setPublicPhotoUrl] = useState("");
+  const [profileImageUrl, setProfileImageUrl] = useState("");
   const reviewMutation = useMutation(
     orpc.adminTutor.reviewTutorProfile.mutationOptions({
       onSuccess: () => {
@@ -453,7 +461,7 @@ export function TutorReviewCard({
       tutorProfileId: profile.id,
       action,
       adminNote: note,
-      publicPhotoUrl: publicPhotoUrl.trim() || undefined,
+      profileImageUrl: profileImageUrl.trim() || undefined,
     });
   }
 
@@ -491,6 +499,11 @@ export function TutorReviewCard({
       ? NON_BCA_TRANSFER_FEE_IDR
       : 0;
   const netHonorarium = Math.max(0, pendingHonorarium - transferFee);
+  const pendingProfileImageUrl = readProfileImageUrl(
+    profile.pendingProfileChanges?.profileImageUrl,
+  );
+  const currentProfileImageUrl =
+    pendingProfileImageUrl ?? profile.user?.image ?? null;
 
   return (
     <>
@@ -498,8 +511,8 @@ export function TutorReviewCard({
         <CardHeader className="items-start">
           <Avatar>
             <AvatarImage
-              src={profile.sourcePhotoUrl ?? undefined}
-              alt="Tutor source portrait"
+              src={currentProfileImageUrl ?? undefined}
+              alt="Tutor profile"
             />
             <AvatarFallback>
               {getInitials(profile.displayName ?? profile.user?.name)}
@@ -694,33 +707,33 @@ export function TutorReviewCard({
 
             <section>
               <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-dimmed">
-                Edited public photo
+                Profile photo
               </Text>
-              {profile.sourcePhotoUrl ? (
+              {currentProfileImageUrl ? (
                 <a
-                  href={profile.sourcePhotoUrl}
+                  href={currentProfileImageUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="text-sm underline underline-offset-2"
                 >
-                  Download original tutor photo
+                  Open current profile photo
                 </a>
               ) : (
                 <Text className="text-sm italic text-dimmed">
-                  No source photo uploaded.
+                  No profile photo submitted.
                 </Text>
               )}
               <Input
                 className="mt-2"
                 type="url"
-                value={publicPhotoUrl}
-                onChange={(event) => setPublicPhotoUrl(event.target.value)}
-                placeholder="Paste the edited public image URL"
-                aria-label="Edited public tutor photo URL"
+                value={profileImageUrl}
+                onChange={(event) => setProfileImageUrl(event.target.value)}
+                placeholder="Paste the edited profile image URL"
+                aria-label="Edited tutor profile image URL"
               />
               <Text className="mt-1 text-xs text-muted">
-                Only this admin-provided image can replace the tutor's public
-                photo.
+                After applying the standard background, paste the final URL to
+                update this same profile photo.
               </Text>
             </section>
 

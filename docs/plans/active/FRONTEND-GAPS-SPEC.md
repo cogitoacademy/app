@@ -49,7 +49,7 @@ accounts. This is frontend routing only and adds no API or database contract.
 
 ### Tutor profile and payout privacy follow-up (2026-08-28)
 
-Tutor onboarding now has one structured Achievements section and one multiline Experiences field, with legacy achievement/credential text retained as a fallback. Availability-summary and credential-proof inputs are retired. Base honorarium is adjusted only through Rp 5,000 minus/plus controls and its six group-size outcomes are shown in tables. Tutor portraits use a source-upload/admin-edited-public-photo workflow. Tutor payout details expose only completed sessions and IDR honorarium, removing take-rate and Marks terminology from the tutor interface.
+Tutor onboarding now has one structured Achievements section and one structured Experiences section, with legacy achievement/credential/experience text retained as a fallback. Achievement and experience entries use repeatable cards with bounded year fields; year values remain ungrouped, and an ongoing experience leaves End year blank. Availability-summary and credential-proof inputs are retired. Base honorarium is adjusted only through Rp 5,000 minus/plus controls and its six group-size outcomes are shown in tables. Tutor portraits use one canonical profile image: the tutor submits one image, then an admin applies the standard background and updates that same image. Tutor payout details expose only completed sessions and IDR honorarium, removing take-rate and Marks terminology from the tutor interface.
 
 Achievement and Experience sections now each accept an optional list of supporting proof URLs. They are visible to admins during review, participate in the protected edit-review flow, and are intentionally omitted from public tutor discovery.
 
@@ -790,6 +790,11 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 - v1.46 (2026-08-31): Made the post-login destination role/onboarding-aware: incomplete or changes-requested tutors go to `/profile`, tutors past onboarding and admins go to `/dashboard`, and the selected destination is preserved through email verification. No API or schema contract changed.
 
 - v1.47 (2026-09-01): Switched R2 uploads from unsupported multipart-form POST to presigned PUT, added exact content-length input/signing, fixed local raw-body upload credentials for the tutor flow, and configured bucket CORS for browser uploads.
+
+- v1.44 (2026-08-31): Made the shared Selia `Drawer.Content` the sole vertical scroll container for student tutor discovery and admin tutor-review drawers, kept profile headers/action footers outside that scroll area, and contained body overscroll so it cannot move the fixed regions. No RPC, schema, or persistence contract changed.
+
+- v1.45 (2026-08-31): Replaced the student account image URL input with a JPG/PNG/WebP upload flow, added circular drag/zoom cropping to a 512px square JPEG, and wired the result through the existing protected upload URL plus Better Auth account save. No new RPC, schema, or persistence contract.
+
 - v1.42 (2026-08-31): Contained tutor `/profile` scrolling to one route-owned vertical scroller, removed the action-bar bottom gap, and kept subject-category fieldsets at natural heights. No RPC, schema, or persistence contract changed.
 
 - v1.40 (2026-08-31): Tightened CI coverage enforcement so `packages/api` lines, overall lines, overall functions, and overall branches must each reach 100% from the shared lcov artifact. The 0/0 branch case is treated as 100%; no runtime or API contract changed.

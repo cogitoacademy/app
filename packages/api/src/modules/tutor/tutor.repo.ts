@@ -1,5 +1,6 @@
 import { eq, and, gte, sql, asc, inArray, isNotNull } from "drizzle-orm";
 import {
+  user,
   tutorProfile,
   availabilitySlot,
   subjectCategory,
@@ -20,7 +21,7 @@ export interface UpdateProfileInput {
   experiences?: string;
   achievementProofUrls?: string[];
   experienceProofUrls?: string[];
-  sourcePhotoUrl?: string;
+  profileImageUrl?: string;
   credentialsSummary?: string;
   education?: TutorEducationEntry[];
   competitionAchievements?: TutorCompetitionAchievement[];
@@ -40,7 +41,7 @@ export interface UpdateProfileInput {
 
 export interface PersistedProfileUpdate extends Omit<
   UpdateProfileInput,
-  "version" | "subjectIds"
+  "version" | "subjectIds" | "profileImageUrl"
 > {
   pendingProfileChanges?: Record<string, unknown> | null;
   profileEditStatus?: string;
@@ -68,6 +69,7 @@ export async function getByUserId(conn: DbOrTx, userId: string) {
   return conn.query.tutorProfile.findFirst({
     where: eq(tutorProfile.userId, userId),
     with: {
+      user: { columns: { image: true } },
       subjects: {
         with: {
           subject: {
@@ -77,6 +79,24 @@ export async function getByUserId(conn: DbOrTx, userId: string) {
       },
     },
   });
+}
+
+/**
+ * Updates the single canonical profile image stored on the auth user.
+ * Tutor-profile moderation uses the tutor profile version separately; callers
+ * decide whether this image is live now or staged in pendingProfileChanges.
+ */
+export async function updateProfileImage(
+  conn: DbOrTx,
+  userId: string,
+  image: string,
+) {
+  const [updated] = await conn
+    .update(user)
+    .set({ image })
+    .where(eq(user.id, userId))
+    .returning();
+  return updated;
 }
 
 /**
@@ -299,6 +319,7 @@ export function createTutorRepo() {
     getByUserId,
     listActiveChildSubjects,
     replaceProfileSubjects,
+    updateProfileImage,
     updateProfileWithVersion,
     updateStatus,
     listAvailability,

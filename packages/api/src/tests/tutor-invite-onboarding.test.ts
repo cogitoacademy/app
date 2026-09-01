@@ -180,7 +180,7 @@ describe("Tutor Invite & Onboarding", () => {
         credentialsSummary: "PhD Mathematics, 10 years teaching",
         achievements: "National mathematics medalist",
         experiences: "Ten years teaching mathematics",
-        sourcePhotoUrl: "https://example.com/tutor-source.jpg",
+        profileImageUrl: "https://example.com/tutor-profile.jpg",
         expertise: ["Mathematics", "Physics"],
         subjectIds: ["40000000-0000-4000-8000-000000000001"],
         modality: "online",
@@ -196,6 +196,7 @@ describe("Tutor Invite & Onboarding", () => {
 
       expect(updated.displayName).toBe("Prof Awesome");
       expect(updated.subjects).toHaveLength(1);
+      expect(updated.user?.image).toBe("https://example.com/tutor-profile.jpg");
     });
 
     test("prices below floor are rejected", async () => {

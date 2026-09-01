@@ -23,7 +23,7 @@ function makeProfile(overrides: Record<string, unknown> = {}) {
     credentialsSummary: "PhD in Math",
     achievements: "National mathematics medalist (2025)",
     experiences: "Mathematics tutor (2024–2025)",
-    sourcePhotoUrl: "https://example.com/source-photo.jpg",
+    user: { image: "https://example.com/profile-photo.jpg" },
     modality: "online",
     bankName: "BCA",
     bankAccountNumber: "1234567890",
@@ -322,6 +322,10 @@ describe("Tutor Service", () => {
         tutorRepo: {
           getByUserId: mock(async () => mockProfile),
           updateProfileWithVersion: mock(async () => [mockProfile]),
+          updateProfileImage: mock(async () => ({
+            id: "u1",
+            image: "https://example.com/profile-photo.jpg",
+          })),
           updateStatus: mock(async () => mockProfile),
           listAvailability: mock(async () => []),
           upsertAvailability: mock(async () => ({ id: "slot1" })),
@@ -369,6 +373,76 @@ describe("Tutor Service", () => {
         version: 1,
       });
       expect(result.id).toBe("tp1");
+    });
+
+    test("draft profile writes the submitted photo to the canonical user image", async () => {
+      const profile = makeProfile({
+        onboardingStatus: "draft",
+        user: { image: null },
+      });
+      const updateProfileImage = mock(async () => ({
+        id: "u1",
+        image: "https://example.com/submitted-photo.jpg",
+      }));
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => profile),
+          updateProfileImage,
+        },
+      });
+      const service = createTutorService(deps as any);
+
+      await service.updateMyProfile("u1", {
+        version: 1,
+        profileImageUrl: "https://example.com/submitted-photo.jpg",
+      });
+
+      expect(updateProfileImage).toHaveBeenCalledWith(
+        expect.anything(),
+        "u1",
+        "https://example.com/submitted-photo.jpg",
+      );
+    });
+
+    test("published profile stages a changed photo for admin review", async () => {
+      const profile = makeProfile({
+        onboardingStatus: "published",
+        pendingProfileChanges: null,
+        user: { image: "https://example.com/current-photo.jpg" },
+      });
+      const updateProfileWithVersion = mock(async () => [profile]);
+      const updateProfileImage = mock(async () => ({
+        id: "u1",
+        image: "https://example.com/current-photo.jpg",
+      }));
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => profile),
+          updateProfileWithVersion,
+          updateProfileImage,
+        },
+      });
+      const service = createTutorService(deps as any);
+
+      await service.updateMyProfile("u1", {
+        version: 1,
+        profileImageUrl: "https://example.com/new-photo.jpg",
+      });
+
+      expect(updateProfileWithVersion).toHaveBeenCalledWith(
+        deps.db,
+        "u1",
+        1,
+        expect.objectContaining({
+          pendingProfileChanges: {
+            profileImageUrl: "https://example.com/new-photo.jpg",
+          },
+          profileEditStatus: "pending_review",
+        }),
+      );
+      expect(updateProfileImage).not.toHaveBeenCalled();
     });
 
     test("updateMyProfile throws OptimisticLockError on version mismatch", async () => {

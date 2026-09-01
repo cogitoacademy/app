@@ -461,6 +461,7 @@ export function createAdminTutorService(deps: {
       let updates: TutorProfileUpdates;
       let newStatus: string;
       let pendingSubjectIds: string[] | undefined;
+      let profileImageUrl = input.profileImageUrl;
       if (input.action === "approve_edits") {
         if (!existing.pendingProfileChanges) {
           throw new InvalidInviteActionError(
@@ -471,6 +472,14 @@ export function createAdminTutorService(deps: {
         const pendingProfileChanges = {
           ...existing.pendingProfileChanges,
         };
+        const pendingProfileImageUrl = pendingProfileChanges.profileImageUrl;
+        delete pendingProfileChanges.profileImageUrl;
+        if (
+          profileImageUrl === undefined &&
+          typeof pendingProfileImageUrl === "string"
+        ) {
+          profileImageUrl = pendingProfileImageUrl;
+        }
         // Published tutor honoraria are no longer review-gated. Ignore a
         // legacy queued base rate so approving unrelated profile edits cannot
         // overwrite the tutor's current fee.
@@ -533,11 +542,11 @@ export function createAdminTutorService(deps: {
         );
       }
 
-      if (input.publicPhotoUrl) {
-        await adminTutorRepo.updateTutorPublicPhoto(
+      if (profileImageUrl) {
+        await adminTutorRepo.updateTutorProfileImage(
           tx,
           profile!.userId,
-          input.publicPhotoUrl,
+          profileImageUrl,
         );
       }
 
@@ -569,6 +578,7 @@ export function createAdminTutorService(deps: {
         },
         details: {
           adminNote: input.adminNote,
+          profileImageUpdated: Boolean(profileImageUrl),
           previousStatus: existing.onboardingStatus,
           newStatus,
         },

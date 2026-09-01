@@ -55,7 +55,6 @@ export const tutorProfile = pgTable(
     experienceProofUrls: jsonb("experience_proof_urls")
       .$type<string[]>()
       .default([]),
-    sourcePhotoUrl: text("source_photo_url"),
     education: jsonb("education").$type<TutorEducationEntry[]>().default([]),
     competitionAchievements: jsonb("competition_achievements")
       .$type<TutorCompetitionAchievement[]>()
@@ -92,7 +91,7 @@ export const tutorProfile = pgTable(
         experiences: string;
         achievementProofUrls: string[];
         experienceProofUrls: string[];
-        sourcePhotoUrl: string;
+        profileImageUrl: string;
         education: TutorEducationEntry[];
         competitionAchievements: TutorCompetitionAchievement[];
         experienceEntries: TutorExperienceEntry[];

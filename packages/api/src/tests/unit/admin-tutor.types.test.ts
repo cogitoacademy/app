@@ -50,19 +50,19 @@ describe("AdminTutor Types (Zod schemas)", () => {
     ).toBe(false);
   });
 
-  test("reviewTutorProfileInput rejects non-HTTP(S) public photos", () => {
+  test("reviewTutorProfileInput rejects non-HTTP(S) profile images", () => {
     expect(
       reviewTutorProfileInput.safeParse({
         tutorProfileId: "p1",
         action: "publish",
-        publicPhotoUrl: "https://example.com/photo.jpg",
+        profileImageUrl: "https://example.com/photo.jpg",
       }).success,
     ).toBe(true);
     expect(
       reviewTutorProfileInput.safeParse({
         tutorProfileId: "p1",
         action: "publish",
-        publicPhotoUrl: "javascript:alert(1)",
+        profileImageUrl: "javascript:alert(1)",
       }).success,
     ).toBe(false);
   });

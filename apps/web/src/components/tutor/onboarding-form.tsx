@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useRouter } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
@@ -44,8 +44,6 @@ import {
   IconUser,
 } from "@tabler/icons-react";
 
-import { authClient } from "@/lib/auth-client";
-import { AccountIdentityCard } from "@/components/profile/account-identity-card";
 import { getUserFacingError } from "@/lib/error-message";
 import { client, orpc } from "@/utils/orpc";
 import { TutorPricingFields } from "./tutor-pricing-fields";
@@ -94,7 +92,7 @@ interface OnboardingFormProps {
     experiences: string | null;
     achievementProofUrls: string[] | null;
     experienceProofUrls: string[] | null;
-    sourcePhotoUrl: string | null;
+    user?: { image: string | null } | null;
     education: TutorEducationEntry[] | null;
     competitionAchievements: TutorCompetitionAchievement[] | null;
     experienceEntries: TutorExperienceEntry[] | null;
@@ -117,7 +115,7 @@ interface OnboardingFormProps {
       experiences: string;
       achievementProofUrls: string[];
       experienceProofUrls: string[];
-      sourcePhotoUrl: string;
+      profileImageUrl: string;
       credentialsSummary: string;
       education: TutorEducationEntry[];
       competitionAchievements: TutorCompetitionAchievement[];
@@ -143,11 +141,6 @@ function haveSameSubjectIds(left: readonly string[], right: readonly string[]) {
 export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const router = useRouter();
-  const [accountForm, setAccountForm] = useState({
-    name: accountUser.name,
-    image: accountUser.image ?? "",
-  });
   const pending = profile.pendingProfileChanges ?? {};
   const legacySubjectIds = new Set(
     profile.subjects
@@ -175,7 +168,8 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       pending.achievementProofUrls ?? profile.achievementProofUrls ?? [],
     experienceProofUrls:
       pending.experienceProofUrls ?? profile.experienceProofUrls ?? [],
-    sourcePhotoUrl: pending.sourcePhotoUrl ?? profile.sourcePhotoUrl ?? "",
+    profileImageUrl:
+      pending.profileImageUrl ?? profile.user?.image ?? accountUser.image ?? "",
     education: pending.education ?? profile.education ?? [],
     competitionAchievements:
       pending.competitionAchievements ?? profile.competitionAchievements ?? [],
@@ -201,39 +195,6 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
-
-  const accountChanged =
-    accountForm.name.trim() !== accountUser.name.trim() ||
-    accountForm.image.trim() !== (accountUser.image ?? "").trim();
-
-  const accountMutation = useMutation({
-    mutationFn: async () => {
-      const name = accountForm.name.trim();
-      if (!name) throw new Error("Account name is required");
-
-      const result = await authClient.updateUser({
-        name,
-        image: accountForm.image.trim() || null,
-      });
-      if (result.error) throw new Error(result.error.message);
-      return result.data;
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: orpc.auth.me.key() });
-      await router.invalidate();
-      toastManager.add({
-        title: "Account profile updated",
-        type: "success",
-      });
-    },
-    onError: (error: Error) => {
-      toastManager.add({
-        title: "Account profile could not be updated",
-        description: getUserFacingError(error),
-        type: "error",
-      });
-    },
-  });
 
   function clearError(field: string) {
     if (errors[field]) {
@@ -308,7 +269,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       experiences?: string;
       achievementProofUrls?: string[];
       experienceProofUrls?: string[];
-      sourcePhotoUrl?: string;
+      profileImageUrl?: string;
       education?: TutorEducationEntry[];
       competitionAchievements?: TutorCompetitionAchievement[];
       experienceEntries?: TutorExperienceEntry[];
@@ -328,7 +289,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     const shortBio = form.shortBio.trim();
     const achievements = form.achievements.trim();
     const experiences = form.experiences.trim();
-    const sourcePhotoUrl = form.sourcePhotoUrl.trim();
+    const profileImageUrl = form.profileImageUrl.trim();
     const education = form.education.map((entry) => ({
       university: entry.university.trim(),
       degree: entry.degree.trim(),
@@ -358,7 +319,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     if (experiences) payload.experiences = experiences;
     payload.achievementProofUrls = form.achievementProofUrls;
     payload.experienceProofUrls = form.experienceProofUrls;
-    if (sourcePhotoUrl) payload.sourcePhotoUrl = sourcePhotoUrl;
+    if (profileImageUrl) payload.profileImageUrl = profileImageUrl;
     payload.education = education;
     payload.competitionAchievements = competitionAchievements;
     payload.experienceEntries = experienceEntries;
@@ -407,8 +368,8 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     if (!form.experiences.trim() && form.experienceEntries.length === 0) {
       validationErrors.experienceEntries = "Add at least one experience";
     }
-    if (!form.sourcePhotoUrl.trim())
-      validationErrors.sourcePhotoUrl = "Required";
+    if (!form.profileImageUrl.trim())
+      validationErrors.profileImageUrl = "Required";
     Object.assign(
       validationErrors,
       validateTutorAchievementDraft(
@@ -487,7 +448,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     }
   }
 
-  async function uploadSourcePhoto(file: File) {
+  async function uploadProfileImage(file: File) {
     setIsUploadingPhoto(true);
     try {
       const signed = await client.upload.createUploadUrl({
@@ -517,9 +478,12 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
         });
         if (!response.ok) throw new Error("Photo upload failed");
       }
-      setForm((current) => ({ ...current, sourcePhotoUrl: signed.publicUrl }));
-      clearError("sourcePhotoUrl");
-      toastManager.add({ title: "Source photo uploaded", type: "success" });
+      setForm((current) => ({
+        ...current,
+        profileImageUrl: signed.publicUrl,
+      }));
+      clearError("profileImageUrl");
+      toastManager.add({ title: "Profile photo uploaded", type: "success" });
     } catch (error) {
       toastManager.add({
         title: "Photo could not be uploaded",
@@ -571,7 +535,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       profile.profileEditStatus === "changes_requested");
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+    <div className="mx-auto flex w-full flex-col gap-6">
       <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <Badge variant="info" pill>
@@ -613,25 +577,6 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
           </div>
         </CardBody>
       </Card>
-
-      <AccountIdentityCard
-        idPrefix="tutor-account"
-        roleLabel="Tutor"
-        name={accountForm.name}
-        email={accountUser.email}
-        image={accountForm.image}
-        hasChanges={accountChanged}
-        isSaving={accountMutation.isPending}
-        footerNote="Your account name and photo are separate from the public tutor profile review."
-        onNameChange={(name) =>
-          setAccountForm((current) => ({ ...current, name }))
-        }
-        onImageChange={(image) =>
-          setAccountForm((current) => ({ ...current, image }))
-        }
-        imageEditable={false}
-        onSave={() => accountMutation.mutate()}
-      />
 
       {hasReviewFeedback ? (
         <Card className="ring-warning-border bg-warning/5" role="status">
@@ -691,7 +636,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
               <CardBody className="grid gap-5 sm:grid-cols-2">
                 <Field>
                   <FieldLabel htmlFor="tutor-display-name">
-                    Display name <span aria-hidden="true">*</span>
+                    Display name<span aria-hidden="true">*</span>
                   </FieldLabel>
                   <Input
                     id="tutor-display-name"
@@ -1139,40 +1084,39 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
               <IconBox variant="tertiary-subtle">
                 <IconPhoto aria-hidden="true" />
               </IconBox>
-              <CardTitle>Source profile photo</CardTitle>
+              <CardTitle>Profile photo</CardTitle>
               <CardDescription>
-                Upload the original photo for the Cogito team to edit. It will
-                not be shown publicly until an admin publishes the edited
-                version.
+                Submit one clear photo. The Cogito team will apply the standard
+                background before publishing or updating it.
               </CardDescription>
             </CardHeader>
             <CardBody>
               <Field>
-                <FieldLabel htmlFor="tutor-source-photo">
-                  Original photo <span aria-hidden="true">*</span>
+                <FieldLabel htmlFor="tutor-profile-image">
+                  Profile photo <span aria-hidden="true">*</span>
                 </FieldLabel>
                 <FieldDescription>
                   JPG, PNG, or WebP, maximum 5 MB. Use a clear, high-resolution
                   portrait.
                 </FieldDescription>
                 <Input
-                  id="tutor-source-photo"
+                  id="tutor-profile-image"
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
                   disabled={isUploadingPhoto}
-                  aria-invalid={Boolean(errors.sourcePhotoUrl)}
+                  aria-invalid={Boolean(errors.profileImageUrl)}
                   onChange={(event) => {
                     const file = event.target.files?.[0];
-                    if (file) void uploadSourcePhoto(file);
+                    if (file) void uploadProfileImage(file);
                   }}
                 />
-                {form.sourcePhotoUrl ? (
+                {form.profileImageUrl ? (
                   <Text className="text-sm text-success">
-                    Photo received and ready for admin editing.
+                    Photo received and ready for Cogito admin editing.
                   </Text>
                 ) : null}
-                {errors.sourcePhotoUrl ? (
-                  <FieldError>{errors.sourcePhotoUrl}</FieldError>
+                {errors.profileImageUrl ? (
+                  <FieldError>{errors.profileImageUrl}</FieldError>
                 ) : null}
               </Field>
             </CardBody>

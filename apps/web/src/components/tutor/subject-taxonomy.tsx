@@ -6,6 +6,7 @@ import { Checkbox } from "@cogito-app/ui/components/selia/checkbox";
 import { Chip, ChipButton } from "@cogito-app/ui/components/selia/chip";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { orpc } from "@/utils/orpc";
+import { IconX } from "@tabler/icons-react";
 
 const MAX_TUTOR_SUBJECTS = 20;
 
@@ -156,14 +157,14 @@ export function SubjectSelector({
           aria-label="Selected competition subcategories"
         >
           {selectedIds.map((subjectId) => (
-            <Chip key={subjectId} variant="primary" pill>
+            <Chip key={subjectId} variant="primary" pill size="sm">
               {selectedSubjectLabels.get(subjectId) ?? "Selected subject"}
               <ChipButton
                 type="button"
                 aria-label={`Remove ${selectedSubjectLabels.get(subjectId) ?? "selected subject"}`}
                 onClick={() => toggleSubject(subjectId, false)}
               >
-                ×
+                <IconX />
               </ChipButton>
             </Chip>
           ))}
@@ -214,10 +215,8 @@ export function SubjectSelector({
               key={category.id}
               className="min-w-0 rounded-lg border border-item-border bg-item p-3"
             >
-              <legend className="px-1 text-sm font-semibold">
-                {category.name}
-              </legend>
-              <div className="mt-2 flex flex-col gap-2">
+              <legend className="px-1 font-semibold">{category.name}</legend>
+              <div className="grid min-[500px]:grid-cols-2 gap-2">
                 {category.children.map((child) => {
                   const checked = selectedIds.includes(child.id);
                   const limitReached =

@@ -15,7 +15,7 @@ export const updateMyProfileInput = z.object({
   experiences: z.string().max(5000).optional(),
   achievementProofUrls: z.array(externalHttpUrl).max(20).optional(),
   experienceProofUrls: z.array(externalHttpUrl).max(20).optional(),
-  sourcePhotoUrl: externalHttpUrl.optional(),
+  profileImageUrl: externalHttpUrl.optional(),
   credentialsSummary: z.string().max(2000).optional(),
   education: tutorEducationInput.optional(),
   competitionAchievements: tutorCompetitionAchievementsInput.optional(),

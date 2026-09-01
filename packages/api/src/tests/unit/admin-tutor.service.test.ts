@@ -56,6 +56,10 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
       getTutorProfileById: mock(async () => profile),
       updateTutorProfile: mock(async () => profile),
       updateTutorProfileWithVersion: mock(async () => [profile]),
+      updateTutorProfileImage: mock(async () => ({
+        id: "u1",
+        image: "https://example.com/profile-photo.jpg",
+      })),
       listTutorProfiles: mock(async () => [profile]),
     },
     auditPort: { record: mock(async () => {}) },
@@ -883,7 +887,7 @@ describe("AdminTutor Service", () => {
           onboardingStatus: "published",
         }),
       );
-      const updateTutorPublicPhoto = mock(async () => ({}));
+      const updateTutorProfileImage = mock(async () => ({}));
       const deps = makeDeps({
         adminTutorRepo: {
           ...makeDeps().adminTutorRepo,
@@ -893,14 +897,14 @@ describe("AdminTutor Service", () => {
               pendingProfileChanges: {
                 bio: "updated",
                 subjectIds: ["s1"],
-                publicPhotoUrl: "https://example.com/photo.jpg",
+                profileImageUrl: "https://example.com/photo.jpg",
               },
             }),
           ),
           listActiveChildSubjects,
           replaceTutorProfileSubjects,
           updateTutorProfile,
-          updateTutorPublicPhoto,
+          updateTutorProfileImage,
         },
       });
       const service = createAdminTutorService(deps as any);
@@ -908,7 +912,7 @@ describe("AdminTutor Service", () => {
       const result = await service.reviewTutorProfile("admin1", {
         tutorProfileId: "p1",
         action: "approve_edits",
-        publicPhotoUrl: "https://example.com/photo.jpg",
+        profileImageUrl: "https://example.com/photo.jpg",
       });
 
       expect(result.onboardingStatus).toBe("published");
@@ -930,7 +934,7 @@ describe("AdminTutor Service", () => {
         }),
         1,
       );
-      expect(updateTutorPublicPhoto).toHaveBeenCalledWith(
+      expect(updateTutorProfileImage).toHaveBeenCalledWith(
         expect.anything(),
         "u1",
         "https://example.com/photo.jpg",

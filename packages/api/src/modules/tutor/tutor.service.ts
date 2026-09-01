@@ -30,9 +30,11 @@ import {
 
 type TutorProfileRow = typeof tutorProfile.$inferSelect;
 type TutorProfileWithSubjectRelations = TutorProfileRow & {
+  user?: { image: string | null } | null;
   subjects?: Array<TutorSubjectRelation & { subjectId: string }>;
 };
 type TutorProfileProjection = TutorProfileRow & {
+  user?: { image: string | null } | null;
   subjects: NormalizedTutorSubject[];
 };
 
@@ -113,6 +115,7 @@ export function validateUpdateInput(
 export function validateSubmitForReview(
   profile: TutorProfileRow | undefined,
   pricingPort: TutorPricingPort,
+  profileImageUrl?: string | null,
 ): void {
   if (!profile) {
     throw new TutorProfileNotFoundError("unknown");
@@ -135,12 +138,15 @@ export function validateSubmitForReview(
       profile.experiences.trim().length > 0) ||
     (Array.isArray(profile.experienceEntries) &&
       profile.experienceEntries.length > 0);
+  const submittedProfileImageUrl =
+    profileImageUrl ??
+    (profile as TutorProfileWithSubjectRelations).user?.image;
   const requiredFields: { key: string; value: unknown }[] = [
     { key: "displayName", value: profile.displayName },
     { key: "shortBio", value: profile.shortBio },
     { key: "achievements", value: hasAchievement },
     { key: "experiences", value: hasExperience },
-    { key: "sourcePhotoUrl", value: profile.sourcePhotoUrl },
+    { key: "profileImageUrl", value: submittedProfileImageUrl },
     { key: "modality", value: profile.modality },
     { key: "bankName", value: profile.bankName },
     { key: "bankAccountNumber", value: profile.bankAccountNumber },
@@ -243,7 +249,7 @@ export function createTutorService(deps: {
   async function updateMyProfile(userId: string, input: UpdateProfileInput) {
     const profile = await tutorRepo.getByUserId(db, userId);
     validateUpdateInput(profile, input, pricingPort);
-    const { version, subjectIds, ...data } = input;
+    const { version, subjectIds, profileImageUrl, ...data } = input;
     if (subjectIds !== undefined) {
       const activeChildSubjects = await tutorRepo.listActiveChildSubjects(
         db,
@@ -259,7 +265,6 @@ export function createTutorService(deps: {
       "experiences",
       "achievementProofUrls",
       "experienceProofUrls",
-      "sourcePhotoUrl",
       "credentialsSummary",
       "education",
       "competitionAchievements",
@@ -268,7 +273,10 @@ export function createTutorService(deps: {
       "modality",
       "prices",
     ] as const;
-    const directData: Omit<UpdateProfileInput, "version" | "subjectIds"> & {
+    const directData: Omit<
+      UpdateProfileInput,
+      "version" | "subjectIds" | "profileImageUrl"
+    > & {
       pendingProfileChanges?: Record<string, unknown> | null;
       profileEditStatus?: string;
       profileEditAdminNote?: null;
@@ -305,6 +313,16 @@ export function createTutorService(deps: {
           pendingProfileChanges[field] = data[field];
         }
         delete directData[field];
+      }
+      if (profileImageUrl !== undefined) {
+        const currentProfileImageUrl = (
+          profile as TutorProfileWithSubjectRelations
+        ).user?.image;
+        if (profileImageUrl === currentProfileImageUrl) {
+          delete pendingProfileChanges.profileImageUrl;
+        } else {
+          pendingProfileChanges.profileImageUrl = profileImageUrl;
+        }
       }
       if (Object.keys(pendingProfileChanges).length > 0) {
         directData.pendingProfileChanges = pendingProfileChanges;
@@ -345,12 +363,18 @@ export function createTutorService(deps: {
       if (!isPublished && subjectIds !== undefined) {
         await tutorRepo.replaceProfileSubjects(conn, profile!.id, subjectIds);
       }
+      if (!isPublished && profileImageUrl !== undefined) {
+        await tutorRepo.updateProfileImage(conn, userId, profileImageUrl);
+      }
 
       const updated = await tutorRepo.getByUserId(conn, userId);
       return projectTutorProfile(updated ?? rows[0]!);
     };
 
-    if (!isPublished && subjectIds !== undefined) {
+    if (
+      !isPublished &&
+      (subjectIds !== undefined || profileImageUrl !== undefined)
+    ) {
       return db.transaction(persist);
     }
     return persist(db);
@@ -365,7 +389,11 @@ export function createTutorService(deps: {
    */
   async function submitForReview(userId: string) {
     const profile = await tutorRepo.getByUserId(db, userId);
-    validateSubmitForReview(profile, pricingPort);
+    validateSubmitForReview(
+      profile,
+      pricingPort,
+      (profile as TutorProfileWithSubjectRelations | undefined)?.user?.image,
+    );
 
     return db.transaction(async (tx) => {
       const row = await tutorRepo.updateStatus(
