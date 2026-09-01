@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 # Lint-error baseline gate — errors fail CI unless documented in the baseline.
 #
-# Context: the repo pin was oxlint 1.78/0.63; #143 bumped to 1.80/0.65 whose
-# stricter React rules flag 62 pre-existing apps/web findings. The user
-# descoped web lint fixes (2026-08-31, CI-SANITY F13) so those specific
-# findings live in .github/lint/baseline.txt and are ALLOWED — everything
-# else fails. Rule: the baseline may only SHRINK without ceremony; growing
-# it requires a plan-doc entry (AGENTS.md rule 11).
+# Context: CI pins oxlint 1.80.0 and oxfmt 0.65.0. The stricter React rules
+# still report known legacy findings in apps/web; those specific errors live
+# in .github/lint/baseline.txt and are ALLOWED — everything else fails. Rule:
+# the baseline may only SHRINK without ceremony; growing it requires a
+# plan-doc entry (AGENTS.md rule 11).
 #
 # Usage: .github/lint/check-baseline.sh   (CI lint job runs this)
 set -euo pipefail

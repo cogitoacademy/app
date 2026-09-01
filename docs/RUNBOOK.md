@@ -823,7 +823,17 @@ bun scripts/run-test-suite.mjs e2e --grep "identity surfaces"
 
 The workflow also runs the server suite in a separate process because its webhook test uses module mocking. The coverage comment script enforces 100% coverage for `packages/api` lines, overall lines, functions, and branches from `coverage/lcov.info`; a 0/0 branch total is treated as 100%. If this gate fails, inspect the missing function/line records in the generated lcov report and add a behavior-level test before pushing. The Bun command's own function/statement output is diagnostic; the lcov gate is authoritative.
 
-The CI lint job emits **documented-intentional warnings** on the pinned toolchain (oxlint 1.78.0): `no-await-in-loop` = sequential money/DB writes in booking/wallet paths (parallelizing would risk money correctness), plus `consistent-function-scoping` and `no-underscore-dangle` style conventions. They are triaged, not regressions — see `docs/plans/active/CI-SANITY.md` F13. Do not "fix" them by parallelizing the loops or by silencing the rules in `.oxlintrc.json` (that config is shared with the local run).
+The CI lint job uses the pinned oxlint 1.80.0 and oxfmt 0.65.0 toolchain. It
+emits **documented-intentional warnings**: `no-await-in-loop` = sequential
+money/DB writes in booking/wallet paths (parallelizing would risk money
+correctness), plus `consistent-function-scoping` and `no-underscore-dangle`
+style conventions. Known legacy React compiler errors are tracked in
+`.github/lint/baseline.txt`; new errors fail `.github/lint/check-baseline.sh`.
+They are triaged, not regressions — see `docs/plans/active/CI-SANITY.md` F13.
+Do not "fix" the warnings by parallelizing the loops or by silencing the rules
+in `.oxlintrc.json` (that config is shared with the local run). The lint
+auto-fix commit sets `LEFTHOOK=0`; the baseline and format steps remain the
+authoritative CI gates.
 
 ## Common Errors
 

@@ -1,6 +1,6 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-09-01
+Last updated: 2026-09-02
 
 ## Website audit P2 hardening
 
@@ -13,6 +13,11 @@ silently overwriting each other or producing duplicate side effects. BullMQ
 jobs are copied to the DLQ only after their configured retry budget is
 exhausted; intermediate failures remain in the normal retry flow.
 
+CI pins oxlint 1.80.0 and oxfmt 0.65.0. Known legacy React compiler errors
+remain explicitly tracked in `.github/lint/baseline.txt`; new findings fail
+the baseline gate. The lint auto-fix commit disables Lefthook while pushing so
+the workflow's dedicated baseline and formatting checks are authoritative.
+
 ## Deployment wave state
 
 **APPLIED (2026-08-31).** The full Terraform + Ansible apply chain completed via `infra/apply.sh`:
@@ -24,7 +29,7 @@ exhausted; intermediate failures remain in the normal retry flow.
 - **Monitoring (2026-09-01)**: Uptime Kuma declared as a Coolify service (`cogito-uptime-kuma`, `louislam/uptime-kuma:2`, port 3001, volume `uptime-kuma-data:/app/data`) at `status.cogitoacademy.id` via `infra/ansible/uptime-kuma.yml` (Coolify API, control-node driven, idempotent); disk watchdog `infra/ansible/disk-watchdog.yml` installs `/usr/local/bin/cogito-disk-watchdog.sh` (nightly 03:30 WIB, warn ≥ 85%, auto-prune ≥ 92% — never volumes/active images/postgres data, newest 1–2 cogitoacademy/app images kept for rollback); `ops.sh disk` + `deploy-retry` added. Discord alerting needs the operator to add `DISCORD_WEBHOOK_URL` to the SOPS vault and paste it into the Kuma UI (monitors are Kuma-UI-configured — the Coolify API cannot express them).
 - **Vault**: R2/Coolify tokens rotated 2026-08-31; `DATABASE_URL` uses the container IP `10.0.1.8` (host-reachable for the cron; the app keeps the private hostname).
 
-**Remaining (see `docs/plans/active/`):** Uptime Kuma + Discord alerting (MONITORING-ALERTING — playbooks delivered 2026-09-01: `uptime-kuma.yml` declares the Kuma service via the Coolify API, `disk-watchdog.yml` installs the nightly disk watchdog; operator console bits remain — `DISCORD_WEBHOOK_URL` in the vault + Kuma UI paste), drills (DEPLOYMENT-PLAN Phase 5), Xendit go-live, branch protection + `ACTIONS_BOT_PAT` (CI-SANITY F9/F10), lint wave (81 oxlint-1.80 findings, toolchain pinned to 1.78/0.63 meanwhile).
+**Remaining (see `docs/plans/active/`):** Uptime Kuma + Discord alerting (MONITORING-ALERTING — playbooks delivered 2026-09-01: `uptime-kuma.yml` declares the Kuma service via the Coolify API, `disk-watchdog.yml` installs the nightly disk watchdog; operator console bits remain — `DISCORD_WEBHOOK_URL` in the vault + Kuma UI paste), drills (DEPLOYMENT-PLAN Phase 5), Xendit go-live, branch protection + `ACTIONS_BOT_PAT` (CI-SANITY F9/F10), and the planned cleanup of the remaining legacy React lint baseline.
 
 ## Stable collection transitions (2026-08-28)
 

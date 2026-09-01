@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useState } from "react";
 import { IconBriefcase, IconPlus, IconTrash } from "@tabler/icons-react";
 
 import { Button } from "@cogito-app/ui/components/selia/button";
@@ -197,15 +197,9 @@ export function TutorExperiencesEditor({
   idPrefix = "tutor-experiences",
   showPreview = true,
 }: TutorExperiencesEditorProps) {
-  const experienceKeys = useRef<string[]>([]);
-
-  function getEditorKey(index: number) {
-    const existingKey = experienceKeys.current[index];
-    if (existingKey) return existingKey;
-    const key = createDraftKey(`${idPrefix}-entry`);
-    experienceKeys.current[index] = key;
-    return key;
-  }
+  const [experienceKeys, setExperienceKeys] = useState(() =>
+    experienceEntries.map(() => createDraftKey(`${idPrefix}-entry`)),
+  );
 
   function updateExperience(
     index: number,
@@ -222,7 +216,9 @@ export function TutorExperiencesEditor({
   }
 
   function removeExperience(index: number) {
-    experienceKeys.current.splice(index, 1);
+    setExperienceKeys((current) =>
+      current.filter((_, entryIndex) => entryIndex !== index),
+    );
     onExperienceEntriesChange(
       experienceEntries.filter((_, entryIndex) => entryIndex !== index),
     );
@@ -267,7 +263,7 @@ export function TutorExperiencesEditor({
         <div className="flex flex-col gap-4">
           {experienceEntries.map((entry, index) => (
             <div
-              key={getEditorKey(index)}
+              key={experienceKeys[index] ?? `${idPrefix}-entry-${index}`}
               className="relative rounded-lg border border-item-border bg-card p-3"
             >
               <Button
@@ -449,12 +445,16 @@ export function TutorExperiencesEditor({
           className="self-start"
           id={`${idPrefix}-add`}
           disabled={experienceEntries.length >= MAX_EXPERIENCE_ENTRIES}
-          onClick={() =>
+          onClick={() => {
+            setExperienceKeys((current) => [
+              ...current,
+              createDraftKey(`${idPrefix}-entry`),
+            ]);
             onExperienceEntriesChange([
               ...experienceEntries,
               createEmptyExperienceEntry(),
-            ])
-          }
+            ]);
+          }}
         >
           <IconPlus aria-hidden="true" />
           Add experience

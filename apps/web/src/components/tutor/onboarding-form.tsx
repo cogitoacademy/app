@@ -446,7 +446,6 @@ export function OnboardingForm({
   const [name, setName] = useState(accountUser.name ?? "");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
-  const publishedSubmitRef = useRef(false);
   const savedNameRef = useRef(accountUser.name.trim());
 
   const nameMutation = useMutation({
@@ -489,21 +488,6 @@ export function OnboardingForm({
   const updateMutation = useMutation(
     orpc.tutor.updateMyProfile.mutationOptions({
       onSuccess: () => {
-        const submittedPublishedChanges = publishedSubmitRef.current;
-        publishedSubmitRef.current = false;
-        toastManager.add({
-          title: submittedPublishedChanges
-            ? "Profile changes submitted for review"
-            : profile.onboardingStatus === "published"
-              ? "Profile changes saved"
-              : "Progress saved",
-          description: submittedPublishedChanges
-            ? "The latest profile changes are now waiting for admin review."
-            : profile.onboardingStatus === "published"
-              ? "Public details were updated. Honorarium changes apply to future bookings; verified details may wait for admin review."
-              : undefined,
-          type: "success",
-        });
         void queryClient.invalidateQueries({
           queryKey: orpc.tutor.getMyProfile.key(),
         });
@@ -513,7 +497,6 @@ export function OnboardingForm({
         void queryClient.invalidateQueries({ queryKey: orpc.auth.me.key() });
       },
       onError: (error: unknown) => {
-        publishedSubmitRef.current = false;
         const fieldErrors = readServerFieldErrors(error);
         if (Object.keys(fieldErrors).length > 0) {
           setErrors((current) => ({ ...current, ...fieldErrors }));
@@ -529,6 +512,22 @@ export function OnboardingForm({
       },
     }),
   );
+
+  function showUpdateSuccess(submittedPublishedChanges: boolean) {
+    toastManager.add({
+      title: submittedPublishedChanges
+        ? "Profile changes submitted for review"
+        : profile.onboardingStatus === "published"
+          ? "Profile changes saved"
+          : "Progress saved",
+      description: submittedPublishedChanges
+        ? "The latest profile changes are now waiting for admin review."
+        : profile.onboardingStatus === "published"
+          ? "Public details were updated. Honorarium changes apply to future bookings; verified details may wait for admin review."
+          : undefined,
+      type: "success",
+    });
+  }
 
   const submitMutation = useMutation(
     orpc.tutor.submitForReview.mutationOptions({
@@ -864,7 +863,6 @@ export function OnboardingForm({
   }
 
   async function handleSaveProgress() {
-    publishedSubmitRef.current = false;
     const validationErrors = validateTutorForm(false);
     if (Object.keys(validationErrors).length > 0) {
       showValidationErrors(
@@ -879,6 +877,7 @@ export function OnboardingForm({
     try {
       await saveCanonicalName();
       await updateMutation.mutateAsync(getSavePayload());
+      showUpdateSuccess(false);
     } catch {
       // handled by mutation callbacks
     }
@@ -901,11 +900,12 @@ export function OnboardingForm({
         // Published profile edits are staged by updateMyProfile itself. The
         // explicit submit action runs the complete form gate before putting
         // the latest pending values into the admin review queue.
-        publishedSubmitRef.current = true;
         await updateMutation.mutateAsync(getSavePayload());
+        showUpdateSuccess(true);
         return;
       }
       await updateMutation.mutateAsync(getSavePayload());
+      showUpdateSuccess(false);
       await submitMutation.mutateAsync();
     } catch {
       // handled by mutation callbacks

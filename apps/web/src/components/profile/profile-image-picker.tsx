@@ -233,6 +233,9 @@ export function ProfileImagePicker({
   const [photoReadyToSave, setPhotoReadyToSave] = useState(false);
 
   const dialogOpen = previewUrl !== null;
+  const clampedOffset = imageDimensions
+    ? clampOffset(offset, imageDimensions, viewportSize, zoom)
+    : offset;
 
   useEffect(() => {
     if (!previewUrl) return;
@@ -241,6 +244,8 @@ export function ProfileImagePicker({
   }, [previewUrl]);
 
   useEffect(() => {
+    if (!dialogOpen) return;
+
     const element = cropViewportRef.current;
     if (!element) return;
 
@@ -258,15 +263,7 @@ export function ProfileImagePicker({
     observer.observe(element);
 
     return () => observer.disconnect();
-  }, [previewUrl]);
-
-  useEffect(() => {
-    if (!imageDimensions) return;
-
-    setOffset((current) =>
-      clampOffset(current, imageDimensions, viewportSize, zoom),
-    );
-  }, [imageDimensions, viewportSize, zoom]);
+  }, [dialogOpen]);
 
   function setUploadPending(nextValue: boolean) {
     setIsUploading(nextValue);
@@ -321,8 +318,8 @@ export function ProfileImagePicker({
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
-      x: offset.x,
-      y: offset.y,
+      x: clampedOffset.x,
+      y: clampedOffset.y,
     };
     setIsDragging(true);
   }
@@ -368,7 +365,7 @@ export function ProfileImagePicker({
         dimensions: imageDimensions,
         viewportSize,
         zoom,
-        offset: clampOffset(offset, imageDimensions, viewportSize, zoom),
+        offset: clampedOffset,
       });
       const publicUrl = await uploadProfileImage(croppedImage);
 
@@ -502,7 +499,7 @@ export function ProfileImagePicker({
                     return {
                       width: `${layout.width}px`,
                       height: `${layout.height}px`,
-                      transform: `translate(calc(-50% + ${offset.x}px), calc(-50% + ${offset.y}px))`,
+                      transform: `translate(calc(-50% + ${clampedOffset.x}px), calc(-50% + ${clampedOffset.y}px))`,
                     };
                   })()}
                   onLoad={handleImageLoad}

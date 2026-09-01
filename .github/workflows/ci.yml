@@ -61,6 +61,11 @@ jobs:
         # Actions to create and approve pull requests").
         if: "${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.commit-check.outputs.last-commit-msg != 'style: apply automated lint and format fixes' }}"
         uses: stefanzweifel/git-auto-commit-action@v7
+        # The action pushes its commit from the checkout; do not run the local
+        # pre-push hook there. The dedicated baseline and format gates below
+        # are the CI checks for this job.
+        env:
+          LEFTHOOK: "0"
         with:
           commit_message: "style: apply automated lint and format fixes"
           commit_options: "--no-verify"

@@ -633,7 +633,6 @@ export function TutorReviewCard({
     profile.pendingProfileChanges?.profileImageUrl,
   );
   const currentProfileImageUrl = profile.user?.image ?? null;
-  const editedProfileImageUrl = resolveProfileImageUrl(profileImageUrl);
   const pendingChangesWithoutPhoto = Object.entries(
     profile.pendingProfileChanges ?? {},
   ).filter(([field]) => field !== "profileImageUrl");
@@ -893,16 +892,15 @@ export function TutorReviewCard({
                     Use this only when the edited asset is already hosted.
                   </FieldDescription>
                 </Field>
-                {editedProfileImageUrl ? (
+                {profileImageUrl.trim() ? (
                   <div className="rounded-lg border border-success-border bg-success/5 p-3">
                     <Text className="text-xs font-semibold uppercase tracking-wide text-success">
                       Edited photo ready
                     </Text>
-                    <img
-                      src={editedProfileImageUrl}
-                      alt="Edited tutor profile preview"
-                      className="mt-2 aspect-square w-full max-w-48 rounded-lg object-cover"
-                    />
+                    <Text className="mt-2 text-sm text-muted">
+                      The hosted photo will be applied when this review action
+                      is approved.
+                    </Text>
                   </div>
                 ) : null}
               </div>
