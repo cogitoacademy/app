@@ -1,6 +1,10 @@
 # Cogito Setup and Deployment
 
-Last updated: 2026-08-28
+Last updated: 2026-09-01
+
+> Quick entry: [INFRA-PLAYBOOK.md](./INFRA-PLAYBOOK.md) — the scenario →
+> command decision table for day-to-day infra operation (env changes, code
+> deploys, migrations, DR). This document covers the full setup detail.
 
 This is the operational guide for the current production setup. It covers the
 first-time VPS/Coolify setup, the normal GitHub Actions deployment, and the
