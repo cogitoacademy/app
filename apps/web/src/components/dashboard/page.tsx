@@ -97,28 +97,24 @@ export function DashboardPage() {
           title="Tutor Discovery"
           value="Open"
           change="Browse verified tutors"
-          changeType="increase"
         />
         <StatCard
           icon={<IconWallet />}
           title="Marks Wallet"
           value="Ready"
           change="Top up before booking"
-          changeType="increase"
         />
         <StatCard
           icon={<IconCalendarEvent />}
           title="Calendar"
           value="Live"
           change="Competition schedule"
-          changeType="increase"
         />
         <StatCard
           icon={<IconCertificate />}
           title="Achievements"
           value="Track"
           change="Submit milestones"
-          changeType="increase"
         />
       </div>
 

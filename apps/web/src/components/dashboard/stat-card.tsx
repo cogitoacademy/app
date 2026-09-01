@@ -9,13 +9,11 @@ export function StatCard({
   title,
   value,
   change,
-  changeType,
 }: {
   icon: React.ReactNode;
   title: string;
   value: React.ReactNode;
   change: string;
-  changeType: "increase" | "decrease";
 }) {
   return (
     <Card>
@@ -28,17 +26,7 @@ export function StatCard({
         </Heading>
         <Text className="mt-2 text-3xl font-semibold break-words">{value}</Text>
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <Badge
-            variant={changeType === "increase" ? "success" : "danger"}
-            className="mt-2"
-          >
-            {change}
-          </Badge>
-          <Text className="mt-2 text-sm text-dimmed">
-            {changeType === "increase"
-              ? "Compared to last month"
-              : "Compared to last week"}
-          </Text>
+          <Badge className="mt-2">{change}</Badge>
         </div>
       </CardBody>
     </Card>

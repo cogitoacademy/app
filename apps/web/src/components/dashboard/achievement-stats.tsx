@@ -22,21 +22,18 @@ export function AchievementStats({
         title="Total Achievements"
         value={total}
         change={`${total} recorded`}
-        changeType="increase"
       />
       <StatCard
         icon={<IconCheck />}
         title="Approved"
         value={approved}
         change="Live on cogitoacademy.id"
-        changeType="increase"
       />
       <StatCard
         icon={<IconClock />}
         title="Pending Review"
         value={pending}
         change="Awaiting approval"
-        changeType={pending > 0 ? "decrease" : "increase"}
       />
     </div>
   );
