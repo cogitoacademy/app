@@ -76,6 +76,17 @@ describe("Discovery Service", () => {
       });
     });
 
+    test("uses canonical user name instead of legacy tutor display name", () => {
+      const result = buildProjection(
+        makeProfile({
+          displayName: "Legacy Profile Name",
+          user: { name: "Canonical User Name", image: null },
+        }),
+      );
+      expect(result.displayName).toBe("Canonical User Name");
+      expect(result.user?.name).toBe("Canonical User Name");
+    });
+
     test("returns null user when user is null", () => {
       const result = buildProjection(makeProfile({ user: null }));
       expect(result.user).toBeNull();

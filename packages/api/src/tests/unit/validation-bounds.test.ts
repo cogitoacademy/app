@@ -334,6 +334,15 @@ describe("Validation bounds — array .max()", () => {
     }
   });
 
+  test("tutor profile subjects reject >7 items", () => {
+    const subjectIds = Array.from({ length: 8 }, (_, i) => `subject-${i}`);
+    const result = updateMyProfileInput.safeParse({ version: 1, subjectIds });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0].message).toMatch(/<=7/i);
+    }
+  });
+
   test("achievement proof URLs reject >20 items", () => {
     const proofUrls = Array.from(
       { length: 21 },

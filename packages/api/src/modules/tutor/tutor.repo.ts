@@ -69,7 +69,7 @@ export async function getByUserId(conn: DbOrTx, userId: string) {
   return conn.query.tutorProfile.findFirst({
     where: eq(tutorProfile.userId, userId),
     with: {
-      user: { columns: { image: true } },
+      user: { columns: { name: true, image: true } },
       subjects: {
         with: {
           subject: {

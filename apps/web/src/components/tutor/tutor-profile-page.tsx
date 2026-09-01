@@ -2,7 +2,6 @@
 
 import { useQuery } from "@tanstack/react-query";
 import type { CogitoUser } from "@cogito-app/auth";
-import type { ReactNode } from "react";
 import {
   Card,
   CardBody,
@@ -28,14 +27,14 @@ export function TutorProfilePage({
 
   if (isLoading) {
     return (
-      <TutorProfileScrollContainer>
+      <div className="w-full shrink-0">
         <Loader />
-      </TutorProfileScrollContainer>
+      </div>
     );
   }
   if (error || !profile) {
     return (
-      <TutorProfileScrollContainer>
+      <div className="w-full shrink-0">
         <Card className="mx-auto w-full max-w-2xl">
           <CardBody className="flex flex-col items-center gap-2 text-center">
             <CardTitle>Tutor profile unavailable</CardTitle>
@@ -45,12 +44,12 @@ export function TutorProfilePage({
             </CardDescription>
           </CardBody>
         </Card>
-      </TutorProfileScrollContainer>
+      </div>
     );
   }
 
   return (
-    <TutorProfileScrollContainer>
+    <div className="w-full shrink-0">
       <OnboardingForm
         accountUser={accountUser}
         profile={{
@@ -63,14 +62,6 @@ export function TutorProfilePage({
               : null,
         }}
       />
-    </TutorProfileScrollContainer>
-  );
-}
-
-function TutorProfileScrollContainer({ children }: { children: ReactNode }) {
-  return (
-    <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain">
-      {children}
     </div>
   );
 }

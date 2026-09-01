@@ -10,11 +10,21 @@ copy and section-level errors, so validation renders inline without a runtime
 exception. No RPC path, request envelope, response shape, schema, or persistence
 contract changed.
 
-The tutor profile editor is rendered inside one route-owned vertical scroll
-container while the authenticated shell is contained for that route. Category
-fieldsets use their own content height and the action bar no longer adds an
-extra bottom gap. This is presentation-only; no RPC path, request envelope,
-response shape, schema, or persistence contract changed.
+The tutor profile editor uses the authenticated shell's page-level vertical
+scroll container, matching the student profile and avoiding a nested form
+scrollbar. Direct shell children do not flex-shrink, so the tutor page wrapper
+and onboarding content share one natural height. Category fieldsets use their
+own content height and the action bar
+stays in normal document flow without adding trailing scroll space. This is
+presentation-only; no RPC path, request envelope, response shape, schema, or
+persistence contract changed.
+
+All roles use Better Auth `user.name` as the canonical visible name. Tutor
+onboarding saves its single **Name** field through Better Auth and no longer
+sends tutor-profile `displayName`; discovery keeps its compatible
+`displayName` response key but projects that value from `user.name`. The legacy
+tutor-profile input/column remains accepted for compatibility and is not used by
+new web UI.
 
 ## Tutor profile drawers (2026-08-31)
 
@@ -47,7 +57,7 @@ enabled.
 
 Email/password sign-in and sign-up use Better Auth endpoints under `/api/auth`. The server's sign-up password-policy preflight returns 400 for malformed JSON instead of allowing a parser exception to become a 500. The web client validates the email forms on the client and surfaces invalid fields with Selia's inline error state and danger outline, waits for the successful auth response and a fresh session read before entering an authenticated route, and the authenticated route guard also reads the non-cookie-cached session so role-based redirects do not briefly fall back to `/login`. If that fresh session has `emailVerified !== true`, the web client requests an email-verification OTP and routes the user to `/verify-email` before the normal role/return-path destination; this also covers legacy accounts created before verification was introduced. The validated destination is preserved after verification. This changes no successful request or response shape.
 
-Google sign-in starts through Better Auth on the API and uses `GET /api/auth/callback/google` as the provider callback (`BETTER_AUTH_URL`), then redirects the browser to the frontend callback route supplied by the web client (`https://app.cogitoacademy.id/auth/callback`). In production, session cookies remain `SameSite=Strict`; Better Auth's short-lived signed OAuth state cookie is scoped to `SameSite=Lax` so a top-level `GET` callback from Google can return it for state verification. The state cookie remains `Secure`/`HttpOnly`, and the database-backed state record plus signed cookie must both validate before a session is created. This changes no endpoint input or output shape.
+Google sign-in starts through Better Auth on the API and uses `GET /api/auth/callback/google` as the provider callback (`BETTER_AUTH_URL`), then redirects the browser to the frontend callback route supplied by the web client (`https://app.cogitoacademy.id/auth/callback`). The Google provider explicitly sends `prompt=consent`, so the Google OAuth permission screen is shown even when the account has authorized the client before. Sign-in requests Google's identity scopes only; the broader Calendar scope used by the server-side Meet integration remains a separate operator OAuth flow. In production, session cookies remain `SameSite=Strict`; Better Auth's short-lived signed OAuth state cookie is scoped to `SameSite=Lax` so a top-level `GET` callback from Google can return it for state verification. The state cookie remains `Secure`/`HttpOnly`, and the database-backed state record plus signed cookie must both validate before a session is created. This changes no endpoint input or output shape.
 
 Production and staging server bootstrap also reconcile `ADMIN_EMAILS` before
 serving traffic (default: `itcogitoacademy01@gmail.com`). Matching addresses
@@ -408,19 +418,22 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `tutor.updateMyProfile`
 
 - **Auth:** Tutor
-- **Input:** `{ version, displayName?, shortBio?, credentialsSummary?, achievements?, experiences?, achievementProofUrls?, experienceProofUrls?, profileImageUrl?, education?, competitionAchievements?, experienceEntries?, expertise?, subjectIds?, modality?, baseRatesIdr?, bankName?, bankAccountNumber?, bankAccountHolderName?, bankAccountOpeningCity?, bankAccountOwnership?: "self" | "trusted_person", bankTransferDisclaimerAccepted?, prices? }`; `experienceEntries` accepts up to 5 `{ role, organization, startYear, endYear, description }` entries, with `endYear` nullable for an ongoing role. The tutor editor exposes one structured achievement section, one structured experience section, and one profile-image field. The legacy `achievements`/`credentialsSummary`/`experiences` values remain accepted for older profiles.
+- **Input:** `{ version, displayName? (legacy clients only), shortBio?, credentialsSummary?, achievements?, experiences?, achievementProofUrls?, experienceProofUrls?, profileImageUrl?, education?, competitionAchievements?, experienceEntries?, expertise?, subjectIds?, modality?, baseRatesIdr?, bankName?, bankAccountNumber?, bankAccountHolderName?, bankAccountOpeningCity?, bankAccountOwnership?: "self" | "trusted_person", bankTransferDisclaimerAccepted?, prices? }`; `experienceEntries` accepts up to 5 `{ role, organization, startYear, endYear, description }` entries, with `endYear` nullable for an ongoing role. The tutor editor saves its canonical name through Better Auth, exposes one combined structured Achievements & experience section and one profile-image field, and does not send `displayName`. The legacy `achievements`/`credentialsSummary`/`experiences` values remain accepted for older profiles.
 - **Output:** `{ profile, subjects: [{ id, slug, name, description?, isSelectable, parent: { id, slug, name } }] }`
-- **Errors:** `OPTIMISTIC_LOCK` (409) on version mismatch, `INVALID_TUTOR_PRICING` (400) on floor-price violation, `INVALID_TUTOR_SUBJECT_SELECTION` (400) when ids are not active selectable child subjects or exceed 20
-- **Description:** Updates the tutor profile with optimistic locking. The tutor editor presents one structured achievement section, one structured experience section, and one profile-image field; each experience stores a role, organization, start/end years, and a brief description. Year values are sent as plain integers without grouping punctuation, and an end year must be on or after its start year. Legacy `achievements`/`credentialsSummary`/`experiences` text remains readable as a fallback when no structured entries exist. `achievementProofUrls`, `experienceProofUrls`, and `profileImageUrl` accept only bounded HTTP(S) URLs. `profileImageUrl` is the single canonical tutor profile image: draft/changes-requested updates write it to the account image, while published changes wait in `pendingProfileChanges` until admin review. The admin can replace it with the background-standardized final asset through tutor review. `subjectIds` is the normalized child-category selection. Payout-account fields remain private. A published tutor's `baseRatesIdr` takes effect immediately for future bookings; existing bookings retain their stored price snapshot for payout. Other trust-sensitive changes—including structured achievements and experiences—wait in `pendingProfileChanges`.
+- **Errors:** `OPTIMISTIC_LOCK` (409) on version mismatch, `INVALID_TUTOR_PRICING` (400) on floor-price violation, `INVALID_TUTOR_SUBJECT_SELECTION` (400) when ids are not active selectable child subjects or exceed 7; tutor domain validation errors include field-specific data such as `missingFields`, `pricingError`, or `subjectIds` where available
+- **Description:** Updates the tutor profile with optimistic locking. The tutor editor presents one combined structured Achievements & experience section and one profile-image field; each experience stores a role, organization, start/end years, and a brief description. Year values are sent as plain integers without grouping punctuation, and an end year must be on or after its start year. Comma punctuation in award and experience text remains visible while editing; comma-separated award titles still normalize to the structured `awards` array. Legacy `achievements`/`credentialsSummary`/`experiences` text remains readable as a fallback when no structured entries exist. `achievementProofUrls`, `experienceProofUrls`, and `profileImageUrl` accept only bounded HTTP(S) URLs. `profileImageUrl` is the single canonical tutor profile image: draft/changes-requested updates write it to the account image, while published changes wait in `pendingProfileChanges` until admin review. The admin can replace it with the background-standardized final asset through tutor review. `subjectIds` is the normalized child-category selection. Payout-account fields remain private. A published tutor's `baseRatesIdr` takes effect immediately for future bookings; existing bookings retain their stored price snapshot for payout. Other trust-sensitive changes—including structured achievements and experiences—wait in `pendingProfileChanges`. The web editor exposes separate **Save draft**/**Save profile changes** and **Submit for review** actions: saving permits incomplete required top-level fields while still highlighting malformed values, while submission applies the complete required-field gate. Both client-side and API-side validation errors are shown beside the affected field and in the form summary.
 
 Structured tutor experience fields are submitted through `experienceEntries` as up to five `{ role, organization, startYear, endYear, description }` entries. Years are plain integers; `endYear` may be `null` for an ongoing role and cannot precede `startYear`. Legacy `experiences` text remains accepted for older profiles.
 
 ### `tutor.submitForReview`
 
+The web tutor profile editor groups education, competition achievements, and experiences into one combined **Achievements & experience** section with one public preview; the API fields and review behavior remain unchanged.
+
 - **Auth:** Tutor
 - **Input:** None
 - **Output:** `{ profile }`
-- **Description:** Submits a draft profile for admin review. The required achievement may come from the structured competition-achievement entries or from legacy achievement text retained on an older profile. The required experience may come from `experienceEntries` or legacy experience text retained on an older profile.
+- **Errors:** `TUTOR_PROFILE_INCOMPLETE` (400) when required profile fields are missing; `INVALID_TUTOR_PRICING` (400) when a base honorarium is invalid; `INVALID_TUTOR_SUBJECT_SELECTION` (400) when subject ids are invalid
+- **Description:** Submits a draft profile for admin review. The required achievement may come from the structured competition-achievement entries or from legacy achievement text retained on an older profile. The required experience may come from `experienceEntries` or legacy experience text retained on an older profile. Incomplete and pricing errors include their missing-field or pricing detail so the web form can highlight the relevant controls.
 
 ### `tutor.listAvailability`
 

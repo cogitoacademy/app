@@ -72,10 +72,14 @@ Production-like server boot reconciles the comma-separated `ADMIN_EMAILS`
 allowlist before serving traffic. It defaults to
 `itcogitoacademy01@gmail.com`, matches case-insensitively, promotes matching
 existing accounts, and never demotes other admins. The Better Auth signup hook
-covers a matching account created after boot; the production seed uses the
-first configured address while local/test seed keeps `admin@cogitoacademy.id`.
-Additional admins can still be granted through the existing admin role
-management flow.
+covers a matching account created after boot. The guarded production seed uses
+a separate `SEED_REVIEW_ADMIN_EMAIL` and refuses to reuse any address in
+`ADMIN_EMAILS`; local/test seed keeps `admin@cogitoacademy.id`. Its review
+student has verified local authentication and seeded Marks, while its review
+tutor has a published structured profile, normalized subjects, and future
+availability. The Google Calendar operator password is never part of reviewer
+credentials. Additional admins can still be granted through the existing admin
+role management flow.
 
 The OVH host bootstrap is repeatable through the Terraform configuration in
 `infra/terraform`, which runs the idempotent `infra/provision.sh` over SSH for
@@ -94,11 +98,23 @@ Unknown client-side paths render the branded `NotFoundPage` from the root route 
 
 The profile and tutor-onboarding routes keep every Selia `FieldLabel`, `FieldDescription`, and `FieldError` under a `Field` root, including checkbox copy and section-level validation messages. This preserves Base UI field context when validation errors render; otherwise Base UI error #28 reaches the outer error page and can look like a misleading 500. This is frontend-only and does not change an API or persistence contract.
 
-The tutor profile editor owns one vertical scroll container inside the contained
-authenticated shell; the shell itself does not scroll on `/profile` for tutors.
+The tutor profile editor uses the authenticated shell's page-level vertical
+scroll container, matching the student profile instead of nesting a second
+scrollable region inside the page. The shell keeps direct page children from
+flex-shrinking, and the tutor profile wrapper therefore follows the onboarding
+content's natural height instead of stopping at the viewport height.
 The normalized subject-category grid uses content-sized fieldsets so shorter
-categories do not stretch into large blank areas, and the sticky action bar
-ends flush with the profile scroller. This is presentation-only.
+categories do not stretch into large blank areas, and the final action card
+stays in normal document flow so the page ends without trailing scroll space.
+This is presentation-only.
+
+All roles use Better Auth `user.name` as the single canonical visible name.
+Tutor onboarding edits that account name directly and no longer submits
+`tutorProfile.displayName`; tutor
+discovery, booking, dashboards, sidebar, and admin review render `user.name`.
+The legacy tutor-profile column and compatible response key remain temporarily,
+but the response key is projected from `user.name` and new UI does not depend on
+the stored legacy value.
 
 Collection empty states use the shared presentation component at `apps/web/src/components/empty-state.tsx`. `EmptyStateCard` is used for page and card-level states, while `EmptyState` supports `default`, `compact`, and `inline` density for calendars, menus, dialogs, fields, and embedded lists. Empty copy distinguishes a genuinely empty collection from a filtered no-match state; the component uses Selia tokens and provides success, warning, secondary, and danger tones without changing any API or persistence contract. The audit covers calendar periods, resource and tutor discovery, bookings, notifications, session/activity history, Marks ledgers, subject selection, tutor proof links, and availability previews.
 
@@ -416,9 +432,14 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 
 ### Tutor Module (tutor)
 
+The tutor `/profile` editor presents education, competition achievements, and experiences in one combined **Achievements & experience** card with a single public preview; each subsection keeps its own private proof-link field.
+
 - `getMyProfile`, `updateMyProfile`, `submitForReview`
-- Tutor profiles store structured `education` (maximum 2 entries), one structured achievement section backed by `competitionAchievements` (maximum 5 entries, each with comma-separated award titles), and one structured experience section backed by `experienceEntries` (maximum 5 role/organization/year/description entries); the web editor previews the normalized format and the public discovery drawer renders it without year grouping dots.
-- `subjectIds` uses the normalized competition mother-category/child-subject taxonomy; drafts may save without subjects, but review submission requires at least one active current child subject. Archived legacy subjects remain readable but cannot be newly selected.
+- Tutor profiles store structured `education` (maximum 2 entries), one structured achievement section backed by `competitionAchievements` (maximum 5 entries, each with comma-separated award titles), and one structured experience section backed by `experienceEntries` (maximum 5 role/organization/year/description entries); the web editor previews the normalized format and the public discovery drawer renders it without year grouping dots. The award editor keeps an in-progress comma visible while the next title is being typed, and experience text fields preserve punctuation.
+- The tutor profile editor separates **Save draft**/**Save profile changes** from **Submit for review**. Draft saving does not require the complete onboarding set, while malformed values are shown with field-level errors, a validation summary, and focus on the first invalid control; submission applies the complete required-field gate. Published tutors remain editable while profile changes are under review: saving updates the pending proposal, and submitting validates and queues the latest version.
+- The admin tutor index derives its displayed status from both onboarding and edit-review state: a published tutor with submitted pending changes is labeled **Edit review**, while an edit returned by admin is labeled **Revision requested**, so admins can identify work requiring attention without opening the drawer.
+- The tutor profile photo uploader is the first editable section and uses the same compact clickable-avatar crop flow as the student identity editor. Published tutors see the current public photo beside their proposed replacement; the replacement remains staged in `pendingProfileChanges.profileImageUrl` until admin approval. The admin review drawer shows the current and proposed assets side by side rather than presenting the pending asset as already public.
+- `subjectIds` uses the normalized competition mother-category/child-subject taxonomy; tutors may select at most 7 active child subjects. Drafts may save without subjects, but review submission requires at least one active current child subject. Archived legacy subjects remain readable but cannot be newly selected.
 - `listAvailability`, `upsertAvailability`, `createWeeklyAvailability`, `deleteAvailability`
 - `getMyPayouts`
 
@@ -520,11 +541,11 @@ Internal-only modules with no RPC procedures: `audit`, `economy`, `email`, `meet
 
 ## Auth Config
 
-- Email/password enabled. Google OAuth optional (conditional on env vars, after foundation hardening).
+- Email/password enabled. Google OAuth optional (conditional on env vars, after foundation hardening); the configured Google provider sends `prompt=consent` so the Google permission screen is shown during verification runs even for a previously authorized account.
 - Production/staging admin bootstrap uses `ADMIN_EMAILS` (default `itcogitoacademy01@gmail.com`) to promote matching existing or newly-created accounts case-insensitively; existing admins are preserved and the normal admin role-management flow remains available for other addresses.
 - Password reset flow: Better Auth built-in endpoints (`/api/auth/request-password-reset`, `/api/auth/reset-password`). Email via existing EmailService (category `auth`), wired through `setAuthEmailSender()` from the composition root (`apps/server/src/index.ts`). Unknown emails get the same success response (no enumeration). `revokeSessionsOnPasswordReset: true` — all existing sessions die on reset. Reset token valid 1 hour.
 - Wallet created lazily via `WalletService.getOrCreate()` on first `auth.me` call.
-- Cookies: session cookies use sameSite=strict (production) / lax (development), secure=true (production), httpOnly=true. The short-lived Better Auth OAuth state cookie is explicitly sameSite=lax so the signed state returns on the provider's top-level callback GET; it remains secure/httpOnly and is checked against the database verification record. Same-site subdomain requests work because `app.cogitoacademy.id` and `api.cogitoacademy.id` share the `cogitoacademy.id` site.
+- Cookies: session cookies use sameSite=strict (production) / lax (development), secure=true (production), httpOnly=true. The short-lived Better Auth OAuth state cookie is explicitly sameSite=lax so the signed state returns on the provider's top-level callback GET; it remains secure/httpOnly and is checked against the database verification record. Same-site subdomain requests work because `app.cogitoacademy.id` and `api.cogitoacademy.id` share the `cogitoacademy.id` site. Google login uses `prompt=consent` to make the provider permission screen visible for verification evidence; it requests identity scopes only and does not add the server-side Meet/Calendar scope to every user's login.
 - `CogitoUser` type exported with role field.
 - Web email sign-in and sign-up treat authentication as one awaited handoff: Better Auth must return success, the client reads a fresh session with `disableCookieCache`, and then TanStack Router navigates by a validated return path or the role/onboarding default. Tutor accounts without a profile, or with `draft`/`changes_requested` onboarding status, go to `/profile`; tutors in review, approved, published, or suspended states and admins go to `/dashboard`, as do students by default. The client suppresses Better Auth's overlapping session signal refresh during that handoff so the form does not remount into the global pending loader; the authenticated shell uses the same fresh session source for its parent route guard. A user whose fresh session has `emailVerified !== true` is sent to `/verify-email` after a new OTP request, including legacy accounts created before verification was introduced; the selected post-login destination is preserved for after verification. Existing users are not backfilled as verified. This is frontend-only and does not change auth endpoints or persistence.
 - The `/login` email forms validate each touched field on change and blur, keep the client rules aligned with the server password policy, show inline Selia field errors and danger outlines for touched or blocked fields, and normalize name/email whitespace before calling Better Auth. This is presentation and client-validation behavior only; it does not change auth endpoints or persistence.
@@ -616,7 +637,7 @@ Use this section as the current role-readiness baseline. Re-audit only after the
 
 ### Student
 
-The student My Profile surface supports self-service account name and profile-image updates through Better Auth, alongside learning/contact fields. The sign-in email remains read-only on this page. Students upload a JPG, PNG, or WebP photo, adjust the visible area with a circular drag/zoom crop editor, and save the resulting square avatar through the existing protected Upload Module. Student identity edits do not require admin review.
+The student My Profile surface supports self-service account name and profile-image updates through Better Auth, alongside learning/contact fields. The sign-in email remains read-only on this page. The compact identity header exposes photo editing through the avatar itself, with a pencil badge communicating that it is clickable. Students upload a JPG, PNG, or WebP photo, adjust the visible area with a circular drag/zoom crop editor, and save the resulting square avatar through the existing protected Upload Module. Student identity edits do not require admin review.
 
 Student profile UX is organized as a responsive account-identity card plus separate learning and parent/guardian sections. The page shows profile completion, keeps account identity saving separate from learning-profile saving, and uses one visible save action for the learning fields. It reads the student row through the focused `auth.getProfile` procedure and treats a missing row as the initial empty form, so the page does not depend on the wallet/tutor aggregate in `auth.me`.
 
@@ -644,7 +665,7 @@ The tutor workspace now has the primary management surfaces: the tutor profile e
 
 Published tutor profiles remain editable. Bio edits and tutor-set base honoraria publish immediately; a new honorarium applies only to future bookings. Existing bookings keep their stored price snapshot, including the original tutor honorarium, for weekly payout. Other trust-sensitive edits are held in `pendingProfileChanges` with a separate edit-review status, so discovery continues serving the last approved profile until an admin approves the proposal or requests revisions.
 
-The tutor profile editor keeps one structured Achievements section backed by education (up to two entries) and competition achievements (up to five entries), plus one structured Experiences section backed by up to five role/organization/year/description entries. The structured editors preview normalized public output; achievement and experience year fields stay as plain digits without grouping dots, and an ongoing experience leaves End year blank. Older profiles still fall back to legacy `achievements`/`credentialsSummary` and `experiences` text when no structured entries exist. Each section keeps its own optional private proof URL list. Tutors submit one canonical profile image; for published tutors, a changed image waits in review while the Cogito admin applies the standard background and updates the same account image. Profile status and feedback stay visible above the form. Base honorarium uses Rp 5,000 steps and a combined six-row IDR matrix. Public profile occupies its own full-width row; Teaching setup and payout account share the next two-column row. The payout form captures complete destination-account details and transfer responsibility. Only conventional BCA is fee-free; BCA Syariah, blu (BCA Digital), and other banks incur Rp2,500 per payout. The tutor sidebar exposes this surface as **Tutor Profile**; the avatar menu keeps **Profile** for students and omits it for tutors and admins. Admins can still use the dedicated Manage Tutors review surface, but `/profile` redirects them to `/dashboard`.
+The tutor profile editor keeps one combined **Achievements & experience** section: structured education (up to two entries), competition achievements (up to five entries), and experiences (up to five role/organization/year/description entries). The structured editors preview normalized public output; achievement and experience year fields stay as plain digits without grouping dots, and an ongoing experience leaves End year blank. Older profiles still fall back to legacy `achievements`/`credentialsSummary` and `experiences` text when no structured entries exist. Each subsection keeps its own optional private proof URL list. Tutors submit one canonical profile image; for published tutors, a changed image waits in review while the Cogito admin applies the standard background and updates the same account image. Profile status and feedback stay visible above the form. Base honorarium uses Rp 5,000 steps and a combined six-row IDR matrix. Public profile occupies its own full-width row; Teaching setup and payout account share the next two-column row. The payout form captures complete destination-account details and transfer responsibility. Only conventional BCA is fee-free; BCA Syariah, blu (BCA Digital), and other banks incur Rp2,500 per payout. The tutor sidebar exposes this surface as **Tutor Profile**; the avatar menu keeps **Profile** for students and omits it for tutors and admins. Admins can still use the dedicated Manage Tutors review surface, but `/profile` redirects them to `/dashboard`.
 
 Manage Tutors shows at most three invitations and five tutor profiles per page in compact Selia tables and paginates each list independently. Invitation operations are grouped into a per-row actions menu. The invitation table uses semantic status badges: invited is warning, accepted is success, and expired/revoked are danger; unknown values fall back to secondary. Tutor details open on demand in a right-side review drawer, which retains the full achievements, experiences, section-specific private proof links, canonical profile photo, and review-action workflow without overwhelming the index page. Status filter changes reset the corresponding list to page one. Both tutor drawers keep the profile body scrollable inside the viewport while their header/actions remain visible.
 

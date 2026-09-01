@@ -155,6 +155,49 @@ function readProfileImageUrl(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value : null;
 }
 
+function PhotoReviewPanel({
+  label,
+  description,
+  imageUrl,
+  fallback,
+  proposed = false,
+}: {
+  label: string;
+  description: string;
+  imageUrl: string | null;
+  fallback: string;
+  proposed?: boolean;
+}) {
+  return (
+    <div className="rounded-lg border border-item-border bg-item p-3">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div>
+          <Text className="text-sm font-medium">{label}</Text>
+          <Text className="text-xs text-muted">{description}</Text>
+        </div>
+        {proposed ? (
+          <Badge variant="warning" size="sm" pill>
+            Pending
+          </Badge>
+        ) : null}
+      </div>
+      {imageUrl ? (
+        <a href={imageUrl} target="_blank" rel="noreferrer">
+          <img
+            src={imageUrl}
+            alt={label}
+            className="aspect-square w-full rounded-lg object-cover"
+          />
+        </a>
+      ) : (
+        <div className="flex aspect-square w-full items-center justify-center rounded-lg bg-accent text-xl font-semibold text-muted">
+          {fallback}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function readEducationEntries(value: unknown): TutorEducationEntry[] | null {
   if (!Array.isArray(value)) return null;
 
@@ -502,8 +545,10 @@ export function TutorReviewCard({
   const pendingProfileImageUrl = readProfileImageUrl(
     profile.pendingProfileChanges?.profileImageUrl,
   );
-  const currentProfileImageUrl =
-    pendingProfileImageUrl ?? profile.user?.image ?? null;
+  const currentProfileImageUrl = profile.user?.image ?? null;
+  const pendingChangesWithoutPhoto = Object.entries(
+    profile.pendingProfileChanges ?? {},
+  ).filter(([field]) => field !== "profileImageUrl");
 
   return (
     <>
@@ -514,13 +559,11 @@ export function TutorReviewCard({
               src={currentProfileImageUrl ?? undefined}
               alt="Tutor profile"
             />
-            <AvatarFallback>
-              {getInitials(profile.displayName ?? profile.user?.name)}
-            </AvatarFallback>
+            <AvatarFallback>{getInitials(profile.user?.name)}</AvatarFallback>
           </Avatar>
           <div className="min-w-0">
             <CardTitle className="truncate">
-              {profile.displayName ?? profile.user?.name ?? "Unnamed tutor"}
+              {profile.user?.name ?? "Unnamed tutor"}
             </CardTitle>
             {profile.user ? (
               <div className="mt-1 flex items-center gap-1.5 text-muted">
@@ -707,22 +750,25 @@ export function TutorReviewCard({
 
             <section>
               <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-dimmed">
-                Profile photo
+                Profile photo review
               </Text>
-              {currentProfileImageUrl ? (
-                <a
-                  href={currentProfileImageUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-sm underline underline-offset-2"
-                >
-                  Open current profile photo
-                </a>
-              ) : (
-                <Text className="text-sm italic text-dimmed">
-                  No profile photo submitted.
-                </Text>
-              )}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <PhotoReviewPanel
+                  label="Current photo"
+                  description="Visible to students now"
+                  imageUrl={currentProfileImageUrl}
+                  fallback={getInitials(profile.user?.name)}
+                />
+                {pendingProfileImageUrl ? (
+                  <PhotoReviewPanel
+                    label="Proposed photo"
+                    description="Applies only after approval"
+                    imageUrl={pendingProfileImageUrl}
+                    fallback={getInitials(profile.user?.name)}
+                    proposed
+                  />
+                ) : null}
+              </div>
               <Input
                 className="mt-2"
                 type="url"
@@ -835,27 +881,25 @@ export function TutorReviewCard({
                 <Text className="mt-1 text-sm">{profile.adminReviewNote}</Text>
               </div>
             ) : null}
-            {profile.pendingProfileChanges ? (
+            {pendingChangesWithoutPhoto.length > 0 ? (
               <section className="rounded-lg border border-warning-border bg-warning/10 p-3">
                 <Text className="text-xs font-semibold uppercase tracking-wide text-warning">
                   Proposed profile changes
                 </Text>
                 <Stack spacing="sm" className="mt-2">
-                  {Object.entries(profile.pendingProfileChanges).map(
-                    ([field, value]) => (
-                      <div key={field} className="min-w-0">
-                        <Text className="text-xs capitalize text-muted">
-                          {formatPendingField(field)}
-                        </Text>
-                        <PendingChangeValue
-                          field={field}
-                          value={value}
-                          subjectLabels={subjectLabels}
-                          idPrefix={`admin-${profile.id}-pending-${field}`}
-                        />
-                      </div>
-                    ),
-                  )}
+                  {pendingChangesWithoutPhoto.map(([field, value]) => (
+                    <div key={field} className="min-w-0">
+                      <Text className="text-xs capitalize text-muted">
+                        {formatPendingField(field)}
+                      </Text>
+                      <PendingChangeValue
+                        field={field}
+                        value={value}
+                        subjectLabels={subjectLabels}
+                        idPrefix={`admin-${profile.id}-pending-${field}`}
+                      />
+                    </div>
+                  ))}
                 </Stack>
                 {profile.profileEditAdminNote ? (
                   <Text className="mt-2 text-sm">

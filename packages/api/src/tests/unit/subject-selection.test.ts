@@ -30,8 +30,13 @@ describe("tutor subject selection", () => {
       validateTutorSubjectIds(["child-1", "child-1"], [child("child-1")]),
     ).toThrow();
 
-    const ids = Array.from({ length: 21 }, (_, index) => `child-${index}`);
-    expect(() => validateTutorSubjectIds(ids, ids.map(child))).toThrow();
+    const ids = Array.from({ length: 7 }, (_, index) => `child-${index}`);
+    expect(() => validateTutorSubjectIds(ids, ids.map(child))).not.toThrow();
+
+    const oversizedIds = [...ids, "child-7"];
+    expect(() =>
+      validateTutorSubjectIds(oversizedIds, oversizedIds.map(child)),
+    ).toThrow();
   });
 
   test("projects only joined child subjects with their parent", () => {

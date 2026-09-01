@@ -8,7 +8,7 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 import { orpc } from "@/utils/orpc";
 import { IconX } from "@tabler/icons-react";
 
-const MAX_TUTOR_SUBJECTS = 20;
+export const MAX_TUTOR_SUBJECTS = 7;
 
 export type SubjectOption = {
   id: string;
@@ -139,8 +139,12 @@ export function SubjectSelector({
     <div
       id={triggerId}
       tabIndex={-1}
-      className="flex flex-col gap-4 outline-none"
+      className={`flex flex-col gap-4 rounded-lg outline-none ${
+        error ? "ring-2 ring-danger-border/24" : ""
+      }`}
       aria-label="Competition subjects"
+      aria-invalid={Boolean(error)}
+      aria-describedby={error ? `${triggerId}-error` : undefined}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Text className="text-sm text-muted">
@@ -252,7 +256,11 @@ export function SubjectSelector({
         </div>
       ) : null}
 
-      {error ? <Text className="text-danger">{error}</Text> : null}
+      {error ? (
+        <Text id={`${triggerId}-error`} className="text-danger" role="alert">
+          {error}
+        </Text>
+      ) : null}
     </div>
   );
 }

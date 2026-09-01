@@ -3,6 +3,7 @@ import {
   availabilitySlot,
   subjectCategory,
   tutorProfile,
+  user,
 } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
@@ -85,7 +86,11 @@ async function listPublished(conn: DbOrTx, input: ListPublishedInput) {
     const q = `%${escaped}%`;
     conditions.push(
       sql`(
-        lower(${tutorProfile.displayName}) like lower(${q}) escape '\\'
+        exists (
+          select 1 from ${user}
+          where ${user.id} = ${tutorProfile.userId}
+            and lower(${user.name}) like lower(${q}) escape '\\'
+        )
         or lower(${tutorProfile.shortBio}) like lower(${q}) escape '\\'
         or lower(${tutorProfile.credentialsSummary}) like lower(${q}) escape '\\'
         or lower(coalesce(${tutorProfile.expertise}::text, '')) like lower(${q}) escape '\\'

@@ -68,7 +68,7 @@ export function TutorSummary({
   tutor: TutorSummaryData;
   action?: ReactNode;
 }) {
-  const tutorName = tutor.displayName ?? tutor.user?.name ?? "Tutor";
+  const tutorName = tutor.user?.name ?? "Tutor";
   const allPrices = tutor.pricesByModality
     ? Object.values(tutor.pricesByModality).flatMap((prices) =>
         prices ? Object.values(prices) : [],

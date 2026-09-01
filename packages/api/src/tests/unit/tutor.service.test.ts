@@ -23,7 +23,10 @@ function makeProfile(overrides: Record<string, unknown> = {}) {
     credentialsSummary: "PhD in Math",
     achievements: "National mathematics medalist (2025)",
     experiences: "Mathematics tutor (2024–2025)",
-    user: { image: "https://example.com/profile-photo.jpg" },
+    user: {
+      name: "Dr. Smith",
+      image: "https://example.com/profile-photo.jpg",
+    },
     modality: "online",
     bankName: "BCA",
     bankAccountNumber: "1234567890",
@@ -188,7 +191,7 @@ describe("Tutor Service", () => {
     test("throws TutorProfileIncompleteError for missing required fields", () => {
       expect(() =>
         validateSubmitForReview(
-          makeProfile({ displayName: null }),
+          makeProfile({ user: { name: "", image: null } }),
           mockPricingPort,
         ),
       ).toThrow(TutorProfileIncompleteError);

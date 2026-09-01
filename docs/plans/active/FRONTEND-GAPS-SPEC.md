@@ -29,12 +29,34 @@ initial empty form. No API or database shape changed. Published tutors may updat
 from this surface at any time; the new rate applies to future bookings while
 existing booking snapshots remain authoritative for weekly payout.
 
-The tutor profile route now uses one route-owned vertical scroll container while
-the authenticated shell is contained, preventing the form and shell from
-scrolling independently. Subject-category fieldsets retain natural heights so
-short categories do not create large blank areas, and the action bar has no
-extra bottom gap. This is presentation-only and does not change any API or
-database contract.
+All roles now use Better Auth `user.name` as the one visible name. Tutor
+onboarding edits the account field directly and no longer submits the legacy
+tutor-profile `displayName`;
+discovery, booking, dashboards, sidebar, and admin review render `user.name`.
+The compatible discovery response key remains but is projected from the user
+record. No database field is removed in this compatibility step.
+
+The tutor profile route now uses the authenticated shell's page-level vertical
+scroll container, matching the student profile and avoiding an inner form
+scrollbar. Direct shell children cannot flex-shrink, so the tutor wrapper and
+onboarding root share the form's natural height. Subject-category fieldsets retain natural heights so
+short categories do not create large blank areas. The final action card stays
+in normal document flow so it cannot leave trailing scroll space. This is
+presentation-only and does not change any API or database contract.
+
+### Tutor profile validation and save actions follow-up (2026-09-01)
+
+The tutor profile editor now keeps progress saving separate from review
+submission. **Save draft** (or **Save profile changes** for a published profile)
+allows incomplete required top-level fields, while malformed values are shown on
+the individual control, repeated in a compact validation summary, and included
+in first-error focus behavior. **Submit for review** applies the complete
+required-field gate before saving and submitting. API-side incomplete-profile and
+pricing errors preserve their field details so the editor can highlight the
+affected area instead of showing only a generic failure. The RPC paths and
+request envelope remain unchanged. Published tutors keep both actions available
+while an edit proposal is under review: saving updates the pending proposal,
+and submitting validates and queues the latest version.
 
 ### Role-aware login destination follow-up (2026-08-31)
 
@@ -59,13 +81,13 @@ The Experiences section now stores up to five structured `experienceEntries` wit
 
 ### Tutor achievement formatting follow-up (2026-08-31)
 
-Tutor onboarding captures structured education (up to 2 entries) and one structured competition-achievement section (up to 5 entries) alongside one multiline Experiences field. Each competition entry stores a name, year, and one or more award titles; the editor accepts comma-separated awards, keeps year values ungrouped, and previews the public format with a bold first line and readable spacing. Published tutor discovery returns the structured arrays and falls back to legacy achievement/credential text for older profiles. Admin tutor review includes an **Edit format** action backed by `adminTutor.updateTutorAchievements`, optimistic `version` checks, and an audit event for corrections. Migration `0039_secret_blink.sql` adds the two JSONB fields after the migrations already present on `main`.
+Tutor onboarding captures structured education (up to 2 entries) and one structured competition-achievement section (up to 5 entries) alongside one multiline Experiences field. Each competition entry stores a name, year, and one or more award titles; the editor accepts comma-separated awards, keeps an in-progress comma visible while the next title is being typed, keeps year values ungrouped, and previews the public format with a bold first line and readable spacing. Experience role, organization, and description text preserves comma punctuation. Published tutor discovery returns the structured arrays and falls back to legacy achievement/credential text for older profiles. Admin tutor review includes an **Edit format** action backed by `adminTutor.updateTutorAchievements`, optimistic `version` checks, and an audit event for corrections. Migration `0039_secret_blink.sql` adds the two JSONB fields after the migrations already present on `main`.
 
 ### Subject taxonomy follow-up (2026-08-25)
 
 Tutor onboarding now uses the normalized competition category/child-subject catalog exposed by `tutors.listSubjects`. The current catalog has seven categories and 33 child subjects. Tutors must select at least one current child subject before submitting for review, and the student tutor catalog supports category and child-subject filters. Archived legacy subjects remain visible on existing tutor profiles but cannot be newly selected. The legacy expertise field remains a compatibility fallback; future category changes should preserve the pending-review behavior for published profiles.
 
-The onboarding selector stores normalized IDs for persistence and renders all current categories with keyboard-accessible checkboxes. Selected subjects appear as chips, while archived profile subjects are shown read-only. The tutor list continues to support selecting multiple mother categories and child subjects; child options are the union of the selected categories, the API matches selected values within each facet, and the list query debounces rapid search/filter changes by 300 ms.
+The onboarding selector stores normalized IDs for persistence and renders all current categories with keyboard-accessible checkboxes. Tutors may select at most 7 active child subjects; the selector shows the cap and current count, disables an eighth choice, and the submit/API validation rejects any over-limit payload. Selected subjects appear as chips, while archived profile subjects are shown read-only. The tutor list continues to support selecting multiple mother categories and child subjects; child options are the union of the selected categories, the API matches selected values within each facet, and the list query debounces rapid search/filter changes by 300 ms.
 
 ### Admin tutor review readability follow-up (2026-08-27)
 
@@ -91,7 +113,13 @@ The authenticated shell's existing Light/Dark/System menu now also responds to `
 
 The student profile and tutor onboarding surfaces now share a responsive account-identity editor. Student learning and parent/guardian fields are separated into clear cards with a completion indicator and one learning-profile save action. Tutor onboarding keeps profile status and review feedback visible, groups public profile/teaching setup/availability fields, presents pricing in a compact responsive grid, and consolidates draft/save/submit actions into a sticky footer. No profile or auth API contracts changed.
 
+The tutor profile photo upload now appears before the rest of the editable profile fields and uses the same compact clickable-avatar crop interaction as the student editor. Published tutors see current and proposed photos separately, with explicit review messaging. The admin review drawer compares those assets side by side and approval promotes the proposed URL through the existing pending-change contract.
+
+The admin tutor index now surfaces the edit-review state in its status badge: a published tutor with submitted changes is shown as **Edit review**, while a returned edit is shown as **Revision requested**, so pending work is visible without opening each drawer.
+
 ### Student profile photo crop follow-up (2026-08-31)
+
+The student identity card now uses its avatar as the compact photo-picker trigger, with a pencil badge indicating editability. Clicking it retains the existing upload, circular crop, and save flow while removing the separate photo input from the card body.
 
 The student account-identity editor now accepts a local JPG, PNG, or WebP upload
 instead of a manually entered image URL. A circular crop dialog supports pointer
@@ -789,9 +817,23 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 
 ### Version Notes
 
+- v1.55 (2026-09-01): Standardized every role on Better Auth `user.name`, removed the tutor-profile name input/payload from onboarding, switched tutor search and visible tutor surfaces to the user record, and retained `tutorProfile.displayName` only as legacy compatibility data. No schema field was removed.
+
+- v1.55 (2026-09-01): Combined the tutor Education, Competition achievements, and Experiences public previews into one preview inside the shared Achievements & experience card. No RPC, schema, or persistence contract changed.
+
+- v1.54 (2026-09-01): Unified tutor profile scrolling with the authenticated shell's page-level scroller to match the student profile, prevented direct page children from flex-shrinking below the form's natural height, removed the nested form scrollbar, and returned the final action card to normal document flow to eliminate trailing scroll space. No RPC, schema, or persistence contract changed.
+
+- v1.53 (2026-09-01): Grouped tutor education, competition achievements, experiences, and their separate proof-link fields into one combined Achievements & experience profile card. No RPC, schema, or persistence contract changed.
+
 - v1.52 (2026-09-01): Set independent Manage Tutors page sizes to 3 invitations and 5 tutor profiles while retaining separate pagination state. No RPC, schema, or persistence contract changed.
 
 - v1.51 (2026-09-01): Fixed the Manage Tutors invitation-table badge mapping so invited is warning, accepted is success, and expired/revoked are danger, with a secondary fallback for unknown values. No RPC, schema, or persistence contract changed.
+
+- v1.50 (2026-09-01): Granted tutors and admins Knowledge Bank access without the student 35-Mark wallet threshold across the sidebar, route guard, resource list, and protected file proxy; students retain the existing threshold. Added role-specific API, module, runbook, and regression coverage.
+
+- v1.48 (2026-09-01): Capped tutor profile subject selection at 7 active child subjects, added explicit frontend submit validation, and kept the API limit aligned with the selector. Updated the tutor taxonomy smoke check and module/API references.
+
+- v1.49 (2026-09-01): Preserved in-progress comma punctuation in the structured tutor achievement editor while keeping comma-separated awards normalized for the existing payload; documented punctuation coverage for achievement and experience text. No API, schema, or persistence contract changed.
 
 - v1.46 (2026-08-31): Made the post-login destination role/onboarding-aware: incomplete or changes-requested tutors go to `/profile`, tutors past onboarding and admins go to `/dashboard`, and the selected destination is preserved through email verification. No API or schema contract changed.
 

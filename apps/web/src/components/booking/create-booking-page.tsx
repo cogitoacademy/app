@@ -334,7 +334,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
   });
   const availableBalance = walletQuery.data?.availableBalance ?? 0;
   const hasEnoughMarks = availableBalance >= requiredHold;
-  const tutorName = profile.displayName ?? profile.user?.name ?? "Cogito tutor";
+  const tutorName = profile.user?.name ?? "Cogito tutor";
   const hasInvalidStartTime = selectedSlots.some((slot) => {
     const value = startTimes[slot.id] ?? formatTimeValue(slot.startDate);
     const latestStart = new Date(

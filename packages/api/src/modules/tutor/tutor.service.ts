@@ -30,11 +30,11 @@ import {
 
 type TutorProfileRow = typeof tutorProfile.$inferSelect;
 type TutorProfileWithSubjectRelations = TutorProfileRow & {
-  user?: { image: string | null } | null;
+  user?: { name: string; image: string | null } | null;
   subjects?: Array<TutorSubjectRelation & { subjectId: string }>;
 };
 type TutorProfileProjection = TutorProfileRow & {
-  user?: { image: string | null } | null;
+  user?: { name: string; image: string | null } | null;
   subjects: NormalizedTutorSubject[];
 };
 
@@ -142,7 +142,10 @@ export function validateSubmitForReview(
     profileImageUrl ??
     (profile as TutorProfileWithSubjectRelations).user?.image;
   const requiredFields: { key: string; value: unknown }[] = [
-    { key: "displayName", value: profile.displayName },
+    {
+      key: "name",
+      value: (profile as TutorProfileWithSubjectRelations).user?.name,
+    },
     { key: "shortBio", value: profile.shortBio },
     { key: "achievements", value: hasAchievement },
     { key: "experiences", value: hasExperience },

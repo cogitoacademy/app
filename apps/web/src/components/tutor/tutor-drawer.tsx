@@ -124,8 +124,7 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
   if (!t) return null;
 
   const selectedTutor = t;
-  const tutorName =
-    selectedTutor.displayName ?? selectedTutor.user?.name ?? "Tutor";
+  const tutorName = selectedTutor.user?.name ?? "Tutor";
 
   const { modalities: priceModalities, rows: priceRows } = getPricingTableData(
     selectedTutor.pricesByModality,
@@ -267,7 +266,7 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
           </>
 
           <DrawerDescription className="sr-only">
-            Details for {t.displayName ?? "tutor"} profile
+            Details for {t.user?.name ?? "tutor"} profile
           </DrawerDescription>
         </DrawerBody>
         <DrawerFooter>
@@ -278,7 +277,7 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
               <Link
                 to="/tutors/$tutorId/book"
                 params={{ tutorId: selectedTutor.id }}
-                aria-label={`Book ${t.displayName ?? t.user?.name ?? "tutor"}`}
+                aria-label={`Book ${t.user?.name ?? "tutor"}`}
               />
             }
           >

@@ -11,10 +11,11 @@ import {
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
-import { Input } from "@cogito-app/ui/components/selia/input";
 import { NumberField } from "@cogito-app/ui/components/selia/number-field";
 import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import { Text } from "@cogito-app/ui/components/selia/text";
+
+import { TutorTextDraftInput } from "./tutor-text-draft-input";
 
 export type TutorExperienceEntry = {
   role: string;
@@ -24,9 +25,7 @@ export type TutorExperienceEntry = {
   description: string;
 };
 
-export type TutorExperienceDraftErrors = {
-  experienceEntries?: string;
-};
+export type TutorExperienceDraftErrors = Record<string, string>;
 
 const MAX_EXPERIENCE_ENTRIES = 5;
 const CURRENT_YEAR = new Date().getFullYear();
@@ -65,25 +64,28 @@ export function createEmptyExperienceEntry(): TutorExperienceEntry {
 export function validateTutorExperienceDraft(
   experienceEntries: readonly TutorExperienceEntry[],
 ): TutorExperienceDraftErrors {
+  const errors: TutorExperienceDraftErrors = {};
+
   for (const [index, entry] of experienceEntries.entries()) {
+    const fieldPrefix = `experienceEntries.${index}`;
     if (!entry.role.trim()) {
-      return {
-        experienceEntries: `Add a role for experience entry ${index + 1}.`,
-      };
+      errors[`${fieldPrefix}.role`] = "Role or position is required.";
+    } else if (entry.role.length > 255) {
+      errors[`${fieldPrefix}.role`] = "Use 255 characters or fewer.";
     }
     if (!entry.organization.trim()) {
-      return {
-        experienceEntries: `Add an organization for experience entry ${index + 1}.`,
-      };
+      errors[`${fieldPrefix}.organization`] =
+        "Organization or company is required.";
+    } else if (entry.organization.length > 255) {
+      errors[`${fieldPrefix}.organization`] = "Use 255 characters or fewer.";
     }
     if (
       !Number.isInteger(entry.startYear) ||
       entry.startYear < 1900 ||
       entry.startYear > 2100
     ) {
-      return {
-        experienceEntries: `Add a valid start year for experience entry ${index + 1}.`,
-      };
+      errors[`${fieldPrefix}.startYear`] =
+        "Enter a start year between 1900 and 2100.";
     }
     if (
       entry.endYear !== null &&
@@ -91,23 +93,25 @@ export function validateTutorExperienceDraft(
         entry.endYear < 1900 ||
         entry.endYear > 2100)
     ) {
-      return {
-        experienceEntries: `Add a valid end year for experience entry ${index + 1}.`,
-      };
+      errors[`${fieldPrefix}.endYear`] =
+        "Enter an end year between 1900 and 2100.";
     }
     if (entry.endYear !== null && entry.endYear < entry.startYear) {
-      return {
-        experienceEntries: `End year must be on or after start year for experience entry ${index + 1}.`,
-      };
+      errors[`${fieldPrefix}.endYear`] =
+        "End year must be on or after the start year.";
     }
     if (!entry.description.trim()) {
-      return {
-        experienceEntries: `Add a short description for experience entry ${index + 1}.`,
-      };
+      errors[`${fieldPrefix}.description`] = "A short description is required.";
+    } else if (entry.description.length > 1_000) {
+      errors[`${fieldPrefix}.description`] = "Use 1,000 characters or fewer.";
     }
   }
 
-  return {};
+  if (Object.keys(errors).some((key) => key.startsWith("experienceEntries."))) {
+    errors.experienceEntries = "Complete the highlighted experience fields.";
+  }
+
+  return errors;
 }
 
 function formatExperiencePeriod(entry: TutorExperienceEntry) {
@@ -177,6 +181,7 @@ type TutorExperiencesEditorProps = {
   experienceEntries: TutorExperienceEntry[];
   onExperienceEntriesChange: (
     experienceEntries: TutorExperienceEntry[],
+    changedField?: string,
   ) => void;
   errors?: TutorExperienceDraftErrors;
   legacyText?: string | null;
@@ -210,6 +215,9 @@ export function TutorExperiencesEditor({
       experienceEntries.map((entry, entryIndex) =>
         entryIndex === index ? { ...entry, ...update } : entry,
       ),
+      Object.keys(update)[0]
+        ? `experienceEntries.${index}.${Object.keys(update)[0]}`
+        : `experienceEntries.${index}`,
     );
   }
 
@@ -277,69 +285,124 @@ export function TutorExperiencesEditor({
                   <FieldLabel htmlFor={`${idPrefix}-role-${index}`}>
                     Role or position
                   </FieldLabel>
-                  <Input
-                    id={`${idPrefix}-role-${index}`}
-                    value={entry.role}
-                    onChange={(event) =>
-                      updateExperience(index, { role: event.target.value })
-                    }
-                    placeholder="e.g. Mathematics Tutor"
-                  />
+                  {(() => {
+                    const error = errors?.[`experienceEntries.${index}.role`];
+                    const errorId = `${idPrefix}-role-${index}-error`;
+                    return (
+                      <>
+                        <TutorTextDraftInput
+                          id={`${idPrefix}-role-${index}`}
+                          value={entry.role}
+                          onCommit={(value) =>
+                            updateExperience(index, { role: value })
+                          }
+                          placeholder="e.g. Mathematics Tutor"
+                          maxLength={255}
+                          aria-invalid={Boolean(error)}
+                          aria-describedby={error ? errorId : undefined}
+                        />
+                        {error ? (
+                          <FieldError id={errorId}>{error}</FieldError>
+                        ) : null}
+                      </>
+                    );
+                  })()}
                 </Field>
                 <Field>
                   <FieldLabel htmlFor={`${idPrefix}-organization-${index}`}>
                     Organization or company
                   </FieldLabel>
-                  <Input
-                    id={`${idPrefix}-organization-${index}`}
-                    value={entry.organization}
-                    onChange={(event) =>
-                      updateExperience(index, {
-                        organization: event.target.value,
-                      })
-                    }
-                    placeholder="e.g. Cogito Academy"
-                  />
+                  {(() => {
+                    const error =
+                      errors?.[`experienceEntries.${index}.organization`];
+                    const errorId = `${idPrefix}-organization-${index}-error`;
+                    return (
+                      <>
+                        <TutorTextDraftInput
+                          id={`${idPrefix}-organization-${index}`}
+                          value={entry.organization}
+                          onCommit={(value) =>
+                            updateExperience(index, { organization: value })
+                          }
+                          placeholder="e.g. Cogito Academy"
+                          maxLength={255}
+                          aria-invalid={Boolean(error)}
+                          aria-describedby={error ? errorId : undefined}
+                        />
+                        {error ? (
+                          <FieldError id={errorId}>{error}</FieldError>
+                        ) : null}
+                      </>
+                    );
+                  })()}
                 </Field>
                 <Field>
                   <FieldLabel htmlFor={`${idPrefix}-start-year-${index}`}>
                     Start year
                   </FieldLabel>
-                  <NumberField
-                    id={`${idPrefix}-start-year-${index}`}
-                    value={entry.startYear || null}
-                    min={1900}
-                    max={2100}
-                    step={1}
-                    format={YEAR_FORMAT}
-                    allowOutOfRange
-                    onValueChange={(value) =>
-                      updateExperience(index, { startYear: value ?? 0 })
-                    }
-                    inputProps={{
-                      "aria-label": `Start year for experience entry ${index + 1}`,
-                    }}
-                  />
+                  {(() => {
+                    const error =
+                      errors?.[`experienceEntries.${index}.startYear`];
+                    const errorId = `${idPrefix}-start-year-${index}-error`;
+                    return (
+                      <>
+                        <NumberField
+                          id={`${idPrefix}-start-year-${index}`}
+                          value={entry.startYear || null}
+                          min={1900}
+                          max={2100}
+                          step={1}
+                          format={YEAR_FORMAT}
+                          allowOutOfRange
+                          onValueChange={(value) =>
+                            updateExperience(index, { startYear: value ?? 0 })
+                          }
+                          inputProps={{
+                            "aria-label": `Start year for experience entry ${index + 1}`,
+                            "aria-invalid": Boolean(error),
+                            "aria-describedby": error ? errorId : undefined,
+                          }}
+                        />
+                        {error ? (
+                          <FieldError id={errorId}>{error}</FieldError>
+                        ) : null}
+                      </>
+                    );
+                  })()}
                 </Field>
                 <Field>
                   <FieldLabel htmlFor={`${idPrefix}-end-year-${index}`}>
                     End year
                   </FieldLabel>
-                  <NumberField
-                    id={`${idPrefix}-end-year-${index}`}
-                    value={entry.endYear}
-                    min={1900}
-                    max={2100}
-                    step={1}
-                    format={YEAR_FORMAT}
-                    allowOutOfRange
-                    onValueChange={(value) =>
-                      updateExperience(index, { endYear: value ?? null })
-                    }
-                    inputProps={{
-                      "aria-label": `End year for experience entry ${index + 1}`,
-                    }}
-                  />
+                  {(() => {
+                    const error =
+                      errors?.[`experienceEntries.${index}.endYear`];
+                    const errorId = `${idPrefix}-end-year-${index}-error`;
+                    return (
+                      <>
+                        <NumberField
+                          id={`${idPrefix}-end-year-${index}`}
+                          value={entry.endYear}
+                          min={1900}
+                          max={2100}
+                          step={1}
+                          format={YEAR_FORMAT}
+                          allowOutOfRange
+                          onValueChange={(value) =>
+                            updateExperience(index, { endYear: value ?? null })
+                          }
+                          inputProps={{
+                            "aria-label": `End year for experience entry ${index + 1}`,
+                            "aria-invalid": Boolean(error),
+                            "aria-describedby": error ? errorId : undefined,
+                          }}
+                        />
+                        {error ? (
+                          <FieldError id={errorId}>{error}</FieldError>
+                        ) : null}
+                      </>
+                    );
+                  })()}
                   <FieldDescription>
                     Leave blank if this experience is ongoing.
                   </FieldDescription>
@@ -352,6 +415,15 @@ export function TutorExperiencesEditor({
                     id={`${idPrefix}-description-${index}`}
                     rows={3}
                     value={entry.description}
+                    maxLength={1000}
+                    aria-invalid={Boolean(
+                      errors?.[`experienceEntries.${index}.description`],
+                    )}
+                    aria-describedby={
+                      errors?.[`experienceEntries.${index}.description`]
+                        ? `${idPrefix}-description-${index}-error`
+                        : undefined
+                    }
                     onChange={(event) =>
                       updateExperience(index, {
                         description: event.target.value,
@@ -359,6 +431,11 @@ export function TutorExperiencesEditor({
                     }
                     placeholder="e.g. Guided students through national mathematics olympiad preparation."
                   />
+                  {errors?.[`experienceEntries.${index}.description`] ? (
+                    <FieldError id={`${idPrefix}-description-${index}-error`}>
+                      {errors[`experienceEntries.${index}.description`]}
+                    </FieldError>
+                  ) : null}
                 </Field>
               </div>
             </div>

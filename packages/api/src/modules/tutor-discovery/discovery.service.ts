@@ -55,7 +55,9 @@ export function buildProjection(profile: ProfileWithUser): ProfileProjection {
   return {
     id: profile.id,
     userId: profile.userId,
-    displayName: profile.displayName,
+    // Keep the response key for backward compatibility, but source every
+    // role's visible name from the canonical auth user record.
+    displayName: profile.user?.name ?? null,
     shortBio: profile.shortBio,
     credentialsSummary: profile.credentialsSummary,
     achievements: profile.achievements,
