@@ -65,7 +65,7 @@ describe("Tutor discovery", () => {
     const tutorRes = await signUpAndSignIn(
       tutorEmail,
       "Test1234!",
-      "Tutor Disc",
+      "Prof Discovery",
     );
     const tutorCtx = await createTestContext(tutorRes.cookie);
     if (!tutorCtx.session?.user) throw new Error("Tutor session not found");
