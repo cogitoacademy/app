@@ -787,6 +787,10 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 
 ### Version Notes
 
+- v1.52 (2026-09-01): Set independent Manage Tutors page sizes to 3 invitations and 5 tutor profiles while retaining separate pagination state. No RPC, schema, or persistence contract changed.
+
+- v1.51 (2026-09-01): Fixed the Manage Tutors invitation-table badge mapping so invited is warning, accepted is success, and expired/revoked are danger, with a secondary fallback for unknown values. No RPC, schema, or persistence contract changed.
+
 - v1.46 (2026-08-31): Made the post-login destination role/onboarding-aware: incomplete or changes-requested tutors go to `/profile`, tutors past onboarding and admins go to `/dashboard`, and the selected destination is preserved through email verification. No API or schema contract changed.
 
 - v1.47 (2026-09-01): Switched R2 uploads from unsupported multipart-form POST to presigned PUT, added exact content-length input/signing, fixed local raw-body upload credentials for the tutor flow, and configured bucket CORS for browser uploads.

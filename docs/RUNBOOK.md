@@ -25,6 +25,10 @@ For manual tutor-invite delivery, copy the visible latest link. After reloading 
 **Generate & copy link** never sends email. Use the separate **Send again** action when an admin intentionally wants Resend to deliver a replacement link.
 
 Tutor invitation delivery should be smoke-tested in both desktop and mobile email clients. Verify the **Accept invitation & set up profile** button and fallback URL lead to `/invite?token=…`, the invited account email is correct, and the displayed expiry is explicitly labeled UTC.
+On `/admin-tutors`, verify the Invitations table uses semantic status colors: invited is warning, accepted is success, and expired/revoked are danger. The invitation filter and row actions should remain unchanged.
+
+Also verify the Invitations table shows up to 3 rows per page and Tutor Profiles shows up to 5 rows per page; each table's pagination advances independently.
+
 
 ## Starting the Server
 

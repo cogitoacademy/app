@@ -70,7 +70,8 @@ import {
 import { EmptyState } from "@/components/empty-state";
 import { getUserFacingError } from "@/lib/error-message";
 
-const PAGE_SIZE = 8;
+const INVITATIONS_PAGE_SIZE = 3;
+const TUTOR_PROFILES_PAGE_SIZE = 5;
 
 type TutorProfile = Awaited<
   ReturnType<typeof client.adminTutor.listTutorProfiles>
@@ -89,6 +90,16 @@ const PROFILE_STATUS: Record<
   approved_unpublished: { label: "Approved", variant: "info" },
   published: { label: "Published", variant: "success" },
   suspended: { label: "Suspended", variant: "danger" },
+};
+
+const INVITE_STATUS_BADGES: Record<
+  string,
+  { variant: "secondary" | "warning" | "danger" | "info" | "success" }
+> = {
+  invited: { variant: "warning" },
+  accepted: { variant: "success" },
+  expired: { variant: "danger" },
+  revoked: { variant: "danger" },
 };
 
 export const Route = createFileRoute("/_app/admin-tutors")({
@@ -141,12 +152,12 @@ function RouteComponent() {
               | "approved_unpublished"
               | "published"
               | "suspended",
-            limit: PAGE_SIZE + 1,
-            offset: profilePage * PAGE_SIZE,
+            limit: TUTOR_PROFILES_PAGE_SIZE + 1,
+            offset: profilePage * TUTOR_PROFILES_PAGE_SIZE,
           })
         : client.adminTutor.listTutorProfiles({
-            limit: PAGE_SIZE + 1,
-            offset: profilePage * PAGE_SIZE,
+            limit: TUTOR_PROFILES_PAGE_SIZE + 1,
+            offset: profilePage * TUTOR_PROFILES_PAGE_SIZE,
           }),
     placeholderData: keepPreviousData,
   });
@@ -165,18 +176,18 @@ function RouteComponent() {
               | "accepted"
               | "expired"
               | "revoked",
-            limit: PAGE_SIZE + 1,
-            offset: invitePage * PAGE_SIZE,
+            limit: INVITATIONS_PAGE_SIZE + 1,
+            offset: invitePage * INVITATIONS_PAGE_SIZE,
           })
         : client.adminTutor.listInvites({
-            limit: PAGE_SIZE + 1,
-            offset: invitePage * PAGE_SIZE,
+            limit: INVITATIONS_PAGE_SIZE + 1,
+            offset: invitePage * INVITATIONS_PAGE_SIZE,
           }),
     placeholderData: keepPreviousData,
   });
 
-  const visibleProfiles = profiles.slice(0, PAGE_SIZE);
-  const visibleInvites = invites.slice(0, PAGE_SIZE);
+  const visibleProfiles = profiles.slice(0, TUTOR_PROFILES_PAGE_SIZE);
+  const visibleInvites = invites.slice(0, INVITATIONS_PAGE_SIZE);
 
   const resendInvite = useMutation(
     orpc.adminTutor.resendInvite.mutationOptions({
@@ -302,6 +313,7 @@ function RouteComponent() {
                 <TableBody>
                   {visibleInvites.map((invite) => {
                     const isInvited = invite.status === "invited";
+                    const status = INVITE_STATUS_BADGES[invite.status];
                     const inviteUrl = latestInviteLinks[invite.id];
                     const actionPending =
                       resendInvite.isPending ||
@@ -319,7 +331,10 @@ function RouteComponent() {
                           </Text>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="secondary" className="capitalize">
+                          <Badge
+                            variant={status?.variant ?? "secondary"}
+                            className="capitalize"
+                          >
                             {invite.status}
                           </Badge>
                         </TableCell>
@@ -412,8 +427,9 @@ function RouteComponent() {
             <PaginationControls
               targetId="admin-tutor-invites"
               label="invitations"
+              pageSize={INVITATIONS_PAGE_SIZE}
               page={invitePage}
-              hasNext={invites.length > PAGE_SIZE}
+              hasNext={invites.length > INVITATIONS_PAGE_SIZE}
               isFetching={invitesFetching}
               onPrevious={() => setInvitePage((page) => Math.max(0, page - 1))}
               onNext={() => setInvitePage((page) => page + 1)}
@@ -527,8 +543,9 @@ function RouteComponent() {
             <PaginationControls
               targetId="admin-tutor-profiles"
               label="tutor profiles"
+              pageSize={TUTOR_PROFILES_PAGE_SIZE}
               page={profilePage}
-              hasNext={profiles.length > PAGE_SIZE}
+              hasNext={profiles.length > TUTOR_PROFILES_PAGE_SIZE}
               isFetching={profilesFetching}
               onPrevious={() => setProfilePage((page) => Math.max(0, page - 1))}
               onNext={() => setProfilePage((page) => page + 1)}
@@ -595,6 +612,7 @@ function RouteComponent() {
 function PaginationControls({
   targetId,
   label,
+  pageSize,
   page,
   hasNext,
   isFetching,
@@ -603,6 +621,7 @@ function PaginationControls({
 }: {
   targetId: string;
   label: string;
+  pageSize: number;
   page: number;
   hasNext: boolean;
   isFetching: boolean;
@@ -627,7 +646,7 @@ function PaginationControls({
   return (
     <Pagination className="mt-4 flex-col gap-3 border-t border-card-separator pt-4 sm:flex-row sm:items-center sm:justify-between">
       <Text className="text-sm text-muted">
-        Page {page + 1} · Up to {PAGE_SIZE} {label} per page
+        Page {page + 1} · Up to {pageSize} {label} per page
       </Text>
       <PaginationList>
         <PaginationItem>

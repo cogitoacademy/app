@@ -349,6 +349,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Admin
 - **Input:** `{ status?, limit?, offset? }` (`limit` default 50)
 - **Output:** `{ items: Invite[], total, limit, offset }`
+- **Frontend note:** The Manage Tutors invitation table requests three rows per page and renders `invited` as warning, `accepted` as success, and terminal `expired`/`revoked` statuses as danger; unknown values use the neutral secondary fallback. The tutor-profile table requests five rows per page.
 
 ### `adminTutor.resendInvite`
 

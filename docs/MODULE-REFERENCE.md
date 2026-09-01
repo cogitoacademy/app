@@ -28,6 +28,8 @@ filter changes. Admin tutor pagination uses per-card DOM anchors and
 request and disables the controls until the next page arrives. Cursor-loaded
 notifications already preserve prior pages by design. User-specific wallet
 lookup and student search do not retain stale results across a changed query.
+Manage Tutors requests three invitations and five tutor profiles per page; the
+two collections keep independent page size, offset, and next-page state.
 
 The shared booking list uses Needs action, Upcoming, Recurring, History, and All tabs. Students and tutors land on Needs action when pending decisions exist; admins retain All. Recommended sorting ranks pending decisions first, active bookings next, and terminal outcomes last; Soonest and Latest provide direct date ordering. The URL stores both presentation choices. The page consumes `booking.listMine` in cursor-backed batches of 20 with an explicit **Load more bookings** action. Infinite-query pages are appended without replacing loaded cards; tabs and sorting operate on loaded pages, and counts use a `+` suffix while another cursor remains.
 
@@ -264,6 +266,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - The email states the exact account email required for claiming, shows expiry in UTC, and includes a plain fallback URL
 - Invitee-controlled display names, email addresses, and URLs are escaped before rendering into HTML
 - Approving published profile edits validates and applies pending `subjectIds` to the normalized tutor-subject join table in the same transaction as the profile update
+- The Manage Tutors invitation table maps `invited` to a warning badge, `accepted` to success, and `expired`/`revoked` to danger; unknown status values use the secondary fallback
 - The admin tutor review card maps pending `subjectIds` to active category/subject labels and wraps long pending values; this is presentation-only and does not change the admin API payload
 - Structured achievement corrections are limited to 2 education entries and 5 competition entries; a stale `version` returns `OPTIMISTIC_LOCK` and no audit record is written.
 
