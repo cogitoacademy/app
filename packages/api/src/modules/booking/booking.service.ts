@@ -73,6 +73,10 @@ import type {
   BookingMeetingPort,
   BookingRoomPort,
 } from "./index";
+import {
+  formatBookingEventTitle,
+  formatCalendarCompetitionLabel,
+} from "./booking-event-title";
 
 /**
  * Terminal target per expiry-eligible state. Shared by `expireBookings` and
@@ -204,20 +208,6 @@ export type BookingService = ReturnType<typeof createBookingService>;
 type BookingRow = NonNullable<
   Awaited<ReturnType<BookingRepo["findBookingById"]>>
 >;
-
-const CALENDAR_COMPETITION_LABELS: Record<string, string> = {
-  "competition-model-united-nations": "MUN",
-  "model-united-nations": "MUN",
-  "competition-world-scholars-cup": "WSC",
-  "world-scholars-cup": "WSC",
-};
-
-function formatCalendarCompetitionLabel(
-  topic: BookingRow["sessionTopic"],
-): string {
-  if (!topic) return "Session";
-  return CALENDAR_COMPETITION_LABELS[topic.categorySlug] ?? topic.categoryName;
-}
 
 /**
  * Creates the booking service orchestrating bookings, wallet holds, pricing, notifications, and meeting creation.
@@ -578,15 +568,15 @@ export function createBookingService(deps: {
       .map((user) => user.name.trim())
       .filter(Boolean);
     const studentNames = [proposerName, ...otherStudentNames].filter(Boolean);
-    const primaryStudentName = proposerName || studentNames[0] || "Student";
-    const titleStudent =
-      booking.targetGroupSize > 1
-        ? `${primaryStudentName} & Friends`
-        : primaryStudentName;
     const competitionLabel = formatCalendarCompetitionLabel(
       booking.sessionTopic,
     );
-    const title = `Cogito - ${competitionLabel} | ${tutorName} x ${titleStudent}`;
+    const title = formatBookingEventTitle({
+      targetGroupSize: booking.targetGroupSize,
+      sessionTopic: booking.sessionTopic,
+      tutorName,
+      proposerName,
+    });
     const sessionNotes = booking.learningGoal?.trim();
     const descriptionLines = [
       `Tutor: ${tutorName}`,

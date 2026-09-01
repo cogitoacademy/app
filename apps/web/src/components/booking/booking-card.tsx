@@ -29,11 +29,11 @@ const LEGACY_TUTOR_PAYOUT_RATE_IDR = 7_000;
 import { cn } from "@cogito-app/ui/lib/utils";
 
 import {
+  formatBookingEventTitle,
   formatBookingTimeRange,
   getBookingStateDescription,
   getBookingStateLabel,
   getBookingStateVariant,
-  getBookingTypeLabel,
 } from "@/components/booking/booking-ui";
 import { EmptyStateCard } from "@/components/empty-state";
 
@@ -47,6 +47,7 @@ export type BookingCardData = {
   id: string;
   type: string;
   modality: string;
+  targetGroupSize: number;
   currentState: string;
   scheduledStartAt: string | Date;
   scheduledEndAt: string | Date;
@@ -60,6 +61,10 @@ export type BookingCardData = {
   } | null;
   tutor: BookingCardPerson | null;
   proposer: BookingCardPerson | null;
+  sessionTopic?: {
+    categorySlug: string;
+    categoryName: string;
+  } | null;
   participants?: Array<{
     userId: string;
     role: string;
@@ -505,18 +510,12 @@ function getBookingPeople(booking: BookingCardData) {
 }
 
 function getBookingTitle(booking: BookingCardData) {
-  const participantNames = getBookingPeople(booking).map(
-    (person) => person.name?.trim() || "Participant",
-  );
-  const participantLabel = formatPeopleNames(participantNames);
-  return `${getBookingTypeLabel(booking.type)} with ${participantLabel}`;
-}
-
-function formatPeopleNames(names: string[]) {
-  if (names.length === 0) return "participant";
-  if (names.length === 1) return names[0];
-  if (names.length === 2) return `${names[0]} & ${names[1]}`;
-  return `${names[0]}, ${names[1]} +${names.length - 2}`;
+  return formatBookingEventTitle({
+    targetGroupSize: booking.targetGroupSize,
+    sessionTopic: booking.sessionTopic,
+    tutorName: booking.tutor?.name,
+    proposerName: booking.proposer?.name,
+  });
 }
 
 function getBookingLocation(booking: BookingCardData) {

@@ -349,6 +349,7 @@ Reschedule proposals must change the active booking or target-session start minu
 - `booking-transitions.ts` — `canTransition()` state machine logic
 - `booking.types.ts` — Zod schemas for all booking operations
 - `booking.errors.ts` — error classes for the booking domain
+- `booking-event-title.ts` — shared Calendar/Meet and booking-surface event-title formatter
 - `booking.repo.ts` — data access for bookings, participants, sessions, notes, reschedules, payouts
 - `booking.service.ts` — service methods below; consumer ports for wallet, pricing, audit, notification, meeting
 - `booking.handler.ts` — `createBookingHandler` (student/proposer) and `createTutorActionsHandler` (tutor)
@@ -406,6 +407,7 @@ Reschedule proposals must change the active booking or target-session start minu
 - Availability is stored as a free-time window; students may choose any minute-level start that keeps the server-fixed 90-minute session inside it. Terminal bookings do not keep the window blocked.
 - Rescheduling is per session, may iterate until accepted, expires after 24 hours, and requires the tutor plus every active student. The booking proposer may propose or counter in the eligible pre-terminal states, including `confirmed` and `scheduled`; student proposals remain subject to current/new H-2 checks. Proposal expiry reverts to the pre-proposal state without cancelling the booking, releasing its hold, or changing its original schedule. For offline booking-level proposals, room assignment timing is kept in sync on accept/reject/expiry, with a room-approval fallback on conflict. Only the tutor may propose outside the original availability window. Force-majeure exceptions are handled by support/admin operations with an auditable reason and an admin override decision rather than an automatic H-2 bypass.
 - Optimistic locking via `version` field prevents concurrent state changes
+- Calendar/Meet event summaries and the authenticated booking list/detail title use the same `formatBookingEventTitle` formatter: `Cogito - {Competition} | {Tutor} x {Student}`, with `& Friends` for group/group-series bookings. This is presentation metadata only and does not add a database column or RPC response field.
 - New IDR booking snapshots copy the active economy version, tutor base/increment, tutor honorarium, Cogito take, total IDR, total Marks, and rounded pooled Marks. Later economy updates do not mutate those snapshots.
 - Only `student` accounts can create bookings or perform student participant actions; tutor/admin attempts fail with `FORBIDDEN` before handlers run. The protected booking list/detail/session reads are available to authenticated parties, while admins can inspect the full booking set; tutor fulfillment remains under `tutorActions.*`.
 - Booking list/detail relations use a safe user projection (`id`, `name`, `image`, `role`). Meeting attendee email arrays remain server-only for calendar/notification work and are not returned through booking reads.

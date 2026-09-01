@@ -4,6 +4,7 @@
 
 | Version | Date       | Status                | Summary                                                                                                                                                               |
 | ------- | ---------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.1.1   | 2026-09-01 | Implemented follow-up | Booking list and detail titles reuse the canonical Calendar/Meet event-title format                                                                                  |
 | 1.1.0   | 2026-08-29 | Implemented           | Booking topic selection and immutable category/subcategory snapshot drive standardized Calendar/Meet metadata                                                         |
 | 1.0.1   | 2026-08-28 | Implemented follow-up | Session Notes replaces the booking-form Learning goal label; free-text notes may include reference links, while the existing API/storage field remains `learningGoal` |
 
@@ -18,6 +19,7 @@
 - Requests include a user-facing Session Notes value of up to 2,000 characters for tutor preparation. It can contain goals, questions, context, and reference links; the existing API/storage key remains `learningGoal` for compatibility.
 - New booking requests select one active competition subcategory offered by the tutor. The server validates it and snapshots both category and subcategory metadata onto the booking; legacy callers may omit `subjectId`, with automatic selection only when the tutor has exactly one active track.
 - Calendar/Meet titles use `Cogito - {Competition} | {Tutor} x {Student}` and append `& Friends` for groups. Descriptions include Tutor, Student, Session Topic, Session Notes, and the booking link.
+- The authenticated booking list and detail header reuse the same canonical title format, so a group booking is shown as `Cogito - {Competition} | {Tutor} x {Student} & Friends` instead of enumerating participant names in the title.
 
 ## Booking shape
 

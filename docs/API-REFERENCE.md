@@ -661,6 +661,12 @@ Structured tutor experience fields are submitted through `experienceEntries` as 
 
 ### `booking.listMine`
 
+**Frontend title parity:** Booking list rows and the booking-detail header use
+the same presentation formatter as Calendar/Meet:
+`Cogito - {Competition} | {Tutor} x {Student}`, with `& Friends` for
+group/group-series bookings. This does not add a response field or change the
+RPC contract.
+
 - **Auth:** Protected
 - **Input:** `{ cursor?, limit?, states? }`
 - **Output:** `{ items: Booking[], nextCursor }`

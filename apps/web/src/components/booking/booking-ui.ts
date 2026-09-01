@@ -1,3 +1,5 @@
+export { formatBookingEventTitle } from "@cogito-app/api/modules/booking/booking-event-title";
+
 const STATE_LABELS: Record<string, string> = {
   awaiting_tutor_review: "Awaiting tutor",
   declined: "Declined",
