@@ -103,11 +103,11 @@ export function Layout({
         </nav>
         <div
           className={cn(
-            "flex min-h-0 min-w-0 max-w-full flex-1 flex-col gap-6 overflow-x-hidden *:shrink-0 *:pb-6 pt-1 max-xl:px-4",
+            "flex min-h-0 min-w-0 max-w-full flex-1 flex-col gap-6 overflow-x-hidden *:shrink-0 *:pb-6 max-xl:p-4",
             contentScrollMode === "contained"
               ? "overflow-hidden"
               : "overflow-y-auto",
-            "xl:px-4",
+            "xl:p-4 border-l border-t border-border xl:rounded-tl-4xl",
           )}
         >
           <SessionExpiryNotice expiresAt={sessionExpiresAt} />
