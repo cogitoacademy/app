@@ -613,7 +613,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-22
 
-**Current state:** **CLOSED (2026-09-02).** The Room approvals tab consumes `room.listPendingApprovals` as the cross-booking queue. Requested rooms can be assigned inline; Choose room/Choose another navigates to the admin booking detail Offline room card, where assignment, relocation, and cancellation use the booking's existing context. No pending or detail flow requires admins to paste a booking UUID. Existing room mutations remain the action paths.
+**Current state:** **CLOSED (2026-09-02).** The Room approvals tab includes an Active rooms catalog backed by `room.list` and an Add room dialog backed by `room.create`, with name/location trimming, positive whole-number capacity validation, and shared room-list cache invalidation after success. It also consumes `room.listPendingApprovals` as the cross-booking queue. Requested rooms can be assigned inline; Choose room/Choose another navigates to the admin booking detail Offline room card, where assignment, relocation, and cancellation use the booking's existing context. No pending or detail flow requires admins to paste a booking UUID. Existing room mutations remain the action paths.
 
 **Required (after G14 backend):**
 
@@ -829,6 +829,8 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 ---
 
 ### Version Notes
+
+- v1.59 (2026-09-02): Added the admin Active rooms catalog and Add room dialog to the Room approvals tab. The dialog calls the existing `room.create` mutation, validates name/location/capacity, and refreshes room selectors after a successful create; no API or schema contract changed.
 
 - v1.58 (2026-09-02): Refined admin offline room assignment into a Room approvals queue plus context-aware booking-detail actions. Removed manual booking UUID/date-time entry; assign, relocate, and cancellation now use the selected booking's existing schedule and room context.
 
