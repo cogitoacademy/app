@@ -53,8 +53,13 @@
         group: root
         mode: "0700"
 
+    # P0 fix (2026-09-02): the full vault breaks bash sourcing (multi-line
+    # PEM + EMAIL_FROM with spaces) — the watchdog env never loaded and the
+    # 03:30 cron never ran. Filter to exactly the keys the watchdog reads.
     - name: Decrypt prod env on the control node (SOPS; age key stays local)
-      ansible.builtin.command: sops -d {{ watchdog_env_src }}
+      ansible.builtin.shell: >-
+        sops -d {{ watchdog_env_src }} |
+        grep -E '^(DISCORD_WEBHOOK_URL|WARN_THRESHOLD|PRUNE_THRESHOLD)='
       delegate_to: localhost
       become: false
       changed_when: false
@@ -72,11 +77,7 @@
         group: root
         mode: "0700"
 
-    # The env file carries the full vault (the watchdog only reads
-    # DISCORD_WEBHOOK_URL / WARN_THRESHOLD / PRUNE_THRESHOLD; the rest is
-    # inert). Writing the whole decrypted vault keeps the pattern identical
-    # to backup-cron.yml and avoids a second decrypt pipeline.
-    - name: Write the cron environment file (root-only)
+    - name: Write the cron environment file (root-only, filtered keys)
       ansible.builtin.copy:
         dest: "{{ watchdog_env_dest }}"
         content: "{{ watchdog_env_plaintext.stdout }}\n"

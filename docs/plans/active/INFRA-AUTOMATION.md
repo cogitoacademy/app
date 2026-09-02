@@ -185,6 +185,39 @@ service (zero config inside) and the empty `cogito` project itself.
   (INFRA-PLAYBOOK §3b) — monitors + Discord notification; optional GitHub
   secret `DISCORD_WEBHOOK_URL` for CD failure pings (not wired).
 
+## P0 finding — nightly backup + disk watchdog NEVER ran (2026-09-02, fixed)
+
+**Symptom:** `/var/log/cogito-backup.log` = one line, `ERROR: R2_ACCOUNT_ID
+is not set` (32 bytes, every night since install). Disk watchdog log did
+not exist at all.
+
+**Root cause (three stacked bugs):**
+
+1. Both cron playbooks wrote the **entire 98-line vault** into
+   `/etc/cogito/backup.env` / `disk.env`. The vault contains a multi-line
+   `GOOGLE_PRIVATE_KEY` (line 30 executes as a command) and
+   `EMAIL_FROM=Cogito <send@...>` (line 34 syntax error) — bash died
+   sourcing the file before `R2_ACCOUNT_ID` loaded. **Zero backups existed.**
+2. `backup.sh` passed `R2_*` names but the AWS CLI reads `AWS_*` — upload
+   would have failed auth even with a working env file.
+3. The vault `DATABASE_URL` uses the app's private-network hostname
+   (`noxeaeuxfreq0axa9unpew5r`) which the VPS host cannot resolve —
+   `pg_dump` would fail even with a working env file.
+
+**Fix (verified live):** playbooks now filter the decrypted vault to only
+the keys each script reads (shell `grep` pipe — no Jinja escaping traps);
+`backup.sh` maps `R2_*` → `AWS_*` and resolves the private DB host to the
+container IP (same logic as `scripts/resolve-private-db-url.sh`); PATH
+includes `/opt/cogito-actions-tools/bin` for the VPS AWS CLI v2.
+
+**Verified:** first real backup uploaded to R2
+(`backups/2026-09-02.sql.gz`, 32,807 bytes, head-object confirmed);
+watchdog `--dry-run` green with the env loaded. Tonight's 02:00 cron is
+the first unattended run — check `/var/log/cogito-backup.log` tomorrow.
+
+**Side benefit:** the full vault no longer sits in plaintext on the VPS
+(secret-sprawl eliminated — only the keys each cron needs are written).
+
 ## Exit gates
 
 - Single Coolify project `cogito-prod` holds every declared resource; the empty `cogito` project deleted; Kuma recreated in the right project; drift-check green.
