@@ -807,11 +807,39 @@ export function AdminBookingDetailPage({ bookingId }: { bookingId: string }) {
         onClose={() => setOverrideOpen(false)}
         onApplied={() => {
           setOverrideOpen(false);
+          const participantInvalidations = participants.flatMap(
+            (participant) => [
+              queryClient.invalidateQueries({
+                queryKey: orpc.admin.getWallet.queryKey({
+                  input: { userId: participant.userId },
+                }),
+              }),
+              queryClient.invalidateQueries({
+                queryKey: orpc.admin.listLedgerEntries.queryKey({
+                  input: {
+                    userId: participant.userId,
+                    bookingId: booking.id,
+                    limit: 8,
+                  },
+                }),
+              }),
+            ],
+          );
           void Promise.all([
             queryClient.invalidateQueries({
               queryKey: orpc.adminBooking.listBookings.key(),
             }),
-            queueItemQuery.refetch(),
+            queryClient.invalidateQueries({
+              queryKey: orpc.adminBooking.getBookingStateHistory.queryKey({
+                input: { bookingId: booking.id },
+              }),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: orpc.booking.get.queryKey({
+                input: { bookingId: booking.id },
+              }),
+            }),
+            ...participantInvalidations,
           ]);
         }}
       />
