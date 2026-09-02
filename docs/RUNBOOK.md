@@ -1272,7 +1272,7 @@ The CD workflow (`cd-prod.yml`) triggers Coolify deploys via webhook. (`cd-stagi
    Secret. Use this format:
 
    ```text
-   https://cl.cogitoacademy.id/api/v1/deploy?uuid=<resource-uuid>&force=true
+   https://cl.cogitoacademy.id/api/v1/deploy?uuid=<resource-uuid>&force=false
    ```
 
    Replace `<resource-uuid>` with the Coolify resource UUID and remove the
@@ -1383,9 +1383,9 @@ The production pipeline (`cd-prod.yml`) builds and pushes images on a GitHub-hos
 2. **Migrate:** `bun run db:migrate` against the production `DATABASE_URL`.
    Turbo allowlists this variable for the `db:migrate` task so strict env mode
    passes it through to `drizzle-kit`.
-3. **Deploy:** the VPS runner logs into GHCR, pulls immutable `server:v<GIT_SHA>` into the host Docker image store, resolves the resource UUID from `COOLIFY_APP_UUID` or `COOLIFY_PROD_SERVER_WEBHOOK`, then calls Coolify's native image rollback/deployment endpoint with that tag. Coolify rollback images must be locally available; the explicit pull satisfies that requirement. The endpoint needs deploy access only and does not PATCH application configuration.
+3. **Deploy:** POST the configured Coolify server webhook. The workflow and script are restored to their last known successful `bb1ccb9a` implementation. Do not pull application images from the self-hosted VPS runner: the 2026-09-02 attempt filled the host disk and crashed the runner with `No space left on device`.
 4. **Health (sha-verified):** poll `https://api.cogitoacademy.id/health` until `version == GIT_SHA` (bounded 20×15s ≈ 5 min).
-5. **Auto-rollback (best-effort, F4):** on poll timeout the script resolves the application UUID from `COOLIFY_APP_UUID` or the existing webhook query and calls `POST /api/v1/applications/<uuid>/rollback` with `v<PREV_GIT_SHA>`. This uses Coolify's native deployment rollback and does not mutate the configured image tag or require application write access. Every API failure prints its HTTP code; the script still ends with the manual hint and exit 1. Database snapshots are never restored automatically.
+5. **Auto-rollback (best-effort, restored `bb1ccb9a` behavior):** on poll timeout the script attempts its original Coolify application lookup/PATCH/redeploy sequence, then always prints the manual rollback hint and exits 1. This path requires application write permission and may be skipped or fail with the current deploy-only token; it is retained only because the CI/CD files were explicitly restored to the last successful state. Database snapshots are never restored automatically.
 6. **Web verification (F3 2026-08-31):** a separate step POSTs the web deploy webhook (`COOLIFY_PROD_WEBHOOK`) and immediately runs `scripts/migrate-and-deploy.sh --poll-web`, which polls `HEALTH_URL_WEB` (default `https://app.cogitoacademy.id`) for plain **HTTP 200** (bounded 20×15s). The web image is static nginx with no version marker, so HTTP 200 is the verification signal; a poll timeout fails the job with a manual web-rollback hint (the web resource is not auto-rolled back — it would need a `COOLIFY_WEB_APP_UUID` secret that does not exist).
 
 Runner triage:

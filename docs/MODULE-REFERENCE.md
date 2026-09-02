@@ -5,11 +5,10 @@ Last updated: 2026-09-02
 The 2026-09-02 Lefthook lint-gate alignment changes repository tooling only;
 services, modules, event keys, and business rules are unchanged.
 
-Production release orchestration is also outside module contracts. The CD
-script selects immutable `v<GIT_SHA>` through Coolify's native image
-rollback/deployment endpoint; it does not mutate application configuration
-and requires deploy access only. No service, event key, or business rule is
-changed.
+Production release orchestration is outside module contracts. Its workflow
+and deploy script are restored to the last known successful `bb1ccb9a` state;
+the VPS runner no longer pulls application images directly. No service, event
+key, or business rule is changed.
 
 The 2026-09-02 admin booking-detail consolidation is presentation-only; room,
 wallet, ledger, and state-history services and event keys are unchanged.
