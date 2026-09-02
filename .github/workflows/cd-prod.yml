@@ -78,7 +78,7 @@ jobs:
         # Full production pipeline via scripts/migrate-and-deploy.sh:
         #   1. pg_dump snapshot → gzip → R2 (pre-migrate-<sha>.sql.gz)
         #   2. bun run db:migrate against the production DATABASE_URL
-        #   3. POST the Coolify server deploy webhook
+        #   3. Pin the server resource to v<GIT_SHA>, then POST its webhook
         #   4. Poll /health until `version == GIT_SHA` (bounded 20x15s)
         #   5. On timeout: best-effort Coolify API auto-rollback to
         #      v<prev-sha> (PATCH resource + redeploy trigger), then the
@@ -106,7 +106,11 @@ jobs:
           # (optional) pin the API resource UUID to skip rollback domain
           # matching; env override for the Coolify API host used by the
           # rollback calls (default https://cl.cogitoacademy.id)
-          # COOLIFY_APP_UUID / COOLIFY_API_BASE_URL
+          # COOLIFY_APP_UUID can be added as a repository secret to skip
+          # rollback domain matching. Keep the canonical API host explicit;
+          # the script also defaults to this value when invoked manually.
+          COOLIFY_APP_UUID: ${{ secrets.COOLIFY_APP_UUID }}
+          COOLIFY_API_BASE_URL: https://cl.cogitoacademy.id
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
