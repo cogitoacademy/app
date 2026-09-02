@@ -553,7 +553,9 @@ export function AvailabilityPage() {
                 <IconSettings />
               </IconBox>
               <CardTitle>Scheduling rules</CardTitle>
-              <CardDescription className="leading-none">Existing bookings stay reserved when weekly hours change.</CardDescription>
+              <CardDescription className="leading-none">
+                Existing bookings stay reserved when weekly hours change.
+              </CardDescription>
             </CardHeader>
             <CardBody className="space-y-3">
               <Rule label="Session duration" value="90 minutes" />
