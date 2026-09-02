@@ -91,7 +91,7 @@ export async function listProfileHistory(conn: DbOrTx, tutorProfileId: string) {
     orderBy: [desc(auditLog.createdAt), desc(auditLog.id)],
     limit: 50,
     with: {
-      actor: { columns: { id: true, name: true, email: true } },
+      actor: { columns: { id: true, name: true } },
     },
   });
 }

@@ -426,7 +426,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 - **Auth:** Tutor
 - **Input:** None
-- **Output:** Up to 50 newest audit entries for the authenticated tutor profile, including action, actor type, timestamps, and photo/review workflow details
+- **Output:** Up to 50 newest audit entries for the authenticated tutor profile, including action, actor identity (`id` and display name only), actor type, timestamps, and photo/review workflow details; account email is not returned
 - **Description:** Returns the profile history shown to the tutor. Published photo replacements remain proposals until an admin approves them.
 
 ### `tutor.updateMyProfile`

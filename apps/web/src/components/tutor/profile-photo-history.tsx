@@ -6,7 +6,7 @@ export type ProfilePhotoHistoryEntry = {
   id: string;
   action: string;
   actorType: string;
-  actor?: { name: string | null; email: string } | null;
+  actor?: { name: string | null; email?: string | null } | null;
   createdAt: string | Date;
   details?: Record<string, unknown> | null;
 };

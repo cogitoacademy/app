@@ -80,12 +80,12 @@ export function validateTutorAchievementDraft(
   for (const [index, entry] of education.entries()) {
     if (!entry.university.trim()) {
       errors[`education.${index}.university`] = "University is required.";
-    } else if (entry.university.length > 255) {
+    } else if (entry.university.trim().length > 255) {
       errors[`education.${index}.university`] = "Use 255 characters or fewer.";
     }
     if (!entry.degree.trim()) {
       errors[`education.${index}.degree`] = "Degree is required.";
-    } else if (entry.degree.length > 255) {
+    } else if (entry.degree.trim().length > 255) {
       errors[`education.${index}.degree`] = "Use 255 characters or fewer.";
     }
   }
@@ -95,7 +95,7 @@ export function validateTutorAchievementDraft(
     if (!entry.competitionName.trim()) {
       errors[`${fieldPrefix}.competitionName`] =
         "Competition name is required.";
-    } else if (entry.competitionName.length > 255) {
+    } else if (entry.competitionName.trim().length > 255) {
       errors[`${fieldPrefix}.competitionName`] = "Use 255 characters or fewer.";
     }
     if (

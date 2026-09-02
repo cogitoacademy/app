@@ -18,7 +18,7 @@ describe("TutorRepo", () => {
     expect(set).toHaveBeenCalledWith({ isActive: false });
   });
 
-  test("lists tutor profile history with actor details", async () => {
+  test("lists tutor profile history with actor names only", async () => {
     const rows = [{ id: "audit-1", action: "tutor_profile_updated" }];
     const findMany = mock(async () => rows);
     const conn = {
@@ -32,7 +32,7 @@ describe("TutorRepo", () => {
       expect.objectContaining({
         limit: 50,
         with: {
-          actor: { columns: { id: true, name: true, email: true } },
+          actor: { columns: { id: true, name: true } },
         },
       }),
     );

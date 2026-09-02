@@ -182,7 +182,9 @@ an approve/publish action to promote it to `user.image`. Requesting changes must
 the current public photo untouched. On the tutor surface, verify the compact photo info
 preview opens on demand instead of keeping a large preview card in the form. Verify the
 photo/review history timeline in both
-tutor and admin surfaces after submit, revision, approval, and publication.
+tutor and admin surfaces after submit, revision, approval, and publication. The
+tutor timeline should show actor names/types without exposing actor account emails;
+the admin timeline may retain the richer moderator identity context.
 
 Achievement and experience proof URLs are verification-only tutor-profile data.
 All user/admin-supplied external links in achievement evidence/documentation,

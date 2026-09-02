@@ -70,13 +70,13 @@ export function validateTutorExperienceDraft(
     const fieldPrefix = `experienceEntries.${index}`;
     if (!entry.role.trim()) {
       errors[`${fieldPrefix}.role`] = "Role or position is required.";
-    } else if (entry.role.length > 255) {
+    } else if (entry.role.trim().length > 255) {
       errors[`${fieldPrefix}.role`] = "Use 255 characters or fewer.";
     }
     if (!entry.organization.trim()) {
       errors[`${fieldPrefix}.organization`] =
         "Organization or company is required.";
-    } else if (entry.organization.length > 255) {
+    } else if (entry.organization.trim().length > 255) {
       errors[`${fieldPrefix}.organization`] = "Use 255 characters or fewer.";
     }
     if (
@@ -102,7 +102,7 @@ export function validateTutorExperienceDraft(
     }
     if (!entry.description.trim()) {
       errors[`${fieldPrefix}.description`] = "A short description is required.";
-    } else if (entry.description.length > 1_000) {
+    } else if (entry.description.trim().length > 1_000) {
       errors[`${fieldPrefix}.description`] = "Use 1,000 characters or fewer.";
     }
   }
