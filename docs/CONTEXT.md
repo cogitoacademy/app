@@ -52,18 +52,21 @@ acceptance.
 
 **Remaining (see `docs/plans/active/`):** drills (DEPLOYMENT-PLAN Phase 5), Xendit go-live, branch protection + `ACTIONS_BOT_PAT` (CI-SANITY F9/F10), and the planned cleanup of the remaining legacy React lint baseline.
 
-**OPS-VISIBILITY-WAVE (2026-09-02/03):** `docs/FAILURES.md` added (the
+**OPS-VISIBILITY-WAVE (2026-09-02/03, merged #179):** `docs/FAILURES.md` added (the
 canonical failure → detection → recovery guide, incl. the disk-full
 deploy-failure class and the "CD does not auto-retry" procedure); circuit
 breaker states surfaced in `/health` (`checks.circuitBreakers`,
-informational); DLQ queue job retention bounded (`JOB_RETENTION` on
-`cogito-jobs-dlq`); `ops.sh` DB-name default fixed (`postgres`) + `cb`
-command added; CD pre-migrate snapshots pruned beyond the newest 7
-(`PRE_MIGRATE_KEEP`); `infra/secrets/**` added to the `infra-apply.yml`
-paths filter (vault-only merges now re-apply the env); Kuma wired by the
-operator (4 monitors + `COGITO ALERT` Discord attached + `cogito` status
-page — see `docs/KUMA-RUNBOOK.md`); disk-watchdog verification procedure and
-memory-headroom recommendation documented in RUNBOOK.
+informational — live-verified 2026-09-03); DLQ queue job retention bounded
+(`JOB_RETENTION` on `cogito-jobs-dlq`); `ops.sh` DB-name default fixed
+(`postgres`) + `cb` command added; CD pre-migrate snapshots pruned beyond
+the newest 7 (`PRE_MIGRATE_KEEP`); `infra/secrets/**` added to the
+`infra-apply.yml` paths filter (vault-only merges now re-apply the env);
+Kuma wired by the operator (4 monitors + `COGITO ALERT` Discord attached +
+`cogito` status page — see `docs/KUMA-RUNBOOK.md`); disk-watchdog
+verification procedure and memory-headroom recommendation documented in
+RUNBOOK; CD `COOLIFY_API_BASE_URL` rollback-path fix (unbound-variable
+crash during the 2026-09-02 disk-full incident). Plan moved to
+`docs/plans/completed/`.
 
 ## Stable collection transitions (2026-08-28)
 
