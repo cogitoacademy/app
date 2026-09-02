@@ -315,12 +315,12 @@ export function AchievementForm({
     ? isAdmin
       ? "Saving corrections..."
       : mode === "create"
-        ? "Submitting achievement..."
-        : "Resubmitting achievement..."
+        ? "Submitting..."
+        : "Resubmitting..."
     : isAdmin
       ? "Save corrections"
       : mode === "create"
-        ? "Submit Achievement"
+        ? "Submit"
         : "Resubmit";
 
   const addSubject = () => {
@@ -344,7 +344,7 @@ export function AchievementForm({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPopup className="max-w-lg">
-        <DialogHeader className="flex-col items-start gap-1.5">
+        <DialogHeader className="flex-col items-start gap-1.5 border-b border-border">
           <DialogTitle>
             {isAdmin
               ? "Correct Achievement"
