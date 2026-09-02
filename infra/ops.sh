@@ -13,6 +13,7 @@
 #   ./ops.sh redis LLEN cogito:dlq   # run one redis command
 #   ./ops.sh dlq              # show the DLQ entries (what failed)
 #   ./ops.sh dlq-clear        # clear the DLQ ledger (DEL cogito:dlq)
+#   ./ops.sh cb               # circuit breaker states (cogito:cb:*)
 #   ./ops.sh studio           # Drizzle Studio GUI via SSH tunnel
 #   ./ops.sh logs [lines]     # tail the API container logs
 #   ./ops.sh backup           # run the nightly backup script manually
@@ -66,7 +67,7 @@ status() {
 db() {
   local dbc dbname
   dbc="$(db_container)"
-  dbname="${OPS_DB_NAME:-cogito}"
+  dbname="${OPS_DB_NAME:-postgres}"
   if [[ $# -eq 0 ]]; then
     "${SSH[@]}" "sudo -n docker exec -it $dbc psql -U postgres -d $dbname"
   else
@@ -112,6 +113,15 @@ dlq_clear() {
   pass="$(redis_auth)"
   echo "Clearing cogito:dlq"
   "${SSH[@]}" "sudo -n docker exec $rc redis-cli -a \"$pass\" DEL cogito:dlq 2>/dev/null"
+}
+
+cb() {
+  local rc pass
+  rc="$(redis_container)"
+  pass="$(redis_auth)"
+  echo "=== circuit breaker states (cogito:cb:*) ==="
+  "${SSH[@]}" "sudo -n docker exec $rc redis-cli -a \"$pass\" --scan --pattern 'cogito:cb:*' 2>/dev/null | while read -r k; do echo \"\$k: \$(sudo -n docker exec $rc redis-cli -a \"$pass\" HGET \"\$k\" state 2>/dev/null)\"; done"
+  echo "(no keys = all breakers closed/never tripped)"
 }
 
 logs() {
@@ -209,6 +219,7 @@ case "${1:-}" in
   redis) shift; redis "$@" ;;
   dlq) dlq ;;
   dlq-clear) dlq_clear ;;
+  cb) cb ;;
   logs) shift; logs "${1:-}" ;;
   backup) backup ;;
   disk) disk ;;
