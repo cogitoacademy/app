@@ -1869,7 +1869,7 @@ function PendingRoomApprovals({
             icon={<IconCheck />}
             title="No pending room approvals"
             description="Tutor-accepted offline bookings will appear here."
-            tone="secondary"
+            tone="info"
             size="compact"
           />
         ) : (
