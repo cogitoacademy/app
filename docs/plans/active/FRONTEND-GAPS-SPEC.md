@@ -243,17 +243,25 @@ failed Google attempts remain `confirmed` for the 5-minute retry job. Manual
 admin links update the newest meeting-attempt row so the detail read remains
 consistent after retries.
 
-### Admin booking-detail modal readability follow-up (2026-08-31)
+### Admin booking-detail readability follow-up (2026-08-31)
 
-The admin Operations booking-detail modal now uses an admin-only responsive
-width override, so it opens as a wide desktop inspector without changing the
-shared/student dialog sizing. Its content area remains vertically scrollable,
-the header and footer stay stable, summary metrics step down from four columns
-to two on smaller screens, and participant/wallet cards use a non-stretching
-responsive split. This is presentation-only; no RPC, schema, or persistence
-contract changed.
+The admin Operations booking-detail surface used an admin-only responsive width
+override and stable scrolling/header treatment before the refresh-safe route was
+introduced. Those layout goals are now carried by the shared detail page and
+its admin-only extension slots. This is presentation-only; no RPC, schema, or
+persistence contract changed.
 
 ---
+
+### Shared booking-detail composition follow-up (2026-09-02)
+
+The admin-only `/admin-operations/bookings/:bookingId` page now composes the
+same responsive `BookingDetailPage` shell used by students and tutors. Explicit
+extensions supply the admin header action plus room assignment, review context,
+participant wallet/ledger inspection, wallet impact, and state-history content.
+Admin authorization and admin-specific RPC calls remain unchanged, and the
+shared shell still hides student/tutor lifecycle mutations for the admin viewer.
+This is presentation-only; no RPC, schema, or persistence contract changed.
 
 ### Admin wallet lookup search follow-up (2026-09-02)
 
@@ -365,7 +373,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 
 **PRD:** FR-10 (Admin Override), OQ-04 (SLA escalation), prd.tex:717-728
 
-**Current state:** **CLOSED (2026-08-22).** The dedicated `/_app/admin` route owns the admin workspace. The operations queue supports category, urgency, and SLA-status filtering; reports show affected-user count, reason/source, elapsed time, OQ-04 deadline, and escalated status with the WhatsApp escalation channel. The booking-detail dialog consumes the full admin-safe `booking.get` read model, renders the hydrated participant roster with per-wallet balances and booking-scoped ledger entries, and retains state history plus override actions.
+**Current state:** **CLOSED (2026-08-22; shared-detail follow-up 2026-09-02).** The dedicated `/_app/admin` route owns the admin workspace. The operations queue supports category, urgency, and SLA-status filtering; reports show affected-user count, reason/source, elapsed time, OQ-04 deadline, and escalated status with the WhatsApp escalation channel. The refresh-safe `/admin-operations/bookings/:bookingId` page consumes the full admin-safe `booking.get` read model through the shared `BookingDetailPage` shell, renders the hydrated participant roster with per-wallet balances and booking-scoped ledger entries, and retains state history, room controls, meeting fallback, and override actions.
 
 **Required:**
 
@@ -730,7 +738,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-07, FR-08, FR-14, FR-15, FR-21
 
-**Current state:** **CLOSED (2026-08-19; UX follow-up 2026-08-24; manual fallback follow-up 2026-08-27).** The booking detail route implements student/tutor state, schedule, participants, Marks, meeting/room access, history, cancellation, tutor review/completion, group invitation/reconfirmation, reschedule proposal/decision, lateness reporting with ticket status, and post-session notes. Its responsive task-detail presentation now prioritizes status, schedule, format/access, visible participant identities, and role-appropriate primary booking actions directly below the status badge; contextual actions remain above Marks or in the main flow. Participant rows show saved images or initials, names, roles, and confirmation states; online meeting-pending/failed states explain when the link is generated and when retries are active, while an available meeting URL is opened from the compact meeting-status popover instead of a `Ready` badge or standalone CTA. Tutor review uses a compact responsive accept/decline dialog with a session summary before the existing mutation is submitted. When automatic meeting setup is unavailable, the assigned tutor can add or replace a trusted URL for an online `confirmed`/`scheduled` booking through a shared Selia dialog; admins retain the operations fallback. The desktop overview/activity flow now stays in an independent left column from the sticky Actions/Marks rail, preventing the rail height from creating a blank row before Activity; narrow layouts retain the overview → actions/Marks → Activity order. Backend guards reject offline, terminal, pre-confirmation, and wrong-tutor requests. Admin review and override actions remain on the dedicated admin operations surface. The manual-link follow-up adds `tutorActions.setMeetingLink` and keeps the booking state machine unchanged.
+**Current state:** **CLOSED (2026-08-19; UX follow-up 2026-08-24; manual fallback follow-up 2026-08-27; admin shared-shell follow-up 2026-09-02).** The booking detail route implements student/tutor state, schedule, participants, Marks, meeting/room access, history, cancellation, tutor review/completion, group invitation/reconfirmation, reschedule proposal/decision, lateness reporting with ticket status, and post-session notes. Its responsive task-detail presentation now prioritizes status, schedule, format/access, visible participant identities, and role-appropriate primary booking actions directly below the status badge; contextual actions remain above the role-appropriate financial or operational rail content or in the main flow. Participant rows show saved images or initials, names, roles, and confirmation states; online meeting-pending/failed states explain when the link is generated and when retries are active, while an available meeting URL is opened from the compact meeting-status popover instead of a `Ready` badge or standalone CTA. Tutor review uses a compact responsive accept/decline dialog with a session summary before the existing mutation is submitted. When automatic meeting setup is unavailable, the assigned tutor can add or replace a trusted URL for an online `confirmed`/`scheduled` booking through a shared Selia dialog; admins retain the operations fallback. The desktop overview/activity flow now stays in an independent left column from the sticky Actions/financial rail, preventing the rail height from creating a blank row before Activity; narrow layouts retain the overview → actions/financial content → Activity order. Backend guards reject offline, terminal, pre-confirmation, and wrong-tutor requests. Admins now use the same page shell through explicit extensions for review context, room actions, participant wallet/ledger detail, wallet impact, state history, and override controls. The manual-link follow-up adds `tutorActions.setMeetingLink` and keeps the booking state machine unchanged.
 
 **Required:**
 

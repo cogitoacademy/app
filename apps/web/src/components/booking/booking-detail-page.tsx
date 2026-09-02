@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -90,7 +90,7 @@ import {
   canProposeBookingReschedule,
 } from "./booking-reschedule-action";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
-import { orpc } from "@/utils/orpc";
+import { client, orpc } from "@/utils/orpc";
 
 const LEGACY_TUTOR_PAYOUT_RATE_IDR = 7_000;
 import { ContactRequestPanel } from "./contact-request-panel";
@@ -103,14 +103,35 @@ type BookingConfirmation = {
   sessionId?: string;
 } | null;
 
+type BookingDetail = Awaited<ReturnType<typeof client.booking.get>>;
+
+export type BookingDetailExtensions = {
+  /** Actions rendered beside the status badge in the shared detail header. */
+  headerActions?: ReactNode;
+  /** Admin or other role-specific content rendered in the main column. */
+  main?: ReactNode;
+  /** Replaces the default financial summary in the sticky sidebar. */
+  sidebar?: ReactNode;
+  /** Replaces the default activity card when a role needs a richer view. */
+  activity?: ReactNode;
+};
+
 export function BookingDetailPage({
   bookingId,
   viewerId,
   viewerRole,
+  backTo,
+  backLabel,
+  initialBooking,
+  extensions,
 }: {
   bookingId: string;
   viewerId: string;
   viewerRole: string;
+  backTo?: "/bookings" | "/admin-operations";
+  backLabel?: string;
+  initialBooking?: BookingDetail;
+  extensions?: BookingDetailExtensions;
 }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -123,10 +144,13 @@ export function BookingDetailPage({
   const [manualLinkDialogOpen, setManualLinkDialogOpen] = useState(false);
   const isTutor = viewerRole === "tutor";
   const isAdmin = viewerRole === "admin";
-  const bookingsPath = "/bookings";
-  const bookingsLabel = isTutor ? "Tutor bookings" : "Bookings";
+  const bookingsPath = backTo ?? (isAdmin ? "/admin-operations" : "/bookings");
+  const bookingsLabel =
+    backLabel ??
+    (isTutor ? "Tutor bookings" : isAdmin ? "Admin operations" : "Bookings");
   const bookingQuery = useQuery({
     ...orpc.booking.get.queryOptions({ input: { bookingId } }),
+    ...(initialBooking ? { initialData: initialBooking } : {}),
     refetchInterval: (query) => {
       const data = query.state.data;
       if (
@@ -154,6 +178,13 @@ export function BookingDetailPage({
       queryClient.invalidateQueries({
         queryKey: orpc.tutorActions.listBookings.queryKey({ input: {} }),
       }),
+      ...(isAdmin
+        ? [
+            queryClient.invalidateQueries({
+              queryKey: orpc.adminBooking.listBookings.key(),
+            }),
+          ]
+        : []),
     ]);
   }
 
@@ -218,7 +249,7 @@ export function BookingDetailPage({
         }),
     }),
   );
-  const setMeetingLink = useMutation(
+  const tutorSetMeetingLink = useMutation(
     orpc.tutorActions.setMeetingLink.mutationOptions({
       onSuccess: () => {
         setManualLinkDialogOpen(false);
@@ -237,6 +268,27 @@ export function BookingDetailPage({
         }),
     }),
   );
+  const adminSetMeetingLink = useMutation(
+    orpc.adminBooking.setMeetingLink.mutationOptions({
+      onSuccess: () => {
+        setManualLinkDialogOpen(false);
+        toastManager.add({
+          title: "Meeting link saved",
+          description: "The booking now has a manual session link.",
+          type: "success",
+        });
+        refreshBookingQueries();
+      },
+      onError: (error: Error) =>
+        toastManager.add({
+          title: "Meeting link could not be saved",
+          description: getUserFacingError(error),
+          type: "error",
+        }),
+    }),
+  );
+  const meetingLinkPending =
+    tutorSetMeetingLink.isPending || adminSetMeetingLink.isPending;
 
   const sessionsQuery = useQuery(
     orpc.booking.listSessions.queryOptions({
@@ -312,7 +364,7 @@ export function BookingDetailPage({
     !isAdmin &&
     canCancelBooking(booking.currentState, booking.scheduledStartAt);
   const canSetManualLink =
-    isTutor &&
+    (isTutor || isAdmin) &&
     booking.modality === "online" &&
     (booking.currentState === "confirmed" ||
       booking.currentState === "scheduled") &&
@@ -323,13 +375,16 @@ export function BookingDetailPage({
     accept.isPending ||
     decline.isPending ||
     complete.isPending ||
-    setMeetingLink.isPending;
+    meetingLinkPending;
   const confirmationPending = cancel.isPending || complete.isPending;
-  const canProposeReschedule = canProposeBookingReschedule({
-    viewerRole,
-    isBookingProposer: booking.proposerId === viewerId,
-    currentState: booking.currentState,
-  });
+  const canProposeReschedule =
+    !isAdmin &&
+    canProposeBookingReschedule({
+      viewerRole,
+      isBookingProposer: booking.proposerId === viewerId,
+      currentState: booking.currentState,
+    });
+  const hasHeaderActions = Boolean(extensions?.headerActions);
   const rescheduleAction = canProposeReschedule ? (
     <BookingRescheduleAction
       bookingId={bookingId}
@@ -386,6 +441,15 @@ export function BookingDetailPage({
 
   function completeSession() {
     setConfirmationDialog({ action: "complete" });
+  }
+
+  function saveMeetingLink(url: string) {
+    const input = { bookingId, url };
+    if (isAdmin) {
+      adminSetMeetingLink.mutate(input);
+    } else {
+      tutorSetMeetingLink.mutate(input);
+    }
   }
 
   function confirmBookingAction() {
@@ -453,12 +517,17 @@ export function BookingDetailPage({
             <Badge variant={getBookingStateVariant(booking.currentState)} pill>
               {getBookingStateLabel(booking.currentState)}
             </Badge>
-            {canReview || canCancel || canProposeReschedule || canComplete ? (
+            {canReview ||
+            canCancel ||
+            canProposeReschedule ||
+            canComplete ||
+            hasHeaderActions ? (
               <div
                 className="flex w-full flex-col gap-2 sm:mt-auto sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end"
                 role="group"
                 aria-label="Booking actions"
               >
+                {extensions?.headerActions}
                 {rescheduleAction}
                 {canReview ? (
                   <>
@@ -585,7 +654,7 @@ export function BookingDetailPage({
                           meetingUrl={meetingUrl}
                           canSetManualLink={canSetManualLink}
                           onSetManualLink={() => setManualLinkDialogOpen(true)}
-                          manualLinkPending={setMeetingLink.isPending}
+                          manualLinkPending={meetingLinkPending}
                         />
                       ) : !activeRoomBooking ? (
                         <InfoPreview
@@ -786,6 +855,12 @@ export function BookingDetailPage({
             </Card>
           ) : null}
 
+          {extensions?.main ? (
+            <div className="order-2 grid min-w-0 gap-4 lg:order-none">
+              {extensions.main}
+            </div>
+          ) : null}
+
           <div className="order-3 grid min-w-0 gap-4 lg:order-none">
             {!isAdmin ? (
               <BookingLifecycleActions
@@ -794,35 +869,37 @@ export function BookingDetailPage({
               />
             ) : null}
 
-            <Card className="min-w-0 overflow-hidden">
-              <CardHeader>
-                <CardTitle>Activity</CardTitle>
-                <CardDescription>
-                  A chronological record of this booking
-                </CardDescription>
-              </CardHeader>
-              <CardBody className="px-6">
-                {history.length > 0 ? (
-                  <ol aria-label="Booking activity" className="relative">
-                    {history.map((entry) => (
-                      <ActivityTimelineItem
-                        key={entry.id}
-                        entry={entry}
-                        timeZone={booking.timezone}
-                        isLast={entry.id === history[history.length - 1]?.id}
-                      />
-                    ))}
-                  </ol>
-                ) : (
-                  <EmptyState
-                    icon={<IconClock />}
-                    title="No activity yet"
-                    description="Booking updates will appear here."
-                    size="inline"
-                  />
-                )}
-              </CardBody>
-            </Card>
+            {extensions?.activity ?? (
+              <Card className="min-w-0 overflow-hidden">
+                <CardHeader>
+                  <CardTitle>Activity</CardTitle>
+                  <CardDescription>
+                    A chronological record of this booking
+                  </CardDescription>
+                </CardHeader>
+                <CardBody className="px-6">
+                  {history.length > 0 ? (
+                    <ol aria-label="Booking activity" className="relative">
+                      {history.map((entry) => (
+                        <ActivityTimelineItem
+                          key={entry.id}
+                          entry={entry}
+                          timeZone={booking.timezone}
+                          isLast={entry.id === history[history.length - 1]?.id}
+                        />
+                      ))}
+                    </ol>
+                  ) : (
+                    <EmptyState
+                      icon={<IconClock />}
+                      title="No activity yet"
+                      description="Booking updates will appear here."
+                      size="inline"
+                    />
+                  )}
+                </CardBody>
+              </Card>
+            )}
           </div>
         </div>
 
@@ -833,50 +910,54 @@ export function BookingDetailPage({
               section="actions"
             />
           ) : null}
-          <Card className="min-w-0 overflow-hidden">
-            <CardHeader>
-              <IconBox variant="warning-subtle">
-                <IconCoins />
-              </IconBox>
-              <CardTitle>{isTutor ? "Honorarium" : "Marks"}</CardTitle>
-              <CardDescription>
-                {isTutor
-                  ? "Amount earned after completion"
-                  : "Cost and reservation"}
-              </CardDescription>
-            </CardHeader>
-            <CardBody className="space-y-4">
-              {isTutor ? (
-                <SummaryRow
-                  label="Session honorarium"
-                  value={`Rp${(booking.priceSnapshot?.tutorHonorariumIdr ?? (booking.priceSnapshot?.tutorShare ?? 0) * LEGACY_TUTOR_PAYOUT_RATE_IDR).toLocaleString("id-ID")}`}
-                />
-              ) : (
-                <>
+          {extensions?.sidebar ?? (
+            <Card className="min-w-0 overflow-hidden">
+              <CardHeader>
+                <IconBox variant="warning">
+                  <IconCoins />
+                </IconBox>
+                <CardTitle>{isTutor ? "Honorarium" : "Marks"}</CardTitle>
+                <CardDescription className="leading-none">
+                  {isTutor
+                    ? "Amount earned after completion"
+                    : "Cost and reservation"}
+                </CardDescription>
+              </CardHeader>
+              <CardBody className="space-y-4">
+                {isTutor ? (
                   <SummaryRow
-                    label="Original price"
-                    value={<MarkAmount value={booking.originalMarks} />}
+                    label="Session honorarium"
+                    value={`Rp${(booking.priceSnapshot?.tutorHonorariumIdr ?? (booking.priceSnapshot?.tutorShare ?? 0) * LEGACY_TUTOR_PAYOUT_RATE_IDR).toLocaleString("id-ID")}`}
                   />
-                  <SummaryRow
-                    label="Currently held"
-                    value={<MarkAmount value={booking.holdAmount} />}
-                  />
-                  <SummaryRow
-                    label="Refunded"
-                    value={<MarkAmount value={booking.refundedAmount} />}
-                  />
-                  {booking.priceSnapshot ? (
+                ) : (
+                  <>
                     <SummaryRow
-                      label="Per participant"
-                      value={
-                        <MarkAmount value={booking.priceSnapshot.perStudent} />
-                      }
+                      label="Original price"
+                      value={<MarkAmount value={booking.originalMarks} />}
                     />
-                  ) : null}
-                </>
-              )}
-            </CardBody>
-          </Card>
+                    <SummaryRow
+                      label="Currently held"
+                      value={<MarkAmount value={booking.holdAmount} />}
+                    />
+                    <SummaryRow
+                      label="Refunded"
+                      value={<MarkAmount value={booking.refundedAmount} />}
+                    />
+                    {booking.priceSnapshot ? (
+                      <SummaryRow
+                        label="Per participant"
+                        value={
+                          <MarkAmount
+                            value={booking.priceSnapshot.perStudent}
+                          />
+                        }
+                      />
+                    ) : null}
+                  </>
+                )}
+              </CardBody>
+            </Card>
+          )}
         </aside>
       </div>
 
@@ -1063,10 +1144,10 @@ export function BookingDetailPage({
       <ManualMeetingLinkDialog
         open={manualLinkDialogOpen}
         onOpenChange={setManualLinkDialogOpen}
-        onSubmit={(url) => setMeetingLink.mutate({ bookingId, url })}
-        pending={setMeetingLink.isPending}
+        onSubmit={saveMeetingLink}
+        pending={meetingLinkPending}
         initialUrl={meetingUrl}
-        actor="tutor"
+        actor={isAdmin ? "admin" : "tutor"}
       />
     </Stack>
   );

@@ -15,5 +15,10 @@ export const Route = createFileRoute(
 
 function AdminBookingDetailRoute() {
   const { bookingId } = Route.useParams();
-  return <AdminBookingDetailPage bookingId={bookingId} />;
+  const { session } = Route.useRouteContext();
+  const viewer = session.data?.user as CogitoUser | undefined;
+
+  return (
+    <AdminBookingDetailPage bookingId={bookingId} viewerId={viewer?.id ?? ""} />
+  );
 }
