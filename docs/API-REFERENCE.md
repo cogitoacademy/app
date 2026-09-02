@@ -122,7 +122,16 @@ Sanity is queried only by the API server. The browser receives normalized conten
 
 ### Verification
 
-CI runs the API integration/unit suite together with the env, auth, and database package tests. The coverage gate requires 100% coverage for `packages/api` lines, overall lines, functions, and branches; a file set with no instrumented branches is reported as 100% for that metric. Coverage is reported from the same lcov artifact used by `.github/scripts/coverage-comment.ts`.
+CI runs one lcov-producing API integration/unit suite together with the env,
+auth, and database package tests, followed by the server suite in a separate
+process because its webhook test uses `mock.module`. The previous duplicate
+uninstrumented API pass is intentionally omitted. Pull-request typecheck and
+build jobs use Turbo `--affected` with full history; manual runs use the full
+graph. The coverage gate requires 100% coverage for `packages/api` lines,
+overall lines, functions, and branches; a file set with no instrumented
+branches is reported as 100% for that metric. Coverage is reported from the
+same lcov artifact used by `.github/scripts/coverage-comment.ts`, and a
+coverage test-command failure is propagated after the comment/gate step.
 
 ### Auth Levels
 

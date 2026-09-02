@@ -1,4 +1,7 @@
 name: CI
+# F14 (CI performance): keep dependency and Turbo caches reusable across jobs,
+# avoid rebuilding the web app during type checking, and run PR checks only for
+# affected packages where the full repository history is available.
 # F5 (CI-SANITY): pull_request-only (+ manual dispatch). The old
 # `push: [main, staging]` trigger re-ran the full 4-job suite on every
 # squash-merge commit even though every merge commit is already gated by
@@ -32,12 +35,12 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
       - uses: oven-sh/setup-bun@v2.2.0
-      - run: bun install --frozen-lockfile
       - uses: actions/cache@v5
         with:
           path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-lint-${{ hashFiles('bun.lock') }}
-          restore-keys: ${{ runner.os }}-bun-lint-
+          key: ${{ runner.os }}-bun-install-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-install-
+      - run: bun install --frozen-lockfile
       - name: Apply auto-fixable lint and format fixes
         run: |
           bunx oxlint --fix || true
@@ -83,18 +86,28 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: oven-sh/setup-bun@v2.2.0
-      - run: bun install --frozen-lockfile
       - uses: actions/cache@v5
         with:
           path: |
             ~/.bun/install/cache
             .turbo
-          key: ${{ runner.os }}-bun-types-${{ hashFiles('bun.lock') }}
-          restore-keys: ${{ runner.os }}-bun-types-
-      - run: bun run check-types
+          key: ${{ runner.os }}-turbo-typecheck-${{ github.sha }}-${{ hashFiles('bun.lock', '**/package.json', 'turbo.json', '**/tsconfig*.json') }}
+          restore-keys: ${{ runner.os }}-turbo-typecheck-
+      - run: bun install --frozen-lockfile
+      - name: Type-check affected packages on pull requests
+        if: ${{ github.event_name == 'pull_request' }}
+        run: bun run check-types -- --affected
+      - name: Type-check all packages on manual runs
+        if: ${{ github.event_name != 'pull_request' }}
+        run: bun run check-types
 
   build:
     name: Build
@@ -102,26 +115,33 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: oven-sh/setup-bun@v2.2.0
-      - run: bun install --frozen-lockfile
       - uses: actions/cache@v5
         with:
           path: |
             ~/.bun/install/cache
             .turbo
-            apps/web/dist
-            apps/server/dist
-          key: ${{ runner.os }}-bun-build-${{ hashFiles('bun.lock') }}
-          restore-keys: ${{ runner.os }}-bun-build-
-      - run: bun run build
+          key: ${{ runner.os }}-turbo-build-${{ github.sha }}-${{ hashFiles('bun.lock', '**/package.json', 'turbo.json', '**/tsconfig*.json', '**/vite.config.*', '**/tsdown.config.*') }}
+          restore-keys: ${{ runner.os }}-turbo-build-
+      - run: bun install --frozen-lockfile
+      - name: Build affected packages on pull requests
+        if: ${{ github.event_name == 'pull_request' }}
+        run: bun run build -- --affected
+      - name: Build all packages on manual runs
+        if: ${{ github.event_name != 'pull_request' }}
+        run: bun run build
 
   test:
     name: Test + Coverage
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [lint, typecheck]
     permissions:
       contents: read
       pull-requests: write
@@ -157,17 +177,17 @@ jobs:
       PAYMENT_WEBHOOK_SECRET: ci-payment-webhook-secret-at-least-32-characters-long
       SANITY_PROJECT_ID: skfmwuke
       NODE_ENV: test
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
     steps:
       - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2.2.0
-      - run: bun install --frozen-lockfile
       - uses: actions/cache@v5
         with:
-          path: |
-            ~/.bun/install/cache
-            .turbo
-          key: ${{ runner.os }}-bun-test-${{ hashFiles('bun.lock') }}
-          restore-keys: ${{ runner.os }}-bun-test-
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-install-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-install-
+      - run: bun install --frozen-lockfile
       - name: Create env file for drizzle
         run: |
           echo "DATABASE_URL=${{ env.DATABASE_URL }}" > apps/server/.env
@@ -179,13 +199,12 @@ jobs:
           echo "SANITY_PROJECT_ID=${{ env.SANITY_PROJECT_ID }}" >> apps/server/.env
           echo "PAYMENT_PROVIDER=stub" >> apps/server/.env
       - run: bun run db:migrate
-      - run: bun test --timeout 30000 packages/api/src/tests/ apps/server/src/openapi.test.ts
-      - name: "Server unit tests (separate process: webhook test uses mock.module)"
-        run: bun test --timeout 30000 apps/server/src/
       - name: Test with coverage
         id: coverage
-        run: bun test --coverage --timeout 30000 packages/api/src/tests/ packages/env/src/ packages/auth/src/ packages/db/src/ apps/server/src/openapi.test.ts
+        run: bun test --coverage --coverage-reporter=lcov --timeout 30000 packages/api/src/tests/ packages/env/src/ packages/auth/src/ packages/db/src/ apps/server/src/openapi.test.ts
         continue-on-error: true
+      - name: "Server unit tests (separate process: webhook test uses mock.module)"
+        run: bun test --timeout 30000 apps/server/src/
       - name: Post coverage comment + enforce gate
         # Keep a failed test suite as the primary failure. The coverage command
         # itself still runs the gate below when it was actually attempted.
@@ -199,3 +218,6 @@ jobs:
           COVERAGE_OVERALL_THRESHOLD: 100
           COVERAGE_FUNCTIONS_THRESHOLD: 100
           COVERAGE_BRANCHES_THRESHOLD: 100
+      - name: Fail if coverage test command failed
+        if: ${{ always() && steps.coverage.outcome == 'failure' }}
+        run: exit 1

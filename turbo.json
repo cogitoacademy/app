@@ -2,6 +2,9 @@
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
   "tasks": {
+    "transit": {
+      "dependsOn": ["^transit"]
+    },
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
@@ -11,7 +14,7 @@
       "dependsOn": ["^lint"]
     },
     "check-types": {
-      "dependsOn": ["^check-types"]
+      "dependsOn": ["transit"]
     },
     "test": {
       "dependsOn": ["^build"],
@@ -33,8 +36,7 @@
     },
     "db:migrate": {
       "cache": false,
-      "env": ["DATABASE_URL"],
-      "persistent": true
+      "env": ["DATABASE_URL"]
     },
     "db:studio": {
       "cache": false,
