@@ -124,6 +124,21 @@ service (zero config inside) and the empty `cogito` project itself.
 
 ## Progress log
 
+- 2026-09-02 (lead): **first live automation run (dispatch) — runner works,
+  two workflow bugs found + fixed.** ✅ Verified working: `SOPS_AGE_KEY`
+  secret decrypt on the runner, Age key materialization + masking, in-memory
+  vault decrypt, Coolify API reached on loopback (127.0.0.1:8000), Terraform
+  job clean (no drift → no apply). ❌ Fixed: (1) `ansible-playbook` not on
+  PATH — Actions' non-login shells never source `.bashrc`, so the venv PATH
+  is now exported via `GITHUB_ENV` in the first step; (2) `workflow_dispatch`
+  semantics — dorny/paths-filter has no diff base on dispatch and matched
+  every filter; the apply steps now run ALL playbooks on dispatch (its
+  purpose is a deliberate full re-sync) and only changed ones on push;
+  (3) drift-check failure was mislabeled as "drift" by a swallowing
+  `|| warning` — now distinguishes exit 1 (drift) from exit 2 (API down).
+  Runner-prep script also gained a curl retry (the transient `(23)` the
+  operator hit 2026-09-01).
+
 - 2026-09-01 (lead): **Wave 1 DONE + verified** — playbooks repointed to
   `cogito-prod`; wrong-project Kuma service deleted; empty `cogito` project
   deleted (only `cogito-prod` remains); Kuma recreated in

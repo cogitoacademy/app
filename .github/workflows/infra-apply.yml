@@ -150,15 +150,22 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Ensure sops + age are available (runner prep, idempotent)
+      # ansible lives in the runner's venv (infra/runner-prep.sh); bashrc is
+      # NOT sourced by Actions' non-login shells, so every step needs the
+      # PATH explicitly. Exported once via GITHUB_ENV, used by all later steps.
+      - name: Ensure sops + ansible are available (runner prep, idempotent)
         run: |
+          echo "PATH=/home/github-runner/ansible-venv/bin:$PATH" >> "$GITHUB_ENV"
           if ! command -v sops >/dev/null 2>&1; then
-            echo "::notice::installing sops into ~/.local/bin (one-time)"
-            mkdir -p "$HOME/.local/bin"
-            curl -fsSL -o /tmp/sops.deb https://github.com/getsops/sops/releases/download/v3.13.0/sops_3.13.0_amd64.deb
+            echo "::notice::installing sops (one-time, retry-safe)"
+            for i in 1 2 3; do
+              sudo curl -fSL -o /tmp/sops.deb https://github.com/getsops/sops/releases/download/v3.13.0/sops_3.13.0_amd64.deb && break
+              echo "curl attempt $i failed — retrying in 5s" >&2; sleep 3
+            done
             sudo dpkg -i /tmp/sops.deb && rm -f /tmp/sops.deb
           fi
           sops --version
+          ansible-playbook --version | head -1
 
       - name: Materialize the SOPS Age key (0600, masked, deleted after)
         env:
@@ -183,30 +190,41 @@ jobs:
           sops -d infra/secrets/prod.env | grep -q '=' \
             || { echo "::error::vault decrypt failed"; exit 1; }
 
-      - name: Drift-check (report-only, never blocks)
+      - name: Drift-check (report-only; exit 1 = drift, 2 = API failure)
         run: |
+          export SOPS_AGE_KEY_FILE="${{ env.SOPS_AGE_KEY_FILE }}"
+          TOKEN="$(sops -d infra/secrets/prod.env | grep '^COOLIFY_API_TOKEN=' | cut -d= -f2-)"
+          set +e
           ansible-playbook -i infra/ansible/inventory.ini infra/ansible/drift-check.yml \
             -e coolify_api_base="http://127.0.0.1:8000/api/v1" \
-            -e coolify_api_token="$(sops -d infra/secrets/prod.env | grep '^COOLIFY_API_TOKEN=' | cut -d= -f2-)" \
-            -e drift_check_dry_run=true \
-          || echo "::warning::drift detected pre-apply (report-only; the apply below re-syncs declared state)"
+            -e coolify_api_token="$TOKEN" \
+            -e drift_check_dry_run=true
+          code=$?
+          set -e
+          if [ "$code" -eq 0 ]; then
+            echo "drift-check: no drift"
+          elif [ "$code" -eq 1 ]; then
+            echo "::warning::DRIFT pre-apply (report-only; the apply below re-syncs declared state)"
+          else
+            echo "::warning::drift-check could not reach the Coolify API (exit $code) — continuing; apply will fail loudly if the API is truly down"
+          fi
 
       - name: Apply — coolify-resources (env + resources, includes restart)
-        if: needs.detect.outputs.coolify-resources == 'true'
+        if: github.event_name == 'workflow_dispatch' || needs.detect.outputs.coolify-resources == 'true'
         run: |
           ansible-playbook -i infra/ansible/inventory.ini infra/ansible/coolify-resources.yml \
             -e coolify_api_url="http://127.0.0.1:8000/api/v1"
 
       - name: Apply — backup-cron
-        if: needs.detect.outputs.backup-cron == 'true'
+        if: github.event_name == 'workflow_dispatch' || needs.detect.outputs.backup-cron == 'true'
         run: ansible-playbook -i infra/ansible/inventory.ini infra/ansible/backup-cron.yml
 
       - name: Apply — disk-watchdog
-        if: needs.detect.outputs.disk-watchdog == 'true'
+        if: github.event_name == 'workflow_dispatch' || needs.detect.outputs.disk-watchdog == 'true'
         run: ansible-playbook -i infra/ansible/inventory.ini infra/ansible/disk-watchdog.yml
 
       - name: Apply — uptime-kuma
-        if: needs.detect.outputs.uptime-kuma == 'true'
+        if: github.event_name == 'workflow_dispatch' || needs.detect.outputs.uptime-kuma == 'true'
         run:
           ansible-playbook -i infra/ansible/inventory.ini infra/ansible/uptime-kuma.yml \
           -e coolify_api_url="http://127.0.0.1:8000/api/v1"
