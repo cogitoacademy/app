@@ -192,6 +192,7 @@ is not set` (32 bytes, every night since install). Disk watchdog log did
 not exist at all.
 
 **Root cause (three stacked bugs):**
+
 1. Both cron playbooks wrote the **entire 98-line vault** into
    `/etc/cogito/backup.env` / `disk.env`. The vault contains a multi-line
    `GOOGLE_PRIVATE_KEY` (line 30 executes as a command) and
