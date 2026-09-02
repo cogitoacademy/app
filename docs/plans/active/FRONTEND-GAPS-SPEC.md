@@ -349,6 +349,8 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 > **Audit 2026-08-19 (against main `d11962b`):** PR #55 merged (`d4e50e0`). Verified in `apps/web/src`:
 >
 > **Follow-up 2026-09-02:** The admin booking-detail dialog is replaced by the refresh-safe admin-only `/admin-operations/bookings/:bookingId` page. The booking monitor table now uses consistent readable type, stable column sizing/top alignment, and non-wrapping badges while retaining horizontal overflow for narrow viewports.
+
+> **Responsive follow-up 2026-09-02:** The booking monitor's flex, tabs, card, and body ancestors are explicitly shrinkable on small screens. The card stays within the content viewport while horizontal overflow is isolated to the table container.
 >
 > **Follow-up 2026-08-22 (against main `12dab67`):** The admin operations queue now includes category filtering and a booking-detail dialog that consumes `adminBooking.getBookingStateHistory`; the Rooms tab now consumes `room.listPendingApprovals` and exposes queue-backed assign/choose-another/cancel actions. The F6 reschedule action now dispatches by viewer role: student proposers use `booking.proposeReschedule`, tutors use `tutorActions.proposeReschedule`. The F1 follow-up branch closes the remaining admin route, participant/wallet/ledger, and OQ-04 SLA presentation gaps.
 >

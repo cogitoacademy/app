@@ -130,7 +130,11 @@ type SlaFilter = "all" | "escalated";
 
 export function AdminOperationsPage() {
   return (
-    <Stack direction="column" spacing="lg">
+    <Stack
+      direction="column"
+      spacing="lg"
+      className="w-full min-w-0 max-w-full"
+    >
       <div>
         <Heading size="md">Operations</Heading>
         <Text className="text-muted">
@@ -138,7 +142,7 @@ export function AdminOperationsPage() {
           offline rooms.
         </Text>
       </div>
-      <Tabs defaultValue="queue">
+      <Tabs defaultValue="queue" className="min-w-0 max-w-full">
         <TabsList>
           <TabsItem value="queue">
             <IconCalendarEvent /> Booking queue
@@ -150,7 +154,7 @@ export function AdminOperationsPage() {
             <IconBuilding /> Room approvals
           </TabsItem>
         </TabsList>
-        <TabsPanel value="queue">
+        <TabsPanel value="queue" className="min-w-0 max-w-full">
           <BookingQueue />
         </TabsPanel>
         <TabsPanel value="wallet">
@@ -182,7 +186,11 @@ function BookingQueue() {
   });
 
   return (
-    <Stack direction="column" spacing="md">
+    <Stack
+      direction="column"
+      spacing="md"
+      className="w-full min-w-0 max-w-full"
+    >
       <Card>
         <CardBody className="flex flex-wrap items-end gap-3">
           <Field className="min-w-56">
@@ -261,14 +269,17 @@ function BookingQueue() {
           onRetry={() => void queueQuery.refetch()}
         />
       ) : (
-        <Card>
+        <Card className="w-full min-w-0 max-w-full overflow-hidden">
           <CardHeader>
             <CardTitle>Booking monitor</CardTitle>
             <CardDescription>
               Urgent and action-required bookings appear first.
             </CardDescription>
           </CardHeader>
-          <CardBody aria-busy={queueQuery.isFetching}>
+          <CardBody
+            aria-busy={queueQuery.isFetching}
+            className="min-w-0 max-w-full"
+          >
             {queueQuery.data.items.length === 0 ? (
               <EmptyState
                 icon={<IconSearch />}
@@ -278,7 +289,7 @@ function BookingQueue() {
                 size="compact"
               />
             ) : (
-              <TableContainer>
+              <TableContainer className="w-[calc(100%+3rem)]! min-w-0 max-w-none">
                 <Table className="min-w-[76rem] text-sm">
                   <TableHeader>
                     <TableRow>
