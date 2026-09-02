@@ -28,7 +28,7 @@
 #   OPS_SSH_USER  SSH user (default: ubuntu)
 set -euo pipefail
 
-OPS_VPS="${OPS_VPS:-15.235.186.159}"
+OPS_VPS="${OPS_VPS:-100.124.43.19}"
 OPS_SSH_KEY="${OPS_SSH_KEY:-$HOME/.ssh/cogito_vps}"
 OPS_SSH_USER="${OPS_SSH_USER:-ubuntu}"
 SSH=(ssh -i "$OPS_SSH_KEY" -o ConnectTimeout=8 -o BatchMode=yes "$OPS_SSH_USER@$OPS_VPS")

@@ -13,7 +13,7 @@ production has NOT changed until you apply (§1).
 ```bash
 cd ~/cogito/app && git pull                      # work from latest main
 export SOPS_AGE_KEY_FILE="$HOME/.config/sops/age/keys.txt"   # vault decrypt
-ssh -i ~/.ssh/cogito_vps -f -N -L 8000:127.0.0.1:8000 ubuntu@15.235.186.159
+ssh -i ~/.ssh/cogito_vps -f -N -L 8000:127.0.0.1:8000 ubuntu@100.124.43.19
 #   ↑ the Coolify API is loopback-only; this tunnel makes it localhost:8000.
 #     "Address already in use" = a tunnel already runs; that's fine.
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8000/api/v1/health  # expect 200
@@ -127,7 +127,7 @@ unchanged (code-only rollback).
 ```bash
 ./ops.sh backup                 # current state first
 # restore target: newest cogito-backups dump (nightly) or pre-migrate-<sha> snapshot
-ssh ubuntu@15.235.186.159   # then: aws s3 cp s3://cogito-backups/... (creds in /etc/cogito/backup.env)
+ssh ubuntu@100.124.43.19   # then: aws s3 cp s3://cogito-backups/... (creds in /etc/cogito/backup.env)
 # restore into scratch → verify counts → maintenance window → restore into prod
 ```
 
