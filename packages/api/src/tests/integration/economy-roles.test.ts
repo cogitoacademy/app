@@ -107,18 +107,7 @@ describe("Economy settings role safety", () => {
       })
       .from(notification)
       .where(eq(notification.userId, tutorId));
-    expect(tutorNotifications).toHaveLength(1);
-    expect(tutorNotifications[0]).toMatchObject({
-      userId: tutorId,
-      category: "system",
-      title: "Cogito rate updated",
-      eventKey: `economy_config_updated:2:${tutorId}`,
-    });
-    expect(tutorNotifications[0]?.body).toContain("Online: Rp55.000 base");
-    expect(tutorNotifications[0]?.metadata).toMatchObject({
-      economyVersion: 2,
-      offlineCogitoIncrementIdr: 45_000,
-    });
+    expect(tutorNotifications).toHaveLength(0);
 
     const studentNotifications = await db
       .select({ id: notification.id })
@@ -149,7 +138,7 @@ describe("Economy settings role safety", () => {
       .select({ id: notification.id })
       .from(notification)
       .where(eq(notification.userId, tutorId));
-    expect(tutorNotifications).toHaveLength(1);
+    expect(tutorNotifications).toHaveLength(0);
   });
 
   test("new bookings use the active Cogito take and snapshot it", async () => {

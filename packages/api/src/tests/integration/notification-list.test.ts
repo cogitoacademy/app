@@ -112,6 +112,21 @@ describe("Notification list & read flow", () => {
     ).toBe(true);
   });
 
+  test("retired economy rate notifications stay out of the inbox", async () => {
+    const before = await studentClient.notification.getUnreadCount({});
+    const legacy = await insertNotification(studentId, {
+      category: "system",
+      eventKey: `economy_config_updated:2:${studentId}`,
+      isRead: false,
+    });
+
+    const result = await studentClient.notification.list({});
+    const after = await studentClient.notification.getUnreadCount({});
+
+    expect(result.items.some((item) => item.id === legacy.id)).toBe(false);
+    expect(after.count).toBe(before.count);
+  });
+
   test("getUnreadCount returns count of unread", async () => {
     await insertNotification(studentId, { isRead: false });
     await insertNotification(studentId, { isRead: false });

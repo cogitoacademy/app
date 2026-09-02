@@ -480,7 +480,7 @@ describe("Admin Service", () => {
       ).rejects.toThrow(EconomyConfigConflictError);
     });
 
-    test("notification failures do not roll back the economy update (fan-out after commit)", async () => {
+    test("economy updates do not fan out tutor notifications", async () => {
       const economy = {
         getConfig: mock(async () => ({
           id: "default",
@@ -517,11 +517,8 @@ describe("Admin Service", () => {
         wallet: {} as any,
         payout: {} as any,
         economy: economy as any,
-        notification: notification as any,
       });
 
-      // The update must succeed (transaction committed + audit row) even
-      // though every tutor notification write rejects.
       const updated = await service.updateEconomySettings("admin1", {
         expectedVersion: 1,
         onlineCogitoBaseIdr: 55_000,
@@ -531,56 +528,7 @@ describe("Admin Service", () => {
       });
       expect(updated.version).toBe(2);
       expect(auditPort.record).toHaveBeenCalledTimes(1);
-      // Notifications are written outside the transaction, per tutor, and
-      // each failure is caught and logged — the write is still attempted.
-      expect(notification.write).toHaveBeenCalledTimes(2);
-    });
-
-    test("fan-out helper failures are caught and logged without breaking the update", async () => {
-      const economy = {
-        getConfig: mock(async () => ({
-          id: "default",
-          version: 1,
-          onlineCogitoBaseIdr: 50_000,
-          onlineCogitoIncrementIdr: 20_000,
-          offlineCogitoBaseIdr: 90_000,
-          offlineCogitoIncrementIdr: 40_000,
-        })),
-        updateConfig: mock(async () => ({
-          id: "default",
-          version: 2,
-          onlineCogitoBaseIdr: 55_000,
-          onlineCogitoIncrementIdr: 20_000,
-          offlineCogitoBaseIdr: 90_000,
-          offlineCogitoIncrementIdr: 40_000,
-        })),
-      };
-      const adminRepo = {
-        listUserIdsByRole: mock(async () => {
-          throw new Error("db down during fan-out");
-        }),
-      };
-      const db = { transaction: mock(async (fn: any) => fn({})) };
-      const auditPort = { record: mock(async () => {}) };
-      const notification = { write: mock(async () => {}) };
-      const service = createAdminService({
-        adminRepo: adminRepo as any,
-        auditPort,
-        db: db as any,
-        wallet: {} as any,
-        payout: {} as any,
-        economy: economy as any,
-        notification: notification as any,
-      });
-
-      const updated = await service.updateEconomySettings("admin1", {
-        expectedVersion: 1,
-        onlineCogitoBaseIdr: 55_000,
-        onlineCogitoIncrementIdr: 20_000,
-        offlineCogitoBaseIdr: 90_000,
-        offlineCogitoIncrementIdr: 40_000,
-      });
-      expect(updated.version).toBe(2);
+      expect(adminRepo.listUserIdsByRole).not.toHaveBeenCalled();
       expect(notification.write).not.toHaveBeenCalled();
     });
   });

@@ -2,6 +2,11 @@
 
 Last updated: 2026-09-02
 
+The 2026-09-02 admin booking-detail consolidation is presentation-only; room,
+wallet, ledger, and state-history services and event keys are unchanged.
+Room assignment additionally permits a `scheduled` offline booking only when
+it has no active room, enabling re-assignment after an admin removes a room.
+
 ## Selia field-context invariant (2026-08-31)
 
 The profile and tutor-onboarding compositions place every `FieldLabel`,
@@ -185,7 +190,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 
 - `admin.types.ts` — `dashboardAnalyticsInput`, `listUsersInput`, `adminSearchUsersInput`, `setRoleInput`, `adminGetWalletInput`, `adminListLedgerEntriesInput`, `adminGetTutorPayoutsInput`, `adminMarkTutorPayoutPaidInput`, `adminUpdateEconomySettingsInput`
 - `admin.errors.ts` — `UserNotFoundError`, `LastAdminError`, `OptimisticLockError`, `WalletNotFoundError`, `InvalidLedgerFilterError`, `EconomyConfigConflictError`, `TutorPayoutNotAvailableError`
-- `admin.repo.ts` — `getById`, `listUsers`, `searchUsers`, `getDashboardAnalytics`, `listUserIdsByRole`, `updateRoleWithExpected`
+- `admin.repo.ts` — `getById`, `listUsers`, `searchUsers`, `getDashboardAnalytics`, `updateRoleWithExpected`
 - `admin.service.ts` — `getDashboardAnalytics`, `listUsers`, `searchUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getPendingTutorPayouts`, `markTutorPayoutPaid`, `getEconomySettings`, `updateEconomySettings`
 - `admin.handler.ts` — `getDashboardAnalytics`, `listUsers`, `searchUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getPendingTutorPayouts`, `markTutorPayoutPaid`, `getEconomySettings`, `updateEconomySettings`
 - `admin.router.ts` — Admin-only routes
@@ -202,9 +207,9 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `getPendingTutorPayouts({ tutorId })` — Returns unpaid honorarium after the latest admin-paid cutoff
 - `markTutorPayoutPaid(adminId, { tutorId })` — Records a paid payout (gross, exact bank, non-BCA transfer fee, net, cutoff, and payer) and audits the immutable payout record; returns `TutorPayoutNotAvailableError` when the amount or required payout-account details are unavailable
 - `getEconomySettings()` — Returns the active computational Mark value and IDR schedules
-- `updateEconomySettings(adminId, input)` — Optimistically updates the four Cogito take fields, records an `economy_config_updated` audit event, and affects future booking/repricing snapshots only; identical values return the current config without a write. The tutor rate-change notification fan-out runs **after the config transaction commits** (best-effort, per-tutor catch+log): a notification failure never rolls back the config update or the audit row. The event key `economy_config_updated:{version}:{tutorId}` keeps retries idempotent per version
+- `updateEconomySettings(adminId, input)` — Optimistically updates the four Cogito take fields, records an `economy_config_updated` audit event, and affects future booking/repricing snapshots only; identical values return the current config without a write. It does not fan out a user notification: tutors do not need the platform take schedule because their IDR honorarium settings and the student-facing Marks preview remain separate concerns.
 
-**Dependencies:** `AdminRepo`, `AuditPort`, `AdminWalletPort`, `BookingPayoutPort`, `EconomyService`, `NotificationPort`
+**Dependencies:** `AdminRepo`, `AuditPort`, `AdminWalletPort`, `BookingPayoutPort`, `EconomyService`
 
 **Business Rules:**
 
@@ -217,8 +222,8 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - Economy writes require the current `version`; stale writes fail with `ECONOMY_CONFIG_CONFLICT`
 - Economy base and increment values are validated in Rp 5,000 increments; increments are non-negative
 - Existing booking price snapshots are immutable when the active schedule changes
-- Rate-change notifications are in-app system notifications for all users whose current role is `tutor`; event keys are unique per economy version and tutor
-- Re-saving the same four schedule values is a no-op and does not increment the economy version, write audit, or fan out notifications
+- Rate changes affect only future booking/repricing snapshots; they do not create tutor notifications
+- Re-saving the same four schedule values is a no-op and does not increment the economy version or write an audit row
 
 ---
 
@@ -619,6 +624,7 @@ chat directory.
 **Business Rules:**
 
 - Every notification has a unique `eventKey` for idempotency
+- Retired `economy_config_updated:*` rate-change rows remain stored for history but are excluded from the user inbox and unread count
 - Selected read-status updates only affect notification IDs owned by the authenticated user
 - `write` throws — used for critical notifications
 - `writeBestEffort` swallows errors — used for non-critical notifications

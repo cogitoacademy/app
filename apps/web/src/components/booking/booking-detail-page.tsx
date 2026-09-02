@@ -114,6 +114,10 @@ export type BookingDetailExtensions = {
   sidebar?: ReactNode;
   /** Replaces the default activity card when a role needs a richer view. */
   activity?: ReactNode;
+  /** Role-specific controls shown inside the session overview. */
+  overviewDetails?: ReactNode;
+  /** Extra detail rendered under the matching participant in the overview. */
+  participantDetails?: (participantId: string) => ReactNode;
 };
 
 export function BookingDetailPage({
@@ -648,7 +652,7 @@ export function BookingDetailPage({
                       Format & access
                     </Text>
                     <div className="mt-0.5 flex flex-wrap items-center">
-                      <Text className="font-medium text-base/5 text-muted">
+                      <Text className="font-medium text-base/5 text-muted mr-1">
                         {booking.modality === "online" ? "Online" : "Offline"}
                       </Text>
                       {booking.modality === "online" ? (
@@ -670,7 +674,7 @@ export function BookingDetailPage({
                       ) : null}
                       {booking.modality === "offline" && activeRoomBooking ? (
                         <>
-                          <Text className="ml-1 text-base/5 font-medium">
+                          <Text className="text-base/5 font-medium">
                             at {activeRoomBooking.room.name}
                           </Text>
                           <Text className="break-words text-sm/5 text-muted">
@@ -681,6 +685,11 @@ export function BookingDetailPage({
                     </div>
                   </div>
                 </div>
+                {extensions?.overviewDetails ? (
+                  <div className="min-w-0 sm:col-span-2">
+                    {extensions.overviewDetails}
+                  </div>
+                ) : null}
                 <span id="session-when-title" className="sr-only">
                   When
                 </span>
@@ -709,43 +718,53 @@ export function BookingDetailPage({
                   </div>
                 </div>
 
-                <div className="grid gap-2 sm:grid-cols-2">
+                <div
+                  className={`grid gap-2 ${isAdmin ? "grid-cols-1" : "sm:grid-cols-2"}`}
+                >
                   {booking.participants.length > 0 ? (
                     booking.participants.map((participant) => (
-                      <Item
+                      <div
                         key={participant.id}
-                        variant="plain"
-                        size="sm"
-                        className="min-w-0 items-center rounded-lg border border-item-border bg-item p-3!"
+                        className="min-w-0 rounded-lg border border-item-border bg-item"
                       >
-                        <ItemMedia>
-                          <Avatar size="sm">
-                            {participant.user?.image ? (
-                              <AvatarImage
-                                src={participant.user.image}
-                                alt={
-                                  (participant.user?.name ?? "Participant") +
-                                  " avatar"
-                                }
-                              />
-                            ) : null}
-                            <AvatarFallback>
-                              {participant.user?.name
-                                .slice(0, 2)
-                                .toUpperCase() ?? "CG"}
-                            </AvatarFallback>
-                          </Avatar>
-                        </ItemMedia>
-                        <ItemContent className="min-w-0 flex-1">
-                          <ItemTitle className="truncate text-sm">
-                            {participant.user?.name ?? "Participant"}
-                          </ItemTitle>
-                          <ItemDescription className="truncate text-xs capitalize">
-                            {participant.role} ·{" "}
-                            {participant.confirmationState.replaceAll("_", " ")}
-                          </ItemDescription>
-                        </ItemContent>
-                      </Item>
+                        <Item
+                          variant="plain"
+                          size="sm"
+                          className="min-w-0 items-center p-3!"
+                        >
+                          <ItemMedia>
+                            <Avatar size="sm">
+                              {participant.user?.image ? (
+                                <AvatarImage
+                                  src={participant.user.image}
+                                  alt={
+                                    (participant.user?.name ?? "Participant") +
+                                    " avatar"
+                                  }
+                                />
+                              ) : null}
+                              <AvatarFallback>
+                                {participant.user?.name
+                                  .slice(0, 2)
+                                  .toUpperCase() ?? "CG"}
+                              </AvatarFallback>
+                            </Avatar>
+                          </ItemMedia>
+                          <ItemContent className="min-w-0 flex-1">
+                            <ItemTitle className="truncate text-sm">
+                              {participant.user?.name ?? "Participant"}
+                            </ItemTitle>
+                            <ItemDescription className="truncate text-xs capitalize">
+                              {participant.role} ·{" "}
+                              {participant.confirmationState.replaceAll(
+                                "_",
+                                " ",
+                              )}
+                            </ItemDescription>
+                          </ItemContent>
+                        </Item>
+                        {extensions?.participantDetails?.(participant.id)}
+                      </div>
                     ))
                   ) : (
                     <EmptyState
@@ -1164,17 +1183,20 @@ type BookingActivityEntry = {
   toState: string;
   reason: string | null;
   actorType: string;
+  actorId?: string | null;
   createdAt: string | Date;
 };
 
-function ActivityTimelineItem({
+export function ActivityTimelineItem({
   entry,
   timeZone,
   isLast,
+  showActorId = false,
 }: {
   entry: BookingActivityEntry;
   timeZone: string;
   isLast: boolean;
+  showActorId?: boolean;
 }) {
   return (
     <li className="relative flex gap-3 pb-6 last:pb-0">
@@ -1237,6 +1259,11 @@ function ActivityTimelineItem({
               {entry.reason}
             </Text>
           </div>
+        ) : null}
+        {showActorId && entry.actorId ? (
+          <Text className="mt-2 break-all font-mono text-xs text-dimmed">
+            Actor: {entry.actorId}
+          </Text>
         ) : null}
       </div>
     </li>

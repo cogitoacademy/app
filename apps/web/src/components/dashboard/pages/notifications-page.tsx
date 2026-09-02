@@ -201,32 +201,6 @@ export function NotificationsPage() {
 
   return (
     <Stack direction="column" spacing="lg">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <Heading size="md">Notifications</Heading>
-            {unreadCount > 0 ? (
-              <Badge variant="info" pill>
-                {unreadCount} unread
-              </Badge>
-            ) : null}
-          </div>
-          <Text className="text-muted">
-            Review updates from your bookings, payments, and account.
-          </Text>
-        </div>
-        {unreadCount > 0 ? (
-          <Button
-            variant="outline"
-            onClick={() => markAllAsRead.mutate({})}
-            progress={markAllAsRead.isPending}
-            disabled={markAllAsRead.isPending}
-          >
-            <IconMailOpened /> Mark all as read
-          </Button>
-        ) : null}
-      </div>
-
       {notificationsQuery.isPending ? (
         <NotificationsLoading />
       ) : notificationsQuery.isError ? (
@@ -260,12 +234,32 @@ export function NotificationsPage() {
         />
       ) : (
         <Card>
-          <CardHeader className="p-5 sm:p-6">
-            <CardTitle>All activity</CardTitle>
-            <CardDescription>
-              Newest updates appear first. Select rows to change their read
-              status.
-            </CardDescription>
+          <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between p-5 sm:p-6">
+            <div>
+              <CardTitle>
+                All activity
+                {unreadCount > 0 ? (
+                  <Badge variant="info" className="ml-1">
+                    {unreadCount} unread
+                  </Badge>
+                ) : null}
+              </CardTitle>
+              <CardDescription>
+                Newest updates appear first. Select rows to change their read
+                status.
+              </CardDescription>
+            </div>
+
+            {unreadCount > 0 ? (
+              <Button
+                variant="outline"
+                onClick={() => markAllAsRead.mutate({})}
+                progress={markAllAsRead.isPending}
+                disabled={markAllAsRead.isPending}
+              >
+                <IconMailOpened /> Mark all as read
+              </Button>
+            ) : null}
           </CardHeader>
 
           <div className="flex flex-col gap-3 border-b border-card-separator px-5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 md:min-h-[53px]">
@@ -396,11 +390,14 @@ function NotificationItem({
       <ItemContent className="min-w-0 gap-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <ItemTitle
-            className={cn("min-w-0", !notification.isRead && "font-semibold")}
+            className={cn(
+              "min-w-0 text-base text-foreground",
+              !notification.isRead && "font-semibold",
+            )}
           >
             {notification.title}
           </ItemTitle>
-          <ItemDescription className="max-w-3xl text-sm">
+          <ItemDescription className="max-w-3xl text-base">
             {notification.body}
           </ItemDescription>
           {!notification.isRead ? (
@@ -412,7 +409,7 @@ function NotificationItem({
           ) : null}
         </div>
 
-        <ItemMeta className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <ItemMeta className="flex flex-wrap items-center gap-x-2 gap-y-1 text-base text-dimmed">
           <time
             dateTime={dateTime}
             className="inline-flex items-center gap-1"

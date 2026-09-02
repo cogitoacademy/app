@@ -123,7 +123,7 @@ This plan consolidates the **documented gaps** (from `docs/superpowers/plans/202
 
 - [ ] **Step 1: Write failing test** — mock `notificationPort.write` rejects; assert economy config WAS updated and audit row exists (transaction committed).
 - [ ] **Step 2: Run — FAIL** (rollback).
-- [ ] **Step 3: Implement** — move the `Promise.all(notification.write(...))` block out of the `db.transaction`, after commit, with `writeBestEffort`-style per-tutor `.catch(log)` (import `log` from `@cogito-app/api/lib/logger`; event key `economy_config_updated:${version}:${tutorId}` stays idempotent).
+- [ ] **Step 3: Implement** — move the `Promise.all(notification.write(...))` block out of the `db.transaction`, after commit, with `writeBestEffort`-style per-tutor `.catch(log)` (import `log` from `@cogito-app/api/lib/logger`; event key `economy_config_updated:${version}:${tutorId}` stays idempotent). **Historical follow-up (2026-09-02):** the tutor fan-out was later retired; the current economy update does not emit these notifications.
 - [ ] **Step 4: Run tests — PASS**.
 - [ ] **Step 5: Commit** `fix(admin): decouple economy-config notifications from config transaction`
 

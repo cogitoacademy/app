@@ -2,6 +2,12 @@
 
 Last updated: 2026-09-02
 
+The 2026-09-02 admin booking-detail layout consolidation adds no environment
+variables, migrations, jobs, or operational steps.
+For an offline scheduled booking, remove its room and verify the room selector
+remains available; assigning a new room must succeed without changing the
+scheduled session window.
+
 > **Quick entry:** for "I want to change X → which commands do I run", use
 > [INFRA-PLAYBOOK.md](./INFRA-PLAYBOOK.md) (scenario → command decision
 > table, incl. deploy/migration/disaster-recovery flows). This document
@@ -156,7 +162,7 @@ Open a clearly invalid client route such as `/this-page-does-not-exist`. Verify 
 
 ### Notification inbox smoke check
 
-As a signed-in student or tutor, open `/notifications` and confirm the list shows the notification title/body, a human-readable category badge, an exact date/time, relative age, unread emphasis, and a booking link when the notification has a booking. Select one row and verify **Mark as read** and **Mark as unread** both update the row and the shell bell count. Select multiple rows, use **Select all**, and verify both bulk actions update only the selected rows. Loading older notifications must keep the current selection model usable; changing read status must clear the selection after success. As another user, confirm a selected ID cannot change a notification owned by someone else.
+As a signed-in student or tutor, open `/notifications` and confirm the list shows the notification title/body, a human-readable category badge, an exact date/time, relative age, unread emphasis, and a booking link when the notification has a booking. Open the shell bell and click a notification; verify an unread item is marked read and navigation continues to its associated booking, balance, achievements, calendar, or notifications page instead of stopping at the read-state update. Select one row and verify **Mark as read** and **Mark as unread** both update the row and the shell bell count. Select multiple rows, use **Select all**, and verify both bulk actions update only the selected rows. Loading older notifications must keep the current selection model usable; changing read status must clear the selection after success. As another user, confirm a selected ID cannot change a notification owned by someone else.
 
 ### Economy rate-control smoke check
 
@@ -165,9 +171,9 @@ and online/offline Cogito take schedule are visible. Change a Cogito base or inc
 by a valid Rp 5,000 step, save, reload, and verify the version increments and the
 preview for class sizes 1–6 changes. The save is optimistic-lock protected and affects
 only future booking/repricing snapshots; existing booking snapshots must remain unchanged.
-After a successful change, verify a `Cogito rate updated` in-app notification appears
-for every current tutor. Re-saving the same values should not increment the version,
-add an audit row, or create another notification.
+After a successful change, verify no `Cogito rate updated` in-app notification appears
+for tutors. Re-saving the same values should not increment the version, add an audit
+row, or create another notification.
 As a student or tutor, opening `/admin-economy` must redirect away and direct
 `admin.getEconomySettings`/update calls must return FORBIDDEN.
 

@@ -196,6 +196,32 @@ describe("createRoomService", () => {
       expect(result).toEqual(roomBookingRow);
     });
 
+    test("assigns a new room to a scheduled offline booking after removal", async () => {
+      const roomBookingRow = {
+        id: "rb2",
+        roomId: "room2",
+        bookingId: "b1",
+        status: "confirmed",
+      };
+      const repo = makeRepo({
+        findRoomById: mock(async () => makeRoom({ id: "room2" })),
+        findBookingStateById: mock(async () => "scheduled"),
+        findActiveRoomBookingByBookingId: mock(async () => null),
+        findRoomBookingsForUpdate: mock(async () => []),
+        insertRoomBooking: mock(async () => roomBookingRow as any),
+      });
+
+      const service = createRoomService(repo, makeDb());
+      const result = await service.assignRoom(
+        "b1",
+        "room2",
+        new Date("2024-01-01T10:00:00Z"),
+        new Date("2024-01-01T11:00:00Z"),
+      );
+
+      expect(result).toEqual(roomBookingRow);
+    });
+
     test("F22: assignRoom rejects a booking that is not awaiting room approval", async () => {
       const repo = makeRepo({
         findRoomById: mock(async () => makeRoom()),

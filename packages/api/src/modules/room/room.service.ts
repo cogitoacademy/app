@@ -143,18 +143,25 @@ export function createRoomService(
 
       await lockRoomForBooking(tx, roomId);
 
-      // F22: only offline bookings awaiting admin room approval may be
-      // assigned a room. `reschedule_proposed` is the H3 carve-out — an admin
-      // can pre-assign while the reschedule proposal is pending; the
-      // transition applies when the proposal settles. Any other state (e.g. a
-      // CONFIRMED online booking) must not receive a CONFIRMED roomBooking
-      // row — the old code no-op'd the transition and left an orphan row.
+      // F22: offline bookings awaiting approval may be assigned a room.
+      // `reschedule_proposed` supports pre-assignment, while `scheduled`
+      // supports assigning again after an admin removed the previous room.
+      // The repository scopes this lookup to offline bookings.
       const currentState = await repo.findBookingStateById(tx, bookingId);
       if (
         currentState !== BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL &&
+        currentState !== BOOKING_STATE.SCHEDULED &&
         currentState !== BOOKING_STATE.RESCHEDULE_PROPOSED
       ) {
         throw new RoomBookingStateError(bookingId, currentState ?? "unknown");
+      }
+
+      const activeRoom = await repo.findActiveRoomBookingByBookingId(
+        tx,
+        bookingId,
+      );
+      if (activeRoom) {
+        throw new RoomBookingStateError(bookingId, currentState);
       }
 
       const conflicting = await repo.findRoomBookingsForUpdate(

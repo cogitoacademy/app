@@ -55,9 +55,11 @@ const RESCHEDULE_PROPOSED_STATE = "reschedule_proposed";
 export function AdminRoomActions({
   booking,
   onBookingChanged,
+  embedded = false,
 }: {
   booking: BookingDetail;
   onBookingChanged: () => void;
+  embedded?: boolean;
 }) {
   const [roomId, setRoomId] = useState("");
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
@@ -73,7 +75,10 @@ export function AdminRoomActions({
   const isRescheduleProposed =
     booking.currentState === RESCHEDULE_PROPOSED_STATE;
   const canAssign =
-    !currentRoomBooking && (isAwaitingApproval || isRescheduleProposed);
+    !currentRoomBooking &&
+    (isAwaitingApproval ||
+      booking.currentState === SCHEDULED_STATE ||
+      isRescheduleProposed);
   const canRelocate =
     Boolean(currentRoomBooking) &&
     (isAwaitingApproval ||
@@ -153,12 +158,18 @@ export function AdminRoomActions({
 
   return (
     <>
-      <Card className="min-w-0 overflow-hidden">
+      <Card
+        className={
+          embedded
+            ? "min-w-0 border-0 bg-transparent shadow-none"
+            : "min-w-0 overflow-hidden"
+        }
+      >
         <CardHeader>
           <IconBox variant="info-subtle" size="sm" aria-hidden="true">
             <IconBuilding />
           </IconBox>
-          <CardTitle>Offline room</CardTitle>
+          <CardTitle>{embedded ? "Room assignment" : "Offline room"}</CardTitle>
           <CardDescription>
             {canRelocate
               ? "Review the current room or move this booking to another room."

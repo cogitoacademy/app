@@ -358,7 +358,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Input:** `{ expectedVersion, onlineCogitoBaseIdr, onlineCogitoIncrementIdr, offlineCogitoBaseIdr, offlineCogitoIncrementIdr }` (IDR values use Rp 5,000 increments; bases are at least Rp 5,000; increments are non-negative)
 - **Output:** The updated economy settings object; `version` increments only when at least one schedule value changes
 - **Errors:** `ECONOMY_CONFIG_CONFLICT` (409) when `expectedVersion` is stale; validation errors (400) for unsupported values
-- **Description:** Updates the active Cogito take schedule, records an audit event, and affects only future bookings and new repricing snapshots. Existing booking snapshots remain unchanged. Every user currently assigned the `tutor` role receives one durable in-app `system` notification per new economy version; the notification is deduplicated by version and tutor id. Saving identical values is a no-op and creates no new audit event or notification.
+- **Description:** Updates the active Cogito take schedule, records an audit event, and affects only future bookings and new repricing snapshots. Existing booking snapshots remain unchanged. The update does not notify tutors; their IDR honorarium settings and the student-facing Marks preview remain separate concerns. Saving identical values is a no-op and creates no new audit event or notification.
 
 ---
 
@@ -760,7 +760,7 @@ The web tutor profile editor groups education, competition achievements, and exp
 - **Description:** `meetingStatus` is `ready` only when a URL exists, `pending` while the booking is awaiting the tutor/participants or a tutor/admin fallback link, and `failed` when automatic Google Meet creation needs another retry. If tutor acceptance encounters a provider failure, the booking remains `confirmed` until retry or manual-link recovery; clients must not treat that state as `scheduled`.
 - **Frontend note:** Booking activity presents the destination state as the primary badge and uses transition-specific icons for participant, scheduling, room, and terminal events. The detail page composes schedule, format/access, and participant profile/name/status information in the overview, places role-appropriate primary actions (including reschedule and completion when eligible) directly below the status badge, keeps contextual actions above Marks or in the main flow, and shows a live response-window notice for deadline-bound states. The API contract is unchanged.
 
-**UI behavior note:** The booking detail surface uses compact accessible Selia `IconInfoSquareRounded` popover triggers for online-link explanations, retry/manual setup status, available meeting-room access, missing offline-room details, and tutor completion timing. Available links no longer render a `Ready` badge or standalone CTA; the popover contains the meeting-room action. The trigger supports hover, keyboard focus, click, and touch; the overview merges the date and hours into one `Date & time` field, places Format & access beside it in a responsive two-column grid that stacks on narrow screens, and keeps the desktop overview/activity flow independent from the sticky Actions/Marks rail so rail height does not add a blank row before Activity. Narrow layouts keep actions/Marks before Activity. This does not change the `booking.get` response contract.
+**UI behavior note:** The booking detail surface uses compact accessible Selia `IconInfoSquareRounded` popover triggers for online-link explanations, retry/manual setup status, available meeting-room access, missing offline-room details, and tutor completion timing. Available links no longer render a `Ready` badge or standalone CTA; the popover contains the meeting-room action. The trigger supports hover, keyboard focus, click, and touch; the overview merges the date and hours into one `Date & time` field, places Format & access beside it in a responsive two-column grid that stacks on narrow screens, and keeps the desktop overview/activity flow independent from the sticky Actions/Marks rail so rail height does not add a blank row before Activity. Admin details embed room management and per-participant wallet/ledger data in the overview, use a single-column participant list, place review context in the right rail, and render state history with the shared activity timeline. Narrow layouts keep actions/Marks before Activity. This does not change the `booking.get` response contract.
 
 ### `booking.listMine`
 
@@ -1000,7 +1000,7 @@ RPC contract.
 - **Auth:** Admin
 - **Input:** `{ bookingId, roomId, startAt, endAt }`
 - **Output:** `{ roomBooking }`
-- **Description:** Confirms a room for an offline booking and transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED`; notifies tutor + confirmed students (G14, #46). The admin UI invokes this from the Room approvals queue or the booking detail Offline room card; `bookingId` and `roomId` remain internal identifiers in the RPC input.
+- **Description:** Confirms a room for an offline booking and transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED`; it may also assign a new room to an already `SCHEDULED` offline booking after its prior room was removed. A scheduled booking with an active room must use relocation instead. Notifies tutor + confirmed students (G14, #46). The admin UI invokes this from the Room approvals queue or the booking detail room controls; `bookingId` and `roomId` remain internal identifiers in the RPC input.
 
 ### `room.checkAvailability`
 
@@ -1032,7 +1032,7 @@ RPC contract.
 - **Auth:** Protected
 - **Input:** `{ unreadOnly?, limit?, cursor? }`
 - **Output:** `{ items: Notification[], nextCursor }`
-- **Description:** Includes in-app contact-request notifications when applicable. These notifications contain request metadata and human-readable names only; contact email is never stored in the notification body or metadata.
+- **Description:** Includes in-app contact-request notifications when applicable. These notifications contain request metadata and human-readable names only; contact email is never stored in the notification body or metadata. Retired economy rate-change notifications are excluded from the inbox.
 
 ### `notification.getUnreadCount`
 

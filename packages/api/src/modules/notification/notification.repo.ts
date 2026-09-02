@@ -1,4 +1,16 @@
-import { eq, and, asc, desc, lt, count, inArray, or, sql } from "drizzle-orm";
+import {
+  eq,
+  and,
+  asc,
+  desc,
+  lt,
+  count,
+  inArray,
+  or,
+  sql,
+  like,
+  not,
+} from "drizzle-orm";
 import {
   notification,
   notificationDispatch,
@@ -8,6 +20,11 @@ import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
 
 export type NotificationRepo = ReturnType<typeof createNotificationRepo>;
+
+// Economy rate-change notices are no longer user-facing. Keep already-created
+// rows out of the inbox and unread count while allowing the data to remain for
+// audit/history purposes.
+const RETIRED_ECONOMY_NOTIFICATION_PATTERN = "economy_config_updated:%";
 
 /**
  * Finds a notification by id, scoped to the owning user.
@@ -249,7 +266,10 @@ export async function listNotifications(
   userId: string,
   opts: { unreadOnly?: boolean; cursor?: string; limit: number },
 ) {
-  const conditions = [eq(notification.userId, userId)];
+  const conditions = [
+    eq(notification.userId, userId),
+    not(like(notification.eventKey, RETIRED_ECONOMY_NOTIFICATION_PATTERN)),
+  ];
   if (opts.unreadOnly) {
     conditions.push(eq(notification.isRead, false));
   }
@@ -289,7 +309,11 @@ export async function countUnread(conn: DbOrTx, userId: string) {
     .select({ value: count() })
     .from(notification)
     .where(
-      and(eq(notification.userId, userId), eq(notification.isRead, false)),
+      and(
+        eq(notification.userId, userId),
+        eq(notification.isRead, false),
+        not(like(notification.eventKey, RETIRED_ECONOMY_NOTIFICATION_PATTERN)),
+      ),
     );
   return Number(row?.value ?? 0);
 }

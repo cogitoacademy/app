@@ -19,6 +19,11 @@
 | 9   | Ops / Google Meet        | No one-time OAuth refresh-token helper script exists and the RUNBOOK lacks the Google Cloud console setup steps for the Meet OAuth path.                                                                                                                                                                         | `scripts/` (only `run-test-suite.mjs`; no `google-meet-auth.ts`); `docs/RUNBOOK.md` (no Google Cloud console section)                                                                        | Low      | Task 10            |
 | 10  | Ops / Xendit             | No dedicated "Xendit go-live checklist" section in the RUNBOOK and the `infra/.env.prod.example` Xendit block is minimal (placeholders only, no per-field instructions); the sandbox checklist exists but the live-switch procedure is not documented.                                                           | `docs/RUNBOOK.md:459-469` (sandbox only); `infra/.env.prod.example:14-19,40`                                                                                                                 | Low      | Task 11            |
 
+> Gap 6 is historical audit context. The subsequent production-hardening fix
+> moved the notification write after commit, and the 2026-09-02 inbox follow-up
+> retired the tutor fan-out entirely; current economy updates do not emit
+> `economy_config_updated:*` user notifications.
+
 ## Verified Sound
 
 The following were cross-checked and found correct (no gap):

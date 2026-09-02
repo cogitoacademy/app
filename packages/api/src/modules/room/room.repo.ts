@@ -105,7 +105,7 @@ export async function findBookingStateById(conn: DbOrTx, bookingId: string) {
   const [row] = await conn
     .select({ currentState: booking.currentState })
     .from(booking)
-    .where(eq(booking.id, bookingId))
+    .where(and(eq(booking.id, bookingId), eq(booking.modality, "offline")))
     .limit(1);
   return row?.currentState ?? null;
 }
