@@ -2,6 +2,9 @@
 
 Last updated: 2026-09-02
 
+The 2026-09-02 Lefthook lint-gate alignment changes repository tooling only;
+services, modules, event keys, and business rules are unchanged.
+
 The 2026-09-02 admin booking-detail consolidation is presentation-only; room,
 wallet, ledger, and state-history services and event keys are unchanged.
 Room assignment additionally permits a `scheduled` offline booking only when

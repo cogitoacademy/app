@@ -19,4 +19,4 @@ pre-push:
     typecheck:
       run: bun run check-types
     lint:
-      run: bun run lint
+      run: bun .github/lint/check-baseline.ts

@@ -1690,13 +1690,7 @@ export function OnboardingForm({
                   ) : null}
                 </Field>
 
-                <div
-                  className={`flex items-start gap-3 rounded-lg border bg-item p-4 ${
-                    errors.bankTransferDisclaimerAccepted
-                      ? "border-danger-border/64 ring-2 ring-danger-border/24"
-                      : "border-item-border"
-                  }`}
-                >
+                <div className={`flex items-start gap-3 rounded-lg bg-item`}>
                   <Checkbox
                     id="tutor-bankTransferDisclaimerAccepted"
                     checked={form.bankTransferDisclaimerAccepted}
@@ -1716,16 +1710,16 @@ export function OnboardingForm({
                       clearError("bankTransferDisclaimerAccepted");
                     }}
                   />
-                  <Field className="min-w-0">
-                    <FieldLabel htmlFor="tutor-bankTransferDisclaimerAccepted">
-                      I confirm the account can receive Cogito transfers
-                    </FieldLabel>
-                    <FieldDescription>
+                  <Field className="min-w-0 leading-none">
+                    <FieldLabel
+                      htmlFor="tutor-bankTransferDisclaimerAccepted"
+                      className="text-sm font-normal leading-relaxed text-muted"
+                    >
                       I confirm this is my own account or an account belonging
                       to someone I trust for receiving this transfer. Cogito is
                       not responsible for any issue after the transfer reaches
                       the account provided here.
-                    </FieldDescription>
+                    </FieldLabel>
                     {errors.bankTransferDisclaimerAccepted ? (
                       <FieldError id="tutor-bankTransferDisclaimerAccepted-error">
                         {errors.bankTransferDisclaimerAccepted}

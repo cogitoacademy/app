@@ -1,8 +1,5 @@
 apps/web/src/components/admin/economy-settings-page.tsx:68:5:react(set-state-in-effect)
-apps/web/src/components/booking/booking-detail-page.tsx:321:51:react(purity)
-apps/web/src/components/booking/booking-detail-page.tsx:732:69:react(purity)
 apps/web/src/components/booking/booking-lifecycle-actions.tsx:134:5:react(purity)
-apps/web/src/components/booking/booking-reschedule-action.tsx:104:58:react(purity)
 apps/web/src/components/booking/manual-meeting-link-dialog.tsx:42:7:react(set-state-in-effect)
 apps/web/src/components/content/calendar-month-view.tsx:55:19:react(set-state-in-effect)
 apps/web/src/components/dashboard/achievement-banner.tsx:47:7:react(set-state-in-effect)
