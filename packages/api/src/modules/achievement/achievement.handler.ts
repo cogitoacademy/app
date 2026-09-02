@@ -3,7 +3,7 @@ import { z } from "zod";
 import { withDomainMap } from "../../lib/handler-utils";
 import { mapAchievementError } from "./achievement.errors";
 import type {
-  achievementInput,
+  studentAchievementInput,
   updateAchievementInput,
   adminUpdateAchievementInput,
   deleteAchievementInput,
@@ -12,7 +12,7 @@ import type {
 } from "./achievement.types";
 import type { AchievementService } from "./achievement.service";
 
-type AchievementInput = z.infer<typeof achievementInput>;
+type AchievementInput = z.infer<typeof studentAchievementInput>;
 type UpdateAchievementInput = z.infer<typeof updateAchievementInput>;
 type AdminUpdateAchievementInput = z.infer<typeof adminUpdateAchievementInput>;
 type DeleteAchievementInput = z.infer<typeof deleteAchievementInput>;

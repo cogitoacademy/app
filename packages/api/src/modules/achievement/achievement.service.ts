@@ -104,7 +104,7 @@ function achievementContent(row: Partial<AchievementRow>) {
     awardingDate: row.awardingDate ?? null,
     location: row.location ?? null,
     description: row.description ?? null,
-    subjects: row.subjects ?? [],
+    subjects: row.subjects === undefined ? [] : row.subjects,
     evidenceUrl: row.evidenceUrl ?? null,
     documentationUrl: row.documentationUrl ?? null,
   };

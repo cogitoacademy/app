@@ -276,6 +276,7 @@ describe("Achievement Service", () => {
           category: "competition",
           award: "Gold",
           level: "National",
+          subjects: null,
           status: "pending",
           version: 4,
         })),
@@ -333,7 +334,10 @@ describe("Achievement Service", () => {
           action: "achievement_admin_updated",
           targetId: "a1",
           targetType: "achievement",
-          beforeState: expect.objectContaining({ eventName: "Old name" }),
+          beforeState: expect.objectContaining({
+            eventName: "Old name",
+            subjects: null,
+          }),
           afterState: expect.objectContaining({
             eventName: "Corrected name",
             level: "International",

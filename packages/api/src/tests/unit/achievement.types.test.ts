@@ -76,7 +76,7 @@ describe("Achievement Types (Zod schemas)", () => {
     expect(result.success).toBe(false);
   });
 
-  test("studentAchievementInput does not accept public documentation images", () => {
+  test("studentAchievementInput strips public documentation images", () => {
     const result = studentAchievementInput.safeParse({
       eventName: "Olympiad",
       category: "competition",
