@@ -11,6 +11,7 @@ import {
 } from "@tanstack/react-query";
 import {
   IconAlertTriangle,
+  IconArrowLeft,
   IconBuilding,
   IconCalendarEvent,
   IconCheck,
@@ -533,7 +534,7 @@ export function AdminBookingDetailPage({
         </CardBody>
         <CardFooter>
           <Button
-            variant="secondary"
+            variant="underline"
             render={
               <Link
                 to="/admin-operations"
@@ -542,6 +543,7 @@ export function AdminBookingDetailPage({
             }
             nativeButton={false}
           >
+            <IconArrowLeft />
             Back to operations
           </Button>
         </CardFooter>
