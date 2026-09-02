@@ -160,7 +160,7 @@ coverage test-command failure is propagated after the comment/gate step.
 
 ### `GET /health`
 
-Production CD verifies this endpoint's `version` against the target commit. It selects the exact immutable `v<GIT_SHA>` Docker image through Coolify's native image rollback/deployment endpoint, which needs deploy access but does not mutate application configuration.
+Production CD verifies this endpoint's `version` against the target commit after invoking the configured Coolify deployment webhook. The CI/CD implementation is restored to its last known successful `bb1ccb9a` state; the VPS runner does not pull application images itself.
 
 - **Auth:** Public
 - **Input:** None
