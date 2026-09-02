@@ -313,7 +313,7 @@
              ['webhook ' + item.name + ': declared URL UUID ' + _declared_uuid + ' != live resource UUID ' + _live_uuid] }}
       loop: "{{ declared_webhooks }}"
       vars:
-        _declared_uuid: "{{ (item.url | regex_search('uuid=([0-9a-fA-F-]+)', '\\1') | first) | default('') }}"
+        _declared_uuid: "{{ ((item.url | regex_search('uuid=([0-9a-fA-F-]+)', '\\1')) or ['']) | first }}"
         _live_uuid: >-
           {{ ((env_resp.json.applications | default([])) | selectattr('name', 'equalto', item.name) | first | default(none)).uuid | default('') }}
       when: >-
@@ -328,7 +328,7 @@
           check can verify it
       loop: "{{ declared_webhooks }}"
       when: >-
-        (item.url | regex_search('uuid=([0-9a-fA-F-]+)', '\\1') | first | default('')) | length == 0
+        (((item.url | regex_search('uuid=([0-9a-fA-F-]+)', '\\1')) or ['']) | first) | length == 0
 
     - name: Report drift findings
       ansible.builtin.debug:
