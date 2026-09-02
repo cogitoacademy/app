@@ -52,7 +52,7 @@
 #   1. pg_dump snapshot of the production database, gzipped.
 #   2. Upload to R2 as pre-migrate-<GIT_SHA>.sql.gz (aws CLI, S3 endpoint).
 #   3. bun run db:migrate against PROD_DATABASE_URL.
-#   4. POST the Coolify deploy webhook (API resource).
+#   4. Pin the Coolify resource to v<GIT_SHA>, then POST its deploy webhook.
 #   5. Poll HEALTH_URL until `version == GIT_SHA` (bounded 20 x 15s).
 #      On timeout: best-effort Coolify API rollback (below), then exit 1.
 #
@@ -87,7 +87,15 @@
 #     rollback is a reviewed, operator-driven decision. The pre-migrate
 #     snapshot is only uploaded (s3://<R2_BACKUP_BUCKET>/pre-migrate-<sha>.sql.gz),
 #     never consumed by this script.
+#   - Because rollback changes the configured image tag, every later deploy
+#     advances the resource to the new immutable v<GIT_SHA> tag first.
 set -euo pipefail
+
+# Keep the documented optional override safe under `set -u`. This must be
+# initialized before coolify_api() can be called from the failure path.
+COOLIFY_API_BASE_URL="${COOLIFY_API_BASE_URL:-https://cl.cogitoacademy.id}"
+# Avoid accidental double slashes when an operator supplies a trailing slash.
+COOLIFY_API_BASE_URL="${COOLIFY_API_BASE_URL%/}"
 
 DRY_RUN=0
 MODE="full"
@@ -234,6 +242,36 @@ attempt_rollback() {
   return 0
 }
 
+# Resolve the resource UUID from the explicit override or the deploy webhook.
+resolve_app_uuid() {
+  if [[ -n "${COOLIFY_APP_UUID:-}" ]]; then
+    printf '%s' "$COOLIFY_APP_UUID"
+    return 0
+  fi
+  printf '%s' "${COOLIFY_WEBHOOK:-}" |
+    sed -n 's/.*[?&]uuid=\([^&]*\).*/\1/p'
+}
+
+# A rollback pins the resource to an immutable old tag. Advance it before
+# each later release or the webhook will redeploy that old image forever.
+prepare_release_tag() {
+  if [[ -z "${COOLIFY_API_TOKEN:-}" ]]; then
+    log "release-tag: COOLIFY_API_TOKEN unset — keeping the resource's configured tag"
+    return 0
+  fi
+  local uuid
+  uuid="$(resolve_app_uuid)"
+  if [[ -z "$uuid" ]]; then
+    die "cannot resolve the Coolify application UUID from COOLIFY_APP_UUID or COOLIFY_WEBHOOK; refusing to deploy without advancing the immutable image tag"
+  fi
+  local release_tag="v${GIT_SHA}"
+  log "release-tag: PATCH /api/v1/applications/${uuid} → docker_registry_image_tag=${release_tag}"
+  coolify_api PATCH "/api/v1/applications/${uuid}" "{\"docker_registry_image_tag\":\"${release_tag}\"}"
+  if [[ "$COOLIFY_API_HTTP_CODE" != 2* ]]; then
+    die "failed to advance the Coolify resource to ${release_tag} (HTTP ${COOLIFY_API_HTTP_CODE}) — ${COOLIFY_API_BODY:0:300}"
+  fi
+}
+
 # Bounded HTTP 200 poll for the web surface (F3). Mirrors the API poll's
 # attempts x interval shape; returns 1 on timeout (caller decides exit).
 poll_web() {
@@ -327,6 +365,7 @@ log "4/6 triggering Coolify deploy"
 # (docs/DEPLOYMENT.md §5). Only send the header when COOLIFY_API_TOKEN is
 # set — unset behaves exactly as before (no header).
 if [[ "$DRY_RUN" == "0" ]]; then
+  prepare_release_tag
   if [[ -n "${COOLIFY_API_TOKEN:-}" ]]; then
     log "    sending Authorization: Bearer <COOLIFY_API_TOKEN> (set)"
     curl --fail --max-time 30 -X POST \

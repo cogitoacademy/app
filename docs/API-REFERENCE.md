@@ -160,6 +160,8 @@ coverage test-command failure is propagated after the comment/gate step.
 
 ### `GET /health`
 
+Production CD verifies this endpoint's `version` against the target commit. Before triggering Coolify, the pipeline advances the server resource to the immutable `v<GIT_SHA>` image tag so a tag left pinned by an earlier rollback cannot cause another deployment of the previous version.
+
 - **Auth:** Public
 - **Input:** None
 - **Output:** `{ status: "ok" | "degraded" | "error", checks: { database, redis, scheduler?, dlq }, dlqDepth, timestamp, version }`
