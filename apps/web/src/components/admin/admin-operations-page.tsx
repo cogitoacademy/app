@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Link } from "@tanstack/react-router";
 import {
   keepPreviousData,
   useMutation,
@@ -15,7 +16,6 @@ import {
   IconCheck,
   IconClock,
   IconCoins,
-  IconEye,
   IconRefresh,
   IconSearch,
   IconUsers,
@@ -152,7 +152,6 @@ function BookingQueue() {
   const [category, setCategory] = useState<OverrideCategoryFilter>("all");
   const [urgency, setUrgency] = useState<Urgency>("all");
   const [slaFilter, setSlaFilter] = useState<SlaFilter>("all");
-  const [details, setDetails] = useState<QueueItem | null>(null);
   const [selected, setSelected] = useState<QueueItem | null>(null);
   const queryInput = {
     limit: 50,
@@ -263,37 +262,50 @@ function BookingQueue() {
               />
             ) : (
               <TableContainer>
-                <Table>
+                <Table className="min-w-[76rem] text-sm">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Booking</TableHead>
-                      <TableHead>Schedule</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Override</TableHead>
-                      <TableHead>Affected users</TableHead>
-                      <TableHead>SLA</TableHead>
-                      <TableHead>Marks</TableHead>
-                      <TableHead />
+                      <TableHead className="w-44 whitespace-nowrap">
+                        Booking
+                      </TableHead>
+                      <TableHead className="w-44 whitespace-nowrap">
+                        Schedule
+                      </TableHead>
+                      <TableHead className="w-40 whitespace-nowrap">
+                        Status
+                      </TableHead>
+                      <TableHead className="min-w-56">Override</TableHead>
+                      <TableHead className="w-28 whitespace-nowrap">
+                        Affected
+                      </TableHead>
+                      <TableHead className="w-40 whitespace-nowrap">
+                        SLA
+                      </TableHead>
+                      <TableHead className="w-28 whitespace-nowrap">
+                        Marks
+                      </TableHead>
+                      <TableHead className="w-44" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {queueQuery.data.items.map((item) => (
                       <TableRow key={item.id}>
-                        <TableCell>
-                          <Text className="font-mono text-xs">{item.id}</Text>
-                          <Text className="text-xs text-muted">
+                        <TableCell className="align-top">
+                          <Text className="font-mono text-sm">{item.id}</Text>
+                          <Text className="mt-1 text-sm text-muted">
                             {item.type} · {item.modality}
                           </Text>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="align-top text-sm">
                           {formatBookingDate(
                             item.scheduledStartAt,
                             item.timezone,
                           )}
                         </TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-1">
+                        <TableCell className="align-top">
+                          <div className="flex flex-col items-start gap-1.5">
                             <Badge
+                              className="whitespace-nowrap"
                               variant={getBookingStateVariant(
                                 item.currentState,
                               )}
@@ -301,48 +313,65 @@ function BookingQueue() {
                               {getBookingStateLabel(item.currentState)}
                             </Badge>
                             {item.escalated ? (
-                              <Badge variant="danger">Escalated</Badge>
+                              <Badge
+                                className="whitespace-nowrap"
+                                variant="danger"
+                              >
+                                Escalated
+                              </Badge>
                             ) : null}
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="align-top">
                           {getOverrideCategory(item.overrideMeta) ? (
-                            <Badge variant="secondary">
+                            <Badge
+                              className="whitespace-nowrap"
+                              variant="secondary"
+                            >
                               {humanize(
                                 getOverrideCategory(item.overrideMeta)!,
                               )}
                             </Badge>
                           ) : (
-                            <Text className="text-xs text-muted">
+                            <Text className="text-sm text-muted">
                               Standard review
                             </Text>
                           )}
-                          <Text className="mt-1 max-w-48 text-xs text-muted">
+                          <Text className="mt-1 max-w-56 text-sm leading-relaxed text-muted">
                             {getOverrideReason(item.overrideMeta) ??
                               "No reported reason"}
                           </Text>
-                          <Text className="text-xs text-dimmed">
+                          <Text className="text-sm text-dimmed">
                             Source: admin override
                           </Text>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="align-top text-sm">
                           {getStringArray(
                             getOverrideMetadata(item.overrideMeta)
                               ?.affectedParticipants,
                           ).length || "—"}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="align-top">
                           <SlaStatus item={item} timezone={item.timezone} />
                         </TableCell>
-                        <TableCell>{item.holdAmount} held</TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap justify-end gap-1">
+                        <TableCell className="align-top whitespace-nowrap text-sm">
+                          {item.holdAmount} held
+                        </TableCell>
+                        <TableCell className="align-top">
+                          <div className="flex flex-col items-stretch gap-1.5">
                             <Button
                               size="sm"
                               variant="secondary"
-                              onClick={() => setDetails(item)}
+                              render={
+                                <Link
+                                  to="/admin-operations/bookings/$bookingId"
+                                  params={{ bookingId: item.id }}
+                                  aria-label={`View booking ${item.id} details`}
+                                />
+                              }
+                              nativeButton={false}
                             >
-                              <IconEye /> Details
+                              View details
                             </Button>
                             <Button
                               size="sm"
@@ -362,14 +391,6 @@ function BookingQueue() {
           </CardBody>
         </Card>
       )}
-      <AdminBookingDetailDialog
-        booking={details}
-        onClose={() => setDetails(null)}
-        onOpenOverride={(booking) => {
-          setDetails(null);
-          setSelected(booking);
-        }}
-      />
       <OverrideDialog
         booking={selected}
         onClose={() => setSelected(null)}
@@ -399,17 +420,16 @@ type AdminLedgerPage = Awaited<
 >;
 type AdminLedgerEntry = AdminLedgerPage["items"][number];
 
-function AdminBookingDetailDialog({
-  booking,
-  onClose,
-  onOpenOverride,
-}: {
-  booking: QueueItem | null;
-  onClose: () => void;
-  onOpenOverride: (booking: QueueItem) => void;
-}) {
+export function AdminBookingDetailPage({ bookingId }: { bookingId: string }) {
   const queryClient = useQueryClient();
   const [manualLinkDialogOpen, setManualLinkDialogOpen] = useState(false);
+  const [overrideOpen, setOverrideOpen] = useState(false);
+  const queueItemQuery = useQuery({
+    ...orpc.adminBooking.listBookings.queryOptions({
+      input: { bookingId },
+    }),
+  });
+  const booking = queueItemQuery.data?.items[0] ?? null;
   const historyQuery = useQuery({
     ...orpc.adminBooking.getBookingStateHistory.queryOptions({
       input: { bookingId: booking?.id ?? "" },
@@ -475,278 +495,355 @@ function AdminBookingDetailDialog({
     }),
   );
 
+  if (queueItemQuery.isPending) return <LoadingCard />;
+  if (queueItemQuery.isError) {
+    return (
+      <ErrorCard
+        message={getUserFacingError(
+          queueItemQuery.error,
+          "The booking detail could not be loaded.",
+        )}
+        onRetry={() => void queueItemQuery.refetch()}
+      />
+    );
+  }
+  if (!booking) {
+    return (
+      <Card>
+        <CardBody>
+          <EmptyState
+            icon={<IconCalendarEvent />}
+            title="Booking not found"
+            description="This booking no longer exists or is not available to review."
+            tone="secondary"
+          />
+        </CardBody>
+        <CardFooter>
+          <Button
+            variant="secondary"
+            render={
+              <Link
+                to="/admin-operations"
+                aria-label="Back to admin operations"
+              />
+            }
+            nativeButton={false}
+          >
+            Back to operations
+          </Button>
+        </CardFooter>
+      </Card>
+    );
+  }
+
   return (
-    <Dialog open={booking !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogPopup className="sm:max-w-[calc(100%-2rem)]! xl:max-w-6xl!">
-        <DialogHeader className="shrink-0 flex-col items-start gap-1 border-b border-dialog-border">
-          <DialogTitle>Booking detail</DialogTitle>
-          <DialogDescription className="break-all">
-            {booking?.id} · admin review context
-          </DialogDescription>
-        </DialogHeader>
-        {booking ? (
-          <DialogBody className="min-h-0 space-y-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={getBookingStateVariant(booking.currentState)}>
-                {getBookingStateLabel(booking.currentState)}
-              </Badge>
-              {booking.escalated ? (
-                <Badge variant="danger">SLA escalated</Badge>
+    <Stack direction="column" spacing="lg">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <Button
+            className="mb-3"
+            size="sm"
+            variant="plain"
+            render={
+              <Link
+                to="/admin-operations"
+                aria-label="Back to admin operations"
+              />
+            }
+            nativeButton={false}
+          >
+            Back to operations
+          </Button>
+          <Heading size="md">Booking detail</Heading>
+          <Text className="break-all text-muted">
+            {booking.id} · admin review context
+          </Text>
+        </div>
+        <Button onClick={() => setOverrideOpen(true)}>Open override</Button>
+      </div>
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant={getBookingStateVariant(booking.currentState)}>
+            {getBookingStateLabel(booking.currentState)}
+          </Badge>
+          {booking.escalated ? (
+            <Badge variant="danger">SLA escalated</Badge>
+          ) : null}
+          <SlaStatus item={booking} timezone={booking.timezone} />
+          <Text className="text-sm text-muted">
+            {booking.type} · {booking.modality}
+          </Text>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <AdminMetricCard
+            label="Session"
+            value={formatBookingDate(
+              booking.scheduledStartAt,
+              booking.timezone,
+            )}
+          />
+          <AdminMetricCard
+            label="Urgency"
+            value={getUrgencyLabel(booking.currentState)}
+          />
+          <AdminMetricCard
+            label="Confirmation"
+            value={`${booking.confirmedHeadcount} of ${booking.targetGroupSize} confirmed`}
+          />
+          <AdminMetricCard
+            label="SLA deadline"
+            value={formatSlaDeadline(booking.slaDeadline, booking.timezone)}
+          />
+        </div>
+
+        {booking.modality === "online" ? (
+          <Card>
+            <CardHeader>
+              <IconBox variant="info-subtle" size="sm">
+                <IconCalendarEvent />
+              </IconBox>
+              <CardTitle>Meeting access</CardTitle>
+              <CardDescription>
+                Add a trusted meeting URL when automatic Google Meet setup is
+                unavailable.
+              </CardDescription>
+            </CardHeader>
+            <CardBody className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <Text className="text-sm text-muted">Current link</Text>
+                <Text className="break-all font-medium">
+                  {bookingQuery.data?.meetingUrl ??
+                    "No meeting link is available yet."}
+                </Text>
+              </div>
+              {canSetManualLink ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setManualLinkDialogOpen(true)}
+                >
+                  {bookingQuery.data?.meetingUrl
+                    ? "Replace link"
+                    : "Add meeting link"}
+                </Button>
               ) : null}
-              <SlaStatus item={booking} timezone={booking.timezone} />
-              <Text className="text-sm text-muted">
-                {booking.type} · {booking.modality}
+            </CardBody>
+          </Card>
+        ) : null}
+
+        <Card>
+          <CardHeader>
+            <IconBox variant="danger-subtle" size="sm">
+              <IconAlertTriangle />
+            </IconBox>
+            <CardTitle>Report context</CardTitle>
+            <CardDescription>
+              Why this booking entered the admin queue and when the response
+              window started.
+            </CardDescription>
+          </CardHeader>
+          <CardBody className="grid gap-3 sm:grid-cols-3">
+            <AdminMetricRow label="Source" value="Admin override" />
+            <AdminMetricRow
+              label="Reported"
+              value={formatReportedAt(booking.reportedAt, booking.timezone)}
+            />
+            <AdminMetricRow
+              label="Time since report"
+              value={formatTimeSince(booking.reportedAt)}
+            />
+            <div className="sm:col-span-3">
+              <Text className="text-sm text-muted">Reported reason</Text>
+              <Text className="mt-1 break-words text-sm">
+                {getOverrideReason(booking.overrideMeta) ??
+                  "No reported reason"}
               </Text>
             </div>
+          </CardBody>
+        </Card>
 
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <AdminMetricCard
-                label="Session"
-                value={formatBookingDate(
-                  booking.scheduledStartAt,
-                  booking.timezone,
-                )}
-              />
-              <AdminMetricCard
-                label="Urgency"
-                value={getUrgencyLabel(booking.currentState)}
-              />
-              <AdminMetricCard
-                label="Confirmation"
-                value={`${booking.confirmedHeadcount} of ${booking.targetGroupSize} confirmed`}
-              />
-              <AdminMetricCard
-                label="SLA deadline"
-                value={formatSlaDeadline(booking.slaDeadline, booking.timezone)}
-              />
-            </div>
-
-            {booking.modality === "online" ? (
-              <Card>
-                <CardHeader>
-                  <IconBox variant="info-subtle" size="sm">
-                    <IconCalendarEvent />
-                  </IconBox>
-                  <CardTitle>Meeting access</CardTitle>
-                  <CardDescription>
-                    Add a trusted meeting URL when automatic Google Meet setup
-                    is unavailable.
-                  </CardDescription>
-                </CardHeader>
-                <CardBody className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <Text className="text-sm text-muted">Current link</Text>
-                    <Text className="break-all font-medium">
-                      {bookingQuery.data?.meetingUrl ??
-                        "No meeting link is available yet."}
-                    </Text>
-                  </div>
-                  {canSetManualLink ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setManualLinkDialogOpen(true)}
-                    >
-                      {bookingQuery.data?.meetingUrl
-                        ? "Replace link"
-                        : "Add meeting link"}
-                    </Button>
-                  ) : null}
-                </CardBody>
-              </Card>
-            ) : null}
-
-            <Card>
-              <CardHeader>
-                <IconBox variant="danger-subtle" size="sm">
-                  <IconAlertTriangle />
-                </IconBox>
-                <CardTitle>Report context</CardTitle>
-                <CardDescription>
-                  Why this booking entered the admin queue and when the response
-                  window started.
-                </CardDescription>
-              </CardHeader>
-              <CardBody className="grid gap-3 sm:grid-cols-3">
-                <AdminMetricRow label="Source" value="Admin override" />
-                <AdminMetricRow
-                  label="Reported"
-                  value={formatReportedAt(booking.reportedAt, booking.timezone)}
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]">
+          <Card>
+            <CardHeader>
+              <IconBox variant="secondary-subtle" size="sm">
+                <IconUsers />
+              </IconBox>
+              <CardTitle>Participants</CardTitle>
+              <CardDescription>
+                Hydrated participant roster with confirmation state and
+                per-wallet ledger activity.
+              </CardDescription>
+            </CardHeader>
+            <CardBody className="space-y-3">
+              {bookingQuery.isPending ? (
+                <Text className="text-muted">Loading participant wallets…</Text>
+              ) : bookingQuery.isError ? (
+                <Text className="text-danger-foreground">
+                  Participant detail could not be loaded.
+                </Text>
+              ) : participants.length > 0 ? (
+                participants.map((participant, index) => (
+                  <AdminParticipantWalletCard
+                    key={participant.id}
+                    participant={participant}
+                    affected={affectedParticipants.includes(participant.userId)}
+                    wallet={walletQueries[index]?.data}
+                    walletLoading={walletQueries[index]?.isPending ?? false}
+                    ledger={ledgerQueries[index]?.data?.items ?? []}
+                    ledgerLoading={ledgerQueries[index]?.isPending ?? false}
+                    timezone={booking.timezone}
+                  />
+                ))
+              ) : (
+                <EmptyState
+                  icon={<IconUsers />}
+                  title="No participant records"
+                  description="Participant details will appear here when the booking has a roster."
+                  size="inline"
                 />
-                <AdminMetricRow
-                  label="Time since report"
-                  value={formatTimeSince(booking.reportedAt)}
-                />
-                <div className="sm:col-span-3">
-                  <Text className="text-sm text-muted">Reported reason</Text>
-                  <Text className="mt-1 break-words text-sm">
-                    {getOverrideReason(booking.overrideMeta) ??
-                      "No reported reason"}
-                  </Text>
-                </div>
-              </CardBody>
-            </Card>
+              )}
+            </CardBody>
+          </Card>
 
-            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]">
-              <Card>
-                <CardHeader>
-                  <IconBox variant="secondary-subtle" size="sm">
-                    <IconUsers />
-                  </IconBox>
-                  <CardTitle>Participants</CardTitle>
-                  <CardDescription>
-                    Hydrated participant roster with confirmation state and
-                    per-wallet ledger activity.
-                  </CardDescription>
-                </CardHeader>
-                <CardBody className="space-y-3">
-                  {bookingQuery.isPending ? (
-                    <Text className="text-muted">
-                      Loading participant wallets…
-                    </Text>
-                  ) : bookingQuery.isError ? (
-                    <Text className="text-danger-foreground">
-                      Participant detail could not be loaded.
-                    </Text>
-                  ) : participants.length > 0 ? (
-                    participants.map((participant, index) => (
-                      <AdminParticipantWalletCard
-                        key={participant.id}
-                        participant={participant}
-                        affected={affectedParticipants.includes(
-                          participant.userId,
-                        )}
-                        wallet={walletQueries[index]?.data}
-                        walletLoading={walletQueries[index]?.isPending ?? false}
-                        ledger={ledgerQueries[index]?.data?.items ?? []}
-                        ledgerLoading={ledgerQueries[index]?.isPending ?? false}
-                        timezone={booking.timezone}
-                      />
-                    ))
-                  ) : (
-                    <EmptyState
-                      icon={<IconUsers />}
-                      title="No participant records"
-                      description="Participant details will appear here when the booking has a roster."
-                      size="inline"
-                    />
+          <Card>
+            <CardHeader>
+              <IconBox variant="warning-subtle" size="sm">
+                <IconCoins />
+              </IconBox>
+              <CardTitle>Wallet impact</CardTitle>
+              <CardDescription>
+                Booking-level Marks reservation and override context.
+              </CardDescription>
+            </CardHeader>
+            <CardBody className="space-y-2">
+              <AdminMetricRow
+                label="Original reservation"
+                value={`${booking.originalMarks} Marks`}
+              />
+              <AdminMetricRow
+                label="Currently held"
+                value={`${booking.holdAmount} Marks`}
+              />
+              <AdminMetricRow
+                label="Refunded"
+                value={`${booking.refundedAmount} Marks`}
+              />
+              <AdminMetricRow
+                label="Latest Marks action"
+                value={
+                  typeof metadata?.marksAction === "string"
+                    ? humanize(metadata.marksAction)
+                    : "No override action"
+                }
+              />
+            </CardBody>
+          </Card>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <IconBox variant="info-subtle" size="sm">
+              <IconClock />
+            </IconBox>
+            <CardTitle>State history</CardTitle>
+            <CardDescription>
+              Every recorded transition, oldest first.
+            </CardDescription>
+          </CardHeader>
+          <CardBody className="px-6 py-2">
+            {historyQuery.isPending ? (
+              <Text className="py-4 text-muted">Loading state history…</Text>
+            ) : historyQuery.isError ? (
+              <div className="py-4">
+                <Text>
+                  {getUserFacingError(
+                    historyQuery.error,
+                    "State history could not be loaded.",
                   )}
-                </CardBody>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <IconBox variant="warning-subtle" size="sm">
-                    <IconCoins />
-                  </IconBox>
-                  <CardTitle>Wallet impact</CardTitle>
-                  <CardDescription>
-                    Booking-level Marks reservation and override context.
-                  </CardDescription>
-                </CardHeader>
-                <CardBody className="space-y-2">
-                  <AdminMetricRow
-                    label="Original reservation"
-                    value={`${booking.originalMarks} Marks`}
+                </Text>
+                <Button
+                  className="mt-3"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => void historyQuery.refetch()}
+                >
+                  Try again
+                </Button>
+              </div>
+            ) : historyQuery.data.length > 0 ? (
+              <div className="divide-y divide-border">
+                {historyQuery.data.map((entry) => (
+                  <AdminHistoryRow
+                    key={entry.id}
+                    entry={entry}
+                    timezone={booking.timezone}
                   />
-                  <AdminMetricRow
-                    label="Currently held"
-                    value={`${booking.holdAmount} Marks`}
-                  />
-                  <AdminMetricRow
-                    label="Refunded"
-                    value={`${booking.refundedAmount} Marks`}
-                  />
-                  <AdminMetricRow
-                    label="Latest Marks action"
-                    value={
-                      typeof metadata?.marksAction === "string"
-                        ? humanize(metadata.marksAction)
-                        : "No override action"
-                    }
-                  />
-                </CardBody>
-              </Card>
-            </div>
-
-            <Card>
-              <CardHeader>
-                <IconBox variant="info-subtle" size="sm">
-                  <IconClock />
-                </IconBox>
-                <CardTitle>State history</CardTitle>
-                <CardDescription>
-                  Every recorded transition, oldest first.
-                </CardDescription>
-              </CardHeader>
-              <CardBody className="px-6 py-2">
-                {historyQuery.isPending ? (
-                  <Text className="py-4 text-muted">
-                    Loading state history…
-                  </Text>
-                ) : historyQuery.isError ? (
-                  <div className="py-4">
-                    <Text>
-                      {getUserFacingError(
-                        historyQuery.error,
-                        "State history could not be loaded.",
-                      )}
-                    </Text>
-                    <Button
-                      className="mt-3"
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => void historyQuery.refetch()}
-                    >
-                      Try again
-                    </Button>
-                  </div>
-                ) : historyQuery.data.length > 0 ? (
-                  <div className="divide-y divide-border">
-                    {historyQuery.data.map((entry) => (
-                      <AdminHistoryRow
-                        key={entry.id}
-                        entry={entry}
-                        timezone={booking.timezone}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <EmptyState
-                    icon={<IconClock />}
-                    title="No state transitions yet"
-                    description="Recorded booking changes will appear here."
-                    size="inline"
-                  />
-                )}
-              </CardBody>
-            </Card>
-          </DialogBody>
-        ) : null}
-        <DialogFooter className="shrink-0">
-          <Button variant="secondary" onClick={onClose}>
-            Close
-          </Button>
-          {booking ? (
-            <Button onClick={() => onOpenOverride(booking)}>
-              Open override
-            </Button>
-          ) : null}
-        </DialogFooter>
-      </DialogPopup>
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                icon={<IconClock />}
+                title="No state transitions yet"
+                description="Recorded booking changes will appear here."
+                size="inline"
+              />
+            )}
+          </CardBody>
+        </Card>
+      </div>
       <ManualMeetingLinkDialog
         open={manualLinkDialogOpen}
         onOpenChange={setManualLinkDialogOpen}
         onSubmit={(url) =>
-          booking
-            ? setMeetingLink.mutate({ bookingId: booking.id, url })
-            : undefined
+          setMeetingLink.mutate({ bookingId: booking.id, url })
         }
         pending={setMeetingLink.isPending}
         initialUrl={bookingQuery.data?.meetingUrl}
         actor="admin"
       />
-    </Dialog>
+      <OverrideDialog
+        booking={overrideOpen ? booking : null}
+        onClose={() => setOverrideOpen(false)}
+        onApplied={() => {
+          setOverrideOpen(false);
+          const participantInvalidations = participants.flatMap(
+            (participant) => [
+              queryClient.invalidateQueries({
+                queryKey: orpc.admin.getWallet.queryKey({
+                  input: { userId: participant.userId },
+                }),
+              }),
+              queryClient.invalidateQueries({
+                queryKey: orpc.admin.listLedgerEntries.queryKey({
+                  input: {
+                    userId: participant.userId,
+                    bookingId: booking.id,
+                    limit: 8,
+                  },
+                }),
+              }),
+            ],
+          );
+          void Promise.all([
+            queryClient.invalidateQueries({
+              queryKey: orpc.adminBooking.listBookings.key(),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: orpc.adminBooking.getBookingStateHistory.queryKey({
+                input: { bookingId: booking.id },
+              }),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: orpc.booking.get.queryKey({
+                input: { bookingId: booking.id },
+              }),
+            }),
+            ...participantInvalidations,
+          ]);
+        }}
+      />
+    </Stack>
   );
 }
 
@@ -1676,18 +1773,21 @@ function SlaStatus({
   timezone: string;
 }) {
   if (!item.slaDeadline) {
-    return <Text className="text-xs text-muted">Not reported</Text>;
+    return <Text className="text-sm text-muted">Not reported</Text>;
   }
 
   return (
     <div className="min-w-32 space-y-1">
-      <Badge variant={item.escalated ? "danger" : "success"}>
+      <Badge
+        className="whitespace-nowrap"
+        variant={item.escalated ? "danger" : "success"}
+      >
         {item.escalated ? "Expired" : "Within SLA"}
       </Badge>
-      <Text className="text-xs text-muted">
+      <Text className="text-sm text-muted">
         Due {formatReportedAt(item.slaDeadline, timezone)}
       </Text>
-      <Text className="text-xs text-dimmed">
+      <Text className="text-sm text-dimmed">
         {formatTimeSince(item.reportedAt)}
       </Text>
       {item.escalated ? (

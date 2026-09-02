@@ -206,7 +206,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 
 ## Admin-Booking Module
 
-**Purpose:** Admin operations console for bookings — filtered override queue with urgency/SLA projection, booking detail/history review, hydrated participant wallet/ledger inspection, before/after override preview, state history, and admin refunds.
+**Purpose:** Admin operations console for bookings — filtered override queue with urgency/SLA projection, a dedicated admin-only booking detail/history page, hydrated participant wallet/ledger inspection, before/after override preview, state history, and admin refunds. Queue rows navigate to `/admin-operations/bookings/:bookingId`; the page resolves its own queue item with the exact `bookingId` filter instead of relying on modal state.
 
 **Files:**
 
@@ -219,7 +219,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 
 **Service Methods:**
 
-- `listBookings(opts)` — Paginated booking list sorted by urgency, filterable by category/urgency/escalated; each item projects `reportedAt`, the OQ-04 business-hours `slaDeadline`, and `escalated` from `overrideMeta.overriddenAt`. `escalated=true` walks bounded keyset windows (at most `MAX_ESCALATED_WINDOWS = 5` fetches of `MAX_PAGE_LIMIT` rows) until the page fills with escalated rows — it never returns an empty page with a non-null `nextCursor`, so the admin queue cannot infinite-loop on a sparse escalated set
+- `listBookings(opts)` — Paginated booking list sorted by urgency, filterable by category/urgency/escalated; an exact `bookingId` lookup returns zero or one item for the admin detail route. Each item projects `reportedAt`, the OQ-04 business-hours `slaDeadline`, and `escalated` from `overrideMeta.overriddenAt`. `escalated=true` walks bounded keyset windows (at most `MAX_ESCALATED_WINDOWS = 5` fetches of `MAX_PAGE_LIMIT` rows) until the page fills with escalated rows — it never returns an empty page with a non-null `nextCursor`, so the admin queue cannot infinite-loop on a sparse escalated set
 - `applyOverride(adminId, input)` — Force state transition by `category` (tutor_no_show/medical_emergency/technical_failure/admin_correction/student_no_show/force_cancel); optionally adjusts held Marks (`marksAction`); records audit log + state history
 - `previewOverride(input)` — Returns the projected booking state and per-participant wallet impact without persisting anything. **F24:** every `affectedParticipants` id must be a participant of the booking — unknown ids throw `OVERRIDE_PARTICIPANT_NOT_IN_BOOKING` instead of being silently filtered (a money action would otherwise skip a user's holds)
 - `getBookingStateHistory(bookingId)` — Returns full state transition history for a booking
