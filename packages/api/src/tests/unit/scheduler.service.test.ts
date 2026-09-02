@@ -100,7 +100,10 @@ mock.module("bullmq", () => ({
   },
 }));
 
-import { createSchedulerService } from "../../modules/scheduler/scheduler.service";
+import {
+  createSchedulerService,
+  JOB_RETENTION,
+} from "../../modules/scheduler/scheduler.service";
 
 describe("createSchedulerService", () => {
   test("returns null when redisUrl is empty", () => {
@@ -563,10 +566,22 @@ describe("createSchedulerService", () => {
       removeOnComplete: { age: 24 * 3600, count: 100 },
       removeOnFail: { age: 7 * 24 * 3600, count: 50 },
     });
-    // The DLQ queue must NOT inherit the retention (its records are already
-    // bounded by the DLQ Redis list) — only the main cogito-jobs queue bounds
-    // its completed/failed sets.
+  });
+
+  test("creates the DLQ queue with bounded job retention", () => {
+    createSchedulerService("redis://localhost:6379", {
+      onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
+      onReleaseHolds: mock(async () => ({ released: 0 })),
+      onCheckTutorLateness: mock(async () => ({ flagged: 0, failed: 0 })),
+      onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
+      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
+    });
+
+    // The Queue constructor for "cogito-jobs-dlq" must receive
+    // defaultJobOptions: JOB_RETENTION (removeOnComplete 24h/100,
+    // removeOnFail 7d/50) so permanent-failure records cannot accumulate
+    // unbounded in Redis.
     expect(capturedDlqQueueOptions).not.toBeNull();
-    expect(capturedDlqQueueOptions.defaultJobOptions).toBeUndefined();
+    expect(capturedDlqQueueOptions.defaultJobOptions).toEqual(JOB_RETENTION);
   });
 });

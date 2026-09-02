@@ -341,9 +341,17 @@ message and exits 1 (readable failure instead of a bare `curl exit 6`).
    domain match, `PATCH` the resource image tag to `v<prev-sha>`, trigger the
    redeploy; Databases are NEVER restored automatically), then prints the
    rollback hint and exits 1.
-   The migration task allowlists `DATABASE_URL` in `turbo.json`; this is required
-   because Turbo's strict environment mode otherwise filters the URL before it
-   reaches `drizzle-kit`.
+   > **Deploy-flow history (2026-09-02):** #175–#177 switched the deploy to
+   > Coolify's native image endpoint (`POST /api/v1/applications/<uuid>/rollback`
+   > with `{"commit":"v<GIT_SHA>"}` — deploy-only access, no PATCH), but #178
+   > **reverted** that flow after the 2026-09-02 disk-full incident (the
+   > runner-side image pull filled the host disk and crashed the runner). The
+   > current pipeline is the restored `bb1ccb9a` webhook + PATCH flow described
+   > above; the native endpoint remains available in Coolify for manual
+   > rollbacks (Coolify UI → Rollback to previous release).
+   > The migration task allowlists `DATABASE_URL` in `turbo.json`; this is required
+   > because Turbo's strict environment mode otherwise filters the URL before it
+   > reaches `drizzle-kit`.
 6. A separate step POSTs the web Coolify webhook and immediately verifies the
    web surface: `scripts/migrate-and-deploy.sh --poll-web` polls
    `https://app.cogitoacademy.id` for HTTP 200 (bounded 20×15s). The web image

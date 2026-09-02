@@ -134,6 +134,33 @@ export async function checkDlqHealth(
   }
 }
 
+/**
+ * Reports the state of every Redis-backed circuit breaker (Resend, Google
+ * Meet, Xendit). Reads the `cogito:cb:*` HSET keys; a missing key means the
+ * breaker has never tripped (closed). Informational only — never flips the
+ * overall health status (mirrors `dlq`): an open breaker means the app is
+ * deliberately failing fast, not that the instance cannot serve.
+ */
+export async function checkCircuitBreakers(
+  redis?: RedisClient,
+): Promise<Record<string, "closed" | "open" | "half-open">> {
+  if (!redis) return {};
+  try {
+    const keys = await redis.keys("cogito:cb:*");
+    const result: Record<string, "closed" | "open" | "half-open"> = {};
+    for (const key of keys) {
+      const name = key.replace(/^cogito:cb:/, "");
+      const state = (await redis.hget(key, "state")) ?? "closed";
+      if (state === "open" || state === "half-open" || state === "closed") {
+        result[name] = state;
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
 export async function healthCheck(redis?: RedisClient, db: DbType = defaultDb) {
   const checks: Record<string, "ok" | "degraded" | "error"> = {};
 
@@ -173,8 +200,13 @@ export async function healthCheck(redis?: RedisClient, db: DbType = defaultDb) {
   const dlqDepth = await checkDlqHealth(redis);
   const dlqStatus: "ok" | "error" = dlqDepth === 0 ? "ok" : "error";
 
+  // Circuit-breaker states (Resend / Google Meet / Xendit) — informational
+  // only, like `dlq`: an open breaker is the app deliberately failing fast,
+  // not a readiness failure, so it must never flip the overall status.
+  const circuitBreakers = await checkCircuitBreakers(redis);
+
   // Readiness is computed from the service checks only (database, redis,
-  // scheduler) — `dlq` is informational.
+  // scheduler) — `dlq` and `circuitBreakers` are informational.
   const readiness = Object.values(checks);
   const overall: HealthOverall = readiness.every((v) => v === "ok")
     ? "ok"
@@ -184,7 +216,7 @@ export async function healthCheck(redis?: RedisClient, db: DbType = defaultDb) {
 
   return {
     status: overall,
-    checks: { ...checks, dlq: dlqStatus },
+    checks: { ...checks, dlq: dlqStatus, circuitBreakers },
     dlqDepth,
     timestamp: new Date().toISOString(),
   };

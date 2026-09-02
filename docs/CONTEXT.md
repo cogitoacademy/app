@@ -47,10 +47,23 @@ acceptance.
 - **Tailscale + hardening**: VPS joined the tailnet (`cogito-vps`), UFW tailnet-only for 22/8000/6001/6002, fail2ban + unattended-upgrades on.
 - **Coolify resources**: project `cogito` / env `production` declared; databases `cogito-prod-db` (postgres:16-alpine) + `cogito-prod-redis` (redis:7.2) drift-checked; applications `cogito-api` + `cogito-web` declared; **47 env vars applied to cogito-api from the SOPS vault**; deploy-webhook route live on `cl.cogitoacademy.id` (probe returns 401 = auth-required form; CD sends `Authorization: Bearer`).
 - **Backup cron**: nightly 02:00 WIB `pg_dump -Fc` → `cogito-backups` (30-day retention), env at `/etc/cogito/backup.env`, log `/var/log/cogito-backup.log`. AWS CLI v2 detected at `/opt/cogito-actions-tools/bin/aws` (noble dropped the apt package — #137).
-- **Monitoring (2026-09-01)**: Uptime Kuma declared as a Coolify service (`cogito-uptime-kuma`, `louislam/uptime-kuma:2`, port 3001, volume `uptime-kuma-data:/app/data`) at `status.cogitoacademy.id` via `infra/ansible/uptime-kuma.yml` (Coolify API, control-node driven, idempotent); disk watchdog `infra/ansible/disk-watchdog.yml` installs `/usr/local/bin/cogito-disk-watchdog.sh` (nightly 03:30 WIB, warn ≥ 85%, auto-prune ≥ 92% — never volumes/active images/postgres data, newest 1–2 cogitoacademy/app images kept for rollback); `ops.sh disk` + `deploy-retry` added. Discord alerting needs the operator to add `DISCORD_WEBHOOK_URL` to the SOPS vault and paste it into the Kuma UI (monitors are Kuma-UI-configured — the Coolify API cannot express them).
+- **Monitoring (2026-09-01)**: Uptime Kuma declared as a Coolify service (`cogito-uptime-kuma`, `louislam/uptime-kuma:2`, port 3001, volume `uptime-kuma-data:/app/data`) at `status.cogitoacademy.id` via `infra/ansible/uptime-kuma.yml` (Coolify API, control-node driven, idempotent); disk watchdog `infra/ansible/disk-watchdog.yml` installs `/usr/local/bin/cogito-disk-watchdog.sh` (nightly 03:30 WIB, warn ≥ 85%, auto-prune ≥ 92% — never volumes/active images/postgres data, newest 1–2 cogitoacademy/app images kept for rollback); `ops.sh disk` + `deploy-retry` added. **Kuma wired 2026-09-02** (operator): 4 monitors + `COGITO ALERT` Discord attached + `cogito` status page — see `docs/KUMA-RUNBOOK.md`.
 - **Vault**: R2/Coolify tokens rotated 2026-08-31; `DATABASE_URL` uses the container IP `10.0.1.8` (host-reachable for the cron; the app keeps the private hostname).
 
-**Remaining (see `docs/plans/active/`):** Uptime Kuma + Discord alerting (MONITORING-ALERTING — playbooks delivered 2026-09-01: `uptime-kuma.yml` declares the Kuma service via the Coolify API, `disk-watchdog.yml` installs the nightly disk watchdog; operator console bits remain — `DISCORD_WEBHOOK_URL` in the vault + Kuma UI paste), drills (DEPLOYMENT-PLAN Phase 5), Xendit go-live, branch protection + `ACTIONS_BOT_PAT` (CI-SANITY F9/F10), and the planned cleanup of the remaining legacy React lint baseline.
+**Remaining (see `docs/plans/active/`):** drills (DEPLOYMENT-PLAN Phase 5), Xendit go-live, branch protection + `ACTIONS_BOT_PAT` (CI-SANITY F9/F10), and the planned cleanup of the remaining legacy React lint baseline.
+
+**OPS-VISIBILITY-WAVE (2026-09-02/03):** `docs/FAILURES.md` added (the
+canonical failure → detection → recovery guide, incl. the disk-full
+deploy-failure class and the "CD does not auto-retry" procedure); circuit
+breaker states surfaced in `/health` (`checks.circuitBreakers`,
+informational); DLQ queue job retention bounded (`JOB_RETENTION` on
+`cogito-jobs-dlq`); `ops.sh` DB-name default fixed (`postgres`) + `cb`
+command added; CD pre-migrate snapshots pruned beyond the newest 7
+(`PRE_MIGRATE_KEEP`); `infra/secrets/**` added to the `infra-apply.yml`
+paths filter (vault-only merges now re-apply the env); Kuma wired by the
+operator (4 monitors + `COGITO ALERT` Discord attached + `cogito` status
+page — see `docs/KUMA-RUNBOOK.md`); disk-watchdog verification procedure and
+memory-headroom recommendation documented in RUNBOOK.
 
 ## Stable collection transitions (2026-08-28)
 

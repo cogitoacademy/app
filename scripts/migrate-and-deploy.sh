@@ -89,6 +89,12 @@
 #     never consumed by this script.
 set -euo pipefail
 
+# Keep the documented optional override safe under `set -u`. This must be
+# initialized before coolify_api() can be called from the failure path.
+COOLIFY_API_BASE_URL="${COOLIFY_API_BASE_URL:-https://cl.cogitoacademy.id}"
+# Avoid accidental double slashes when an operator supplies a trailing slash.
+COOLIFY_API_BASE_URL="${COOLIFY_API_BASE_URL%/}"
+
 DRY_RUN=0
 MODE="full"
 for arg in "$@"; do

@@ -21,11 +21,11 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8000/api/v1/health  # 
 
 ## 1. "I changed an env var / secret in the vault"
 
-| Step   | Command                                                                                                                                                                                      | Proves                |
-| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
-| Edit   | `sops infra/secrets/prod.env` (or `sops set infra/secrets/prod.env '["KEY"]' "value"`)                                                                                                       | —                     |
-| Apply  | **automatic**: commit the vault via PR → merge → `infra-apply.yml` re-applies `coolify-resources.yml` on the VPS runner (env patch + restart). Manual fallback: `./infra/apply.sh resources` | workflow run green    |
-| Verify | `curl -s https://api.cogitoacademy.id/health \| jq -r .version`                                                                                                                              | sha matches main HEAD |
+| Step   | Command                                                                                                                                                                                                                                                                                                                                                                     | Proves                |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| Edit   | `sops infra/secrets/prod.env` (or `sops set infra/secrets/prod.env '["KEY"]' "value"`)                                                                                                                                                                                                                                                                                      | —                     |
+| Apply  | **automatic**: commit the vault via PR → merge → `infra-apply.yml` re-applies `coolify-resources.yml` (env patch + restart) **when the merge touches `infra/secrets/**`** (the paths filter — added by the OPS-VISIBILITY-WAVE; a vault-only merge now triggers the Ansible job). Manual fallback: `./infra/apply.sh resources` or `workflow_dispatch` on `infra-apply.yml` | workflow run green    |
+| Verify | `curl -s https://api.cogitoacademy.id/health \| jq -r .version`                                                                                                                                                                                                                                                                                                             | sha matches main HEAD |
 
 Notes: new keys must be added to `.sops.yaml` `encrypted_regex` or they save
 as plaintext (this bit us once — #149). The pre-commit `sops-plaintext-guard`
@@ -33,6 +33,8 @@ hook is your safety net. Webhook/GitHub-secret values (GH secrets) are
 separate from the vault — update in repo Settings too. Automation
 prerequisites (one-time): `SOPS_AGE_KEY` GitHub secret +
 `sudo bash infra/runner-prep.sh` on the VPS (INFRA-AUTOMATION plan).
+The auto-apply fires only on merges that touch `infra/secrets/**`; if the
+runner is down or the workflow did not trigger, use the manual fallback.
 
 ## 2. Deploy code (merge to main)
 
@@ -70,32 +72,34 @@ of `./infra/apply.sh`.
 Break-glass (runner down, key rotation, DR): run `./infra/apply.sh` from the
 operator machine as before — §0 prerequisites still apply.
 
-## 3b. Uptime Kuma one-time UI pass (the only buttons you need to touch)
+## 3b. Uptime Kuma (wired 2026-09-02 — revisit only when adding a monitor)
 
 Kuma's monitors/notifications live in its own SQLite DB — the Coolify API
-cannot express them, so this is a one-time ~10-minute UI pass (revisit only
-when adding a monitor):
+cannot express them. The one-time UI pass was **completed by the operator on
+2026-09-02** (see `docs/KUMA-RUNBOOK.md` for the click-by-click runbook and
+the live state). Current live state: 4 monitors (`api-health` with keyword
+`"status":"ok"` and `maxretries=2`, `web-app`, `DLQ DEPTH` with keyword
+`"dlqDepth":0` and `maxretries=3`, plus the `COGITO ACADEMY` group), the
+`COGITO ALERT` Discord notification attached to **all** of them, and the
+`cogito` status page published at `status.cogitoacademy.id`.
 
-1. Open `https://status.cogitoacademy.id` → sign in (admin account exists;
-   if the service was ever recreated, create it again — first-run screen).
-2. **Notifications → Setup Notifications → Discord**: paste the
-   `DISCORD_WEBHOOK_URL` from the vault
-   (`sops -d infra/secrets/prod.env | grep DISCORD_WEBHOOK_URL | cut -d= -f2-`)
-   → **Test** (a message must land in your Discord channel) → Save.
-3. **Add New Monitor** (each, 60s interval, "Apply on all existing…"
-   unchecked; attach the Discord notification to each):
-   - `api-health` — HTTP(s): `https://api.cogitoacademy.id/health`,
-     Keyword **`"status":"ok"`** (down on 5xx/degraded).
-   - `web-app` — HTTP(s): `https://app.cogitoacademy.id`.
-   - `api-cert` / `app-cert` — HTTP(s) - Certificate Info for
-     `api.cogitoacademy.id` / `app.cogitoacademy.id` (alerts before expiry).
-   - `dlq-depth` — HTTP(s) keyword on `https://api.cogitoacademy.id/health`,
-     Keyword **`"dlqDepth":0`** — DOWN = fresh DLQ failures exist
-     (age-aware; stale entries never trip it). Heartbeat retry: 3.
-4. **Test each monitor** (the "Test" button) — a Discord post should arrive.
-5. Optional: **Status Pages → New Status Page** (slug `cogito`), add the
-   monitors, publish — this IS the dashboard served at
-   `status.cogitoacademy.id`.
+Two root causes were found and fixed during that pass — keep them in mind
+when touching Kuma:
+
+- **503-flap:** `api-health` recorded DOWN on every CD deploy because
+  `maxretries=0` — the API container restarts during a deploy and `/health`
+  returns 503 while the new image boots. The monitor was correctly detecting
+  deploy restarts, not flapping. Fix: `maxretries=2` + `retry_interval=60`.
+- **Discord silent:** the `COGITO ALERT` notification existed but
+  `monitor_notification` was empty — no monitor was attached, so nothing
+  ever posted. Fix: attach the notification to every monitor (and to any
+  new monitor you add).
+
+**Adding a monitor** (the only recurring step): Kuma UI → Add New Monitor →
+configure → **attach the `COGITO ALERT` notification** (the step that was
+missed before 2026-09-02) → Test (a Discord post must arrive) → optionally
+add it to the `cogito` status page. Recommended follow-up: `api-cert` /
+`app-cert` certificate monitors (not yet created).
 
 ## 4. Database changes (migrations)
 
@@ -119,7 +123,10 @@ auto-restore with live traffic** — take a maintenance window, then §DR-2.
 **DR-1 — bad deploy / app down (most common).**
 Coolify UI (via tailnet: `http://<tailnet-ip>:8000`) → resource → **Rollback
 to previous release**; or the CD script's auto-rollback already repointed the
-tag on health-poll timeout. Verify: `/health.version` == the old sha. DB
+image tag on health-poll timeout (the restored `bb1ccb9a` flow: PATCH
+`docker_registry_image_tag` to `v<PREV_GIT_SHA>` + redeploy — the #175–#177
+native-endpoint flow was reverted by #178 after the 2026-09-02 disk-full
+incident). Verify: `/health.version` == the old sha. DB
 unchanged (code-only rollback).
 
 **DR-2 — bad migration / DB corruption.**

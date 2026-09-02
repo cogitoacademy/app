@@ -18,6 +18,7 @@ export interface RedisClient {
   hget(key: string, field: string): Promise<string | null>;
   hgetall(key: string): Promise<Record<string, string>>;
   hdel(key: string, ...fields: string[]): Promise<number>;
+  keys(pattern: string): Promise<string[]>;
   llen(key: string): Promise<number>;
   eval(
     script: string,
@@ -175,6 +176,19 @@ export class InMemoryRedis implements RedisClient {
     return removed;
   }
 
+  async keys(pattern: string): Promise<string[]> {
+    // Glob-style pattern matching over the hash keys (circuit-breaker state
+    // lives in HSETs). `*` matches any run of characters; a literal `*` in
+    // the pattern is the only wildcard the callers use (cogito:cb:*).
+    const regex = new RegExp(
+      `^${pattern
+        .split("*")
+        .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+        .join(".*")}$`,
+    );
+    return [...this.hashes.keys()].filter((key) => regex.test(key));
+  }
+
   async eval(
     _script: string,
     _keys: string[],
@@ -261,6 +275,7 @@ type RedisAdapterClient = {
   hget(key: string, field: string): Promise<string | null>;
   hgetall(key: string): Promise<Record<string, string>>;
   hdel(key: string, ...fields: string[]): Promise<number>;
+  keys(pattern: string): Promise<string[]>;
   llen(key: string): Promise<number>;
   eval(
     script: string,
@@ -303,6 +318,7 @@ export function createRedisAdapter(client: RedisAdapterClient): RedisClient {
     hget: (key: string, field: string) => client.hget(key, field),
     hgetall: (key: string) => client.hgetall(key),
     hdel: (key: string, ...fields: string[]) => client.hdel(key, ...fields),
+    keys: (pattern: string) => client.keys(pattern),
     llen: (key: string) => client.llen(key),
     eval: (script: string, keys: string[], args: (string | number)[]) =>
       client.eval(script, keys.length, ...keys, ...args),
