@@ -146,6 +146,19 @@ describe("DiscoveryRepo", () => {
       expect(callArg.limit).toBe(10);
       expect(callArg.offset).toBe(5);
     });
+
+    test("does not expose tutor terms acceptance metadata", async () => {
+      const findMany = mock(async () => []);
+      const conn = makeConn(findMany);
+      const repo = createDiscoveryRepo(conn);
+
+      await repo.listPublished({ limit: 20, offset: 0 });
+
+      expect(findMany.mock.calls[0]![0].columns).toMatchObject({
+        termsOfServiceAcceptedAt: false,
+        termsOfServiceVersion: false,
+      });
+    });
   });
 
   describe("getProfileById", () => {

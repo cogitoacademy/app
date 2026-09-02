@@ -2,6 +2,7 @@ import { describe, expect, mock, test } from "bun:test";
 import {
   deactivateFutureRecurringAvailability,
   listProfileHistory,
+  updateStatus,
 } from "../../modules/tutor/tutor.repo";
 
 describe("TutorRepo", () => {
@@ -36,5 +37,37 @@ describe("TutorRepo", () => {
         },
       }),
     );
+  });
+
+  test("updates tutor status without changing terms by default", async () => {
+    const returning = mock(async () => [{ id: "profile-1" }]);
+    const where = mock(() => ({ returning }));
+    const set = mock(() => ({ where }));
+    const update = mock(() => ({ set }));
+    const conn = { update } as any;
+
+    await updateStatus(conn, "user-1", "pending_review");
+
+    expect(set).toHaveBeenCalledWith({ onboardingStatus: "pending_review" });
+  });
+
+  test("records terms only when accepting during submission", async () => {
+    const returning = mock(async () => [{ id: "profile-1" }]);
+    const where = mock(() => ({ returning }));
+    const set = mock(() => ({ where }));
+    const update = mock(() => ({ set }));
+    const conn = { update } as any;
+
+    await updateStatus(conn, "user-1", "pending_review", {
+      acceptTerms: true,
+      termsVersion: "2026-09",
+    });
+
+    expect(set).toHaveBeenCalledWith(
+      expect.objectContaining({ onboardingStatus: "pending_review" }),
+    );
+    const values = set.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(values.termsOfServiceAcceptedAt).toBeDefined();
+    expect(values.termsOfServiceVersion).toBeDefined();
   });
 });

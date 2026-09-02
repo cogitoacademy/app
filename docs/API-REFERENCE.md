@@ -26,6 +26,22 @@ sends tutor-profile `displayName`; discovery keeps its compatible
 tutor-profile input/column remains accepted for compatibility and is not used by
 new web UI.
 
+## Tutor Terms of Service acceptance (2026-09-02)
+
+The first complete tutor onboarding submission opens a bilingual
+Indonesian/English Terms of Service dialog before review submission. Saving a
+draft remains available without accepting the terms. The tutor must check the
+agreement box before the client sends `tutor.submitForReview`.
+
+Acceptance is enforced server-side and recorded once on `tutor_profile` with
+`termsOfServiceAcceptedAt` and `termsOfServiceVersion` (`2026-09`). The
+acceptance write and the `pending_review` status transition share the same
+transaction. Subsequent submissions, including `changes_requested` revisions,
+do not need to send the acceptance again. The acceptance metadata is excluded
+from public tutor-discovery projections. The sticky onboarding action area keeps
+**View Tutor Terms** available so the current document can
+be reopened in read-only mode after acceptance.
+
 ## Tutor profile drawers (2026-08-31)
 
 The student tutor-discovery drawer and admin tutor-review drawer keep their header/action regions outside the scroll container while `Drawer.Content` owns the single vertical scroll region for long profile content. The body may overscroll locally, but that motion is contained and cannot move the fixed regions. This is client-side presentation only; no RPC path, request envelope, response shape, schema, or persistence contract changed.
@@ -491,13 +507,13 @@ Structured tutor experience fields are submitted through `experienceEntries` as 
 
 ### `tutor.submitForReview`
 
-The web tutor profile editor groups education, competition achievements, and experiences into one combined **Achievements & experience** section with one public preview; the API fields and review behavior remain unchanged.
+The web tutor profile editor groups education, competition achievements, and experiences into one combined **Achievements & experience** section with one public preview; the review endpoint also enforces the one-time Terms of Service acceptance described above.
 
 - **Auth:** Tutor
-- **Input:** None
+- **Input:** `{ acceptTerms?: boolean }`
 - **Output:** `{ profile }`
-- **Errors:** `TUTOR_PROFILE_INCOMPLETE` (400) when required profile fields are missing; `INVALID_TUTOR_PRICING` (400) when a base honorarium is invalid; `INVALID_TUTOR_SUBJECT_SELECTION` (400) when subject ids are invalid
-- **Description:** Submits a draft profile for admin review. The required achievement may come from the structured competition-achievement entries or from legacy achievement text retained on an older profile. The required experience may come from `experienceEntries` or legacy experience text retained on an older profile. Incomplete and pricing errors include their missing-field or pricing detail so the web form can highlight the relevant controls.
+- **Errors:** `TUTOR_PROFILE_INCOMPLETE` (400) when required profile fields are missing; `INVALID_TUTOR_PRICING` (400) when a base honorarium is invalid; `INVALID_TUTOR_SUBJECT_SELECTION` (400) when specialization ids are invalid; `TUTOR_TERMS_NOT_ACCEPTED` (400) when the profile has never accepted the current terms and `acceptTerms` is not `true`
+- **Description:** Submits a draft profile for admin review. The required achievement may come from the structured competition-achievement entries or from legacy achievement text retained on an older profile. The required experience may come from `experienceEntries` or legacy experience text retained on an older profile. Incomplete and pricing errors include their missing-field or pricing detail so the web form can highlight the relevant controls. On the first successful submission, the caller must send `acceptTerms: true`; the server stores the acceptance timestamp/version once and transitions the profile to `pending_review` in the same transaction. Later submissions can send `{}`.
 
 ### `tutor.listAvailability`
 

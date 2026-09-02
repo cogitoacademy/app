@@ -6,6 +6,7 @@ import {
   InvalidTutorStatusError,
   AvailabilitySlotOverlapError,
   TutorProfileIncompleteError,
+  TutorTermsNotAcceptedError,
   InvalidTutorPricingError,
   InvalidDateRangeError,
   mapTutorError,
@@ -123,6 +124,15 @@ describe("tutor.errors", () => {
       expect(err.name).toBe("InvalidTutorPricingError");
     });
   });
+  describe("TutorTermsNotAcceptedError", () => {
+    it("includes the accepted terms version in its details", () => {
+      const err = new TutorTermsNotAcceptedError("tp_1", "2026-09");
+
+      expect(err.code).toBe("TUTOR_TERMS_NOT_ACCEPTED");
+      expect(err.domain).toBe("tutor");
+      expect(err.details).toEqual({ id: "tp_1", termsVersion: "2026-09" });
+    });
+  });
   describe("mapTutorError", () => {
     it("should map TutorProfileNotFoundError to NOT_FOUND", () => {
       const result = mapTutorError(new TutorProfileNotFoundError("tp_1"));
@@ -159,6 +169,13 @@ describe("tutor.errors", () => {
       );
       expect(result.status).toBe(400);
       expect(result.data).toEqual({ pricingError: "Prices are invalid" });
+    });
+    it("should map TutorTermsNotAcceptedError to BAD_REQUEST", () => {
+      const result = mapTutorError(
+        new TutorTermsNotAcceptedError("tp_1", "2026-09"),
+      );
+      expect(result.status).toBe(400);
+      expect(result.data).toEqual({ termsVersion: "2026-09" });
     });
     it("should fall back to INTERNAL_SERVER_ERROR for unknown domain error", () => {
       const result = mapTutorError(new TestDomainError());

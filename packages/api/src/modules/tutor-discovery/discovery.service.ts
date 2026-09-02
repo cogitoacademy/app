@@ -26,6 +26,8 @@ export interface ProfileWithUser extends Omit<
   | "bankAccountOpeningCity"
   | "bankAccountOwnership"
   | "bankTransferDisclaimerAccepted"
+  | "termsOfServiceAcceptedAt"
+  | "termsOfServiceVersion"
 > {
   user: PublicTutorUser | null;
   subjects?: Array<TutorSubjectRelation & { subjectId: string }>;

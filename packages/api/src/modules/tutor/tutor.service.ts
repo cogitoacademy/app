@@ -11,6 +11,10 @@ import type { tutorProfile } from "@cogito-app/db/schema";
 import type { TutorAuditPort, TutorPricingPort } from "./index";
 import type { BookingPayoutPort } from "../booking";
 import {
+  TUTOR_TERMS_OF_SERVICE_VERSION,
+  type SubmitForReviewInput,
+} from "./tutor.types";
+import {
   haveSameSubjectIds,
   toNormalizedTutorSubjects,
   type NormalizedTutorSubject,
@@ -22,6 +26,7 @@ import {
   InvalidTutorStatusError,
   AvailabilitySlotOverlapError,
   TutorProfileIncompleteError,
+  TutorTermsNotAcceptedError,
   InvalidTutorPricingError,
   OptimisticLockError,
   InvalidDateRangeError,
@@ -116,6 +121,7 @@ export function validateSubmitForReview(
   profile: TutorProfileRow | undefined,
   pricingPort: TutorPricingPort,
   profileImageUrl?: string | null,
+  acceptTerms = false,
 ): void {
   if (!profile) {
     throw new TutorProfileNotFoundError("unknown");
@@ -210,6 +216,13 @@ export function validateSubmitForReview(
     if (error) {
       throw new InvalidTutorPricingError(profile.id, error);
     }
+  }
+
+  if (!profile.termsOfServiceAcceptedAt && !acceptTerms) {
+    throw new TutorTermsNotAcceptedError(
+      profile.id,
+      TUTOR_TERMS_OF_SERVICE_VERSION,
+    );
   }
 }
 
@@ -422,15 +435,22 @@ export function createTutorService(deps: {
    * Submits the tutor profile for admin review, recording an audit entry.
    *
    * @param userId - the tutor user
+   * @param input - optional first-submission Terms of Service acceptance
    * @returns the updated tutor profile
    * @throws {TutorProfileNotFoundError} if the profile does not exist
    */
-  async function submitForReview(userId: string) {
+  async function submitForReview(
+    userId: string,
+    input: SubmitForReviewInput = {},
+  ) {
     const profile = await tutorRepo.getByUserId(db, userId);
+    const acceptsTermsForFirstSubmission =
+      input.acceptTerms === true && !profile?.termsOfServiceAcceptedAt;
     validateSubmitForReview(
       profile,
       pricingPort,
       (profile as TutorProfileWithSubjectRelations | undefined)?.user?.image,
+      acceptsTermsForFirstSubmission,
     );
 
     return db.transaction(async (tx) => {
@@ -438,6 +458,12 @@ export function createTutorService(deps: {
         tx,
         userId,
         ONBOARDING_STATUS.PENDING_REVIEW,
+        acceptsTermsForFirstSubmission
+          ? {
+              acceptTerms: true,
+              termsVersion: TUTOR_TERMS_OF_SERVICE_VERSION,
+            }
+          : undefined,
       );
 
       await auditPort.record({
@@ -453,6 +479,11 @@ export function createTutorService(deps: {
           profileImageUrl:
             (profile as TutorProfileWithSubjectRelations).user?.image ?? null,
           stage: "source_submitted",
+          termsOfServiceAccepted: acceptsTermsForFirstSubmission,
+          termsOfServiceVersion:
+            row?.termsOfServiceVersion ??
+            profile?.termsOfServiceVersion ??
+            null,
         },
       });
 

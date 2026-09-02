@@ -166,9 +166,7 @@ describe("Tutor Invite & Onboarding", () => {
     });
 
     test("tutor cannot submit for review with missing fields", async () => {
-      await expectRejects(
-        tutorClient.tutor.submitForReview(undefined as never),
-      );
+      await expectRejects(tutorClient.tutor.submitForReview({}));
     });
 
     test("tutor can update profile with all required fields", async () => {
@@ -199,6 +197,19 @@ describe("Tutor Invite & Onboarding", () => {
       expect(updated.user?.image).toBe("https://example.com/tutor-profile.jpg");
     });
 
+    test("complete first submission still requires tutor terms acceptance", async () => {
+      await expectRejects(tutorClient.tutor.submitForReview({}));
+
+      const [profile] = await db
+        .select()
+        .from(tutorProfile)
+        .where(eq(tutorProfile.userId, tutorId))
+        .limit(1);
+      expect(profile!.onboardingStatus).toBe("draft");
+      expect(profile!.termsOfServiceAcceptedAt).toBeNull();
+      expect(profile!.termsOfServiceVersion).toBeNull();
+    });
+
     test("prices below floor are rejected", async () => {
       const version = await getTutorVersion();
       await expectRejects(
@@ -221,10 +232,18 @@ describe("Tutor Invite & Onboarding", () => {
     });
 
     test("tutor can submit for review", async () => {
-      const result = await tutorClient.tutor.submitForReview(
-        undefined as never,
-      );
+      const result = await tutorClient.tutor.submitForReview({
+        acceptTerms: true,
+      });
       expect(result.onboardingStatus).toBe("pending_review");
+
+      const [profile] = await db
+        .select()
+        .from(tutorProfile)
+        .where(eq(tutorProfile.userId, tutorId))
+        .limit(1);
+      expect(profile!.termsOfServiceAcceptedAt).toBeDefined();
+      expect(profile!.termsOfServiceVersion).toBe("2026-09");
     });
 
     test("admin requests changes", async () => {
@@ -251,9 +270,7 @@ describe("Tutor Invite & Onboarding", () => {
         credentialsSummary: "PhD Math, 10yr exp, Olympiad coach",
       });
 
-      const result = await tutorClient.tutor.submitForReview(
-        undefined as never,
-      );
+      const result = await tutorClient.tutor.submitForReview({});
       expect(result.onboardingStatus).toBe("pending_review");
     });
 

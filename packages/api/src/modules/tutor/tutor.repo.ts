@@ -202,10 +202,22 @@ export async function updateStatus(
   conn: DbOrTx,
   userId: string,
   status: string,
+  options: {
+    acceptTerms?: boolean;
+    termsVersion?: string;
+  } = {},
 ) {
   const [updated] = await conn
     .update(tutorProfile)
-    .set({ onboardingStatus: status })
+    .set({
+      onboardingStatus: status,
+      ...(options.acceptTerms
+        ? {
+            termsOfServiceAcceptedAt: sql`COALESCE(${tutorProfile.termsOfServiceAcceptedAt}, now())`,
+            termsOfServiceVersion: sql`COALESCE(${tutorProfile.termsOfServiceVersion}, ${options.termsVersion ?? null})`,
+          }
+        : {}),
+    })
     .where(eq(tutorProfile.userId, userId))
     .returning();
   return updated;

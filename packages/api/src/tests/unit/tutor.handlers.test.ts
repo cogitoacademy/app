@@ -5,6 +5,7 @@ import {
   InvalidTutorStatusError,
   AvailabilitySlotOverlapError,
   WeeklyAvailabilityRangeError,
+  TutorTermsNotAcceptedError,
 } from "../../modules/tutor/tutor.errors";
 
 describe("tutorHandlers", () => {
@@ -68,7 +69,7 @@ describe("tutorHandlers", () => {
   });
 
   describe("submitForReview", () => {
-    test("calls tutor.submitForReview with userId", async () => {
+    test("calls tutor.submitForReview with userId and input", async () => {
       const submitForReview = mock(async () => ({
         id: "t1",
         status: "pending_review",
@@ -76,10 +77,11 @@ describe("tutorHandlers", () => {
       const tutorService = { submitForReview } as any;
       const handler = createTutorHandler(tutorService);
       const context = { session: { user: { id: "u1" } } } as any;
+      const input = { acceptTerms: true };
 
-      const result = await handler.submitForReview({ context });
+      const result = await handler.submitForReview({ context, input });
 
-      expect(submitForReview).toHaveBeenCalledWith("u1");
+      expect(submitForReview).toHaveBeenCalledWith("u1", input);
       expect(result).toEqual({ id: "t1", status: "pending_review" });
     });
 
@@ -92,10 +94,26 @@ describe("tutorHandlers", () => {
       const context = { session: { user: { id: "u1" } } } as any;
 
       try {
-        await handler.submitForReview({ context });
+        await handler.submitForReview({ context, input: {} });
         expect.unreachable("Should have thrown");
       } catch (err: any) {
         expect(err.status).toBe(409);
+      }
+    });
+
+    test("maps missing tutor terms acceptance to 400", async () => {
+      const submitForReview = mock(async () => {
+        throw new TutorTermsNotAcceptedError("t1", "2026-09");
+      });
+      const handler = createTutorHandler({ submitForReview } as any);
+      const context = { session: { user: { id: "u1" } } } as any;
+
+      try {
+        await handler.submitForReview({ context, input: {} });
+        expect.unreachable("Should have thrown");
+      } catch (err: any) {
+        expect(err.status).toBe(400);
+        expect(err.data).toEqual({ termsVersion: "2026-09" });
       }
     });
   });

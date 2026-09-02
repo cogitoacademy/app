@@ -18,6 +18,23 @@ remain explicitly tracked in `.github/lint/baseline.txt`; new findings fail
 the baseline gate. The lint auto-fix commit disables Lefthook while pushing so
 the workflow's dedicated baseline and formatting checks are authoritative.
 
+## Tutor Terms of Service acceptance (2026-09-02)
+
+The first complete tutor onboarding submission presents the bilingual
+Indonesian/English Terms of Service from
+`apps/web/src/components/tutor/tutor-terms-of-service.tsx`. Draft saves do not
+require consent, and cancelling the dialog leaves the profile in its current
+draft/revision state.
+
+The server accepts `acceptTerms?: boolean` on `tutor.submitForReview`, enforces
+acceptance when the tutor profile has no prior consent, and writes
+`terms_of_service_accepted_at` plus `terms_of_service_version` (`2026-09`) once
+in the same transaction as `pending_review`. Later review submissions do not
+need the flag. These fields are available to the tutor-owned profile response
+but are explicitly removed from public tutor discovery. The sticky onboarding
+action area also exposes a read-only **View Tutor Terms** action after
+acceptance.
+
 ## Deployment wave state
 
 **APPLIED (2026-08-31).** The full Terraform + Ansible apply chain completed via `infra/apply.sh`:
@@ -404,7 +421,7 @@ when set to false.
 
 ### `contactRequest` (contact-request.ts) — completed-session request state, explicit email consent, and booking/user foreign keys
 
-### `tutorProfile` (tutor-profile.ts) — CHECK modality + onboarding_status + profile_edit_status; keeps approved public values separate from pending reviewed edits; stores IDR base honoraria in `base_rates_idr`
+### `tutorProfile` (tutor-profile.ts) — CHECK modality + onboarding_status + profile_edit_status; keeps approved public values separate from pending reviewed edits; stores IDR base honoraria in `base_rates_idr` and one-time Tutor Terms of Service acceptance metadata (`terms_of_service_accepted_at`, `terms_of_service_version`)
 
 ### `economyConfig` (economy-config.ts) — singleton active Marks value, IDR tutor honorarium parameters, and admin-managed Cogito take schedule
 
@@ -476,6 +493,7 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 The tutor `/profile` editor presents education, competition achievements, and experiences in one combined **Achievements & experience** card with a single public preview; each subsection keeps its own private proof-link field. Short bios are limited to 50 words, and the proof-link guidance recommends one Google Drive folder shared with “Anyone with the link can view” for both achievement and experience evidence.
 
 - `getMyProfile`, `updateMyProfile`, `submitForReview`
+- The first complete `submitForReview` requires the bilingual Terms of Service checkbox; the server records the acceptance timestamp/version once and later `changes_requested` resubmissions proceed without a second prompt.
 - Tutor profiles store structured `education` (maximum 2 entries), one structured achievement section backed by `competitionAchievements` (maximum 5 entries, each with comma-separated award titles), and one structured experience section backed by `experienceEntries` (maximum 5 role/organization/year/description entries); the web editor previews the normalized format and the public discovery drawer renders it without year grouping dots. The award editor keeps an in-progress comma visible while the next title is being typed, and experience text fields preserve punctuation.
 - The tutor profile editor separates **Save draft**/**Save profile changes** from **Submit for review**. Draft saving does not require the complete onboarding set, while malformed values are shown with field-level errors, a validation summary, and focus on the first invalid control; submission applies the complete required-field gate. Published tutors remain editable while profile changes are under review: saving updates the pending proposal, and submitting validates and queues the latest version.
 - The admin tutor index derives its displayed status from both onboarding and edit-review state: a published tutor with submitted pending changes is labeled **Edit review**, while an edit returned by admin is labeled **Revision requested**, so admins can identify work requiring attention without opening the drawer.
@@ -626,6 +644,7 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 | `docs/plans/active/WAVE-6-REVIEW-FIXES.md`                        | `fix/wave6-a` (PR #82), `fix/wave6-b` (PR #83), `fix/wave6-c` (PR #84) — all merged | **Completed (2026-08-19)** — all wave-6 findings (H1–H3, M1–M5, L1–L3, N1–N4, P1–P3) fixed & merged; L3 closed as defense-in-depth                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `docs/plans/active/PRD-GAPS-PHASE3.md`                            | main (merged)                                                                       | Active — all U-items closed (U9 closed by REVIEW-FIXES-4 P2.8)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `docs/plans/active/FRONTEND-GAPS-SPEC.md`                         | `f/f9-session-notes` (follow-up); `f/competition-taxonomy` (PR pending)             | Active — F1 admin workspace, hydrated participant wallet/ledger detail, and OQ-04 SLA projection are complete; F9 session notes editor/rendering is complete; F18 proposer-side pending-invite withdrawal is complete; F12 room approval queue and active-room catalog are implemented; booking detail meeting/activity UX refined 2026-08-22 and compact contextual info previews added 2026-08-26; competition taxonomy follow-up implemented 2026-08-25; empty-state consistency follow-up documented 2026-08-25; tutor discovery pricing matrix consolidated 2026-08-27; booking overflow polish added 2026-08-28; canonical tutor profile-image workflow consolidated 2026-08-31 |
+| `docs/plans/completed/TUTOR-TERMS-ONBOARDING.md`                  | working tree                                                                        | **Completed (2026-09-02)** — bilingual Tutor Terms of Service modal and server-enforced, first-submit-only consent persistence |
 | `docs/plans/completed/ECONOMY-RATE-CONTROL.md`                    | main                                                                                | Completed 2026-08-22 — admin-managed Cogito take schedule, IDR tutor honoraria, immutable booking snapshots, and all-role economy E2E                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `docs/plans/active/DEFERRED-OPS-TASKS.md`                         | main (post-merge)                                                                   | Active — code gaps 1.1–1.8 done (1.4 now 0 bare selects); §2 Redis session caching deferred; §3/§4 ops pending (provisioning/CD secrets partially done via the deployment wave)                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `docs/plans/active/DEPLOYMENT-PLAN.md`                            | main (merged #115–#118)                                                             | **APPLIED 2026-08-31** — Terraform 7 resources in state (no drift), Tailscale + hardening done, Coolify resources declared (47 env vars), backup cron installed, webhook route live (401 auth-required). Remaining: Uptime Kuma + Discord, drills, Xendit go-live                                                                                                                                                                                                                                                                                                                                                                                         |

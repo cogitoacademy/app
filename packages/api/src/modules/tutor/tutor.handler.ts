@@ -2,7 +2,7 @@ import type { Context } from "../../context";
 import { z } from "zod";
 import { withDomainMap } from "../../lib/handler-utils";
 import type { TutorService } from "./tutor.service";
-import { updateMyProfileInput } from "./tutor.types";
+import { updateMyProfileInput, submitForReviewInput } from "./tutor.types";
 import {
   upsertAvailabilityInput,
   createWeeklyAvailabilityInput,
@@ -22,6 +22,7 @@ type ReplaceWeeklyAvailabilityInput = z.infer<
   typeof replaceWeeklyAvailabilityInput
 >;
 type GetMyPayoutsInput = z.infer<typeof getMyPayoutsInput>;
+type SubmitForReviewInput = z.infer<typeof submitForReviewInput>;
 
 export type TutorHandler = ReturnType<typeof createTutorHandler>;
 
@@ -54,9 +55,15 @@ export function createTutorHandler(tutorService: TutorService) {
       );
     },
 
-    submitForReview: async ({ context }: { context: Context }) => {
+    submitForReview: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: SubmitForReviewInput;
+    }) => {
       return withDomainMap(
-        () => tutorService.submitForReview(context.session!.user.id),
+        () => tutorService.submitForReview(context.session!.user.id, input),
         mapTutorError,
       );
     },

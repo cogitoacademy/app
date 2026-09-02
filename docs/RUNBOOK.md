@@ -90,6 +90,17 @@ does not fall into the generic error screen, and the browser console has no
 `FieldError` has been rendered outside a Selia `Field` root; inspect the affected
 form composition before checking the API or database.
 
+For a complete draft or `changes_requested` tutor, click **Submit for review**
+and confirm the bilingual Indonesian/English Terms of Service dialog opens. The
+primary action must remain disabled until the agreement checkbox is selected;
+both language sections must be readable in Indonesian-then-English order, and Cancel/Exit must leave the
+profile unsubmitted. Accept the terms and verify the profile moves to
+`pending_review`. Reload the tutor profile and submit again after a revision;
+the dialog should not appear a second time, and the acceptance timestamp/version
+should remain unchanged. The sticky action area must still show
+**View Tutor Terms**; opening it shows the current document
+without the acceptance checkbox or a submit action.
+
 For Google sign-in, start from `https://app.cogitoacademy.id/login` in an incognito/clean browser and confirm the provider callback is `https://api.cogitoacademy.id/api/auth/callback/google`, followed by the frontend route `/auth/callback` and the role-appropriate destination. The Google authorization URL must contain `prompt=consent`; record the Google permission screen in the verification video and click **Show all services** so every requested identity scope is fully expanded and readable before accepting. In DevTools, the initial auth response must set `better-auth.state` with `Secure`, `HttpOnly`, and `SameSite=Lax`; the callback request must include that cookie and its `state` query parameter. Keep the Google Cloud OAuth client configured with the frontend origin `https://app.cogitoacademy.id` and the API redirect URI `https://api.cogitoacademy.id/api/auth/callback/google`. This login flow requests identity scopes only. For the separate Calendar scope used by automatic Meet creation, use the dedicated Meet OAuth client and the consent/refresh-token procedure in `docs/GOOGLE-MEET-SETUP.md`; do not add Calendar access to every user's login.
 
 ### Dashboard smoke check
@@ -452,6 +463,13 @@ structured experience editor; it adds JSONB `experience_entries` with an
 empty-array default. Existing `experiences` text is intentionally preserved
 as the compatibility fallback, so this migration does not require parsing or
 data backfill.
+
+Tutor Terms of Service acceptance requires migration
+`0042_nappy_thunderbird.sql`. Run `bun run db:migrate` before starting an API
+build that includes the first-submit consent flow; it adds nullable
+`tutor_profile.terms_of_service_accepted_at` and
+`tutor_profile.terms_of_service_version`. Existing rows are not backfilled;
+the first accepted submission records version `2026-09`.
 
 The IDR economy and admin rate-control surface require migration
 `0028_economy_config.sql`. Run `bun run db:migrate` before starting the server;

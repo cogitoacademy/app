@@ -295,6 +295,13 @@
       "when": 1788314278955,
       "tag": "0041_seed_mark_packages",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1788326141039,
+      "tag": "0042_nappy_thunderbird",
+      "breakpoints": true
     }
   ]
 }
