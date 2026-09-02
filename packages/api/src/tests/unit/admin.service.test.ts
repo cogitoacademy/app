@@ -227,6 +227,47 @@ describe("Admin Service", () => {
     });
   });
 
+  describe("searchUsers", () => {
+    test("trims the query and uses the default result limit", async () => {
+      const searchUsers = mock(async () => [
+        {
+          id: "u1",
+          name: "Ada Lovelace",
+          email: "ada@example.com",
+          image: null,
+          role: "student",
+        },
+      ]);
+      const service = createAdminService({
+        adminRepo: { searchUsers } as any,
+        auditPort: { record: mock(async () => {}) } as any,
+        db: {} as any,
+        wallet: {} as any,
+        payout: {} as any,
+      });
+
+      await expect(service.searchUsers({ query: "  ada " })).resolves.toEqual([
+        expect.objectContaining({ id: "u1" }),
+      ]);
+      expect(searchUsers).toHaveBeenCalledWith(expect.anything(), "ada", 10);
+    });
+
+    test("passes an explicit result limit", async () => {
+      const searchUsers = mock(async () => []);
+      const service = createAdminService({
+        adminRepo: { searchUsers } as any,
+        auditPort: { record: mock(async () => {}) } as any,
+        db: {} as any,
+        wallet: {} as any,
+        payout: {} as any,
+      });
+
+      await service.searchUsers({ query: "ada", limit: 3 });
+
+      expect(searchUsers).toHaveBeenCalledWith(expect.anything(), "ada", 3);
+    });
+  });
+
   describe("getWallet", () => {
     function makeService(wallet: any) {
       return createAdminService({

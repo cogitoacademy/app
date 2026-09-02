@@ -1,4 +1,15 @@
-import { asc, and, count, desc, eq, gte, lte, sql } from "drizzle-orm";
+import {
+  asc,
+  and,
+  count,
+  desc,
+  eq,
+  gte,
+  ilike,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 import { booking, user } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
 import { USER_ROLE } from "../../shared/constants";
@@ -10,6 +21,14 @@ export interface DashboardAnalyticsQuery {
 
 export type UserRole = "student" | "tutor" | "admin";
 export type UserRow = typeof user.$inferSelect;
+export type AdminUserSearchRow = Pick<
+  UserRow,
+  "id" | "name" | "email" | "image" | "role"
+>;
+
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, "\\$&");
+}
 
 /**
  * Lists users with pagination, newest first.
@@ -30,6 +49,47 @@ export async function listUsers(
     .orderBy(desc(user.createdAt))
     .limit(limit)
     .offset(offset);
+}
+
+/**
+ * Searches user identities for admin workflows such as wallet lookup.
+ *
+ * Name, email, and id are searchable because all three are useful support
+ * references. The result is deliberately a small identity projection rather
+ * than the complete auth row.
+ */
+export async function searchUsers(
+  conn: DbOrTx,
+  query: string,
+  limit: number,
+): Promise<AdminUserSearchRow[]> {
+  const normalizedQuery = query.trim();
+  const searchPattern = `%${escapeLikePattern(normalizedQuery)}%`;
+  const exactMatchRank = sql<number>`case
+    when lower(${user.email}) = lower(${normalizedQuery}) then 0
+    when lower(${user.id}) = lower(${normalizedQuery}) then 0
+    when lower(${user.name}) = lower(${normalizedQuery}) then 1
+    else 2
+  end`;
+
+  return conn
+    .select({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      image: user.image,
+      role: user.role,
+    })
+    .from(user)
+    .where(
+      or(
+        ilike(user.name, searchPattern),
+        ilike(user.email, searchPattern),
+        ilike(user.id, searchPattern),
+      ),
+    )
+    .orderBy(asc(exactMatchRank), asc(user.name), desc(user.createdAt))
+    .limit(limit);
 }
 
 /**
@@ -257,6 +317,7 @@ export async function updateRoleWithExpected(
 export function createAdminRepo() {
   return {
     listUsers,
+    searchUsers,
     countUsers,
     getDashboardAnalytics,
     getById,

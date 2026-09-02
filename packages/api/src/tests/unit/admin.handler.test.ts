@@ -107,6 +107,28 @@ describe("AdminHandler", () => {
     });
   });
 
+  test("delegates admin user search to the service", async () => {
+    const searchUsers = mock(async () => [
+      {
+        id: "u1",
+        name: "Ada Lovelace",
+        email: "ada@example.com",
+        image: null,
+        role: "student",
+      },
+    ]);
+    const handler = createAdminHandler({ searchUsers } as any);
+    const context = {
+      session: { user: { id: "admin1" } },
+    } as any;
+    const input = { query: "ada", limit: 10 };
+
+    await expect(handler.searchUsers({ context, input })).resolves.toEqual([
+      expect.objectContaining({ id: "u1" }),
+    ]);
+    expect(searchUsers).toHaveBeenCalledWith(input);
+  });
+
   describe("setRole", () => {
     test("calls adminService.setRole with session user id and input", async () => {
       const repo = makeAdminRepo();

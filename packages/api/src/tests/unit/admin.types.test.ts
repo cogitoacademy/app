@@ -2,6 +2,7 @@ import { describe, test, expect } from "bun:test";
 import {
   dashboardAnalyticsInput,
   listUsersInput,
+  adminSearchUsersInput,
   setRoleInput,
 } from "../../modules/admin/admin.types";
 
@@ -19,6 +20,19 @@ describe("Admin Types (Zod schemas)", () => {
   test("listUsersInput defaults limit and offset", () => {
     const result = listUsersInput.safeParse(undefined);
     expect(result.success).toBe(true);
+  });
+
+  test("adminSearchUsersInput trims the query and defaults the limit", () => {
+    const result = adminSearchUsersInput.safeParse({ query: "  ada " });
+    expect(result.success).toBe(true);
+    expect(result.data).toEqual({ query: "ada", limit: 10 });
+  });
+
+  test("adminSearchUsersInput rejects short queries and oversized limits", () => {
+    expect(adminSearchUsersInput.safeParse({ query: "a" }).success).toBe(false);
+    expect(
+      adminSearchUsersInput.safeParse({ query: "ada", limit: 21 }).success,
+    ).toBe(false);
   });
 
   test("setRoleInput validates role enum", () => {

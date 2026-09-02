@@ -1,6 +1,6 @@
 # Cogito API Reference
 
-Last updated: 2026-09-01
+Last updated: 2026-09-02
 
 ## Profile and tutor-onboarding validation (2026-08-31)
 
@@ -273,6 +273,14 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Input:** `{ limit?, offset? }` (`limit` default 50)
 - **Output:** `{ users: User[], total, limit, offset }`
 - **Description:** Paginated user list
+
+### `admin.searchUsers`
+
+- **RPC path:** `/rpc/admin/users/search`
+- **Auth:** Admin
+- **Input:** `{ query, limit? }` (`query` is trimmed and must contain at least 2 characters; `limit` defaults to 10 and is capped at 20)
+- **Output:** `UserSearchResult[]` where each result is `{ id, name, email, image, role }`
+- **Description:** Case-insensitive partial lookup for admin support workflows. Matches `name`, `email`, or `id`; exact email/ID matches are ranked first. Wildcard characters are treated literally. The wallet lookup UI uses the selected result's `id` with `admin.getWallet` and `admin.listLedgerEntries`.
 
 ### `admin.setRole`
 

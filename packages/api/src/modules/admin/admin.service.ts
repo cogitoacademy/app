@@ -76,6 +76,11 @@ export interface ListUsersResult {
   offset: number;
 }
 
+export interface SearchUsersInput {
+  query: string;
+  limit?: number;
+}
+
 export interface SetRoleInput {
   userId: string;
   role: UserRole;
@@ -205,6 +210,10 @@ export function createAdminService(deps: {
     ]);
 
     return { users, total, limit, offset };
+  }
+
+  async function searchUsers(input: SearchUsersInput) {
+    return adminRepo.searchUsers(db, input.query.trim(), input.limit ?? 10);
   }
 
   async function getDashboardAnalytics(
@@ -548,6 +557,7 @@ export function createAdminService(deps: {
 
   return {
     listUsers,
+    searchUsers,
     getDashboardAnalytics,
     setRole,
     getWallet,
