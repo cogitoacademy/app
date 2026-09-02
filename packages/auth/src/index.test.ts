@@ -11,7 +11,6 @@ import {
   auth,
   setAuthEmailSender,
   setVerificationEmailSender,
-  setWelcomeEmailSender,
   resolveGoogleSocialProviders,
 } from "./index";
 
@@ -29,12 +28,11 @@ const user = {
 const resetPassword = (auth as any).options.emailAndPassword.sendResetPassword;
 const sendVerificationOTP = (auth as any).options.plugins[0].options
   .sendVerificationOTP;
-const sendWelcome = (auth as any).options.databaseHooks.user.create.after;
+const afterUserCreate = (auth as any).options.databaseHooks.user.create.after;
 
 afterEach(() => {
   setAuthEmailSender(null as any);
   setVerificationEmailSender(null as any);
-  setWelcomeEmailSender(null as any);
 });
 
 describe("auth email hooks", () => {
@@ -56,7 +54,7 @@ describe("auth email hooks", () => {
 
     try {
       (env as { NODE_ENV: string }).NODE_ENV = "production";
-      await sendWelcome(operator);
+      await afterUserCreate(operator);
 
       const [promoted] = await db
         .select({ role: userRow.role })
@@ -80,7 +78,7 @@ describe("auth email hooks", () => {
       };
 
       await expect(
-        sendWelcome({
+        afterUserCreate({
           ...user,
           id: crypto.randomUUID(),
           email: DEFAULT_PRODUCTION_ADMIN_EMAIL,
@@ -124,7 +122,7 @@ describe("auth email hooks", () => {
     ).resolves.toBeUndefined();
   });
 
-  test("verification hook is a no-op without a sender and forwards when set", async () => {
+  test("verification hook is a no-op without a sender and marks signup OTPs", async () => {
     await expect(
       sendVerificationOTP({
         email: user.email,
@@ -137,13 +135,31 @@ describe("auth email hooks", () => {
     setVerificationEmailSender(async (params) => {
       calls.push(params);
     });
+    await sendVerificationOTP(
+      {
+        email: user.email,
+        otp: "123456",
+        type: "email-verification",
+      },
+      { path: "/sign-up/email" },
+    );
+    expect(calls).toEqual([
+      {
+        email: user.email,
+        otp: "123456",
+        type: "email-verification",
+        isSignup: true,
+      },
+    ]);
+
+    calls.length = 0;
     await sendVerificationOTP({
       email: user.email,
-      otp: "123456",
+      otp: "654321",
       type: "sign-in",
     });
     expect(calls).toEqual([
-      { email: user.email, otp: "123456", type: "sign-in" },
+      { email: user.email, otp: "654321", type: "sign-in" },
     ]);
   });
 
@@ -159,27 +175,6 @@ describe("auth email hooks", () => {
         type: "forget-password",
       }),
     ).resolves.toBeUndefined();
-  });
-
-  test("welcome hook is a no-op without a sender and forwards the login URL", async () => {
-    await expect(sendWelcome(user)).resolves.toBeUndefined();
-
-    const calls: unknown[] = [];
-    setWelcomeEmailSender(async (params) => {
-      calls.push(params);
-    });
-    await sendWelcome(user);
-    expect(calls).toEqual([
-      { user, loginUrl: `${env.CORS_ORIGIN.replace(/\/$/, "")}/login` },
-    ]);
-  });
-
-  test("welcome hook swallows sender failures", async () => {
-    setWelcomeEmailSender(async () => {
-      throw new Error("mailer down");
-    });
-
-    await expect(sendWelcome(user)).resolves.toBeUndefined();
   });
 });
 

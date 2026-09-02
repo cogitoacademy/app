@@ -1210,6 +1210,15 @@ The production env schema requires `RESEND_API_KEY` and a non-default `EMAIL_FRO
 
 Accounts created before mandatory email verification remain `email_verified=false`; do not run a data backfill that marks them verified. On the next email/password or Google sign-in, the web client requests a fresh verification OTP and routes the account to `/verify-email`. After the code is accepted, the user continues to the original destination.
 
+New email/password signups receive one combined welcome + verification email: it contains the onboarding/dashboard entry point, login link, platform introduction, and six-digit OTP. **Resend code** and verification for legacy accounts remain verification-only, so they do not repeat the signup welcome copy.
+
+Manual signup smoke test:
+
+1. Create a new email/password account with a fresh address.
+2. Confirm exactly one auth email is delivered and that it contains both the welcome content and the six-digit verification code.
+3. Enter the code on `/verify-email` and confirm the account reaches its normal destination.
+4. Use **Resend code** and confirm the replacement message is verification-only.
+
 Manual smoke test after an auth or web deploy:
 
 1. Sign in with a pre-verification account whose `email_verified` value is `false`.

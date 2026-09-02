@@ -5,11 +5,9 @@ import { isProductionLike } from "@cogito-app/env/node-env";
 import {
   setAuthEmailSender,
   setVerificationEmailSender,
-  setWelcomeEmailSender,
 } from "@cogito-app/auth";
 import { buildResetPasswordEmail } from "@cogito-app/auth/reset-password-email";
 import { buildVerificationEmail } from "@cogito-app/auth/verification-email";
-import { buildWelcomeEmail } from "@cogito-app/auth/welcome-email";
 import { log } from "@cogito-app/api/lib/logger";
 import { sql } from "drizzle-orm";
 
@@ -114,8 +112,9 @@ setAuthEmailSender(async ({ user, url }) => {
   });
 });
 
-// G2: email verification OTP delivery through the shared email port.
-setVerificationEmailSender(async ({ email, otp, type }) => {
+// P2/G2: signup welcome copy and email verification OTP share one delivery;
+// other OTP types remain purpose-specific.
+setVerificationEmailSender(async ({ email, otp, type, isSignup }) => {
   if (!isProductionLike(env.NODE_ENV)) {
     log({
       level: "info",
@@ -125,29 +124,19 @@ setVerificationEmailSender(async ({ email, otp, type }) => {
       otp,
     });
   }
+  const isSignupVerification =
+    type === "email-verification" && isSignup === true;
   const { subject, html } = buildVerificationEmail({
     name: email.split("@")[0] ?? email,
     otp,
     expiresInMinutes: 5,
+    includeWelcome: isSignupVerification,
+    loginUrl: isSignupVerification
+      ? `${env.CORS_ORIGIN.replace(/\/$/, "")}/login`
+      : undefined,
   });
   await services.email.send({
     to: email,
-    subject,
-    html,
-    category: "auth",
-  });
-});
-
-// P2: signup-confirmation (welcome) email to new students. Sent only on actual
-// user creation (better-auth databaseHooks.user.create.after), so an existing
-// user signing in never re-triggers it.
-setWelcomeEmailSender(async ({ user, loginUrl }) => {
-  const { subject, html } = buildWelcomeEmail({
-    name: user.name || user.email,
-    loginUrl,
-  });
-  await services.email.send({
-    to: user.email,
     subject,
     html,
     category: "auth",

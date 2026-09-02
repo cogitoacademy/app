@@ -25,4 +25,33 @@ describe("buildVerificationEmail", () => {
     expect(html).toContain("&lt;script&gt;");
     expect(html).toContain("&lt;b&gt;");
   });
+
+  test("combines welcome content with signup verification", () => {
+    const { subject, html } = buildVerificationEmail({
+      name: "New Student",
+      otp: "123456",
+      expiresInMinutes: 5,
+      includeWelcome: true,
+      loginUrl: "https://app.cogitoacademy.id/login",
+    });
+
+    expect(subject).toBe("Welcome to Cogito — verify your email");
+    expect(html).toContain("Welcome to Cogito, New Student!");
+    expect(html).toContain("Your account has been created");
+    expect(html).toContain("https://app.cogitoacademy.id/login");
+    expect(html).toContain("123456");
+  });
+
+  test("keeps login URLs escaped in the combined email", () => {
+    const { html } = buildVerificationEmail({
+      name: "Student",
+      otp: "123456",
+      expiresInMinutes: 5,
+      includeWelcome: true,
+      loginUrl: "https://app.test/login?next=<dashboard>",
+    });
+
+    expect(html).not.toContain("<dashboard>");
+    expect(html).toContain("&lt;dashboard&gt;");
+  });
 });
