@@ -253,6 +253,14 @@ describe("Redis client helpers", () => {
     expect(await client.hdel("hash", "b")).toBe(1);
     expect(await client.hdel("missing-hash", "field")).toBe(0);
     expect(await client.hgetall("hash")).toEqual({});
+    expect(await client.keys("cogito:cb:*")).toEqual([]);
+    await client.hset("cogito:cb:resend", ["state", "open"]);
+    await client.hset("cogito:cb:google_meet", ["state", "half-open"]);
+    expect(await client.keys("cogito:cb:*")).toEqual([
+      "cogito:cb:resend",
+      "cogito:cb:google_meet",
+    ]);
+    expect(await client.keys("cogito:cb:resend")).toEqual(["cogito:cb:resend"]);
     expect(await client.del("value")).toBe(1);
     expect(await client.del("value")).toBe(0);
     expect(await client.ping()).toBe("PONG");
@@ -327,6 +335,10 @@ describe("Redis client helpers", () => {
         calls.push(["hdel", key, ...fields]);
         return fields.length;
       },
+      keys: async (pattern: string) => {
+        calls.push(["keys", pattern]);
+        return ["cogito:cb:resend"];
+      },
       llen: async (key: string) => {
         calls.push(["llen", key]);
         return 0;
@@ -370,11 +382,12 @@ describe("Redis client helpers", () => {
     await adapter.hget("hash", "field");
     await adapter.hgetall("hash");
     await adapter.hdel("hash", "field");
+    await adapter.keys("cogito:cb:*");
     await adapter.llen("list");
     await adapter.eval("return 1", ["key"], ["arg"]);
     await adapter.ping();
     await adapter.quit();
-    expect(calls).toHaveLength(17);
+    expect(calls).toHaveLength(18);
 
     expect(fresh.redisRetryStrategy(1)).toBe(200);
     expect(fresh.redisRetryStrategy(11)).toBeNull();

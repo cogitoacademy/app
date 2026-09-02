@@ -50,8 +50,13 @@ export function createSchedulerService(
   const connection = { url: redisUrl };
 
   // M4: DLQ queue + worker. Created before the main worker so the main
-  // worker's handler stays the "current" one for callers.
-  const dlqQueue = new Queue(DLQ_QUEUE_NAME, { connection });
+  // worker's handler stays the "current" one for callers. The DLQ queue
+  // inherits JOB_RETENTION so permanent-failure records cannot accumulate
+  // unbounded in Redis (the DLQ Redis list is bounded separately).
+  const dlqQueue = new Queue(DLQ_QUEUE_NAME, {
+    connection,
+    defaultJobOptions: JOB_RETENTION,
+  });
 
   const dlqWorker = new Worker(
     DLQ_QUEUE_NAME,

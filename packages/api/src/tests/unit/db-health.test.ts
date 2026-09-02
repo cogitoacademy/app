@@ -2,6 +2,7 @@ import { describe, test, expect } from "bun:test";
 import { InMemoryRedis, createRedisAdapter } from "../../lib/redis";
 import {
   DLQ_FRESH_WINDOW_MS,
+  checkCircuitBreakers,
   checkDlqHealth,
   checkSchedulerHealth,
   healthCheck,
@@ -363,5 +364,65 @@ describe("checkDlqHealth", () => {
     // alerting signal, not a readiness gate.
     expect(dlqResult.status).toBe("ok");
     expect(dlqResult.checks.scheduler).toBe("ok");
+  });
+});
+
+describe("checkCircuitBreakers", () => {
+  test("reports closed when no breaker keys exist", async () => {
+    const redis = new InMemoryRedis();
+    const result = await checkCircuitBreakers(redis);
+    expect(result).toEqual({});
+  });
+
+  test("reports open/half-open/closed states from cogito:cb:* keys", async () => {
+    const redis = new InMemoryRedis();
+    await redis.hset(
+      "cogito:cb:resend",
+      ["state", "open"],
+      ["failureCount", "5"],
+    );
+    await redis.hset(
+      "cogito:cb:google_meet",
+      ["state", "half-open"],
+      ["failureCount", "5"],
+    );
+    await redis.hset(
+      "cogito:cb:xendit",
+      ["state", "closed"],
+      ["failureCount", "0"],
+    );
+    const result = await checkCircuitBreakers(redis);
+    expect(result).toEqual({
+      resend: "open",
+      google_meet: "half-open",
+      xendit: "closed",
+    });
+  });
+
+  test("returns {} when redis is unavailable", async () => {
+    const result = await checkCircuitBreakers(undefined);
+    expect(result).toEqual({});
+  });
+
+  test("returns {} when the breaker-key scan throws (Redis unreachable)", async () => {
+    const failingRedis = {
+      ...new InMemoryRedis(),
+      keys: async () => {
+        throw new Error("connection refused");
+      },
+    };
+    await expect(checkCircuitBreakers(failingRedis as any)).resolves.toEqual(
+      {},
+    );
+  });
+
+  test("is wired into healthCheck as checks.circuitBreakers (informational)", async () => {
+    const redis = new InMemoryRedis();
+    await redis.hset("cogito:cb:resend", ["state", "open"]);
+    const result = await healthCheck(redis, makeDb({ ms: 5 }));
+    expect(result.checks.circuitBreakers).toEqual({ resend: "open" });
+    // An open breaker must NOT flip the overall status — it is a deliberate
+    // fail-fast signal, not a readiness failure (mirrors `dlq`).
+    expect(result.status).toBe("ok");
   });
 });
