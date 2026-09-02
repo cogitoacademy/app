@@ -701,9 +701,13 @@ emergency restore against the actual object list first.
   `localhost:8000`, SOPS decrypt on the control node, idempotent, drift
   PATCHed). Nothing is installed on the VPS host directly.
 - **Discord alerting**: the webhook URL is a bearer secret stored in the
-  SOPS vault as `DISCORD_WEBHOOK_URL` (operator console bit — see
-  [Operator follow-ups](#operator-follow-ups) below). Kuma posts monitor
-  alerts to the ops Discord channel; the disk watchdog posts disk warnings.
+  SOPS vault as `DISCORD_WEBHOOK_URL`. Kuma posts monitor alerts to the ops
+  Discord channel; the disk watchdog posts disk warnings. **Wired
+  2026-09-02** — the `COGITO ALERT` Discord notification is attached to all
+  four Kuma monitors (see `docs/KUMA-RUNBOOK.md` for the live state and the
+  two root causes fixed that day: the 503-flap from `maxretries=0` during CD
+  deploys, and the empty `monitor_notification` that silently killed Discord
+  alerting).
 - **Disk watchdog**: [`infra/ansible/disk-watchdog.yml`](../infra/ansible/disk-watchdog.yml)
   installs `/usr/local/bin/cogito-disk-watchdog.sh` + a nightly cron
   (**03:30 WIB**) that warns at **≥ 85%** disk and auto-prunes at **≥ 92%**
@@ -732,23 +736,22 @@ emergency restore against the actual object list first.
    ansible-playbook -i infra/ansible/inventory.ini \
      infra/ansible/disk-watchdog.yml --ask-become-pass
    ```
-4. **Configure Kuma** (first-run admin account at
-   https://status.cogitoacademy.id) — the Coolify API cannot express Kuma's
-   monitors, so this is a one-time UI step (printed by the playbook too):
-   - **Monitors** (60s interval unless noted):
-     - `api /health` — HTTP(s) `https://api.cogitoacademy.id/health`,
-       keyword `"status":"ok"`.
-     - `app URL` — HTTP(s) `https://app.cogitoacademy.id`.
-     - `Cert expiry` — Certificate Info monitors for `api.` and `app.`
-       (alert before expiry).
-     - `dlqDepth` — HTTP(s) keyword monitor on `/health`, keyword
-       `"dlqDepth":0` (fails only when a **fresh** DLQ failure exists; the
-       age-aware health from MONITORING-ALERTING item 3 keeps stale
-       pre-`failedAt` entries quiet).
-   - **Notifications** → New Notification → **Discord**, paste
-     `DISCORD_WEBHOOK_URL` from the vault; attach to every monitor.
-   - **Status page** (optional): Status Pages → New Status Page → add the
-     monitors → publish at `status.cogitoacademy.id`.
+4. **Configure Kuma** — **DONE 2026-09-02** (operator UI pass; the Coolify
+   API cannot express Kuma's monitors). Live state: `api-health` (keyword
+   `"status":"ok"`, `maxretries=2`), `web-app`, `DLQ DEPTH` (keyword
+   `"dlqDepth":0`, `maxretries=3`), the `COGITO ACADEMY` group, the
+   `COGITO ALERT` Discord notification attached to all monitors, and the
+   `cogito` status page at `status.cogitoacademy.id`. The click-by-click
+   runbook and the read-only verification query live in
+   `docs/KUMA-RUNBOOK.md`. Two root causes were fixed during the pass:
+   - **503-flap** — `maxretries=0` recorded DOWN on every CD deploy (the
+     API container restarts and `/health` 503s while the new image boots).
+     Fixed with `maxretries=2` + `retry_interval=60`.
+   - **Discord silent** — the notification existed but no monitor was
+     attached (`monitor_notification` empty). Fixed by attaching it to every
+     monitor.
+   - Not yet created: `api-cert` / `app-cert` certificate monitors
+     (recommended follow-up).
 
 ### What alerts arrive
 
@@ -756,7 +759,7 @@ emergency restore against the actual object list first.
 | ---------------------------------------------------------- | -------------------- | --------------------------------------------------------------- | ------------------------------------------------------------- |
 | Kuma: api /health down                                     | Kuma monitor         | API unreachable or `status != ok` (DB/Redis/scheduler degraded) | `./ops.sh health`, `./ops.sh status`, check Coolify logs      |
 | Kuma: app down                                             | Kuma monitor         | Web app unreachable                                             | `curl -sI https://app.cogitoacademy.id`, Coolify web resource |
-| Kuma: cert expiring                                        | Kuma monitor         | TLS cert for `api.`/`app.` near expiry                          | Traefik/Let's Encrypt renewal check                           |
+| Kuma: cert expiring                                        | Kuma monitor         | TLS cert for `api.`/`app.` near expiry (monitors not yet created) | Traefik/Let's Encrypt renewal check                           |
 | Kuma: dlqDepth > 0                                         | Kuma keyword monitor | A **fresh** DLQ failure landed in the last 24h                  | `./ops.sh dlq` to see what failed                             |
 | Discord: "VPS disk at N%"                                  | disk watchdog        | Disk ≥ 85%                                                      | `./ops.sh disk`; plan cleanup                                 |
 | Discord: "CRITICAL: VPS disk still at N% after auto-prune" | disk watchdog        | Disk ≥ 92% **after** the prune ladder                           | Operator action required — see below                          |
@@ -791,6 +794,41 @@ If the CRITICAL alert fires, act: `./ops.sh disk` to see what is large,
 then remove the offender (e.g. old backups, large volumes — never the
 postgres volume) and re-run the watchdog manually.
 
+### Disk watchdog verification (after first install)
+
+The watchdog (`/usr/local/bin/cogito-disk-watchdog.sh`, cron 03:30 WIB) was
+installed 2026-09-02 while the disk was at 99% (31G of 38G in
+`/var/lib/containerd` — dangling Docker images, 25.8G reclaimable). The
+operator's `docker image prune -f` reclaimed the space (99% → 36%, verified
+2026-09-02 17:33 UTC: 14G of 38G used). Verify the watchdog works:
+
+1. `./infra/ops.sh disk` — record `df -h /` usage.
+2. After 03:30 WIB: `sudo cat /var/log/cogito-disk-gc.log` — expect a
+   `check:` line and, if ≥92%, a `prune ladder` run with the post-prune
+   usage.
+3. `./infra/ops.sh disk` again — usage should be below 85% if the prune
+   ran. If not: run the ladder manually
+   (`sudo /usr/local/bin/cogito-disk-watchdog.sh --force-prune`) and check
+   the log for errors.
+4. If the watchdog never ran (no log file): check the cron entry
+   (`sudo crontab -l -u root`) and that `/etc/cogito/disk.env` exists with
+   `DISCORD_WEBHOOK_URL` (the playbook writes it; a missing key logs
+   "webhook not set" but the watchdog still runs).
+
+> **2026-09-02 status:** installed (binary + cron + env present), first run
+> pending — `/var/log/cogito-disk-gc.log` did not exist yet at 17:33 UTC
+> (the 03:30 WIB run had not fired). Re-verify after the first 03:30 WIB run.
+
+### Memory headroom (recommended, not yet applied)
+
+The VPS has 3.8G RAM, **no swap**, and **no container memory limits**
+(verified 2026-09-02: all containers `Memory: 0`). Recommended hardening
+(deferred — operator decision):
+- Add 2G swap: `sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
+  && sudo mkswap /swapfile && sudo swapon /swapfile` (+ fstab entry).
+- Set Coolify per-resource memory limits: API 512M, Redis 256M, Postgres
+  512M, Kuma 256M (Coolify UI → resource → Advanced → Memory limit).
+
 ### Redeploy / retry procedure (the 'CD red but box recovered' case)
 
 The 2026-08-31 disk event showed the exact failure shape: the CD deploy
@@ -822,12 +860,46 @@ flow, verified in that event:
 > runner is mid-flight — the `production-deploy` concurrency group would
 > queue a second migration. Re-run the failed run instead.
 
+### CD does not auto-retry (the 2026-09-02 disk-full incident class)
+
+`cd-prod.yml` has **no retry** — a failed run stays red until someone
+re-runs it or the next merge to main happens (the workflow has no paths
+filter, so **any push to main re-triggers CD**). The 2026-09-02 incident
+(#174–#178) showed the exact shape: the host disk was 99% full, Coolify's
+image pull died mid-extraction (`failed to extract layer ... no space left
+on device` in `application_deployment_queues.logs`), the deploy webhook was
+accepted (`deployment queued`) but the container never switched from
+`bb1ccb9a` (still serving, healthy). Recovery procedure:
+
+1. **Free disk first** — the watchdog auto-prunes at ≥92% (03:30 WIB), but
+   do not wait for it during an incident:
+   ```bash
+   ./infra/ops.sh disk                       # confirm the diagnosis
+   sudo docker image prune -f                # dangling images (reclaimed 25.3GB, 99% → 36% on 2026-09-02)
+   # if still ≥92%: sudo docker image prune -af --filter until=48h
+   ./infra/ops.sh disk                       # verify < 85%
+   ```
+2. **Re-run the failed CD run** (safe — snapshot/migrate/deploy are
+   idempotent): `./infra/ops.sh deploy-retry` (or Actions UI → failed run →
+   Re-run failed jobs). The wave PR's squash-merge to main is the
+   alternative re-trigger — do NOT push to main from a worker branch.
+3. **Verify**: `curl -s https://api.cogitoacademy.id/health` — `version`
+   must equal the merged commit sha, and `checks.*` all `ok`.
+
+> The old container keeps serving while the deploy is stuck — a disk-full
+> deploy failure is a stuck deploy, not an outage. Fix the disk, then
+> re-run.
+
 ### Operator follow-ups
 
-- Add `DISCORD_WEBHOOK_URL` to the SOPS vault (step 1 above) — required for
-  any Discord alert to fire.
-- Kuma UI paste for monitors + Discord notification (step 4 above) — the
-  Coolify API cannot express Kuma's monitors.
+- ~~Add `DISCORD_WEBHOOK_URL` to the SOPS vault~~ — **done** (vault has it,
+  encrypted #149).
+- ~~Kuma UI paste for monitors + Discord notification~~ — **done 2026-09-02**
+  (see `docs/KUMA-RUNBOOK.md` for the live state and the two root causes
+  fixed: 503-flap from `maxretries=0`, and the empty `monitor_notification`
+  that silenced Discord).
+- Recommended: add `api-cert` / `app-cert` certificate monitors in the Kuma
+  UI (not yet created).
 - Optional: add `DISCORD_WEBHOOK_URL` as a GitHub secret if the CD should
   post deploy failures to Discord (not wired — noted only).
 

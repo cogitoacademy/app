@@ -2,7 +2,7 @@
 
 | Field      | Value                                                                                                                                                                                                                                                                                                                                                                    |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Status     | **Active — items 1–3 DONE; service live in cogito-prod (recreated 2026-09-01 after the project-unification fix, healthy, status. 302); vault has DISCORD_WEBHOOK_URL (encrypted #149); infra-apply automation live (2026-09-02, run 33613824234 green). Remaining: operator Kuma UI pass (monitors + Discord notification + optional status page — INFRA-PLAYBOOK §3b)** |
+| Status     | **DONE (2026-09-02)** — items 1–3 + 5 delivered; Kuma wired by the operator (4 monitors + `COGITO ALERT` Discord attached + `cogito` status page); disk watchdog installed and verified; memory-headroom recommendation documented (deferred — operator decision). See the status log for the two root causes fixed during the wiring pass |
 | Created    | 2026-08-31                                                                                                                                                                                                                                                                                                                                                               |
 | Depends on | DEPLOYMENT-WAVE-2 (#121/#122) merged; infra apply (Terraform + Ansible) in progress                                                                                                                                                                                                                                                                                      |
 | Scope      | Uptime Kuma + Discord alerting, DLQ age-aware health, ops visibility                                                                                                                                                                                                                                                                                                     |
@@ -129,3 +129,35 @@ Ansible playbook (decrypted from the vault on the control node).
   follow-ups (never done by the worker):** add `DISCORD_WEBHOOK_URL` to the
   SOPS vault; paste the webhook into the Kuma UI + create the monitors;
   optional GitHub secret for CD failure posts.
+- 2026-09-02 (**operator Kuma UI pass — DONE**): 4 monitors live
+  (`api-health` keyword `"status":"ok"` `maxretries=2`, `web-app`
+  `maxretries=2`, `DLQ DEPTH` keyword `"dlqDepth":0` `maxretries=3`, plus
+  the `COGITO ACADEMY` group), the `COGITO ALERT` Discord notification
+  attached to **all** monitors (`monitor_notification` non-empty), and the
+  `cogito` status page published at `status.cogitoacademy.id`. Two root
+  causes found and fixed during the pass:
+  - **503-flap (verified live):** 10 down heartbeats at 09:01–12:05 UTC
+    correlate 1:1 with CD deploys (09:05, 09:08, 09:11, 09:17, 09:23,
+    09:28, 10:09, 12:01 UTC — `gh run list`). The API container restarts
+    during deploy; `/health` returns 503 while the new image boots (health
+    poll allows up to 20×15s). `maxretries=0` meant the first 503 was
+    recorded as DOWN. The monitor was not flapping randomly — it was
+    correctly detecting deploy restarts. Fix: `maxretries=2` +
+    `retry_interval=60`.
+  - **Discord-not-hitting (verified live):** the `COGITO ALERT` Discord
+    notification existed in Kuma's DB but `monitor_notification` was empty —
+    no monitor was attached, so nothing ever posted. The
+    `DISCORD_WEBHOOK_URL` in `/etc/cogito/disk.env` is for the **disk
+    watchdog** (different path, works independently). Fix: attach
+    notification #1 to each monitor in the Kuma UI.
+  - Kill-container drill: **not run** — the wiring was verified via the real
+    503-flap heartbeats instead; the drill remains a periodic check
+    (documented in `docs/KUMA-RUNBOOK.md`).
+  - Not created: `api-cert` / `app-cert` certificate monitors (recommended
+    follow-up).
+  - Disk state recorded: 36% used after the operator's `docker image prune
+    -f` (99% → 36%, 2026-09-02); watchdog first run pending (cron 03:30 WIB
+    — log `/var/log/cogito-disk-gc.log` did not exist yet at 17:33 UTC).
+  - Memory headroom recommendation documented in RUNBOOK (deferred —
+    operator decision): 2G swap + per-resource Coolify memory limits (API
+    512M, Redis 256M, Postgres 512M, Kuma 256M).
