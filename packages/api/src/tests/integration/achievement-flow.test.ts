@@ -83,6 +83,40 @@ describe("Achievement review flow", () => {
     expect(list[0]!.status).toBe("pending");
   });
 
+  test("admin corrects a pending achievement before approving it", async () => {
+    const updated = await adminClient.achievement.adminUpdate({
+      id: approvedAchievementId,
+      version: 1,
+      data: {
+        level: "International",
+        location: "Geneva, Switzerland",
+        description: "Ranked 1st among 1,000 participants across 20 countries.",
+      },
+    });
+
+    expect(updated.status).toBe("pending");
+    expect(updated.version).toBe(2);
+    expect(updated.level).toBe("International");
+    expect(updated.location).toBe("Geneva, Switzerland");
+
+    const logs = await db
+      .select()
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.action, "achievement_admin_updated"),
+          eq(auditLog.targetId, approvedAchievementId),
+        ),
+      );
+    expect(logs.length).toBe(1);
+    expect(logs[0]!.actorId).toBe(adminId);
+    expect(logs[0]!.beforeState).toMatchObject({ level: "nasional" });
+    expect(logs[0]!.afterState).toMatchObject({
+      level: "International",
+      location: "Geneva, Switzerland",
+    });
+  });
+
   test("admin approves → approved + audit log", async () => {
     const updated = await adminClient.achievement.adminReview({
       achievementId: approvedAchievementId,

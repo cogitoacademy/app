@@ -6,6 +6,7 @@ import {
   IconCalendarEvent,
   IconCertificate,
   IconCheck,
+  IconEdit,
   IconInbox,
   IconMapPin,
   IconPhoto,
@@ -53,6 +54,10 @@ import {
 } from "@cogito-app/ui/components/selia/item";
 import { EmptyStateCard } from "@/components/empty-state";
 import {
+  AchievementForm,
+  type AchievementCategory,
+} from "@/components/dashboard/achievement-form";
+import {
   Select,
   SelectItem,
   SelectList,
@@ -74,6 +79,7 @@ type StatusFilter = "all" | "pending" | "approved" | "rejected";
 
 const STATUS_CONFIG = {
   pending: { label: "Pending review", variant: "warning" },
+  pending_review: { label: "Pending review", variant: "warning" },
   approved: { label: "Approved", variant: "success" },
   rejected: { label: "Rejected", variant: "danger" },
 } as const;
@@ -86,6 +92,9 @@ export function AchievementModerationPage() {
     eventName: string;
     action: "approved" | "rejected";
   } | null>(null);
+  const [editAchievement, setEditAchievement] =
+    useState<AdminAchievement | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
   const [rejectionNote, setRejectionNote] = useState("");
   const achievementsQuery = useQuery(
     orpc.achievement.adminList.queryOptions({
@@ -150,9 +159,13 @@ export function AchievementModerationPage() {
   const visibleAchievements =
     statusFilter === "all"
       ? achievements
-      : achievements.filter((item) => item.status === statusFilter);
+      : achievements.filter((item) =>
+          statusFilter === "pending"
+            ? item.status === "pending" || item.status === "pending_review"
+            : item.status === statusFilter,
+        );
   const pendingCount = achievements.filter(
-    (item) => item.status === "pending",
+    (item) => item.status === "pending" || item.status === "pending_review",
   ).length;
   const approvedCount = achievements.filter(
     (item) => item.status === "approved",
@@ -231,6 +244,10 @@ export function AchievementModerationPage() {
               onReject={(id, eventName) =>
                 setReviewTarget({ id, eventName, action: "rejected" })
               }
+              onEdit={(item) => {
+                setEditAchievement(item);
+                setEditOpen(true);
+              }}
             />
           ))}
         </div>
@@ -300,6 +317,32 @@ export function AchievementModerationPage() {
           </DialogFooter>
         </DialogPopup>
       </Dialog>
+
+      {editAchievement ? (
+        <AchievementForm
+          mode="edit"
+          audience="admin"
+          editId={editAchievement.id}
+          expectedVersion={editAchievement.version}
+          defaultValues={{
+            eventName: editAchievement.eventName,
+            category: editAchievement.category as AchievementCategory,
+            award: editAchievement.award,
+            level: editAchievement.level,
+            awardingDate: editAchievement.awardingDate ?? "",
+            location: editAchievement.location ?? "",
+            description: editAchievement.description ?? "",
+            subjects: editAchievement.subjects ?? [],
+            evidenceUrl: editAchievement.evidenceUrl ?? "",
+            documentationUrl: editAchievement.documentationUrl ?? "",
+          }}
+          open={editOpen}
+          onOpenChange={(open) => {
+            setEditOpen(open);
+            if (!open) setEditAchievement(null);
+          }}
+        />
+      ) : null}
     </Stack>
   );
 }
@@ -311,6 +354,7 @@ function ModerationCard({
   reviewingStatus,
   onApprove,
   onReject,
+  onEdit,
 }: {
   achievement: AdminAchievement;
   mutationPending: boolean;
@@ -318,12 +362,15 @@ function ModerationCard({
   reviewingStatus?: "approved" | "rejected" | "archived";
   onApprove: (id: string, eventName: string) => void;
   onReject: (id: string, eventName: string) => void;
+  onEdit: (achievement: AdminAchievement) => void;
 }) {
   const status =
     STATUS_CONFIG[achievement.status as keyof typeof STATUS_CONFIG] ??
     STATUS_CONFIG.pending;
   const studentName = achievement.student?.name ?? "Cogito student";
   const isReviewing = mutationPending && reviewingId === achievement.id;
+  const isEditable =
+    achievement.status === "pending" || achievement.status === "pending_review";
 
   return (
     <Card className="flex flex-col">
@@ -398,7 +445,7 @@ function ModerationCard({
           </div>
         ) : null}
       </CardBody>
-      <CardFooter className="justify-between">
+      <CardFooter className="flex-wrap justify-between gap-3">
         {achievement.evidenceUrl ? (
           <Button
             variant="plain"
@@ -418,8 +465,16 @@ function ModerationCard({
         ) : (
           <Text className="text-sm text-dimmed">No evidence attached</Text>
         )}
-        {achievement.status === "pending" ? (
-          <div className="flex gap-2">
+        {isEditable ? (
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              variant="plain"
+              size="sm"
+              onClick={() => onEdit(achievement)}
+              disabled={mutationPending}
+            >
+              <IconEdit /> Correct
+            </Button>
             <Button
               variant="danger"
               size="sm"

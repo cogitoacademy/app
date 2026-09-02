@@ -20,6 +20,7 @@ import {
 } from "@cogito-app/ui/components/selia/field";
 import { Input } from "@cogito-app/ui/components/selia/input";
 import { DatePicker } from "@cogito-app/ui/components/selia/date-picker";
+import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import {
   getSelectItemValue,
   Select,
@@ -32,7 +33,7 @@ import {
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
-import { IconPhoto, IconPlus, IconX } from "@tabler/icons-react";
+import { IconPlus, IconX } from "@tabler/icons-react";
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -44,9 +45,8 @@ import { orpc } from "@/utils/orpc";
 const LEVELS = [
   "International",
   "National",
-  "Regional",
-  "Provincial",
-  "District",
+  "Province/State",
+  "City/Regency",
   "School",
 ] as const;
 
@@ -76,6 +76,7 @@ type AchievementFormValues = {
 
 type AchievementFormProps = {
   mode: "create" | "edit";
+  audience?: "student" | "admin";
   defaultValues?: Partial<AchievementFormValues>;
   editId?: string;
   expectedVersion?: number;
@@ -113,17 +114,35 @@ const achievementFormSchema = z.object({
   location: z.string().max(255),
   description: z.string().max(2000),
   subjects: z.array(z.string().max(255)).max(20),
-  evidenceUrl: z.string().trim().url("Enter a valid evidence URL").max(2048),
+  evidenceUrl: z
+    .string()
+    .trim()
+    .max(2048)
+    .refine((value) => !value || isValidHttpUrl(value), {
+      message: "Enter a valid proof URL",
+    }),
   documentationUrl: z
     .string()
     .trim()
     .max(2048)
-    .refine((value) => !value || isValidImageUrl(value), {
+    .refine((value) => !value || isValidHttpUrl(value), {
       message: "Enter a valid public documentation URL",
     }),
 });
 
-function isValidImageUrl(value: string) {
+const studentAchievementFormSchema = achievementFormSchema
+  .omit({ documentationUrl: true })
+  .superRefine((value, context) => {
+    if (!value.evidenceUrl.trim()) {
+      context.addIssue({
+        code: "custom",
+        path: ["evidenceUrl"],
+        message: "Proof link is required",
+      });
+    }
+  });
+
+function isValidHttpUrl(value: string) {
   try {
     const url = new URL(value);
     return url.protocol === "http:" || url.protocol === "https:";
@@ -134,6 +153,7 @@ function isValidImageUrl(value: string) {
 
 export function AchievementForm({
   mode,
+  audience = "student",
   defaultValues,
   editId,
   expectedVersion,
@@ -144,6 +164,7 @@ export function AchievementForm({
   const [subjectInput, setSubjectInput] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const queryClient = useQueryClient();
+  const isAdmin = audience === "admin";
 
   const createMutation = useMutation(
     orpc.achievement.create.mutationOptions({
@@ -196,10 +217,36 @@ export function AchievementForm({
     }),
   );
 
+  const adminUpdateMutation = useMutation(
+    orpc.achievement.adminUpdate.mutationOptions({
+      onSuccess: () => {
+        void queryClient.invalidateQueries({
+          queryKey: orpc.achievement.adminList.key(),
+        });
+        toastManager.add({
+          title: "Achievement corrections saved",
+          description: "The corrected submission is ready for review.",
+          type: "success",
+        });
+        onOpenChange(false);
+        onSuccess?.();
+      },
+      onError: (error) => {
+        toastManager.add({
+          title: "Achievement corrections could not be saved",
+          description: getUserFacingError(error),
+          type: "error",
+        });
+      },
+    }),
+  );
+
   const form = useForm({
     defaultValues: { ...DEFAULT_VALUES, ...defaultValues },
     onSubmit: async ({ value }) => {
-      const validation = achievementFormSchema.safeParse(value);
+      const validation = (
+        isAdmin ? achievementFormSchema : studentAchievementFormSchema
+      ).safeParse(value);
       if (!validation.success) {
         setFormError(
           validation.error.issues[0]?.message ??
@@ -213,22 +260,34 @@ export function AchievementForm({
         if (mode === "edit" && editId) {
           if (expectedVersion === undefined)
             throw new Error("expectedVersion is required in edit mode");
-          await updateMutation.mutateAsync({
-            id: editId,
-            version: expectedVersion,
-            data: {
-              eventName: value.eventName,
-              category: value.category,
-              award: value.award,
-              level: value.level,
-              awardingDate: value.awardingDate || undefined,
-              location: value.location || undefined,
-              description: value.description || undefined,
-              subjects: value.subjects,
-              evidenceUrl: value.evidenceUrl || undefined,
-              documentationUrl: value.documentationUrl || undefined,
-            },
-          });
+          const data = {
+            eventName: value.eventName,
+            category: value.category,
+            award: value.award,
+            level: value.level,
+            awardingDate: value.awardingDate || null,
+            location: value.location || null,
+            description: value.description || null,
+            subjects: value.subjects,
+            evidenceUrl: value.evidenceUrl || null,
+            ...(isAdmin
+              ? { documentationUrl: value.documentationUrl || null }
+              : {}),
+          };
+
+          if (isAdmin) {
+            await adminUpdateMutation.mutateAsync({
+              id: editId,
+              version: expectedVersion,
+              data,
+            });
+          } else {
+            await updateMutation.mutateAsync({
+              id: editId,
+              version: expectedVersion,
+              data,
+            });
+          }
         } else {
           await createMutation.mutateAsync({
             eventName: value.eventName,
@@ -240,7 +299,6 @@ export function AchievementForm({
             description: value.description || undefined,
             subjects: value.subjects,
             evidenceUrl: value.evidenceUrl || undefined,
-            documentationUrl: value.documentationUrl || undefined,
           });
         }
       } catch {
@@ -249,14 +307,21 @@ export function AchievementForm({
     },
   });
 
-  const isPending = createMutation.isPending || updateMutation.isPending;
+  const isPending =
+    createMutation.isPending ||
+    updateMutation.isPending ||
+    adminUpdateMutation.isPending;
   const submitLabel = isPending
-    ? mode === "create"
-      ? "Submitting achievement..."
-      : "Resubmitting achievement..."
-    : mode === "create"
-      ? "Submit Achievement"
-      : "Resubmit";
+    ? isAdmin
+      ? "Saving corrections..."
+      : mode === "create"
+        ? "Submitting achievement..."
+        : "Resubmitting achievement..."
+    : isAdmin
+      ? "Save corrections"
+      : mode === "create"
+        ? "Submit Achievement"
+        : "Resubmit";
 
   const addSubject = () => {
     const trimmed = subjectInput.trim();
@@ -281,12 +346,18 @@ export function AchievementForm({
       <DialogPopup className="max-w-lg">
         <DialogHeader className="flex-col items-start gap-1.5">
           <DialogTitle>
-            {mode === "create" ? "Add Achievement" : "Edit Achievement"}
+            {isAdmin
+              ? "Correct Achievement"
+              : mode === "create"
+                ? "Add Achievement"
+                : "Edit Achievement"}
           </DialogTitle>
           <DialogDescription>
-            {mode === "create"
-              ? "Submit your competition achievements to be showcased on cogitoacademy.id"
-              : "Edit and resubmit your achievement for review"}
+            {isAdmin
+              ? "Update any field that needs correcting before you approve this submission."
+              : mode === "create"
+                ? "Submit your competition achievements to be showcased on cogitoacademy.id"
+                : "Edit and resubmit your achievement for review"}
           </DialogDescription>
         </DialogHeader>
 
@@ -386,12 +457,13 @@ export function AchievementForm({
                 {(field) => (
                   <Field>
                     <FieldLabel htmlFor={field.name}>
-                      Private verification evidence{" "}
-                      <span className="text-danger">*</span>
+                      {isAdmin ? "Verification evidence" : "Proof link"}{" "}
+                      {!isAdmin ? <span className="text-danger">*</span> : null}
                     </FieldLabel>
                     <FieldDescription>
-                      Add the certificate or proof used by moderators. This URL
-                      is not used as the public achievement-card image.
+                      {isAdmin
+                        ? "The link the student provided for verification. Keep it separate from the public documentation image."
+                        : "Upload your certificate or proof to Google Drive, set General access to Anyone with the link and Viewer, then paste the link here. This link is only used to verify your achievement."}
                     </FieldDescription>
                     <Input
                       id={field.name}
@@ -400,24 +472,10 @@ export function AchievementForm({
                       value={field.state.value}
                       onBlur={field.handleBlur}
                       onChange={(e) => field.handleChange(e.target.value)}
-                      placeholder="https://..."
+                      placeholder={
+                        isAdmin ? "https://..." : "https://drive.google.com/..."
+                      }
                     />
-                    {isValidImageUrl(field.state.value) ? (
-                      <div className="mt-1 flex h-36 items-center justify-center overflow-hidden rounded-lg border border-item-border bg-accent">
-                        <img
-                          src={field.state.value}
-                          alt="Achievement evidence preview"
-                          className="h-full w-full object-cover"
-                        />
-                      </div>
-                    ) : field.state.value ? (
-                      <div className="mt-1 flex items-center gap-2 rounded-lg border border-item-border bg-accent p-3 text-muted">
-                        <IconPhoto className="size-4 shrink-0" />
-                        <Text className="text-sm">
-                          Preview appears after you enter a valid image URL.
-                        </Text>
-                      </div>
-                    ) : null}
                     {field.state.meta.errors.map((error) => (
                       <FieldError key={String(error)}>
                         {String(error)}
@@ -434,10 +492,7 @@ export function AchievementForm({
                     <Select
                       value={field.state.value}
                       onValueChange={(value) =>
-                        field.handleChange(
-                          (getSelectItemValue(value) ??
-                            "other") as AchievementCategory,
-                        )
+                        field.handleChange(getSelectItemValue(value) ?? "")
                       }
                     >
                       <SelectTrigger>
@@ -462,33 +517,35 @@ export function AchievementForm({
                 )}
               </form.Field>
 
-              <form.Field name="documentationUrl">
-                {(field) => (
-                  <Field>
-                    <FieldLabel htmlFor={field.name}>
-                      Public documentation image
-                    </FieldLabel>
-                    <FieldDescription>
-                      Optional public image shown on the achievement card after
-                      approval.
-                    </FieldDescription>
-                    <Input
-                      id={field.name}
-                      name={field.name}
-                      type="url"
-                      value={field.state.value}
-                      onBlur={field.handleBlur}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      placeholder="https://..."
-                    />
-                    {field.state.meta.errors.map((error) => (
-                      <FieldError key={String(error)}>
-                        {String(error)}
-                      </FieldError>
-                    ))}
-                  </Field>
-                )}
-              </form.Field>
+              {isAdmin ? (
+                <form.Field name="documentationUrl">
+                  {(field) => (
+                    <Field>
+                      <FieldLabel htmlFor={field.name}>
+                        Public documentation image
+                      </FieldLabel>
+                      <FieldDescription>
+                        Optional image URL shown on the public achievement card
+                        after approval.
+                      </FieldDescription>
+                      <Input
+                        id={field.name}
+                        name={field.name}
+                        type="url"
+                        value={field.state.value}
+                        onBlur={field.handleBlur}
+                        onChange={(e) => field.handleChange(e.target.value)}
+                        placeholder="https://..."
+                      />
+                      {field.state.meta.errors.map((error) => (
+                        <FieldError key={String(error)}>
+                          {String(error)}
+                        </FieldError>
+                      ))}
+                    </Field>
+                  )}
+                </form.Field>
+              ) : null}
 
               <form.Field name="awardingDate">
                 {(field) => (
@@ -507,13 +564,17 @@ export function AchievementForm({
                 {(field) => (
                   <Field>
                     <FieldLabel htmlFor={field.name}>Location</FieldLabel>
+                    <FieldDescription>
+                      Enter one location, for example: Jakarta, Indonesia;
+                      Geneva, Switzerland; or Online.
+                    </FieldDescription>
                     <Input
                       id={field.name}
                       name={field.name}
                       value={field.state.value}
                       onBlur={field.handleBlur}
                       onChange={(e) => field.handleChange(e.target.value)}
-                      placeholder="e.g. Jakarta, Online"
+                      placeholder="e.g. Jakarta, Indonesia"
                     />
                   </Field>
                 )}
@@ -522,14 +583,23 @@ export function AchievementForm({
               <form.Field name="description">
                 {(field) => (
                   <Field>
-                    <FieldLabel htmlFor={field.name}>Description</FieldLabel>
-                    <Input
+                    <FieldLabel htmlFor={field.name}>
+                      Brief Description
+                    </FieldLabel>
+                    <FieldDescription>
+                      Summarize the result or context in a sentence or two.
+                      Example: “Ranked 1st among 1,000 participants across 20
+                      countries.”
+                    </FieldDescription>
+                    <Textarea
                       id={field.name}
                       name={field.name}
+                      rows={5}
+                      maxLength={2000}
                       value={field.state.value}
                       onBlur={field.handleBlur}
                       onChange={(e) => field.handleChange(e.target.value)}
-                      placeholder="Brief description of your achievement"
+                      placeholder="e.g. Ranked 1st among 1,000 participants across 20 countries."
                     />
                   </Field>
                 )}

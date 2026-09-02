@@ -31,6 +31,12 @@ export interface UpdateAchievementInput {
   data: UpdateAchievementData;
 }
 
+export interface AdminUpdateAchievementInput {
+  id: string;
+  version: number;
+  data: UpdateAchievementData;
+}
+
 export interface AdminReviewInput {
   achievementId: string;
   status: "approved" | "rejected" | "archived";
@@ -69,10 +75,39 @@ export function validateUpdate(existing: AchievementRow | undefined): void {
   }
 }
 
+export function validateAdminUpdate(
+  existing: AchievementRow | undefined,
+): void {
+  if (
+    !existing ||
+    (existing.status !== ACHIEVEMENT_STATUS.PENDING &&
+      existing.status !== ACHIEVEMENT_STATUS.PENDING_REVIEW)
+  ) {
+    throw new AchievementNotEditableError(existing?.id ?? "unknown");
+  }
+}
+
 export function validateDelete(existing: AchievementRow | undefined): void {
   if (!existing || existing.status !== ACHIEVEMENT_STATUS.PENDING) {
     throw new AchievementNotEditableError(existing?.id ?? "unknown");
   }
+}
+
+function achievementContent(row: Partial<AchievementRow>) {
+  return {
+    eventName: row.eventName ?? null,
+    category: row.category ?? null,
+    award: row.award ?? null,
+    level: row.level ?? null,
+    issuer: row.issuer ?? null,
+    visibility: row.visibility ?? null,
+    awardingDate: row.awardingDate ?? null,
+    location: row.location ?? null,
+    description: row.description ?? null,
+    subjects: row.subjects ?? [],
+    evidenceUrl: row.evidenceUrl ?? null,
+    documentationUrl: row.documentationUrl ?? null,
+  };
 }
 
 export function createAchievementService(deps: {
@@ -130,6 +165,43 @@ export function createAchievementService(deps: {
     if (rows.length === 0)
       throw new OptimisticLockError(input.id, input.version);
     return rows[0];
+  }
+
+  /**
+   * Lets an admin correct a pending achievement before moderation. The update
+   * is versioned and audited, but it deliberately leaves the review status
+   * unchanged so approval remains an explicit second action.
+   */
+  async function adminUpdate(
+    adminId: string,
+    input: AdminUpdateAchievementInput,
+  ) {
+    return db.transaction(async (tx) => {
+      const existing = await achievementRepo.getById(tx, input.id);
+      validateAdminUpdate(existing);
+
+      const [updated] = await achievementRepo.updateByIdWithVersion(
+        tx,
+        input.id,
+        input.version,
+        input.data,
+      );
+      if (!updated) throw new OptimisticLockError(input.id, input.version);
+
+      await auditPort.record({
+        db: tx,
+        actorId: adminId,
+        actorType: ACTOR_TYPE.ADMIN,
+        action: "achievement_admin_updated",
+        targetId: input.id,
+        targetType: "achievement",
+        beforeState: achievementContent(existing!),
+        afterState: achievementContent(updated),
+        details: { previousStatus: existing!.status },
+      });
+
+      return updated;
+    });
   }
 
   async function remove(userId: string, id: string, expectedVersion: number) {
@@ -220,6 +292,7 @@ export function createAchievementService(deps: {
     listApprovedPublic,
     create,
     update,
+    adminUpdate,
     remove,
     adminList,
     adminReview,

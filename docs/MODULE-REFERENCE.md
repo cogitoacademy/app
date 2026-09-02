@@ -130,12 +130,12 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 
 **Files:**
 
-- `achievement.types.ts` — Zod schemas for create/update/list/admin filters
-- `achievement.errors.ts` — `AchievementNotFoundError`, `AchievementNotOwnedError`, `OptimisticLockError`
-- `achievement.repo.ts` — CRUD with optimistic locking (`updateWithVersion`, `deleteWithVersion`)
-- `achievement.service.ts` — Ownership checks, admin review workflow, optimistic lock handling
-- `achievement.handler.ts` — `list`, `listApproved`, `create`, `update`, `remove`, `adminList`, `adminReview`
-- `achievement.router.ts` — Protected routes for student ops, admin routes for review, public `listApproved` route
+- `achievement.types.ts` — Zod schemas for student create/update, admin correction, list/admin filters
+- `achievement.errors.ts` — `AchievementNotFoundError`, `AchievementNotOwnedError`, `AchievementNotEditableError`, `OptimisticLockError`
+- `achievement.repo.ts` — CRUD with optimistic locking (`updateWithVersion`, `updateByIdWithVersion`, `deleteWithVersion`)
+- `achievement.service.ts` — Ownership checks, admin correction/review workflow, audit and optimistic lock handling
+- `achievement.handler.ts` — `list`, `listApproved`, `create`, `update`, `remove`, `adminList`, `adminUpdate`, `adminReview`
+- `achievement.router.ts` — Protected routes for student ops, admin routes for correction/review, public `listApproved` route
 
 **Service Methods:**
 
@@ -145,6 +145,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `update(userId, input)` — Updates with optimistic lock check (`input.version` + `input.data`)
 - `remove(userId, id, expectedVersion)` — Deletes with optimistic lock check
 - `adminList(input)` — Paginated list with optional status filter
+- `adminUpdate(adminId, input)` — Corrects a `pending`/`pending_review` submission with optimistic locking, before/after audit content, and no status change; admins can also set or clear `documentationUrl`
 - `adminReview(id, status, adminNote?)` — Moderation action. **F12:** transition table — `pending`/`pending_review` → `approved`/`rejected`/`archived`; `approved`/`rejected` → `archived`; `archived` → `approved`/`rejected` (restore). Other transitions throw `AchievementNotEditableError`. Reads and updates inside one transaction using the current status/version as a compare-and-swap; a lost race throws `OptimisticLockError` before notification/audit side effects. Notifies the owner and writes an `achievement_{status}` audit record after success
 
 **Dependencies:** `AchievementRepo`
@@ -153,11 +154,13 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 
 - Achievements start in `pending` status
 - Only the owning student can create/update/delete their achievements
-- `awardingDate` is the canonical award date; `evidenceUrl` is private verification material available only to the owner/admin workflows, while `documentationUrl` is optional public-safe documentation. Both accept only HTTP(S) URLs up to 2048 characters
+- `awardingDate` is the canonical award date; `evidenceUrl` is private verification material available to the owning student and admin workflows, while `documentationUrl` is optional public-safe documentation controlled by admins. Both accept only HTTP(S) URLs up to 2048 characters
+- Student create/update schemas exclude `documentationUrl`; the student form presents the level options in `International`, `National`, `Province/State`, `City/Regency`, `School` order and instructs students to share Google Drive proof with “Anyone with the link can view” + Viewer
+- The student form uses one explicit location value such as `Jakarta, Indonesia`, `Geneva, Switzerland`, or `Online`, and a long-answer `Brief Description` field with a ranked-result example
 - `listApprovedPublic()` must select only public-safe fields. It must not return `userId` or `evidenceUrl`; the public site uses `displayName` and `documentationUrl` when rendering an approved record.
 - The student achievement form uses shared Selia portal controls for Category, Level, and Awarding Date; those popups must remain above the modal dialog layer.
 - Optimistic locking prevents lost updates (`version` field)
-- Admin review changes status to `approved` or `rejected`
+- Admin correction is allowed only for `pending`/`pending_review`, can update every submission field plus public documentation, writes an audit snapshot, and does not change status; admin review changes status to `approved` or `rejected`
 
 ---
 

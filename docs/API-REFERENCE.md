@@ -561,16 +561,16 @@ The web tutor profile editor groups education, competition achievements, and exp
 ### `achievement.create`
 
 - **Auth:** Student (`studentProcedure` — tutors/admins get FORBIDDEN, F17; FR-18 is student-facing)
-- **Input:** `{ eventName, category, award, level, awardingDate?, location?, description?, subjects?, evidenceUrl?, documentationUrl? }`
+- **Input:** `{ eventName, category, award, level, awardingDate?, location?, description?, subjects?, evidenceUrl? }`
 - **Output:** `{ achievement }`
-- **Description:** Submits a new achievement in `pending` status. `evidenceUrl` and `documentationUrl`, when present, must be HTTP(S) URLs of at most 2048 characters.
+- **Description:** Submits a new achievement in `pending` status. Student submissions may include only the private verification `evidenceUrl`, which must be an HTTP(S) URL of at most 2048 characters. The public `documentationUrl` is intentionally admin-managed.
 
 ### `achievement.update`
 
 - **Auth:** Student (`studentProcedure` — tutors/admins get FORBIDDEN, F17)
-- **Input:** `{ id, version, data: { ...achievementFields } }`
+- **Input:** `{ id, version, data: { eventName?, category?, award?, level?, awardingDate?, location?, description?, subjects?, evidenceUrl? } }`
 - **Output:** `{ achievement }`
-- **Description:** Updates a pending achievement; optimistic locking via `version`
+- **Description:** Updates a pending achievement; optimistic locking via `version`. The student route cannot set or overwrite the public documentation image.
 
 ### `achievement.delete`
 
@@ -584,6 +584,14 @@ The web tutor profile editor groups education, competition achievements, and exp
 - **Auth:** Admin
 - **Input:** `{ status?, limit?, offset? }` (`limit` default 50)
 - **Output:** `{ items: Achievement[], total, limit, offset }`
+
+### `achievement.adminUpdate`
+
+- **RPC path:** `/rpc/admin/achievements/update`
+- **Auth:** Admin
+- **Input:** `{ id, version, data: { eventName?, category?, award?, level?, issuer?, visibility?, awardingDate?, location?, description?, subjects?, evidenceUrl?, documentationUrl? } }`; nullable optional fields can be cleared
+- **Output:** `{ achievement }`
+- **Description:** Corrects a pending or legacy `pending_review` achievement before moderation. Admins can correct the submission fields and set or clear the public documentation image. The update uses optimistic compare-and-swap via `version`, records an `achievement_admin_updated` audit event with before/after content, and leaves the status unchanged so approval/rejection remains a separate action. A stale version returns `OPTIMISTIC_LOCK` (409); non-pending records return `ACHIEVEMENT_NOT_EDITABLE`.
 
 ### `achievement.adminReview`
 

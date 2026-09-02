@@ -5,8 +5,9 @@ import {
   adminProcedure,
 } from "../../procedures";
 import {
-  achievementInput,
+  studentAchievementInput,
   updateAchievementInput,
+  adminUpdateAchievementInput,
   deleteAchievementInput,
   adminListInput,
   adminReviewInput,
@@ -44,7 +45,7 @@ export function createAchievementRouter(handler: AchievementHandler) {
         summary: "Create achievement",
         description: "Submits a new achievement for review",
       })
-      .input(achievementInput)
+      .input(studentAchievementInput)
       .handler(handler.create),
 
     update: studentProcedure
@@ -79,6 +80,17 @@ export function createAchievementRouter(handler: AchievementHandler) {
       })
       .input(adminListInput)
       .handler(handler.adminList),
+
+    adminUpdate: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/achievements/update",
+        tags: ["Admin", "Achievements"],
+        summary: "Correct achievement",
+        description: "Corrects an achievement submission before it is approved",
+      })
+      .input(adminUpdateAchievementInput)
+      .handler(handler.adminUpdate),
 
     adminReview: adminProcedure
       .route({

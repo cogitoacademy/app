@@ -31,11 +31,49 @@ export const achievementInput = z.object({
   documentationUrl: externalHttpUrl.optional(),
 });
 
+/** Student submissions do not choose the public-facing documentation image. */
+export const studentAchievementInput = achievementInput.omit({
+  documentationUrl: true,
+});
+
+const achievementUpdateData = z.object({
+  eventName: z.string().min(1, "Event name is required").max(255).optional(),
+  category: z.enum(ACHIEVEMENT_CATEGORIES).optional(),
+  award: z.string().min(1, "Award is required").max(255).optional(),
+  level: z.string().min(1, "Level is required").max(255).optional(),
+  issuer: z.string().max(255).nullable().optional(),
+  visibility: z.boolean().optional(),
+  awardingDate: z
+    .string()
+    .max(255)
+    .refine((v) => !Number.isNaN(Date.parse(v)), {
+      message: "awardingDate must be a valid date",
+    })
+    .nullable()
+    .optional(),
+  location: z.string().max(255).nullable().optional(),
+  description: z.string().max(2000).nullable().optional(),
+  subjects: z.array(z.string().max(255)).max(20).nullable().optional(),
+  evidenceUrl: externalHttpUrl.nullable().optional(),
+  documentationUrl: externalHttpUrl.nullable().optional(),
+});
+
+const versionedAchievementUpdateInput = z.object({
+  id: z.string().max(100),
+  version: z.number().int(),
+  data: achievementUpdateData,
+});
+
+const studentAchievementUpdateData = achievementUpdateData.omit({
+  documentationUrl: true,
+});
+
 export const updateAchievementInput = z.object({
   id: z.string().max(100),
   version: z.number().int(),
-  data: achievementInput.partial(),
+  data: studentAchievementUpdateData,
 });
+export const adminUpdateAchievementInput = versionedAchievementUpdateInput;
 
 export const deleteAchievementInput = z.object({
   id: z.string().max(100),

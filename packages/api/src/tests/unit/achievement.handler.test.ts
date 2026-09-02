@@ -34,6 +34,7 @@ function makeAchievementRepo(overrides: Record<string, unknown> = {}) {
     })),
     update: mock(async () => ({ id: "a1", userId: "u1" })),
     updateWithVersion: mock(async () => [{ id: "a1", userId: "u1" }]),
+    updateByIdWithVersion: mock(async () => [{ id: "a1", userId: "u1" }]),
     deleteRow: mock(async () => undefined),
     deleteWithVersion: mock(async () => [{ id: "a1" }]),
     adminList: mock(async () => []),
@@ -150,6 +151,36 @@ describe("AchievementHandler", () => {
       });
 
       expect(repo.deleteWithVersion).toHaveBeenCalled();
+    });
+  });
+
+  describe("adminUpdate", () => {
+    test("delegates to achievementService.adminUpdate", async () => {
+      const repo = makeAchievementRepo();
+      const service = createAchievementService({
+        achievementRepo: repo as any,
+        auditPort: makeAuditPort() as any,
+        notificationPort: makeNotificationPort() as any,
+        db: makeDb(),
+      });
+      const handler = createAchievementHandler({ achievementService: service });
+
+      const result = await handler.adminUpdate({
+        context: makeContext("admin1"),
+        input: {
+          id: "a1",
+          version: 1,
+          data: { eventName: "Corrected" },
+        },
+      });
+
+      expect(result.id).toBe("a1");
+      expect(repo.updateByIdWithVersion).toHaveBeenCalledWith(
+        expect.anything(),
+        "a1",
+        1,
+        { eventName: "Corrected" },
+      );
     });
   });
 
