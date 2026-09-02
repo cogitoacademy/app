@@ -1,11 +1,7 @@
 import { USER_ROLE, ADMIN_DEFAULT_PAGE_LIMIT } from "../../shared/constants";
 import type { DbType } from "../../lib/db";
 import type { AdminRepo, UserRow, UserRole } from "./admin.repo";
-import type {
-  AdminAuditPort,
-  AdminNotificationPort,
-  AdminWalletPort,
-} from "./index";
+import type { AdminAuditPort, AdminWalletPort } from "./index";
 import type { BookingPayoutPort } from "../booking";
 import {
   UserNotFoundError,
@@ -17,7 +13,6 @@ import {
   TutorPayoutNotAvailableError,
 } from "./admin.errors";
 import type { EconomyService } from "../economy";
-import { log } from "../../lib/logger";
 
 export const DASHBOARD_ANALYTICS_PERIODS = ["7d", "30d", "90d"] as const;
 export type DashboardAnalyticsPeriod =
@@ -182,10 +177,6 @@ export interface UpdateEconomySettingsInput {
   offlineCogitoIncrementIdr: number;
 }
 
-function formatIdr(amount: number): string {
-  return `Rp${amount.toLocaleString("id-ID")}`;
-}
-
 export function createAdminService(deps: {
   adminRepo: AdminRepo;
   auditPort: AdminAuditPort;
@@ -193,10 +184,8 @@ export function createAdminService(deps: {
   wallet: AdminWalletPort;
   payout: BookingPayoutPort;
   economy?: EconomyService;
-  notification?: AdminNotificationPort;
 }) {
-  const { adminRepo, auditPort, db, wallet, payout, economy, notification } =
-    deps;
+  const { adminRepo, auditPort, db, wallet, payout, economy } = deps;
 
   async function listUsers(
     input: ListUsersInput = {},
@@ -497,60 +486,6 @@ export function createAdminService(deps: {
 
       return result;
     });
-
-    // Fan-out the tutor notifications AFTER the config transaction commits.
-    // A notification failure must never roll back the config update (or the
-    // audit row): each tutor write is best-effort with its own catch+log. The
-    // event key stays `economy_config_updated:{version}:{tutorId}`, so retries
-    // remain idempotent per version.
-    if (notification) {
-      try {
-        const tutorIds = await adminRepo.listUserIdsByRole(db, USER_ROLE.TUTOR);
-        const notificationBody =
-          `Online: ${formatIdr(updated.onlineCogitoBaseIdr)} base + ` +
-          `${formatIdr(updated.onlineCogitoIncrementIdr)} per student. ` +
-          `Offline: ${formatIdr(updated.offlineCogitoBaseIdr)} base + ` +
-          `${formatIdr(updated.offlineCogitoIncrementIdr)} per student. ` +
-          "The new schedule applies to new bookings; existing booking snapshots are unchanged.";
-
-        await Promise.all(
-          tutorIds.map((tutorId) =>
-            notification
-              .write({
-                db,
-                userId: tutorId,
-                category: "system",
-                title: "Cogito rate updated",
-                body: notificationBody,
-                eventKey: `economy_config_updated:${updated.version}:${tutorId}`,
-                metadata: {
-                  economyVersion: updated.version,
-                  onlineCogitoBaseIdr: updated.onlineCogitoBaseIdr,
-                  onlineCogitoIncrementIdr: updated.onlineCogitoIncrementIdr,
-                  offlineCogitoBaseIdr: updated.offlineCogitoBaseIdr,
-                  offlineCogitoIncrementIdr: updated.offlineCogitoIncrementIdr,
-                },
-              })
-              .catch((error: unknown) => {
-                log({
-                  level: "warn",
-                  action: "economy_notify_tutor_failed",
-                  tutorId,
-                  economyVersion: updated.version,
-                  error: { message: String(error) },
-                });
-              }),
-          ),
-        );
-      } catch (error) {
-        log({
-          level: "error",
-          action: "economy_notify_fanout_failed",
-          economyVersion: updated.version,
-          error: { message: String(error) },
-        });
-      }
-    }
 
     return updated;
   }

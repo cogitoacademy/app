@@ -1930,7 +1930,7 @@ export function OnboardingForm({
           </Card>
 
           <Card className="sticky bottom-0 z-10 overflow-hidden *:border-none">
-            <CardFooter className="flex-col items-stretch gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <CardFooter className="flex-col items-stretch gap-4 2xl:flex-row 2xl:items-center 2xl:justify-between">
               <div>
                 <Text className="font-medium">
                   {isDraft
@@ -1943,11 +1943,11 @@ export function OnboardingForm({
                     : "Save changes while you work, or submit the latest version for admin review. You can continue updating during review."}
                 </Text>
               </div>
-              <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
+              <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row lg:items-center sm:justify-end">
                 <Button
                   type="button"
                   variant="underline"
-                  size="sm"
+                  size="xs"
                   className="w-full sm:w-auto"
                   onClick={openTutorTerms}
                 >
@@ -1955,6 +1955,7 @@ export function OnboardingForm({
                 </Button>
                 <Button
                   type="button"
+                  size="xs"
                   variant="secondary"
                   className="w-full sm:w-auto"
                   progress={nameMutation.isPending || updateMutation.isPending}
@@ -1970,6 +1971,7 @@ export function OnboardingForm({
                 {isEditable ? (
                   <Button
                     type="button"
+                    size="xs"
                     className="w-full sm:w-auto"
                     progress={
                       nameMutation.isPending

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   keepPreviousData,
@@ -84,6 +84,7 @@ import {
   TableRow,
 } from "@cogito-app/ui/components/selia/table";
 import { EmptyState } from "@/components/empty-state";
+import { CogitoMarks } from "@/components/cogito-marks";
 import {
   Tabs,
   TabsItem,
@@ -99,7 +100,10 @@ import {
   getBookingStateVariant,
 } from "@/components/booking/booking-ui";
 import { AdminRoomActions } from "@/components/booking/admin-room-actions";
-import { BookingDetailPage } from "@/components/booking/booking-detail-page";
+import {
+  ActivityTimelineItem,
+  BookingDetailPage,
+} from "@/components/booking/booking-detail-page";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { client, orpc } from "@/utils/orpc";
 import { getUserFacingError } from "@/lib/error-message";
@@ -130,7 +134,11 @@ type SlaFilter = "all" | "escalated";
 
 export function AdminOperationsPage() {
   return (
-    <Stack direction="column" spacing="lg">
+    <Stack
+      direction="column"
+      spacing="lg"
+      className="w-full min-w-0 max-w-full"
+    >
       <div>
         <Heading size="md">Operations</Heading>
         <Text className="text-muted">
@@ -138,7 +146,7 @@ export function AdminOperationsPage() {
           offline rooms.
         </Text>
       </div>
-      <Tabs defaultValue="queue">
+      <Tabs defaultValue="queue" className="min-w-0 max-w-full">
         <TabsList>
           <TabsItem value="queue">
             <IconCalendarEvent /> Booking queue
@@ -150,7 +158,7 @@ export function AdminOperationsPage() {
             <IconBuilding /> Room approvals
           </TabsItem>
         </TabsList>
-        <TabsPanel value="queue">
+        <TabsPanel value="queue" className="min-w-0 max-w-full">
           <BookingQueue />
         </TabsPanel>
         <TabsPanel value="wallet">
@@ -182,7 +190,11 @@ function BookingQueue() {
   });
 
   return (
-    <Stack direction="column" spacing="md">
+    <Stack
+      direction="column"
+      spacing="md"
+      className="w-full min-w-0 max-w-full"
+    >
       <Card>
         <CardBody className="flex flex-wrap items-end gap-3">
           <Field className="min-w-56">
@@ -261,14 +273,17 @@ function BookingQueue() {
           onRetry={() => void queueQuery.refetch()}
         />
       ) : (
-        <Card>
+        <Card className="w-full min-w-0 max-w-full overflow-hidden">
           <CardHeader>
             <CardTitle>Booking monitor</CardTitle>
             <CardDescription>
               Urgent and action-required bookings appear first.
             </CardDescription>
           </CardHeader>
-          <CardBody aria-busy={queueQuery.isFetching}>
+          <CardBody
+            aria-busy={queueQuery.isFetching}
+            className="min-w-0 max-w-full"
+          >
             {queueQuery.data.items.length === 0 ? (
               <EmptyState
                 icon={<IconSearch />}
@@ -278,7 +293,7 @@ function BookingQueue() {
                 size="compact"
               />
             ) : (
-              <TableContainer>
+              <TableContainer className="w-[calc(100%+3rem)]! min-w-0 max-w-none">
                 <Table className="min-w-[76rem] text-sm">
                   <TableHeader>
                     <TableRow>
@@ -429,8 +444,6 @@ type QueueItem = Awaited<
 type StateHistoryItem = Awaited<
   ReturnType<typeof client.adminBooking.getBookingStateHistory>
 >[number];
-type AdminBookingDetail = Awaited<ReturnType<typeof client.booking.get>>;
-type AdminParticipant = AdminBookingDetail["participants"][number];
 type AdminWallet = Awaited<ReturnType<typeof client.admin.getWallet>>;
 type AdminLedgerPage = Awaited<
   ReturnType<typeof client.admin.listLedgerEntries>
@@ -551,28 +564,25 @@ export function AdminBookingDetailPage({
     );
   }
 
-  const adminMainContent = (
-    <>
-      {booking.modality === "offline" && bookingQuery.data ? (
-        <AdminRoomActions
-          booking={bookingQuery.data}
-          onBookingChanged={invalidateBookingDetailQueries}
-        />
-      ) : null}
-      <AdminReviewContextCard booking={booking} />
-      <AdminParticipantFinancialsCard
-        participants={participants}
-        walletQueries={walletQueries}
-        ledgerQueries={ledgerQueries}
-        affectedParticipants={affectedParticipants}
+  const participantFinancials = new Map(
+    participants.map((participant, index) => [
+      participant.id,
+      <AdminParticipantFinancialDetails
+        key={participant.id}
+        affected={affectedParticipants.includes(participant.userId)}
+        wallet={walletQueries[index]?.data}
+        walletLoading={walletQueries[index]?.isPending ?? false}
+        ledger={ledgerQueries[index]?.data?.items ?? []}
+        ledgerLoading={ledgerQueries[index]?.isPending ?? false}
         timezone={booking.timezone}
-        loading={bookingQuery.isPending}
-        error={bookingQuery.isError}
-      />
-    </>
+      />,
+    ]),
   );
   const adminSidebarContent = (
-    <AdminWalletImpactCard booking={booking} metadata={metadata} />
+    <div className="grid gap-4">
+      <AdminReviewContextCard booking={booking} />
+      <AdminWalletImpactCard booking={booking} metadata={metadata} />
+    </div>
   );
   const adminActivityContent = (
     <AdminStateHistoryCard
@@ -607,7 +617,16 @@ export function AdminBookingDetailPage({
               <IconAlertTriangle /> Open override
             </Button>
           ),
-          main: adminMainContent,
+          overviewDetails:
+            booking.modality === "offline" && bookingQuery.data ? (
+              <AdminRoomActions
+                booking={bookingQuery.data}
+                onBookingChanged={invalidateBookingDetailQueries}
+                embedded
+              />
+            ) : undefined,
+          participantDetails: (participantId) =>
+            participantFinancials.get(participantId),
           sidebar: adminSidebarContent,
           activity: adminActivityContent,
         }}
@@ -697,67 +716,6 @@ function AdminReviewContextCard({ booking }: { booking: QueueItem }) {
   );
 }
 
-function AdminParticipantFinancialsCard({
-  participants,
-  walletQueries,
-  ledgerQueries,
-  affectedParticipants,
-  timezone,
-  loading,
-  error,
-}: {
-  participants: AdminParticipant[];
-  walletQueries: Array<{ data?: AdminWallet; isPending: boolean }>;
-  ledgerQueries: Array<{ data?: AdminLedgerPage; isPending: boolean }>;
-  affectedParticipants: string[];
-  timezone: string;
-  loading: boolean;
-  error: boolean;
-}) {
-  return (
-    <Card className="min-w-0 overflow-hidden">
-      <CardHeader>
-        <IconBox variant="secondary-subtle" size="sm">
-          <IconUsers />
-        </IconBox>
-        <CardTitle>Participant financials</CardTitle>
-        <CardDescription>
-          Participant roster with wallet balances and booking ledger activity.
-        </CardDescription>
-      </CardHeader>
-      <CardBody className="space-y-3">
-        {loading ? (
-          <Text className="text-muted">Loading participant wallets…</Text>
-        ) : error ? (
-          <Text className="text-danger-foreground">
-            Participant detail could not be loaded.
-          </Text>
-        ) : participants.length > 0 ? (
-          participants.map((participant, index) => (
-            <AdminParticipantWalletCard
-              key={participant.id}
-              participant={participant}
-              affected={affectedParticipants.includes(participant.userId)}
-              wallet={walletQueries[index]?.data}
-              walletLoading={walletQueries[index]?.isPending ?? false}
-              ledger={ledgerQueries[index]?.data?.items ?? []}
-              ledgerLoading={ledgerQueries[index]?.isPending ?? false}
-              timezone={timezone}
-            />
-          ))
-        ) : (
-          <EmptyState
-            icon={<IconUsers />}
-            title="No participant records"
-            description="Participant details will appear here when the booking has a roster."
-            size="inline"
-          />
-        )}
-      </CardBody>
-    </Card>
-  );
-}
-
 function AdminWalletImpactCard({
   booking,
   metadata,
@@ -779,15 +737,19 @@ function AdminWalletImpactCard({
       <CardBody className="space-y-2">
         <AdminMetricRow
           label="Original reservation"
-          value={formatMarks(booking.originalMarks) + " Marks"}
+          value={
+            <CogitoMarks value={formatMarksValue(booking.originalMarks)} />
+          }
         />
         <AdminMetricRow
           label="Currently held"
-          value={formatMarks(booking.holdAmount) + " Marks"}
+          value={<CogitoMarks value={formatMarksValue(booking.holdAmount)} />}
         />
         <AdminMetricRow
           label="Refunded"
-          value={formatMarks(booking.refundedAmount) + " Marks"}
+          value={
+            <CogitoMarks value={formatMarksValue(booking.refundedAmount)} />
+          }
         />
         <AdminMetricRow
           label="Latest Marks action"
@@ -844,15 +806,17 @@ function AdminStateHistoryCard({
             </Button>
           </div>
         ) : entries.length > 0 ? (
-          <div className="divide-y divide-border">
-            {entries.map((entry) => (
-              <AdminHistoryRow
+          <ol aria-label="Booking state history" className="relative py-4">
+            {entries.toReversed().map((entry, index, newestFirst) => (
+              <ActivityTimelineItem
                 key={entry.id}
                 entry={entry}
-                timezone={timezone}
+                timeZone={timezone}
+                isLast={index === newestFirst.length - 1}
+                showActorId
               />
             ))}
-          </div>
+          </ol>
         ) : (
           <EmptyState
             icon={<IconClock />}
@@ -865,7 +829,7 @@ function AdminStateHistoryCard({
     </Card>
   );
 }
-function AdminMetricRow({ label, value }: { label: string; value: string }) {
+function AdminMetricRow({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-3 border-b border-border pb-2 last:border-b-0 last:pb-0">
       <Text className="text-sm text-muted">{label}</Text>
@@ -874,8 +838,7 @@ function AdminMetricRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function AdminParticipantWalletCard({
-  participant,
+function AdminParticipantFinancialDetails({
   affected,
   wallet,
   walletLoading,
@@ -883,7 +846,6 @@ function AdminParticipantWalletCard({
   ledgerLoading,
   timezone,
 }: {
-  participant: AdminParticipant;
   affected: boolean;
   wallet?: AdminWallet;
   walletLoading: boolean;
@@ -892,22 +854,11 @@ function AdminParticipantWalletCard({
   timezone: string;
 }) {
   return (
-    <div className="rounded-lg border border-item-border bg-item p-3">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <Text className="font-medium">
-              {participant.user?.name ?? "Unknown participant"}
-            </Text>
-            <Badge variant="secondary">{humanize(participant.role)}</Badge>
-            {affected ? <Badge variant="warning">Affected</Badge> : null}
-          </div>
-          <Text className="truncate text-xs text-muted">
-            User ID: {participant.userId}
-          </Text>
-          <Text className="break-all font-mono text-[0.65rem] text-dimmed">
-            {participant.userId} · {humanize(participant.confirmationState)}
-          </Text>
+    <div className="border-t border-border px-3 pb-3 pt-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Text className="text-xs font-medium text-muted">Wallet balance</Text>
+          {affected ? <Badge variant="warning">Affected</Badge> : null}
         </div>
         {walletLoading ? (
           <Text className="text-xs text-muted">Loading wallet…</Text>
@@ -940,7 +891,12 @@ function AdminParticipantWalletCard({
                     {formatBookingDate(entry.createdAt, timezone)}
                   </Text>
                 </div>
-                <Text className="font-medium">{formatMarks(entry.amount)}</Text>
+                <Text className="font-medium">
+                  <CogitoMarks
+                    size="3"
+                    value={formatMarksValue(entry.amount)}
+                  />
+                </Text>
               </div>
             ))}
           </div>
@@ -962,47 +918,9 @@ function WalletMetric({ label, value }: { label: string; value: number }) {
   return (
     <div>
       <Text className="text-[0.65rem] text-muted">{label}</Text>
-      <Text className="text-xs font-medium">{formatMarks(value)}</Text>
-    </div>
-  );
-}
-
-function AdminHistoryRow({
-  entry,
-  timezone,
-}: {
-  entry: StateHistoryItem;
-  timezone: string;
-}) {
-  return (
-    <div className="relative flex gap-3 py-4">
-      <IconBox variant="secondary-subtle" size="sm">
-        <IconClock />
-      </IconBox>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex flex-wrap items-center gap-2">
-            <Text className="font-medium">
-              {entry.fromState
-                ? `${getBookingStateLabel(entry.fromState)} → `
-                : "Created → "}
-              {getBookingStateLabel(entry.toState)}
-            </Text>
-            <Badge variant="secondary">{humanize(entry.actorType)}</Badge>
-          </div>
-          <Text className="text-xs text-dimmed">
-            {formatBookingDate(entry.createdAt, timezone)}
-          </Text>
-        </div>
-        <Text className="mt-1 break-words text-sm text-muted">
-          {entry.reason ?? `Updated by ${humanize(entry.actorType)}`}
-        </Text>
-        {entry.actorId ? (
-          <Text className="mt-1 break-all font-mono text-xs text-dimmed">
-            Actor: {entry.actorId}
-          </Text>
-        ) : null}
-      </div>
+      <Text className="text-xs font-medium">
+        <CogitoMarks size="3" value={formatMarksValue(value)} />
+      </Text>
     </div>
   );
 }
@@ -1627,7 +1545,7 @@ function RoomCatalog({ onAddRoom }: { onAddRoom: () => void }) {
             size="compact"
           />
         ) : (
-          <TableContainer>
+          <TableContainer className="w-[calc(100%+3rem)]!">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -1869,11 +1787,11 @@ function PendingRoomApprovals({
             icon={<IconCheck />}
             title="No pending room approvals"
             description="Tutor-accepted offline bookings will appear here."
-            tone="secondary"
+            tone="info"
             size="compact"
           />
         ) : (
-          <TableContainer>
+          <TableContainer className="w-[calc(100%+3rem)]!">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -2126,8 +2044,8 @@ function formatTimeSince(value: string | Date | null) {
   return `${Math.floor(elapsedHours / 24)}d since report`;
 }
 
-function formatMarks(value: number) {
-  return `${new Intl.NumberFormat("id-ID").format(value)} Marks`;
+function formatMarksValue(value: number) {
+  return new Intl.NumberFormat("id-ID").format(value);
 }
 
 function showError(title: string, error: Error) {

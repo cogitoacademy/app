@@ -329,7 +329,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 | F7  | Student reschedule approval UI                | FR-15                  | G6                                                     | 1d     | Closed                                                                                                                         |
 | F8  | Series session completion UI                  | FR-20                  | G18                                                    | 1d     | **Closed (REVIEW-FIXES-3 P6)**                                                                                                 |
 | F9  | Session notes (rich-text) view + add          | FR-09, DL-18           | G7                                                     | 1.5d   | **Closed (2026-08-22)** — toolbar editor, client DOMPurify render pass, and author context                                     |
-| F10 | Notifications page                            | FR-17                  | G17                                                    | 1.5d   | Closed                                                                                                                         |
+| F10 | Notifications page                            | FR-17                  | G17                                                    | 1.5d   | **Closed** — full inbox plus bell-item navigation to the associated page and aligned notification typography                   |
 | F11 | Admin wallet/ledger view                      | FR-10                  | G9                                                     | 1d     | **Closed** — wallet lookup now resolves users by name/email/ID before loading wallet and ledger                                |
 | F12 | Admin room approval UI                        | FR-22                  | G14                                                    | 1d     | **Closed (room approval queue)**                                                                                               |
 | F13 | Tutor payout view                             | DL-11                  | G16 (`tutor.getMyPayouts` exists since #43)            | 0.5d   | **Closed (REVIEW-FIXES-3 P6)**                                                                                                 |
@@ -349,6 +349,8 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 > **Audit 2026-08-19 (against main `d11962b`):** PR #55 merged (`d4e50e0`). Verified in `apps/web/src`:
 >
 > **Follow-up 2026-09-02:** The admin booking-detail dialog is replaced by the refresh-safe admin-only `/admin-operations/bookings/:bookingId` page. The booking monitor table now uses consistent readable type, stable column sizing/top alignment, and non-wrapping badges while retaining horizontal overflow for narrow viewports.
+
+> **Responsive follow-up 2026-09-02:** The booking monitor's flex, tabs, card, and body ancestors are explicitly shrinkable on small screens. The card stays within the content viewport while horizontal overflow is isolated to the table container.
 >
 > **Follow-up 2026-08-22 (against main `12dab67`):** The admin operations queue now includes category filtering and a booking-detail dialog that consumes `adminBooking.getBookingStateHistory`; the Rooms tab now consumes `room.listPendingApprovals` and exposes queue-backed assign/choose-another/cancel actions. The F6 reschedule action now dispatches by viewer role: student proposers use `booking.proposeReschedule`, tutors use `tutorActions.proposeReschedule`. The F1 follow-up branch closes the remaining admin route, participant/wallet/ledger, and OQ-04 SLA presentation gaps.
 >
@@ -854,6 +856,8 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 
 - v1.59 (2026-09-02): Added the admin Active rooms catalog and Add room dialog to the Room approvals tab. The dialog calls the existing `room.create` mutation, validates name/location/capacity, and refreshes room selectors after a successful create; no API or schema contract changed.
 
+- v1.60 (2026-09-02): Restored room re-assignment after removal: scheduled offline bookings with no active room expose the selector again and the room service accepts the guarded assignment.
+- v1.59 (2026-09-02): Consolidated admin booking details: room controls and participant wallet/ledger facts now live in Session overview, the admin participant grid is one column, review context moved to the right rail, Marks values use the shared `CogitoMarks` component, and State history matches the shared Activity timeline.
 - v1.58 (2026-09-02): Refined admin offline room assignment into a Room approvals queue plus context-aware booking-detail actions. Removed manual booking UUID/date-time entry; assign, relocate, and cancellation now use the selected booking's existing schedule and room context.
 
 - v1.57 (2026-09-02): Replaced the admin wallet lookup's exact user-ID input with an admin-only identity search by name, email, or user ID. Results are bounded and selectable, and wallet/ledger reads run only for the selected account. Added the `admin.searchUsers` RPC and updated the admin API/module/runbook references.
@@ -941,3 +945,14 @@ Student discovery and admin tutor-review drawers now give `Drawer.Content` the
 single vertical scroll region. Headers and action footers stay outside that
 region, while local body overscroll remains contained. No RPC, schema, or
 persistence contract changed.
+
+### Notification inbox follow-up (2026-09-02)
+
+The shell notification bell now sends each clicked item to its available
+destination after initiating the read-state update: booking detail when a
+`bookingId` exists, balance for payment/refund, achievements for achievement
+events, calendar for schedule events, and the notifications inbox as a safe
+fallback. Retired economy rate-change notices are omitted from the inbox and
+unread count, and the bell/full-inbox title, time, and description text follow
+the updated size/color hierarchy. The notification schema and RPC inputs are
+unchanged.

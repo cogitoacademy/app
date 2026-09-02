@@ -62,11 +62,11 @@ const adminNavItems = [
   { to: "/admin", label: "Dashboard", icon: IconHome },
   { to: "/bookings", label: "Bookings", icon: IconCalendarEvent },
   { to: "/admin-operations", label: "Operations", icon: IconShieldCheck },
-  { to: "/admin-economy", label: "Economy settings", icon: IconAdjustments },
-  { to: "/admin-tutors", label: "Manage Tutors", icon: IconUsersGroup },
+  { to: "/admin-economy", label: "Economy", icon: IconAdjustments },
+  { to: "/admin-tutors", label: "Tutors", icon: IconUsersGroup },
   {
     to: "/admin-achievements",
-    label: "Review Achievements",
+    label: "Achievements",
     icon: IconCertificate,
   },
 ] as const;

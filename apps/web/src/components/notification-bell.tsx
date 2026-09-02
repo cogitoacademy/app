@@ -1,8 +1,8 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
-import { IconBell } from "@tabler/icons-react";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { IconArrowUpRight, IconBell } from "@tabler/icons-react";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import {
@@ -32,6 +32,7 @@ function formatRelativeTime(date: Date | string) {
 
 export function NotificationBell() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const countQuery = useQuery(
     orpc.notification.getUnreadCount.queryOptions({}),
@@ -85,6 +86,33 @@ export function NotificationBell() {
 
   const unread = countQuery.data?.count ?? 0;
 
+  function openNotification(notification: {
+    bookingId: string | null;
+    category: string;
+  }) {
+    if (notification.bookingId) {
+      return navigate({
+        to: "/bookings/$bookingId",
+        params: { bookingId: notification.bookingId },
+      });
+    }
+
+    switch (notification.category) {
+      case "achievement":
+        return navigate({ to: "/achievements" });
+      case "booking":
+      case "override":
+        return navigate({ to: "/bookings" });
+      case "payment":
+      case "refund":
+        return navigate({ to: "/balance" });
+      case "schedule":
+        return navigate({ to: "/calendar" });
+      default:
+        return navigate({ to: "/notifications" });
+    }
+  }
+
   return (
     <Menu>
       <MenuTrigger
@@ -111,12 +139,12 @@ export function NotificationBell() {
         ) : null}
         <span className="sr-only">Notifications</span>
       </MenuTrigger>
-      <MenuPopup className="w-80 max-w-[calc(100vw-2rem)]">
-        <div className="flex items-center justify-between px-3 py-2">
-          <span className="font-medium text-sm">Notifications</span>
-          {unread > 0 && (
+      <MenuPopup className="w-80 lg:w-120 max-w-[calc(100vw-2rem)] shadow-xl">
+        <div className="flex items-center justify-between px-3 py-2 h-[50px]">
+          <span className="font-medium text-base">Notifications</span>
+          {unread === 0 && (
             <Button
-              variant="plain"
+              variant="underline"
               size="sm"
               onClick={() => markAll.mutate({})}
               progress={markAll.isPending}
@@ -144,27 +172,28 @@ export function NotificationBell() {
             className="px-3"
           />
         ) : (
-          <div className="flex max-h-80 flex-col gap-0.5 overflow-y-auto py-1">
+          <div className="flex max-h-80 lg:max-h-100 flex-col gap-0.5 overflow-y-auto py-1">
             {listQuery.data?.items.map((n) => (
               <MenuItem
                 key={n.id}
                 onClick={() => {
                   if (!n.isRead) markRead.mutate({ id: n.id });
+                  void openNotification(n);
                 }}
                 className={n.isRead ? "opacity-70" : "bg-accent/40"}
               >
                 <div className="flex w-full flex-col gap-0.5 px-2 py-1.5">
                   <div className="flex items-start justify-between gap-2">
                     <span
-                      className={`text-sm ${n.isRead ? "font-normal" : "font-medium"}`}
+                      className={`text-sm md:text-base text-foreground ${n.isRead ? "font-normal" : "font-medium"}`}
                     >
                       {n.title}
                     </span>
-                    <span className="shrink-0 text-xs text-dimmed">
+                    <span className="shrink-0 text-sm md:text-base text-dimmed">
                       {formatRelativeTime(n.createdAt)}
                     </span>
                   </div>
-                  <span className="line-clamp-2 text-xs text-muted">
+                  <span className="line-clamp-2 text-sm text-muted">
                     {n.body}
                   </span>
                 </div>
@@ -175,7 +204,7 @@ export function NotificationBell() {
         <Separator />
         <div className="px-2 py-1.5">
           <Button
-            variant="plain"
+            variant="tertiary"
             block
             nativeButton={false}
             render={
@@ -183,6 +212,7 @@ export function NotificationBell() {
             }
           >
             View all notifications
+            <IconArrowUpRight />
           </Button>
         </div>
       </MenuPopup>

@@ -135,16 +135,8 @@ test("admin can review and update the future-booking Cogito take schedule", asyn
           .last(),
       ).toBeVisible();
       await expect(
-        tutorPage.getByText("Cogito rate updated", { exact: true }).first(),
-      ).toBeVisible();
-      await expect(
-        tutorPage
-          .getByText(
-            `Online: Rp${updatedOnlineBase.toLocaleString("id-ID")} base`,
-            { exact: false },
-          )
-          .first(),
-      ).toBeVisible();
+        tutorPage.getByText("Cogito rate updated", { exact: true }),
+      ).toHaveCount(0);
     } finally {
       await tutorContext.close();
     }

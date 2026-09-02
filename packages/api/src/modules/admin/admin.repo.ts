@@ -260,24 +260,6 @@ export async function countAdmins(conn: DbOrTx): Promise<number> {
 }
 
 /**
- * Lists user ids for a specific role.
- *
- * Keeping the role lookup in the admin repository lets transactional admin
- * workflows fan out to the current audience without reaching into another
- * module's database tables directly.
- */
-export async function listUserIdsByRole(
-  conn: DbOrTx,
-  role: UserRole,
-): Promise<string[]> {
-  const rows = await conn
-    .select({ id: user.id })
-    .from(user)
-    .where(eq(user.role, role));
-  return rows.map((row) => row.id);
-}
-
-/**
  * Locks all admin rows for the remainder of the transaction. Concurrent
  * demotions of the last admins serialize on these rows, so the
  * count-and-check inside a transaction can never observe a stale snapshot.
@@ -322,7 +304,6 @@ export function createAdminRepo() {
     getDashboardAnalytics,
     getById,
     countAdmins,
-    listUserIdsByRole,
     lockAdminRows,
     updateRoleWithExpected,
   };

@@ -204,7 +204,7 @@ export function TutorsPageContent() {
   return (
     <Stack direction="column" spacing="lg">
       <div>
-        <Heading size="md">Book a Sessions</Heading>
+        <Heading size="md"></Heading>
         <Text className="text-muted">
           Find a verified tutor by name, field of competition, and
           specialization.
