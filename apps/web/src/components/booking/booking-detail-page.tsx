@@ -642,8 +642,8 @@ export function BookingDetailPage({
                     >
                       Format & access
                     </Text>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-2">
-                      <Text className="font-medium text-base/5">
+                    <div className="mt-0.5 flex flex-wrap items-center">
+                      <Text className="font-medium text-base/5 text-muted">
                         {booking.modality === "online" ? "Online" : "Offline"}
                       </Text>
                       {booking.modality === "online" ? (
@@ -663,17 +663,17 @@ export function BookingDetailPage({
                           label="About room details"
                         />
                       ) : null}
+                      {booking.modality === "offline" && activeRoomBooking ? (
+                        <>
+                          <Text className="ml-1 text-base/5 font-medium">
+                            at {activeRoomBooking.room.name}
+                          </Text>
+                          <Text className="break-words text-sm/5 text-muted">
+                            {activeRoomBooking.room.location}
+                          </Text>
+                        </>
+                      ) : null}
                     </div>
-                    {booking.modality === "offline" && activeRoomBooking ? (
-                      <>
-                        <Text className="mt-1 font-medium">
-                          {activeRoomBooking.room.name}
-                        </Text>
-                        <Text className="mt-0.5 break-words text-sm text-muted">
-                          {activeRoomBooking.room.location}
-                        </Text>
-                      </>
-                    ) : null}
                   </div>
                 </div>
                 <span id="session-when-title" className="sr-only">

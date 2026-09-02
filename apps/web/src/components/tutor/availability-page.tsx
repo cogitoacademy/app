@@ -313,15 +313,15 @@ export function AvailabilityPage() {
         </Badge>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.6fr)] xl:items-start">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.9fr)] xl:items-start">
         <form onSubmit={saveWeekly}>
           <Card>
             <CardHeader>
-              <IconBox variant="primary-subtle">
+              <IconBox variant="primary-subtle" size="md">
                 <IconClock />
               </IconBox>
               <CardTitle>Weekly hours</CardTitle>
-              <CardDescription>
+              <CardDescription className="leading-none">
                 Choose when students can normally book you.
               </CardDescription>
             </CardHeader>
@@ -492,11 +492,11 @@ export function AvailabilityPage() {
         <div className="space-y-4 xl:sticky xl:top-6">
           <Card>
             <CardHeader>
-              <IconBox variant="info-subtle">
+              <IconBox variant="danger-subtle">
                 <IconCalendarEvent />
               </IconBox>
               <CardTitle>Date override</CardTitle>
-              <CardDescription>
+              <CardDescription className="leading-none">
                 Add different hours for one specific date.
               </CardDescription>
             </CardHeader>
@@ -553,14 +553,12 @@ export function AvailabilityPage() {
                 <IconSettings />
               </IconBox>
               <CardTitle>Scheduling rules</CardTitle>
+              <CardDescription className="leading-none">Existing bookings stay reserved when weekly hours change.</CardDescription>
             </CardHeader>
             <CardBody className="space-y-3">
               <Rule label="Session duration" value="90 minutes" />
               <Rule label="Timezone" value="Asia/Jakarta" />
               <Rule label="Availability" value="Weekly + overrides" />
-              <Text className="text-sm text-muted">
-                Existing bookings stay reserved when weekly hours change.
-              </Text>
             </CardBody>
           </Card>
         </div>
