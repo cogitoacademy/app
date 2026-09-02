@@ -11,7 +11,7 @@
 | [CI-SANITY.md](active/CI-SANITY.md)                     | `f/ci-test-coverage-performance`              | —         | **F1–F7 implemented + merged 2026-08-31** (#130, #132–#137); PR #152 refreshes the oxlint 1.80 baseline, fixes three new React findings, and hardens the lint auto-fix push; this branch adds F14 CI test/coverage performance improvements; F8 (e2e in CI) + F10 (branch protection) remain; F9 (ACTIONS_BOT_PAT) operator console; F13 warnings remain documented |
 | [INFRA-AUTOMATION.md](active/INFRA-AUTOMATION.md)       | `ops/infra-unify`                             | —         | Wave 1 DONE (project unified, Kuma recreated in cogito-prod); Wave 2 (infra-apply.yml + runner-prep) awaiting operator: SOPS_AGE_KEY secret + runner-prep.sh                                                                                                                                                                                                        |
 | [MONITORING-ALERTING.md](active/MONITORING-ALERTING.md) | main (merged #130)                            | —         | **DONE (2026-09-02)** — items 1–2 + disk watchdog delivered 2026-09-01 (`ops/monitoring-discord`); Kuma wired by the operator (4 monitors + `COGITO ALERT` Discord attached + `cogito` status page); item 3 (DLQ age-aware health) done 2026-08-31; memory-headroom recommendation documented (deferred)                                                            |
-| [OPS-VISIBILITY-WAVE.md](active/OPS-VISIBILITY-WAVE.md) | `f/ops-docs` + `f/ops-code` + `f/ops-tooling` | —         | **Active (2026-09-02/03)** — FAILURES.md added; circuit breakers in `/health`; DLQ retention bounded; ops.sh DB-name fix + `cb`; pre-migrate snapshot pruning; vault-triggered infra-apply; Kuma wired (operator); disk-watchdog verification + memory recommendation documented                                                                                    |
+| [LINT-DEPRECATION-HYGIENE.md](active/LINT-DEPRECATION-HYGIENE.md) | `f/ci-test-coverage-performance`              | —         | **Active (2026-08-31 scope change)** — web descooped; backend test-file non-null guards (Task 3), CI deprecations + ansible group (Task 6), docs sync (Task 7) remain; oxlint pin stays 1.78/0.63 until the web baseline is cleared                                                                                                                                  |
 
 ## Completed (merged to main)
 
@@ -54,6 +54,7 @@
 
 | [ACHIEVEMENT-STUDENT-REVIEW-UX.md](completed/ACHIEVEMENT-STUDENT-REVIEW-UX.md) | `f/client-revisions` | **Completed locally 2026-09-02** — clearer student achievement entry, admin-only public documentation, and audited versioned correction flow |
 | [TUTOR-TERMS-ONBOARDING.md](completed/TUTOR-TERMS-ONBOARDING.md) | working tree | **Completed locally 2026-09-02** — bilingual Tutor Terms of Service modal and first-submit-only consent persistence |
+| [OPS-VISIBILITY-WAVE.md](completed/OPS-VISIBILITY-WAVE.md) | main (merged #179) | **Merged #179 (2026-09-03)** — FAILURES.md guide, circuit breakers in `/health`, DLQ retention, ops.sh DB-name fix + `cb`, pre-migrate snapshot pruning, vault-triggered infra-apply, Kuma wiring docs, CD `COOLIFY_API_BASE_URL` fix; deployed + sha-verified |
 
 ## Archive (superseded / historical)
 
