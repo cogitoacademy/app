@@ -61,6 +61,7 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
         image: "https://example.com/profile-photo.jpg",
       })),
       listTutorProfiles: mock(async () => [profile]),
+      listTutorProfileHistory: mock(async () => []),
     },
     auditPort: { record: mock(async () => {}) },
     emailPort: { send: mock(async () => ({ messageId: "email1" })) },
@@ -536,6 +537,37 @@ describe("AdminTutor Service", () => {
       expect(result).toEqual([makeProfile()]);
     });
 
+    test("listTutorProfileHistory returns audit rows for an existing profile", async () => {
+      const history = [{ id: "audit-1", action: "tutor_profile_updated" }];
+      const listTutorProfileHistory = mock(async () => history);
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          listTutorProfileHistory,
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+
+      await expect(service.listTutorProfileHistory("p1")).resolves.toEqual(
+        history,
+      );
+      expect(listTutorProfileHistory).toHaveBeenCalledWith(deps.db, "p1");
+    });
+
+    test("listTutorProfileHistory throws when the profile is missing", async () => {
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getTutorProfileById: mock(async () => null),
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+
+      await expect(
+        service.listTutorProfileHistory("missing-profile"),
+      ).rejects.toThrow(TutorProfileNotFoundError);
+    });
+
     test("reviewTutorProfile throws TutorProfileNotFoundError for null profile", async () => {
       const deps = makeDeps({
         adminTutorRepo: {
@@ -912,7 +944,6 @@ describe("AdminTutor Service", () => {
       const result = await service.reviewTutorProfile("admin1", {
         tutorProfileId: "p1",
         action: "approve_edits",
-        profileImageUrl: "https://example.com/photo.jpg",
       });
 
       expect(result.onboardingStatus).toBe("published");

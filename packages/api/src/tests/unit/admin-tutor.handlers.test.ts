@@ -118,6 +118,24 @@ describe("adminTutorHandlers", () => {
     });
   });
 
+  describe("listTutorProfileHistory", () => {
+    test("calls adminTutor.listTutorProfileHistory with the profile id", async () => {
+      const listTutorProfileHistory = mock(async () => [{ id: "audit-1" }]);
+      const adminTutorService = { listTutorProfileHistory } as any;
+      const handler = createAdminTutorHandler(adminTutorService);
+      const context = { session: { user: { id: "admin1" } } } as any;
+      const input = { tutorProfileId: "profile-1" };
+
+      const result = await handler.listTutorProfileHistory({
+        context,
+        input,
+      });
+
+      expect(listTutorProfileHistory).toHaveBeenCalledWith("profile-1");
+      expect(result).toEqual([{ id: "audit-1" }]);
+    });
+  });
+
   describe("reviewTutorProfile", () => {
     test("calls adminTutor.reviewTutorProfile with session user id and input", async () => {
       const reviewTutorProfile = mock(async () => ({

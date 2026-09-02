@@ -324,6 +324,7 @@ describe("Tutor Service", () => {
       return {
         tutorRepo: {
           getByUserId: mock(async () => mockProfile),
+          listProfileHistory: mock(async () => []),
           updateProfileWithVersion: mock(async () => [mockProfile]),
           updateProfileImage: mock(async () => ({
             id: "u1",
@@ -366,6 +367,35 @@ describe("Tutor Service", () => {
       const service = createTutorService(deps as any);
       const result = await service.getMyProfile("u1");
       expect(result.id).toBe("tp1");
+    });
+
+    test("getMyProfileHistory returns audit rows for the tutor profile", async () => {
+      const history = [{ id: "audit-1", action: "tutor_profile_updated" }];
+      const listProfileHistory = mock(async () => history);
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          listProfileHistory,
+        },
+      });
+      const service = createTutorService(deps as any);
+
+      await expect(service.getMyProfileHistory("u1")).resolves.toEqual(history);
+      expect(listProfileHistory).toHaveBeenCalledWith(deps.db, "tp1");
+    });
+
+    test("getMyProfileHistory throws when the tutor profile is missing", async () => {
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => null),
+        },
+      });
+      const service = createTutorService(deps as any);
+
+      await expect(service.getMyProfileHistory("u1")).rejects.toThrow(
+        TutorProfileNotFoundError,
+      );
     });
 
     test("updateMyProfile returns updated profile", async () => {
@@ -446,6 +476,41 @@ describe("Tutor Service", () => {
         }),
       );
       expect(updateProfileImage).not.toHaveBeenCalled();
+    });
+
+    test("published profile removes an unchanged photo edit", async () => {
+      const profile = makeProfile({
+        onboardingStatus: "published",
+        pendingProfileChanges: {
+          profileImageUrl: "https://example.com/profile-photo.jpg",
+          shortBio: "pending bio",
+        },
+        user: { image: "https://example.com/profile-photo.jpg" },
+      });
+      const updateProfileWithVersion = mock(async () => [profile]);
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => profile),
+          updateProfileWithVersion,
+        },
+      });
+      const service = createTutorService(deps as any);
+
+      await service.updateMyProfile("u1", {
+        version: 1,
+        profileImageUrl: "https://example.com/profile-photo.jpg",
+      });
+
+      expect(updateProfileWithVersion).toHaveBeenCalledWith(
+        deps.db,
+        "u1",
+        1,
+        expect.objectContaining({
+          pendingProfileChanges: { shortBio: "pending bio" },
+          profileEditStatus: "pending_review",
+        }),
+      );
     });
 
     test("updateMyProfile throws OptimisticLockError on version mismatch", async () => {

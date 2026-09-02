@@ -454,4 +454,29 @@ describe("AdminTutorRepo", () => {
     ).resolves.toEqual(row);
     expect(set).toHaveBeenCalledWith({ image: row.image });
   });
+
+  test("lists tutor profile history with actor details", async () => {
+    const { createAdminTutorRepo } =
+      await import("../../modules/admin-tutor/admin-tutor.repo");
+    const repo = createAdminTutorRepo();
+    const rows = [{ id: "audit-1", action: "tutor_profile_reviewed" }];
+    const findMany = mock(async () => rows);
+    const conn = {
+      query: {
+        auditLog: { findMany },
+      },
+    } as any;
+
+    await expect(
+      repo.listTutorProfileHistory(conn, "profile-1"),
+    ).resolves.toEqual(rows);
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        limit: 50,
+        with: {
+          actor: { columns: { id: true, name: true, email: true } },
+        },
+      }),
+    );
+  });
 });

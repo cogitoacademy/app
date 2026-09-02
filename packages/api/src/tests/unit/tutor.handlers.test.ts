@@ -38,6 +38,20 @@ describe("tutorHandlers", () => {
     });
   });
 
+  describe("getMyProfileHistory", () => {
+    test("calls tutor.getMyProfileHistory with userId", async () => {
+      const getMyProfileHistory = mock(async () => [{ id: "audit-1" }]);
+      const tutorService = { getMyProfileHistory } as any;
+      const handler = createTutorHandler(tutorService);
+      const context = { session: { user: { id: "u1" } } } as any;
+
+      const result = await handler.getMyProfileHistory({ context });
+
+      expect(getMyProfileHistory).toHaveBeenCalledWith("u1");
+      expect(result).toEqual([{ id: "audit-1" }]);
+    });
+  });
+
   describe("updateMyProfile", () => {
     test("calls tutor.updateMyProfile with userId and input", async () => {
       const updateMyProfile = mock(async () => ({ id: "t1", userId: "u1" }));
