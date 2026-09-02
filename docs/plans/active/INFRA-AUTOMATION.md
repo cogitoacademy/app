@@ -1,11 +1,14 @@
 # Infra Automation & Coolify Unification — Wave Plan
 
-| Field      | Value                                                                                                                                                            |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status     | Active                                                                                                                                                           |
-| Created    | 2026-09-01                                                                                                                                                       |
-| Depends on | #148 (monitoring wave), #149 (vault), #150 (INFRA-PLAYBOOK); infra applied 2026-08-31                                                                            |
-| Scope      | (1) Coolify project unification, (2) Kuma recreate in the right project, (3) full CI-driven Terraform + Ansible applies via the VPS self-hosted runner, (4) docs |
+| Field  | Value                                                                                                                                                                                                                                                             |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status | **Wave 1 + Wave 2 LIVE (2026-09-02) — unified project verified; infra-apply fully green end-to-end (run 33613824234: all steps, terraform + ansible). Enabled by the operator: SOPS_AGE_KEY secret + runner-prep.sh. Remaining: Kuma UI pass (INFRA-PLAYBOOK §3b) |
+
+                                                                                                                                                         |
+
+| Created | 2026-09-01 |
+| Depends on | #148 (monitoring wave), #149 (vault), #150 (INFRA-PLAYBOOK); infra applied 2026-08-31 |
+| Scope | (1) Coolify project unification, (2) Kuma recreate in the right project, (3) full CI-driven Terraform + Ansible applies via the VPS self-hosted runner, (4) docs |
 
 ## Background (live-verified 2026-09-01)
 
@@ -171,6 +174,16 @@ service (zero config inside) and the empty `cogito` project itself.
   Pending operator: `gh secret set SOPS_AGE_KEY < ~/.config/sops/age/keys.txt`
   - `sudo bash infra/runner-prep.sh` on the VPS; then the Kuma UI pass
     (INFRA-PLAYBOOK §3b).
+
+- 2026-09-02 (lead): **RUN 33613824234 — FULLY GREEN.** Every step of the
+  ansible job (prep, key materialization, vault decrypt, drift-check,
+  coolify-resources, backup-cron local, disk-watchdog local, uptime-kuma,
+  post-apply /health verify, key cleanup) and terraform (no-drift no-op)
+  passed; live state verified post-apply (API sha-verified, web 200,
+  status. 302). **Automation is LIVE**: merges touching `infra/**` now
+  self-apply. Remaining operator bits: the one-time Kuma UI pass
+  (INFRA-PLAYBOOK §3b) — monitors + Discord notification; optional GitHub
+  secret `DISCORD_WEBHOOK_URL` for CD failure pings (not wired).
 
 ## Exit gates
 
