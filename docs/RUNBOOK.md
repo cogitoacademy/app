@@ -1272,7 +1272,7 @@ The CD workflow (`cd-prod.yml`) triggers Coolify deploys via webhook. (`cd-stagi
    Secret. Use this format:
 
    ```text
-   https://cl.cogitoacademy.id/api/v1/deploy?uuid=<resource-uuid>&force=false
+   https://cl.cogitoacademy.id/api/v1/deploy?uuid=<resource-uuid>&force=true
    ```
 
    Replace `<resource-uuid>` with the Coolify resource UUID and remove the
@@ -1383,9 +1383,9 @@ The production pipeline (`cd-prod.yml`) builds and pushes images on a GitHub-hos
 2. **Migrate:** `bun run db:migrate` against the production `DATABASE_URL`.
    Turbo allowlists this variable for the `db:migrate` task so strict env mode
    passes it through to `drizzle-kit`.
-3. **Deploy:** with `COOLIFY_API_TOKEN`, resolve the resource UUID from `COOLIFY_APP_UUID` or the webhook query, PATCH its configured tag to immutable `v<GIT_SHA>`, then POST the Coolify deploy webhook (`COOLIFY_PROD_SERVER_WEBHOOK`). This advance step is required because an earlier auto-rollback leaves the resource pinned to `v<PREV_GIT_SHA>`; a bare webhook would keep redeploying that old image.
+3. **Deploy:** POST the Coolify deploy webhook (`COOLIFY_PROD_SERVER_WEBHOOK`) with `force=true`. This forces a registry pull for the unchanged `latest` tag and needs deploy access only; the pipeline does not PATCH application configuration.
 4. **Health (sha-verified):** poll `https://api.cogitoacademy.id/health` until `version == GIT_SHA` (bounded 20×15s ≈ 5 min).
-5. **Auto-rollback (best-effort, F4 2026-08-31):** on poll timeout the script attempts a Coolify API rollback when `COOLIFY_API_TOKEN` is set: resolve the application UUID (env `COOLIFY_APP_UUID`, else match the API domain on `GET /api/v1/applications`), `PATCH /api/v1/applications/<uuid>` to `docker_registry_image_tag: v<PREV_GIT_SHA>` (override the API host with `COOLIFY_API_BASE_URL`, default `https://cl.cogitoacademy.id`), then `POST /api/v1/deploy?uuid=<uuid>&force=false`. The default is initialized safely under `set -u`, and the workflow passes the canonical host explicitly; an unset override no longer aborts rollback. Every API failure prints its HTTP code and the script ALWAYS ends with the manual rollback hint and exit 1 — a rollback failure never masks the deploy failure. Without `COOLIFY_API_TOKEN` or `PREV_GIT_SHA` the auto-rollback is skipped with a reason and only the manual hint applies. Configure the optional `COOLIFY_APP_UUID` repository secret to avoid list-and-domain matching.
+5. **Auto-rollback (best-effort, F4):** on poll timeout the script resolves the application UUID from `COOLIFY_APP_UUID` or the existing webhook query and calls `POST /api/v1/applications/<uuid>/rollback` with `v<PREV_GIT_SHA>`. This uses Coolify's native deployment rollback and does not mutate the configured image tag or require application write access. Every API failure prints its HTTP code; the script still ends with the manual hint and exit 1. Database snapshots are never restored automatically.
 6. **Web verification (F3 2026-08-31):** a separate step POSTs the web deploy webhook (`COOLIFY_PROD_WEBHOOK`) and immediately runs `scripts/migrate-and-deploy.sh --poll-web`, which polls `HEALTH_URL_WEB` (default `https://app.cogitoacademy.id`) for plain **HTTP 200** (bounded 20×15s). The web image is static nginx with no version marker, so HTTP 200 is the verification signal; a poll timeout fails the job with a manual web-rollback hint (the web resource is not auto-rolled back — it would need a `COOLIFY_WEB_APP_UUID` secret that does not exist).
 
 Runner triage:

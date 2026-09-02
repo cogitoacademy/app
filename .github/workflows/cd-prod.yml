@@ -78,7 +78,7 @@ jobs:
         # Full production pipeline via scripts/migrate-and-deploy.sh:
         #   1. pg_dump snapshot → gzip → R2 (pre-migrate-<sha>.sql.gz)
         #   2. bun run db:migrate against the production DATABASE_URL
-        #   3. Pin the server resource to v<GIT_SHA>, then POST its webhook
+        #   3. POST the server webhook with force=true (fresh registry pull)
         #   4. Poll /health until `version == GIT_SHA` (bounded 20x15s)
         #   5. On timeout: best-effort Coolify API auto-rollback to
         #      v<prev-sha> (PATCH resource + redeploy trigger), then the
