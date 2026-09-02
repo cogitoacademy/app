@@ -149,7 +149,7 @@ export function AchievementTable({
                           {achievement.award}
                         </Text>
                       </TableCell>
-                      <TableCell className="align-top">
+                      <TableCell className="align-center">
                         <Badge
                           variant={status.variant}
                           className="whitespace-nowrap"
@@ -157,14 +157,14 @@ export function AchievementTable({
                           {status.label}
                         </Badge>
                       </TableCell>
-                      <TableCell className="align-top">
+                      <TableCell className="align-center">
                         <Text className="whitespace-nowrap font-medium">
                           {formatAchievementDate(achievement.awardingDate)}
                         </Text>
                       </TableCell>
-                      <TableCell className="align-top text-right">
+                      <TableCell className="align-center text-right">
                         <Button
-                          variant="plain"
+                          variant="tertiary"
                           size="sm"
                           onClick={() => setSelectedAchievement(achievement)}
                         >
