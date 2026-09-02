@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   keepPreviousData,
@@ -20,6 +20,11 @@ import {
   IconSearch,
   IconUsers,
 } from "@tabler/icons-react";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@cogito-app/ui/components/selia/avatar";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
@@ -47,6 +52,14 @@ import {
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Input } from "@cogito-app/ui/components/selia/input";
+import {
+  Item,
+  ItemAction,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from "@cogito-app/ui/components/selia/item";
 import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import {
   getSelectItemValue,
@@ -1212,48 +1225,175 @@ type PreviewResult = Awaited<
 >;
 
 function WalletLookup() {
-  const [userId, setUserId] = useState("");
-  const [searchedUserId, setSearchedUserId] = useState("");
+  const [search, setSearch] = useState("");
+  const [submittedSearch, setSubmittedSearch] = useState("");
+  const [selectedUser, setSelectedUser] =
+    useState<AdminUserSearchResult | null>(null);
+  const searchQuery = useQuery({
+    ...orpc.admin.searchUsers.queryOptions({
+      input: { query: submittedSearch || "--", limit: 10 },
+    }),
+    enabled: submittedSearch.length >= 2,
+  });
+  const selectedUserId = selectedUser?.id ?? "";
   const walletQuery = useQuery({
-    ...orpc.admin.getWallet.queryOptions({ input: { userId: searchedUserId } }),
-    enabled: Boolean(searchedUserId),
+    ...orpc.admin.getWallet.queryOptions({ input: { userId: selectedUserId } }),
+    enabled: Boolean(selectedUserId),
   });
   const ledgerQuery = useQuery({
     ...orpc.admin.listLedgerEntries.queryOptions({
-      input: { userId: searchedUserId, limit: 50 },
+      input: { userId: selectedUserId, limit: 50 },
     }),
-    enabled: Boolean(searchedUserId) && walletQuery.isSuccess,
+    enabled: Boolean(selectedUserId) && walletQuery.isSuccess,
   });
+
+  function submitSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextSearch = search.trim();
+    if (nextSearch.length < 2) return;
+    setSelectedUser(null);
+    setSubmittedSearch(nextSearch);
+  }
+
   return (
     <Stack direction="column" spacing="md">
       <Card>
         <CardHeader>
           <CardTitle>Find a wallet</CardTitle>
-          <CardDescription>Enter an exact Cogito user ID.</CardDescription>
+          <CardDescription>
+            Search by name, email, or user ID, then choose the account to
+            inspect.
+          </CardDescription>
         </CardHeader>
-        <CardBody className="flex gap-2">
-          <Input
-            value={userId}
-            onChange={(event) => setUserId(event.target.value)}
-            placeholder="User ID"
-          />
-          <Button
-            onClick={() => setSearchedUserId(userId.trim())}
-            disabled={!userId.trim()}
+        <CardBody>
+          <form
+            className="flex flex-col gap-2 sm:flex-row"
+            onSubmit={submitSearch}
           >
-            <IconSearch /> Search
-          </Button>
+            <Field className="min-w-0 flex-1">
+              <FieldLabel className="sr-only" htmlFor="wallet-user-search">
+                Search users
+              </FieldLabel>
+              <Input
+                id="wallet-user-search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Name, email, or user ID"
+                autoComplete="off"
+              />
+            </Field>
+            <Button
+              type="submit"
+              progress={searchQuery.isFetching}
+              disabled={search.trim().length < 2 || searchQuery.isFetching}
+            >
+              <IconSearch /> Search
+            </Button>
+          </form>
         </CardBody>
       </Card>
-      {walletQuery.isError ? (
+
+      {submittedSearch && searchQuery.isPending ? (
+        <LoadingCard />
+      ) : submittedSearch && searchQuery.isError ? (
         <ErrorCard
+          title="User search could not be completed"
+          message={getUserFacingError(
+            searchQuery.error,
+            "Matching users could not be loaded.",
+          )}
+          onRetry={() => void searchQuery.refetch()}
+        />
+      ) : submittedSearch && searchQuery.data?.length === 0 ? (
+        <Card>
+          <CardBody>
+            <EmptyState
+              icon={<IconUsers />}
+              title="No matching users"
+              description="Try a different name, email, or user ID."
+              tone="secondary"
+              size="compact"
+            />
+          </CardBody>
+        </Card>
+      ) : searchQuery.data?.length ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Matching users</CardTitle>
+            <CardDescription>
+              Select an account to load its wallet and latest ledger activity.
+            </CardDescription>
+          </CardHeader>
+          <CardBody className="space-y-2">
+            {searchQuery.data.map((user) => (
+              <Item
+                key={user.id}
+                render={
+                  <button
+                    type="button"
+                    onClick={() => setSelectedUser(user)}
+                    aria-label={"View wallet for " + user.name}
+                    aria-pressed={selectedUserId === user.id}
+                  />
+                }
+                variant={
+                  selectedUserId === user.id ? "primary-outline" : "default"
+                }
+                size="sm"
+                className="w-full items-center"
+              >
+                <ItemMedia>
+                  <Avatar size="sm">
+                    {user.image ? (
+                      <AvatarImage src={user.image} alt="" />
+                    ) : null}
+                    <AvatarFallback>
+                      {getUserInitials(user.name)}
+                    </AvatarFallback>
+                  </Avatar>
+                </ItemMedia>
+                <ItemContent className="min-w-0 flex-1">
+                  <ItemTitle className="truncate text-sm">
+                    {user.name}
+                  </ItemTitle>
+                  <ItemDescription className="truncate text-xs">
+                    {user.email}
+                  </ItemDescription>
+                </ItemContent>
+                <ItemAction>
+                  <Badge variant="secondary" pill>
+                    {humanize(user.role)}
+                  </Badge>
+                </ItemAction>
+              </Item>
+            ))}
+          </CardBody>
+        </Card>
+      ) : null}
+
+      {selectedUser ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>{selectedUser.name}</CardTitle>
+            <CardDescription className="break-all">
+              {selectedUser.email} · {humanize(selectedUser.role)} ·{" "}
+              {selectedUser.id}
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      ) : null}
+
+      {selectedUser && walletQuery.isPending ? <LoadingCard /> : null}
+      {selectedUser && walletQuery.isError ? (
+        <ErrorCard
+          title="Wallet could not be loaded"
           message={getUserFacingError(
             walletQuery.error,
             "The wallet could not be loaded.",
           )}
           onRetry={() => void walletQuery.refetch()}
         />
-      ) : walletQuery.data ? (
+      ) : selectedUser && walletQuery.data ? (
         <div className="grid gap-3 sm:grid-cols-3">
           <BalanceCard label="Total" value={walletQuery.data.totalBalance} />
           <BalanceCard label="Held" value={walletQuery.data.heldBalance} />
@@ -1263,7 +1403,18 @@ function WalletLookup() {
           />
         </div>
       ) : null}
-      {ledgerQuery.data ? (
+
+      {selectedUser && ledgerQuery.isError ? (
+        <ErrorCard
+          title="Ledger could not be loaded"
+          message={getUserFacingError(
+            ledgerQuery.error,
+            "The wallet was found, but its ledger could not be loaded.",
+          )}
+          onRetry={() => void ledgerQuery.refetch()}
+        />
+      ) : null}
+      {selectedUser && ledgerQuery.data ? (
         <Card>
           <CardHeader>
             <CardTitle>Ledger</CardTitle>
@@ -1314,6 +1465,10 @@ function WalletLookup() {
     </Stack>
   );
 }
+
+type AdminUserSearchResult = Awaited<
+  ReturnType<typeof client.admin.searchUsers>
+>[number];
 
 type PendingRoomApproval = Awaited<
   ReturnType<typeof client.room.listPendingApprovals>
@@ -1705,9 +1860,11 @@ function LoadingCard() {
   );
 }
 function ErrorCard({
+  title = "Operations data could not be loaded",
   message,
   onRetry,
 }: {
+  title?: string;
   message: string;
   onRetry: () => void;
 }) {
@@ -1717,7 +1874,7 @@ function ErrorCard({
         <IconBox variant="danger-subtle">
           <IconAlertTriangle />
         </IconBox>
-        <Text className="mt-3">Operations data could not be loaded</Text>
+        <Text className="mt-3">{title}</Text>
         <Text className="mt-1 text-muted">{message}</Text>
         <Button className="mt-4" variant="secondary" onClick={onRetry}>
           Try again
@@ -1763,6 +1920,19 @@ function humanize(value: string) {
   return value
     .replaceAll("_", " ")
     .replace(/^./, (letter) => letter.toUpperCase());
+}
+
+function getUserInitials(name: string) {
+  return (
+    name
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0])
+      .join("")
+      .toUpperCase() || "CG"
+  );
 }
 
 function SlaStatus({

@@ -2,6 +2,7 @@ import { adminProcedure } from "../../procedures";
 import {
   dashboardAnalyticsInput,
   listUsersInput,
+  adminSearchUsersInput,
   setRoleInput,
   adminGetWalletInput,
   adminListLedgerEntriesInput,
@@ -35,6 +36,18 @@ export function createAdminRouter(handler: AdminHandler) {
       })
       .input(listUsersInput)
       .handler(handler.listUsers),
+
+    searchUsers: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/users/search",
+        tags: ["Admin"],
+        summary: "Search users",
+        description:
+          "Finds users by name, email, or user ID for admin support workflows",
+      })
+      .input(adminSearchUsersInput)
+      .handler(handler.searchUsers),
 
     setRole: adminProcedure
       .route({

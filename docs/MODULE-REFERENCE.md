@@ -1,6 +1,6 @@
 # Cogito Module Reference
 
-Last updated: 2026-09-01
+Last updated: 2026-09-02
 
 ## Selia field-context invariant (2026-08-31)
 
@@ -41,6 +41,15 @@ Tutor invitations use the shared email provider: create sends once, **Generate &
 The invite form performs an admin-only account preflight by exact normalized email. Provider facts come from Better Auth `account.providerId` rows (`google`, `credential`, or both); admin-role accounts are shown as ineligible and cannot be submitted from the UI.
 
 Google OAuth is enabled only when both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are configured; a partial configuration disables the provider rather than creating an empty provider entry. Redis access goes through the adapter boundary in `packages/api/src/lib/redis.ts`, so the in-memory fallback exposes the same command surface for tests and defensive runtime degradation while production remains Redis-backed.
+
+## Admin wallet lookup search (2026-09-02)
+
+Admin Operations searches user identity before loading wallet data. The
+`admin.searchUsers` read matches name, email, or ID case-insensitively and
+returns at most 20 safe identity rows; exact email/ID matches sort first and
+user-entered wildcard characters are escaped. The UI selects one result, then
+calls `admin.getWallet` and `admin.listLedgerEntries` with that user's internal
+ID. No wallet is created by the search or lookup reads.
 
 ## Overview
 
@@ -170,17 +179,18 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 
 **Files:**
 
-- `admin.types.ts` — `dashboardAnalyticsInput`, `listUsersInput`, `setRoleInput`, `adminGetWalletInput`, `adminListLedgerEntriesInput`, `adminGetTutorPayoutsInput`, `adminMarkTutorPayoutPaidInput`, `adminUpdateEconomySettingsInput`
+- `admin.types.ts` — `dashboardAnalyticsInput`, `listUsersInput`, `adminSearchUsersInput`, `setRoleInput`, `adminGetWalletInput`, `adminListLedgerEntriesInput`, `adminGetTutorPayoutsInput`, `adminMarkTutorPayoutPaidInput`, `adminUpdateEconomySettingsInput`
 - `admin.errors.ts` — `UserNotFoundError`, `LastAdminError`, `OptimisticLockError`, `WalletNotFoundError`, `InvalidLedgerFilterError`, `EconomyConfigConflictError`, `TutorPayoutNotAvailableError`
-- `admin.repo.ts` — `getById`, `listUsers`, `getDashboardAnalytics`, `listUserIdsByRole`, `updateRoleWithExpected`
-- `admin.service.ts` — `getDashboardAnalytics`, `listUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getPendingTutorPayouts`, `markTutorPayoutPaid`, `getEconomySettings`, `updateEconomySettings`
-- `admin.handler.ts` — `getDashboardAnalytics`, `listUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getPendingTutorPayouts`, `markTutorPayoutPaid`, `getEconomySettings`, `updateEconomySettings`
+- `admin.repo.ts` — `getById`, `listUsers`, `searchUsers`, `getDashboardAnalytics`, `listUserIdsByRole`, `updateRoleWithExpected`
+- `admin.service.ts` — `getDashboardAnalytics`, `listUsers`, `searchUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getPendingTutorPayouts`, `markTutorPayoutPaid`, `getEconomySettings`, `updateEconomySettings`
+- `admin.handler.ts` — `getDashboardAnalytics`, `listUsers`, `searchUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getPendingTutorPayouts`, `markTutorPayoutPaid`, `getEconomySettings`, `updateEconomySettings`
 - `admin.router.ts` — Admin-only routes
 
 **Service Methods:**
 
 - `getDashboardAnalytics(period?)` — Returns normalized 7/30/90-day booking and audience trends, a live booking-state portfolio, period modality/category breakdowns, and Marks-based summary KPIs; trend dates are filled with zero rows using WIB calendar boundaries
 - `listUsers(opts)` — Paginated user list
+- `searchUsers({ query, limit? })` — Returns a bounded identity projection for admin lookup, matching name, email, or user ID
 - `setRole(userId, role, adminId)` — Changes user role; throws `LastAdminError` if removing last admin; optimistic lock via `expectedRole`; records audit log
 - `getWallet({ userId })` — Returns any user's wallet balances; throws `WalletNotFoundError`
 - `listLedgerEntries(input)` — Paginated ledger filtered by wallet/user, entry type, date range, or booking; `walletId` and `userId` are mutually exclusive
@@ -198,6 +208,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - The completion rate is `completed / (completed + terminal exception bookings)` for bookings created in the selected period, and Marks figures come from locked booking price snapshots
 - Cannot remove the last admin role from the system
 - Role changes are audit-logged
+- User lookup is case-insensitive and bounded; exact email/ID matches rank first, and wildcard characters are treated literally
 - Ledger filters must target exactly one wallet (`walletId` or `userId`, not both)
 - Economy writes require the current `version`; stale writes fail with `ECONOMY_CONFIG_CONFLICT`
 - Economy base and increment values are validated in Rp 5,000 increments; increments are non-negative

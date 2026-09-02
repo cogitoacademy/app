@@ -2,10 +2,10 @@
 
 | Field      | Value                                                                                                                                                                                                                                                          |
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status     | Living gap inventory (updated 2026-09-01; F1/F8/F9/F13/F14/F18 closed; F16 scope retired; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F12 closed; competition taxonomy and tutor-achievement-format follow-ups implemented; meeting fallback follow-up added) |
+| Status     | Living gap inventory (updated 2026-09-02; F1/F8/F9/F13/F14/F18 closed; F16 scope retired; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F12 closed; competition taxonomy and tutor-achievement-format follow-ups implemented; meeting fallback and admin wallet-search follow-ups added) |
 | Branch     | `f/frontend-prd-gaps` (merged #55); `f/competition-taxonomy` (PR pending)                                                                                                                                                                                      |
 | Created    | 2026-07-29                                                                                                                                                                                                                                                     |
-| Audited    | 2026-09-01                                                                                                                                                                                                                                                     |
+| Audited    | 2026-09-02                                                                                                                                                                                                                                                     |
 | Depends on | Backend PRD gaps (G1-G19) where API is needed                                                                                                                                                                                                                  |
 | Scope      | Frontend surfaces plus the admin queue projection needed for SLA detail (`apps/web/`, `packages/api/`)                                                                                                                                                         |
 
@@ -251,6 +251,17 @@ contract changed.
 
 ---
 
+### Admin wallet lookup search follow-up (2026-09-02)
+
+The Operations → Wallet lookup tab now searches visible user identity instead
+of requiring an admin to know an internal user ID. `admin.searchUsers` matches
+name, email, or ID and returns a bounded identity projection; exact email/ID
+matches are ranked first. The admin selects one result before the UI loads
+`admin.getWallet` and `admin.listLedgerEntries`, so the internal ID remains an
+implementation key rather than the primary operator workflow.
+
+---
+
 ## Current Frontend State
 
 ### Existing routes (`apps/web/src/routes/`)
@@ -282,7 +293,7 @@ for classmates.
 | `/_app/availability`         | availability-page.tsx                     | Complete baseline — Calendly-style weekly hours, date overrides, rules summary, and week preview                                                                     |
 | `/_app/notifications`        | notifications-page.tsx                    | Exists (full page)                                                                                                                                                   |
 | `/_app/admin`                | admin-dashboard-page.tsx                  | Complete F1 admin workspace entry point                                                                                                                              |
-| `/_app/admin-operations`     | admin-operations-page.tsx                 | Complete F1 queue/detail surface — filters, hydrated participants/wallets/ledger, override, rooms, and wallet lookup                                                 |
+| `/_app/admin-operations`     | admin-operations-page.tsx                 | Complete F1 queue/detail surface — filters, hydrated participants/wallets/ledger, override, rooms, and searchable wallet lookup                                      |
 | `/_app/admin-tutors`         | admin tutor invite + review               | Complete — invite/review queue plus version-checked structured achievement correction                                                                                |
 | `/_app/admin-achievements`   | achievement-moderation-page.tsx           | Exists (moderation UI)                                                                                                                                               |
 | `/_app/admin-economy`        | economy-settings-page.tsx                 | Complete — admin-managed Cogito take schedule with validation, preview, optimistic versioning, and audit-backed persistence                                          |
@@ -307,7 +318,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 | F8  | Series session completion UI                  | FR-20                  | G18                                                    | 1d     | **Closed (REVIEW-FIXES-3 P6)**                                                                                                 |
 | F9  | Session notes (rich-text) view + add          | FR-09, DL-18           | G7                                                     | 1.5d   | **Closed (2026-08-22)** — toolbar editor, client DOMPurify render pass, and author context                                     |
 | F10 | Notifications page                            | FR-17                  | G17                                                    | 1.5d   | Closed                                                                                                                         |
-| F11 | Admin wallet/ledger view                      | FR-10                  | G9                                                     | 1d     | Closed                                                                                                                         |
+| F11 | Admin wallet/ledger view                      | FR-10                  | G9                                                     | 1d     | **Closed** — wallet lookup now resolves users by name/email/ID before loading wallet and ledger                                              |
 | F12 | Admin room approval UI                        | FR-22                  | G14                                                    | 1d     | **Closed (room approval queue)**                                                                                               |
 | F13 | Tutor payout view                             | DL-11                  | G16 (`tutor.getMyPayouts` exists since #43)            | 0.5d   | **Closed (REVIEW-FIXES-3 P6)**                                                                                                 |
 | F14 | Group series no opt-out disclaimer display    | FR-20                  | G15                                                    | 0.5d   | **Closed (REVIEW-FIXES-3 P6)**                                                                                                 |
@@ -581,12 +592,12 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-10
 
-**Current state:** **CLOSED (2026-08-19).** Wallet lookup tab in `admin-operations-page.tsx` (`admin.getWallet` + `admin.listLedgerEntries`) — merged via #55.
+**Current state:** **CLOSED (2026-09-02).** Wallet lookup tab in `admin-operations-page.tsx` searches via `admin.searchUsers`, then uses the selected identity with `admin.getWallet` + `admin.listLedgerEntries`; the internal user ID is no longer the primary lookup input.
 
-**Required (after G9 backend):**
+**Implemented:**
 
 1. In admin dashboard (F1), "Wallet view" section
-2. Search by user → calls `admin.getWallet` → shows balance (total/held/available)
+2. Search by name/email/ID via `admin.searchUsers`, select a user, then call `admin.getWallet` → shows balance (total/held/available)
 3. Ledger entries: paginated, filterable by entry type, date range, booking ID
 4. Calls `admin.listLedgerEntries`
 
@@ -818,6 +829,8 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 ---
 
 ### Version Notes
+
+- v1.57 (2026-09-02): Replaced the admin wallet lookup's exact user-ID input with an admin-only identity search by name, email, or user ID. Results are bounded and selectable, and wallet/ledger reads run only for the selected account. Added the `admin.searchUsers` RPC and updated the admin API/module/runbook references.
 
 - v1.56 (2026-09-01): Limited tutor short bios to 50 whitespace-delimited words, added a live word counter and matching API validation, and updated achievement/experience proof guidance to recommend one shared Google Drive folder with the “Anyone with the link can view” setting. The RPC shape and database schema are unchanged.
 

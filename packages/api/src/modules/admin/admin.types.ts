@@ -13,6 +13,11 @@ export const listUsersInput = z
   })
   .optional();
 
+export const adminSearchUsersInput = z.object({
+  query: z.string().trim().min(2).max(100),
+  limit: z.number().int().min(1).max(20).default(10),
+});
+
 export const setRoleInput = z.object({
   userId: z.string().max(100),
   role: z.enum(["student", "tutor", "admin"]),

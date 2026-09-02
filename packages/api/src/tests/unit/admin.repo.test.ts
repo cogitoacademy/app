@@ -5,6 +5,7 @@ import {
   getById,
   countAdmins,
   getDashboardAnalytics,
+  searchUsers,
   updateRoleWithExpected,
   createAdminRepo,
 } from "../../modules/admin/admin.repo";
@@ -91,6 +92,30 @@ describe("listUsers", () => {
   });
 });
 
+describe("searchUsers", () => {
+  test("returns matching identity rows with relevance ordering and a limit", async () => {
+    const rows = [
+      {
+        id: "u1",
+        name: "Ada Lovelace",
+        email: "ada@example.com",
+        image: null,
+        role: "student",
+      },
+    ];
+    const { select, chain } = makeSelectConn(rows);
+    const conn: any = { select };
+
+    const result = await searchUsers(conn, " ada ", 10);
+
+    expect(result).toEqual(rows);
+    expect(chain.from).toHaveBeenCalledTimes(1);
+    expect(chain.where).toHaveBeenCalledTimes(1);
+    expect(chain.orderBy).toHaveBeenCalledTimes(1);
+    expect(chain.limit).toHaveBeenCalledWith(10);
+  });
+});
+
 describe("countUsers", () => {
   test("returns count from select", async () => {
     const { select, chain } = makeSelectConn([{ count: 42 }]);
@@ -161,6 +186,7 @@ describe("createAdminRepo", () => {
     const repo = createAdminRepo();
 
     expect(repo).toHaveProperty("listUsers");
+    expect(repo).toHaveProperty("searchUsers");
     expect(repo).toHaveProperty("countUsers");
     expect(repo).toHaveProperty("getById");
     expect(repo).toHaveProperty("countAdmins");
