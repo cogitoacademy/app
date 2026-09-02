@@ -124,6 +124,19 @@ service (zero config inside) and the empty `cogito` project itself.
 
 ## Progress log
 
+- 2026-09-02 (lead): **second live run (post-fix dispatch) — two more bugs
+  found + fixed.** ✅ `ansible-playbook` PATH now works (venv via GITHUB_ENV);
+  terraform no-drift no-op; vault decrypt + Coolify API on loopback. ❌
+  (1) host playbooks (backup-cron/disk-watchdog) SSH to the VPS from a
+  runner that IS the VPS — `github-runner` has no known_hosts → UNREACHABLE
+  (exit 4); fixed with `--connection=local` (tasks still escalate via
+  NOPASSWD sudo). (2) drift-check crashed (exit 2, misreported as
+  "API down") on webhook URLs still holding the `<uuid>` placeholder —
+  `regex_search` returns None and `None | first` throws inside `when`;
+  fixed with `(match or ['']) | first` guards in drift-check.yml.
+  Dispatch-run verdict: coolify-resources applied green (env drift
+  re-synced + restart), post-apply /health verify passed — full path
+  works end-to-end.
 - 2026-09-02 (lead): **first live automation run (dispatch) — runner works,
   two workflow bugs found + fixed.** ✅ Verified working: `SOPS_AGE_KEY`
   secret decrypt on the runner, Age key materialization + masking, in-memory

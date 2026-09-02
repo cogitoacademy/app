@@ -215,13 +215,13 @@ jobs:
           ansible-playbook -i infra/ansible/inventory.ini infra/ansible/coolify-resources.yml \
             -e coolify_api_url="http://127.0.0.1:8000/api/v1"
 
-      - name: Apply — backup-cron
+      - name: Apply — backup-cron (local connection — the runner IS the host)
         if: github.event_name == 'workflow_dispatch' || needs.detect.outputs.backup-cron == 'true'
-        run: ansible-playbook -i infra/ansible/inventory.ini infra/ansible/backup-cron.yml
+        run: ansible-playbook -i infra/ansible/inventory.ini infra/ansible/backup-cron.yml --connection=local
 
-      - name: Apply — disk-watchdog
+      - name: Apply — disk-watchdog (local connection — the runner IS the host)
         if: github.event_name == 'workflow_dispatch' || needs.detect.outputs.disk-watchdog == 'true'
-        run: ansible-playbook -i infra/ansible/inventory.ini infra/ansible/disk-watchdog.yml
+        run: ansible-playbook -i infra/ansible/inventory.ini infra/ansible/disk-watchdog.yml --connection=local
 
       - name: Apply — uptime-kuma
         if: github.event_name == 'workflow_dispatch' || needs.detect.outputs.uptime-kuma == 'true'
