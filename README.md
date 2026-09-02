@@ -41,7 +41,7 @@ cp apps/server/.env.example apps/server/.env
 cp apps/web/.env.example apps/web/.env
 # Edit BETTER_AUTH_SECRET to a 32+ character string
 
-# 5. (Optional) Seed package data
+# 5. (Optional) Seed package data for local/test setup; migration 0041 installs defaults automatically
 bun run seed-packages
 ```
 
@@ -128,4 +128,4 @@ See [`docs/CONTEXT.md`](docs/CONTEXT.md) for full architecture details and [`AGE
 | `bun run db:migrate`    | Apply migrations                         |
 | `bun run db:generate`   | Generate migration from schema changes   |
 | `bun run db:studio`     | Drizzle Studio UI                        |
-| `bun run seed-packages` | Seed mark package data                   |
+| `bun run seed-packages` | Seed mark package data (local/test or approved recovery) |

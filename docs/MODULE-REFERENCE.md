@@ -218,6 +218,39 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 
 ---
 
+## Admin-Mark-Package Module
+
+**Purpose:** Admin management of the purchasable Marks catalog while keeping
+payment package codes stable.
+
+**Files:**
+
+- `admin-mark-package.types.ts` — Zod schemas for create, update, and activation inputs
+- `admin-mark-package.errors.ts` — `MarkPackageNotFoundError`, `MarkPackageCodeConflictError`
+- `admin-mark-package.repo.ts` — full-catalog read, insert, detail update, and active-state update queries
+- `admin-mark-package.service.ts` — transactional catalog mutations and audit records
+- `admin-mark-package.handler.ts` — admin session adaptation and domain-error mapping
+- `admin-mark-package.router.ts` — Admin-only catalog routes
+
+**Service Methods:**
+
+- `list()` — Returns all packages, including inactive rows, ordered by Marks and code
+- `create(adminId, input)` — Inserts a package with an application-generated UUID id; duplicate codes become `MARK_PACKAGE_CODE_CONFLICT`
+- `update(adminId, input)` — Updates name, Marks, and IDR price while keeping `code` immutable
+- `setActive(adminId, input)` — Soft-enables or soft-disables a package; repeated state is a no-op
+
+**Dependencies:** `DbType`, `AuditPort`
+
+**Business Rules:**
+
+- Package `code` is the stable business key passed to `payment.createPurchase`; existing payment records also keep the package id and amount/Marks snapshots
+- Packages are never hard-deleted; inactive rows remain available for audit and historical references and are hidden only from `wallet.listPackages`
+- Every create/update/activation transition is written to the audit log inside the same database transaction
+- Default catalog values are installed by the versioned, idempotent data migration `0041_seed_mark_packages.sql`, not by the server boot path or every deployment seed
+- The migration updates the default name/Marks/price when the code already exists but preserves an operator's explicit `is_active` choice
+
+---
+
 ## Admin-Booking Module
 
 **Purpose:** Admin operations console for bookings — filtered override queue with urgency/SLA projection, a dedicated admin-only booking detail/history page, hydrated participant wallet/ledger inspection, before/after override preview, state history, and admin refunds. Queue rows navigate to `/admin-operations/bookings/:bookingId`; the page resolves its own queue item with the exact `bookingId` filter instead of relying on modal state.

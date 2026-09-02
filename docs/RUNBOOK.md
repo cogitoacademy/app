@@ -480,10 +480,11 @@ manual recovery only.
 ### Seed the Database
 
 ```bash
-bun run seed-packages          # Seeds mark packages only
+# Default mark packages are installed by migration 0041_seed_mark_packages.sql.
+bun run seed-packages          # Optional local/test or explicitly approved recovery tool
 ```
 
-Production guard: `NODE_ENV=production bun run seed-packages` will exit with an error unless `SEED_ALLOWED_IN_PROD=true` is explicitly set. The full `bun run seed` command uses the same guard and additionally requires `SEED_ADMIN_PASSWORD`, `SEED_TUTOR_PASSWORD`, and `SEED_STUDENT_PASSWORD` (minimum 12 characters). In production it creates a dedicated local-login review admin from `SEED_REVIEW_ADMIN_EMAIL` and refuses to reuse an operator address from `ADMIN_EMAILS`. Set the review student/tutor emails explicitly, run the seed once, then remove all seed passwords and `SEED_ALLOWED_IN_PROD` from the deployment environment. Never provide the Google Calendar account password to a reviewer.
+Production guard: `NODE_ENV=production bun run seed-packages` will exit with an error unless `SEED_ALLOWED_IN_PROD=true` is explicitly set. Do not run it as part of normal deploys: the CD migration step applies `0041_seed_mark_packages.sql` automatically and safely. Use the command only for local/test setup or an explicitly approved recovery. The full `bun run seed` command uses the same guard and additionally requires `SEED_ADMIN_PASSWORD`, `SEED_TUTOR_PASSWORD`, and `SEED_STUDENT_PASSWORD` (minimum 12 characters). In production it creates a dedicated local-login review admin from `SEED_REVIEW_ADMIN_EMAIL` and refuses to reuse an operator address from `ADMIN_EMAILS`. Set the review student/tutor emails explicitly, run the seed once, then remove all seed passwords and `SEED_ALLOWED_IN_PROD` from the deployment environment. Never provide the Google Calendar account password to a reviewer.
 
 The full production/staging seed creates or reuses the separate review address
 from `SEED_REVIEW_ADMIN_EMAIL` and sets its role to `admin`. Independently, on
@@ -494,7 +495,15 @@ after boot is promoted by the Better Auth signup hook. Set `ADMIN_EMAILS` to a
 comma-separated list when more than one trusted account should be bootstrapped.
 Other admin accounts may still be granted through the existing admin role UI/API.
 
-Seed values follow PRD OQ-01: Starter 50 Marks / Rp 312,500, Learner 120 Marks / Rp 690,000, Explorer 200 Marks / Rp 1,070,000, Pioneer 400 Marks / Rp 2,000,000. Seed demo students are marked email-verified so the local booking smoke flow can exercise the verified-student guard without an external OTP provider. Re-run `bun run seed` on prod once before any real payment: the insert is `onConflictDoNothing`, so existing rows keep stale values — correct package prices are required before the payment provider goes live (delete stale `mark_package` rows first if an older seed already ran).
+Default catalog values follow PRD OQ-01: Starter 50 Marks / Rp 312,500, Learner 120 Marks / Rp 690,000, Explorer 200 Marks / Rp 1,070,000, Pioneer 400 Marks / Rp 2,000,000. Migration `0041_seed_mark_packages.sql` inserts missing rows and updates those name/Marks/price fields when a matching code already exists, while preserving an existing `is_active` choice. Seed demo students are marked email-verified so the local booking smoke flow can exercise the verified-student guard without an external OTP provider. To change the catalog after deployment, use the admin mark-package API; do not delete rows because payment records reference the package id and retain amount/Marks snapshots.
+
+If production is currently missing packages, deploy the migration and verify with:
+
+```bash
+bun run db:migrate
+```
+
+Then call `adminMarkPackage.list` as an admin and confirm the four default codes are present. The next normal CD deployment runs this migration automatically; no per-deploy seed command or server-boot seed is required.
 
 ### Reset the Database
 
@@ -503,7 +512,7 @@ Seed values follow PRD OQ-01: Starter 50 Marks / Rp 312,500, Learner 120 Marks /
 docker compose down -v
 bun run db:start
 bun run db:migrate
-bun run seed-packages
+# Migration 0041 inserts the default mark-package catalog.
 ```
 
 Test database reset:

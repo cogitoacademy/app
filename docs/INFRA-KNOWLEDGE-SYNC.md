@@ -278,9 +278,10 @@ The plan is thorough; these are the gaps found during this review:
 6. **`WEBHOOK_ALLOWED_IPS` verification at go-live** — sandbox and live use
    the same documented Xendit egress IPs, but verify against the live
    dashboard before the first real transaction.
-7. **Seed packages on prod before real payments** — RUNBOOK notes it
-   (`onConflictDoNothing` means stale prices persist); add it to Phase 2's
-   checklist.
+7. **Default package catalog on prod** — migration
+   `0041_seed_mark_packages.sql` now installs/upserts the PRD catalog during
+   the normal CD migration step. Keep the package seed command for local/test
+   setup or explicitly approved recovery; it is not a per-deploy operation.
 8. **Backup `DATABASE_URL` host-reachability note** — the vault's
    `DATABASE_URL` must resolve from the VPS _host_ (published port or
    container IP), not the private hostname. It's in the playbook header; add
