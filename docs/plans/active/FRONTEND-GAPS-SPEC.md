@@ -602,7 +602,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-22
 
-**Current state:** **CLOSED (2026-08-22).** The Rooms tab consumes `room.listPendingApprovals` and no longer requires admins to paste a booking id for pending approvals. Existing assign/relocate/cancel mutations remain the action paths.
+**Current state:** **CLOSED (2026-09-02).** The Room approvals tab consumes `room.listPendingApprovals` as the cross-booking queue. Requested rooms can be assigned inline; Choose room/Choose another navigates to the admin booking detail Offline room card, where assignment, relocation, and cancellation use the booking's existing context. No pending or detail flow requires admins to paste a booking UUID. Existing room mutations remain the action paths.
 
 **Required (after G14 backend):**
 
@@ -818,6 +818,8 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 ---
 
 ### Version Notes
+
+- v1.58 (2026-09-02): Refined admin offline room assignment into a Room approvals queue plus context-aware booking-detail actions. Removed manual booking UUID/date-time entry; assign, relocate, and cancellation now use the selected booking's existing schedule and room context.
 
 - v1.56 (2026-09-01): Limited tutor short bios to 50 whitespace-delimited words, added a live word counter and matching API validation, and updated achievement/experience proof guidance to recommend one shared Google Drive folder with the “Anyone with the link can view” setting. The RPC shape and database schema are unchanged.
 

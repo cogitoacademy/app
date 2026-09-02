@@ -82,10 +82,11 @@ import {
   getBookingStateLabel,
   getBookingStateVariant,
 } from "@/components/booking/booking-ui";
+import { AdminRoomActions } from "@/components/booking/admin-room-actions";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { ManualMeetingLinkDialog } from "@/components/booking/manual-meeting-link-dialog";
 import { client, orpc } from "@/utils/orpc";
 import { getUserFacingError } from "@/lib/error-message";
-import { CrossBrowserDateTimeInput } from "@/components/booking/minute-time-input";
 import { WhatsAppSupportDialog } from "@/components/whatsapp-support-dialog";
 
 const OVERRIDE_CATEGORIES = [
@@ -130,7 +131,7 @@ export function AdminOperationsPage() {
             <IconCoins /> Wallet lookup
           </TabsItem>
           <TabsItem value="rooms">
-            <IconBuilding /> Rooms
+            <IconBuilding /> Room approvals
           </TabsItem>
         </TabsList>
         <TabsPanel value="queue">
@@ -630,6 +631,32 @@ export function AdminBookingDetailPage({ bookingId }: { bookingId: string }) {
               ) : null}
             </CardBody>
           </Card>
+        ) : null}
+
+        {booking.modality === "offline" && bookingQuery.data ? (
+          <AdminRoomActions
+            booking={bookingQuery.data}
+            onBookingChanged={() => {
+              void Promise.all([
+                queryClient.invalidateQueries({
+                  queryKey: orpc.adminBooking.listBookings.key(),
+                }),
+                queryClient.invalidateQueries({
+                  queryKey: orpc.adminBooking.getBookingStateHistory.queryKey({
+                    input: { bookingId: booking.id },
+                  }),
+                }),
+                queryClient.invalidateQueries({
+                  queryKey: orpc.booking.get.queryKey({
+                    input: { bookingId: booking.id },
+                  }),
+                }),
+                queryClient.invalidateQueries({
+                  queryKey: orpc.room.listPendingApprovals.key(),
+                }),
+              ]);
+            }}
+          />
         ) : null}
 
         <Card>
@@ -1321,72 +1348,49 @@ type PendingRoomApproval = Awaited<
 
 function RoomOperations() {
   const queryClient = useQueryClient();
-  const [operation, setOperation] = useState<"assign" | "relocate">("assign");
-  const [bookingId, setBookingId] = useState("");
-  const [roomId, setRoomId] = useState("");
-  const [startAt, setStartAt] = useState("");
-  const [endAt, setEndAt] = useState("");
-  const [selectedApproval, setSelectedApproval] =
+  const [cancelApproval, setCancelApproval] =
     useState<PendingRoomApproval | null>(null);
-  const roomsQuery = useQuery(
-    orpc.room.list.queryOptions({ input: undefined }),
-  );
   const pendingQuery = useQuery(
     orpc.room.listPendingApprovals.queryOptions({ input: { limit: 50 } }),
   );
   const invalidateRoomQueries = () => {
-    void queryClient.invalidateQueries({ queryKey: orpc.room.list.key() });
-    void queryClient.invalidateQueries({
-      queryKey: orpc.room.listPendingApprovals.key(),
-    });
+    void Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: orpc.room.listPendingApprovals.key(),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: orpc.booking.get.key(),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: orpc.booking.listMine.key(),
+      }),
+    ]);
   };
   const assign = useMutation(
     orpc.room.assign.mutationOptions({
       onSuccess: () => {
         toastManager.add({ title: "Room assigned", type: "success" });
-        setSelectedApproval(null);
         invalidateRoomQueries();
       },
       onError: (error: Error) => showError("Room could not be assigned", error),
     }),
   );
-  const relocate = useMutation(
-    orpc.room.relocate.mutationOptions({
-      onSuccess: () => {
-        toastManager.add({ title: "Room relocated", type: "success" });
-        setSelectedApproval(null);
-        invalidateRoomQueries();
-      },
-      onError: (error: Error) =>
-        showError("Room could not be relocated", error),
-    }),
-  );
   const cancel = useMutation(
     orpc.room.cancelBooking.mutationOptions({
       onSuccess: () => {
-        toastManager.add({ title: "Room booking cancelled", type: "success" });
-        setSelectedApproval(null);
+        setCancelApproval(null);
+        toastManager.add({
+          title: "Offline booking cancelled",
+          type: "success",
+        });
         invalidateRoomQueries();
       },
       onError: (error: Error) =>
         showError("Room booking could not be cancelled", error),
     }),
   );
-  const openApproval = (approval: PendingRoomApproval) => {
-    setSelectedApproval(approval);
-    setOperation("assign");
-    setBookingId(approval.bookingId);
-    setRoomId(approval.requestedRoomId ?? "");
-    setStartAt(
-      toDateTimeLocalInput(approval.scheduledStartAt, approval.timezone),
-    );
-    setEndAt(toDateTimeLocalInput(approval.scheduledEndAt, approval.timezone));
-  };
   const assignRequested = (approval: PendingRoomApproval) => {
-    if (!approval.requestedRoomId) {
-      openApproval(approval);
-      return;
-    }
+    if (!approval.requestedRoomId) return;
     assign.mutate({
       bookingId: approval.bookingId,
       roomId: approval.requestedRoomId,
@@ -1394,14 +1398,8 @@ function RoomOperations() {
       endAt: new Date(approval.scheduledEndAt),
     });
   };
-  const valid =
-    bookingId.trim() &&
-    roomId &&
-    startAt &&
-    endAt &&
-    new Date(endAt) > new Date(startAt);
   return (
-    <Stack direction="column" spacing="md">
+    <>
       <PendingRoomApprovals
         items={pendingQuery.data ?? []}
         isPending={pendingQuery.isPending}
@@ -1416,123 +1414,30 @@ function RoomOperations() {
         onRetry={() => void pendingQuery.refetch()}
         onRefresh={() => void pendingQuery.refetch()}
         onAssignRequested={assignRequested}
-        onOpenForm={openApproval}
-        onCancel={(id) => cancel.mutate({ bookingId: id })}
+        onCancel={setCancelApproval}
         isActionPending={assign.isPending || cancel.isPending}
       />
-      <Card>
-        <CardHeader>
-          <CardTitle>Offline room assignment</CardTitle>
-          <CardDescription>
-            {selectedApproval
-              ? `Managing pending booking ${selectedApproval.bookingId}.`
-              : "Assign or relocate an active room to an offline booking."}
-          </CardDescription>
-        </CardHeader>
-        <CardBody className="grid gap-4 sm:grid-cols-2">
-          <Field>
-            <FieldLabel>Operation</FieldLabel>
-            <Select
-              value={operation}
-              onValueChange={(value) =>
-                setOperation(getSelectItemValue(value) as "assign" | "relocate")
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectPopup>
-                <SelectList>
-                  <SelectItem value="assign">Assign room</SelectItem>
-                  <SelectItem value="relocate">Relocate room</SelectItem>
-                </SelectList>
-              </SelectPopup>
-            </Select>
-          </Field>
-          <Field>
-            <FieldLabel>Booking ID</FieldLabel>
-            <Input
-              value={bookingId}
-              onChange={(event) => setBookingId(event.target.value)}
-            />
-          </Field>
-          <Field>
-            <FieldLabel>Room</FieldLabel>
-            <Select
-              value={roomId}
-              onValueChange={(value) =>
-                setRoomId(getSelectItemValue(value) ?? "")
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select room" />
-              </SelectTrigger>
-              <SelectPopup>
-                <SelectList>
-                  {roomsQuery.data?.map((room) => (
-                    <SelectItem key={room.id} value={room.id}>
-                      {room.name} · {room.location}
-                    </SelectItem>
-                  ))}
-                </SelectList>
-              </SelectPopup>
-            </Select>
-            <FieldDescription>
-              {roomsQuery.isPending
-                ? "Loading rooms…"
-                : roomsQuery.isError
-                  ? "Rooms could not be loaded."
-                  : roomsQuery.data?.length === 0
-                    ? "No rooms are available yet. Add a room before assigning an offline booking."
-                    : "Choose the room for this offline booking."}
-            </FieldDescription>
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="room-start-date">Start</FieldLabel>
-            <CrossBrowserDateTimeInput
-              id="room-start"
-              timeAriaLabel="Start time"
-              value={startAt}
-              onChange={setStartAt}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="room-end-date">End</FieldLabel>
-            <CrossBrowserDateTimeInput
-              id="room-end"
-              timeAriaLabel="End time"
-              value={endAt}
-              onChange={setEndAt}
-            />
-          </Field>
-        </CardBody>
-        <CardFooter className="justify-end gap-2">
-          <Button
-            variant="danger"
-            onClick={() => cancel.mutate({ bookingId: bookingId.trim() })}
-            disabled={!bookingId.trim() || cancel.isPending}
-          >
-            Cancel room
-          </Button>
-          <Button
-            onClick={() => {
-              const input = {
-                bookingId: bookingId.trim(),
-                roomId,
-                startAt: new Date(startAt),
-                endAt: new Date(endAt),
-              };
-              if (operation === "relocate") relocate.mutate(input);
-              else assign.mutate(input);
-            }}
-            progress={assign.isPending || relocate.isPending}
-            disabled={!valid || assign.isPending || relocate.isPending}
-          >
-            {operation === "relocate" ? "Relocate room" : "Assign room"}
-          </Button>
-        </CardFooter>
-      </Card>
-    </Stack>
+      <ConfirmationDialog
+        open={cancelApproval !== null}
+        onOpenChange={(open) => {
+          if (!open && !cancel.isPending) setCancelApproval(null);
+        }}
+        title="Cancel this offline booking?"
+        description={
+          cancelApproval
+            ? `This will cancel the booking scheduled for ${formatBookingDate(cancelApproval.scheduledStartAt, cancelApproval.timezone)}, release held Marks, and notify the tutor and confirmed students.`
+            : "This will cancel the offline booking and release its held Marks."
+        }
+        confirmLabel="Cancel booking"
+        confirmVariant="danger"
+        pending={cancel.isPending}
+        onConfirm={() => {
+          if (cancelApproval) {
+            cancel.mutate({ bookingId: cancelApproval.bookingId });
+          }
+        }}
+      />
+    </>
   );
 }
 
@@ -1543,7 +1448,6 @@ function PendingRoomApprovals({
   onRetry,
   onRefresh,
   onAssignRequested,
-  onOpenForm,
   onCancel,
   isActionPending,
 }: {
@@ -1553,8 +1457,7 @@ function PendingRoomApprovals({
   onRetry: () => void;
   onRefresh: () => void;
   onAssignRequested: (approval: PendingRoomApproval) => void;
-  onOpenForm: (approval: PendingRoomApproval) => void;
-  onCancel: (bookingId: string) => void;
+  onCancel: (approval: PendingRoomApproval) => void;
   isActionPending: boolean;
 }) {
   return (
@@ -1653,7 +1556,18 @@ function PendingRoomApprovals({
                         <Button
                           size="sm"
                           variant="secondary"
-                          onClick={() => onOpenForm(item)}
+                          render={
+                            <Link
+                              to="/admin-operations/bookings/$bookingId"
+                              params={{ bookingId: item.bookingId }}
+                              aria-label={
+                                item.requestedRoomId
+                                  ? "Choose another room for this booking"
+                                  : "Choose a room for this booking"
+                              }
+                            />
+                          }
+                          nativeButton={false}
                           disabled={isActionPending}
                         >
                           {item.requestedRoomId
@@ -1663,7 +1577,7 @@ function PendingRoomApprovals({
                         <Button
                           size="sm"
                           variant="danger"
-                          onClick={() => onCancel(item.bookingId)}
+                          onClick={() => onCancel(item)}
                           progress={isActionPending}
                           disabled={isActionPending}
                         >
@@ -1829,26 +1743,6 @@ function formatTimeSince(value: string | Date | null) {
 
 function formatMarks(value: number) {
   return `${new Intl.NumberFormat("id-ID").format(value)} Marks`;
-}
-
-function toDateTimeLocalInput(value: string | Date, timeZone: string) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    calendar: "iso8601",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  })
-    .formatToParts(new Date(value))
-    .reduce<Record<string, string>>((result, part) => {
-      if (part.type !== "literal") result[part.type] = part.value;
-      return result;
-    }, {});
-
-  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
 }
 
 function showError(title: string, error: Error) {

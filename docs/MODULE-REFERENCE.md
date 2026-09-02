@@ -700,6 +700,13 @@ chat directory.
 
 **Purpose:** Room management for offline bookings — room CRUD, availability checks, assignment, relocation, and un-assignment.
 
+**Admin UI workflow:** The Operations → Room approvals tab is the cross-booking
+work queue. A requested room can be assigned inline; choosing a room or a
+different room opens the admin-only booking detail page, where the Offline room
+card performs assignment, relocation, or room removal with the booking's
+schedule already attached. The UI does not ask admins to type booking UUIDs,
+and this workflow does not change the RPC contracts.
+
 **Files:**
 
 - `room.types.ts` — Zod schemas for list/pending-approval/create/assign/check-availability/relocate/cancel inputs
