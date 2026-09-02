@@ -409,7 +409,7 @@ recipient consent.
 
 **Purpose:** Core booking lifecycle — solo, group, and series bookings with state machine transitions, reschedule approval, session notes, wallet holds, payouts, and meeting integration.
 
-Reschedule proposals must change the active booking or target-session start minute and cannot repeat the pending proposal for the same target. `proposeReschedule` serializes replacements with a booking-scoped transaction advisory lock; `reschedule_booking_pending_uniq` independently guarantees at most one pending proposal per booking.
+Reschedule proposals must change the active booking or target-session start minute and cannot repeat the pending proposal for the same target. `proposeReschedule` serializes replacements with a booking-scoped transaction advisory lock; `reschedule_booking_pending_uniq` independently guarantees at most one pending proposal per booking. The booking-detail proposal editor is presented in a height-constrained bottom Selia drawer on mobile and a right-side drawer on desktop; this presentation does not change the service contract.
 
 **Files:**
 

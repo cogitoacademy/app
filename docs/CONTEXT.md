@@ -553,7 +553,7 @@ Booking read relations expose only safe user identity (`id`, `name`, `image`,
 `role`). Internal meeting attendee email arrays are selected only by
 server-side meeting/notification code.
 
-After submission, the tutor or booking proposer can propose a replacement time from the booking-detail action panel. The frontend dispatches student proposals to `booking.proposeReschedule` and tutor proposals to `tutorActions.proposeReschedule`; both routes use the shared service. Rescheduling is session-scoped; each proposal requires tutor and all active-student approval, and the original schedule remains active until unanimous acceptance.
+After submission, the tutor or booking proposer can propose a replacement time from the booking-detail action panel. The proposal form opens in a height-constrained bottom Selia drawer on mobile and a right-side drawer on desktop, with a scrolling body and persistent action footer. The frontend dispatches student proposals to `booking.proposeReschedule` and tutor proposals to `tutorActions.proposeReschedule`; both routes use the shared service. Rescheduling is session-scoped; each proposal requires tutor and all active-student approval, and the original schedule remains active until unanimous acceptance.
 
 ### TutorActions Module (tutor)
 
