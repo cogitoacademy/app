@@ -458,14 +458,14 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
               </IconBox>
               <CardTitle>Session topic</CardTitle>
               <CardDescription>
-                Choose the competition and focus area for this booking.
+                Choose the competition and specialization for this booking.
               </CardDescription>
             </CardHeader>
             <CardBody>
               {subjects.length > 0 ? (
                 <Field>
                   <FieldLabel htmlFor="booking-subject">
-                    Competition and category
+                    Specialization
                   </FieldLabel>
                   <Select
                     value={effectiveSubjectId}

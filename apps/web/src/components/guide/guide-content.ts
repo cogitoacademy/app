@@ -295,11 +295,11 @@ const studentContent: GuideContent = {
           id: "student-discover",
           title: "Find a tutor",
           summary:
-            "Browse published tutors by subject, expertise, and session format, then inspect their availability.",
+            "Browse published tutors by specialization, expertise, and session format, then inspect their availability.",
           actor: "You",
           icon: IconSearch,
           details: [
-            "Use the subject and modality filters to narrow the list.",
+            "Use the specialization and modality filters to narrow the list.",
             "Open a tutor profile to compare their teaching setup, pricing, and future availability.",
             "Choose one session for a solo booking or multiple dates for a series.",
           ],
@@ -544,11 +544,11 @@ const tutorContent: GuideContent = {
           id: "tutor-profile",
           title: "Complete your teaching profile",
           summary:
-            "Add your bio, subjects, prices, proof, teaching formats, and availability before asking for review.",
+            "Add your bio, specializations, prices, proof, teaching formats, and availability before asking for review.",
           actor: "You",
           icon: IconNotes,
           details: [
-            "Select active child subjects from the normalized subject catalog.",
+            "Select active specializations from the competition catalog.",
             "Set future non-overlapping availability windows; each student booking is exactly 90 minutes.",
             "Save as a draft while collecting the required information, then submit when ready.",
           ],
@@ -775,7 +775,7 @@ const adminContent: GuideContent = {
           id: "admin-review-tutor",
           title: "Review and publish tutor profiles",
           summary:
-            "Check profile completeness, subjects, pricing, proof, and review feedback before making a tutor discoverable.",
+            "Check profile completeness, specializations, pricing, proof, and review feedback before making a tutor discoverable.",
           actor: "Admin",
           icon: IconShieldCheck,
           details: [

@@ -16,7 +16,7 @@ Automatically created Google Calendar events now use readable booking metadata:
 The metadata is sent through both the service-account and OAuth Calendar API
 paths. Existing Google Calendar events keep their old title; only newly created
 events and future retry-created events use the new format. Booking creation
-validates the tutor subcategory and snapshots its category/subcategory metadata
+validates the tutor specialization and snapshots its category/specialization metadata
 in `booking.session_topic` via migration 0037.
 
 The authenticated booking list and detail header now reuse the same canonical

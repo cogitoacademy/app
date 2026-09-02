@@ -217,7 +217,7 @@ export function TutorsPageContent() {
             <IconSearch className="size-4" />
           </InputGroupAddon>
           <Input
-            placeholder="Search tutors or subjects..."
+            placeholder="Search tutors or specializations..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -257,7 +257,7 @@ export function TutorsPageContent() {
               className="min-w-0 flex-1 truncate text-left"
               placeholder={
                 categoryIds.length > 0
-                  ? "All child subjects"
+                  ? "All specializations"
                   : "Choose category first"
               }
             />
@@ -302,8 +302,8 @@ export function TutorsPageContent() {
 
       {isTaxonomyError && (
         <Text className="text-muted" role="status">
-          Subject filters are temporarily unavailable. You can still search
-          tutors by name or description.
+          Specialization filters are temporarily unavailable. You can still
+          search tutors by name or description.
         </Text>
       )}
 
@@ -324,7 +324,7 @@ export function TutorsPageContent() {
         <EmptyStateCard
           icon={<IconSearch />}
           title="No tutors found"
-          description="We couldn't find a tutor matching those filters. Try another subject or reset your search."
+          description="We couldn't find a tutor matching those filters. Try another specialization or reset your search."
           tone="secondary"
           action={
             <Button

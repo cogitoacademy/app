@@ -201,7 +201,7 @@ describe("DiscoveryRepo", () => {
   });
 
   describe("listSubjects", () => {
-    test("lists active parent categories with active children", async () => {
+    test("lists active categories with active specializations", async () => {
       const categories = [{ id: "cat-1", children: [] }];
       const findMany = mock(async () => categories);
       const conn = {

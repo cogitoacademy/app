@@ -1,4 +1,4 @@
--- Tutor subject taxonomy: editable mother categories and selectable child subjects.
+-- Tutor specialization taxonomy: editable competition categories and selectable specializations.
 -- The initial catalog is intentionally small and slug-stable so admins can
 -- rename labels without breaking tutor selections or student filters.
 CREATE TABLE "subject_category" (
@@ -37,7 +37,7 @@ CREATE INDEX "tutor_profile_subject_subjectId_idx" ON "tutor_profile_subject" US
 CREATE UNIQUE INDEX "tutor_profile_subject_profile_subject_uniq" ON "tutor_profile_subject" USING btree ("tutor_profile_id","subject_id");
 -- statement-breakpoint
 
--- Source-informed mother categories from cogitoacademy.id/en.
+-- Source-informed competition categories from cogitoacademy.id/en.
 INSERT INTO "subject_category" ("id", "parent_id", "slug", "name", "sort_order") VALUES
 	('10000000-0000-4000-8000-000000000001', NULL, 'model-united-nations', 'Model United Nations', 10),
 	('10000000-0000-4000-8000-000000000002', NULL, 'public-speaking', 'Public Speaking', 20),
@@ -54,7 +54,7 @@ ON CONFLICT ("slug") DO UPDATE SET
 	"updated_at" = now();
 -- statement-breakpoint
 
--- Initial child subjects. IDs are stable within the catalog; the API only
+-- Initial specializations. IDs are stable within the catalog; the API only
 -- accepts active rows with a non-null parent_id for tutor selection.
 INSERT INTO "subject_category" ("id", "parent_id", "slug", "name", "sort_order") VALUES
 	('20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'mun-debate', 'MUN Debate', 10),

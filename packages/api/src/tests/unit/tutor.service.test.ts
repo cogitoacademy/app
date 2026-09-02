@@ -526,7 +526,7 @@ describe("Tutor Service", () => {
       ).rejects.toThrow(OptimisticLockError);
     });
 
-    test("published profile stores changed subject ids as pending edits", async () => {
+    test("published profile stores changed specialization ids as pending edits", async () => {
       const profile = makeProfile({
         onboardingStatus: "published",
         subjects: [

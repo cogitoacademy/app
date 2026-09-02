@@ -271,7 +271,7 @@ function readExperienceEntries(value: unknown): TutorExperienceEntry[] | null {
 }
 
 function formatPendingField(field: string) {
-  if (field === "subjectIds") return "Subjects";
+  if (field === "subjectIds") return "Specializations";
   return field.replace(/([A-Z])/g, " $1");
 }
 
@@ -290,7 +290,7 @@ function PendingChangeValue({
     return (
       <div
         className="flex min-w-0 flex-wrap gap-1.5"
-        aria-label="Proposed subjects"
+        aria-label="Proposed specializations"
       >
         {value.map((subjectId) => {
           const id = String(subjectId);
@@ -300,7 +300,7 @@ function PendingChangeValue({
               variant="secondary"
               className="h-auto min-h-5.5 max-w-full whitespace-normal break-words py-0.5"
             >
-              {subjectLabels.get(id) ?? "Subject unavailable"}
+              {subjectLabels.get(id) ?? "Specialization unavailable"}
             </Badge>
           );
         })}
@@ -942,7 +942,7 @@ export function TutorReviewCard({
                 </div>
               ) : (
                 <Text className="text-sm italic text-dimmed">
-                  No subjects listed.
+                  No specializations listed.
                 </Text>
               )}
             </section>

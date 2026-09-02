@@ -175,7 +175,7 @@ const TUTOR_FIELD_LABELS: Record<string, string> = {
   bankAccountOpeningCity: "Account opening city/regency",
   bankAccountOwnership: "Account ownership",
   bankTransferDisclaimerAccepted: "Transfer-account confirmation",
-  subjects: "Subjects and competition tracks",
+  subjects: "Specializations",
   baseRatesIdr: "Base honorarium",
   education: "Education",
   achievementProofUrls: "Achievement proof links",
@@ -357,10 +357,10 @@ function readServerFieldErrors(error: unknown) {
   ) {
     fieldErrors.subjects =
       data.reason === "too_many"
-        ? `Select no more than ${MAX_TUTOR_SUBJECTS} child subjects.`
+        ? `Select no more than ${MAX_TUTOR_SUBJECTS} specializations.`
         : data.reason === "required"
-          ? "Select at least one child subject."
-          : "Some selected subjects are no longer available. Update your selection.";
+          ? "Select at least one specialization."
+          : "Some selected specializations are no longer available. Update your selection.";
   }
 
   if (Array.isArray(data.issues)) {
@@ -805,10 +805,10 @@ export function OnboardingForm({
     if (form.subjectIds.length > MAX_TUTOR_SUBJECTS) {
       addError(
         "subjects",
-        `Select no more than ${MAX_TUTOR_SUBJECTS} child subjects.`,
+        `Select no more than ${MAX_TUTOR_SUBJECTS} specializations.`,
       );
     } else if (requireComplete && form.subjectIds.length === 0) {
-      addError("subjects", "Select at least one child subject.");
+      addError("subjects", "Select at least one specialization.");
     }
 
     const ratesToCheck =
@@ -1341,10 +1341,10 @@ export function OnboardingForm({
 
                 <Field className="sm:col-span-2">
                   <FieldLabel htmlFor="tutor-subject-category">
-                    Subjects and competition tracks *
+                    Specializations *
                   </FieldLabel>
                   <FieldDescription>
-                    Select the competition subcategories you teach. Students
+                    Select the competition specializations you teach. Students
                     will see these on your tutor profile. You can select up to{" "}
                     {MAX_TUTOR_SUBJECTS}.
                   </FieldDescription>

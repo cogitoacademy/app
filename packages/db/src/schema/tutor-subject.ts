@@ -16,8 +16,9 @@ import { tutorInvite } from "./tutor-invite";
 import { tutorProfile } from "./tutor-profile";
 
 /**
- * Editable subject catalog. A row with a null parentId is a mother category;
- * rows with a parentId are selectable child subjects. Inactive rows are kept
+ * Editable specialization catalog. A row with a null parentId is a competition
+ * category;
+ * rows with a parentId are selectable specializations. Inactive rows are kept
  * for legacy tutor profile reads and foreign-key preservation.
  */
 export const subjectCategory = pgTable(
@@ -55,8 +56,9 @@ export const subjectCategory = pgTable(
 );
 
 /**
- * Normalized tutor subject selection. Only child subjectCategory rows should
- * be inserted here; the API validates that invariant before persistence.
+ * Normalized tutor specialization selection. Only subjectCategory rows with a
+ * parentId should be inserted here; the API validates that invariant before
+ * persistence.
  */
 export const tutorProfileSubject = pgTable(
   "tutor_profile_subject",

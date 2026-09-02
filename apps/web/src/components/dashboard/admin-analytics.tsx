@@ -542,7 +542,7 @@ function AnalyticsContent({
             </IconBox>
             <CardTitle>Demand signals</CardTitle>
             <CardDescription>
-              Format mix and the most requested subject categories in the
+              Format mix and the most requested specialization categories in the
               selected period.
             </CardDescription>
           </CardHeader>

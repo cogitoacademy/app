@@ -115,7 +115,7 @@ export async function updateProfileImage(
 }
 
 /**
- * Finds active child subjects by id. Parent categories are deliberately
+ * Finds active specializations by id. Parent categories are deliberately
  * excluded so arbitrary expertise strings or mother ids cannot be persisted
  * as tutor selections.
  */

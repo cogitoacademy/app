@@ -156,7 +156,7 @@ describe("Discovery Service", () => {
       });
     });
 
-    test("passes multiple category and subject filters to the repo", async () => {
+    test("passes multiple category and specialization filters to the repo", async () => {
       const listPublished = mock(async () => []);
       const repo = makeRepo({ listPublished });
       const service = createDiscoveryService({ repo });
