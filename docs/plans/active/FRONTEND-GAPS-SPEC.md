@@ -494,7 +494,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-15
 
-**Current state:** **CLOSED (2026-08-19; role-dispatch follow-up 2026-08-22; no-op/race guards 2026-08-28).** `booking-reschedule-action.tsx` (calendar + time input + reason; role-aware `booking.proposeReschedule`/`tutorActions.proposeReschedule`, per-session `sessionId`, supersedes pending proposal) — merged via #55 with the tutor route wiring corrected in the follow-up. The UI disables proposals matching either the active start or pending proposal; the service applies the same invariant to booking and series-session targets, serializes replacement, and the database permits only one pending proposal per booking.
+**Current state:** **CLOSED (2026-08-19; role-dispatch follow-up 2026-08-22; no-op/race guards 2026-08-28; drawer follow-up 2026-09-02).** `booking-reschedule-action.tsx` (calendar + time input + reason; role-aware `booking.proposeReschedule`/`tutorActions.proposeReschedule`, per-session `sessionId`, supersedes pending proposal) — merged via #55 with the tutor route wiring corrected in the follow-up. The proposal editor now uses a height-constrained bottom Selia drawer on mobile and a right-side drawer on desktop, with a scrollable body and separate action footer. The UI disables proposals matching either the active start or pending proposal; the service applies the same invariant to booking and series-session targets, serializes replacement, and the database permits only one pending proposal per booking.
 
 **Required (after G6 backend fix):**
 
@@ -858,6 +858,7 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 
 - v1.60 (2026-09-02): Restored room re-assignment after removal: scheduled offline bookings with no active room expose the selector again and the room service accepts the guarded assignment.
 - v1.59 (2026-09-02): Consolidated admin booking details: room controls and participant wallet/ledger facts now live in Session overview, the admin participant grid is one column, review context moved to the right rail, Marks values use the shared `CogitoMarks` component, and State history matches the shared Activity timeline.
+- v1.59 (2026-09-02): Replaced the booking-detail **Propose new time** dialog with a height-constrained bottom Selia drawer on mobile and a right-side drawer on desktop. The form body scrolls independently and the action footer remains accessible; RPC and state-transition contracts are unchanged.
 - v1.58 (2026-09-02): Refined admin offline room assignment into a Room approvals queue plus context-aware booking-detail actions. Removed manual booking UUID/date-time entry; assign, relocate, and cancellation now use the selected booking's existing schedule and room context.
 
 - v1.57 (2026-09-02): Replaced the admin wallet lookup's exact user-ID input with an admin-only identity search by name, email, or user ID. Results are bounded and selectable, and wallet/ledger reads run only for the selected account. Added the `admin.searchUsers` RPC and updated the admin API/module/runbook references.

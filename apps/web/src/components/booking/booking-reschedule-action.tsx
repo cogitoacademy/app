@@ -1,19 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { IconCalendarEvent, IconCheck, IconClock } from "@tabler/icons-react";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import { DatePicker } from "@cogito-app/ui/components/selia/date-picker";
 import {
-  Dialog,
-  DialogBody,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogPopup,
-  DialogTitle,
-} from "@cogito-app/ui/components/selia/dialog";
+  Drawer,
+  DrawerBody,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerPopup,
+  DrawerTitle,
+} from "@cogito-app/ui/components/selia/drawer";
 import {
   Field,
   FieldDescription,
@@ -88,6 +88,22 @@ export function BookingRescheduleAction({
   const [newDate, setNewDate] = useState("");
   const [newTime, setNewTime] = useState("");
   const [reason, setReason] = useState("");
+  const [isDesktop, setIsDesktop] = useState(false);
+  const [availabilityCutoff, setAvailabilityCutoff] = useState(0);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 640px)");
+    const updateViewport = () => setIsDesktop(mediaQuery.matches);
+
+    updateViewport();
+    mediaQuery.addEventListener("change", updateViewport);
+    return () => mediaQuery.removeEventListener("change", updateViewport);
+  }, []);
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) setAvailabilityCutoff(Date.now());
+    setOpen(nextOpen);
+  };
   const proposalRoute = getRescheduleProposalRoute(viewerRole);
   const isTutor = proposalRoute === RESCHEDULE_PROPOSAL_ROUTE.tutor;
   const availabilityQuery = useQuery({
@@ -101,7 +117,7 @@ export function BookingRescheduleAction({
     .filter(
       (slot) =>
         (slot.modality === "both" || slot.modality === modality) &&
-        new Date(slot.endDate).getTime() - 90 * 60_000 > Date.now(),
+        new Date(slot.endDate).getTime() - 90 * 60_000 > availabilityCutoff,
     )
     .toSorted(
       (a, b) =>
@@ -160,19 +176,30 @@ export function BookingRescheduleAction({
 
   return (
     <>
-      <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={() => handleOpenChange(true)}
+      >
         <IconCalendarEvent /> Propose new time
       </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogPopup>
-          <DialogHeader className="flex-col items-start gap-1.5">
-            <DialogTitle>Propose a new time</DialogTitle>
-            <DialogDescription>
+      <Drawer
+        open={open}
+        onOpenChange={handleOpenChange}
+        swipeDirection={isDesktop ? "right" : "down"}
+      >
+        <DrawerPopup
+          direction={isDesktop ? "right" : "bottom"}
+          className={isDesktop ? "w-full max-w-xl" : undefined}
+        >
+          <DrawerHeader className="flex-col items-start gap-1.5 border-b border-drawer-border pb-4.5">
+            <DrawerTitle>Propose a new time</DrawerTitle>
+            <DrawerDescription>
               The original schedule stays active until the tutor and every
               active student accept.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogBody className="space-y-4">
+            </DrawerDescription>
+          </DrawerHeader>
+          <DrawerBody className="space-y-4">
             {isTutor ? (
               <Field>
                 <FieldLabel>Scheduling method</FieldLabel>
@@ -333,11 +360,11 @@ export function BookingRescheduleAction({
                 placeholder="Explain why this session needs a new time."
               />
             </Field>
-          </DialogBody>
-          <DialogFooter>
+          </DrawerBody>
+          <DrawerFooter>
             <Button
               variant="secondary"
-              onClick={() => setOpen(false)}
+              onClick={() => handleOpenChange(false)}
               disabled={propose.isPending}
             >
               Cancel
@@ -366,9 +393,9 @@ export function BookingRescheduleAction({
             >
               Send proposal
             </Button>
-          </DialogFooter>
-        </DialogPopup>
-      </Dialog>
+          </DrawerFooter>
+        </DrawerPopup>
+      </Drawer>
     </>
   );
 }
