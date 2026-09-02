@@ -193,7 +193,7 @@ export function BookingsPage() {
               ? "No matching bookings in the loaded results yet. Load more to check the rest of your bookings."
               : getEmptyStateDescription(activeTab, role)
           }
-          tone={activeTab === "action" ? "warning" : "secondary"}
+          tone={activeTab === "action" ? "warning" : "info"}
           action={
             !bookingsQuery.hasNextPage &&
             role === "student" &&
