@@ -346,6 +346,24 @@ describe("updateWithVersion", () => {
   });
 });
 
+describe("updateByIdWithVersion", () => {
+  test("updates an achievement by id with optimistic locking", async () => {
+    const returned = [{ id: "a1", version: 2, eventName: "Corrected" }];
+    const conn = { ...makeUpdateConn(returned) } as any;
+
+    const result = await repo.updateByIdWithVersion(conn, "a1", 1, {
+      eventName: "Corrected",
+    });
+
+    expect(result).toEqual(returned);
+    expect(conn.update).toHaveBeenCalledTimes(1);
+    expect(conn.set).toHaveBeenCalledWith(
+      expect.objectContaining({ eventName: "Corrected" }),
+    );
+    expect(conn.where).toHaveBeenCalledTimes(1);
+  });
+});
+
 function makeDeleteWithReturningConn(returned: any[] = []) {
   const returning = mock(async () => returned);
   const where = mock(() => ({ returning }));
@@ -384,6 +402,7 @@ describe("createAchievementRepo", () => {
     expect(r).toHaveProperty("findByIdForUser");
     expect(r).toHaveProperty("update");
     expect(r).toHaveProperty("updateWithVersion");
+    expect(r).toHaveProperty("updateByIdWithVersion");
     expect(r).toHaveProperty("deleteWithVersion");
     expect(r).toHaveProperty("adminList");
     expect(r).toHaveProperty("getById");
@@ -393,6 +412,7 @@ describe("createAchievementRepo", () => {
     expect(typeof r.findByIdForUser).toBe("function");
     expect(typeof r.update).toBe("function");
     expect(typeof r.updateWithVersion).toBe("function");
+    expect(typeof r.updateByIdWithVersion).toBe("function");
     expect(typeof r.deleteWithVersion).toBe("function");
     expect(typeof r.adminList).toBe("function");
     expect(typeof r.getById).toBe("function");

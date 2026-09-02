@@ -51,6 +51,8 @@
 | [MEETING-CALENDAR-METADATA.md](completed/MEETING-CALENDAR-METADATA.md)                             | main                                          | Completed 2026-08-29 — competition-aware Calendar titles, topic snapshot, and unified Session Notes/reference links                  |
 | [CONTACT-SHARING.md](completed/CONTACT-SHARING.md)                                                 | `f/contact-sharing-flow`                      | **#108 (merged 2026-08-26)** — consent-based post-session contact requests, explicit email sharing, privacy leak regression coverage |
 
+| [ACHIEVEMENT-STUDENT-REVIEW-UX.md](completed/ACHIEVEMENT-STUDENT-REVIEW-UX.md) | `f/client-revisions` | **Completed locally 2026-09-02** — clearer student achievement entry, admin-only public documentation, and audited versioned correction flow |
+
 ## Archive (superseded / historical)
 
 See `docs/archive/` — superseded execution plans, refactoring plan, phase-0 design reference, and completed superpowers feature specs.

@@ -4,7 +4,9 @@ const { createAchievementRouter } =
   await import("../../modules/achievement/achievement.router");
 import {
   achievementInput,
+  studentAchievementInput,
   updateAchievementInput,
+  adminUpdateAchievementInput,
   deleteAchievementInput,
   adminListInput,
   adminReviewInput,
@@ -18,6 +20,7 @@ describe("achievementRouter", () => {
         list: mock(async () => []),
         create: mock(async () => ({})),
         update: mock(async () => ({})),
+        adminUpdate: mock(async () => ({})),
         remove: mock(async () => {}),
         adminList: mock(async () => []),
         adminReview: mock(async () => ({})),
@@ -27,6 +30,7 @@ describe("achievementRouter", () => {
     expect(Object.keys(router).toSorted()).toEqual([
       "adminList",
       "adminReview",
+      "adminUpdate",
       "create",
       "delete",
       "list",
@@ -66,11 +70,34 @@ describe("achievementRouter", () => {
       expect(result.success).toBe(true);
     });
 
+    test("studentAchievementInput strips public documentation images", () => {
+      const result = studentAchievementInput.safeParse({
+        eventName: "Olympiad",
+        category: "other",
+        award: "Gold",
+        level: "National",
+        documentationUrl: "https://example.com/public-proof.jpg",
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data).not.toHaveProperty("documentationUrl");
+      }
+    });
+
     test("updateAchievementInput accepts partial data", () => {
       const result = updateAchievementInput.safeParse({
         id: "a1",
         version: 1,
         data: { eventName: "Updated" },
+      });
+      expect(result.success).toBe(true);
+    });
+
+    test("adminUpdateAchievementInput accepts a versioned correction", () => {
+      const result = adminUpdateAchievementInput.safeParse({
+        id: "a1",
+        version: 2,
+        data: { level: "Province/State", description: null },
       });
       expect(result.success).toBe(true);
     });
@@ -192,6 +219,28 @@ describe("achievementHandler", () => {
       await handler.remove({ context, input });
 
       expect(remove).toHaveBeenCalledWith("u1", "a1", 1);
+    });
+  });
+
+  describe("adminUpdate", () => {
+    test("calls achievementService.adminUpdate with admin userId and input", async () => {
+      const adminUpdate = mock(async () => ({ id: "a1", status: "pending" }));
+      const handler = createAchievementHandler({
+        achievementService: { adminUpdate } as any,
+      });
+      const context = {
+        session: { user: { id: "admin1" } },
+      } as any;
+      const input = {
+        id: "a1",
+        version: 1,
+        data: { eventName: "Corrected" },
+      };
+
+      const result = await handler.adminUpdate({ context, input });
+
+      expect(adminUpdate).toHaveBeenCalledWith("admin1", input);
+      expect(result).toEqual({ id: "a1", status: "pending" });
     });
   });
 

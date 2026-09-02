@@ -188,14 +188,19 @@ tutor and admin surfaces after submit, revision, approval, and publication. The
 tutor timeline should show actor names/types without exposing actor account emails;
 the admin timeline may retain the richer moderator identity context.
 
-Achievement and experience proof URLs are verification-only tutor-profile data.
-All user/admin-supplied external links in achievement evidence/documentation,
-tutor proof/profile-image fields, and manual meeting-link dialogs must use
+Tutor-profile achievement and experience proof URLs are verification-only
+tutor-profile data. All user/admin-supplied external links in tutor
+proof/profile-image fields and manual meeting-link dialogs must use
 `http://` or `https://`; generated local profile assets may use the bounded
 `/uploads/...` storage path. Schemes such as `javascript:`, `data:`, and `file:`
 must be rejected by the API even if client validation is bypassed.
 Operators may open them from the admin tutor review card, but they must not be added
 to public discovery projections, marketing exports, or student-facing interfaces.
+
+Student achievement proof links are a separate workflow: the student owns the
+submitted link and the achievement admin queue uses it for verification, while
+the public projection omits it. The student form should explain how to upload
+proof to Google Drive and set General access to “Anyone with the link” + Viewer.
 
 ### Shared booking list smoke check
 
@@ -253,7 +258,33 @@ On availability/profile/admin forms, verify dates use the Selia date picker, tim
 
 ### Achievement form smoke check
 
-As a student, open `/achievements`, choose **Add Achievement**, and verify the Category and Level selects open above the modal and update their triggers. Open **Awarding Date**, confirm the calendar is visible above the modal, select a day, and verify the trigger shows the chosen date. Open the calendar month/year dropdowns as well; each popup must remain clickable and must not be hidden behind the dialog backdrop. This is a UI-only check; the existing `achievement.create` input and `awardingDate` contract remain unchanged.
+As a student, open `/achievements`, choose **Add Achievement**, and verify the
+Level options appear in this order: **International**, **National**,
+**Province/State**, **City/Regency**, **School**. Confirm the **Proof link**
+copy tells the student to upload proof to Google Drive, set General access to
+**Anyone with the link** + **Viewer**, and paste the link. Confirm there is no
+student-facing **Public documentation image** field.
+
+Enter one clear Location value such as `Jakarta, Indonesia`,
+`Geneva, Switzerland`, or `Online`. Confirm the section is titled
+**Brief Description**, uses a multiline textarea, and shows a ranked-result
+example such as “Ranked 1st among 1,000 participants across 20 countries.”
+Verify the Category and Level selects open above the modal and update their
+triggers. Open **Awarding Date**, confirm the calendar is visible above the
+modal, select a day, and verify the trigger shows the chosen date. Open the
+calendar month/year dropdowns as well; each popup must remain clickable and
+must not be hidden behind the dialog backdrop.
+
+As an admin, open `/admin-achievements`, choose **Correct** on a pending
+submission, change each submission field and the **Public documentation image**,
+save, and confirm the row stays pending until an explicit Approve/Reject action.
+Repeat with a stale version and confirm the API returns a conflict without
+overwriting the newer correction; verify the `achievement_admin_updated` audit
+record contains before/after content. The API-level regression command is:
+
+```bash
+bun test packages/api/src/tests/unit/achievement.types.test.ts packages/api/src/tests/unit/achievement.router.test.ts packages/api/src/tests/unit/achievement.handler.test.ts packages/api/src/tests/unit/achievement.service.test.ts packages/api/src/tests/unit/achievement.repo.test.ts
+```
 
 ### Public achievements smoke check
 

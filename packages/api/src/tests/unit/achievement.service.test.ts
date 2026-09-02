@@ -1,6 +1,7 @@
 import { describe, test, expect, mock } from "bun:test";
 import {
   validateUpdate,
+  validateAdminUpdate,
   validateDelete,
   createAchievementService,
 } from "../../modules/achievement/achievement.service";
@@ -60,6 +61,29 @@ describe("Achievement Service", () => {
       expect(() =>
         validateDelete(makeAchievement({ status: "approved" })),
       ).toThrow(AchievementNotEditableError);
+    });
+  });
+
+  describe("validateAdminUpdate", () => {
+    test("allows pending and pending_review achievements", () => {
+      expect(() =>
+        validateAdminUpdate(makeAchievement({ status: "pending" })),
+      ).not.toThrow();
+      expect(() =>
+        validateAdminUpdate(makeAchievement({ status: "pending_review" })),
+      ).not.toThrow();
+    });
+
+    test("rejects approved, rejected, and missing achievements", () => {
+      expect(() =>
+        validateAdminUpdate(makeAchievement({ status: "approved" })),
+      ).toThrow(AchievementNotEditableError);
+      expect(() =>
+        validateAdminUpdate(makeAchievement({ status: "rejected" })),
+      ).toThrow(AchievementNotEditableError);
+      expect(() => validateAdminUpdate(undefined)).toThrow(
+        AchievementNotEditableError,
+      );
     });
   });
 
@@ -236,6 +260,117 @@ describe("Achievement Service", () => {
           status: "archived",
         }),
       ).rejects.toThrow(AchievementNotEditableError);
+    });
+  });
+
+  describe("adminUpdate", () => {
+    test("updates pending content and records before/after audit state", async () => {
+      const auditPort = {
+        record: mock(async () => {}),
+      };
+      const repo = {
+        getById: mock(async () => ({
+          id: "a1",
+          userId: "u1",
+          eventName: "Old name",
+          category: "competition",
+          award: "Gold",
+          level: "National",
+          subjects: null,
+          status: "pending",
+          version: 4,
+        })),
+        updateByIdWithVersion: mock(async () => [
+          {
+            id: "a1",
+            userId: "u1",
+            eventName: "Corrected name",
+            category: "competition",
+            award: "Gold",
+            level: "International",
+            location: "Geneva, Switzerland",
+            description:
+              "Ranked 1st among 1,000 participants across 20 countries.",
+            status: "pending",
+            version: 5,
+          },
+        ]),
+      };
+      const service = createAchievementService({
+        achievementRepo: repo as any,
+        auditPort: auditPort as any,
+        notificationPort: { writeBestEffort: mock(async () => {}) } as any,
+        db: makeDb(),
+      });
+
+      const result = await service.adminUpdate("admin1", {
+        id: "a1",
+        version: 4,
+        data: {
+          eventName: "Corrected name",
+          level: "International",
+          location: "Geneva, Switzerland",
+          description:
+            "Ranked 1st among 1,000 participants across 20 countries.",
+        },
+      });
+
+      expect(result.version).toBe(5);
+      expect(repo.updateByIdWithVersion).toHaveBeenCalledWith(
+        expect.anything(),
+        "a1",
+        4,
+        {
+          eventName: "Corrected name",
+          level: "International",
+          location: "Geneva, Switzerland",
+          description:
+            "Ranked 1st among 1,000 participants across 20 countries.",
+        },
+      );
+      expect(auditPort.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: "admin1",
+          action: "achievement_admin_updated",
+          targetId: "a1",
+          targetType: "achievement",
+          beforeState: expect.objectContaining({
+            eventName: "Old name",
+            subjects: null,
+          }),
+          afterState: expect.objectContaining({
+            eventName: "Corrected name",
+            level: "International",
+          }),
+          details: { previousStatus: "pending" },
+        }),
+      );
+    });
+
+    test("throws on a stale admin correction", async () => {
+      const repo = {
+        getById: mock(async () => ({
+          id: "a1",
+          userId: "u1",
+          status: "pending",
+          version: 4,
+        })),
+        updateByIdWithVersion: mock(async () => []),
+      };
+      const service = createAchievementService({
+        achievementRepo: repo as any,
+        auditPort: { record: mock(async () => {}) } as any,
+        notificationPort: { writeBestEffort: mock(async () => {}) } as any,
+        db: makeDb(),
+      });
+
+      await expect(
+        service.adminUpdate("admin1", {
+          id: "a1",
+          version: 4,
+          data: { eventName: "Stale correction" },
+        }),
+      ).rejects.toThrow(/modified by another transaction/i);
     });
   });
 });

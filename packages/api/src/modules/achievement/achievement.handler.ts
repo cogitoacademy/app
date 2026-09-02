@@ -3,16 +3,18 @@ import { z } from "zod";
 import { withDomainMap } from "../../lib/handler-utils";
 import { mapAchievementError } from "./achievement.errors";
 import type {
-  achievementInput,
+  studentAchievementInput,
   updateAchievementInput,
+  adminUpdateAchievementInput,
   deleteAchievementInput,
   adminListInput,
   adminReviewInput,
 } from "./achievement.types";
 import type { AchievementService } from "./achievement.service";
 
-type AchievementInput = z.infer<typeof achievementInput>;
+type AchievementInput = z.infer<typeof studentAchievementInput>;
 type UpdateAchievementInput = z.infer<typeof updateAchievementInput>;
+type AdminUpdateAchievementInput = z.infer<typeof adminUpdateAchievementInput>;
 type DeleteAchievementInput = z.infer<typeof deleteAchievementInput>;
 type AdminListInput = z.infer<typeof adminListInput>;
 type AdminReviewInput = z.infer<typeof adminReviewInput>;
@@ -62,6 +64,19 @@ export function createAchievementHandler(deps: {
     );
   }
 
+  async function adminUpdate({
+    context,
+    input,
+  }: {
+    context: Context;
+    input: AdminUpdateAchievementInput;
+  }) {
+    return withDomainMap(
+      () => achievementService.adminUpdate(context.session!.user.id, input),
+      mapAchievementError,
+    );
+  }
+
   async function remove({
     context,
     input,
@@ -105,7 +120,16 @@ export function createAchievementHandler(deps: {
     );
   }
 
-  return { list, listApproved, create, update, remove, adminList, adminReview };
+  return {
+    list,
+    listApproved,
+    create,
+    update,
+    adminUpdate,
+    remove,
+    adminList,
+    adminReview,
+  };
 }
 
 export type AchievementHandler = ReturnType<typeof createAchievementHandler>;

@@ -23,14 +23,14 @@ export interface UpdateAchievementData {
   category?: string;
   award?: string;
   level?: string;
-  issuer?: string;
+  issuer?: string | null;
   visibility?: boolean;
-  awardingDate?: string;
-  location?: string;
-  description?: string;
-  subjects?: string[];
-  evidenceUrl?: string;
-  documentationUrl?: string;
+  awardingDate?: string | null;
+  location?: string | null;
+  description?: string | null;
+  subjects?: string[] | null;
+  evidenceUrl?: string | null;
+  documentationUrl?: string | null;
 }
 
 export interface AdminListInput {
@@ -185,6 +185,26 @@ async function updateWithVersion(
 }
 
 /**
+ * Updates an achievement by id with optimistic concurrency for admin edits.
+ * The service performs the status guard before calling this method because an
+ * admin correction is intentionally not scoped to the achievement owner.
+ */
+async function updateByIdWithVersion(
+  conn: DbOrTx,
+  id: string,
+  expectedVersion: number,
+  data: UpdateAchievementData,
+) {
+  return conn
+    .update(achievement)
+    .set({ ...data, version: sql`${achievement.version} + 1` })
+    .where(
+      and(eq(achievement.id, id), eq(achievement.version, expectedVersion)),
+    )
+    .returning();
+}
+
+/**
  * Deletes an achievement with optimistic concurrency via version.
  *
  * @param conn - the database connection or active transaction
@@ -298,6 +318,7 @@ export function createAchievementRepo() {
     findByIdForUser,
     update,
     updateWithVersion,
+    updateByIdWithVersion,
     deleteWithVersion,
     adminList,
     getById,
