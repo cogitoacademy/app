@@ -140,7 +140,12 @@ With signed-in student, tutor, and admin sessions, exercise empty data and no-ma
 
 For admin operations, confirm the booking monitor keeps body text readable, aligns multi-line cells at the top, and keeps status/category badges on one line. At a narrow mobile viewport, verify the Operations page and monitor card do not exceed the viewport width; horizontal scrolling must be confined to the table contents. Open **View details** and verify navigation to `/admin-operations/bookings/:bookingId`; refresh that URL and confirm participant wallets, booking ledger activity, meeting fallback, report context, state history, and override controls still load. A student or tutor opening the URL must be redirected to `/dashboard`, and a missing booking must render the in-page not-found state with a route back to operations.
 
-For local verification, run `bun run lint` and `bun run check-types` from the repository root. The latter runs the web production build before TypeScript checking, so a missing empty-state import or invalid Selia variant is caught before review.
+For local verification, run `bun .github/lint/check-baseline.ts` and
+`bun run check-types` from the repository root. Lefthook runs those same two
+checks before push. Use `bun run lint` when inspecting the complete raw lint
+output, including documented legacy errors. The type check runs the web
+production build before TypeScript checking, so a missing empty-state import
+or invalid Selia variant is caught before review.
 
 ### How Cogito Works guide smoke check
 
@@ -926,8 +931,10 @@ emits **documented-intentional warnings**: `no-await-in-loop` = sequential
 money/DB writes in booking/wallet paths (parallelizing would risk money
 correctness), plus `consistent-function-scoping` and `no-underscore-dangle`
 style conventions. Known legacy React compiler errors are tracked in
-`.github/lint/baseline.txt`; new errors fail `.github/lint/check-baseline.sh`.
+`.github/lint/baseline.txt`; new errors fail `.github/lint/check-baseline.ts`.
 They are triaged, not regressions — see `docs/plans/active/CI-SANITY.md` F13.
+The local pre-push hook invokes this same baseline gate; `bun run lint` remains
+the raw diagnostic command and is expected to report the baselined errors.
 Do not "fix" the warnings by parallelizing the loops or by silencing the rules
 in `.oxlintrc.json` (that config is shared with the local run). The lint
 auto-fix commit sets `LEFTHOOK=0`; the baseline and format steps remain the

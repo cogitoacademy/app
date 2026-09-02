@@ -15,8 +15,12 @@ exhausted; intermediate failures remain in the normal retry flow.
 
 CI pins oxlint 1.80.0 and oxfmt 0.65.0. Known legacy React compiler errors
 remain explicitly tracked in `.github/lint/baseline.txt`; new findings fail
-the baseline gate. The lint auto-fix commit disables Lefthook while pushing so
-the workflow's dedicated baseline and formatting checks are authoritative.
+the baseline gate. Lefthook and CI both run the cross-platform
+`.github/lint/check-baseline.ts` checker, so documented legacy findings do not
+make every push fail while new errors still block both local pushes and CI.
+The lint auto-fix commit disables
+Lefthook while pushing so the workflow's dedicated baseline and formatting
+checks are authoritative.
 
 ## Tutor Terms of Service acceptance (2026-09-02)
 

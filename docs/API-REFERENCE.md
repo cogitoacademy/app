@@ -2,6 +2,10 @@
 
 Last updated: 2026-09-02
 
+The 2026-09-02 local pre-push lint-gate alignment changes developer tooling
+only. It does not change any RPC path, request envelope, response shape,
+authentication rule, or API behavior.
+
 ## Profile and tutor-onboarding validation (2026-08-31)
 
 Profile and tutor-onboarding field validation is client-side presentation logic.
