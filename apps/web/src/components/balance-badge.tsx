@@ -8,7 +8,6 @@ export function BalanceBadge() {
   const { data: wallet, isLoading } = useQuery(orpc.wallet.get.queryOptions());
 
   const balance = wallet?.availableBalance ?? 0;
-  const totalBalance = wallet?.totalBalance ?? 0;
   // const isEmpty = balance === 0;
 
   return (
@@ -21,10 +20,8 @@ export function BalanceBadge() {
         <span className="text-muted">—</span>
       ) : (
         <>
-          <span>
-            {balance}/{totalBalance}
-          </span>
-          <img src="/cogito-mark.png" className="h-[0.9em] w-auto" alt="" />
+          <img src="/cogito-mark.png" className="size-3 w-auto" alt="" />
+          <span>{balance}</span>
         </>
       )}
     </div>

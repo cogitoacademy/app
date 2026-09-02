@@ -146,15 +146,19 @@ describe("tutor.errors", () => {
     });
     it("should map TutorProfileIncompleteError to BAD_REQUEST", () => {
       const result = mapTutorError(
-        new TutorProfileIncompleteError("tp_1", ["displayName"]),
+        new TutorProfileIncompleteError("tp_1", ["displayName", "prices"]),
       );
       expect(result.status).toBe(400);
+      expect(result.data).toEqual({
+        missingFields: ["displayName", "prices"],
+      });
     });
     it("should map InvalidTutorPricingError to BAD_REQUEST", () => {
       const result = mapTutorError(
         new InvalidTutorPricingError("tp_1", "Prices are invalid"),
       );
       expect(result.status).toBe(400);
+      expect(result.data).toEqual({ pricingError: "Prices are invalid" });
     });
     it("should fall back to INTERNAL_SERVER_ERROR for unknown domain error", () => {
       const result = mapTutorError(new TestDomainError());

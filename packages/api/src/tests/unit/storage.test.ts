@@ -1,5 +1,4 @@
 import { afterAll, describe, expect, mock, test } from "bun:test";
-import { createHmac } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -16,10 +15,16 @@ mock.module("@aws-sdk/client-s3", () => ({
   },
 }));
 
+mock.module("@aws-sdk/s3-request-presigner", () => ({
+  getSignedUrl: async (
+    _client: unknown,
+    command: { input?: { Key?: string } },
+  ) => `https://signed.example/${command.input?.Key ?? "upload"}`,
+}));
+
 import {
   InvalidStorageKeyError,
   createLocalStorage,
-  createPresignedPost,
   createR2Storage,
   createStorage,
 } from "../../lib/storage";
@@ -28,120 +33,6 @@ const dir = mkdtempSync(join(tmpdir(), "cogito-storage-unit-test-"));
 
 afterAll(() => {
   rmSync(dir, { recursive: true, force: true });
-});
-
-describe("createPresignedPost", () => {
-  const opts = {
-    endpoint: "https://acct.r2.cloudflarestorage.com",
-    bucket: "bucket",
-    key: "user-1/uuid-avatar.png",
-    contentType: "image/png",
-    maxBytes: 1024 * 1024,
-    accessKeyId: "akid",
-    secretAccessKey: "secret",
-  };
-
-  function decodePolicy(signed: ReturnType<typeof createPresignedPost>) {
-    return JSON.parse(
-      Buffer.from(signed.fields.policy, "base64").toString("utf-8"),
-    ) as {
-      expiration: string;
-      conditions: unknown[];
-    };
-  }
-
-  test("produces a POST signed upload with all expected fields", () => {
-    const signed = createPresignedPost(opts);
-    expect(signed.method).toBe("POST");
-    expect(signed.url).toBe("https://acct.r2.cloudflarestorage.com/bucket");
-    expect(signed.fields.key).toBe("user-1/uuid-avatar.png");
-    expect(signed.fields["Content-Type"]).toBe("image/png");
-    expect(signed.fields["x-amz-algorithm"]).toBe("AWS4-HMAC-SHA256");
-    expect(signed.fields["x-amz-credential"]).toMatch(
-      /^akid\/\d{8}\/auto\/s3\/aws4_request$/,
-    );
-    expect(signed.fields["x-amz-date"]).toMatch(/^\d{8}T\d{6}Z$/);
-    expect(signed.fields.policy).toBeTruthy();
-    expect(signed.fields["x-amz-signature"]).toBeTruthy();
-  });
-
-  test("policy conditions bind bucket, key, content type, x-amz fields and size range", () => {
-    const signed = createPresignedPost(opts);
-    const policy = decodePolicy(signed);
-    expect(policy.conditions).toContainEqual({ bucket: "bucket" });
-    expect(policy.conditions).toContainEqual({ key: "user-1/uuid-avatar.png" });
-    expect(policy.conditions).toContainEqual([
-      "eq",
-      "$Content-Type",
-      "image/png",
-    ]);
-    expect(policy.conditions).toContainEqual([
-      "eq",
-      "$x-amz-algorithm",
-      "AWS4-HMAC-SHA256",
-    ]);
-    expect(policy.conditions).toContainEqual([
-      "eq",
-      "$x-amz-credential",
-      signed.fields["x-amz-credential"],
-    ]);
-    expect(policy.conditions).toContainEqual([
-      "eq",
-      "$x-amz-date",
-      signed.fields["x-amz-date"],
-    ]);
-    expect(policy.conditions).toContainEqual([
-      "content-length-range",
-      1,
-      1024 * 1024,
-    ]);
-  });
-
-  test("signature is a valid HMAC-SHA256 of the policy over the signing key chain", () => {
-    const signed = createPresignedPost(opts);
-    const amzDate = signed.fields["x-amz-date"];
-    const dateStamp = amzDate.slice(0, 8);
-    const policy = signed.fields.policy;
-
-    const hmacStep = (key: string | Buffer, data: string | Buffer) =>
-      createHmac("sha256", key as Parameters<typeof createHmac>[0])
-        .update(data)
-        .digest();
-
-    const kDate = hmacStep(`AWS4secret`, dateStamp);
-    const kRegion = hmacStep(kDate, "auto");
-    const kService = hmacStep(kRegion, "s3");
-    const kSigning = hmacStep(kService, "aws4_request");
-    const expected = hmacStep(kSigning, policy).toString("hex");
-
-    expect(signed.fields["x-amz-signature"]).toBe(expected);
-  });
-
-  test("defaults region to auto and expires after 300 seconds", () => {
-    const before = Date.now();
-    const signed = createPresignedPost(opts);
-    const policy = decodePolicy(signed);
-    const expiryMs = Date.parse(policy.expiration);
-    expect(signed.fields["x-amz-credential"]).toContain("/auto/s3/");
-    expect(expiryMs - before).toBeGreaterThanOrEqual(299_000);
-    expect(expiryMs - before).toBeLessThanOrEqual(301_000);
-  });
-
-  test("honors a custom region and expiresInSeconds", () => {
-    const before = Date.now();
-    const signed = createPresignedPost({
-      ...opts,
-      region: "us-east-1",
-      expiresInSeconds: 60,
-    });
-    const policy = decodePolicy(signed);
-    expect(signed.fields["x-amz-credential"]).toContain(
-      "/us-east-1/s3/aws4_request",
-    );
-    const expiryMs = Date.parse(policy.expiration);
-    expect(expiryMs - before).toBeGreaterThanOrEqual(59_000);
-    expect(expiryMs - before).toBeLessThanOrEqual(61_000);
-  });
 });
 
 describe("createLocalStorage", () => {
@@ -222,7 +113,7 @@ describe("createR2Storage", () => {
     expect(url).toBe("user-1/uuid-avatar.png");
   });
 
-  test("getSignedUploadUrl delegates to createPresignedPost", async () => {
+  test("getSignedUploadUrl returns an R2 presigned PUT URL", async () => {
     const s = createR2Storage({
       accountId: "acct",
       accessKeyId: "key",
@@ -232,11 +123,11 @@ describe("createR2Storage", () => {
     const { url, method, fields } = await s.getSignedUploadUrl(
       "user-1/uuid-avatar.png",
       "image/png",
+      128,
     );
-    expect(method).toBe("POST");
-    expect(url).toBe("https://acct.r2.cloudflarestorage.com/bucket");
-    expect(fields.policy).toBeTruthy();
-    expect(fields["x-amz-signature"]).toBeTruthy();
+    expect(method).toBe("PUT");
+    expect(url).toBe("https://signed.example/user-1/uuid-avatar.png");
+    expect(fields).toEqual({});
   });
 
   test("resolvePublicUrl prefixes when publicUrl is set and returns key otherwise", () => {

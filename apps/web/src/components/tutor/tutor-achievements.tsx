@@ -16,9 +16,10 @@ import {
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
-import { Input } from "@cogito-app/ui/components/selia/input";
 import { NumberField } from "@cogito-app/ui/components/selia/number-field";
 import { Text } from "@cogito-app/ui/components/selia/text";
+
+import { TutorTextDraftInput } from "./tutor-text-draft-input";
 
 export type TutorEducationEntry = {
   university: string;
@@ -31,10 +32,7 @@ export type TutorCompetitionAchievement = {
   awards: string[];
 };
 
-export type TutorAchievementDraftErrors = {
-  education?: string;
-  competitionAchievements?: string;
-};
+export type TutorAchievementDraftErrors = Record<string, string>;
 
 const MAX_EDUCATION_ENTRIES = 2;
 const MAX_COMPETITION_ACHIEVEMENTS = 5;
@@ -77,43 +75,74 @@ export function validateTutorAchievementDraft(
   education: readonly TutorEducationEntry[],
   competitionAchievements: readonly TutorCompetitionAchievement[],
 ): TutorAchievementDraftErrors {
+  const errors: TutorAchievementDraftErrors = {};
+
   for (const [index, entry] of education.entries()) {
     if (!entry.university.trim()) {
-      return {
-        education: `Add a university for education entry ${index + 1}.`,
-      };
+      errors[`education.${index}.university`] = "University is required.";
+    } else if (entry.university.trim().length > 255) {
+      errors[`education.${index}.university`] = "Use 255 characters or fewer.";
     }
     if (!entry.degree.trim()) {
-      return { education: `Add a degree for education entry ${index + 1}.` };
+      errors[`education.${index}.degree`] = "Degree is required.";
+    } else if (entry.degree.trim().length > 255) {
+      errors[`education.${index}.degree`] = "Use 255 characters or fewer.";
     }
   }
 
   for (const [index, entry] of competitionAchievements.entries()) {
+    const fieldPrefix = `competitionAchievements.${index}`;
     if (!entry.competitionName.trim()) {
-      return {
-        competitionAchievements: `Add a competition name for achievement ${index + 1}.`,
-      };
+      errors[`${fieldPrefix}.competitionName`] =
+        "Competition name is required.";
+    } else if (entry.competitionName.trim().length > 255) {
+      errors[`${fieldPrefix}.competitionName`] = "Use 255 characters or fewer.";
     }
     if (
       !Number.isInteger(entry.year) ||
       entry.year < 1900 ||
       entry.year > 2100
     ) {
-      return {
-        competitionAchievements: `Add a valid year for achievement ${index + 1}.`,
-      };
+      errors[`${fieldPrefix}.year`] = "Enter a year between 1900 and 2100.";
     }
     if (
       entry.awards.length === 0 ||
       entry.awards.some((award) => !award.trim())
     ) {
-      return {
-        competitionAchievements: `Add at least one award for achievement ${index + 1}.`,
-      };
+      errors[`${fieldPrefix}.awards`] = "Add at least one award.";
+    } else if (
+      entry.awards.some((award) => award.length > 255) ||
+      entry.awards.length > 10
+    ) {
+      errors[`${fieldPrefix}.awards`] =
+        "Use up to 10 award titles, with 255 characters per title.";
     }
   }
 
-  return {};
+  if (Object.keys(errors).some((key) => key.startsWith("education."))) {
+    errors.education = "Complete the highlighted education fields.";
+  }
+  if (
+    Object.keys(errors).some((key) =>
+      key.startsWith("competitionAchievements."),
+    )
+  ) {
+    errors.competitionAchievements =
+      "Complete the highlighted achievement fields.";
+  }
+
+  return errors;
+}
+
+function formatAwardTitles(awards: readonly string[]) {
+  return awards.join(", ");
+}
+
+function parseAwardTitles(value: string) {
+  return value
+    .split(",")
+    .map((award) => award.trim())
+    .filter(Boolean);
 }
 
 type TutorAchievementsDisplayProps = {
@@ -214,9 +243,13 @@ export function TutorAchievementsDisplay({
 type TutorAchievementsEditorProps = {
   education: TutorEducationEntry[];
   competitionAchievements: TutorCompetitionAchievement[];
-  onEducationChange: (education: TutorEducationEntry[]) => void;
+  onEducationChange: (
+    education: TutorEducationEntry[],
+    changedField?: string,
+  ) => void;
   onCompetitionAchievementsChange: (
     competitionAchievements: TutorCompetitionAchievement[],
+    changedField?: string,
   ) => void;
   errors?: TutorAchievementDraftErrors;
   idPrefix?: string;
@@ -256,6 +289,7 @@ export function TutorAchievementsEditor({
       education.map((entry, entryIndex) =>
         entryIndex === index ? { ...entry, [field]: value } : entry,
       ),
+      `education.${index}.${field}`,
     );
   }
 
@@ -267,6 +301,9 @@ export function TutorAchievementsEditor({
       competitionAchievements.map((entry, entryIndex) =>
         entryIndex === index ? { ...entry, ...update } : entry,
       ),
+      Object.keys(update)[0]
+        ? `competitionAchievements.${index}.${Object.keys(update)[0]}`
+        : `competitionAchievements.${index}`,
     );
   }
 
@@ -331,27 +368,55 @@ export function TutorAchievementsEditor({
                     <FieldLabel htmlFor={`${idPrefix}-university-${index}`}>
                       University
                     </FieldLabel>
-                    <Input
-                      id={`${idPrefix}-university-${index}`}
-                      value={entry.university}
-                      onChange={(event) =>
-                        updateEducation(index, "university", event.target.value)
-                      }
-                      placeholder="e.g. Universitas Gadjah Mada"
-                    />
+                    {(() => {
+                      const error = errors?.[`education.${index}.university`];
+                      const errorId = `${idPrefix}-university-${index}-error`;
+                      return (
+                        <>
+                          <TutorTextDraftInput
+                            id={`${idPrefix}-university-${index}`}
+                            value={entry.university}
+                            onCommit={(value) =>
+                              updateEducation(index, "university", value)
+                            }
+                            placeholder="e.g. Universitas Gadjah Mada"
+                            maxLength={255}
+                            aria-invalid={Boolean(error)}
+                            aria-describedby={error ? errorId : undefined}
+                          />
+                          {error ? (
+                            <FieldError id={errorId}>{error}</FieldError>
+                          ) : null}
+                        </>
+                      );
+                    })()}
                   </Field>
                   <Field>
                     <FieldLabel htmlFor={`${idPrefix}-degree-${index}`}>
                       Degree in brief
                     </FieldLabel>
-                    <Input
-                      id={`${idPrefix}-degree-${index}`}
-                      value={entry.degree}
-                      onChange={(event) =>
-                        updateEducation(index, "degree", event.target.value)
-                      }
-                      placeholder="e.g. Bachelor of Law"
-                    />
+                    {(() => {
+                      const error = errors?.[`education.${index}.degree`];
+                      const errorId = `${idPrefix}-degree-${index}-error`;
+                      return (
+                        <>
+                          <TutorTextDraftInput
+                            id={`${idPrefix}-degree-${index}`}
+                            value={entry.degree}
+                            onCommit={(value) =>
+                              updateEducation(index, "degree", value)
+                            }
+                            placeholder="e.g. Bachelor of Law"
+                            maxLength={255}
+                            aria-invalid={Boolean(error)}
+                            aria-describedby={error ? errorId : undefined}
+                          />
+                          {error ? (
+                            <FieldError id={errorId}>{error}</FieldError>
+                          ) : null}
+                        </>
+                      );
+                    })()}
                   </Field>
                 </div>
               </div>
@@ -423,54 +488,97 @@ export function TutorAchievementsEditor({
                     <FieldLabel htmlFor={`${idPrefix}-competition-${index}`}>
                       Competition name
                     </FieldLabel>
-                    <Input
-                      id={`${idPrefix}-competition-${index}`}
-                      value={entry.competitionName}
-                      onChange={(event) =>
-                        updateCompetition(index, {
-                          competitionName: event.target.value,
-                        })
-                      }
-                      placeholder="e.g. Harvard Model United Nations"
-                    />
+                    {(() => {
+                      const error =
+                        errors?.[
+                          `competitionAchievements.${index}.competitionName`
+                        ];
+                      const errorId = `${idPrefix}-competition-${index}-error`;
+                      return (
+                        <>
+                          <TutorTextDraftInput
+                            id={`${idPrefix}-competition-${index}`}
+                            value={entry.competitionName}
+                            onCommit={(value) =>
+                              updateCompetition(index, {
+                                competitionName: value,
+                              })
+                            }
+                            placeholder="e.g. Harvard Model United Nations"
+                            maxLength={255}
+                            aria-invalid={Boolean(error)}
+                            aria-describedby={error ? errorId : undefined}
+                          />
+                          {error ? (
+                            <FieldError id={errorId}>{error}</FieldError>
+                          ) : null}
+                        </>
+                      );
+                    })()}
                   </Field>
                   <Field>
                     <FieldLabel htmlFor={`${idPrefix}-year-${index}`}>
                       Year
                     </FieldLabel>
-                    <NumberField
-                      id={`${idPrefix}-year-${index}`}
-                      value={entry.year || null}
-                      min={1900}
-                      max={2100}
-                      step={1}
-                      format={YEAR_FORMAT}
-                      allowOutOfRange
-                      onValueChange={(value) =>
-                        updateCompetition(index, { year: value ?? 0 })
-                      }
-                      inputProps={{
-                        "aria-label": `Year for competition achievement ${index + 1}`,
-                      }}
-                    />
+                    {(() => {
+                      const error =
+                        errors?.[`competitionAchievements.${index}.year`];
+                      const errorId = `${idPrefix}-year-${index}-error`;
+                      return (
+                        <>
+                          <NumberField
+                            id={`${idPrefix}-year-${index}`}
+                            value={entry.year || null}
+                            min={1900}
+                            max={2100}
+                            step={1}
+                            format={YEAR_FORMAT}
+                            allowOutOfRange
+                            onValueChange={(value) =>
+                              updateCompetition(index, { year: value ?? 0 })
+                            }
+                            inputProps={{
+                              "aria-label": `Year for competition achievement ${index + 1}`,
+                              "aria-invalid": Boolean(error),
+                              "aria-describedby": error ? errorId : undefined,
+                            }}
+                          />
+                          {error ? (
+                            <FieldError id={errorId}>{error}</FieldError>
+                          ) : null}
+                        </>
+                      );
+                    })()}
                   </Field>
                   <Field className="sm:col-span-2">
                     <FieldLabel htmlFor={`${idPrefix}-awards-${index}`}>
                       Award title in full
                     </FieldLabel>
-                    <Input
-                      id={`${idPrefix}-awards-${index}`}
-                      value={entry.awards.join(", ")}
-                      onChange={(event) =>
-                        updateCompetition(index, {
-                          awards: event.target.value
-                            .split(",")
-                            .map((award) => award.trim())
-                            .filter(Boolean),
-                        })
-                      }
-                      placeholder="e.g. Champion, Best Speaker, Best Memorial"
-                    />
+                    {(() => {
+                      const error =
+                        errors?.[`competitionAchievements.${index}.awards`];
+                      const errorId = `${idPrefix}-awards-${index}-error`;
+                      return (
+                        <>
+                          <TutorTextDraftInput
+                            id={`${idPrefix}-awards-${index}`}
+                            value={formatAwardTitles(entry.awards)}
+                            onCommit={(value) =>
+                              updateCompetition(index, {
+                                awards: parseAwardTitles(value),
+                              })
+                            }
+                            placeholder="e.g. Champion, Best Speaker, Best Memorial"
+                            maxLength={2_600}
+                            aria-invalid={Boolean(error)}
+                            aria-describedby={error ? errorId : undefined}
+                          />
+                          {error ? (
+                            <FieldError id={errorId}>{error}</FieldError>
+                          ) : null}
+                        </>
+                      );
+                    })()}
                     <FieldDescription>
                       Separate multiple awards with commas.
                     </FieldDescription>

@@ -1,6 +1,6 @@
 # Cogito Module Reference
 
-Last updated: 2026-08-31
+Last updated: 2026-09-01
 
 ## Selia field-context invariant (2026-08-31)
 
@@ -28,6 +28,8 @@ filter changes. Admin tutor pagination uses per-card DOM anchors and
 request and disables the controls until the next page arrives. Cursor-loaded
 notifications already preserve prior pages by design. User-specific wallet
 lookup and student search do not retain stale results across a changed query.
+Manage Tutors requests three invitations and five tutor profiles per page; the
+two collections keep independent page size, offset, and next-page state.
 
 The shared booking list uses Needs action, Upcoming, Recurring, History, and All tabs. Students and tutors land on Needs action when pending decisions exist; admins retain All. Recommended sorting ranks pending decisions first, active bookings next, and terminal outcomes last; Soonest and Latest provide direct date ordering. The URL stores both presentation choices. The page consumes `booking.listMine` in cursor-backed batches of 20 with an explicit **Load more bookings** action. Infinite-query pages are appended without replacing loaded cards; tabs and sorting operate on loaded pages, and counts use a `+` suffix while another cursor remains.
 
@@ -59,8 +61,11 @@ The server then runs `apps/server/src/admin-bootstrap.ts` in production-like
 environments. It reads the comma-separated `ADMIN_EMAILS` allowlist (default
 `itcogitoacademy01@gmail.com`), matches email addresses case-insensitively, and
 promotes matching existing users without demoting other admins. Better Auth
-applies the same rule to a matching signup after boot; seed uses the first
-configured address only for the production/staging seed account.
+applies the same rule to a matching signup after boot. The guarded
+production/staging review seed is deliberately separate: it uses
+`SEED_REVIEW_ADMIN_EMAIL`, rejects any address also present in `ADMIN_EMAILS`,
+and creates local-login student/tutor/admin review identities without touching
+the Google Calendar operator account.
 
 The frontend form-control refactor remains outside this service boundary. Selia controls provide consistent date, time, number, and multiline-input UX while retaining semantic HTML behavior and the existing API contracts. Shared text-entry controls use an explicit 16px font size below the `lg` breakpoint to prevent mobile focus zoom, then use the tokenized `text-base` size from `lg` upward. Tutor availability keeps compact, equal-width minute-time fields with a visual range separator and content-sized suggestions, and modality triggers render icons beside labels. Portal-based date/select popups are layered above dialogs so the shared controls remain usable inside modal forms.
 
@@ -97,7 +102,7 @@ Editorial content integration is also read-only: Sanity remains the source of tr
 
 - `content.types.ts` — normalized competition/resource/file projections and the resource-id input shape
 - `content.service.ts` — server-side Sanity client, published-perspective GROQ queries, English localization fallback, and asset metadata lookup
-- `content.handler.ts` — protected competition read and student-only Knowledge Bank threshold gate
+- `content.handler.ts` — protected competition read and role-aware Knowledge Bank access gate
 - `content.router.ts` — `content.listCompetitions` and `content.listStudentResources`
 - `index.ts` — `createContentModule({ wallet, client? })` composition factory
 - `apps/server/src/routes.ts` — authenticated `/content/knowledge-bank/:resourceId/file` PDF streaming proxy for resource files
@@ -114,7 +119,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 
 - Sanity is queried with `perspective: "published"`; the API token, if used, stays server-side.
 - Competition Calendar requires an authenticated session but is not Marks-gated.
-- Knowledge Bank requires the student role and `wallet.knowledgeBankEligible`; the existing 35-Mark total-balance rule includes held Marks.
+- Knowledge Bank is available to students, tutors, and admins through `wallet.knowledgeBankEligible`. Students must meet the existing 35-Mark total-balance rule, including held Marks; tutors and admins bypass that wallet threshold.
 - Resource files are streamed through the app with private/no-store headers. Raw Sanity asset URLs are never returned by the list procedure.
 
 ---
@@ -158,20 +163,21 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 
 ## Admin Module
 
-**Purpose:** System administration — user management, role assignment, wallet/ledger lookup, payout summaries, and active economy schedule management.
+**Purpose:** System administration — user management, role assignment, wallet/ledger lookup, payout summaries, active economy schedule management, and aggregate business analytics.
 
 **Files:**
 
-- `admin.types.ts` — `listUsersInput`, `setRoleInput`, `adminGetWalletInput`, `adminListLedgerEntriesInput`, `adminGetTutorPayoutsInput`, `adminMarkTutorPayoutPaidInput`, `adminUpdateEconomySettingsInput`
+- `admin.types.ts` — `dashboardAnalyticsInput`, `listUsersInput`, `setRoleInput`, `adminGetWalletInput`, `adminListLedgerEntriesInput`, `adminGetTutorPayoutsInput`, `adminMarkTutorPayoutPaidInput`, `adminUpdateEconomySettingsInput`
 - `admin.errors.ts` — `UserNotFoundError`, `LastAdminError`, `OptimisticLockError`, `WalletNotFoundError`, `InvalidLedgerFilterError`, `EconomyConfigConflictError`, `TutorPayoutNotAvailableError`
-- `admin.repo.ts` — `findUserById`, `listUsers`, `listUserIdsByRole`, `updateUserRole`
-- `admin.service.ts` — `listUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getPendingTutorPayouts`, `markTutorPayoutPaid`, `getEconomySettings`, `updateEconomySettings`
-- `admin.handler.ts` — `listUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getPendingTutorPayouts`, `markTutorPayoutPaid`, `getEconomySettings`, `updateEconomySettings`
+- `admin.repo.ts` — `getById`, `listUsers`, `getDashboardAnalytics`, `listUserIdsByRole`, `updateRoleWithExpected`
+- `admin.service.ts` — `getDashboardAnalytics`, `listUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getPendingTutorPayouts`, `markTutorPayoutPaid`, `getEconomySettings`, `updateEconomySettings`
+- `admin.handler.ts` — `getDashboardAnalytics`, `listUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getPendingTutorPayouts`, `markTutorPayoutPaid`, `getEconomySettings`, `updateEconomySettings`
 - `admin.router.ts` — Admin-only routes
 
 **Service Methods:**
 
-- `listUsers(opts)` — Paginated user list with role filter
+- `getDashboardAnalytics(period?)` — Returns normalized 7/30/90-day booking and audience trends, a live booking-state portfolio, period modality/category breakdowns, and Marks-based summary KPIs; trend dates are filled with zero rows using WIB calendar boundaries
+- `listUsers(opts)` — Paginated user list
 - `setRole(userId, role, adminId)` — Changes user role; throws `LastAdminError` if removing last admin; optimistic lock via `expectedRole`; records audit log
 - `getWallet({ userId })` — Returns any user's wallet balances; throws `WalletNotFoundError`
 - `listLedgerEntries(input)` — Paginated ledger filtered by wallet/user, entry type, date range, or booking; `walletId` and `userId` are mutually exclusive
@@ -185,6 +191,8 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 
 **Business Rules:**
 
+- Dashboard period metrics are based on booking/user creation time; the live state portfolio is intentionally all-time so it reflects current admin workload
+- The completion rate is `completed / (completed + terminal exception bookings)` for bookings created in the selected period, and Marks figures come from locked booking price snapshots
 - Cannot remove the last admin role from the system
 - Role changes are audit-logged
 - Ledger filters must target exactly one wallet (`walletId` or `userId`, not both)
@@ -250,7 +258,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `revokeInvite(inviteId, adminId, reason?)` — Marks invite as revoked
 - `listInvites(opts)` — Paginated invite list
 - `listTutorProfiles(opts)` — Paginated tutor profiles with status filter
-- `reviewTutorProfile(profileId, status, adminNote?, publicPhotoUrl?)` — Approve/reject tutor profile and optionally install an admin-edited public tutor photo. The tutor's `sourcePhotoUrl` remains separate and cannot directly become the public account image; both URLs accept HTTP(S) only. The profile status/version is updated atomically and a lost moderation race throws `TutorProfileOptimisticLockError` before photo, subject, notification, or audit writes. **F25 state machine (`validateReviewAction`):** each action is only allowed from specific onboarding statuses — `request_changes`/`approve_unpublished`/`publish` from `pending_review`/`changes_requested` (publish also from `approved_unpublished`); `request_changes` and `approve_unpublished` also support `suspended` for explicit admin restoration; `unpublish`/`suspend`/`approve_edits`/`request_edit_changes` only from `published`.
+- `reviewTutorProfile(profileId, status, adminNote?, profileImageUrl?)` — Approve/reject tutor profile and optionally install the final background-standardized asset into the single canonical tutor profile image. Tutor-submitted published changes remain in `pendingProfileChanges` until approved; `profileImageUrl` accepts bounded HTTP(S) URLs or a generated local `/uploads/...` storage path. The profile status/version and image update are handled in one transaction, and a lost moderation race throws `TutorProfileOptimisticLockError` before image, subject, notification, or audit writes. **F25 state machine (`validateReviewAction`):** each action is only allowed from specific onboarding statuses — `request_changes`/`approve_unpublished`/`publish` from `pending_review`/`changes_requested` (publish also from `approved_unpublished`); `request_changes` and `approve_unpublished` also support `suspended` for explicit admin restoration; `unpublish`/`suspend`/`approve_edits`/`request_edit_changes` only from `published`.
 - `updateTutorAchievements(adminId, input)` — Replaces structured education and competition achievements with optimistic locking, mirrors matching pending edit fields, and records the before/after values in the audit log.
 
 **Dependencies:** `AdminTutorRepo`, `EmailPort`
@@ -260,6 +268,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - Tutor invitation email copy has one primary action: accept the invitation and set up the tutor profile
 - The email states the exact account email required for claiming, shows expiry in UTC, and includes a plain fallback URL
 - Invitee-controlled display names, email addresses, and URLs are escaped before rendering into HTML
+- The Manage Tutors invitation table maps `invited` to a warning badge, `accepted` to success, and `expired`/`revoked` to danger; unknown status values use the secondary fallback
 - Approving published profile edits validates and applies pending `subjectIds` to the normalized tutor-subject join table in the same transaction as the profile update
 - The admin tutor review card maps pending `subjectIds` to active category/subject labels and wraps long pending values; this is presentation-only and does not change the admin API payload
 - Structured achievement corrections are limited to 2 education entries and 5 competition entries; a stale `version` returns `OPTIMISTIC_LOCK` and no audit record is written.
@@ -308,7 +317,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `me(userId)` — Returns user + profile + tutorProfile + wallet (creates wallet if missing); used by role-aware aggregate surfaces
 - `getProfile(userId)` — Returns only the authenticated student's profile and raises `ProfileNotFoundError` when the row does not exist; the student `/profile` page treats that state as an empty form
 - `updateProfile(userId, input)` — Creates or updates student profile fields (phone, school, grade, parent contacts, and `allowContactRequests`)
-- Student account `name` and optional `image` are edited from the same UI through Better Auth `updateUser`; email is displayed read-only and is not part of `auth.updateProfile`.
+- Student account `name` and optional `image` are edited from the same UI through Better Auth `updateUser`; email is displayed read-only and is not part of `auth.updateProfile`. The compact identity header makes the avatar a keyboard-accessible photo picker trigger and marks it with a pencil badge. The picker validates JPG/PNG/WebP files in the browser, provides circular drag/zoom cropping, uploads a 512px square JPEG through the protected Upload Module, and saves the returned public URL with the account identity update.
 - `searchStudents(requesterId, query, limit)` — ILIKE search of `student`-role users by name/email, excluding the requester, up to 10 safe identity results (`id`, `name`, `image`); email is a repository-only lookup key. Exposed via `studentProcedure` so tutors/admins get FORBIDDEN (F16 — the lookup exists for the group-booking invite UI)
 
 **Dependencies:** `AuthRepo`, `WalletPort` (for lazy wallet creation)
@@ -317,9 +326,9 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 
 - Wallet is lazily created on first `me` call
 - Better Auth handles session management, password hashing, and session cookies
-- Google OAuth starts on the API and returns through `/api/auth/callback/google`; the frontend callback route is the post-login destination. Production session cookies remain `SameSite=Strict`, while Better Auth's short-lived signed OAuth state cookie uses `SameSite=Lax` so the provider's top-level callback GET can return it. The state cookie remains `Secure`/`HttpOnly`, and Better Auth verifies it against the database-backed verification record before creating a session.
+- Google OAuth starts on the API and returns through `/api/auth/callback/google`; the frontend callback route is the post-login destination. The configured provider sends `prompt=consent` so the Google permission screen is available for verification runs, including when the account has a previous grant. The login flow requests identity scopes only; the broader Calendar scope used by the server-side Meet integration is a separate operator OAuth flow. Production session cookies remain `SameSite=Strict`, while Better Auth's short-lived signed OAuth state cookie uses `SameSite=Lax` so the provider's top-level callback GET can return it. The state cookie remains `Secure`/`HttpOnly`, and Better Auth verifies it against the database-backed verification record before creating a session.
 - Production/staging startup and signup bootstrap matching `ADMIN_EMAILS` to the `admin` role is case-insensitive and additive: it never demotes existing admins; other admin addresses remain supported by the existing role-management procedures.
-- The web email sign-in/sign-up handoff awaits the Better Auth result, performs a fresh session read before choosing `/dashboard`, `/profile`, `/admin-tutors`, or a validated return path, and suppresses the overlapping client signal refresh so the login form does not flash back into the loader. When the fresh session has `emailVerified !== true`, email/password sign-in sends a verification OTP and routes to `/verify-email`; the Google callback applies the same rule. The validated post-login destination is carried through verification, and legacy accounts are not automatically marked verified. The authenticated shell uses the same fresh session source for its parent route guard. Tutor `/onboarding` links remain a compatibility redirect to `/profile`; this is frontend routing only and adds no auth/API contract.
+- The web email sign-in/sign-up handoff awaits the Better Auth result, performs a fresh session read, and chooses a validated return path or a role/onboarding-aware default: a tutor without a profile or with `draft`/`changes_requested` status goes to `/profile`, while tutors in review/approved/published/suspended states and admins go to `/dashboard`; students also default to `/dashboard`. The tutor status read uses the existing protected `tutor.getMyProfile` procedure. The client suppresses the overlapping session signal refresh so the login form does not flash back into the loader. When the fresh session has `emailVerified !== true`, email/password sign-in sends a verification OTP and routes to `/verify-email`; the Google callback applies the same rule, and the selected destination is carried through verification. Legacy accounts are not automatically marked verified. The authenticated shell uses the same fresh session source for its parent route guard. Tutor `/onboarding` links remain a compatibility redirect to `/profile`; this is frontend routing only and adds no auth/API contract.
 - The `/login` email forms run field-level validation on change/blur after a field is touched, show Selia inline errors and danger outlines for invalid fields, and mirror the sign-up password requirements enforced by the server. These checks are client-only and do not add an auth endpoint or persistence rule.
 - The server reads sign-up bodies through the request-size guard and safely parses the JSON before applying password policy. Malformed JSON returns HTTP 400 (`Invalid JSON request body`) rather than escaping as an internal error.
 - Email verification (G2, REVIEW-FIXES-4 P4.4): the `emailOTP` plugin sends a 6-digit OTP on sign-up (`sendVerificationOnSignUp`, 5 min expiry) via the shared email port (`setVerificationEmailSender` + `buildVerificationEmail`); unverified users, including legacy accounts created before this feature, receive a new OTP after email/password or Google sign-in and are routed to `/verify-email`; `POST /api/auth/email-otp/verify-email` marks the user verified; the web `/verify-email` route collects the code
@@ -343,6 +352,7 @@ Reschedule proposals must change the active booking or target-session start minu
 - `booking-transitions.ts` — `canTransition()` state machine logic
 - `booking.types.ts` — Zod schemas for all booking operations
 - `booking.errors.ts` — error classes for the booking domain
+- `booking-event-title.ts` — shared Calendar/Meet and booking-surface event-title formatter
 - `booking.repo.ts` — data access for bookings, participants, sessions, notes, reschedules, payouts
 - `booking.service.ts` — service methods below; consumer ports for wallet, pricing, audit, notification, meeting
 - `booking.handler.ts` — `createBookingHandler` (student/proposer) and `createTutorActionsHandler` (tutor)
@@ -400,6 +410,7 @@ Reschedule proposals must change the active booking or target-session start minu
 - Availability is stored as a free-time window; students may choose any minute-level start that keeps the server-fixed 90-minute session inside it. Terminal bookings do not keep the window blocked.
 - Rescheduling is per session, may iterate until accepted, expires after 24 hours, and requires the tutor plus every active student. The booking proposer may propose or counter in the eligible pre-terminal states, including `confirmed` and `scheduled`; student proposals remain subject to current/new H-2 checks. Proposal expiry reverts to the pre-proposal state without cancelling the booking, releasing its hold, or changing its original schedule. For offline booking-level proposals, room assignment timing is kept in sync on accept/reject/expiry, with a room-approval fallback on conflict. Only the tutor may propose outside the original availability window. Force-majeure exceptions are handled by support/admin operations with an auditable reason and an admin override decision rather than an automatic H-2 bypass.
 - Optimistic locking via `version` field prevents concurrent state changes
+- Calendar/Meet event summaries and the authenticated booking list/detail title use the same `formatBookingEventTitle` formatter: `Cogito - {Competition} | {Tutor} x {Student}`, with `& Friends` for group/group-series bookings. This is presentation metadata only and does not add a database column or RPC response field.
 - New IDR booking snapshots copy the active economy version, tutor base/increment, tutor honorarium, Cogito take, total IDR, total Marks, and rounded pooled Marks. Later economy updates do not mutate those snapshots.
 - Only `student` accounts can create bookings or perform student participant actions; tutor/admin attempts fail with `FORBIDDEN` before handlers run. The protected booking list/detail/session reads are available to authenticated parties, while admins can inspect the full booking set; tutor fulfillment remains under `tutorActions.*`.
 - Booking list/detail relations use a safe user projection (`id`, `name`, `image`, `role`). Meeting attendee email arrays remain server-only for calendar/notification work and are not returned through booking reads.
@@ -794,21 +805,25 @@ chat directory.
 
 **Purpose:** Tutor profile management — create, update, submit for review, availability management, and payout summaries.
 
+The web tutor profile editor groups education, competition achievements, and experiences into one combined **Achievements & experience** section with one public preview; each subsection retains its own private proof-link list. Short bios are limited to 50 words, and the form recommends one Google Drive folder with the “Anyone with the link can view” setting for both achievement and experience evidence.
+
 **Files:**
 
-- `tutor.types.ts` — Zod schemas for profile fields and structured achievements, `getMyPayoutsInput`
+- `tutor.types.ts` — Zod schemas for profile fields and structured achievements/experiences, `getMyPayoutsInput`
+- `tutor-experiences.ts` — Structured experience entry validation and limits
 - `availability.types.ts` — Availability slot types (`upsert`, weekly-create, weekly-replace, delete)
 - `tutor.errors.ts` — `TutorProfileNotFoundError`, `TutorNotAvailableError`, `AvailabilitySlotOverlapError`, `InvalidTutorPricingError`, `OptimisticLockError`, `InvalidDateRangeError`, `WeeklyAvailabilityRangeError`
-- `tutor.repo.ts` — `findByUserId`, `create`, `update`, `upsertAvailability`
-- `tutor.service.ts` — `getMyProfile`, `updateMyProfile`, `submitForReview`, `listAvailability`, `upsertAvailability`, `createWeeklyAvailability`, `replaceWeeklyAvailability`, `deleteAvailability`, `getMyPayouts`
+- `tutor.repo.ts` — `findByUserId`, `create`, `update`, `listProfileHistory`, `upsertAvailability`
+- `tutor.service.ts` — `getMyProfile`, `getMyProfileHistory`, `updateMyProfile`, `submitForReview`, `listAvailability`, `upsertAvailability`, `createWeeklyAvailability`, `replaceWeeklyAvailability`, `deleteAvailability`, `getMyPayouts`
 - `tutor.handler.ts` — Maps handler context/input
 - `tutor.router.ts` — Tutor-guarded routes (`tutorProcedure`)
 
 **Service Methods:**
 
 - `getMyProfile(userId)` — Returns tutor profile
-- `updateMyProfile(userId, input)` — Updates profile fields with optimistic locking (`version`). The tutor editor uses one structured achievement section backed by `competitionAchievements` (up to 5 entries); each competition entry requires a year and at least one award. Legacy `achievements` text remains accepted for older profiles. Published profiles apply bio and `baseRatesIdr` edits immediately; a changed honorarium is used only for future bookings, while each existing booking's price snapshot remains authoritative for payout. Other trust-sensitive edits—including structured achievements—are stored as pending changes for admin review so discovery continues serving the approved values.
-- `submitForReview(userId)` — Validates required fields + pricing, then sets `onboardingStatus` to `pending_review`; records audit log. The web tutor profile form at `/profile` redirects to `/dashboard` after the mutation succeeds.
+- `getMyProfileHistory(userId)` — Returns the newest profile/photo review audit entries for the tutor; actor identity is limited to id and display name so account emails are not exposed to tutors
+- `updateMyProfile(userId, input)` — Updates profile fields with optimistic locking (`version`). The tutor editor uses one combined structured Achievements & experience section backed by `competitionAchievements` (up to 5 entries) and `experienceEntries` (up to 5 entries), with education rendered in the same section. Short bios are limited to 50 whitespace-delimited words (and 2,000 characters). Experience entries require a role, organization, start year, valid end year or null for ongoing work, and a brief description; year values are stored as ungrouped integers. Commas remain usable in the award and experience text editors while comma-separated award titles continue normalizing to the structured array. Legacy `achievements` and `experiences` text remains accepted for older profiles. Published profiles apply bio and `baseRatesIdr` edits immediately; a changed honorarium is used only for future bookings, while each existing booking's price snapshot remains authoritative for payout. Other trust-sensitive edits—including structured achievements and experiences—are stored as pending changes for admin review so discovery continues serving the approved values. The tutor-facing proof guidance recommends one Google Drive folder with the “Anyone with the link can view” setting for both achievement and experience evidence. The web editor's draft/save action permits incomplete required top-level fields, but validates malformed values and renders field-level errors; the separate review action performs the complete required-field validation before calling `submitForReview`.
+- `submitForReview(userId)` — Validates required fields + pricing, accepting either structured or legacy achievement/experience data, then sets `onboardingStatus` to `pending_review`; records audit log. Its incomplete-profile and pricing errors preserve missing-field/pricing details for the editor's field-level error display. The web tutor profile form at `/profile` redirects to `/dashboard` after the mutation succeeds.
 - `listAvailability(userId)` — Lists the tutor's active future availability slots
 - `upsertAvailability(userId, input)` — Creates/updates a slot, rejecting overlaps
 - `createWeeklyAvailability(userId, input)` — Materializes weekly slots through `repeatUntil` (≤ 53 occurrences), rejecting overlaps
@@ -827,12 +842,17 @@ chat directory.
 - Profile updates use optimistic locking (`version`)
 - New tutor pricing is stored as IDR base honoraria by modality (`baseRatesIdr`) and validated against the active economy minimum and Rp 5,000 increments; published tutors may change these rates at any time, new bookings use the new rate, and existing booking snapshots remain authoritative for payout. The legacy Marks map remains readable during migration
 - The tutor profile editor at `/profile` renders selected modalities in one combined six-row IDR group-size matrix using the same table structure as the student discovery drawer; this is presentation-only. The legacy `/onboarding` path redirects to `/profile` for tutors.
-- The tutor profile editor exposes one structured achievement section and one multiline experiences field. The achievement section supports education plus competition entries; its optional proof URL list is protected by profile review and never enters the public discovery projection. Legacy `achievements` and credential-summary text remain readable fallback data, and migration 0032 copies the credential summary into achievements for older rows. Availability summaries and the old generic credential-proof URLs are retired from tutor editing.
-- The tutor profile editor owns the single vertical scroll container for the tutor `/profile` route while the authenticated shell is contained; subject-category fieldsets keep their natural height and the sticky action bar has no extra bottom gap. This is presentation-only and does not change the tutor RPC contract.
+- The tutor profile editor places the profile-photo upload first and uses a clickable avatar with the shared circular crop flow. Compact Selia `InfoPreview` popovers reveal the full submitted/current/proposed image on demand. For a published tutor it labels `user.image` as the current public photo and a differing `pendingProfileChanges.profileImageUrl` as the proposed photo. The admin review drawer compares both assets side by side; `approve_edits` remains the only operation that promotes the proposal into `user.image`.
+- The admin tutor index derives the status badge from `onboardingStatus` plus `profileEditStatus`; published tutors with `pending_review` edits show **Edit review**, and edits returned with `changes_requested` show **Revision requested**, making review-needed rows visible before opening the drawer.
+- The tutor profile editor exposes one combined structured Achievements & experience section. It supports education plus competition entries and up to five role/organization/year/description entries; each subsection's optional proof URL list is protected by profile review and never enters the public discovery projection. The form recommends one shared Google Drive folder for both proof types, using the “Anyone with the link can view” setting. Legacy `achievements`, credential-summary, and `experiences` text remain readable fallback data, and migration 0032 copies the credential summary into achievements for older rows. Availability summaries and the old generic credential-proof URLs are retired from tutor editing.
+- The tutor profile editor uses the authenticated shell's page-level vertical scroll container, matching the student profile and avoiding a nested form scrollbar. Direct page children cannot flex-shrink, so the tutor wrapper and onboarding content share one natural height; subject-category fieldsets keep their natural height and the final action card stays in normal document flow without trailing scroll space. This is presentation-only and does not change the tutor RPC contract.
+- The tutor profile editor keeps draft/save and submit-for-review as distinct actions. Missing required fields are allowed during draft/save, while submit requires the complete profile; malformed fields are surfaced beside their controls and in a validation summary. A published tutor can continue editing while a profile-change proposal is under review; saving updates the pending proposal and the explicit submit action queues the latest validated version.
+- Every role uses Better Auth `user.name` as the canonical visible name. Tutor onboarding edits that account field directly and does not submit `tutorProfile.displayName`; discovery search matches `user.name`, its backward-compatible `displayName` projection is populated from `user.name`, and tutor/sidebar/booking/admin surfaces render `user.name`. The tutor-profile column remains legacy compatibility data.
 - Tutor payout calculations retain the internal split fields for accounting compatibility, but tutor-facing payout UI exposes only unpaid completed-session count and IDR honorarium. The private payout form collects bank name, account number, account-holder name, account-opening city/regency, ownership choice, and transfer-responsibility acknowledgment; submission requires all of them. Admin payout records advance the paid cutoff.
 - New tutor submissions must select at least one active child subject from the normalized catalog; mother categories cannot be selected directly
 - A normalized subject update replaces the tutor's join rows atomically and never accepts arbitrary legacy `expertise` strings as category ids
 - Structured tutor achievements are stored in `tutor_profile.education` and `tutor_profile.competition_achievements` as JSONB arrays. Education has at most 2 entries; the single achievement section can contain at most 5 competition entries, and each entry has a 1900–2100 year plus at least one award. Legacy `achievements`/`credentialsSummary` remains readable as a fallback when no structured competition achievements exist.
+- Structured tutor experiences are stored in `tutor_profile.experience_entries` as a JSONB array with at most 5 entries. Each entry has a role, organization, 1900–2100 start year, nullable 1900–2100 end year, and brief description; end year cannot precede start year. Legacy `experiences` remains readable as a fallback when no structured experience entries exist. Migration `0040_colossal_morlun.sql` adds the array with an empty-array default.
 
 ## Tutor Subject Taxonomy Module
 
@@ -850,6 +870,7 @@ chat directory.
 - Mother categories are the seven competition areas: Model United Nations, World Scholar’s Cup, Essay & Writing, Debate, Business, Olympiad, and Public Speaking
 - The current catalog contains 33 selectable child subjects in the exact order defined by `0029_competition_taxonomy.sql`
 - Only active child rows are selectable by tutors; archived legacy rows remain readable for existing profiles and are not offered for new selection
+- Tutors may select at most 7 active child subjects; the web selector communicates the cap and disables additional choices, while the API validates the same limit
 - The legacy `expertise` JSON remains for compatibility with existing rows and clients, but normalized `subjectIds` drives new onboarding and discovery filters
 - The onboarding selector renders every current category with keyboard-accessible checkboxes, keeps normalized IDs for persistence/filtering, and shows archived profile subjects as read-only labels; raw UUIDs are an implementation detail and must not appear in user-facing controls
 
@@ -877,6 +898,7 @@ chat directory.
 - Frontend filter selects normalize displayed objects back to primitive category/subject ID arrays or modality values before calling `listPublished`; empty arrays represent the corresponding “All” option, child-subject options are the union of the selected mother categories, and the query is debounced by 300 ms.
 - The student tutor drawer combines the available modality maps into one group-size pricing matrix with separate Online and Offline Marks columns, prefixing populated values with the Cogito Marks icon; missing modality/size combinations are display-only em dashes and do not change the response contract.
 - Published tutor projections include the structured education and competition achievement arrays. The student drawer renders each first line in a semibold hierarchy, separates achievement bullets with breathing room, and joins multiple awards with commas.
+- Long student and admin tutor profiles scroll inside the drawer content area while header/action regions stay outside that scroll area; local body overscroll is contained and cannot move the fixed regions. This is presentation-only and does not change the discovery or review contracts.
 
 **Dependencies:** `DiscoveryRepo`, `PricingPort`
 
@@ -884,11 +906,11 @@ chat directory.
 
 ## Upload Module
 
-**Purpose:** Secure file uploads for achievement proofs and avatars — signed PUT URLs via Cloudflare R2 (production) or local-disk fallback (dev).
+**Purpose:** Secure file uploads for achievement proofs and avatars — signed PUT uploads via Cloudflare R2 (production) or an authenticated local-disk fallback (dev).
 
 **Files:**
 
-- `upload.types.ts` — `createUploadUrlInput` (filename sanitized + bounded, `contentType` allowlist: png/jpeg/webp/gif/pdf); `MAX_UPLOAD_BYTES` = 5 MB
+- `upload.types.ts` — `createUploadUrlInput` (filename sanitized + bounded, `contentType` allowlist: png/jpeg/webp/gif/pdf, `contentLength` bounded to `MAX_UPLOAD_BYTES`); `MAX_UPLOAD_BYTES` = 5 MB
 - `upload.errors.ts` — `InvalidContentTypeError`, `InvalidFilenameError`
 - `upload.service.ts` — `createUploadUrl`, `resolvePublicUrl`
 - `upload.handler.ts` — `createUploadUrl`
@@ -898,13 +920,14 @@ chat directory.
 
 **Service Methods:**
 
-- `createUploadUrl(userId, { filename, contentType })` — Returns `{ uploadUrl, key, publicUrl, contentType, maxBytes }`; key = `{userId}/{uuid}-{sanitizedFilename}`
+- `createUploadUrl(userId, { filename, contentType, contentLength })` — Returns `{ uploadUrl, key, publicUrl, contentType, maxBytes, method, fields }`; key = `{userId}/{uuid}-{sanitizedFilename}`. R2 signs a PUT request for the exact content type and declared length; local mode returns the authenticated raw-body POST route. The student profile photo flow sends a client-cropped square JPEG through this method before calling Better Auth `updateUser`.
 - `resolvePublicUrl(key)` — Key → public URL helper (used by `createUploadUrl` output)
 
 **Business Rules:**
 
-- When all `R2_*` vars are set → R2 signed-URL uploads; otherwise local storage served via `GET /uploads/*` (with path-traversal guard) when `R2_PUBLIC_URL` is unset
-- Content types restricted to the allowlist; 5 MB size cap; filenames sanitized (no `..`, no leading `/`)
+- When all `R2_*` vars are set → R2 presigned PUT uploads; otherwise local storage served via `GET /uploads/*` (with path-traversal guard) when `R2_PUBLIC_URL` is unset
+- Content types restricted to the allowlist; declared content length is 1 byte–5 MB and is signed for R2; filenames sanitized (no `..`, no leading `/`)
+- Browser R2 uploads require bucket CORS allowing the app origin, `PUT`, and the request's `Content-Type` header
 
 ---
 
@@ -930,7 +953,7 @@ chat directory.
 - `credit(db, params)` — Atomically credits available balance (payment received)
 - `compensate(db, params)` — Compensation operation (positive or negative)
 - `listLedger(walletId, opts)` — Paginated ledger with `bookingId` and `eventKey` filters
-- `knowledgeBankEligible(userId)` — Returns `{ eligible, balance, threshold }`; eligibility and `balance` use the **total balance** (held Marks count toward the 35-Mark threshold, PRD DL-16 / U13)
+- `knowledgeBankEligible(userId, viewerRole?)` — Returns `{ eligible, balance, threshold }`; students use the **total balance** (held Marks count toward the 35-Mark threshold, PRD DL-16 / U13), while tutors and admins are eligible without a wallet threshold. The optional role is supplied by authenticated handlers and the file proxy.
 - `listActivePackages()` — Returns active mark packages
 
 **Dependencies:** `WalletRepo`

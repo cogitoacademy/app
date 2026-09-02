@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { createUploadUrlInput } from "../../modules/upload/upload.types";
+import {
+  createUploadUrlInput,
+  MAX_UPLOAD_BYTES,
+} from "../../modules/upload/upload.types";
 
 describe("createUploadUrlInput", () => {
   test("accepts allowed content types", () => {
@@ -14,6 +17,7 @@ describe("createUploadUrlInput", () => {
       const result = createUploadUrlInput.safeParse({
         filename: "photo.png",
         contentType,
+        contentLength: 1024,
       });
       expect(result.success).toBe(true);
     }
@@ -23,17 +27,24 @@ describe("createUploadUrlInput", () => {
     const result = createUploadUrlInput.safeParse({
       filename: "notes.txt",
       contentType: "text/plain",
+      contentLength: 1024,
     });
     expect(result.success).toBe(false);
   });
 
   test("rejects missing or empty filenames", () => {
     expect(
-      createUploadUrlInput.safeParse({ filename: "", contentType: "image/png" })
-        .success,
+      createUploadUrlInput.safeParse({
+        filename: "",
+        contentType: "image/png",
+        contentLength: 1024,
+      }).success,
     ).toBe(false);
     expect(
-      createUploadUrlInput.safeParse({ contentType: "image/png" }).success,
+      createUploadUrlInput.safeParse({
+        contentType: "image/png",
+        contentLength: 1024,
+      }).success,
     ).toBe(false);
   });
 
@@ -42,12 +53,14 @@ describe("createUploadUrlInput", () => {
       createUploadUrlInput.safeParse({
         filename: "a/../../x",
         contentType: "image/png",
+        contentLength: 1024,
       }).success,
     ).toBe(false);
     expect(
       createUploadUrlInput.safeParse({
         filename: "/etc/passwd",
         contentType: "image/png",
+        contentLength: 1024,
       }).success,
     ).toBe(false);
   });
@@ -56,7 +69,19 @@ describe("createUploadUrlInput", () => {
     const result = createUploadUrlInput.safeParse({
       filename: "a".repeat(256),
       contentType: "image/png",
+      contentLength: 1024,
     });
     expect(result.success).toBe(false);
+  });
+
+  test("rejects content lengths outside the bounded integer range", () => {
+    for (const contentLength of [0, MAX_UPLOAD_BYTES + 1, 1.5]) {
+      const result = createUploadUrlInput.safeParse({
+        filename: "photo.png",
+        contentType: "image/png",
+        contentLength,
+      });
+      expect(result.success).toBe(false);
+    }
   });
 });

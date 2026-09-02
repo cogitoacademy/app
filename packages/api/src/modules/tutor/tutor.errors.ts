@@ -89,6 +89,17 @@ export class OptimisticLockError extends DomainError {
   }
 }
 
+function badRequestWithTutorDetails(err: DomainError) {
+  const details = err.details ?? {};
+  const data = Object.fromEntries(
+    Object.entries(details).filter(([key]) => key !== "id"),
+  );
+  return new ORPCError("BAD_REQUEST", {
+    message: err.message,
+    data,
+  });
+}
+
 export class InvalidDateRangeError extends DomainError {
   readonly domain = "tutor";
   constructor(field: string) {
@@ -98,7 +109,7 @@ export class InvalidDateRangeError extends DomainError {
   }
 }
 
-export function mapTutorError(err: DomainError): ORPCError<string, undefined> {
+export function mapTutorError(err: DomainError): ORPCError<string, unknown> {
   if (err instanceof TutorProfileNotFoundError)
     return notFound(err.message, err);
   if (err instanceof TutorProfileNotEditableError)
@@ -109,11 +120,11 @@ export function mapTutorError(err: DomainError): ORPCError<string, undefined> {
   if (err instanceof WeeklyAvailabilityRangeError)
     return badRequest(err.message, err);
   if (err instanceof TutorProfileIncompleteError)
-    return badRequest(err.message, err);
+    return badRequestWithTutorDetails(err);
   if (err instanceof InvalidTutorPricingError)
-    return badRequest(err.message, err);
+    return badRequestWithTutorDetails(err);
   if (err instanceof InvalidTutorSubjectSelectionError)
-    return badRequest(err.message, err);
+    return badRequestWithTutorDetails(err);
   if (err instanceof OptimisticLockError) return conflict(err.message, err);
   if (err instanceof InvalidDateRangeError) return badRequest(err.message, err);
   return internalServerError(err.message, err);

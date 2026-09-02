@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { externalHttpUrl } from "../../lib/url-schema";
+import { profileImageUrl } from "../../lib/url-schema";
 import {
   tutorCompetitionAchievementsInput,
   tutorEducationInput,
@@ -65,7 +65,7 @@ export const reviewTutorProfileInput = z.object({
     "request_edit_changes",
   ]),
   adminNote: z.string().max(2000).optional(),
-  publicPhotoUrl: externalHttpUrl.optional(),
+  profileImageUrl: profileImageUrl.optional(),
 });
 
 export const updateTutorAchievementsInput = z.object({

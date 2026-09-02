@@ -31,6 +31,10 @@ import {
   type TutorCompetitionAchievement,
   type TutorEducationEntry,
 } from "./tutor-achievements";
+import {
+  TutorExperiencesDisplay,
+  type TutorExperienceEntry,
+} from "./tutor-experiences";
 
 const MODALITY_LABELS: Record<string, string> = {
   online: "Online",
@@ -65,6 +69,7 @@ type TutorDrawerProps = {
     experiences: string | null;
     education: TutorEducationEntry[] | null;
     competitionAchievements: TutorCompetitionAchievement[] | null;
+    experienceEntries: TutorExperienceEntry[] | null;
     expertise: string[];
     subjects?: TutorSubject[] | null;
     modality: string | null;
@@ -119,8 +124,7 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
   if (!t) return null;
 
   const selectedTutor = t;
-  const tutorName =
-    selectedTutor.displayName ?? selectedTutor.user?.name ?? "Tutor";
+  const tutorName = selectedTutor.user?.name ?? "Tutor";
 
   const { modalities: priceModalities, rows: priceRows } = getPricingTableData(
     selectedTutor.pricesByModality,
@@ -236,7 +240,17 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
                 </div>
               </>
             ) : null}
-            {t.experiences && (
+            {selectedTutor.experienceEntries?.length ? (
+              <>
+                <Separator className="my-4" />
+                <div className="mb-4">
+                  <TutorExperiencesDisplay
+                    experienceEntries={selectedTutor.experienceEntries}
+                    idPrefix="tutor-drawer-experiences"
+                  />
+                </div>
+              </>
+            ) : t.experiences ? (
               <>
                 <Separator className="my-4" />
                 <div className="mb-4">
@@ -248,11 +262,11 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
                   </Text>
                 </div>
               </>
-            )}
+            ) : null}
           </>
 
           <DrawerDescription className="sr-only">
-            Details for {t.displayName ?? "tutor"} profile
+            Details for {t.user?.name ?? "tutor"} profile
           </DrawerDescription>
         </DrawerBody>
         <DrawerFooter>
@@ -263,7 +277,7 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
               <Link
                 to="/tutors/$tutorId/book"
                 params={{ tutorId: selectedTutor.id }}
-                aria-label={`Book ${t.displayName ?? t.user?.name ?? "tutor"}`}
+                aria-label={`Book ${t.user?.name ?? "tutor"}`}
               />
             }
           >

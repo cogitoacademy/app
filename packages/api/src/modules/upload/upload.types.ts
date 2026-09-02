@@ -17,6 +17,7 @@ export const createUploadUrlInput = z.object({
     .max(255)
     .refine((s) => !s.includes("..") && !s.startsWith("/"), "invalid filename"),
   contentType: z.enum(ALLOWED_CONTENT_TYPES),
+  contentLength: z.number().int().min(1).max(MAX_UPLOAD_BYTES),
 });
 
 export type CreateUploadUrlInput = z.infer<typeof createUploadUrlInput>;

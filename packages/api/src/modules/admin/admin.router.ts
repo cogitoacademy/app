@@ -1,5 +1,6 @@
 import { adminProcedure } from "../../procedures";
 import {
+  dashboardAnalyticsInput,
   listUsersInput,
   setRoleInput,
   adminGetWalletInput,
@@ -12,6 +13,18 @@ import type { AdminHandler } from "./admin.handler";
 
 export function createAdminRouter(handler: AdminHandler) {
   return {
+    getDashboardAnalytics: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/dashboard-analytics",
+        tags: ["Admin", "Analytics"],
+        summary: "Get admin dashboard analytics",
+        description:
+          "Returns aggregate booking, audience, portfolio, and category metrics for the admin dashboard",
+      })
+      .input(dashboardAnalyticsInput)
+      .handler(handler.getDashboardAnalytics),
+
     listUsers: adminProcedure
       .route({
         method: "POST",

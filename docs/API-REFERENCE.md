@@ -1,6 +1,6 @@
 # Cogito API Reference
 
-Last updated: 2026-08-31
+Last updated: 2026-09-01
 
 ## Profile and tutor-onboarding validation (2026-08-31)
 
@@ -10,11 +10,25 @@ copy and section-level errors, so validation renders inline without a runtime
 exception. No RPC path, request envelope, response shape, schema, or persistence
 contract changed.
 
-The tutor profile editor is rendered inside one route-owned vertical scroll
-container while the authenticated shell is contained for that route. Category
-fieldsets use their own content height and the action bar no longer adds an
-extra bottom gap. This is presentation-only; no RPC path, request envelope,
-response shape, schema, or persistence contract changed.
+The tutor profile editor uses the authenticated shell's page-level vertical
+scroll container, matching the student profile and avoiding a nested form
+scrollbar. Direct shell children do not flex-shrink, so the tutor page wrapper
+and onboarding content share one natural height. Category fieldsets use their
+own content height and the action bar
+stays in normal document flow without adding trailing scroll space. This is
+presentation-only; no RPC path, request envelope, response shape, schema, or
+persistence contract changed.
+
+All roles use Better Auth `user.name` as the canonical visible name. Tutor
+onboarding saves its single **Name** field through Better Auth and no longer
+sends tutor-profile `displayName`; discovery keeps its compatible
+`displayName` response key but projects that value from `user.name`. The legacy
+tutor-profile input/column remains accepted for compatibility and is not used by
+new web UI.
+
+## Tutor profile drawers (2026-08-31)
+
+The student tutor-discovery drawer and admin tutor-review drawer keep their header/action regions outside the scroll container while `Drawer.Content` owns the single vertical scroll region for long profile content. The body may overscroll locally, but that motion is contained and cannot move the fixed regions. This is client-side presentation only; no RPC path, request envelope, response shape, schema, or persistence contract changed.
 
 ## Stable collection transitions (2026-08-28)
 
@@ -43,7 +57,7 @@ enabled.
 
 Email/password sign-in and sign-up use Better Auth endpoints under `/api/auth`. The server's sign-up password-policy preflight returns 400 for malformed JSON instead of allowing a parser exception to become a 500. The web client validates the email forms on the client and surfaces invalid fields with Selia's inline error state and danger outline, waits for the successful auth response and a fresh session read before entering an authenticated route, and the authenticated route guard also reads the non-cookie-cached session so role-based redirects do not briefly fall back to `/login`. If that fresh session has `emailVerified !== true`, the web client requests an email-verification OTP and routes the user to `/verify-email` before the normal role/return-path destination; this also covers legacy accounts created before verification was introduced. The validated destination is preserved after verification. This changes no successful request or response shape.
 
-Google sign-in starts through Better Auth on the API and uses `GET /api/auth/callback/google` as the provider callback (`BETTER_AUTH_URL`), then redirects the browser to the frontend callback route supplied by the web client (`https://app.cogitoacademy.id/auth/callback`). In production, session cookies remain `SameSite=Strict`; Better Auth's short-lived signed OAuth state cookie is scoped to `SameSite=Lax` so a top-level `GET` callback from Google can return it for state verification. The state cookie remains `Secure`/`HttpOnly`, and the database-backed state record plus signed cookie must both validate before a session is created. This changes no endpoint input or output shape.
+Google sign-in starts through Better Auth on the API and uses `GET /api/auth/callback/google` as the provider callback (`BETTER_AUTH_URL`), then redirects the browser to the frontend callback route supplied by the web client (`https://app.cogitoacademy.id/auth/callback`). The Google provider explicitly sends `prompt=consent`, so the Google OAuth permission screen is shown even when the account has authorized the client before. Sign-in requests Google's identity scopes only; the broader Calendar scope used by the server-side Meet integration remains a separate operator OAuth flow. In production, session cookies remain `SameSite=Strict`; Better Auth's short-lived signed OAuth state cookie is scoped to `SameSite=Lax` so a top-level `GET` callback from Google can return it for state verification. The state cookie remains `Secure`/`HttpOnly`, and the database-backed state record plus signed cookie must both validate before a session is created. This changes no endpoint input or output shape.
 
 Production and staging server bootstrap also reconcile `ADMIN_EMAILS` before
 serving traffic (default: `itcogitoacademy01@gmail.com`). Matching addresses
@@ -53,7 +67,7 @@ Auth signup hook. This is operational role initialization, not a new RPC or
 auth request/response field; other admins can still be managed through the
 existing admin role-management flow.
 
-The web dashboard has no aggregate endpoint. Its role-specific views compose existing procedures: the shared booking list uses protected `booking.listMine` for student, tutor, and admin visibility (with admin seeing all bookings), while tutor discovery remains student-only (`tutors.listPublished`) and tutor/admin dashboards compose their remaining role-specific procedures. Student and tutor next-lesson sections derive the nearest future non-terminal, non-pending item client-side and reuse the booking-list card; the tutor dashboard's above-the-fold ordering of welcome/setup, review requests, and next lesson is presentation-only. Student and tutor welcome cards also share one frontend visual component with role-specific copy and links. On narrow screens, the rounded booking status-tab strip fills the available page width and only its inner tab list scrolls horizontally inside a scrollbar-hidden region; internal paint padding keeps selected-tab shadows and focus rings visible, while shared empty-state cards preserve their rounded glow and card shadow without widening the page. These are presentation-only details and add no RPC endpoint or input/output change.
+The web dashboard mostly composes existing procedures: the shared booking list uses protected `booking.listMine` for student, tutor, and admin visibility (with admin seeing all bookings), while tutor discovery remains student-only (`tutors.listPublished`) and tutor/admin dashboards compose their remaining role-specific procedures. The admin dashboard's Business insights section additionally calls the admin-only `admin.getDashboardAnalytics` aggregate procedure for 7/30/90-day WIB metrics and a live booking-state portfolio. Student and tutor next-lesson sections derive the nearest future non-terminal, non-pending item client-side and reuse the booking-list card; the tutor dashboard's above-the-fold ordering of welcome/setup, review requests, and next lesson is presentation-only. Student and tutor welcome cards also share one frontend visual component with role-specific copy and links. On narrow screens, the rounded booking status-tab strip fills the available page width and only its inner tab list scrolls horizontally inside a scrollbar-hidden region; internal paint padding keeps selected-tab shadows and focus rings visible, while shared empty-state cards preserve their rounded glow and card shadow without widening the page. These are presentation-only details except for the documented admin analytics read.
 
 The authenticated `/guide` (`How Cogito Works`) route is frontend-only. Its typed journey content is bundled with the web app, is role-filtered in the route UI, and adds no RPC procedure, request input, response output, or persistence contract. The centered `max-w-6xl` shell, Selia-composed chapter rail, and bold timing callouts are presentation-only; the callouts restate existing 7-day, 12-hour, H-2, 15-minute, 24-hour, meeting-retry, and support-SLA rules. The development-only anti-slop Tweaks Bar is a static browser asset and does not change the production API surface.
 
@@ -78,17 +92,17 @@ Sanity is queried only by the API server. The browser receives normalized conten
 
 ### `content.listStudentResources`
 
-- **Auth:** Student
+- **Auth:** Protected (student, tutor, or admin)
 - **Input:** None
 - **Output:** `{ items: [{ id, title, description, category }], access: { eligible, balance, threshold } }`
-- **Description:** Returns published Knowledge Bank metadata for the authenticated `/knowledge-bank` app route only when the student's total Marks balance meets the 35-Mark threshold. Held Marks count toward eligibility. Below the threshold, `items` is empty and the access state explains the lock.
+- **Description:** Returns published Knowledge Bank metadata for the authenticated `/knowledge-bank` app route. Students must meet the 35-Mark total-balance threshold (held Marks count toward eligibility); below the threshold, `items` is empty and the access state explains the lock. Tutors and admins are eligible regardless of wallet balance.
 
 ### `GET /content/knowledge-bank/:resourceId/file`
 
-- **Auth:** Student with current total balance at or above the threshold
+- **Auth:** Student with current total balance at or above the threshold, Tutor, or Admin
 - **Input:** `resourceId` path parameter
 - **Output:** Streamed Sanity file, normally `application/pdf`
-- **Description:** Revalidates the session and Knowledge Bank eligibility, resolves the asset server-side, and streams it with `Cache-Control: private, no-store`. This is an Elysia file route, not an oRPC procedure.
+- **Description:** Revalidates the student/tutor/admin role and Knowledge Bank eligibility, resolves the asset server-side, and streams it with `Cache-Control: private, no-store`. Tutors and admins bypass the student wallet threshold. This is an Elysia file route, not an oRPC procedure.
 
 ### Verification
 
@@ -149,6 +163,15 @@ CI runs the API integration/unit suite together with the env, auth, and database
 
 The auth endpoints do not grandfather existing users by changing `emailVerified`. The web sign-in handoff applies the same verification requirement to new and legacy unverified users; the OTP is requested through Better Auth's `/api/auth/email-otp/send-verification-otp` endpoint and completed through `/api/auth/email-otp/verify-email`.
 
+The default web post-login destination is role- and onboarding-aware. A tutor
+without a profile, or with `draft`/`changes_requested` onboarding status, goes
+to `/profile`; a tutor whose onboarding has moved into review, approval,
+publication, or suspension goes to `/dashboard`. Admins and students default to
+`/dashboard`. A validated `redirect` query remains an explicit return path.
+Email/password and Google sign-in carry the selected destination through
+`/verify-email` when email verification is still required. This is frontend
+routing behavior and does not add an RPC or persistence contract.
+
 ### `auth.getProfile`
 
 - **Auth:** Protected
@@ -163,7 +186,7 @@ The auth endpoints do not grandfather existing users by changing `emailVerified`
 - **Input:** `{ phoneNumber?, schoolName?, gradeLevel?, parentName?, parentPhone?, parentEmail?, allowContactRequests? }`
 - **Output:** `{ user, profile }`
 - **Description:** Creates or updates the authenticated user's student profile fields
-- **Account identity:** The student profile page also uses Better Auth `updateUser` to update the signed-in user's `name` and optional `image`; email remains read-only on this surface.
+- **Account identity:** The student profile page also uses Better Auth `updateUser` to update the signed-in user's `name` and optional `image`; email remains read-only on this surface. The student UI selects a JPG/PNG/WebP file, crops it to a square in the browser through a circular drag/zoom editor, uploads the resulting JPEG through `upload.createUploadUrl`, and sends the returned `publicUrl` to Better Auth only when the account details are saved.
 
 ### `auth.searchStudents`
 
@@ -236,6 +259,13 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ---
 
 ## Admin (`admin.*`)
+
+### `admin.getDashboardAnalytics`
+
+- **Auth:** Admin
+- **Input:** `{ period?: "7d" | "30d" | "90d" }` (default `"30d"`)
+- **Output:** `{ period, periodStart, periodEnd, summary, bookingTrend, userTrend, stateBreakdown, modalityBreakdown, categoryBreakdown }`
+- **Description:** Returns the aggregate data used by the admin Business insights section. Period metrics use booking/user creation time and WIB calendar days; `summary` includes booking volume, resolved-booking completion rate, active learners, new students/tutors, gross Marks, and platform-take Marks. `stateBreakdown` is the live all-bookings state mix, while modality/category breakdowns are scoped to the selected period. Missing trend days are returned as zero rows so charts stay continuous.
 
 ### `admin.listUsers`
 
@@ -329,6 +359,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Admin
 - **Input:** `{ status?, limit?, offset? }` (`limit` default 50)
 - **Output:** `{ items: Invite[], total, limit, offset }`
+- **Frontend note:** The Manage Tutors invitation table requests three rows per page and renders `invited` as warning, `accepted` as success, and terminal `expired`/`revoked` statuses as danger; unknown values use the neutral secondary fallback. The tutor-profile table requests five rows per page.
 
 ### `adminTutor.resendInvite`
 
@@ -357,10 +388,17 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Output:** `{ items: TutorProfile[], total, limit, offset }`
 - **Description:** The admin review UI resolves pending `subjectIds` through the active subject taxonomy and displays category/subject labels; the procedure continues to return the pending change payload unchanged.
 
+### `adminTutor.listTutorProfileHistory`
+
+- **Auth:** Admin
+- **Input:** `{ tutorProfileId }`
+- **Output:** Up to 50 newest audit entries for the tutor profile, including action, actor, timestamps, state snapshots, and photo workflow details
+- **Description:** Returns the review/photo history shown in the admin tutor drawer. Admin-uploaded edited assets are applied to the canonical `user.image` only by an approve/publish action; requesting changes never changes the current public photo.
+
 ### `adminTutor.reviewTutorProfile`
 
 - **Auth:** Admin
-- **Input:** `{ tutorProfileId, action, adminNote?, publicPhotoUrl? }` (`action` one of request_changes/approve_unpublished/publish/unpublish/suspend/approve_edits/request_edit_changes; `publicPhotoUrl`, when present, must be an HTTP(S) URL of at most 2048 characters)
+- **Input:** `{ tutorProfileId, action, adminNote?, profileImageUrl? }` (`action` one of request_changes/approve_unpublished/publish/unpublish/suspend/approve_edits/request_edit_changes; `profileImageUrl`, when present, must be an HTTP(S) URL or a generated `/uploads/...` storage path of at most 2048 characters)
 - **Output:** `{ profile }`
 - **Errors:** `TUTOR_PROFILE_NOT_FOUND` (404), `INVALID_INVITE_ACTION` (400) when the action is not allowed from the profile's current onboarding status (F25 state machine: publish only from `pending_review`/`changes_requested`/`approved_unpublished`; unpublish/suspend/approve_edits/request_edit_changes only from `published`; request_changes only from `pending_review`/`changes_requested`), `TUTOR_PROFILE_OPTIMISTIC_LOCK` (409) if another moderator changed the profile first
 
@@ -384,20 +422,32 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Output:** `{ profile }`
 - **Description:** Returns the authenticated tutor's profile. The web app presents this tutor-owned profile editor at `/profile`; the legacy `/onboarding` URL redirects there. This route change does not alter the RPC contract.
 
+### `tutor.getMyProfileHistory`
+
+- **Auth:** Tutor
+- **Input:** None
+- **Output:** Up to 50 newest audit entries for the authenticated tutor profile, including action, actor identity (`id` and display name only), actor type, timestamps, and photo/review workflow details; account email is not returned
+- **Description:** Returns the profile history shown to the tutor. Published photo replacements remain proposals until an admin approves them.
+
 ### `tutor.updateMyProfile`
 
 - **Auth:** Tutor
-- **Input:** `{ version, displayName?, shortBio?, credentialsSummary?, achievements?, experiences?, achievementProofUrls?, experienceProofUrls?, sourcePhotoUrl?, education?, competitionAchievements?, expertise?, subjectIds?, modality?, baseRatesIdr?, bankName?, bankAccountNumber?, bankAccountHolderName?, bankAccountOpeningCity?, bankAccountOwnership?: "self" | "trusted_person", bankTransferDisclaimerAccepted?, prices? }`; the tutor editor exposes one structured achievement section backed by up to 5 `{ competitionName, year, awards }` entries, while `education` accepts up to 2 `{ university, degree }` entries. The legacy `achievements`/`credentialsSummary` values remain accepted for older profiles.
+- **Input:** `{ version, displayName? (legacy clients only), shortBio? (maximum 50 whitespace-delimited words and 2,000 characters), credentialsSummary?, achievements?, experiences?, achievementProofUrls?, experienceProofUrls?, profileImageUrl?, education?, competitionAchievements?, experienceEntries?, expertise?, subjectIds?, modality?, baseRatesIdr?, bankName?, bankAccountNumber?, bankAccountHolderName?, bankAccountOpeningCity?, bankAccountOwnership?: "self" | "trusted_person", bankTransferDisclaimerAccepted?, prices? }`; `experienceEntries` accepts up to 5 `{ role, organization, startYear, endYear, description }` entries, with `endYear` nullable for an ongoing role. The tutor editor saves its canonical name through Better Auth, exposes one combined structured Achievements & experience section and one profile-image field, and does not send `displayName`. The legacy `achievements`/`credentialsSummary`/`experiences` values remain accepted for older profiles.
 - **Output:** `{ profile, subjects: [{ id, slug, name, description?, isSelectable, parent: { id, slug, name } }] }`
-- **Errors:** `OPTIMISTIC_LOCK` (409) on version mismatch, `INVALID_TUTOR_PRICING` (400) on floor-price violation, `INVALID_TUTOR_SUBJECT_SELECTION` (400) when ids are not active selectable child subjects or exceed 20
-- **Description:** Updates the tutor profile with optimistic locking. The tutor editor presents one structured achievement section plus one multiline experiences field; each competition entry stores a name, year, and one or more award titles. Legacy `achievements`/`credentialsSummary` text remains readable and is used as a fallback when no structured competition achievements exist. `achievementProofUrls`, `experienceProofUrls`, and `sourcePhotoUrl` accept only bounded HTTP(S) URLs. `sourcePhotoUrl` is private editing input; only an admin may set the edited public photo through tutor review. `subjectIds` is the normalized child-category selection. Payout-account fields remain private. A published tutor's `baseRatesIdr` takes effect immediately for future bookings; existing bookings retain their stored price snapshot for payout. Other trust-sensitive changes—including structured achievements—wait in `pendingProfileChanges`.
+- **Errors:** `OPTIMISTIC_LOCK` (409) on version mismatch, `INVALID_TUTOR_PRICING` (400) on floor-price violation, `INVALID_TUTOR_SUBJECT_SELECTION` (400) when ids are not active selectable child subjects or exceed 7; tutor domain validation errors include field-specific data such as `missingFields`, `pricingError`, or `subjectIds` where available
+- **Description:** Updates the tutor profile with optimistic locking. The tutor editor presents one combined structured Achievements & experience section and one profile-image field; each experience stores a role, organization, start/end years, and a brief description. Short bios are limited to 50 whitespace-delimited words (and 2,000 characters). Year values are sent as plain integers without grouping punctuation, and an end year must be on or after its start year. Comma punctuation in award and experience text remains visible while editing; comma-separated award titles still normalize to the structured `awards` array. Legacy `achievements`/`credentialsSummary`/`experiences` text remains readable as a fallback when no structured entries exist. `achievementProofUrls` and `experienceProofUrls` accept bounded HTTP(S) URLs; `profileImageUrl` accepts bounded HTTP(S) URLs or a generated local `/uploads/...` storage path. The tutor-facing proof guidance recommends putting both achievement and experience evidence in one Google Drive folder with the “Anyone with the link can view” setting. `profileImageUrl` is the single canonical tutor profile image: draft/changes-requested updates write it to the account image, while published changes wait in `pendingProfileChanges` until admin review. The admin can replace it with the background-standardized final asset through tutor review. `subjectIds` is the normalized child-category selection. Payout-account fields remain private. A published tutor's `baseRatesIdr` takes effect immediately for future bookings; existing bookings retain their stored price snapshot for payout. Other trust-sensitive changes—including structured achievements and experiences—wait in `pendingProfileChanges`. The web editor exposes separate **Save draft**/**Save profile changes** and **Submit for review** actions: saving permits incomplete required top-level fields while still highlighting malformed values, while submission applies the complete required-field gate. Both client-side and API-side validation errors are shown beside the affected field and in the form summary.
+
+Structured tutor experience fields are submitted through `experienceEntries` as up to five `{ role, organization, startYear, endYear, description }` entries. Years are plain integers; `endYear` may be `null` for an ongoing role and cannot precede `startYear`. Legacy `experiences` text remains accepted for older profiles.
 
 ### `tutor.submitForReview`
+
+The web tutor profile editor groups education, competition achievements, and experiences into one combined **Achievements & experience** section with one public preview; the API fields and review behavior remain unchanged.
 
 - **Auth:** Tutor
 - **Input:** None
 - **Output:** `{ profile }`
-- **Description:** Submits a draft profile for admin review. The required achievement may come from the structured competition-achievement entries or from legacy achievement text retained on an older profile.
+- **Errors:** `TUTOR_PROFILE_INCOMPLETE` (400) when required profile fields are missing; `INVALID_TUTOR_PRICING` (400) when a base honorarium is invalid; `INVALID_TUTOR_SUBJECT_SELECTION` (400) when subject ids are invalid
+- **Description:** Submits a draft profile for admin review. The required achievement may come from the structured competition-achievement entries or from legacy achievement text retained on an older profile. The required experience may come from `experienceEntries` or legacy experience text retained on an older profile. Incomplete and pricing errors include their missing-field or pricing detail so the web form can highlight the relevant controls.
 
 ### `tutor.listAvailability`
 
@@ -568,10 +618,10 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `wallet.knowledgeBankEligible`
 
-- **Auth:** Student
+- **Auth:** Protected (student, tutor, or admin)
 - **Input:** None
 - **Output:** `{ eligible, balance, threshold }`
-- **Description:** Checks Knowledge Bank gating (min balance threshold); eligibility and `balance` use the **total balance** (held Marks count toward the 35-Mark threshold, per PRD DL-16 / U13). No Marks are deducted.
+- **Description:** Checks Knowledge Bank access without changing the wallet. Students must meet the 35-Mark threshold, and eligibility plus `balance` use the **total balance** (held Marks count, per PRD DL-16 / U13). Tutors and admins are eligible regardless of wallet balance; `balance` is still returned when a wallet exists and is `0` when no wallet exists. No Marks are deducted.
 
 > Note: `hold`/`release`/`deduct`/`credit`/`compensate` are service-layer methods only — they are not exposed over RPC; other modules call them via consumer-driven ports.
 
@@ -637,6 +687,12 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 **UI behavior note:** The booking detail surface uses compact accessible Selia `IconInfoSquareRounded` popover triggers for online-link explanations, retry/manual setup status, available meeting-room access, missing offline-room details, and tutor completion timing. Available links no longer render a `Ready` badge or standalone CTA; the popover contains the meeting-room action. The trigger supports hover, keyboard focus, click, and touch; the overview merges the date and hours into one `Date & time` field, places Format & access beside it in a responsive two-column grid that stacks on narrow screens, and keeps the desktop overview/activity flow independent from the sticky Actions/Marks rail so rail height does not add a blank row before Activity. Narrow layouts keep actions/Marks before Activity. This does not change the `booking.get` response contract.
 
 ### `booking.listMine`
+
+**Frontend title parity:** Booking list rows and the booking-detail header use
+the same presentation formatter as Calendar/Meet:
+`Cogito - {Competition} | {Tutor} x {Student}`, with `& Friends` for
+group/group-series bookings. This does not add a response field or change the
+RPC contract.
 
 - **Auth:** Protected
 - **Input:** `{ cursor?, limit?, states? }`
@@ -1046,10 +1102,10 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `upload.createUploadUrl`
 
 - **Auth:** Protected (F19 — intentionally NOT student-only: any authenticated role may mint a bounded upload URL; the tutor proof-file path needs it)
-- **Input:** `{ filename, contentType }` (`contentType` one of `image/png`/`image/jpeg`/`image/webp`/`image/gif`/`application/pdf`; `filename` max 255 chars, no `..`/leading `/`)
-- **Output:** `{ uploadUrl, key, publicUrl, contentType, maxBytes, method, fields }` (`maxBytes` 5 MB; `method: "POST"`; `fields` carries the S3/R2 presigned-POST policy fields — or is `{}` in local mode)
+- **Input:** `{ filename, contentType, contentLength }` (`contentType` one of `image/png`/`image/jpeg`/`image/webp`/`image/gif`/`application/pdf`; `filename` max 255 chars, no `..`/leading `/`; `contentLength` is an integer from 1 byte through 5 MB)
+- **Output:** `{ uploadUrl, key, publicUrl, contentType, maxBytes, method, fields }` (`maxBytes` 5 MB; `method: "PUT"` for R2 and `"POST"` for local mode; `fields` is `{}` for both current backends)
 - **Errors:** `INVALID_CONTENT_TYPE` (400), `INVALID_FILENAME` (400)
-- **Description:** Returns a presigned POST URL (Cloudflare R2, size-bounded via `content-length-range` in the policy) or a local URL (dev, `POST /uploads/*` with a session) for uploading a file; uploaded objects are referenced by `key`/`publicUrl` (e.g. private achievement `evidenceUrl`, public `documentationUrl`, or user avatar). Local files are served via `GET /uploads/*` when `R2_PUBLIC_URL` is unset
+- **Description:** Returns a Cloudflare R2 presigned PUT URL whose key, content type, and declared content length are signed, or a local URL (dev, authenticated `POST /uploads/*`) for uploading a file. Browser clients using R2 require bucket CORS for the frontend origin. Uploaded objects are referenced by `key`/`publicUrl` (e.g. private achievement `evidenceUrl`, public `documentationUrl`, or user avatar). Local files are served via `GET /uploads/*` when `R2_PUBLIC_URL` is unset
 
 ## Tutor payout profile fields (2026-08-28)
 

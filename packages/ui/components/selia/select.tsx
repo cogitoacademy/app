@@ -185,6 +185,7 @@ export const selectTriggerVariants = cva(
   [
     "h-9.5 px-3.5 w-full bg-input rounded placeholder:text-dimmed transition-[color,box-shadow]",
     "focus:outline-0 focus:ring-primary focus:ring-2",
+    "aria-invalid:ring-danger-border/24 aria-invalid:ring-2 aria-invalid:focus:ring-danger-border/24",
     "flex items-center gap-2.5 cursor-pointer",
     "data-disabled:cursor-not-allowed data-disabled:opacity-70",
   ],

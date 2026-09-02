@@ -204,7 +204,7 @@ DL-14 & May 29, 2026 & Phase 0 follows Package 2 from the technical proposal plu
 \hline
 DL-15 & August 15, 2026 & Tutor tier-based pricing and Marks-denominated tutor self-pricing are removed from Phase 0. Tutors set an IDR base honorarium for each supported modality in Rp 5,000 increments; group honoraria are derived from the fixed online/offline increment schedule. & Final \\
 \hline
-DL-16 & June 1, 2026 & Knowledge Bank access requires student login and at least 35 total Marks in the wallet. This is an eligibility threshold, not a 35-Mark fee. & Final \\
+DL-16 & June 1, 2026 & Knowledge Bank access requires student login and at least 35 total Marks in the wallet; authenticated tutors and admins may access it without a Marks threshold. This is an eligibility threshold for students, not a 35-Mark fee. & Final \\
 \hline
 DL-17 & May 30, 2026 & Series bookings may contain up to 4 explicitly selected sessions, require tutor acceptance or decline as a full package, and hold Marks for all sessions upfront. & Final \\
 \hline
@@ -340,9 +340,9 @@ Public & Existing bilingual public landing page remains in place; approved achie
 \hline
 Student & Login / signup, dashboard, wallet and Marks purchase, tutor discovery, tutor profile, solo and group booking flow, booking detail / history, report tutor lateness / no-show action, notifications, achievements submission, authenticated Competition Calendar, 35-Mark-gated Knowledge Bank, and WhatsApp support button. Public signup creates student / default access only and cannot create tutor access. \\
 \hline
-Tutor & Invite acceptance, account claim, onboarding, dashboard, IDR honorarium setup and breakdown, payout request / payroll status, availability management, incoming bookings, booking detail, reschedule proposal, session completion, and session notes. \\
+Tutor & Invite acceptance, account claim, onboarding, dashboard, IDR honorarium setup and breakdown, payout request / payroll status, availability management, incoming bookings, booking detail, reschedule proposal, session completion, session notes, and authenticated Knowledge Bank access without a Marks threshold. \\
 \hline
-Admin & Login, dashboard, user lookup, tutor invitation, tutor onboarding review, booking monitor, booking detail and state history, wallet / ledger view, override / reconciliation, tutor honorarium review, economy settings, achievement moderation, and audit review. \\
+Admin & Login, dashboard, user lookup, tutor invitation, tutor onboarding review, booking monitor, booking detail and state history, wallet / ledger view, override / reconciliation, tutor honorarium review, economy settings, achievement moderation, audit review, and authenticated Knowledge Bank access without a Marks threshold. \\
 \hline
 \end{tabular}
 
@@ -438,7 +438,7 @@ Moderate achievements & No & No & Yes & Approve, reject, archive, or restore as 
 	\hline
 FR-11           & As a user, I want access to Competition Calendar after signing in.                                 & \textbf{Requirement:} The system shall expose the published Competition Calendar inside the authenticated app for every signed-in role while keeping Sanity as the editorial source of truth. The bilingual public academy site shall provide login CTAs with a calendar return path. \newline \textbf{Acceptance:} A signed-in user can browse the English app calendar without a Marks condition; public academy calendar URLs redirect to app login; the existing Sanity content remains authoritative.                                                                                                                                                                                                                                                                                                                                         \\
 	\hline
-FR-12           & As a student, I want clear Knowledge Bank access rules so I know when content is available.                                           & \textbf{Requirement:} The system shall provide the Knowledge Bank inside the authenticated app, backed by the existing Sanity source, and gate student access by login plus wallet threshold. \newline \textbf{Acceptance:} Knowledge Bank access is available only after signing into the student dashboard and only if the student's wallet has at least 35 Marks. The UI must state clearly that 35 Marks is a minimum wallet-balance requirement, not a 35-Mark access fee, opening the Knowledge Bank must not deduct Marks, and resource files must be served only through an authenticated app path.                                                                                                                                                                                                                                                                                                                                                                 \\
+	FR-12           & As a student, I want clear Knowledge Bank access rules so I know when content is available.                                           & \textbf{Requirement:} The system shall provide the Knowledge Bank inside the authenticated app, backed by the existing Sanity source, and gate student access by login plus wallet threshold while allowing authenticated tutors and admins to access the same resources without that student threshold. \newline \textbf{Acceptance:} Student access is available only after signing into the student dashboard and only if the student's wallet has at least 35 total Marks; tutor and admin access is available after authentication regardless of wallet balance. The UI must state clearly that 35 Marks is a minimum student wallet-balance requirement, not a 35-Mark access fee, opening the Knowledge Bank must not deduct Marks, and resource files must be served only through an authenticated app path.                                                                                                                                                                                                                                                                                                                                                                 \\
 	\hline
 	FR-13           & As support staff, I want the system to preserve history so disputes can be reviewed later.                             & \textbf{Requirement:} The system shall preserve booking and wallet history for support and dispute handling. \newline \textbf{Acceptance:} Historical booking and ledger records remain queryable and linked to the relevant student, tutor, and payment references.                                                                                                                                                                                                                                                                                                                                             \\
 	\hline
@@ -666,7 +666,7 @@ The package table above supersedes all earlier package values, including the pre
 	\item Students purchase Marks in approved packages: Starter 50 Marks / Rp 312,500, Learner 120 Marks / Rp 690,000, Explorer 200 Marks / Rp 1,070,000, Pioneer 400 Marks / Rp 2,000,000.
 	\item Purchased Marks are non-refundable, non-transferable, cannot be converted back to rupiah, and do not expire after a valid purchase. Unused purchased Marks remain in the student's wallet.
 	\item Tutor honorarium is calculated and reported in IDR. Any payout request or disbursement uses the tutor's IDR honorarium balance, not a Marks cash-out rate.
-	\item Knowledge Bank access checks wallet balance continuously and requires at least 35 Marks.
+	\item Knowledge Bank access checks wallet balance continuously for students and requires at least 35 Marks; authenticated tutors and admins are not subject to this threshold.
 	\item Successful Marks purchase creates a credit entry.
 	\item Booking hold creates a hold entry.
 	\item Booking completion converts the held amount into a deduction entry.
@@ -685,11 +685,11 @@ The package table above supersedes all earlier package values, including the pre
 
 \textbf{Knowledge Bank access rule}
 \begin{itemize}
-    \item Student must be signed in and inside the student dashboard.
-    \item Minimum wallet balance required: 35 Marks.
+    \item Students must be signed in and inside the student dashboard; tutors must be authenticated in the tutor workspace.
+    \item Students require a minimum wallet balance of 35 Marks; tutors and admins have access without a wallet threshold.
     \item Opening the Knowledge Bank does not deduct Marks.
     \item User-facing copy must say: ``Knowledge Bank access requires at least 35 Marks in your wallet. You are not paying 35 Marks to open it.''
-    \item A student below 35 Marks loses Knowledge Bank access until they top up or admin correction restores balance.
+    \item A student below 35 Marks loses Knowledge Bank access until they top up or admin correction restores balance; this restriction does not apply to tutors or admins.
 \end{itemize}
 
 

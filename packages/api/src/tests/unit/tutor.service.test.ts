@@ -23,7 +23,10 @@ function makeProfile(overrides: Record<string, unknown> = {}) {
     credentialsSummary: "PhD in Math",
     achievements: "National mathematics medalist (2025)",
     experiences: "Mathematics tutor (2024–2025)",
-    sourcePhotoUrl: "https://example.com/source-photo.jpg",
+    user: {
+      name: "Dr. Smith",
+      image: "https://example.com/profile-photo.jpg",
+    },
     modality: "online",
     bankName: "BCA",
     bankAccountNumber: "1234567890",
@@ -188,7 +191,7 @@ describe("Tutor Service", () => {
     test("throws TutorProfileIncompleteError for missing required fields", () => {
       expect(() =>
         validateSubmitForReview(
-          makeProfile({ displayName: null }),
+          makeProfile({ user: { name: "", image: null } }),
           mockPricingPort,
         ),
       ).toThrow(TutorProfileIncompleteError);
@@ -216,6 +219,35 @@ describe("Tutor Service", () => {
       expect(() =>
         validateSubmitForReview(
           makeProfile({ achievements: null, competitionAchievements: [] }),
+          mockPricingPort,
+        ),
+      ).toThrow(TutorProfileIncompleteError);
+    });
+
+    test("accepts structured experiences without legacy text", () => {
+      expect(() =>
+        validateSubmitForReview(
+          makeProfile({
+            experiences: null,
+            experienceEntries: [
+              {
+                role: "Mathematics Tutor",
+                organization: "Cogito Academy",
+                startYear: 2024,
+                endYear: null,
+                description: "Guided students through olympiad preparation.",
+              },
+            ],
+          }),
+          mockPricingPort,
+        ),
+      ).not.toThrow();
+    });
+
+    test("requires an experience when legacy and structured values are empty", () => {
+      expect(() =>
+        validateSubmitForReview(
+          makeProfile({ experiences: null, experienceEntries: [] }),
           mockPricingPort,
         ),
       ).toThrow(TutorProfileIncompleteError);
@@ -292,7 +324,12 @@ describe("Tutor Service", () => {
       return {
         tutorRepo: {
           getByUserId: mock(async () => mockProfile),
+          listProfileHistory: mock(async () => []),
           updateProfileWithVersion: mock(async () => [mockProfile]),
+          updateProfileImage: mock(async () => ({
+            id: "u1",
+            image: "https://example.com/profile-photo.jpg",
+          })),
           updateStatus: mock(async () => mockProfile),
           listAvailability: mock(async () => []),
           upsertAvailability: mock(async () => ({ id: "slot1" })),
@@ -332,6 +369,35 @@ describe("Tutor Service", () => {
       expect(result.id).toBe("tp1");
     });
 
+    test("getMyProfileHistory returns audit rows for the tutor profile", async () => {
+      const history = [{ id: "audit-1", action: "tutor_profile_updated" }];
+      const listProfileHistory = mock(async () => history);
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          listProfileHistory,
+        },
+      });
+      const service = createTutorService(deps as any);
+
+      await expect(service.getMyProfileHistory("u1")).resolves.toEqual(history);
+      expect(listProfileHistory).toHaveBeenCalledWith(deps.db, "tp1");
+    });
+
+    test("getMyProfileHistory throws when the tutor profile is missing", async () => {
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => null),
+        },
+      });
+      const service = createTutorService(deps as any);
+
+      await expect(service.getMyProfileHistory("u1")).rejects.toThrow(
+        TutorProfileNotFoundError,
+      );
+    });
+
     test("updateMyProfile returns updated profile", async () => {
       const deps = makeDeps();
       const service = createTutorService(deps as any);
@@ -340,6 +406,111 @@ describe("Tutor Service", () => {
         version: 1,
       });
       expect(result.id).toBe("tp1");
+    });
+
+    test("draft profile writes the submitted photo to the canonical user image", async () => {
+      const profile = makeProfile({
+        onboardingStatus: "draft",
+        user: { image: null },
+      });
+      const updateProfileImage = mock(async () => ({
+        id: "u1",
+        image: "https://example.com/submitted-photo.jpg",
+      }));
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => profile),
+          updateProfileImage,
+        },
+      });
+      const service = createTutorService(deps as any);
+
+      await service.updateMyProfile("u1", {
+        version: 1,
+        profileImageUrl: "https://example.com/submitted-photo.jpg",
+      });
+
+      expect(updateProfileImage).toHaveBeenCalledWith(
+        expect.anything(),
+        "u1",
+        "https://example.com/submitted-photo.jpg",
+      );
+    });
+
+    test("published profile stages a changed photo for admin review", async () => {
+      const profile = makeProfile({
+        onboardingStatus: "published",
+        pendingProfileChanges: null,
+        user: { image: "https://example.com/current-photo.jpg" },
+      });
+      const updateProfileWithVersion = mock(async () => [profile]);
+      const updateProfileImage = mock(async () => ({
+        id: "u1",
+        image: "https://example.com/current-photo.jpg",
+      }));
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => profile),
+          updateProfileWithVersion,
+          updateProfileImage,
+        },
+      });
+      const service = createTutorService(deps as any);
+
+      await service.updateMyProfile("u1", {
+        version: 1,
+        profileImageUrl: "https://example.com/new-photo.jpg",
+      });
+
+      expect(updateProfileWithVersion).toHaveBeenCalledWith(
+        deps.db,
+        "u1",
+        1,
+        expect.objectContaining({
+          pendingProfileChanges: {
+            profileImageUrl: "https://example.com/new-photo.jpg",
+          },
+          profileEditStatus: "pending_review",
+        }),
+      );
+      expect(updateProfileImage).not.toHaveBeenCalled();
+    });
+
+    test("published profile removes an unchanged photo edit", async () => {
+      const profile = makeProfile({
+        onboardingStatus: "published",
+        pendingProfileChanges: {
+          profileImageUrl: "https://example.com/profile-photo.jpg",
+          shortBio: "pending bio",
+        },
+        user: { image: "https://example.com/profile-photo.jpg" },
+      });
+      const updateProfileWithVersion = mock(async () => [profile]);
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => profile),
+          updateProfileWithVersion,
+        },
+      });
+      const service = createTutorService(deps as any);
+
+      await service.updateMyProfile("u1", {
+        version: 1,
+        profileImageUrl: "https://example.com/profile-photo.jpg",
+      });
+
+      expect(updateProfileWithVersion).toHaveBeenCalledWith(
+        deps.db,
+        "u1",
+        1,
+        expect.objectContaining({
+          pendingProfileChanges: { shortBio: "pending bio" },
+          profileEditStatus: "pending_review",
+        }),
+      );
     });
 
     test("updateMyProfile throws OptimisticLockError on version mismatch", async () => {
@@ -433,6 +604,51 @@ describe("Tutor Service", () => {
       >;
       expect(updateArgs.education).toBeUndefined();
       expect(updateArgs.competitionAchievements).toBeUndefined();
+    });
+
+    test("published profile stores structured experiences as pending edits", async () => {
+      const profile = makeProfile({
+        onboardingStatus: "published",
+        experienceEntries: [],
+      });
+      const updateProfileWithVersion = mock(async () => [profile]);
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => profile),
+          updateProfileWithVersion,
+        },
+      });
+      const service = createTutorService(deps as any);
+      const experienceEntries = [
+        {
+          role: "Mathematics Tutor",
+          organization: "Cogito Academy",
+          startYear: 2024,
+          endYear: null,
+          description: "Guided students through olympiad preparation.",
+        },
+      ];
+
+      await service.updateMyProfile("u1", {
+        version: 1,
+        experienceEntries,
+      });
+
+      expect(updateProfileWithVersion).toHaveBeenCalledWith(
+        deps.db,
+        "u1",
+        1,
+        expect.objectContaining({
+          pendingProfileChanges: { experienceEntries },
+          profileEditStatus: "pending_review",
+        }),
+      );
+      const updateArgs = updateProfileWithVersion.mock.calls[0][3] as Record<
+        string,
+        unknown
+      >;
+      expect(updateArgs.experienceEntries).toBeUndefined();
     });
 
     test("published profile applies a changed IDR base honorarium immediately", async () => {

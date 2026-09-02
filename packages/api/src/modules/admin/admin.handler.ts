@@ -10,6 +10,7 @@ import type {
 } from "./admin.service";
 import type {
   listUsersInput,
+  dashboardAnalyticsInput,
   setRoleInput,
   adminGetWalletInput,
   adminListLedgerEntriesInput,
@@ -19,6 +20,7 @@ import type {
 } from "./admin.types";
 
 type ListUsersInputZod = z.infer<typeof listUsersInput>;
+type DashboardAnalyticsInputZod = z.infer<typeof dashboardAnalyticsInput>;
 type SetRoleInputZod = z.infer<typeof setRoleInput>;
 type AdminGetWalletInputZod = z.infer<typeof adminGetWalletInput>;
 type AdminListLedgerEntriesInputZod = z.infer<
@@ -38,6 +40,19 @@ export type AdminHandler = ReturnType<typeof createAdminHandler>;
 
 export function createAdminHandler(adminService: AdminService) {
   return {
+    getDashboardAnalytics: async ({
+      context: _context,
+      input,
+    }: {
+      context: Context;
+      input: DashboardAnalyticsInputZod;
+    }) => {
+      return withDomainMap(
+        () => adminService.getDashboardAnalytics(input?.period),
+        mapAdminError,
+      );
+    },
+
     listUsers: async ({
       context: _context,
       input,

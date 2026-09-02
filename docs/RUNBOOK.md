@@ -31,6 +31,10 @@ For manual tutor-invite delivery, copy the visible latest link. After reloading 
 
 Tutor invitation delivery should be smoke-tested in both desktop and mobile email clients. Verify the **Accept invitation & set up profile** button and fallback URL lead to `/invite?token=…`, the invited account email is correct, and the displayed expiry is explicitly labeled UTC.
 
+On `/admin-tutors`, verify the Invitations table uses semantic status colors: invited is warning, accepted is success, and expired/revoked are danger. The invitation filter and row actions should remain unchanged.
+
+Also verify the Invitations table shows up to 3 rows per page and Tutor Profiles shows up to 5 rows per page; each table's pagination advances independently.
+
 ## Starting the Server
 
 ### Production URL topology
@@ -67,14 +71,17 @@ Coolify checks from causing a false `Connection refused` status.
 
 ### Login/auth smoke check
 
-Open `/login` in a clean browser and sign in as a student, tutor, and admin. The email button may show progress while the auth request and fresh session read complete; it must then go directly to `/dashboard`, `/profile`, or `/admin-tutors` without an intermediate `/login` navigation. Verify a wrong password returns the form with an error and the button is usable again. For a return link such as `/login?redirect=/bookings`, verify it lands on the validated target after the same handoff.
+Open `/login` in a clean browser and sign in as a student, an onboarding-incomplete tutor, an already-submitted tutor, and an admin. The email button may show progress while the auth request, fresh session read, and tutor-status read complete; it must then go directly to `/dashboard` for the student, submitted tutor, and admin, or `/profile` for a tutor with no profile or `draft`/`changes_requested` status, without an intermediate `/login` navigation. Verify a wrong password returns the form with an error and the button is usable again. For a return link such as `/login?redirect=/bookings`, verify it lands on the validated target after the same handoff.
 
 Also verify the client validation feedback: blur an empty or malformed email, a short password, and (on sign-up) a short name or password missing uppercase/lowercase/digit requirements. Each invalid field should show its own Selia inline error and danger outline; submitting incomplete data should reveal the field errors and must not call `/api/auth`. Correcting the values should clear the errors and re-enable the normal auth request. An API-level malformed JSON request to `/api/auth/sign-up/email` must return 400, never 500.
 
 ### Profile and tutor-onboarding smoke check
 
 After a web deployment, sign in as a student and open `/profile`; then sign in
-as a tutor and open `/profile` (the tutor route should redirect to `/onboarding`).
+as a tutor and open `/profile` to inspect the tutor-owned editor. A new or
+incomplete tutor should arrive there after login, while a tutor whose profile
+has already been submitted should arrive at `/dashboard` and can open
+**Tutor Profile** from the sidebar when needed.
 Submit incomplete forms and confirm validation messages remain inline, the page
 does not fall into the generic error screen, and the browser console has no
 `Base UI error #28`. A `500` shown by the client error page together with
@@ -82,15 +89,16 @@ does not fall into the generic error screen, and the browser console has no
 `FieldError` has been rendered outside a Selia `Field` root; inspect the affected
 form composition before checking the API or database.
 
-For Google sign-in, start from `https://app.cogitoacademy.id/login` in a clean browser and confirm the provider callback is `https://api.cogitoacademy.id/api/auth/callback/google`, followed by the frontend route `/auth/callback` and the role-appropriate destination. In DevTools, the initial auth response must set `better-auth.state` with `Secure`, `HttpOnly`, and `SameSite=Lax`; the callback request must include that cookie and its `state` query parameter. Keep the Google Cloud OAuth client configured with the frontend origin `https://app.cogitoacademy.id` and the API redirect URI `https://api.cogitoacademy.id/api/auth/callback/google`.
+For Google sign-in, start from `https://app.cogitoacademy.id/login` in an incognito/clean browser and confirm the provider callback is `https://api.cogitoacademy.id/api/auth/callback/google`, followed by the frontend route `/auth/callback` and the role-appropriate destination. The Google authorization URL must contain `prompt=consent`; record the Google permission screen in the verification video and click **Show all services** so every requested identity scope is fully expanded and readable before accepting. In DevTools, the initial auth response must set `better-auth.state` with `Secure`, `HttpOnly`, and `SameSite=Lax`; the callback request must include that cookie and its `state` query parameter. Keep the Google Cloud OAuth client configured with the frontend origin `https://app.cogitoacademy.id` and the API redirect URI `https://api.cogitoacademy.id/api/auth/callback/google`. This login flow requests identity scopes only. For the separate Calendar scope used by automatic Meet creation, use the dedicated Meet OAuth client and the consent/refresh-token procedure in `docs/GOOGLE-MEET-SETUP.md`; do not add Calendar access to every user's login.
 
 ### Dashboard smoke check
 
 After a web deployment, sign in once as each supported role and open `/dashboard`. Verify the sidebar user menu shows the authenticated profile image when one is configured and uses initials when it is not:
 
 - Student: learning welcome, next lesson, Knowledge Bank/calendar, and tutor recommendations. Confirm the welcome card shows the SVG illustration and shared spacing/sizing used by the tutor dashboard. If a booking exists, confirm the next-lesson card matches the booking-list date tile, participant metadata, Marks display, status tooltip, and detail action.
-- Tutor: the first dashboard row shows the same SVG welcome card visual plus teaching setup, and the next visible row shows requests to review plus next lesson before metrics/payout; actions link to `/bookings`, `/availability`, and `/profile`. Verify the review card keeps its empty/loading slot when there are no requests. When a tutor submits the initial profile form, confirm the app redirects to `/dashboard` and the browser Back button does not return to the form. Opening the legacy `/onboarding` URL should land on `/profile`.
-- Admin: open `/admin` for the admin workspace and verify priority operations/moderation counts and links to `/admin-operations`, `/admin-tutors`, `/admin-achievements`, and `/admin-economy`. In `/admin-operations`, verify category, urgency, and SLA-status filters; open a queue item and confirm its reported reason/source, affected-user count, OQ-04 deadline, time-since-report, escalated badge, and WhatsApp escalation action. Clicking the escalation action must show the confirmation modal; Cancel keeps the admin page in place, while Continue opens the Cogito support conversation at `+62 881-0119-90195` in a new tab. Confirm the hydrated participant wallet/booking-ledger cards and state-history timeline load, then use **Open override** to reach the existing preview/apply flow. In `/admin-economy`, verify the active schedule loads, edits persist after reload, and the preview updates.
+- Tutor: the first dashboard row shows the same SVG welcome card visual plus teaching setup, and the next visible row shows requests to review plus next lesson before metrics/payout; actions link to `/bookings`, `/availability`, and `/profile`. Verify the review card keeps its empty/loading slot when there are no requests. When a tutor submits the initial profile form, confirm the app redirects to `/dashboard` and the browser Back button does not return to the form. A later login for that tutor must also land on `/dashboard`; a `draft` or `changes_requested` tutor must land on `/profile` so the profile can be completed or corrected. Opening the legacy `/onboarding` URL should land on `/profile`.
+- Admin: a normal login must land on `/dashboard`; open the admin workspace and verify priority operations/moderation counts and links to `/admin-operations`, `/admin-tutors`, `/admin-achievements`, and `/admin-economy`. In `/admin-operations`, verify category, urgency, and SLA-status filters; open a queue item and confirm its reported reason/source, affected-user count, OQ-04 deadline, time-since-report, escalated badge, and WhatsApp escalation action. Clicking the escalation action must show the confirmation modal; Cancel keeps the admin page in place, while Continue opens the Cogito support conversation at `+62 881-0119-90195` in a new tab. Confirm the hydrated participant wallet/booking-ledger cards and state-history timeline load, then use **Open override** to reach the existing preview/apply flow. In `/admin-economy`, verify the active schedule loads, edits persist after reload, and the preview updates.
+- In the admin dashboard's **Business insights** section, verify the default 30-day view loads KPI cards, booking activity, current booking portfolio, audience growth, session-format mix, and top categories. Switch to 7 and 90 days and confirm the charts reload with continuous WIB date labels; verify zero-data periods show an intentional empty state, the retry state is actionable, and the dashboard remains usable while analytics loads. Confirm the note distinguishes Marks-based platform take from cash revenue and that the existing priority/review queues remain visible below the analytics section.
 - In the Operations → Rooms tab, verify the pending offline room-approval queue loads. Use **Assign** for a requested room, **Choose another** to load a booking into the room form (which also exposes the existing relocate operation), and **Cancel** when no suitable room is available.
 - In `/admin-tutors`, open a profile with pending edits and confirm the proposed subject changes show readable category/subject labels instead of raw UUIDs. Resize to a narrow viewport and verify subject badges and other long pending values wrap without horizontal page overflow; use **Edit format** to correct structured education/competition entries, save, reload, and confirm the version-checked update and success toast. The review request/response payloads must remain unchanged.
 
@@ -106,7 +114,7 @@ The route selects the dashboard from the authenticated session role. A tutor or 
 
 ### Knowledge Bank smoke check
 
-As an authenticated student, open `/knowledge-bank`. With at least 35 total Marks, confirm published Sanity resource metadata loads, search/category filtering works, and the PDF preview opens through the authenticated `/content/knowledge-bank/:resourceId/file` proxy. Below 35 Marks, confirm the page stays locked and offers the balance/top-up action; opening the Knowledge Bank must not create a Marks deduction.
+As an authenticated student, open `/knowledge-bank`. With at least 35 total Marks, confirm published Sanity resource metadata loads, search/category filtering works, and the PDF preview opens through the authenticated `/content/knowledge-bank/:resourceId/file` proxy. Below 35 Marks, confirm the page stays locked and offers the balance/top-up action. Then sign in as a tutor and an admin with no Marks balance and confirm each role sees Knowledge Bank in the sidebar, the route loads resources, and the PDF preview opens without a wallet threshold. Opening the Knowledge Bank as an eligible student, tutor, or admin must not create a Marks deduction.
 
 ### Empty-state consistency smoke check
 
@@ -165,21 +173,33 @@ for issues after transfer to the provided account. Verify the copy identifies on
 conventional BCA as fee-free; BCA Syariah and blu (BCA Digital) must be treated as
 non-BCA and charged Rp2,500 per payout.
 
-Tutor portrait operations use a two-stage workflow: the tutor uploads an image through
-`upload.createUploadUrl`, which is saved as `sourcePhotoUrl` for internal editing. After
-editing and applying the standard background, an admin pastes the finished public URL in
-the tutor review card and completes an allowed review action. Never copy a tutor source
-photo directly into `user.image`; only the admin-provided edited asset is public.
+Tutor portrait operations use a staged source-to-final workflow. The tutor uploads one
+source image through `upload.createUploadUrl`; draft/source profiles store it through
+`user.image`, while a published tutor's replacement is staged in
+`pendingProfileChanges.profileImageUrl`. In the admin review drawer, upload the edited
+background-standardized asset (a hosted URL remains available as a fallback), then use
+an approve/publish action to promote it to `user.image`. Requesting changes must leave
+the current public photo untouched. On the tutor surface, verify the compact photo info
+preview opens on demand instead of keeping a large preview card in the form. Verify the
+photo/review history timeline in both
+tutor and admin surfaces after submit, revision, approval, and publication. The
+tutor timeline should show actor names/types without exposing actor account emails;
+the admin timeline may retain the richer moderator identity context.
 
 Achievement and experience proof URLs are verification-only tutor-profile data.
 All user/admin-supplied external links in achievement evidence/documentation,
-tutor proof/source/public-photo fields, and manual meeting-link dialogs must use
-`http://` or `https://`; schemes such as `javascript:`, `data:`, and `file:` must
-be rejected by the API even if client validation is bypassed.
+tutor proof/profile-image fields, and manual meeting-link dialogs must use
+`http://` or `https://`; generated local profile assets may use the bounded
+`/uploads/...` storage path. Schemes such as `javascript:`, `data:`, and `file:`
+must be rejected by the API even if client validation is bypassed.
 Operators may open them from the admin tutor review card, but they must not be added
 to public discovery projections, marketing exports, or student-facing interfaces.
 
 ### Shared booking list smoke check
+
+Verify booking titles use `Cogito - {Competition} | {Tutor} x {Student}` and
+group/group-series titles use `& Friends`, matching the Google Calendar/Meet
+summary rather than listing participants with `+N`.
 
 With seeded student, tutor, and admin sessions, open `/bookings` and verify the same list layout loads for each role. Students see proposer/participant bookings, tutors see assigned bookings with the Cogito mark icon before `Earns: X` and `Total: Y`, and admins see the full list with the icon before `Total X` and `Tutor Y`, with no lifecycle mutations. Verify the Upcoming/Pending/Recurring/Past/Cancelled/All tabs, that generic status badges are hidden outside All (except attention states), and that hovering/focusing a visible status badge shows its explanation. On a narrow viewport, confirm the rounded tab strip fills the available page width, only the inner tab list can be swiped horizontally to reach every tab, active-tab shadows and focus rings remain visible at both scroll edges, and the page does not create horizontal overflow or show a scrollbar. Confirm the empty-state outline and decorative glow remain visible inside the rounded card boundary without creating overflow. Confirm mobile rows keep date, location, and tutor name readable beside the booking summary, while desktop time/location/tutor metadata stays aligned and the action button remains at the far edge. For single-session group bookings, student `You pay` must show the per-student amount, and the participant avatar stack must not include the tutor. Open a row’s detail page to perform actions; list rows should not expose inline cancellation or reschedule mutations. `/tutor-bookings` should redirect to `/bookings`.
 
@@ -261,15 +281,56 @@ In the same dialog, select the booking's current date and start minute. Confirm 
 
 ### Tutor subject taxonomy smoke check
 
-Open `/profile` as a tutor and verify the selector loads exactly seven active competition categories and 33 child subjects from `tutors.listSubjects`. All categories should be visible with keyboard-accessible checkboxes, no manual subject input, selected-subject chips, and a 20-subject limit. Select subjects from multiple categories, save a draft, and confirm the selections reload with the profile. A submission with no current child subject must be blocked; archived legacy subjects on an existing profile should remain visible as read-only labels. Published tutor discovery should expose current subjects and allow students to filter by mother category or child subject. On the tutor list page, category, child-subject, and modality filter triggers must show their labels rather than raw IDs or values. Confirm category and child-subject filters support multiple values, retain overlapping subjects while categories are added, remove subjects that are no longer available after a category is removed, and wait about 300 ms after typing/toggling before `listPublished` runs. Open a tutor drawer with both modalities and verify pricing appears in one table with `Group Size`, `Online (Marks)`, and `Offline (Marks)` columns; populated prices should have the Cogito Marks icon as a prefix, and a size available in only one modality should show an em dash in the other column.
+Open `/profile` as a tutor and verify the selector loads exactly seven active competition categories and 33 child subjects from `tutors.listSubjects`. All categories should be visible with keyboard-accessible checkboxes, no manual subject input, selected-subject chips, and a 7-subject limit. The selector should show the current count, disable an eighth selection, and the submit validation should reject any over-limit state. Select subjects from multiple categories, save a draft, and confirm the selections reload with the profile. A submission with no current child subject must be blocked; archived legacy subjects on an existing profile should remain visible as read-only labels. Published tutor discovery should expose current subjects and allow students to filter by mother category or child subject. On the tutor list page, category, child-subject, and modality filter triggers must show their labels rather than raw IDs or values. Confirm category and child-subject filters support multiple values, retain overlapping subjects while categories are added, remove subjects that are no longer available after a category is removed, and wait about 300 ms after typing/toggling before `listPublished` runs. Open a tutor drawer with both modalities and verify pricing appears in one table with `Group Size`, `Online (Marks)`, and `Offline (Marks)` columns; populated prices should have the Cogito Marks icon as a prefix, and a size available in only one modality should show an em dash in the other column. On a short viewport, confirm the student tutor drawer's profile body scrolls independently while its header and booking/close footer remain visible; body overscroll may bounce locally, but the fixed regions must not move.
 
-### Tutor achievement formatting smoke check
+### Tutor achievement and experience formatting smoke check
 
-Open `/profile` as a tutor and confirm the Public profile has one Experiences field and no duplicate free-text Achievements field. In the single Achievements section, add two education entries and five competition achievements. Confirm the sixth row controls are disabled, incomplete rows are rejected on **Submit for review**, the Year field displays plain digits without grouping dots, and the preview uses a bold first line, a muted detail line, visible spacing between bullets, and comma-separated award titles. Save a draft, reload, and verify the arrays persist. Open a published tutor in discovery and confirm the drawer shows the structured sections; for an old profile with only legacy achievement text, confirm the fallback remains visible. As an admin, open `/admin-tutors`, edit the structured entries with **Edit format**, save, reload, and verify the corrected values plus the audit event. Repeat with an intentionally stale review tab/version and confirm the API returns a conflict without overwriting the newer values.
+The tutor editor uses one combined **Achievements & experience** card and one public preview for all three structured subsections. The proof-link fields remain separate for compatibility, but the form recommends putting both achievement and experience proof in one Google Drive folder with the “Anyone with the link can view” setting.
+
+Open `/profile` as a tutor and confirm the Public profile has no duplicate free-text Achievements or Experiences fields. In the combined Achievements & experience section, add two education entries and five competition achievements. Type a comma after one award before entering the next title and confirm the comma remains visible; verify a comma in an experience role, organization, or description also remains visible. Add up to five role/organization/year/description entries, leaving End year blank for an ongoing role. Confirm the sixth row controls are disabled, incomplete rows and an end year before the start year are rejected on **Submit for review**, and every year field displays plain digits without grouping dots. Save a draft, reload, and verify the structured arrays persist. Open a published tutor in discovery and confirm the drawer shows the structured sections; for an old profile with only legacy achievement or experience text, confirm the fallback remains visible. As an admin, open `/admin-tutors` and verify structured experience entries render readably in the review card and pending-change panel. Repeat the same short-viewport check in the admin tutor-review drawer; body overscroll may bounce locally, but the header and review actions must remain fixed. Repeat with an intentionally stale review tab/version and confirm the API returns a conflict without overwriting the newer values.
+
+### Tutor profile validation and action smoke check
+
+Open `/profile` as a tutor with a draft or changes-requested profile. Leave one
+required top-level field empty and click **Save draft**; confirm the profile
+progress saves without submitting for review. Enter a short bio with 51 words
+and confirm the counter, inline error, and validation summary say to use 50
+words or fewer. Enter an invalid URL, an invalid year, or an invalid honorarium
+and confirm the exact control receives the red invalid state and inline message,
+while the validation summary lists the same field. Click **Submit for review**
+with multiple missing fields and confirm all missing fields are listed and the
+first invalid control receives focus. Fix the fields, submit again, and verify
+the existing review transition and redirect to `/dashboard` still occur. For a
+server-side rejection, confirm the returned missing-field, word-count, or
+pricing detail highlights the corresponding form area rather than showing only
+a generic toast.
+
+Open a published tutor with **Changes under review**, edit another profile
+field, and confirm **Save profile changes** remains enabled and updates the
+pending proposal without changing the live public value. Confirm
+**Submit changes for review** validates and queues the latest version, and that
+the tutor remains editable while the admin review is pending.
 
 ### Profile UX smoke check
 
-Open `/profile` as a student and as a tutor at desktop and narrow widths. Verify the account card shows the current name, profile image (or initials), and read-only sign-in email; changing the name or image enables only the account save action. On a new student account without a profile row, confirm the student page still opens with an empty editable form and does not require the wallet/tutor aggregate request. On the student page, learning and parent/guardian fields use separate sections with one learning-profile save action. On the tutor page, the shell title and sidebar item say **Tutor Profile**, profile status and review feedback remain visible, the public profile section is separated from the teaching setup row, the honorarium preview is one combined modality matrix, fields are grouped into public profile/teaching setup/availability sections, and the sticky action area offers draft save plus submit-for-review only when the profile is editable. Verify the tutor profile has one vertical scrollbar, with no second page/form scrollbar or large blank region after the action bar; shorter subject categories should not stretch to the height of the longest category. Opening `/onboarding` as a tutor should redirect to `/profile`. As an admin, verify the avatar menu has no **Profile** item and opening `/profile` redirects to `/dashboard`. In the payout-account form, verify all four account details plus ownership and disclaimer confirmation are required, the conventional-BCA/non-BCA fee copy is visible, and BCA Syariah and blu (BCA Digital) are not treated as fee-free. Confirm the browser console has no runtime errors and that the updated payout fields remain private to the tutor/admin surfaces.
+As a student, choose a JPG, PNG, or WebP profile photo up to 5 MB. Confirm the
+crop dialog shows a circular guide, dragging repositions the image, and zoom
+changes the visible area. Choose **Use this photo**, confirm the account card
+shows the uploaded-photo state, then select **Save account details**. Reload the
+page and verify the cropped image appears in the account card and authenticated
+sidebar avatar. In R2 mode, the network request should be a `PUT` to the
+presigned S3 endpoint and return success; a CORS failure means the bucket policy
+does not include the current frontend origin. Confirm an unsupported file type
+or oversized file is rejected, and that cancelling the crop leaves the previous
+photo unchanged.
+
+### Tutor experience formatting smoke check
+
+Open `/profile` as a tutor and verify the Experiences subsection of the combined Achievements & experience section accepts up to five role, organization, start-year, end-year, and description entries. Leave End year blank for ongoing work, confirm year inputs stay as plain digits without grouping dots, verify an end year before the start year is rejected on review submission, and confirm structured entries persist in the public discovery drawer and admin review card while legacy `experiences` text still renders as a fallback.
+
+Open `/profile` as a student and as a tutor at desktop and narrow widths. Verify the account card shows the current name, profile image (or initials), and read-only sign-in email; changing the name or image enables only the account save action. On a new student account without a profile row, confirm the student page still opens with an empty editable form and does not require the wallet/tutor aggregate request. On the student page, learning and parent/guardian fields use separate sections with one learning-profile save action. On the tutor page, the shell title and sidebar item say **Tutor Profile**, profile status and review feedback remain visible, the public profile section is separated from the teaching setup row, the honorarium preview is one combined modality matrix, fields are grouped into public profile/teaching setup/availability sections, and the final action card offers draft save plus submit-for-review only when the profile is editable. Verify the tutor profile scrolls through the same page-level shell container as the student profile, with no inner form scrollbar or large blank region after the action card; inspect the shell, tutor wrapper, and onboarding root and confirm the wrapper's natural height covers the full form rather than shrinking to the viewport. The action card must remain in normal document flow, and shorter subject categories should not stretch to the height of the longest category. Opening `/onboarding` as a tutor should redirect to `/profile`. As an admin, verify the avatar menu has no **Profile** item and opening `/profile` redirects to `/dashboard`. In the payout-account form, verify all four account details plus ownership and disclaimer confirmation are required, the conventional-BCA/non-BCA fee copy is visible, and BCA Syariah and blu (BCA Digital) are not treated as fee-free. Confirm the browser console has no runtime errors and that the updated payout fields remain private to the tutor/admin surfaces.
+
+For a tutor, confirm the public-profile editor exposes one **Name** field backed by Better Auth `user.name` and no second tutor-profile name. Save a changed name and verify the sidebar, tutor discovery, booking, dashboard, and admin review all render the updated account name; changing unrelated tutor-profile fields must not introduce or display `tutorProfile.displayName`.
 
 The authenticated shell shows a session-expiry warning during the final 30 minutes of Better Auth's seven-day session. The warning includes a sign-in-again action; an API `401` remains the fallback redirect for expired sessions.
 
@@ -332,6 +393,13 @@ structured achievement editor; it adds JSONB `education` and
 `credentials_summary` text is intentionally preserved as the public fallback,
 so this migration does not require a data backfill.
 
+Tutor profile experience fields require migration `0040_colossal_morlun.sql`.
+Run `bun run db:migrate` before starting an API build that includes the
+structured experience editor; it adds JSONB `experience_entries` with an
+empty-array default. Existing `experiences` text is intentionally preserved
+as the compatibility fallback, so this migration does not require parsing or
+data backfill.
+
 The IDR economy and admin rate-control surface require migration
 `0028_economy_config.sql`. Run `bun run db:migrate` before starting the server;
 it adds `tutor_profile.base_rates_idr`, creates the singleton
@@ -381,12 +449,12 @@ manual recovery only.
 bun run seed-packages          # Seeds mark packages only
 ```
 
-Production guard: `NODE_ENV=production bun run seed-packages` will exit with an error unless `SEED_ALLOWED_IN_PROD=true` is explicitly set. The full `bun run seed` command uses the same guard and additionally requires `SEED_ADMIN_PASSWORD`.
+Production guard: `NODE_ENV=production bun run seed-packages` will exit with an error unless `SEED_ALLOWED_IN_PROD=true` is explicitly set. The full `bun run seed` command uses the same guard and additionally requires `SEED_ADMIN_PASSWORD`, `SEED_TUTOR_PASSWORD`, and `SEED_STUDENT_PASSWORD` (minimum 12 characters). In production it creates a dedicated local-login review admin from `SEED_REVIEW_ADMIN_EMAIL` and refuses to reuse an operator address from `ADMIN_EMAILS`. Set the review student/tutor emails explicitly, run the seed once, then remove all seed passwords and `SEED_ALLOWED_IN_PROD` from the deployment environment. Never provide the Google Calendar account password to a reviewer.
 
-The full production/staging seed creates or reuses the first address in
-`ADMIN_EMAILS` and sets its role to `admin`; when `ADMIN_EMAILS` is unset it
-defaults to `itcogitoacademy01@gmail.com`. On every production-like server
-boot, the same allowlist promotes matching existing accounts
+The full production/staging seed creates or reuses the separate review address
+from `SEED_REVIEW_ADMIN_EMAIL` and sets its role to `admin`. Independently, on
+every production-like server boot, the `ADMIN_EMAILS` operator allowlist
+promotes matching existing accounts
 case-insensitively without demoting other admins. A matching account created
 after boot is promoted by the Better Auth signup hook. Set `ADMIN_EMAILS` to a
 comma-separated list when more than one trusted account should be bootstrapped.
@@ -757,7 +825,17 @@ bun scripts/run-test-suite.mjs e2e --grep "identity surfaces"
 
 The workflow also runs the server suite in a separate process because its webhook test uses module mocking. The coverage comment script enforces 100% coverage for `packages/api` lines, overall lines, functions, and branches from `coverage/lcov.info`; a 0/0 branch total is treated as 100%. If this gate fails, inspect the missing function/line records in the generated lcov report and add a behavior-level test before pushing. The Bun command's own function/statement output is diagnostic; the lcov gate is authoritative.
 
-The CI lint job emits **documented-intentional warnings** on the pinned toolchain (oxlint 1.78.0): `no-await-in-loop` = sequential money/DB writes in booking/wallet paths (parallelizing would risk money correctness), plus `consistent-function-scoping` and `no-underscore-dangle` style conventions. They are triaged, not regressions — see `docs/plans/active/CI-SANITY.md` F13. Do not "fix" them by parallelizing the loops or by silencing the rules in `.oxlintrc.json` (that config is shared with the local run).
+The CI lint job uses the pinned oxlint 1.80.0 and oxfmt 0.65.0 toolchain. It
+emits **documented-intentional warnings**: `no-await-in-loop` = sequential
+money/DB writes in booking/wallet paths (parallelizing would risk money
+correctness), plus `consistent-function-scoping` and `no-underscore-dangle`
+style conventions. Known legacy React compiler errors are tracked in
+`.github/lint/baseline.txt`; new errors fail `.github/lint/check-baseline.sh`.
+They are triaged, not regressions — see `docs/plans/active/CI-SANITY.md` F13.
+Do not "fix" the warnings by parallelizing the loops or by silencing the rules
+in `.oxlintrc.json` (that config is shared with the local run). The lint
+auto-fix commit sets `LEFTHOOK=0`; the baseline and format steps remain the
+authoritative CI gates.
 
 ## Common Errors
 
@@ -966,6 +1044,8 @@ Key environment variables (see `.env.example` for full list):
 | `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` / `R2_PUBLIC_URL` | No       | Cloudflare R2 upload backend (required in production/staging — P4.3)                                                                                                                                                                                                             |
 | `R2_BACKUP_BUCKET`                                                                            | No       | Private R2 bucket used only for database backups; keep separate from the public upload bucket                                                                                                                                                                                    |
 | `SEED_ALLOWED_IN_PROD`                                                                        | No       | Seed-script production guard                                                                                                                                                                                                                                                     |
+| `SEED_REVIEW_ADMIN_EMAIL` / `SEED_REVIEW_TUTOR_EMAIL` / `SEED_REVIEW_STUDENT_EMAIL`           | No       | Dedicated local-login reviewer identities. The review admin must not be present in `ADMIN_EMAILS`; never use the Google Calendar operator account.                                                                                                                               |
+| `SEED_ADMIN_PASSWORD` / `SEED_TUTOR_PASSWORD` / `SEED_STUDENT_PASSWORD`                       | No       | One-time seed inputs, all required in production/staging with at least 12 characters. Remove them from the deployment environment immediately after seeding.                                                                                                                     |
 | `STUB_WEBHOOK_ALLOWED`                                                                        | No       | Stub-checkout E2E flag; the stub checkout endpoint only serves `development`/`test` — staging always returns 404 (prod-fixes C2)                                                                                                                                                 |
 
 ## Real-Provider Swap (Resend / Xendit / Google Meet / R2)
@@ -1049,7 +1129,25 @@ The production env schema requires all four `R2_*` vars together **and** `R2_PUB
 1. Cloudflare dashboard → **R2** → create a bucket (region `auto`).
 2. **Manage R2 API Tokens** → create a token with Object Read & Write on the bucket → copy `ACCESS_KEY_ID` + `SECRET_ACCESS_KEY` into `R2_ACCOUNT_ID` (your Cloudflare account id), `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`.
 3. Set `R2_PUBLIC_URL` to the public object URL (e.g. `https://media.cogitoacademy.id` via a custom domain, or the `r2.cloudflarestorage.com` endpoint). `GET /uploads/*` is disabled whenever `R2_PUBLIC_URL` is set (objects are served from R2 instead).
-4. Verify an upload → the returned key resolves under `R2_PUBLIC_URL`.
+4. In the bucket's **CORS Policy** JSON tab, allow the frontend origins and the presigned PUT flow:
+
+   ```json
+   [
+     {
+       "AllowedOrigins": [
+         "http://localhost:3000",
+         "http://127.0.0.1:3000",
+         "https://app.cogitoacademy.id"
+       ],
+       "AllowedMethods": ["GET", "PUT", "HEAD"],
+       "AllowedHeaders": ["Content-Type"],
+       "ExposeHeaders": ["ETag"],
+       "MaxAgeSeconds": 3600
+     }
+   ]
+   ```
+
+5. Verify an upload → the returned key resolves under `R2_PUBLIC_URL`.
 
 ## Deploy Secrets (CD webhooks)
 
@@ -1205,6 +1303,13 @@ If a push fails with `denied: installation not allowed to Create organization pa
    docker push ghcr.io/cogitoacademy/app/server:init   # repeat for /web
    ```
    After the packages exist, the workflows push without org changes.
+
+## Tutor drawer scroll smoke check
+
+Open a long tutor profile in the student discovery drawer and in the admin review
+drawer on a short viewport. Scroll and overscroll the profile body; it may bounce
+locally, but the header and booking/review footer must remain visible and must not
+move with the body.
 
 ## Tutor payout operations (2026-08-28)
 

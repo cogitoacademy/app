@@ -15,6 +15,7 @@ import {
   tutorCompetitionAchievementsInput,
   tutorEducationInput,
 } from "../../modules/tutor/tutor-achievements";
+import { tutorExperienceEntriesInput } from "../../modules/tutor/tutor-experiences";
 import { upsertAvailabilityInput } from "../../modules/tutor/availability.types";
 import { achievementInput } from "../../modules/achievement/achievement.types";
 import { createInviteInput } from "../../modules/admin-tutor/admin-tutor.types";
@@ -44,6 +45,14 @@ const pastDate = () => {
 const LONG_ID = "a".repeat(101);
 const LONG_SHORT_TEXT = "a".repeat(256);
 const LONG_LONG_TEXT = "a".repeat(2001);
+const TOO_MANY_TUTOR_BIO_WORDS = Array.from(
+  { length: 51 },
+  (_, index) => `word${index + 1}`,
+).join(" ");
+const EXACTLY_FIFTY_TUTOR_BIO_WORDS = Array.from(
+  { length: 50 },
+  (_, index) => `word${index + 1}`,
+).join(" ");
 const LONG_URL = "https://example.com/" + "a".repeat(2048);
 const LONG_TOKEN = "a".repeat(257);
 const LONG_SEARCH = "a".repeat(201);
@@ -79,6 +88,30 @@ describe("Validation bounds — string .max()", () => {
       tutorCompetitionAchievementsInput.safeParse([
         { competitionName: "Competition", year: 2020, awards: [] },
       ]).success,
+    ).toBe(false);
+  });
+
+  test("Tutor experiences enforce the five-entry cap and chronological years", () => {
+    const validEntry = {
+      role: "Mathematics Tutor",
+      organization: "Cogito Academy",
+      startYear: 2024,
+      endYear: null,
+      description: "Guided students through olympiad preparation.",
+    };
+    expect(
+      tutorExperienceEntriesInput.safeParse(
+        Array.from({ length: 6 }, () => validEntry),
+      ).success,
+    ).toBe(false);
+    expect(
+      tutorExperienceEntriesInput.safeParse([
+        { ...validEntry, startYear: 2025, endYear: 2024 },
+      ]).success,
+    ).toBe(false);
+    expect(
+      tutorExperienceEntriesInput.safeParse([{ ...validEntry, role: "" }])
+        .success,
     ).toBe(false);
   });
 
@@ -127,6 +160,27 @@ describe("Validation bounds — string .max()", () => {
     }
   });
 
+  test("Short bio rejects more than 50 words", () => {
+    const result = updateMyProfileInput.safeParse({
+      version: 1,
+      shortBio: TOO_MANY_TUTOR_BIO_WORDS,
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(
+        result.error.issues.some((issue) => /50 words/i.test(issue.message)),
+      ).toBe(true);
+    }
+  });
+
+  test("Short bio allows exactly 50 words", () => {
+    const result = updateMyProfileInput.safeParse({
+      version: 1,
+      shortBio: EXACTLY_FIFTY_TUTOR_BIO_WORDS,
+    });
+    expect(result.success).toBe(true);
+  });
+
   test("URL: achievement proof item rejects >2048 chars", () => {
     const result = updateMyProfileInput.safeParse({
       version: 1,
@@ -136,6 +190,21 @@ describe("Validation bounds — string .max()", () => {
     if (!result.success) {
       expect(result.error.issues[0].message).toMatch(/<=2048/i);
     }
+  });
+
+  test("Profile photo accepts local upload paths but rejects traversal", () => {
+    expect(
+      updateMyProfileInput.safeParse({
+        version: 1,
+        profileImageUrl: "/uploads/tutor/profile.jpg",
+      }).success,
+    ).toBe(true);
+    expect(
+      updateMyProfileInput.safeParse({
+        version: 1,
+        profileImageUrl: "/uploads/../profile.jpg",
+      }).success,
+    ).toBe(false);
   });
 
   test("Email: createInviteInput email rejects >320 chars", () => {
@@ -306,6 +375,15 @@ describe("Validation bounds — array .max()", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.issues[0].message).toMatch(/<=20/i);
+    }
+  });
+
+  test("tutor profile subjects reject >7 items", () => {
+    const subjectIds = Array.from({ length: 8 }, (_, i) => `subject-${i}`);
+    const result = updateMyProfileInput.safeParse({ version: 1, subjectIds });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0].message).toMatch(/<=7/i);
     }
   });
 

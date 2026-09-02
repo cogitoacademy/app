@@ -71,6 +71,7 @@ import { InfoPreview } from "@/components/info-preview";
 import { getUserFacingError } from "@/lib/error-message";
 import {
   canCancelBooking,
+  formatBookingEventTitle,
   formatBookingDate,
   formatBookingDateOnly,
   formatBookingTimeRange,
@@ -283,6 +284,12 @@ export function BookingDetailPage({
   }
 
   const booking = bookingQuery.data;
+  const eventTitle = formatBookingEventTitle({
+    targetGroupSize: booking.targetGroupSize,
+    sessionTopic: booking.sessionTopic,
+    tutorName: booking.tutor?.name,
+    proposerName: booking.proposer?.name,
+  });
   const activeRoomBooking = booking.roomBookings.find(
     (entry) => entry.status !== "cancelled",
   );
@@ -427,11 +434,7 @@ export function BookingDetailPage({
                 {booking.modality === "online" ? "Online" : "Offline"}
               </Text>
             </div>
-            <Heading className="break-words text-2xl">
-              {isTutor
-                ? `${booking.proposer?.name ?? "Student"}'s booking request`
-                : `Session with ${booking.tutor?.name ?? "your tutor"}`}
-            </Heading>
+            <Heading className="break-words text-2xl">{eventTitle}</Heading>
             <Text className="mt-2 max-w-2xl text-muted">
               {getBookingStateDescription(booking.currentState)}
             </Text>

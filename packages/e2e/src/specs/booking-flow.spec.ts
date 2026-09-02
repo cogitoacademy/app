@@ -23,7 +23,7 @@ async function login(page: Page, email = SEED_EMAIL, password = SEED_PASSWORD) {
   await page.getByLabel("Email").fill(email);
   await page.locator("input#password").fill(password);
   await page.getByRole("button", { name: "Sign In", exact: true }).click();
-  await page.waitForURL(/\/(dashboard|onboarding|admin-tutors)(?:$|\/)/);
+  await page.waitForURL(/\/(dashboard|profile)(?:$|\/)/);
   expect(pathsAfterLoginPage).not.toContain("/login");
 }
 

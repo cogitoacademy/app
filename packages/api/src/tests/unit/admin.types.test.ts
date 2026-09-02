@@ -1,7 +1,21 @@
 import { describe, test, expect } from "bun:test";
-import { listUsersInput, setRoleInput } from "../../modules/admin/admin.types";
+import {
+  dashboardAnalyticsInput,
+  listUsersInput,
+  setRoleInput,
+} from "../../modules/admin/admin.types";
 
 describe("Admin Types (Zod schemas)", () => {
+  test("dashboardAnalyticsInput accepts the supported periods", () => {
+    expect(dashboardAnalyticsInput.safeParse(undefined).success).toBe(true);
+    expect(dashboardAnalyticsInput.safeParse({ period: "7d" }).data).toEqual({
+      period: "7d",
+    });
+    expect(dashboardAnalyticsInput.safeParse({ period: "365d" }).success).toBe(
+      false,
+    );
+  });
+
   test("listUsersInput defaults limit and offset", () => {
     const result = listUsersInput.safeParse(undefined);
     expect(result.success).toBe(true);

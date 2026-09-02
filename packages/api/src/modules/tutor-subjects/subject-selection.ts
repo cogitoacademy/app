@@ -2,7 +2,7 @@ import { DomainError } from "../../lib/domain-errors";
 import type { subjectCategory } from "@cogito-app/db/schema";
 
 export const MIN_TUTOR_SUBJECTS = 1;
-export const MAX_TUTOR_SUBJECTS = 20;
+export const MAX_TUTOR_SUBJECTS = 7;
 
 type SubjectCategoryRow = typeof subjectCategory.$inferSelect;
 type SubjectCategoryWithParent = SubjectCategoryRow & {

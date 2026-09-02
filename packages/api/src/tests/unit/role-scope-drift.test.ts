@@ -16,6 +16,7 @@ import {
  * - `payment.createPurchase` must be verified-student-only (F18 — wired in Part A)
  * - `upload.createUploadUrl` stays `protectedProcedure` (F19 — any authenticated
  *   role may mint a bounded upload URL; the tutor proof-file path needs it)
+ * - tutor discovery and booking creation remain student-only for tutors/admins
  */
 describe("role-scope guards (F16–F19)", () => {
   beforeAll(async () => {
@@ -25,6 +26,7 @@ describe("role-scope guards (F16–F19)", () => {
   const ts = Date.now();
   let studentClient: ReturnType<typeof createTestClient>;
   let tutorClient: ReturnType<typeof createTestClient>;
+  let adminClient: ReturnType<typeof createTestClient>;
 
   beforeAll(async () => {
     const studentRes = await signUpAndSignIn(
@@ -45,6 +47,16 @@ describe("role-scope guards (F16–F19)", () => {
     if (!tutorCtx.session?.user) throw new Error("Tutor session missing");
     await setUserRole(tutorCtx.session.user.id, "tutor");
     tutorClient = createTestClient(await createTestContext(tutorRes.cookie));
+
+    const adminRes = await signUpAndSignIn(
+      `scope.admin.${ts}@cogito.test`,
+      "Test1234!",
+      "Scope Admin",
+    );
+    const adminCtx = await createTestContext(adminRes.cookie);
+    if (!adminCtx.session?.user) throw new Error("Admin session missing");
+    await setUserRole(adminCtx.session.user.id, "admin");
+    adminClient = createTestClient(await createTestContext(adminRes.cookie));
   });
 
   test("F16: tutor calling auth.searchStudents gets FORBIDDEN", async () => {
@@ -86,5 +98,30 @@ describe("role-scope guards (F16–F19)", () => {
     await expect(
       tutorClient.payment.createPurchase({ packageCode: "starter" }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  test("tutor and admin cannot browse tutors or create a booking", async () => {
+    const clients = [tutorClient, adminClient];
+    const input = {
+      tutorId: "blocked-tutor",
+      availabilitySlotId: "blocked-slot",
+      modality: "online" as const,
+      scheduledStartAt: new Date(Date.now() + 48 * 3600_000).toISOString(),
+      timezone: "Asia/Jakarta",
+    };
+
+    await Promise.all(
+      clients.map(async (client) => {
+        await expect(client.tutors.listPublished({})).rejects.toMatchObject({
+          code: "FORBIDDEN",
+        });
+        await expect(
+          client.tutors.getProfile({ tutorId: "blocked-tutor" }),
+        ).rejects.toMatchObject({ code: "FORBIDDEN" });
+        await expect(client.booking.createSolo(input)).rejects.toMatchObject({
+          code: "FORBIDDEN",
+        });
+      }),
+    );
   });
 });

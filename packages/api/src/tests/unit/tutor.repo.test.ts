@@ -1,5 +1,8 @@
 import { describe, expect, mock, test } from "bun:test";
-import { deactivateFutureRecurringAvailability } from "../../modules/tutor/tutor.repo";
+import {
+  deactivateFutureRecurringAvailability,
+  listProfileHistory,
+} from "../../modules/tutor/tutor.repo";
 
 describe("TutorRepo", () => {
   test("deactivates future recurring availability for a tutor", async () => {
@@ -13,5 +16,25 @@ describe("TutorRepo", () => {
 
     expect(update).toHaveBeenCalledTimes(1);
     expect(set).toHaveBeenCalledWith({ isActive: false });
+  });
+
+  test("lists tutor profile history with actor names only", async () => {
+    const rows = [{ id: "audit-1", action: "tutor_profile_updated" }];
+    const findMany = mock(async () => rows);
+    const conn = {
+      query: {
+        auditLog: { findMany },
+      },
+    } as any;
+
+    await expect(listProfileHistory(conn, "profile-1")).resolves.toEqual(rows);
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        limit: 50,
+        with: {
+          actor: { columns: { id: true, name: true } },
+        },
+      }),
+    );
   });
 });

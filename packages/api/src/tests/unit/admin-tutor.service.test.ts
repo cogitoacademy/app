@@ -56,7 +56,12 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
       getTutorProfileById: mock(async () => profile),
       updateTutorProfile: mock(async () => profile),
       updateTutorProfileWithVersion: mock(async () => [profile]),
+      updateTutorProfileImage: mock(async () => ({
+        id: "u1",
+        image: "https://example.com/profile-photo.jpg",
+      })),
       listTutorProfiles: mock(async () => [profile]),
+      listTutorProfileHistory: mock(async () => []),
     },
     auditPort: { record: mock(async () => {}) },
     emailPort: { send: mock(async () => ({ messageId: "email1" })) },
@@ -532,6 +537,37 @@ describe("AdminTutor Service", () => {
       expect(result).toEqual([makeProfile()]);
     });
 
+    test("listTutorProfileHistory returns audit rows for an existing profile", async () => {
+      const history = [{ id: "audit-1", action: "tutor_profile_updated" }];
+      const listTutorProfileHistory = mock(async () => history);
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          listTutorProfileHistory,
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+
+      await expect(service.listTutorProfileHistory("p1")).resolves.toEqual(
+        history,
+      );
+      expect(listTutorProfileHistory).toHaveBeenCalledWith(deps.db, "p1");
+    });
+
+    test("listTutorProfileHistory throws when the profile is missing", async () => {
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getTutorProfileById: mock(async () => null),
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+
+      await expect(
+        service.listTutorProfileHistory("missing-profile"),
+      ).rejects.toThrow(TutorProfileNotFoundError);
+    });
+
     test("reviewTutorProfile throws TutorProfileNotFoundError for null profile", async () => {
       const deps = makeDeps({
         adminTutorRepo: {
@@ -883,7 +919,7 @@ describe("AdminTutor Service", () => {
           onboardingStatus: "published",
         }),
       );
-      const updateTutorPublicPhoto = mock(async () => ({}));
+      const updateTutorProfileImage = mock(async () => ({}));
       const deps = makeDeps({
         adminTutorRepo: {
           ...makeDeps().adminTutorRepo,
@@ -893,14 +929,14 @@ describe("AdminTutor Service", () => {
               pendingProfileChanges: {
                 bio: "updated",
                 subjectIds: ["s1"],
-                publicPhotoUrl: "https://example.com/photo.jpg",
+                profileImageUrl: "https://example.com/photo.jpg",
               },
             }),
           ),
           listActiveChildSubjects,
           replaceTutorProfileSubjects,
           updateTutorProfile,
-          updateTutorPublicPhoto,
+          updateTutorProfileImage,
         },
       });
       const service = createAdminTutorService(deps as any);
@@ -908,7 +944,6 @@ describe("AdminTutor Service", () => {
       const result = await service.reviewTutorProfile("admin1", {
         tutorProfileId: "p1",
         action: "approve_edits",
-        publicPhotoUrl: "https://example.com/photo.jpg",
       });
 
       expect(result.onboardingStatus).toBe("published");
@@ -930,7 +965,7 @@ describe("AdminTutor Service", () => {
         }),
         1,
       );
-      expect(updateTutorPublicPhoto).toHaveBeenCalledWith(
+      expect(updateTutorProfileImage).toHaveBeenCalledWith(
         expect.anything(),
         "u1",
         "https://example.com/photo.jpg",

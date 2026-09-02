@@ -2,6 +2,11 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 
 import type { CogitoUser } from "@cogito-app/auth";
 import { authClient } from "@/lib/auth-client";
+import {
+  getPostLoginDestination,
+  readTutorOnboardingStatus,
+} from "@/lib/post-login-redirect";
+import { client } from "@/utils/orpc";
 import { validateLoginSearch } from "./-login-search";
 
 export const Route = createFileRoute("/auth/callback")({
@@ -16,12 +21,15 @@ export const Route = createFileRoute("/auth/callback")({
 
     const sessionUser = session.data.user as CogitoUser;
     const role = sessionUser.role;
-    const destination =
-      role === "tutor"
-        ? "/profile"
-        : role === "admin"
-          ? "/admin-tutors"
-          : (search.redirect ?? "/dashboard");
+    const tutorOnboardingStatus =
+      role === "tutor" && !search.redirect
+        ? await readTutorOnboardingStatus(() => client.tutor.getMyProfile())
+        : undefined;
+    const destination = getPostLoginDestination({
+      role,
+      tutorOnboardingStatus,
+      redirectPath: search.redirect,
+    });
 
     if (sessionUser.emailVerified !== true) {
       try {

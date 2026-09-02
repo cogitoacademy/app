@@ -1,6 +1,7 @@
 "use client";
 
 import { type ReactNode, useState } from "react";
+import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Avatar,
@@ -12,7 +13,6 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
-  CardFooter,
   CardHeader,
   CardHeaderAction,
   CardTitle,
@@ -44,7 +44,8 @@ import {
 } from "@tabler/icons-react";
 
 import { getUserFacingError } from "@/lib/error-message";
-import { orpc } from "@/utils/orpc";
+import { resolveProfileImageUrl } from "@/lib/profile-image-url";
+import { client, orpc } from "@/utils/orpc";
 import {
   TutorAchievementsDisplay,
   TutorAchievementsEditor,
@@ -52,6 +53,11 @@ import {
   type TutorEducationEntry,
   validateTutorAchievementDraft,
 } from "@/components/tutor/tutor-achievements";
+import {
+  TutorExperiencesDisplay,
+  type TutorExperienceEntry,
+} from "@/components/tutor/tutor-experiences";
+import { ProfilePhotoHistory } from "@/components/tutor/profile-photo-history";
 
 const FLOOR_ONLINE: Record<string, number> = {
   "1": 42,
@@ -104,6 +110,7 @@ interface TutorReviewCardProps {
     experienceProofUrls: string[] | null;
     education: TutorEducationEntry[] | null;
     competitionAchievements: TutorCompetitionAchievement[] | null;
+    experienceEntries: TutorExperienceEntry[] | null;
     expertise: string[] | null;
     modality: string | null;
     bankName: string | null;
@@ -114,17 +121,22 @@ interface TutorReviewCardProps {
     bankTransferDisclaimerAccepted: boolean | null;
     prices: Record<string, number> | null;
     availabilitySummary: string | null;
-    sourcePhotoUrl: string | null;
     onboardingStatus: string;
     adminReviewNote: string | null;
     pendingProfileChanges: Record<string, unknown> | null;
     profileEditStatus: string;
     profileEditAdminNote: string | null;
     version: number;
-    user?: { id: string; name: string; email: string } | null;
+    user?: {
+      id: string;
+      name: string;
+      email: string;
+      image: string | null;
+    } | null;
   };
   subjectLabels: ReadonlyMap<string, string>;
   onAction?: () => void;
+  footerTarget?: HTMLElement | null;
 }
 
 function getInitials(name?: string | null) {
@@ -139,6 +151,55 @@ function getInitials(name?: string | null) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function readProfileImageUrl(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function PhotoReviewPanel({
+  label,
+  description,
+  imageUrl,
+  fallback,
+  proposed = false,
+}: {
+  label: string;
+  description: string;
+  imageUrl: string | null;
+  fallback: string;
+  proposed?: boolean;
+}) {
+  const resolvedImageUrl = resolveProfileImageUrl(imageUrl);
+
+  return (
+    <div className="rounded-lg border border-item-border bg-item p-3">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div>
+          <Text className="text-sm font-medium">{label}</Text>
+          <Text className="text-xs text-muted">{description}</Text>
+        </div>
+        {proposed ? (
+          <Badge variant="warning" size="sm" pill>
+            Pending
+          </Badge>
+        ) : null}
+      </div>
+      {resolvedImageUrl ? (
+        <a href={resolvedImageUrl} target="_blank" rel="noreferrer">
+          <img
+            src={resolvedImageUrl}
+            alt={label}
+            className="aspect-square w-full rounded-lg object-cover"
+          />
+        </a>
+      ) : (
+        <div className="flex aspect-square w-full items-center justify-center rounded-lg bg-accent text-xl font-semibold text-muted">
+          {fallback}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function readEducationEntries(value: unknown): TutorEducationEntry[] | null {
@@ -178,6 +239,32 @@ function readCompetitionAchievements(
       competitionName: entry.competitionName,
       year: entry.year,
       awards: entry.awards,
+    });
+  }
+  return entries;
+}
+
+function readExperienceEntries(value: unknown): TutorExperienceEntry[] | null {
+  if (!Array.isArray(value)) return null;
+
+  const entries: TutorExperienceEntry[] = [];
+  for (const entry of value) {
+    if (
+      !isRecord(entry) ||
+      typeof entry.role !== "string" ||
+      typeof entry.organization !== "string" ||
+      typeof entry.startYear !== "number" ||
+      (entry.endYear !== null && typeof entry.endYear !== "number") ||
+      typeof entry.description !== "string"
+    ) {
+      return null;
+    }
+    entries.push({
+      role: entry.role,
+      organization: entry.organization,
+      startYear: entry.startYear,
+      endYear: entry.endYear,
+      description: entry.description,
     });
   }
   return entries;
@@ -247,6 +334,18 @@ function PendingChangeValue({
     }
   }
 
+  if (field === "experienceEntries") {
+    const entries = readExperienceEntries(value);
+    if (entries) {
+      return (
+        <TutorExperiencesDisplay
+          experienceEntries={entries}
+          idPrefix={`${idPrefix}-experiences`}
+        />
+      );
+    }
+  }
+
   const displayValue =
     value === null || value === undefined
       ? "—"
@@ -265,6 +364,7 @@ export function TutorReviewCard({
   profile,
   subjectLabels,
   onAction,
+  footerTarget,
 }: TutorReviewCardProps) {
   const queryClient = useQueryClient();
   const pendingPayout = useQuery({
@@ -273,6 +373,11 @@ export function TutorReviewCard({
     }),
     enabled: Boolean(profile.user?.id),
   });
+  const { data: profileHistory = [] } = useQuery(
+    orpc.adminTutor.listTutorProfileHistory.queryOptions({
+      input: { tutorProfileId: profile.id },
+    }),
+  );
   const markPayoutMutation = useMutation(
     orpc.admin.markTutorPayoutPaid.mutationOptions({
       onSuccess: () => {
@@ -297,7 +402,8 @@ export function TutorReviewCard({
     "request_changes" | "request_edit_changes" | "suspend" | null
   >(null);
   const [adminNote, setAdminNote] = useState("");
-  const [publicPhotoUrl, setPublicPhotoUrl] = useState("");
+  const [profileImageUrl, setProfileImageUrl] = useState("");
+  const [isUploadingProfilePhoto, setIsUploadingProfilePhoto] = useState(false);
   const reviewMutation = useMutation(
     orpc.adminTutor.reviewTutorProfile.mutationOptions({
       onSuccess: () => {
@@ -305,6 +411,9 @@ export function TutorReviewCard({
         setAdminNote("");
         void queryClient.invalidateQueries({
           queryKey: orpc.adminTutor.listTutorProfiles.key(),
+        });
+        void queryClient.invalidateQueries({
+          queryKey: orpc.adminTutor.listTutorProfileHistory.key(),
         });
         toastManager.add({ title: "Tutor profile updated", type: "success" });
         onAction?.();
@@ -404,12 +513,86 @@ export function TutorReviewCard({
       | "request_edit_changes",
     note?: string,
   ) {
+    if (isUploadingProfilePhoto) {
+      toastManager.add({
+        title: "Photo upload still in progress",
+        description: "Wait for the edited photo to finish uploading first.",
+        type: "info",
+      });
+      return;
+    }
     reviewMutation.mutate({
       tutorProfileId: profile.id,
       action,
       adminNote: note,
-      publicPhotoUrl: publicPhotoUrl.trim() || undefined,
+      profileImageUrl: profileImageUrl.trim() || undefined,
     });
+  }
+
+  async function uploadEditedProfilePhoto(file: File) {
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      toastManager.add({
+        title: "Unsupported photo format",
+        description: "Choose a JPG, PNG, or WebP image.",
+        type: "error",
+      });
+      return;
+    }
+
+    setIsUploadingProfilePhoto(true);
+    try {
+      const signed = await client.upload.createUploadUrl({
+        filename: `tutor-${profile.id}-edited.${file.type.split("/")[1]}`,
+        contentType: file.type as "image/png" | "image/jpeg" | "image/webp",
+        contentLength: file.size,
+      });
+      if (file.size > signed.maxBytes) {
+        throw new Error("Photo must be 5 MB or smaller.");
+      }
+
+      const uploadUrl =
+        resolveProfileImageUrl(signed.uploadUrl) ?? signed.uploadUrl;
+      const isLocalUpload = signed.uploadUrl.startsWith("/");
+      const fields = signed.fields ?? {};
+      let response: Response;
+      if (Object.keys(fields).length > 0) {
+        const body = new FormData();
+        Object.entries(fields).forEach(([key, value]) =>
+          body.append(key, value),
+        );
+        body.append("file", file);
+        response = await fetch(uploadUrl, {
+          method: signed.method,
+          body,
+        });
+      } else {
+        response = await fetch(uploadUrl, {
+          method: signed.method,
+          credentials: isLocalUpload ? "include" : "omit",
+          headers: { "content-type": file.type },
+          body: file,
+        });
+      }
+      if (!response.ok) throw new Error("Photo upload failed.");
+
+      setProfileImageUrl(
+        resolveProfileImageUrl(signed.publicUrl) ?? signed.publicUrl,
+      );
+      toastManager.add({
+        title: "Edited profile photo uploaded",
+        description: "Approve or publish the profile to apply this photo.",
+        type: "success",
+      });
+    } catch (error) {
+      toastManager.add({
+        title: "Edited photo could not be uploaded",
+        description: getUserFacingError(error),
+        type: "error",
+      });
+    } finally {
+      setIsUploadingProfilePhoto(false);
+    }
   }
 
   function submitNoteAction() {
@@ -446,23 +629,28 @@ export function TutorReviewCard({
       ? NON_BCA_TRANSFER_FEE_IDR
       : 0;
   const netHonorarium = Math.max(0, pendingHonorarium - transferFee);
+  const pendingProfileImageUrl = readProfileImageUrl(
+    profile.pendingProfileChanges?.profileImageUrl,
+  );
+  const currentProfileImageUrl = profile.user?.image ?? null;
+  const pendingChangesWithoutPhoto = Object.entries(
+    profile.pendingProfileChanges ?? {},
+  ).filter(([field]) => field !== "profileImageUrl");
 
   return (
     <>
-      <Card className="flex h-full min-w-0 flex-col overflow-hidden">
+      <Card className="flex min-w-0 flex-col overflow-hidden">
         <CardHeader className="items-start">
           <Avatar>
             <AvatarImage
-              src={profile.sourcePhotoUrl ?? undefined}
-              alt="Tutor source portrait"
+              src={resolveProfileImageUrl(currentProfileImageUrl)}
+              alt="Tutor profile"
             />
-            <AvatarFallback>
-              {getInitials(profile.displayName ?? profile.user?.name)}
-            </AvatarFallback>
+            <AvatarFallback>{getInitials(profile.user?.name)}</AvatarFallback>
           </Avatar>
           <div className="min-w-0">
             <CardTitle className="truncate">
-              {profile.displayName ?? profile.user?.name ?? "Unnamed tutor"}
+              {profile.user?.name ?? "Unnamed tutor"}
             </CardTitle>
             {profile.user ? (
               <div className="mt-1 flex items-center gap-1.5 text-muted">
@@ -620,20 +808,27 @@ export function TutorReviewCard({
               urls={profile.achievementProofUrls}
             />
 
-            <section>
-              <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-dimmed">
-                Experiences
-              </Text>
-              <Text
-                className={
-                  profile.experiences
-                    ? "whitespace-pre-line text-sm"
-                    : "text-sm italic text-dimmed"
-                }
-              >
-                {profile.experiences ?? "No experiences provided."}
-              </Text>
-            </section>
+            {profile.experienceEntries?.length ? (
+              <TutorExperiencesDisplay
+                experienceEntries={profile.experienceEntries}
+                idPrefix={`admin-${profile.id}-experiences`}
+              />
+            ) : (
+              <section>
+                <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-dimmed">
+                  Experiences
+                </Text>
+                <Text
+                  className={
+                    profile.experiences
+                      ? "whitespace-pre-line text-sm"
+                      : "text-sm italic text-dimmed"
+                  }
+                >
+                  {profile.experiences ?? "No experiences provided."}
+                </Text>
+              </section>
+            )}
 
             <ProofLinks
               label="Experience proof"
@@ -642,34 +837,73 @@ export function TutorReviewCard({
 
             <section>
               <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-dimmed">
-                Edited public photo
+                Profile photo review
               </Text>
-              {profile.sourcePhotoUrl ? (
-                <a
-                  href={profile.sourcePhotoUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-sm underline underline-offset-2"
-                >
-                  Download original tutor photo
-                </a>
-              ) : (
-                <Text className="text-sm italic text-dimmed">
-                  No source photo uploaded.
-                </Text>
-              )}
-              <Input
-                className="mt-2"
-                type="url"
-                value={publicPhotoUrl}
-                onChange={(event) => setPublicPhotoUrl(event.target.value)}
-                placeholder="Paste the edited public image URL"
-                aria-label="Edited public tutor photo URL"
-              />
-              <Text className="mt-1 text-xs text-muted">
-                Only this admin-provided image can replace the tutor's public
-                photo.
-              </Text>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <PhotoReviewPanel
+                  label="Current photo"
+                  description="Visible to students now"
+                  imageUrl={currentProfileImageUrl}
+                  fallback={getInitials(profile.user?.name)}
+                />
+                {pendingProfileImageUrl ? (
+                  <PhotoReviewPanel
+                    label="Proposed photo"
+                    description="Applies only after approval"
+                    imageUrl={pendingProfileImageUrl}
+                    fallback={getInitials(profile.user?.name)}
+                    proposed
+                  />
+                ) : null}
+              </div>
+              <div className="mt-4 grid gap-3">
+                <Field>
+                  <FieldLabel htmlFor={`admin-${profile.id}-edited-photo`}>
+                    Upload edited photo
+                  </FieldLabel>
+                  <Input
+                    id={`admin-${profile.id}-edited-photo`}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    disabled={isUploadingProfilePhoto}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.currentTarget.value = "";
+                      if (file) void uploadEditedProfilePhoto(file);
+                    }}
+                  />
+                  <FieldDescription>
+                    Upload the Cogito-standardized version. It will be applied
+                    only when the review action is approved.
+                  </FieldDescription>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor={`admin-${profile.id}-edited-photo-url`}>
+                    Or paste edited photo URL
+                  </FieldLabel>
+                  <Input
+                    id={`admin-${profile.id}-edited-photo-url`}
+                    type="url"
+                    value={profileImageUrl}
+                    onChange={(event) => setProfileImageUrl(event.target.value)}
+                    placeholder="https://..."
+                  />
+                  <FieldDescription>
+                    Use this only when the edited asset is already hosted.
+                  </FieldDescription>
+                </Field>
+                {profileImageUrl.trim() ? (
+                  <div className="rounded-lg border border-success-border bg-success/5 p-3">
+                    <Text className="text-xs font-semibold uppercase tracking-wide text-success">
+                      Edited photo ready
+                    </Text>
+                    <Text className="mt-2 text-sm text-muted">
+                      The hosted photo will be applied when this review action
+                      is approved.
+                    </Text>
+                  </div>
+                ) : null}
+              </div>
             </section>
 
             <section>
@@ -770,27 +1004,25 @@ export function TutorReviewCard({
                 <Text className="mt-1 text-sm">{profile.adminReviewNote}</Text>
               </div>
             ) : null}
-            {profile.pendingProfileChanges ? (
+            {pendingChangesWithoutPhoto.length > 0 ? (
               <section className="rounded-lg border border-warning-border bg-warning/10 p-3">
                 <Text className="text-xs font-semibold uppercase tracking-wide text-warning">
                   Proposed profile changes
                 </Text>
                 <Stack spacing="sm" className="mt-2">
-                  {Object.entries(profile.pendingProfileChanges).map(
-                    ([field, value]) => (
-                      <div key={field} className="min-w-0">
-                        <Text className="text-xs capitalize text-muted">
-                          {formatPendingField(field)}
-                        </Text>
-                        <PendingChangeValue
-                          field={field}
-                          value={value}
-                          subjectLabels={subjectLabels}
-                          idPrefix={`admin-${profile.id}-pending-${field}`}
-                        />
-                      </div>
-                    ),
-                  )}
+                  {pendingChangesWithoutPhoto.map(([field, value]) => (
+                    <div key={field} className="min-w-0">
+                      <Text className="text-xs capitalize text-muted">
+                        {formatPendingField(field)}
+                      </Text>
+                      <PendingChangeValue
+                        field={field}
+                        value={value}
+                        subjectLabels={subjectLabels}
+                        idPrefix={`admin-${profile.id}-pending-${field}`}
+                      />
+                    </div>
+                  ))}
                 </Stack>
                 {profile.profileEditAdminNote ? (
                   <Text className="mt-2 text-sm">
@@ -799,96 +1031,107 @@ export function TutorReviewCard({
                 ) : null}
               </section>
             ) : null}
+            <ProfilePhotoHistory
+              entries={profileHistory}
+              title="Photo & review history"
+            />
           </Stack>
         </CardBody>
 
-        <CardFooter className="flex-wrap gap-2">
-          {profile.onboardingStatus === "published" &&
-          profile.profileEditStatus === "pending_review" ? (
-            <>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => setNoteAction("request_edit_changes")}
-                disabled={isPending}
-              >
-                Request revision
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => handleAction("approve_edits")}
-                progress={isPending && reviewAction === "approve_edits"}
-                disabled={isPending}
-              >
-                Approve changes
-              </Button>
-            </>
-          ) : null}
-          {profile.onboardingStatus === "pending_review" ? (
-            <>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => setNoteAction("request_changes")}
-                disabled={isPending}
-              >
-                Request changes
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => handleAction("approve_unpublished")}
-                progress={isPending && reviewAction === "approve_unpublished"}
-                disabled={isPending}
-              >
-                Approve profile
-              </Button>
-            </>
-          ) : null}
+        {footerTarget
+          ? createPortal(
+              <>
+                {profile.onboardingStatus === "published" &&
+                profile.profileEditStatus === "pending_review" ? (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setNoteAction("request_edit_changes")}
+                      disabled={isPending}
+                    >
+                      Request revision
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => handleAction("approve_edits")}
+                      progress={isPending && reviewAction === "approve_edits"}
+                      disabled={isPending}
+                    >
+                      Approve changes
+                    </Button>
+                  </>
+                ) : null}
+                {profile.onboardingStatus === "pending_review" ? (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setNoteAction("request_changes")}
+                      disabled={isPending}
+                    >
+                      Request changes
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => handleAction("approve_unpublished")}
+                      progress={
+                        isPending && reviewAction === "approve_unpublished"
+                      }
+                      disabled={isPending}
+                    >
+                      Approve profile
+                    </Button>
+                  </>
+                ) : null}
 
-          {profile.onboardingStatus === "approved_unpublished" ? (
-            <>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => setNoteAction("request_changes")}
-                disabled={isPending}
-              >
-                Request changes
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => handleAction("publish")}
-                progress={isPending && reviewAction === "publish"}
-                disabled={isPending}
-              >
-                Publish profile
-              </Button>
-            </>
-          ) : null}
+                {profile.onboardingStatus === "approved_unpublished" ? (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setNoteAction("request_changes")}
+                      disabled={isPending}
+                    >
+                      Request changes
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => handleAction("publish")}
+                      progress={isPending && reviewAction === "publish"}
+                      disabled={isPending}
+                    >
+                      Publish profile
+                    </Button>
+                  </>
+                ) : null}
 
-          {profile.onboardingStatus === "published" &&
-          profile.profileEditStatus !== "pending_review" ? (
-            <>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => handleAction("unpublish")}
-                progress={isPending && reviewAction === "unpublish"}
-                disabled={isPending}
-              >
-                Unpublish
-              </Button>
-              <Button
-                size="sm"
-                variant="danger"
-                onClick={() => setNoteAction("suspend")}
-                disabled={isPending}
-              >
-                Suspend
-              </Button>
-            </>
-          ) : null}
-        </CardFooter>
+                {profile.onboardingStatus === "published" &&
+                profile.profileEditStatus !== "pending_review" ? (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => handleAction("unpublish")}
+                      progress={isPending && reviewAction === "unpublish"}
+                      disabled={isPending}
+                    >
+                      Unpublish
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={() => setNoteAction("suspend")}
+                      disabled={isPending}
+                    >
+                      Suspend
+                    </Button>
+                  </>
+                ) : null}
+              </>,
+              footerTarget,
+            )
+          : null}
       </Card>
 
       <Dialog

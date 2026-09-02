@@ -1,14 +1,17 @@
-import { eq, and, gte, sql, asc, inArray, isNotNull } from "drizzle-orm";
+import { eq, and, gte, sql, asc, desc, inArray, isNotNull } from "drizzle-orm";
 import {
+  user,
   tutorProfile,
   availabilitySlot,
   subjectCategory,
   tutorProfileSubject,
+  auditLog,
 } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
 import type {
   TutorCompetitionAchievement,
   TutorEducationEntry,
+  TutorExperienceEntry,
 } from "@cogito-app/db/schema";
 
 export interface UpdateProfileInput {
@@ -19,10 +22,11 @@ export interface UpdateProfileInput {
   experiences?: string;
   achievementProofUrls?: string[];
   experienceProofUrls?: string[];
-  sourcePhotoUrl?: string;
+  profileImageUrl?: string;
   credentialsSummary?: string;
   education?: TutorEducationEntry[];
   competitionAchievements?: TutorCompetitionAchievement[];
+  experienceEntries?: TutorExperienceEntry[];
   expertise?: string[];
   subjectIds?: string[];
   modality?: "online" | "offline" | "both";
@@ -38,7 +42,7 @@ export interface UpdateProfileInput {
 
 export interface PersistedProfileUpdate extends Omit<
   UpdateProfileInput,
-  "version" | "subjectIds"
+  "version" | "subjectIds" | "profileImageUrl"
 > {
   pendingProfileChanges?: Record<string, unknown> | null;
   profileEditStatus?: string;
@@ -66,6 +70,7 @@ export async function getByUserId(conn: DbOrTx, userId: string) {
   return conn.query.tutorProfile.findFirst({
     where: eq(tutorProfile.userId, userId),
     with: {
+      user: { columns: { name: true, image: true } },
       subjects: {
         with: {
           subject: {
@@ -75,6 +80,38 @@ export async function getByUserId(conn: DbOrTx, userId: string) {
       },
     },
   });
+}
+
+export async function listProfileHistory(conn: DbOrTx, tutorProfileId: string) {
+  return conn.query.auditLog.findMany({
+    where: and(
+      eq(auditLog.targetType, "tutor_profile"),
+      eq(auditLog.targetId, tutorProfileId),
+    ),
+    orderBy: [desc(auditLog.createdAt), desc(auditLog.id)],
+    limit: 50,
+    with: {
+      actor: { columns: { id: true, name: true } },
+    },
+  });
+}
+
+/**
+ * Updates the single canonical profile image stored on the auth user.
+ * Tutor-profile moderation uses the tutor profile version separately; callers
+ * decide whether this image is live now or staged in pendingProfileChanges.
+ */
+export async function updateProfileImage(
+  conn: DbOrTx,
+  userId: string,
+  image: string,
+) {
+  const [updated] = await conn
+    .update(user)
+    .set({ image })
+    .where(eq(user.id, userId))
+    .returning();
+  return updated;
 }
 
 /**
@@ -295,8 +332,10 @@ export async function deactivateFutureRecurringAvailability(
 export function createTutorRepo() {
   return {
     getByUserId,
+    listProfileHistory,
     listActiveChildSubjects,
     replaceProfileSubjects,
+    updateProfileImage,
     updateProfileWithVersion,
     updateStatus,
     listAvailability,

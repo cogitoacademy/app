@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   Avatar,
   AvatarFallback,
@@ -23,6 +23,9 @@ import {
 } from "@cogito-app/ui/components/selia/field";
 import { Input } from "@cogito-app/ui/components/selia/input";
 import { Text } from "@cogito-app/ui/components/selia/text";
+
+import { resolveProfileImageUrl } from "@/lib/profile-image-url";
+import { ProfileImagePicker } from "./profile-image-picker";
 
 function getInitials(name: string) {
   return (
@@ -65,17 +68,27 @@ export function AccountIdentityCard({
   imageEditable?: boolean;
 }) {
   const displayName = name.trim() || "Your profile";
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   return (
     <Card className="overflow-hidden">
       <CardHeader className="grid-cols-[auto_1fr] items-start">
-        <Avatar size="lg">
-          <AvatarImage
-            src={image.trim() || undefined}
-            alt={`${displayName} avatar`}
-          />
-          <AvatarFallback>{getInitials(name)}</AvatarFallback>
-        </Avatar>
+        <ProfileImagePicker
+          id={`${idPrefix}-image`}
+          image={image}
+          onImageChange={onImageChange}
+          onUploadingChange={setIsUploadingImage}
+          disabled={!imageEditable}
+          compactTrigger={
+            <Avatar size="lg">
+              <AvatarImage
+                src={resolveProfileImageUrl(image)}
+                alt={`${displayName} avatar`}
+              />
+              <AvatarFallback>{getInitials(name)}</AvatarFallback>
+            </Avatar>
+          }
+        />
         <div className="min-w-0">
           <CardTitle>Account identity</CardTitle>
           <CardDescription>
@@ -101,23 +114,6 @@ export function AccountIdentityCard({
           </Field>
         ) : null}
         <Field>
-          <FieldLabel htmlFor={`${idPrefix}-image`}>
-            Profile image URL
-          </FieldLabel>
-          <Input
-            id={`${idPrefix}-image`}
-            name={`${idPrefix}-image`}
-            type="url"
-            autoComplete="url"
-            value={image}
-            onChange={(event) => onImageChange(event.target.value)}
-            placeholder="https://example.com/photo.jpg"
-          />
-          <FieldDescription>
-            Use a publicly accessible image URL.
-          </FieldDescription>
-        </Field>
-        <Field className="md:col-span-2">
           <FieldLabel htmlFor={`${idPrefix}-email`}>Sign-in email</FieldLabel>
           <Input
             id={`${idPrefix}-email`}
@@ -129,7 +125,7 @@ export function AccountIdentityCard({
             disabled
           />
           <FieldDescription>
-            Your sign-in email cannot be changed from this page.
+            Your sign-in email cannot be changed.
           </FieldDescription>
         </Field>
       </CardBody>
@@ -139,7 +135,7 @@ export function AccountIdentityCard({
           type="button"
           className="w-full sm:w-auto"
           progress={isSaving}
-          disabled={isSaving || !name.trim() || !hasChanges}
+          disabled={isSaving || isUploadingImage || !name.trim() || !hasChanges}
           onClick={onSave}
         >
           Save account details

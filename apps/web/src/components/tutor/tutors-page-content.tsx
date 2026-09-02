@@ -35,6 +35,7 @@ import type {
   TutorCompetitionAchievement,
   TutorEducationEntry,
 } from "./tutor-achievements";
+import type { TutorExperienceEntry } from "./tutor-experiences";
 import { useSubjectTaxonomy, type TutorSubject } from "./subject-taxonomy";
 
 type PublishedTutor = {
@@ -47,6 +48,7 @@ type PublishedTutor = {
   experiences: string | null;
   education: TutorEducationEntry[] | null;
   competitionAchievements: TutorCompetitionAchievement[] | null;
+  experienceEntries: TutorExperienceEntry[] | null;
   expertise: string[];
   subjects?: TutorSubject[] | null;
   modality: string | null;

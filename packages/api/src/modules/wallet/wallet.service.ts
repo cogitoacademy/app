@@ -1,4 +1,8 @@
-import { KNOWLEDGE_BANK_THRESHOLD, ENTRY_TYPE } from "../../shared/constants";
+import {
+  ENTRY_TYPE,
+  KNOWLEDGE_BANK_THRESHOLD,
+  USER_ROLE,
+} from "../../shared/constants";
 import { ledgerEntry } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
@@ -98,7 +102,10 @@ export interface WalletPort {
     walletId: string,
     opts?: LedgerQueryOptions,
   ): Promise<{ items: LedgerEntryRow[]; nextCursor: string | null }>;
-  knowledgeBankEligible(userId: string): Promise<{
+  knowledgeBankEligible(
+    userId: string,
+    viewerRole?: string,
+  ): Promise<{
     eligible: boolean;
     balance: number;
     threshold: number;
@@ -414,27 +421,37 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
   }
 
   /**
-   * Checks whether a user's total balance meets the Knowledge Bank threshold.
+   * Checks whether a user can access the Knowledge Bank.
    *
-   * Per PRD DL-16, held Marks (committed to bookings) count toward the
-   * 35-Mark threshold, so eligibility uses `totalBalance`, not the available
-   * balance (U13).
+   * Students must meet the 35-Mark threshold. Tutors and admins have access
+   * as part of their roles and are not subject to the student wallet
+   * threshold. Held Marks count toward student eligibility, so the student
+   * check uses `totalBalance`, not the available balance (U13).
    *
    * @param userId - the user to check
-   * @returns eligibility, the total balance, and the threshold
+   * @param viewerRole - the authenticated viewer role, when available
+   * @returns eligibility, the total balance, and the student threshold
    */
-  async function knowledgeBankEligible(userId: string) {
+  async function knowledgeBankEligible(userId: string, viewerRole?: string) {
     const w = await repo.getByUserId(db, userId);
+    const balance = w?.totalBalance ?? 0;
+    const bypassWalletThreshold =
+      viewerRole === USER_ROLE.TUTOR || viewerRole === USER_ROLE.ADMIN;
+    const isStudent =
+      viewerRole === undefined || viewerRole === USER_ROLE.STUDENT;
+
     if (!w) {
       return {
-        eligible: false,
+        eligible: bypassWalletThreshold,
         balance: 0,
         threshold: KNOWLEDGE_BANK_THRESHOLD,
       };
     }
     return {
-      eligible: w.totalBalance >= KNOWLEDGE_BANK_THRESHOLD,
-      balance: w.totalBalance,
+      eligible:
+        bypassWalletThreshold ||
+        (isStudent && balance >= KNOWLEDGE_BANK_THRESHOLD),
+      balance,
       threshold: KNOWLEDGE_BANK_THRESHOLD,
     };
   }

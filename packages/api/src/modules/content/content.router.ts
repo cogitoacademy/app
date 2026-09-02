@@ -1,4 +1,4 @@
-import { protectedProcedure, studentProcedure } from "../../procedures";
+import { protectedProcedure } from "../../procedures";
 import type { ContentHandler } from "./content.handler";
 
 export function createContentRouter(handler: ContentHandler) {
@@ -14,14 +14,14 @@ export function createContentRouter(handler: ContentHandler) {
       })
       .handler(handler.listCompetitions),
 
-    listStudentResources: studentProcedure
+    listStudentResources: protectedProcedure
       .route({
         method: "POST",
         path: "/content/knowledge-bank/list",
         tags: ["Content"],
         summary: "List Knowledge Bank resources",
         description:
-          "Returns published Knowledge Bank resources for students meeting the 35-Mark threshold",
+          "Returns published Knowledge Bank resources for students meeting the 35-Mark threshold and for authenticated tutors or admins",
       })
       .handler(handler.listStudentResources),
   };

@@ -6,8 +6,9 @@ import { Checkbox } from "@cogito-app/ui/components/selia/checkbox";
 import { Chip, ChipButton } from "@cogito-app/ui/components/selia/chip";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { orpc } from "@/utils/orpc";
+import { IconX } from "@tabler/icons-react";
 
-const MAX_TUTOR_SUBJECTS = 20;
+export const MAX_TUTOR_SUBJECTS = 7;
 
 export type SubjectOption = {
   id: string;
@@ -138,8 +139,12 @@ export function SubjectSelector({
     <div
       id={triggerId}
       tabIndex={-1}
-      className="flex flex-col gap-4 outline-none"
+      className={`flex flex-col gap-4 rounded-lg outline-none ${
+        error ? "ring-2 ring-danger-border/24" : ""
+      }`}
       aria-label="Competition subjects"
+      aria-invalid={Boolean(error)}
+      aria-describedby={error ? `${triggerId}-error` : undefined}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Text className="text-sm text-muted">
@@ -156,14 +161,14 @@ export function SubjectSelector({
           aria-label="Selected competition subcategories"
         >
           {selectedIds.map((subjectId) => (
-            <Chip key={subjectId} variant="primary" pill>
+            <Chip key={subjectId} variant="primary" pill size="sm">
               {selectedSubjectLabels.get(subjectId) ?? "Selected subject"}
               <ChipButton
                 type="button"
                 aria-label={`Remove ${selectedSubjectLabels.get(subjectId) ?? "selected subject"}`}
                 onClick={() => toggleSubject(subjectId, false)}
               >
-                ×
+                <IconX />
               </ChipButton>
             </Chip>
           ))}
@@ -214,10 +219,8 @@ export function SubjectSelector({
               key={category.id}
               className="min-w-0 rounded-lg border border-item-border bg-item p-3"
             >
-              <legend className="px-1 text-sm font-semibold">
-                {category.name}
-              </legend>
-              <div className="mt-2 flex flex-col gap-2">
+              <legend className="px-1 font-semibold">{category.name}</legend>
+              <div className="grid min-[500px]:grid-cols-2 gap-2">
                 {category.children.map((child) => {
                   const checked = selectedIds.includes(child.id);
                   const limitReached =
@@ -253,7 +256,11 @@ export function SubjectSelector({
         </div>
       ) : null}
 
-      {error ? <Text className="text-danger">{error}</Text> : null}
+      {error ? (
+        <Text id={`${triggerId}-error`} className="text-danger" role="alert">
+          {error}
+        </Text>
+      ) : null}
     </div>
   );
 }

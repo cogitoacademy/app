@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+export const dashboardAnalyticsInput = z
+  .object({
+    period: z.enum(["7d", "30d", "90d"]).default("30d"),
+  })
+  .optional();
+
 export const listUsersInput = z
   .object({
     limit: z.number().min(1).max(100).default(50),

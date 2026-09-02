@@ -26,7 +26,7 @@ describe("walletHandler", () => {
   describe("get", () => {
     test("calls wallet.getOrCreate and returns transformed wallet", async () => {
       const context = {
-        session: { user: { id: "u1" } },
+        session: { user: { id: "u1", role: "student" } },
       };
 
       const result = await walletHandler.get({ context } as any);
@@ -70,14 +70,17 @@ describe("walletHandler", () => {
   describe("knowledgeBankEligible", () => {
     test("calls wallet.knowledgeBankEligible with session user id", async () => {
       const context = {
-        session: { user: { id: "u1" } },
+        session: { user: { id: "u1", role: "student" } },
       };
 
       const result = await walletHandler.knowledgeBankEligible({
         context,
       } as any);
 
-      expect(walletService.knowledgeBankEligible).toHaveBeenCalledWith("u1");
+      expect(walletService.knowledgeBankEligible).toHaveBeenCalledWith(
+        "u1",
+        "student",
+      );
       expect(result).toEqual({ eligible: true, balance: 40, threshold: 35 });
     });
   });

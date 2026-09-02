@@ -3,6 +3,7 @@
 import {
   Field,
   FieldDescription,
+  FieldError,
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
 import { Text } from "@cogito-app/ui/components/selia/text";
@@ -75,6 +76,8 @@ export function TutorPricingFields({
         {modalities.map((currentModality) => {
           const key = currentModality as "online" | "offline";
           const value = baseRatesIdr[key];
+          const error = errors[`baseRatesIdr.${key}`] ?? errors.baseRatesIdr;
+          const errorId = `tutor-base-rate-${key}-error`;
           return (
             <Field key={key}>
               <FieldLabel htmlFor={"tutor-base-rate-" + key}>
@@ -101,7 +104,10 @@ export function TutorPricingFields({
                   })
                 }
               >
-                <NumberFieldGroup className="w-full">
+                <NumberFieldGroup
+                  className="w-full"
+                  aria-invalid={Boolean(error)}
+                >
                   <NumberFieldDecrement
                     aria-label={`Decrease ${key} base honorarium by Rp 5,000`}
                   >
@@ -109,7 +115,8 @@ export function TutorPricingFields({
                   </NumberFieldDecrement>
                   <NumberFieldInput
                     className="min-w-0 flex-1 font-medium"
-                    aria-invalid={Boolean(errors.baseRatesIdr)}
+                    aria-invalid={Boolean(error)}
+                    aria-describedby={error ? errorId : undefined}
                     inputMode="numeric"
                   />
                   <NumberFieldIncrement
@@ -123,6 +130,7 @@ export function TutorPricingFields({
                 Minimum {formatIdr(MIN_BASE_RATE_IDR)} · +{" "}
                 {formatIdr(TUTOR_INCREMENT_IDR[key])} per additional student
               </FieldDescription>
+              {error ? <FieldError id={errorId}>{error}</FieldError> : null}
             </Field>
           );
         })}
@@ -140,11 +148,6 @@ export function TutorPricingFields({
             renderValue={formatIdr}
           />
         </div>
-      ) : null}
-      {errors.baseRatesIdr ? (
-        <Text className="text-sm text-danger" role="alert">
-          {errors.baseRatesIdr}
-        </Text>
       ) : null}
     </div>
   );

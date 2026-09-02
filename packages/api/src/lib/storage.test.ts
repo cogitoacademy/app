@@ -91,50 +91,17 @@ describe("createR2Storage", () => {
     );
   });
 
-  test("getSignedUploadUrl produces a POST url with a bounded policy (M9)", async () => {
+  test("getSignedUploadUrl produces a presigned PUT URL", async () => {
     const { url, method, fields } = await s.getSignedUploadUrl(
       "user-1/uuid-avatar.png",
       "image/png",
+      128,
     );
-    expect(method).toBe("POST");
-    expect(url).toBe("https://acct.r2.cloudflarestorage.com/bucket");
-    expect(fields["x-amz-algorithm"]).toBe("AWS4-HMAC-SHA256");
-    expect(fields.policy).toBeTruthy();
-    expect(fields["x-amz-signature"]).toBeTruthy();
-
-    const policy = JSON.parse(
-      Buffer.from(fields.policy, "base64").toString("utf-8"),
-    ) as { conditions: unknown[] };
-    const sizeCondition = policy.conditions.find(
-      (c) => Array.isArray(c) && c[0] === "content-length-range",
-    ) as [string, number, number];
-    expect(sizeCondition).toBeTruthy();
-    expect(sizeCondition[2]).toBe(5 * 1024 * 1024);
-  });
-
-  test("presigned POST policy covers every x-amz form field (R4)", async () => {
-    const { fields } = await s.getSignedUploadUrl(
-      "user-1/uuid-avatar.png",
-      "image/png",
-    );
-    const policy = JSON.parse(
-      Buffer.from(fields.policy, "base64").toString("utf-8"),
-    ) as {
-      conditions: unknown[];
-    };
-    const alg = policy.conditions.find(
-      (c) => Array.isArray(c) && c[0] === "eq" && c[1] === "$x-amz-algorithm",
-    ) as [string, string, string];
-    expect(alg).toBeTruthy();
-    expect(alg[2]).toBe("AWS4-HMAC-SHA256");
-    const cred = policy.conditions.find(
-      (c) => Array.isArray(c) && c[0] === "eq" && c[1] === "$x-amz-credential",
-    ) as [string, string, string];
-    expect(cred[2]).toBe(fields["x-amz-credential"]);
-    const date = policy.conditions.find(
-      (c) => Array.isArray(c) && c[0] === "eq" && c[1] === "$x-amz-date",
-    ) as [string, string, string];
-    expect(date[2]).toBe(fields["x-amz-date"]);
+    const signedUrl = new URL(url);
+    expect(method).toBe("PUT");
+    expect(signedUrl.hostname).toBe("bucket.acct.r2.cloudflarestorage.com");
+    expect(signedUrl.pathname).toBe("/user-1/uuid-avatar.png");
+    expect(fields).toEqual({});
   });
 });
 

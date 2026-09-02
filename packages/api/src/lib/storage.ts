@@ -1,5 +1,5 @@
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import { createHmac } from "node:crypto";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
@@ -7,7 +7,7 @@ import { isValidUploadKey } from "./request-id";
 
 export interface SignedUpload {
   url: string;
-  method: "POST";
+  method: "POST" | "PUT";
   fields: Record<string, string>;
 }
 
@@ -17,7 +17,11 @@ export interface StoragePort {
     body: Uint8Array,
     contentType: string,
   ): Promise<{ key: string; url: string }>;
-  getSignedUploadUrl(key: string, contentType: string): Promise<SignedUpload>;
+  getSignedUploadUrl(
+    key: string,
+    contentType: string,
+    contentLength?: number,
+  ): Promise<SignedUpload>;
   resolvePublicUrl(key: string): string;
 }
 
@@ -30,71 +34,6 @@ export class InvalidStorageKeyError extends Error {
 
 function assertValidKey(key: string): void {
   if (!isValidUploadKey(key)) throw new InvalidStorageKeyError(key);
-}
-
-function hmac(key: string | Buffer, data: string): Buffer {
-  return createHmac("sha256", key as Parameters<typeof createHmac>[0])
-    .update(data)
-    .digest();
-} /**
- * Builds an S3-compatible presigned POST (R2 supports S3 POST policies).
- * The policy binds an exact object key, the content type, and a
- * `content-length-range` so an authenticated client cannot upload an
- * arbitrarily large object (M9) — a PUT URL cannot express a size bound.
- */
-export function createPresignedPost(opts: {
-  endpoint: string;
-  bucket: string;
-  region?: string;
-  key: string;
-  contentType: string;
-  maxBytes: number;
-  accessKeyId: string;
-  secretAccessKey: string;
-  expiresInSeconds?: number;
-}): SignedUpload {
-  const region = opts.region ?? "auto";
-  const date = new Date();
-  const amzDate = date.toISOString().replace(/[:-]|\.\d{3}/g, "");
-  const dateStamp = amzDate.slice(0, 8);
-  const credential = `${opts.accessKeyId}/${dateStamp}/${region}/s3/aws4_request`;
-  const expiration = new Date(
-    date.getTime() + (opts.expiresInSeconds ?? 300) * 1000,
-  ).toISOString();
-
-  const policy = {
-    expiration,
-    conditions: [
-      { bucket: opts.bucket },
-      { key: opts.key },
-      ["eq", "$Content-Type", opts.contentType],
-      ["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"],
-      ["eq", "$x-amz-credential", credential],
-      ["eq", "$x-amz-date", amzDate],
-      ["content-length-range", 1, opts.maxBytes],
-    ],
-  };
-  const policyBase64 = Buffer.from(JSON.stringify(policy)).toString("base64");
-
-  const kDate = hmac(`AWS4${opts.secretAccessKey}`, dateStamp);
-  const kRegion = hmac(kDate, region);
-  const kService = hmac(kRegion, "s3");
-  const kSigning = hmac(kService, "aws4_request");
-  const signature = hmac(kSigning, policyBase64).toString("hex");
-
-  return {
-    url: `${opts.endpoint}/${opts.bucket}`,
-    method: "POST",
-    fields: {
-      key: opts.key,
-      "Content-Type": opts.contentType,
-      "x-amz-algorithm": "AWS4-HMAC-SHA256",
-      "x-amz-credential": credential,
-      "x-amz-date": amzDate,
-      policy: policyBase64,
-      "x-amz-signature": signature,
-    },
-  };
 }
 
 export function createLocalStorage(opts: {
@@ -115,7 +54,7 @@ export function createLocalStorage(opts: {
       assertValidKey(key);
       // Local mode uploads go through the authenticated server route
       // POST /uploads/* (size-bounded); the response advertises the POST flow
-      // so the client uses one upload mechanism in both modes.
+      // so the client uses the same raw-body upload mechanism in both modes.
       return { url: `${baseUrl}/${key}`, method: "POST", fields: {} };
     },
     resolvePublicUrl(key) {
@@ -154,17 +93,24 @@ export function createR2Storage(opts: {
       );
       return { key, url: opts.publicUrl ? `${opts.publicUrl}/${key}` : key };
     },
-    async getSignedUploadUrl(key, contentType) {
+    async getSignedUploadUrl(key, contentType, contentLength) {
       assertValidKey(key);
-      return createPresignedPost({
-        endpoint: `https://${opts.accountId}.r2.cloudflarestorage.com`,
-        bucket: opts.bucket,
-        key,
-        contentType,
-        maxBytes: 5 * 1024 * 1024,
-        accessKeyId: opts.accessKeyId,
-        secretAccessKey: opts.secretAccessKey,
-      });
+      // R2 supports presigned PUT URLs, but not S3 multipart-form POST
+      // policies. Sign the content length when the caller provides it so the
+      // upload cannot exceed the module's size limit.
+      const uploadUrl = await getSignedUrl(
+        client,
+        new PutObjectCommand({
+          Bucket: opts.bucket,
+          Key: key,
+          ContentType: contentType,
+          ...(contentLength !== undefined
+            ? { ContentLength: contentLength }
+            : {}),
+        }),
+        { expiresIn: 300 },
+      );
+      return { url: uploadUrl, method: "PUT", fields: {} };
     },
     resolvePublicUrl(key) {
       assertValidKey(key);

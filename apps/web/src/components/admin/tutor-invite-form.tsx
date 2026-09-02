@@ -161,7 +161,7 @@ export function TutorInviteForm() {
             </div>
           ) : null}
           <Field>
-            <FieldLabel>Display Name *</FieldLabel>
+            <FieldLabel>Recipient name *</FieldLabel>
             <Input
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}

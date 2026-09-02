@@ -92,7 +92,9 @@ describe("content handlers", () => {
     });
 
     const result = await handler.listStudentResources({
-      context: { session: { user: { id: "student-1" } } } as any,
+      context: {
+        session: { user: { id: "student-1", role: "student" } },
+      } as any,
     });
 
     expect(listStudentResources).not.toHaveBeenCalled();
@@ -118,13 +120,87 @@ describe("content handlers", () => {
     });
 
     const result = await handler.listStudentResources({
-      context: { session: { user: { id: "student-1" } } } as any,
+      context: {
+        session: { user: { id: "student-1", role: "student" } },
+      } as any,
     });
 
     expect(listStudentResources).toHaveBeenCalledTimes(1);
     expect(result).toEqual({
       items: resources,
       access: { eligible: true, balance: 40, threshold: 35 },
+    });
+  });
+
+  test("lists Knowledge Bank content for a tutor without a Marks balance", async () => {
+    const resources = [
+      {
+        id: "resource-1",
+        title: "Tutor reference",
+        description: "A teaching guide",
+        category: "academic",
+      },
+    ];
+    const listStudentResources = mock(async () => resources);
+    const knowledgeBankEligible = mock(async () => ({
+      eligible: true,
+      balance: 0,
+      threshold: 35,
+    }));
+    const handler = createContentHandler({
+      service: makeContentService({ listStudentResources }),
+      wallet: {
+        knowledgeBankEligible,
+      } as unknown as WalletPort,
+    });
+
+    const result = await handler.listStudentResources({
+      context: {
+        session: { user: { id: "tutor-1", role: "tutor" } },
+      } as any,
+    });
+
+    expect(knowledgeBankEligible).toHaveBeenCalledWith("tutor-1", "tutor");
+    expect(listStudentResources).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      items: resources,
+      access: { eligible: true, balance: 0, threshold: 35 },
+    });
+  });
+
+  test("lists Knowledge Bank content for an admin without a Marks balance", async () => {
+    const resources = [
+      {
+        id: "resource-1",
+        title: "Admin reference",
+        description: "An operations guide",
+        category: "general",
+      },
+    ];
+    const listStudentResources = mock(async () => resources);
+    const knowledgeBankEligible = mock(async () => ({
+      eligible: true,
+      balance: 0,
+      threshold: 35,
+    }));
+    const handler = createContentHandler({
+      service: makeContentService({ listStudentResources }),
+      wallet: {
+        knowledgeBankEligible,
+      } as unknown as WalletPort,
+    });
+
+    const result = await handler.listStudentResources({
+      context: {
+        session: { user: { id: "admin-1", role: "admin" } },
+      } as any,
+    });
+
+    expect(knowledgeBankEligible).toHaveBeenCalledWith("admin-1", "admin");
+    expect(listStudentResources).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      items: resources,
+      access: { eligible: true, balance: 0, threshold: 35 },
     });
   });
 });

@@ -104,6 +104,10 @@ export function resolveGoogleSocialProviders(input: {
     google: {
       clientId: input.clientId,
       clientSecret: input.clientSecret,
+      // Force Google's OAuth permission screen for every authorization.
+      // This is required for the verification demo and makes a previously
+      // authorized account show the requested identity scopes again.
+      prompt: "consent" as const,
     },
   };
 }

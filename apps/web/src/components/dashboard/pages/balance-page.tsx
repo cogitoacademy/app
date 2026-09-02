@@ -123,7 +123,6 @@ export function BalancePage() {
             </span>
           }
           change={`${kbAccessible ? "✓" : "✗"} Knowledge Bank`}
-          changeType={kbAccessible ? "increase" : "decrease"}
         />
         <StatCard
           icon={<IconLock />}
@@ -139,7 +138,6 @@ export function BalancePage() {
             </span>
           }
           change="In active bookings"
-          changeType="decrease"
         />
         <StatCard
           icon={<IconCoin />}
@@ -155,7 +153,6 @@ export function BalancePage() {
             </span>
           }
           change="Ready to spend"
-          changeType="increase"
         />
       </div>
 

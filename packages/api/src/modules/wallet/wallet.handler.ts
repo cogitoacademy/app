@@ -48,7 +48,8 @@ export function createWalletHandler({ wallet }: WalletHandlerDeps) {
 
     knowledgeBankEligible: async ({ context }: { context: Context }) => {
       return withDomainMap(async () => {
-        return wallet.knowledgeBankEligible(context.session!.user.id);
+        const user = context.session!.user as { id: string; role?: string };
+        return wallet.knowledgeBankEligible(user.id, user.role);
       }, mapWalletError);
     },
   };

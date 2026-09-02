@@ -258,6 +258,17 @@ describe("procedures", () => {
     ).resolves.toBe("ok");
   });
 
+  test("requireStudent rejects an unauthenticated request", async () => {
+    const { requireStudent } = await import("../../procedures");
+
+    await expect(
+      (requireStudent as any)({
+        context: { session: null, services: {} },
+        next: async () => "ok",
+      }),
+    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+  });
+
   test("studentProcedure is exported", async () => {
     const mod = await import("../../procedures");
     expect(mod.studentProcedure).toBeDefined();

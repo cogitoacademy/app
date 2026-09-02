@@ -41,6 +41,7 @@ export interface ProfileProjection {
   experiences: string | null;
   education: TutorProfileRow["education"];
   competitionAchievements: TutorProfileRow["competitionAchievements"];
+  experienceEntries: TutorProfileRow["experienceEntries"];
   expertise: string[];
   subjects: NormalizedTutorSubject[];
   modality: string | null;
@@ -54,13 +55,16 @@ export function buildProjection(profile: ProfileWithUser): ProfileProjection {
   return {
     id: profile.id,
     userId: profile.userId,
-    displayName: profile.displayName,
+    // Keep the response key for backward compatibility, but source every
+    // role's visible name from the canonical auth user record.
+    displayName: profile.user?.name ?? null,
     shortBio: profile.shortBio,
     credentialsSummary: profile.credentialsSummary,
     achievements: profile.achievements,
     experiences: profile.experiences,
     education: profile.education ?? [],
     competitionAchievements: profile.competitionAchievements ?? [],
+    experienceEntries: profile.experienceEntries ?? [],
     expertise: profile.expertise ?? [],
     subjects: toNormalizedTutorSubjects(profile.subjects),
     modality: profile.modality,

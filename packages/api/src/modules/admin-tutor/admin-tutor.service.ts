@@ -43,6 +43,13 @@ export type TutorInviteDeliveryRow = TutorInviteRow & {
   emailDelivery: InviteEmailDelivery;
 };
 
+function readPendingProfileImage(
+  pendingProfileChanges: Record<string, unknown> | null | undefined,
+) {
+  const value = pendingProfileChanges?.profileImageUrl;
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
 export function buildTutorInviteEmail(
   invite: Pick<TutorInviteRow, "displayName" | "email" | "token" | "expiresAt">,
   appBaseUrl: string,
@@ -446,6 +453,15 @@ export function createAdminTutorService(deps: {
     });
   }
 
+  async function listTutorProfileHistory(tutorProfileId: string) {
+    const profile = await adminTutorRepo.getTutorProfileById(
+      db,
+      tutorProfileId,
+    );
+    if (!profile) throw new TutorProfileNotFoundError(tutorProfileId);
+    return adminTutorRepo.listTutorProfileHistory(db, tutorProfileId);
+  }
+
   async function reviewTutorProfile(
     adminId: string,
     input: ReviewTutorProfileInput,
@@ -461,6 +477,12 @@ export function createAdminTutorService(deps: {
       let updates: TutorProfileUpdates;
       let newStatus: string;
       let pendingSubjectIds: string[] | undefined;
+      let profileImageUrl = input.profileImageUrl;
+      const appliesProfileImage = [
+        "approve_edits",
+        "approve_unpublished",
+        "publish",
+      ].includes(input.action);
       if (input.action === "approve_edits") {
         if (!existing.pendingProfileChanges) {
           throw new InvalidInviteActionError(
@@ -471,6 +493,14 @@ export function createAdminTutorService(deps: {
         const pendingProfileChanges = {
           ...existing.pendingProfileChanges,
         };
+        const pendingProfileImageUrl = pendingProfileChanges.profileImageUrl;
+        delete pendingProfileChanges.profileImageUrl;
+        if (
+          profileImageUrl === undefined &&
+          typeof pendingProfileImageUrl === "string"
+        ) {
+          profileImageUrl = pendingProfileImageUrl;
+        }
         // Published tutor honoraria are no longer review-gated. Ignore a
         // legacy queued base rate so approving unrelated profile edits cannot
         // overwrite the tutor's current fee.
@@ -533,11 +563,11 @@ export function createAdminTutorService(deps: {
         );
       }
 
-      if (input.publicPhotoUrl) {
-        await adminTutorRepo.updateTutorPublicPhoto(
+      if (profileImageUrl && appliesProfileImage) {
+        await adminTutorRepo.updateTutorProfileImage(
           tx,
           profile!.userId,
-          input.publicPhotoUrl,
+          profileImageUrl,
         );
       }
 
@@ -569,6 +599,21 @@ export function createAdminTutorService(deps: {
         },
         details: {
           adminNote: input.adminNote,
+          profileImageUpdated: Boolean(profileImageUrl && appliesProfileImage),
+          profileImageUrl:
+            profileImageUrl && appliesProfileImage ? profileImageUrl : null,
+          submittedProfileImageUrl: profileImageUrl ?? null,
+          previousProfileImageUrl: profile?.user?.image ?? null,
+          proposedProfileImageUrl: readPendingProfileImage(
+            existing.pendingProfileChanges,
+          ),
+          photoStage: profileImageUrl
+            ? appliesProfileImage
+              ? "published"
+              : "edited"
+            : readPendingProfileImage(existing.pendingProfileChanges)
+              ? "proposed"
+              : null,
           previousStatus: existing.onboardingStatus,
           newStatus,
         },
@@ -668,6 +713,7 @@ export function createAdminTutorService(deps: {
     sendInviteAgain,
     revokeInvite,
     listTutorProfiles,
+    listTutorProfileHistory,
     reviewTutorProfile,
     updateTutorAchievements,
   };

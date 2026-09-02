@@ -43,6 +43,7 @@ export function Checkbox({
       className={cn(
         "size-4 shrink-0 flex items-center justify-center rounded-xs border border-input-border bg-input shadow-input cursor-pointer",
         "focus:outline-0 focus-visible:outline-2 focus-visible:outline-offset-2 outline-primary",
+        "aria-invalid:border-danger-border aria-invalid:ring-danger-border/24 aria-invalid:ring-2",
         "data-[checked]:bg-primary data-[checked]:border-primary",
         "transition-colors duration-75 hover:border-input-accent-border",
         "data-disabled:cursor-not-allowed data-disabled:opacity-50",

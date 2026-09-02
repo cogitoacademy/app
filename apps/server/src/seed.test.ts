@@ -3,7 +3,13 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { db } from "@cogito-app/db";
 import { markPackage } from "@cogito-app/db/schema";
-import { resolveSeedAdminEmail, seedAllowed, seedAdminPassword } from "./seed";
+import {
+  assertReviewAdminIsSeparate,
+  requireProductionReviewPassword,
+  resolveSeedAdminEmail,
+  seedAllowed,
+  seedAdminPassword,
+} from "./seed";
 import { PACKAGES, seedPackages, seedPackagesAllowed } from "./seed-packages";
 
 describe("seed guards", () => {
@@ -33,18 +39,37 @@ describe("seed guards", () => {
     );
   });
 
-  test("uses the local demo admin outside production and the configured operator in production", () => {
+  test("uses a separate review admin in production", () => {
     expect(resolveSeedAdminEmail("development")).toBe("admin@cogitoacademy.id");
     expect(resolveSeedAdminEmail("test")).toBe("admin@cogitoacademy.id");
     expect(resolveSeedAdminEmail("production")).toBe(
-      "itcogitoacademy01@gmail.com",
+      "review.admin@cogitoacademy.id",
     );
-    expect(
-      resolveSeedAdminEmail(
-        "staging",
+    expect(resolveSeedAdminEmail("staging", " Reviewer@Example.com ")).toBe(
+      "reviewer@example.com",
+    );
+  });
+
+  test("production review admin cannot reuse an operator account", () => {
+    expect(() =>
+      assertReviewAdminIsSeparate(
+        "operator@example.com",
         " Operator@Example.com, other@example.com ",
       ),
-    ).toBe("operator@example.com");
+    ).toThrow("must not be an operator email");
+  });
+
+  test("production review passwords must be explicit", () => {
+    expect(() =>
+      requireProductionReviewPassword("production", "PASSWORD", undefined),
+    ).toThrow("at least 12 characters");
+    expect(() =>
+      requireProductionReviewPassword(
+        "production",
+        "PASSWORD",
+        "StrongReview123",
+      ),
+    ).not.toThrow();
   });
 
   test("W2: seed-packages exits non-zero in production without SEED_ALLOWED_IN_PROD", () => {

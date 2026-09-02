@@ -23,6 +23,17 @@ export function createTutorRouter(handler: TutorHandler) {
       .input(z.void())
       .handler(handler.getMyProfile),
 
+    getMyProfileHistory: tutorProcedure
+      .route({
+        method: "POST",
+        path: "/tutor/profile/history",
+        tags: ["Tutor"],
+        summary: "Get tutor profile history",
+        description: "Returns the tutor profile review and photo history",
+      })
+      .input(z.void())
+      .handler(handler.getMyProfileHistory),
+
     updateMyProfile: tutorProcedure
       .route({
         method: "POST",

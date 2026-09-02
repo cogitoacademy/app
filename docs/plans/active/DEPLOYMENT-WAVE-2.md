@@ -373,4 +373,4 @@ trivially on the others).
 - **Admin DLQ reader** RPC (read-only).
 - **WAL archiving / point-in-time recovery** (only if sub-24h recovery becomes a requirement).
 - **Xendit go-live**: sandbox E2E → one real small transaction → swap keys.
-- **Google OAuth verification video** (removes the unverified warning for real users).
+- **Google OAuth verification video** (operator deliverable: record the Google permission screen with **Show all services** expanded, provide active test credentials, and include step-by-step navigation; the app now forces `prompt=consent`).

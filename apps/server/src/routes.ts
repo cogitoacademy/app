@@ -6,6 +6,7 @@ import type { RateLimitResult } from "@cogito-app/api/lib/rate-limit";
 import { getRedisClient } from "@cogito-app/api/lib/redis";
 import { SECURITY_HEADERS } from "@cogito-app/api/lib/security-headers";
 import { MAX_UPLOAD_BYTES } from "@cogito-app/api/modules/upload/upload.types";
+import { USER_ROLE } from "@cogito-app/api/shared/constants";
 import { recordRequest, getMetrics } from "@cogito-app/api/lib/metrics";
 import { auth, assertPasswordPolicy } from "@cogito-app/auth";
 import { isAllowedFrontendOrigin } from "@cogito-app/env/origins";
@@ -375,13 +376,17 @@ export function createServer() {
           set.status = 401;
           return { error: "Unauthorized" };
         }
-        if (sessionUser.role !== "student") {
+        const isStudent = sessionUser.role === USER_ROLE.STUDENT;
+        const isTutor = sessionUser.role === USER_ROLE.TUTOR;
+        const isAdmin = sessionUser.role === USER_ROLE.ADMIN;
+        if (!isStudent && !isTutor && !isAdmin) {
           set.status = 403;
           return { error: "Forbidden" };
         }
 
         const access = await context.services.wallet.knowledgeBankEligible(
           sessionUser.id,
+          sessionUser.role,
         );
         if (!access.eligible) {
           set.status = 403;

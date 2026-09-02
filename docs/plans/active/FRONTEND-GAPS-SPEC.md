@@ -2,10 +2,10 @@
 
 | Field      | Value                                                                                                                                                                                                                                                          |
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status     | Living gap inventory (updated 2026-08-31; F1/F8/F9/F13/F14/F18 closed; F16 scope retired; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F12 closed; competition taxonomy and tutor-achievement-format follow-ups implemented; meeting fallback follow-up added) |
+| Status     | Living gap inventory (updated 2026-09-01; F1/F8/F9/F13/F14/F18 closed; F16 scope retired; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F12 closed; competition taxonomy and tutor-achievement-format follow-ups implemented; meeting fallback follow-up added) |
 | Branch     | `f/frontend-prd-gaps` (merged #55); `f/competition-taxonomy` (PR pending)                                                                                                                                                                                      |
 | Created    | 2026-07-29                                                                                                                                                                                                                                                     |
-| Audited    | 2026-08-31                                                                                                                                                                                                                                                     |
+| Audited    | 2026-09-01                                                                                                                                                                                                                                                     |
 | Depends on | Backend PRD gaps (G1-G19) where API is needed                                                                                                                                                                                                                  |
 | Scope      | Frontend surfaces plus the admin queue projection needed for SLA detail (`apps/web/`, `packages/api/`)                                                                                                                                                         |
 
@@ -29,28 +29,65 @@ initial empty form. No API or database shape changed. Published tutors may updat
 from this surface at any time; the new rate applies to future bookings while
 existing booking snapshots remain authoritative for weekly payout.
 
-The tutor profile route now uses one route-owned vertical scroll container while
-the authenticated shell is contained, preventing the form and shell from
-scrolling independently. Subject-category fieldsets retain natural heights so
-short categories do not create large blank areas, and the action bar has no
-extra bottom gap. This is presentation-only and does not change any API or
-database contract.
+All roles now use Better Auth `user.name` as the one visible name. Tutor
+onboarding edits the account field directly and no longer submits the legacy
+tutor-profile `displayName`;
+discovery, booking, dashboards, sidebar, and admin review render `user.name`.
+The compatible discovery response key remains but is projected from the user
+record. No database field is removed in this compatibility step.
+
+The tutor profile route now uses the authenticated shell's page-level vertical
+scroll container, matching the student profile and avoiding an inner form
+scrollbar. Direct shell children cannot flex-shrink, so the tutor wrapper and
+onboarding root share the form's natural height. Subject-category fieldsets retain natural heights so
+short categories do not create large blank areas. The final action card stays
+in normal document flow so it cannot leave trailing scroll space. This is
+presentation-only and does not change any API or database contract.
+
+### Tutor profile validation and save actions follow-up (2026-09-01)
+
+The tutor profile editor now keeps progress saving separate from review
+submission. **Save draft** (or **Save profile changes** for a published profile)
+allows incomplete required top-level fields, while malformed values are shown on
+the individual control, repeated in a compact validation summary, and included
+in first-error focus behavior. **Submit for review** applies the complete
+required-field gate before saving and submitting. API-side incomplete-profile and
+pricing errors preserve their field details so the editor can highlight the
+affected area instead of showing only a generic failure. The RPC paths and
+request envelope remain unchanged. Published tutors keep both actions available
+while an edit proposal is under review: saving updates the pending proposal,
+and submitting validates and queues the latest version.
+
+### Role-aware login destination follow-up (2026-08-31)
+
+The web login handoff now reads the existing tutor profile onboarding status
+before selecting the default destination. Tutors without a profile, or with
+`draft`/`changes_requested` status, go to `/profile` so they can complete or
+correct onboarding. Tutors whose profile has moved into review, approval,
+publication, or suspension, along with admins and students, go to
+`/dashboard`. A validated `redirect` query remains an explicit return path,
+and the same destination is preserved through `/verify-email` for unverified
+accounts. This is frontend routing only and adds no API or database contract.
 
 ### Tutor profile and payout privacy follow-up (2026-08-28)
 
-Tutor onboarding now has one structured Achievements section and one multiline Experiences field, with legacy achievement/credential text retained as a fallback. Availability-summary and credential-proof inputs are retired. Base honorarium is adjusted only through Rp 5,000 minus/plus controls and its six group-size outcomes are shown in tables. Tutor portraits use a source-upload/admin-edited-public-photo workflow. Tutor payout details expose only completed sessions and IDR honorarium, removing take-rate and Marks terminology from the tutor interface.
+Tutor onboarding now has one structured Achievements section and one structured Experiences section, with legacy achievement/credential/experience text retained as a fallback. Achievement and experience entries use repeatable cards with bounded year fields; year values remain ungrouped, and an ongoing experience leaves End year blank. Client-side max-length checks measure the trimmed value to match the API schemas. Availability-summary and credential-proof inputs are retired. Base honorarium is adjusted only through Rp 5,000 minus/plus controls and its six group-size outcomes are shown in tables. Tutor portraits use a staged source-to-final workflow: the tutor submits one uploaded source image, an admin uploads the background-standardized replacement, and approval/publication promotes that replacement to the canonical public image; the tutor/admin surfaces expose the review history. Tutor-facing history shows actor names/types without account emails. Tutor payout details expose only completed sessions and IDR honorarium, removing take-rate and Marks terminology from the tutor interface.
 
-Achievement and Experience sections now each accept an optional list of supporting proof URLs. They are visible to admins during review, participate in the protected edit-review flow, and are intentionally omitted from public tutor discovery.
+Achievement and Experience sections retain separate optional proof URL fields for compatibility. The tutor-facing copy recommends putting both evidence types in one Google Drive folder with the “Anyone with the link can view” setting. The URLs remain visible to admins during review, participate in the protected edit-review flow, and are intentionally omitted from public tutor discovery.
+
+### Tutor experience formatting follow-up (2026-08-31)
+
+The Experiences section now stores up to five structured `experienceEntries` with role, organization, start year, nullable end year, and brief description. The API keeps legacy `experiences` text as a compatibility fallback, while public discovery and admin review render structured entries when present. Migration `0040_colossal_morlun.sql` adds the JSONB array with an empty-array default.
 
 ### Tutor achievement formatting follow-up (2026-08-31)
 
-Tutor onboarding captures structured education (up to 2 entries) and one structured competition-achievement section (up to 5 entries) alongside one multiline Experiences field. Each competition entry stores a name, year, and one or more award titles; the editor accepts comma-separated awards, keeps year values ungrouped, and previews the public format with a bold first line and readable spacing. Published tutor discovery returns the structured arrays and falls back to legacy achievement/credential text for older profiles. Admin tutor review includes an **Edit format** action backed by `adminTutor.updateTutorAchievements`, optimistic `version` checks, and an audit event for corrections. Migration `0039_secret_blink.sql` adds the two JSONB fields after the migrations already present on `main`.
+Tutor onboarding captures structured education (up to 2 entries) and one structured competition-achievement section (up to 5 entries) alongside one multiline Experiences field. Each competition entry stores a name, year, and one or more award titles; the editor accepts comma-separated awards, keeps an in-progress comma visible while the next title is being typed, keeps year values ungrouped, and previews the public format with a bold first line and readable spacing. Experience role, organization, and description text preserves comma punctuation. Published tutor discovery returns the structured arrays and falls back to legacy achievement/credential text for older profiles. Admin tutor review includes an **Edit format** action backed by `adminTutor.updateTutorAchievements`, optimistic `version` checks, and an audit event for corrections. Migration `0039_secret_blink.sql` adds the two JSONB fields after the migrations already present on `main`.
 
 ### Subject taxonomy follow-up (2026-08-25)
 
 Tutor onboarding now uses the normalized competition category/child-subject catalog exposed by `tutors.listSubjects`. The current catalog has seven categories and 33 child subjects. Tutors must select at least one current child subject before submitting for review, and the student tutor catalog supports category and child-subject filters. Archived legacy subjects remain visible on existing tutor profiles but cannot be newly selected. The legacy expertise field remains a compatibility fallback; future category changes should preserve the pending-review behavior for published profiles.
 
-The onboarding selector stores normalized IDs for persistence and renders all current categories with keyboard-accessible checkboxes. Selected subjects appear as chips, while archived profile subjects are shown read-only. The tutor list continues to support selecting multiple mother categories and child subjects; child options are the union of the selected categories, the API matches selected values within each facet, and the list query debounces rapid search/filter changes by 300 ms.
+The onboarding selector stores normalized IDs for persistence and renders all current categories with keyboard-accessible checkboxes. Tutors may select at most 7 active child subjects; the selector shows the cap and current count, disables an eighth choice, and the submit/API validation rejects any over-limit payload. Selected subjects appear as chips, while archived profile subjects are shown read-only. The tutor list continues to support selecting multiple mother categories and child subjects; child options are the union of the selected categories, the API matches selected values within each facet, and the list query debounces rapid search/filter changes by 300 ms.
 
 ### Admin tutor review readability follow-up (2026-08-27)
 
@@ -75,6 +112,31 @@ The authenticated shell's existing Light/Dark/System menu now also responds to `
 ### Profile UX follow-up (2026-08-22)
 
 The student profile and tutor onboarding surfaces now share a responsive account-identity editor. Student learning and parent/guardian fields are separated into clear cards with a completion indicator and one learning-profile save action. Tutor onboarding keeps profile status and review feedback visible, groups public profile/teaching setup/availability fields, presents pricing in a compact responsive grid, and consolidates draft/save/submit actions into a sticky footer. No profile or auth API contracts changed.
+
+The tutor profile photo upload now appears before the rest of the editable profile fields and uses the same compact clickable-avatar crop interaction as the student editor. Published tutors see current and proposed photos separately, with explicit review messaging; full image previews open on demand through the shared Selia `InfoPreview` popover. The admin review drawer compares those assets side by side and approval promotes the proposed URL through the existing pending-change contract.
+
+The admin tutor index now surfaces the edit-review state in its status badge: a published tutor with submitted changes is shown as **Edit review**, while a returned edit is shown as **Revision requested**, so pending work is visible without opening each drawer.
+
+### Student profile photo crop follow-up (2026-08-31)
+
+The student identity card now uses its avatar as the compact photo-picker trigger, with a pencil badge indicating editability. Clicking it retains the existing upload, circular crop, and save flow while removing the separate photo input from the card body.
+
+The student account-identity editor now accepts a local JPG, PNG, or WebP upload
+instead of a manually entered image URL. A circular crop dialog supports pointer
+dragging and zoom before producing a 512px square JPEG. The client uploads that
+asset through the existing protected `upload.createUploadUrl` flow, keeps the
+returned URL in the account form, and only applies it through Better Auth when
+the student saves account details. The existing upload RPC now also receives the
+cropped blob's `contentLength`; no new RPC or persistence contract was added.
+
+### R2 browser upload follow-up (2026-09-01)
+
+The shared upload module now uses the Cloudflare-supported presigned `PUT`
+flow for R2; the previous multipart-form `POST` flow returned
+`501 NotImplemented`. Upload requests carry the exact cropped file length so
+the presigned request remains bounded to the 5 MB module limit. The upload
+bucket also has CORS rules for the local and production frontend origins,
+allowing `GET`, `PUT`, and `HEAD` with `Content-Type`.
 
 ### Auth form validation follow-up (2026-08-25)
 
@@ -177,6 +239,16 @@ failed Google attempts remain `confirmed` for the 5-minute retry job. Manual
 admin links update the newest meeting-attempt row so the detail read remains
 consistent after retries.
 
+### Admin booking-detail modal readability follow-up (2026-08-31)
+
+The admin Operations booking-detail modal now uses an admin-only responsive
+width override, so it opens as a wide desktop inspector without changing the
+shared/student dialog sizing. Its content area remains vertically scrollable,
+the header and footer stay stable, summary metrics step down from four columns
+to two on smaller screens, and participant/wallet cards use a non-stretching
+responsive split. This is presentation-only; no RPC, schema, or persistence
+contract changed.
+
 ---
 
 ## Current Frontend State
@@ -198,7 +270,7 @@ for classmates.
 | `/_app/dashboard`            | role-specific dashboard pages             | Complete — student, tutor, and admin next-action views using existing oRPC data                                                                                      |
 | `/_app/balance`              | balance-page.tsx                          | Exists (wallet + Knowledge Bank card)                                                                                                                                |
 | `/_app/calendar`             | competition-calendar-page.tsx             | Complete — authenticated, English-only read-only calendar backed by published Sanity content                                                                         |
-| `/_app/knowledge-bank`       | knowledge-bank-page.tsx                   | Complete — student-only 35-Mark gate, metadata search/filter, and protected PDF preview                                                                              |
+| `/_app/knowledge-bank`       | knowledge-bank-page.tsx                   | Complete — student 35-Mark gate plus unrestricted tutor/admin access, metadata search/filter, and protected PDF preview                                              |
 | `/_app/bookings`             | bookings-page.tsx                         | Exists (role-scoped list and lifecycle entry points)                                                                                                                 |
 | `/_app/bookings/$bookingId`  | booking-detail-page.tsx                   | Complete baseline — detail, lifecycle, reschedule, reporting, invites, notes, history                                                                                |
 | `/_app/tutors`               | tutors-page-content.tsx                   | Exists (discovery list)                                                                                                                                              |
@@ -239,7 +311,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 | F12 | Admin room approval UI                        | FR-22                  | G14                                                    | 1d     | **Closed (room approval queue)**                                                                                               |
 | F13 | Tutor payout view                             | DL-11                  | G16 (`tutor.getMyPayouts` exists since #43)            | 0.5d   | **Closed (REVIEW-FIXES-3 P6)**                                                                                                 |
 | F14 | Group series no opt-out disclaimer display    | FR-20                  | G15                                                    | 0.5d   | **Closed (REVIEW-FIXES-3 P6)**                                                                                                 |
-| F15 | Knowledge Bank gating flow (full)             | FR-12                  | Sanity content module + protected file proxy           | 1.5d   | **Closed (student-only app content with protected files)**                                                                     |
+| F15 | Knowledge Bank gating flow (full)             | FR-12                  | Sanity content module + protected file proxy           | 1.5d   | **Closed (student-gated and tutor/admin-accessible app content with protected files)**                                         |
 | F16 | Achievements public landing surfacing         | FR-18                  | No active app landing route; public procedure retained | 1d     | **Scope retired (2026-08-23)**                                                                                                 |
 | F17 | Booking detail page (implemented baseline)    | FR-07, FR-08           | G6, G11                                                | 2d     | Closed                                                                                                                         |
 | F18 | Group invite accept/decline/reconfirm UI      | FR-20, TC-25           | G15                                                    | 1d     | **Closed** — invitee actions plus proposer-side pending-invite withdrawal                                                      |
@@ -595,7 +667,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-12, DL-16
 
-**Current state:** **CLOSED (2026-08-23).** The balance page and authenticated Knowledge Bank route use the server-side `wallet.knowledgeBankEligible` rule. Eligible students see published Sanity resource metadata and protected PDF previews; below-threshold students remain in the app with a top-up CTA.
+**Current state:** **CLOSED (2026-08-23; tutor/admin access expanded 2026-09-01).** The authenticated Knowledge Bank route uses the server-side `wallet.knowledgeBankEligible` rule. Eligible students (at least 35 total Marks), all authenticated tutors, and all authenticated admins see published Sanity resource metadata and protected PDF previews; below-threshold students remain in the app with a top-up CTA.
 
 **Required:**
 
@@ -608,6 +680,8 @@ Full override form per PRD §Emergency Override UI/UX:
 
 - Student with ≥35 Marks → can open Knowledge Bank, no deduction
 - Student with <35 Marks → blocked, prompted to top up
+- Tutor with 0 Marks → can open Knowledge Bank and protected files, no threshold
+- Admin with 0 Marks → can open Knowledge Bank and protected files, no threshold
 - Copy is parent-legible (prd.tex:315)
 - Resource files are streamed through the authenticated app server; Sanity asset URLs are not exposed to the browser
 
@@ -743,9 +817,38 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 
 ### Version Notes
 
+- v1.56 (2026-09-01): Limited tutor short bios to 50 whitespace-delimited words, added a live word counter and matching API validation, and updated achievement/experience proof guidance to recommend one shared Google Drive folder with the “Anyone with the link can view” setting. The RPC shape and database schema are unchanged.
+
+- v1.55 (2026-09-01): Standardized every role on Better Auth `user.name`, removed the tutor-profile name input/payload from onboarding, switched tutor search and visible tutor surfaces to the user record, and retained `tutorProfile.displayName` only as legacy compatibility data. No schema field was removed.
+
+- v1.55 (2026-09-01): Combined the tutor Education, Competition achievements, and Experiences public previews into one preview inside the shared Achievements & experience card. No RPC, schema, or persistence contract changed.
+
+- v1.54 (2026-09-01): Unified tutor profile scrolling with the authenticated shell's page-level scroller to match the student profile, prevented direct page children from flex-shrinking below the form's natural height, removed the nested form scrollbar, and returned the final action card to normal document flow to eliminate trailing scroll space. No RPC, schema, or persistence contract changed.
+
+- v1.53 (2026-09-01): Grouped tutor education, competition achievements, experiences, and their separate proof-link fields into one combined Achievements & experience profile card. No RPC, schema, or persistence contract changed.
+
+- v1.52 (2026-09-01): Set independent Manage Tutors page sizes to 3 invitations and 5 tutor profiles while retaining separate pagination state. No RPC, schema, or persistence contract changed.
+
+- v1.51 (2026-09-01): Fixed the Manage Tutors invitation-table badge mapping so invited is warning, accepted is success, and expired/revoked are danger, with a secondary fallback for unknown values. No RPC, schema, or persistence contract changed.
+
+- v1.50 (2026-09-01): Granted tutors and admins Knowledge Bank access without the student 35-Mark wallet threshold across the sidebar, route guard, resource list, and protected file proxy; students retain the existing threshold. Added role-specific API, module, runbook, and regression coverage.
+
+- v1.48 (2026-09-01): Capped tutor profile subject selection at 7 active child subjects, added explicit frontend submit validation, and kept the API limit aligned with the selector. Updated the tutor taxonomy smoke check and module/API references.
+
+- v1.49 (2026-09-01): Preserved in-progress comma punctuation in the structured tutor achievement editor while keeping comma-separated awards normalized for the existing payload; documented punctuation coverage for achievement and experience text. No API, schema, or persistence contract changed.
+
+- v1.46 (2026-08-31): Made the post-login destination role/onboarding-aware: incomplete or changes-requested tutors go to `/profile`, tutors past onboarding and admins go to `/dashboard`, and the selected destination is preserved through email verification. No API or schema contract changed.
+
+- v1.47 (2026-09-01): Switched R2 uploads from unsupported multipart-form POST to presigned PUT, added exact content-length input/signing, fixed local raw-body upload credentials for the tutor flow, and configured bucket CORS for browser uploads.
+
+- v1.44 (2026-08-31): Made the shared Selia `Drawer.Content` the sole vertical scroll container for student tutor discovery and admin tutor-review drawers, kept profile headers/action footers outside that scroll area, and contained body overscroll so it cannot move the fixed regions. No RPC, schema, or persistence contract changed.
+
+- v1.45 (2026-08-31): Replaced the student account image URL input with a JPG/PNG/WebP upload flow, added circular drag/zoom cropping to a 512px square JPEG, and wired the result through the existing protected upload URL plus Better Auth account save. No new RPC, schema, or persistence contract.
+
 - v1.42 (2026-08-31): Contained tutor `/profile` scrolling to one route-owned vertical scroller, removed the action-bar bottom gap, and kept subject-category fieldsets at natural heights. No RPC, schema, or persistence contract changed.
 
 - v1.40 (2026-08-31): Tightened CI coverage enforcement so `packages/api` lines, overall lines, overall functions, and overall branches must each reach 100% from the shared lcov artifact. The 0/0 branch case is treated as 100%; no runtime or API contract changed.
+- v1.43 (2026-08-31): Replaced the tutor Experiences text area with one structured repeatable section backed by up to five `experienceEntries`, added start/end-year validation without grouping separators, kept legacy `experiences` text as a fallback, exposed the structured entries in discovery/admin review, and added migration `0040_colossal_morlun.sql`.
 - v1.41 (2026-08-31): Simplified tutor profile input to one structured Achievements section plus one Experiences field, kept legacy achievement text as a fallback, and disabled grouping separators in competition-achievement years. The submit validator accepts either structured competition achievements or legacy achievement text.
 - v1.39 (2026-08-31): Kept profile contact-privacy and tutor-onboarding validation parts under Selia `Field` roots, including structured-achievement section errors, so Base UI error #28 cannot turn an inline validation state into a generic client-side 500. No RPC, schema, persistence, or URL contract changed.
 - v1.38 (2026-08-31): Added structured tutor education and competition achievements with 2/5 entry caps, bold-first-line public rendering, legacy `credentialsSummary` fallback, migration `0039_secret_blink.sql`, and admin correction through `adminTutor.updateTutorAchievements` with optimistic locking and audit logging.
@@ -790,3 +893,10 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 - v1.2 (2026-08-16): Re-audited against open PR #55 (`f/frontend-prd-gaps`, 25 commits). Marked F2/F3/F6/F7/F11/F17 as covered by the PR (Closed* = pending merge), F1/F9/F12 as partial-after-PR, and corrected F13's backend note (`tutor.getMyPayouts` exists since #43). Flagged the PR's blockers (red CI unused `proposedEndAt`; migration 0020 achievement-column schema mismatch; undeclared F18/J2/dead-components section deletions) — tracked in REVIEW-FIXES-3 P2. Still open after PR #55: F8, F13, F14, F16, F18-withdraw, J2, dead-components cleanup.
 - v1.1 (2026-08-14): Full frontend audit at `apps/web` git HEAD `9b7df5e`. Corrected the "Current Frontend State" routes table (was stale — e.g. notifications page existed). Statuses updated: F4, F5, F10, F15 → **Closed**; F8, F16, F17 → **Partial**; F1-F3, F6, F7, F9, F11-F14 → **Missing**. Added gaps F18 (group invite accept/decline/reconfirm UI), J2 (session expiry UX), and a dead-components cleanup note. Effort revised from ~20d to ~15d for the remaining ~10 gaps.
 - v1.0 (2026-07-29): Created. 17 frontend gaps catalogued (F1-F17) with PRD references, backend dependencies, and acceptance criteria. Derived from PRD §Product Surfaces and audit of `apps/web/src/`. Runs parallel with backend PRD-GAPS-SPEC.md.
+
+### Tutor drawer scroll follow-up (2026-09-01)
+
+Student discovery and admin tutor-review drawers now give `Drawer.Content` the
+single vertical scroll region. Headers and action footers stay outside that
+region, while local body overscroll remains contained. No RPC, schema, or
+persistence contract changed.

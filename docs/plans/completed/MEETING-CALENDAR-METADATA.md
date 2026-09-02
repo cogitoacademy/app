@@ -19,6 +19,11 @@ events and future retry-created events use the new format. Booking creation
 validates the tutor subcategory and snapshots its category/subcategory metadata
 in `booking.session_topic` via migration 0037.
 
+The authenticated booking list and detail header now reuse the same canonical
+event-title formatter. Group bookings therefore show the compact
+`Cogito - {Competition} | {Tutor} x {Student} & Friends` title in-app as well as
+in Google Calendar/Meet; participant names remain available in the roster.
+
 ## Follow-up (2026-08-28)
 
 The booking form now presents the pre-session context as one `Session Notes`
@@ -35,4 +40,5 @@ compatibility carrier for now; file upload/Calendar attachments are deferred.
 - `booking.service.test.ts`: scheduling passes the tutor/student title,
   Session Notes (including a reference link), and booking deep link to the
   meeting port.
+- `booking-event-title.test.ts`: solo, group, and legacy-booking title parity.
 - Workspace type-check completed successfully.

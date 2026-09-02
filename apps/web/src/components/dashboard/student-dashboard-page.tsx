@@ -242,7 +242,7 @@ function RecommendedTutorsCard({
 }
 
 function RecommendedTutor({ tutor }: { tutor: TutorSummaryData }) {
-  const tutorName = tutor.displayName ?? tutor.user?.name ?? "Cogito Tutor";
+  const tutorName = tutor.user?.name ?? "Cogito Tutor";
 
   return (
     <TutorSummary

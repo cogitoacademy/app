@@ -1,4 +1,5 @@
 import { adminProcedure } from "../../procedures";
+import { z } from "zod";
 import {
   createInviteInput,
   listInvitesInput,
@@ -92,6 +93,17 @@ export function createAdminTutorRouter(handler: AdminTutorHandler) {
       })
       .input(listTutorProfilesInput)
       .handler(handler.listTutorProfiles),
+
+    listTutorProfileHistory: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/tutors/profiles/history",
+        tags: ["Admin Tutors"],
+        summary: "List tutor profile history",
+        description: "Returns the tutor profile review and photo history",
+      })
+      .input(z.object({ tutorProfileId: z.string().max(100) }))
+      .handler(handler.listTutorProfileHistory),
 
     reviewTutorProfile: adminProcedure
       .route({

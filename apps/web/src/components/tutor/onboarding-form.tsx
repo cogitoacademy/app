@@ -1,8 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useRouter } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@cogito-app/ui/components/selia/avatar";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
@@ -35,6 +40,10 @@ import {
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import {
+  countTutorShortBioWords,
+  MAX_TUTOR_SHORT_BIO_WORDS,
+} from "@cogito-app/api/modules/tutor/tutor.types";
+import {
   IconAlertTriangle,
   IconBuildingBank,
   IconPhoto,
@@ -43,18 +52,35 @@ import {
   IconUser,
 } from "@tabler/icons-react";
 
-import { authClient } from "@/lib/auth-client";
-import { AccountIdentityCard } from "@/components/profile/account-identity-card";
 import { getUserFacingError } from "@/lib/error-message";
-import { client, orpc } from "@/utils/orpc";
+import { authClient } from "@/lib/auth-client";
+import { resolveProfileImageUrl } from "@/lib/profile-image-url";
+import { ProfileImagePicker } from "@/components/profile/profile-image-picker";
+import { ProfilePhotoPreview } from "@/components/profile/profile-photo-preview";
+import { orpc } from "@/utils/orpc";
 import { TutorPricingFields } from "./tutor-pricing-fields";
 import {
+  TutorAchievementsDisplay,
   TutorAchievementsEditor,
   type TutorCompetitionAchievement,
   type TutorEducationEntry,
   validateTutorAchievementDraft,
 } from "./tutor-achievements";
-import { SubjectSelector, type TutorSubject } from "./subject-taxonomy";
+import {
+  TutorExperiencesDisplay,
+  TutorExperiencesEditor,
+  type TutorExperienceEntry,
+  validateTutorExperienceDraft,
+} from "./tutor-experiences";
+import {
+  MAX_TUTOR_SUBJECTS,
+  SubjectSelector,
+  type TutorSubject,
+} from "./subject-taxonomy";
+import {
+  ProfilePhotoHistory,
+  type ProfilePhotoHistoryEntry,
+} from "./profile-photo-history";
 
 type Modality = "online" | "offline" | "both";
 type BankAccountOwnership = "self" | "trusted_person";
@@ -72,6 +98,7 @@ const TUTOR_STATUS_BADGES: Record<string, TutorStatusBadge> = {
   published: { label: "Published", variant: "success" },
   suspended: { label: "Suspended", variant: "danger" },
 };
+const EMPTY_PROFILE_HISTORY: ProfilePhotoHistoryEntry[] = [];
 
 interface OnboardingFormProps {
   accountUser: {
@@ -88,9 +115,10 @@ interface OnboardingFormProps {
     experiences: string | null;
     achievementProofUrls: string[] | null;
     experienceProofUrls: string[] | null;
-    sourcePhotoUrl: string | null;
+    user?: { image: string | null } | null;
     education: TutorEducationEntry[] | null;
     competitionAchievements: TutorCompetitionAchievement[] | null;
+    experienceEntries: TutorExperienceEntry[] | null;
     expertise: string[];
     subjects?: TutorSubject[] | null;
     modality: string | null;
@@ -110,10 +138,11 @@ interface OnboardingFormProps {
       experiences: string;
       achievementProofUrls: string[];
       experienceProofUrls: string[];
-      sourcePhotoUrl: string;
+      profileImageUrl: string;
       credentialsSummary: string;
       education: TutorEducationEntry[];
       competitionAchievements: TutorCompetitionAchievement[];
+      experienceEntries: TutorExperienceEntry[];
       expertise: string[];
       subjectIds: string[];
       modality: Modality;
@@ -124,6 +153,7 @@ interface OnboardingFormProps {
     profileEditAdminNote: string | null;
     version: number;
   };
+  profileHistory?: ProfilePhotoHistoryEntry[];
 }
 
 function haveSameSubjectIds(left: readonly string[], right: readonly string[]) {
@@ -132,14 +162,236 @@ function haveSameSubjectIds(left: readonly string[], right: readonly string[]) {
   return left.every((subjectId) => rightSet.has(subjectId));
 }
 
-export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
+const TUTOR_FIELD_LABELS: Record<string, string> = {
+  name: "Name",
+  shortBio: "Short bio",
+  competitionAchievements: "Competition achievements",
+  experienceEntries: "Experience entries",
+  profileImageUrl: "Profile photo",
+  modality: "Teaching modality",
+  bankName: "Bank",
+  bankAccountNumber: "Account number",
+  bankAccountHolderName: "Account holder name",
+  bankAccountOpeningCity: "Account opening city/regency",
+  bankAccountOwnership: "Account ownership",
+  bankTransferDisclaimerAccepted: "Transfer-account confirmation",
+  subjects: "Subjects and competition tracks",
+  baseRatesIdr: "Base honorarium",
+  education: "Education",
+  achievementProofUrls: "Achievement proof links",
+  experienceProofUrls: "Experience proof links",
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isExternalHttpUrl(value: string) {
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function mapServerFieldKey(field: string) {
+  if (field === "subjectIds" || field.startsWith("subjectIds.")) {
+    return "subjects";
+  }
+  if (field === "prices") return "baseRatesIdr";
+  if (field.startsWith("prices.")) {
+    return `baseRatesIdr.${field.slice("prices.".length)}`;
+  }
+  return field;
+}
+
+function getTutorFieldLabel(field: string) {
+  if (TUTOR_FIELD_LABELS[field]) return TUTOR_FIELD_LABELS[field];
+
+  const educationField = field.match(/^education\.(\d+)\.(\w+)$/);
+  if (educationField) {
+    const [, index, name] = educationField;
+    return `Education ${Number(index) + 1}: ${
+      name === "university" ? "University" : "Degree"
+    }`;
+  }
+
+  const achievementField = field.match(
+    /^competitionAchievements\.(\d+)\.(\w+)$/,
+  );
+  if (achievementField) {
+    const [, index, name] = achievementField;
+    const labels: Record<string, string> = {
+      competitionName: "Competition name",
+      year: "Year",
+      awards: "Award titles",
+    };
+    return `Achievement ${Number(index) + 1}: ${labels[name] ?? name}`;
+  }
+
+  const experienceField = field.match(/^experienceEntries\.(\d+)\.(\w+)$/);
+  if (experienceField) {
+    const [, index, name] = experienceField;
+    const labels: Record<string, string> = {
+      role: "Role or position",
+      organization: "Organization or company",
+      startYear: "Start year",
+      endYear: "End year",
+      description: "Description",
+    };
+    return `Experience ${Number(index) + 1}: ${labels[name] ?? name}`;
+  }
+
+  const rateField = field.match(/^baseRatesIdr\.(online|offline)$/);
+  if (rateField) {
+    return `${rateField[1] === "online" ? "Online" : "Offline"} base rate`;
+  }
+
+  const proofField = field.match(/^(achievement|experience)ProofUrls\.(\d+)$/);
+  if (proofField) {
+    return `${proofField[1] === "achievement" ? "Achievement" : "Experience"} proof link ${Number(proofField[2]) + 1}`;
+  }
+
+  return field.replaceAll(/([A-Z])/g, " $1");
+}
+
+function getVisibleTutorErrors(errors: Record<string, string>) {
+  const keys = Object.keys(errors);
+  return Object.entries(errors).filter(
+    ([field]) =>
+      !keys.some(
+        (childField) =>
+          childField !== field && childField.startsWith(`${field}.`),
+      ),
+  );
+}
+
+function getTutorErrorFocusTarget(
+  field: string,
+  hasCompetitionEntries: boolean,
+  hasExperienceEntries: boolean,
+) {
+  const educationField = field.match(/^education\.(\d+)\.(university|degree)$/);
+  if (educationField) {
+    return `tutor-achievements-${educationField[2]}-${educationField[1]}`;
+  }
+
+  const achievementField = field.match(
+    /^competitionAchievements\.(\d+)\.(competitionName|year|awards)$/,
+  );
+  if (achievementField) {
+    return `tutor-achievements-${
+      achievementField[3] === "competitionName"
+        ? "competition"
+        : achievementField[3]
+    }-${achievementField[2]}`;
+  }
+
+  const experienceField = field.match(
+    /^experienceEntries\.(\d+)\.(role|organization|startYear|endYear|description)$/,
+  );
+  if (experienceField) {
+    return `tutor-experiences-${
+      experienceField[3] === "startYear"
+        ? "start-year"
+        : experienceField[3] === "endYear"
+          ? "end-year"
+          : experienceField[3]
+    }-${experienceField[2]}`;
+  }
+
+  const rateField = field.match(/^baseRatesIdr\.(online|offline)$/);
+  if (rateField) return `tutor-base-rate-${rateField[1]}`;
+  if (field === "subjects") return "tutor-subject-category";
+  if (field === "education") return "tutor-achievements-university-0";
+  if (field === "competitionAchievements") {
+    return hasCompetitionEntries
+      ? "tutor-achievements-competition-0"
+      : "tutor-achievements-competition-add";
+  }
+  if (field === "experienceEntries") {
+    return hasExperienceEntries
+      ? "tutor-experiences-role-0"
+      : "tutor-experiences-add";
+  }
+  if (field === "shortBio") return "tutor-short-bio";
+  if (field === "profileImageUrl") return "tutor-profile-image";
+  if (field.startsWith("achievementProofUrls.")) {
+    return "tutor-achievement-proofs";
+  }
+  if (field.startsWith("experienceProofUrls.")) {
+    return "tutor-experience-proofs";
+  }
+  return `tutor-${field}`;
+}
+
+function readServerFieldErrors(error: unknown) {
+  const fieldErrors: Record<string, string> = {};
+  if (!isRecord(error) || !isRecord(error.data)) return fieldErrors;
+
+  const data = error.data;
+  if (Array.isArray(data.missingFields)) {
+    for (const field of data.missingFields) {
+      if (typeof field === "string") {
+        fieldErrors[mapServerFieldKey(field)] = "Required.";
+      }
+    }
+  }
+
+  if (typeof data.pricingError === "string") {
+    const normalized = data.pricingError.toLowerCase();
+    const field = normalized.includes("offline")
+      ? "baseRatesIdr.offline"
+      : normalized.includes("online")
+        ? "baseRatesIdr.online"
+        : "baseRatesIdr";
+    fieldErrors[field] = data.pricingError;
+  }
+
+  if (
+    typeof data.reason === "string" &&
+    ["required", "too_many", "duplicate", "not_child", "inactive"].includes(
+      data.reason,
+    )
+  ) {
+    fieldErrors.subjects =
+      data.reason === "too_many"
+        ? `Select no more than ${MAX_TUTOR_SUBJECTS} child subjects.`
+        : data.reason === "required"
+          ? "Select at least one child subject."
+          : "Some selected subjects are no longer available. Update your selection.";
+  }
+
+  if (Array.isArray(data.issues)) {
+    for (const issue of data.issues) {
+      if (!isRecord(issue) || !Array.isArray(issue.path)) continue;
+      const path = issue.path
+        .filter(
+          (part): part is string | number =>
+            typeof part === "string" || typeof part === "number",
+        )
+        .filter((part) => part !== "json")
+        .join(".");
+      if (!path) continue;
+      const message =
+        typeof issue.message === "string"
+          ? issue.message
+          : "Check this field and try again.";
+      fieldErrors[mapServerFieldKey(path)] = message;
+    }
+  }
+
+  return fieldErrors;
+}
+
+export function OnboardingForm({
+  accountUser,
+  profile,
+  profileHistory = EMPTY_PROFILE_HISTORY,
+}: OnboardingFormProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const router = useRouter();
-  const [accountForm, setAccountForm] = useState({
-    name: accountUser.name,
-    image: accountUser.image ?? "",
-  });
   const pending = profile.pendingProfileChanges ?? {};
   const legacySubjectIds = new Set(
     profile.subjects
@@ -155,7 +407,6 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       .map((subject) => subject.id) ??
     [];
   const [form, setForm] = useState({
-    displayName: pending.displayName ?? profile.displayName ?? "",
     shortBio: profile.shortBio ?? "",
     achievements:
       pending.achievements ??
@@ -167,10 +418,13 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       pending.achievementProofUrls ?? profile.achievementProofUrls ?? [],
     experienceProofUrls:
       pending.experienceProofUrls ?? profile.experienceProofUrls ?? [],
-    sourcePhotoUrl: pending.sourcePhotoUrl ?? profile.sourcePhotoUrl ?? "",
+    profileImageUrl:
+      pending.profileImageUrl ?? profile.user?.image ?? accountUser.image ?? "",
     education: pending.education ?? profile.education ?? [],
     competitionAchievements:
       pending.competitionAchievements ?? profile.competitionAchievements ?? [],
+    experienceEntries:
+      pending.experienceEntries ?? profile.experienceEntries ?? [],
     expertise: pending.expertise ?? profile.expertise ?? [],
     subjectIds: initialSubjectIds,
     modality: (pending.modality ?? profile.modality ?? "") as Modality | "",
@@ -189,80 +443,91 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     bankTransferDisclaimerAccepted:
       profile.bankTransferDisclaimerAccepted ?? false,
   });
+  const [name, setName] = useState(accountUser.name ?? "");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const savedNameRef = useRef(accountUser.name.trim());
 
-  const accountChanged =
-    accountForm.name.trim() !== accountUser.name.trim() ||
-    accountForm.image.trim() !== (accountUser.image ?? "").trim();
-
-  const accountMutation = useMutation({
-    mutationFn: async () => {
-      const name = accountForm.name.trim();
-      if (!name) throw new Error("Account name is required");
-
-      const result = await authClient.updateUser({
-        name,
-        image: accountForm.image.trim() || null,
-      });
+  const nameMutation = useMutation({
+    mutationFn: async (nextName: string) => {
+      const result = await authClient.updateUser({ name: nextName });
       if (result.error) throw new Error(result.error.message);
       return result.data;
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: orpc.auth.me.key() });
-      await router.invalidate();
-      toastManager.add({
-        title: "Account profile updated",
-        type: "success",
-      });
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: orpc.auth.me.key() });
     },
-    onError: (error: Error) => {
+    onError: (error: unknown) => {
       toastManager.add({
-        title: "Account profile could not be updated",
+        title: "Name could not be saved",
         description: getUserFacingError(error),
         type: "error",
       });
     },
   });
 
-  function clearError(field: string) {
-    if (errors[field]) {
-      setErrors((prev) => {
-        const next = { ...prev };
-        delete next[field];
-        return next;
-      });
+  async function saveCanonicalName() {
+    const nextName = name.trim();
+    if (nextName !== savedNameRef.current) {
+      await nameMutation.mutateAsync(nextName);
+      savedNameRef.current = nextName;
     }
+  }
+
+  function clearError(field: string) {
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next[field];
+      for (const key of Object.keys(next)) {
+        if (key.startsWith(`${field}.`)) delete next[key];
+      }
+      return next;
+    });
   }
 
   const updateMutation = useMutation(
     orpc.tutor.updateMyProfile.mutationOptions({
       onSuccess: () => {
-        toastManager.add({
-          title:
-            profile.onboardingStatus === "published"
-              ? "Profile changes saved"
-              : "Progress saved",
-          description:
-            profile.onboardingStatus === "published"
-              ? "Public details were updated. Honorarium changes apply to future bookings; verified details may wait for admin review."
-              : undefined,
-          type: "success",
-        });
         void queryClient.invalidateQueries({
           queryKey: orpc.tutor.getMyProfile.key(),
+        });
+        void queryClient.invalidateQueries({
+          queryKey: orpc.tutor.getMyProfileHistory.key(),
         });
         void queryClient.invalidateQueries({ queryKey: orpc.auth.me.key() });
       },
       onError: (error: unknown) => {
+        const fieldErrors = readServerFieldErrors(error);
+        if (Object.keys(fieldErrors).length > 0) {
+          setErrors((current) => ({ ...current, ...fieldErrors }));
+        }
         toastManager.add({
           title: "Tutor profile could not be saved",
-          description: getUserFacingError(error),
+          description:
+            Object.keys(fieldErrors).length > 0
+              ? "Check the highlighted fields and try again."
+              : getUserFacingError(error),
           type: "error",
         });
       },
     }),
   );
+
+  function showUpdateSuccess(submittedPublishedChanges: boolean) {
+    toastManager.add({
+      title: submittedPublishedChanges
+        ? "Profile changes submitted for review"
+        : profile.onboardingStatus === "published"
+          ? "Profile changes saved"
+          : "Progress saved",
+      description: submittedPublishedChanges
+        ? "The latest profile changes are now waiting for admin review."
+        : profile.onboardingStatus === "published"
+          ? "Public details were updated. Honorarium changes apply to future bookings; verified details may wait for admin review."
+          : undefined,
+      type: "success",
+    });
+  }
 
   const submitMutation = useMutation(
     orpc.tutor.submitForReview.mutationOptions({
@@ -275,14 +540,24 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
           queryClient.invalidateQueries({
             queryKey: orpc.tutor.getMyProfile.key(),
           }),
+          queryClient.invalidateQueries({
+            queryKey: orpc.tutor.getMyProfileHistory.key(),
+          }),
           queryClient.invalidateQueries({ queryKey: orpc.auth.me.key() }),
         ]);
         await navigate({ to: "/dashboard", replace: true });
       },
       onError: (error: unknown) => {
+        const fieldErrors = readServerFieldErrors(error);
+        if (Object.keys(fieldErrors).length > 0) {
+          setErrors((current) => ({ ...current, ...fieldErrors }));
+        }
         toastManager.add({
           title: "Tutor profile could not be submitted",
-          description: getUserFacingError(error),
+          description:
+            Object.keys(fieldErrors).length > 0
+              ? "Check the highlighted fields and try again."
+              : getUserFacingError(error),
           type: "error",
         });
       },
@@ -292,15 +567,15 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
   function getSavePayload() {
     const payload: {
       version: number;
-      displayName?: string;
       shortBio?: string;
       achievements?: string;
       experiences?: string;
       achievementProofUrls?: string[];
       experienceProofUrls?: string[];
-      sourcePhotoUrl?: string;
+      profileImageUrl?: string;
       education?: TutorEducationEntry[];
       competitionAchievements?: TutorCompetitionAchievement[];
+      experienceEntries?: TutorExperienceEntry[];
       expertise?: string[];
       subjectIds?: string[];
       modality?: Modality;
@@ -313,11 +588,10 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       bankTransferDisclaimerAccepted?: boolean;
       prices?: Record<string, number>;
     } = { version: profile.version };
-    const displayName = form.displayName.trim();
     const shortBio = form.shortBio.trim();
     const achievements = form.achievements.trim();
     const experiences = form.experiences.trim();
-    const sourcePhotoUrl = form.sourcePhotoUrl.trim();
+    const profileImageUrl = form.profileImageUrl.trim();
     const education = form.education.map((entry) => ({
       university: entry.university.trim(),
       degree: entry.degree.trim(),
@@ -329,20 +603,27 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
         awards: entry.awards.map((award) => award.trim()),
       }),
     );
+    const experienceEntries = form.experienceEntries.map((entry) => ({
+      role: entry.role.trim(),
+      organization: entry.organization.trim(),
+      startYear: entry.startYear,
+      endYear: entry.endYear,
+      description: entry.description.trim(),
+    }));
     const bankName = form.bankName.trim();
     const bankAccountNumber = form.bankAccountNumber.replaceAll(/\D/g, "");
     const bankAccountHolderName = form.bankAccountHolderName.trim();
     const bankAccountOpeningCity = form.bankAccountOpeningCity.trim();
 
-    if (displayName) payload.displayName = displayName;
-    if (shortBio) payload.shortBio = shortBio;
-    if (achievements) payload.achievements = achievements;
-    if (experiences) payload.experiences = experiences;
+    payload.shortBio = shortBio;
+    payload.achievements = achievements;
+    payload.experiences = experiences;
     payload.achievementProofUrls = form.achievementProofUrls;
     payload.experienceProofUrls = form.experienceProofUrls;
-    if (sourcePhotoUrl) payload.sourcePhotoUrl = sourcePhotoUrl;
+    if (profileImageUrl) payload.profileImageUrl = profileImageUrl;
     payload.education = education;
     payload.competitionAchievements = competitionAchievements;
+    payload.experienceEntries = experienceEntries;
     if (form.expertise.length > 0) payload.expertise = form.expertise;
     if (
       form.subjectIds.length > 0 &&
@@ -375,19 +656,71 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     return payload;
   }
 
-  async function handleSubmitForReview() {
+  function validateTutorForm(requireComplete: boolean) {
     const validationErrors: Record<string, string> = {};
-    if (!form.displayName.trim()) validationErrors.displayName = "Required";
-    if (!form.shortBio.trim()) validationErrors.shortBio = "Required";
+    const addError = (field: string, message: string) => {
+      validationErrors[field] ??= message;
+    };
+    const canonicalName = name.trim();
+    if (!canonicalName) addError("name", "Required.");
+    if (canonicalName.length > 255) {
+      addError("name", "Use 255 characters or fewer.");
+    }
+    const shortBio = form.shortBio.trim();
+    const shortBioWordCount = countTutorShortBioWords(form.shortBio);
+    const achievements = form.achievements.trim();
+    const experiences = form.experiences.trim();
+    const profileImageUrl = form.profileImageUrl.trim();
+    const bankName = form.bankName.trim();
+    const bankAccountNumber = form.bankAccountNumber.replaceAll(/\D/g, "");
+    const bankAccountHolderName = form.bankAccountHolderName.trim();
+    const bankAccountOpeningCity = form.bankAccountOpeningCity.trim();
+
+    if (requireComplete && !shortBio) addError("shortBio", "Required.");
+    if (shortBioWordCount > MAX_TUTOR_SHORT_BIO_WORDS) {
+      addError("shortBio", `Use ${MAX_TUTOR_SHORT_BIO_WORDS} words or fewer.`);
+    }
+    if (form.shortBio.length > 2_000) {
+      addError("shortBio", "Use 2,000 characters or fewer.");
+    }
+    if (form.achievements.length > 5_000) {
+      addError("achievements", "Use 5,000 characters or fewer.");
+    }
+    if (form.experiences.length > 5_000) {
+      addError("experiences", "Use 5,000 characters or fewer.");
+    }
+
     if (
-      !form.achievements.trim() &&
+      requireComplete &&
+      !achievements &&
       form.competitionAchievements.length === 0
     ) {
-      validationErrors.competitionAchievements = "Add at least one achievement";
+      addError(
+        "competitionAchievements",
+        "Add at least one competition achievement or achievement summary.",
+      );
     }
-    if (!form.experiences.trim()) validationErrors.experiences = "Required";
-    if (!form.sourcePhotoUrl.trim())
-      validationErrors.sourcePhotoUrl = "Required";
+    if (
+      requireComplete &&
+      !experiences &&
+      form.experienceEntries.length === 0
+    ) {
+      addError(
+        "experienceEntries",
+        "Add at least one experience entry or experience summary.",
+      );
+    }
+    if (requireComplete && !profileImageUrl) {
+      addError("profileImageUrl", "Upload a profile photo.");
+    }
+    if (
+      profileImageUrl &&
+      !isExternalHttpUrl(profileImageUrl) &&
+      !profileImageUrl.startsWith("/uploads/")
+    ) {
+      addError("profileImageUrl", "Upload a valid profile photo.");
+    }
+
     Object.assign(
       validationErrors,
       validateTutorAchievementDraft(
@@ -395,108 +728,187 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
         form.competitionAchievements,
       ),
     );
-    if (!form.modality) validationErrors.modality = "Required";
-    if (!form.bankName.trim()) validationErrors.bankName = "Required";
-    if (!/^\d{6,30}$/.test(form.bankAccountNumber.replaceAll(/\D/g, ""))) {
-      validationErrors.bankAccountNumber = "Enter a valid account number";
-    }
-    if (!form.bankAccountHolderName.trim())
-      validationErrors.bankAccountHolderName = "Required";
-    if (!form.bankAccountOpeningCity.trim())
-      validationErrors.bankAccountOpeningCity = "Required";
-    if (!form.bankAccountOwnership)
-      validationErrors.bankAccountOwnership =
-        "Select an account ownership option";
-    if (!form.bankTransferDisclaimerAccepted) {
-      validationErrors.bankTransferDisclaimerAccepted =
-        "Please confirm the transfer-account responsibility statement";
-    }
-    if (form.subjectIds.length === 0)
-      validationErrors.subjects = "Select at least one child subject";
-    const requiredRates =
-      form.modality === "both"
-        ? ["online", "offline"]
-        : form.modality
-          ? [form.modality]
-          : [];
+    Object.assign(
+      validationErrors,
+      validateTutorExperienceDraft(form.experienceEntries),
+    );
+
+    const validateProofUrls = (
+      field: "achievementProofUrls" | "experienceProofUrls",
+      urls: string[],
+    ) => {
+      if (urls.length > 20) {
+        addError(field, "Add no more than 20 proof links.");
+      }
+      urls.forEach((url, index) => {
+        if (url.length > 2_048 || !isExternalHttpUrl(url)) {
+          addError(`${field}.${index}`, "Enter a valid http(s) URL.");
+        }
+      });
+    };
+    validateProofUrls("achievementProofUrls", form.achievementProofUrls);
+    validateProofUrls("experienceProofUrls", form.experienceProofUrls);
+
+    if (requireComplete && !form.modality) addError("modality", "Required.");
     if (
-      requiredRates.some(
-        (key) =>
-          typeof form.baseRatesIdr[key as "online" | "offline"] !== "number",
-      )
+      form.modality &&
+      !["online", "offline", "both"].includes(form.modality)
     ) {
-      validationErrors.baseRatesIdr =
-        "Add a valid IDR base honorarium for each selected modality";
+      addError("modality", "Select a valid teaching format.");
     }
 
+    if (requireComplete && !bankName) addError("bankName", "Required.");
+    if (bankName && (bankName.length < 2 || bankName.length > 100)) {
+      addError("bankName", "Use 2–100 characters.");
+    }
+    if (requireComplete && !bankAccountNumber) {
+      addError("bankAccountNumber", "Enter a valid account number.");
+    } else if (bankAccountNumber && !/^\d{6,30}$/.test(bankAccountNumber)) {
+      addError("bankAccountNumber", "Enter 6–30 digits.");
+    }
+    if (requireComplete && !bankAccountHolderName) {
+      addError("bankAccountHolderName", "Required.");
+    }
+    if (
+      bankAccountHolderName &&
+      (bankAccountHolderName.length < 2 || bankAccountHolderName.length > 100)
+    ) {
+      addError("bankAccountHolderName", "Use 2–100 characters.");
+    }
+    if (requireComplete && !bankAccountOpeningCity) {
+      addError("bankAccountOpeningCity", "Required.");
+    }
+    if (
+      bankAccountOpeningCity &&
+      (bankAccountOpeningCity.length < 2 || bankAccountOpeningCity.length > 100)
+    ) {
+      addError("bankAccountOpeningCity", "Use 2–100 characters.");
+    }
+    if (
+      form.bankAccountOwnership &&
+      !["self", "trusted_person"].includes(form.bankAccountOwnership)
+    ) {
+      addError(
+        "bankAccountOwnership",
+        "Select a valid account ownership option.",
+      );
+    } else if (requireComplete && !form.bankAccountOwnership) {
+      addError("bankAccountOwnership", "Select an account ownership option.");
+    }
+    if (requireComplete && !form.bankTransferDisclaimerAccepted) {
+      addError(
+        "bankTransferDisclaimerAccepted",
+        "Please confirm the transfer-account responsibility statement.",
+      );
+    }
+
+    if (form.subjectIds.length > MAX_TUTOR_SUBJECTS) {
+      addError(
+        "subjects",
+        `Select no more than ${MAX_TUTOR_SUBJECTS} child subjects.`,
+      );
+    } else if (requireComplete && form.subjectIds.length === 0) {
+      addError("subjects", "Select at least one child subject.");
+    }
+
+    const ratesToCheck =
+      form.modality === "both"
+        ? (["online", "offline"] as const)
+        : form.modality === "online" || form.modality === "offline"
+          ? ([form.modality] as const)
+          : ([] as const);
+    for (const key of ratesToCheck) {
+      const value = form.baseRatesIdr[key];
+      if (typeof value !== "number") {
+        if (requireComplete) {
+          addError(
+            `baseRatesIdr.${key}`,
+            `Add a valid ${key} IDR base honorarium.`,
+          );
+        }
+        continue;
+      }
+      if (!Number.isInteger(value) || value < 50_000 || value % 5_000 !== 0) {
+        addError(
+          `baseRatesIdr.${key}`,
+          `${key === "online" ? "Online" : "Offline"} base honorarium must be an IDR amount of at least Rp 50,000 in Rp 5,000 increments.`,
+        );
+      }
+    }
+
+    return validationErrors;
+  }
+
+  function showValidationErrors(
+    validationErrors: Record<string, string>,
+    title: string,
+    description: string,
+  ) {
+    setErrors(validationErrors);
+    const visibleErrors = getVisibleTutorErrors(validationErrors);
+    toastManager.add({
+      title,
+      description: `${description} ${visibleErrors.length} field${visibleErrors.length === 1 ? "" : "s"} highlighted below.`,
+      type: "error",
+    });
+    const firstError =
+      visibleErrors[0]?.[0] ?? Object.keys(validationErrors)[0];
+    if (!firstError) return;
+    const focusTarget = getTutorErrorFocusTarget(
+      firstError,
+      form.competitionAchievements.length > 0,
+      form.experienceEntries.length > 0,
+    );
+    window.setTimeout(() => document.getElementById(focusTarget)?.focus(), 0);
+  }
+
+  async function handleSaveProgress() {
+    const validationErrors = validateTutorForm(false);
     if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
-      toastManager.add({
-        title: "Please fill all required fields",
-        type: "error",
-      });
-      const firstError = Object.keys(validationErrors)[0];
-      const focusTarget =
-        firstError === "subjects"
-          ? "tutor-subject-category"
-          : firstError === "education"
-            ? "tutor-achievements-university-0"
-            : firstError === "competitionAchievements"
-              ? form.competitionAchievements.length > 0
-                ? "tutor-achievements-competition-0"
-                : "tutor-achievements-competition-add"
-              : `tutor-${firstError}`;
-      window.setTimeout(() => document.getElementById(focusTarget)?.focus(), 0);
+      showValidationErrors(
+        validationErrors,
+        "Some fields need attention",
+        "Fix the highlighted fields before saving your progress.",
+      );
       return;
     }
 
+    setErrors({});
     try {
+      await saveCanonicalName();
       await updateMutation.mutateAsync(getSavePayload());
-      await submitMutation.mutateAsync();
+      showUpdateSuccess(false);
     } catch {
       // handled by mutation callbacks
     }
   }
 
-  async function uploadSourcePhoto(file: File) {
-    setIsUploadingPhoto(true);
+  async function handleSubmitForReview() {
+    const validationErrors = validateTutorForm(true);
+    if (Object.keys(validationErrors).length > 0) {
+      showValidationErrors(
+        validationErrors,
+        "Please fix the highlighted fields",
+        "Complete the required information before submitting for review.",
+      );
+      return;
+    }
+
     try {
-      const signed = await client.upload.createUploadUrl({
-        filename: file.name,
-        contentType: file.type as "image/png" | "image/jpeg" | "image/webp",
-      });
-      if (file.size > signed.maxBytes)
-        throw new Error("Photo is larger than 5 MB");
-      if (signed.method === "POST") {
-        const body = new FormData();
-        Object.entries(signed.fields ?? {}).forEach(([key, value]) =>
-          body.append(key, value),
-        );
-        body.append("file", file);
-        const response = await fetch(signed.uploadUrl, {
-          method: "POST",
-          body,
-        });
-        if (!response.ok) throw new Error("Photo upload failed");
-      } else {
-        const response = await fetch(signed.uploadUrl, {
-          method: signed.method,
-          headers: { "content-type": file.type },
-          body: file,
-        });
-        if (!response.ok) throw new Error("Photo upload failed");
+      await saveCanonicalName();
+      if (profile.onboardingStatus === "published") {
+        // Published profile edits are staged by updateMyProfile itself. The
+        // explicit submit action runs the complete form gate before putting
+        // the latest pending values into the admin review queue.
+        await updateMutation.mutateAsync(getSavePayload());
+        showUpdateSuccess(true);
+        return;
       }
-      setForm((current) => ({ ...current, sourcePhotoUrl: signed.publicUrl }));
-      clearError("sourcePhotoUrl");
-      toastManager.add({ title: "Source photo uploaded", type: "success" });
-    } catch (error) {
-      toastManager.add({
-        title: "Photo could not be uploaded",
-        description: getUserFacingError(error),
-        type: "error",
-      });
-    } finally {
-      setIsUploadingPhoto(false);
+      await updateMutation.mutateAsync(getSavePayload());
+      showUpdateSuccess(false);
+      await submitMutation.mutateAsync();
+    } catch {
+      // handled by mutation callbacks
     }
   }
 
@@ -526,7 +938,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
         ? "Your profile has been approved and is waiting for publication by an admin."
         : profile.onboardingStatus === "published"
           ? profile.profileEditStatus === "pending_review"
-            ? "Your profile is live. Honorarium changes apply to future bookings; other important changes are waiting for admin review."
+            ? "Your profile is live. You can keep updating it while the latest changes are waiting for admin review."
             : profile.profileEditStatus === "changes_requested"
               ? "Your profile is live, but the admin requested revisions to your proposed changes."
               : "Your tutor profile is live. You can update it anytime. Honorarium changes apply to future bookings; other important changes are reviewed before going live."
@@ -538,9 +950,20 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       profile.onboardingStatus === "changes_requested") ||
     (profile.profileEditAdminNote &&
       profile.profileEditStatus === "changes_requested");
+  const visibleValidationErrors = getVisibleTutorErrors(errors);
+  const currentProfileImageValue =
+    profile.user?.image?.trim() || accountUser.image?.trim() || "";
+  const selectedProfileImageValue = form.profileImageUrl.trim();
+  const currentProfileImageUrl =
+    resolveProfileImageUrl(currentProfileImageValue) ?? "";
+  const selectedProfileImageUrl =
+    resolveProfileImageUrl(selectedProfileImageValue) ?? "";
+  const hasProposedProfileImage =
+    Boolean(selectedProfileImageValue) &&
+    selectedProfileImageUrl !== currentProfileImageUrl;
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+    <div className="mx-auto flex w-full flex-col gap-6">
       <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <Badge variant="info" pill>
@@ -583,25 +1006,6 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
         </CardBody>
       </Card>
 
-      <AccountIdentityCard
-        idPrefix="tutor-account"
-        roleLabel="Tutor"
-        name={accountForm.name}
-        email={accountUser.email}
-        image={accountForm.image}
-        hasChanges={accountChanged}
-        isSaving={accountMutation.isPending}
-        footerNote="Your account name and photo are separate from the public tutor profile review."
-        onNameChange={(name) =>
-          setAccountForm((current) => ({ ...current, name }))
-        }
-        onImageChange={(image) =>
-          setAccountForm((current) => ({ ...current, image }))
-        }
-        imageEditable={false}
-        onSave={() => accountMutation.mutate()}
-      />
-
       {hasReviewFeedback ? (
         <Card className="ring-warning-border bg-warning/5" role="status">
           <CardHeader>
@@ -636,16 +1040,218 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
         </Card>
       ) : null}
 
+      {visibleValidationErrors.length > 0 ? (
+        <Card className="border-danger-border/64 bg-danger/5" role="alert">
+          <CardBody>
+            <Text className="font-medium text-danger">
+              Please fix the highlighted fields before continuing.
+            </Text>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-danger">
+              {visibleValidationErrors.map(([field, message]) => (
+                <li key={field}>
+                  <span className="font-medium">
+                    {getTutorFieldLabel(field)}:
+                  </span>{" "}
+                  {message}
+                </li>
+              ))}
+            </ul>
+          </CardBody>
+        </Card>
+      ) : null}
+
+      {!isEditable ? (
+        <Card>
+          <CardHeader>
+            <IconBox variant="tertiary-subtle">
+              <IconPhoto aria-hidden="true" />
+            </IconBox>
+            <CardTitle>Profile photo review</CardTitle>
+            <CardDescription>
+              Your submitted photo stays unchanged until the Cogito team
+              finishes its review and publishes any edited version.
+            </CardDescription>
+          </CardHeader>
+          <CardBody className="flex flex-wrap items-start gap-6">
+            <div className="flex flex-col items-center gap-2 text-center">
+              <Avatar size="lg" className="size-20!">
+                <AvatarImage
+                  src={currentProfileImageUrl || undefined}
+                  alt="Submitted tutor profile"
+                />
+                <AvatarFallback>
+                  {(accountUser.name.slice(0, 2) || "TU").toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex items-center gap-1">
+                <Text className="text-sm font-medium">Submitted photo</Text>
+                <ProfilePhotoPreview
+                  label="Submitted photo"
+                  description="This is the source photo currently on your tutor profile."
+                  imageUrl={currentProfileImageUrl || null}
+                  fallback={(
+                    accountUser.name.slice(0, 2) || "TU"
+                  ).toUpperCase()}
+                />
+              </div>
+            </div>
+            <div className="basis-full">
+              <ProfilePhotoHistory
+                entries={profileHistory}
+                title="Photo & review history"
+              />
+            </div>
+          </CardBody>
+        </Card>
+      ) : null}
+
       {isEditable ? (
         <form
           onSubmit={(event) => {
             event.preventDefault();
             event.stopPropagation();
-            updateMutation.mutate(getSavePayload());
+            handleSaveProgress();
           }}
           className="flex flex-col gap-6"
         >
           <div className="grid gap-6 xl:grid-cols-2">
+            <Card className="min-w-0 xl:col-span-2">
+              <CardHeader>
+                <IconBox variant="tertiary-subtle">
+                  <IconPhoto aria-hidden="true" />
+                </IconBox>
+                <CardTitle>Profile photo</CardTitle>
+                <CardDescription>
+                  Submit one clear photo. The Cogito team will apply the
+                  standard background before publishing or updating it.
+                </CardDescription>
+              </CardHeader>
+              <CardBody className="flex flex-wrap items-start gap-8">
+                {profile.onboardingStatus === "published" ? (
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    <Avatar size="lg" className="size-20!">
+                      <AvatarImage
+                        src={currentProfileImageUrl || undefined}
+                        alt="Current public tutor profile"
+                      />
+                      <AvatarFallback>
+                        {(accountUser.name.slice(0, 2) || "TU").toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <div className="flex items-center justify-center gap-1">
+                        <Text className="text-sm font-medium">
+                          Current photo
+                        </Text>
+                        <ProfilePhotoPreview
+                          label="Current photo"
+                          description="This photo is visible to students right now."
+                          imageUrl={currentProfileImageUrl || null}
+                          fallback={(
+                            accountUser.name.slice(0, 2) || "TU"
+                          ).toUpperCase()}
+                          tone="success"
+                        />
+                      </div>
+                      <Text className="text-xs text-muted">
+                        Visible to students
+                      </Text>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="flex flex-col items-center gap-2 text-center">
+                  <ProfileImagePicker
+                    id="tutor-profile-image"
+                    image={selectedProfileImageUrl}
+                    disabled={isUploadingPhoto}
+                    onUploadingChange={setIsUploadingPhoto}
+                    onImageChange={(profileImageUrl) => {
+                      setForm((current) => ({ ...current, profileImageUrl }));
+                      clearError("profileImageUrl");
+                    }}
+                    compactTrigger={
+                      <Avatar size="lg" className="size-20!">
+                        <AvatarImage
+                          src={selectedProfileImageUrl || undefined}
+                          alt={
+                            hasProposedProfileImage
+                              ? "Proposed tutor profile"
+                              : "Tutor profile"
+                          }
+                        />
+                        <AvatarFallback>
+                          {(accountUser.name.slice(0, 2) || "TU").toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                    }
+                  />
+                  <div>
+                    <div className="flex items-center justify-center gap-1">
+                      <Text className="text-sm font-medium">
+                        {profile.onboardingStatus === "published"
+                          ? hasProposedProfileImage
+                            ? "Proposed photo"
+                            : "Change photo"
+                          : "Profile photo"}
+                      </Text>
+                      {selectedProfileImageUrl ? (
+                        <ProfilePhotoPreview
+                          label={
+                            profile.onboardingStatus === "published" &&
+                            hasProposedProfileImage
+                              ? "Proposed photo"
+                              : "Profile photo"
+                          }
+                          description={
+                            profile.onboardingStatus === "published"
+                              ? "This replacement stays private until an admin approves it."
+                              : "This is the photo that will be submitted with your tutor profile."
+                          }
+                          imageUrl={selectedProfileImageUrl}
+                          fallback={(
+                            accountUser.name.slice(0, 2) || "TU"
+                          ).toUpperCase()}
+                          tone={
+                            profile.onboardingStatus === "published" &&
+                            hasProposedProfileImage
+                              ? "warning"
+                              : "info"
+                          }
+                        />
+                      ) : null}
+                    </div>
+                    <Text className="max-w-56 text-xs text-muted">
+                      {profile.onboardingStatus === "published"
+                        ? "Changes become public after admin approval."
+                        : "Click the avatar to upload and crop your photo."}
+                    </Text>
+                  </div>
+                  {hasProposedProfileImage ? (
+                    <Badge variant="warning" size="sm" pill>
+                      {profile.pendingProfileChanges?.profileImageUrl ===
+                      selectedProfileImageUrl
+                        ? "Awaiting review"
+                        : "Ready to save"}
+                    </Badge>
+                  ) : null}
+                </div>
+                {errors.profileImageUrl ? (
+                  <Field className="basis-full">
+                    <FieldError id="tutor-profile-image-error">
+                      {errors.profileImageUrl}
+                    </FieldError>
+                  </Field>
+                ) : null}
+                <div className="basis-full">
+                  <ProfilePhotoHistory
+                    entries={profileHistory}
+                    title="Photo & review history"
+                  />
+                </div>
+              </CardBody>
+            </Card>
+
             <Card className="min-w-0 xl:col-span-2">
               <CardHeader>
                 <IconBox variant="secondary-subtle">
@@ -657,97 +1263,50 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                   teaching style.
                 </CardDescription>
               </CardHeader>
-              <CardBody className="grid gap-5 sm:grid-cols-2">
+              <CardBody className="grid gap-5 sm:grid-cols-[1fr_2fr]">
                 <Field>
-                  <FieldLabel htmlFor="tutor-display-name">
-                    Display name <span aria-hidden="true">*</span>
+                  <FieldLabel htmlFor="tutor-name">
+                    Name <span aria-hidden="true">*</span>
                   </FieldLabel>
+                  <FieldDescription>
+                    The same account name is used across Cogito for every role.
+                  </FieldDescription>
                   <Input
-                    id="tutor-display-name"
-                    name="displayName"
+                    id="tutor-name"
+                    name="name"
                     autoComplete="name"
-                    value={form.displayName}
+                    value={name}
+                    maxLength={255}
                     onChange={(event) => {
-                      setForm((current) => ({
-                        ...current,
-                        displayName: event.target.value,
-                      }));
-                      clearError("displayName");
+                      setName(event.target.value);
+                      clearError("name");
                     }}
-                    placeholder="How students will see your name"
-                    aria-invalid={Boolean(errors.displayName)}
-                  />
-                  {errors.displayName ? (
-                    <FieldError>{errors.displayName}</FieldError>
-                  ) : null}
-                </Field>
-
-                <Field className="sm:col-span-2">
-                  <FieldLabel htmlFor="tutor-experiences">
-                    Experiences <span aria-hidden="true">*</span>
-                  </FieldLabel>
-                  <FieldDescription>
-                    Add one experience per line.
-                  </FieldDescription>
-                  <Textarea
-                    id="tutor-experiences"
-                    name="experiences"
-                    rows={6}
-                    value={form.experiences}
-                    onChange={(event) => {
-                      setForm((current) => ({
-                        ...current,
-                        experiences: event.target.value,
-                      }));
-                      clearError("experiences");
-                    }}
-                    placeholder="Legal GRC Intern, PT Pelindo Energi Logistik (Surabaya, 2025)"
-                    aria-invalid={Boolean(errors.experiences)}
-                  />
-                  {errors.experiences ? (
-                    <FieldError>{errors.experiences}</FieldError>
-                  ) : null}
-                </Field>
-
-                <Field className="sm:col-span-2">
-                  <FieldLabel htmlFor="tutor-experience-proofs">
-                    Experience proof links
-                  </FieldLabel>
-                  <FieldDescription>
-                    Optional. Add one public reference, portfolio, or supporting
-                    URL per line. These links are only used for admin
-                    verification.
-                  </FieldDescription>
-                  <Textarea
-                    id="tutor-experience-proofs"
-                    name="experienceProofUrls"
-                    rows={3}
-                    value={form.experienceProofUrls.join("\n")}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        experienceProofUrls: event.target.value
-                          .split(/\r?\n/)
-                          .map((url) => url.trim())
-                          .filter(Boolean),
-                      }))
+                    placeholder="Your name"
+                    aria-invalid={Boolean(errors.name)}
+                    aria-describedby={
+                      errors.name ? "tutor-name-error" : undefined
                     }
-                    placeholder="https://example.com/reference"
                   />
+                  {errors.name ? (
+                    <FieldError id="tutor-name-error">{errors.name}</FieldError>
+                  ) : null}
                 </Field>
 
-                <Field className="sm:col-span-2">
+                <Field>
                   <FieldLabel htmlFor="tutor-short-bio">
                     Short bio <span aria-hidden="true">*</span>
                   </FieldLabel>
                   <FieldDescription>
-                    A concise introduction students can scan before booking.
+                    Share anything about yourself as a person, including things
+                    beyond the competition field such as your hobbies and
+                    favorite books.
                   </FieldDescription>
                   <Textarea
                     id="tutor-short-bio"
                     name="shortBio"
                     rows={4}
                     value={form.shortBio}
+                    maxLength={2_000}
                     onChange={(event) => {
                       setForm((current) => ({
                         ...current,
@@ -757,9 +1316,26 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                     }}
                     placeholder="Brief introduction about yourself"
                     aria-invalid={Boolean(errors.shortBio)}
+                    aria-describedby={
+                      errors.shortBio ? "tutor-short-bio-error" : undefined
+                    }
                   />
+                  <Text
+                    className={`text-right text-xs ${
+                      countTutorShortBioWords(form.shortBio) >
+                      MAX_TUTOR_SHORT_BIO_WORDS
+                        ? "text-danger"
+                        : "text-muted"
+                    }`}
+                    aria-live="polite"
+                  >
+                    {countTutorShortBioWords(form.shortBio)}/
+                    {MAX_TUTOR_SHORT_BIO_WORDS} words
+                  </Text>
                   {errors.shortBio ? (
-                    <FieldError>{errors.shortBio}</FieldError>
+                    <FieldError id="tutor-short-bio-error">
+                      {errors.shortBio}
+                    </FieldError>
                   ) : null}
                 </Field>
 
@@ -769,7 +1345,8 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                   </FieldLabel>
                   <FieldDescription>
                     Select the competition subcategories you teach. Students
-                    will see these on your tutor profile.
+                    will see these on your tutor profile. You can select up to{" "}
+                    {MAX_TUTOR_SUBJECTS}.
                   </FieldDescription>
                   <SubjectSelector
                     triggerId="tutor-subject-category"
@@ -816,7 +1393,13 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                       clearError("modality");
                     }}
                   >
-                    <SelectTrigger id="tutor-modality">
+                    <SelectTrigger
+                      id="tutor-modality"
+                      aria-invalid={Boolean(errors.modality)}
+                      aria-describedby={
+                        errors.modality ? "tutor-modality-error" : undefined
+                      }
+                    >
                       <SelectValue placeholder="Select a teaching format" />
                     </SelectTrigger>
                     <SelectPopup>
@@ -832,7 +1415,9 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                     </SelectPopup>
                   </Select>
                   {errors.modality ? (
-                    <FieldError>{errors.modality}</FieldError>
+                    <FieldError id="tutor-modality-error">
+                      {errors.modality}
+                    </FieldError>
                   ) : null}
                 </Field>
 
@@ -875,7 +1460,11 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                       id="tutor-bankName"
                       value={form.bankName}
                       placeholder="BCA"
+                      maxLength={100}
                       aria-invalid={Boolean(errors.bankName)}
+                      aria-describedby={
+                        errors.bankName ? "tutor-bankName-error" : undefined
+                      }
                       onChange={(event) => {
                         setForm((current) => ({
                           ...current,
@@ -890,7 +1479,9 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                       transfer fee per payout.
                     </FieldDescription>
                     {errors.bankName ? (
-                      <FieldError>{errors.bankName}</FieldError>
+                      <FieldError id="tutor-bankName-error">
+                        {errors.bankName}
+                      </FieldError>
                     ) : null}
                   </Field>
                   <Field>
@@ -903,7 +1494,13 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                       autoComplete="off"
                       value={form.bankAccountNumber}
                       placeholder="Enter account number"
+                      maxLength={30}
                       aria-invalid={Boolean(errors.bankAccountNumber)}
+                      aria-describedby={
+                        errors.bankAccountNumber
+                          ? "tutor-bankAccountNumber-error"
+                          : undefined
+                      }
                       onChange={(event) => {
                         setForm((current) => ({
                           ...current,
@@ -916,7 +1513,9 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                       }}
                     />
                     {errors.bankAccountNumber ? (
-                      <FieldError>{errors.bankAccountNumber}</FieldError>
+                      <FieldError id="tutor-bankAccountNumber-error">
+                        {errors.bankAccountNumber}
+                      </FieldError>
                     ) : null}
                   </Field>
                   <Field>
@@ -928,7 +1527,13 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                       autoComplete="name"
                       value={form.bankAccountHolderName}
                       placeholder="Name as registered by the bank"
+                      maxLength={100}
                       aria-invalid={Boolean(errors.bankAccountHolderName)}
+                      aria-describedby={
+                        errors.bankAccountHolderName
+                          ? "tutor-bankAccountHolderName-error"
+                          : undefined
+                      }
                       onChange={(event) => {
                         setForm((current) => ({
                           ...current,
@@ -938,7 +1543,9 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                       }}
                     />
                     {errors.bankAccountHolderName ? (
-                      <FieldError>{errors.bankAccountHolderName}</FieldError>
+                      <FieldError id="tutor-bankAccountHolderName-error">
+                        {errors.bankAccountHolderName}
+                      </FieldError>
                     ) : null}
                   </Field>
                   <Field>
@@ -950,7 +1557,13 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                       id="tutor-bankAccountOpeningCity"
                       value={form.bankAccountOpeningCity}
                       placeholder="e.g. Jakarta Selatan"
+                      maxLength={100}
                       aria-invalid={Boolean(errors.bankAccountOpeningCity)}
+                      aria-describedby={
+                        errors.bankAccountOpeningCity
+                          ? "tutor-bankAccountOpeningCity-error"
+                          : undefined
+                      }
                       onChange={(event) => {
                         setForm((current) => ({
                           ...current,
@@ -960,7 +1573,9 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                       }}
                     />
                     {errors.bankAccountOpeningCity ? (
-                      <FieldError>{errors.bankAccountOpeningCity}</FieldError>
+                      <FieldError id="tutor-bankAccountOpeningCity-error">
+                        {errors.bankAccountOpeningCity}
+                      </FieldError>
                     ) : null}
                   </Field>
                 </div>
@@ -994,6 +1609,11 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                     <SelectTrigger
                       id="tutor-bankAccountOwnership"
                       aria-invalid={Boolean(errors.bankAccountOwnership)}
+                      aria-describedby={
+                        errors.bankAccountOwnership
+                          ? "tutor-bankAccountOwnership-error"
+                          : undefined
+                      }
                     >
                       <SelectValue placeholder="Select who owns this account" />
                     </SelectTrigger>
@@ -1009,14 +1629,30 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                     </SelectPopup>
                   </Select>
                   {errors.bankAccountOwnership ? (
-                    <FieldError>{errors.bankAccountOwnership}</FieldError>
+                    <FieldError id="tutor-bankAccountOwnership-error">
+                      {errors.bankAccountOwnership}
+                    </FieldError>
                   ) : null}
                 </Field>
 
-                <div className="flex items-start gap-3 rounded-lg border border-item-border bg-item p-4">
+                <div
+                  className={`flex items-start gap-3 rounded-lg border bg-item p-4 ${
+                    errors.bankTransferDisclaimerAccepted
+                      ? "border-danger-border/64 ring-2 ring-danger-border/24"
+                      : "border-item-border"
+                  }`}
+                >
                   <Checkbox
                     id="tutor-bankTransferDisclaimerAccepted"
                     checked={form.bankTransferDisclaimerAccepted}
+                    aria-invalid={Boolean(
+                      errors.bankTransferDisclaimerAccepted,
+                    )}
+                    aria-describedby={
+                      errors.bankTransferDisclaimerAccepted
+                        ? "tutor-bankTransferDisclaimerAccepted-error"
+                        : undefined
+                    }
                     onCheckedChange={(checked) => {
                       setForm((current) => ({
                         ...current,
@@ -1036,7 +1672,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                       the account provided here.
                     </FieldDescription>
                     {errors.bankTransferDisclaimerAccepted ? (
-                      <FieldError>
+                      <FieldError id="tutor-bankTransferDisclaimerAccepted-error">
                         {errors.bankTransferDisclaimerAccepted}
                       </FieldError>
                     ) : null}
@@ -1051,104 +1687,194 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
               <IconBox variant="info-subtle">
                 <IconSchool aria-hidden="true" />
               </IconBox>
-              <CardTitle>Achievements</CardTitle>
+              <CardTitle>Achievements &amp; experience</CardTitle>
               <CardDescription>
-                Add your education and competition achievements in one place.
+                Add your education, competition achievements, and relevant
+                teaching, work, or mentoring experience in one place.
               </CardDescription>
             </CardHeader>
             <CardBody>
               <TutorAchievementsEditor
                 education={form.education}
                 competitionAchievements={form.competitionAchievements}
-                onEducationChange={(education) => {
+                onEducationChange={(education, changedField) => {
                   setForm((current) => ({ ...current, education }));
-                  clearError("education");
+                  clearError(changedField ?? "education");
                 }}
-                onCompetitionAchievementsChange={(competitionAchievements) => {
+                onCompetitionAchievementsChange={(
+                  competitionAchievements,
+                  changedField,
+                ) => {
                   setForm((current) => ({
                     ...current,
                     competitionAchievements,
                   }));
-                  clearError("competitionAchievements");
+                  clearError(changedField ?? "competitionAchievements");
                 }}
-                errors={{
-                  education: errors.education,
-                  competitionAchievements: errors.competitionAchievements,
-                }}
+                errors={errors}
+                showPreview={false}
               />
               <Field className="mt-6">
                 <FieldLabel htmlFor="tutor-achievement-proofs">
                   Achievement proof links
                 </FieldLabel>
                 <FieldDescription>
-                  Optional. Add one public certificate, result, or portfolio URL
-                  per line. These links are only used for admin verification.
+                  Optional. If possible, put your achievement and experience
+                  proof in one Google Drive folder and use the “Anyone with the
+                  link can view” setting. These links are only used for admin
+                  verification.
                 </FieldDescription>
                 <Textarea
                   id="tutor-achievement-proofs"
                   name="achievementProofUrls"
                   rows={3}
                   value={form.achievementProofUrls.join("\n")}
-                  onChange={(event) =>
+                  aria-invalid={Boolean(
+                    errors.achievementProofUrls ||
+                    Object.keys(errors).some((key) =>
+                      key.startsWith("achievementProofUrls."),
+                    ),
+                  )}
+                  aria-describedby={
+                    errors.achievementProofUrls ||
+                    Object.keys(errors).some((key) =>
+                      key.startsWith("achievementProofUrls."),
+                    )
+                      ? "tutor-achievement-proofs-error"
+                      : undefined
+                  }
+                  onChange={(event) => {
                     setForm((current) => ({
                       ...current,
                       achievementProofUrls: event.target.value
                         .split(/\r?\n/)
                         .map((url) => url.trim())
                         .filter(Boolean),
-                    }))
-                  }
+                    }));
+                    clearError("achievementProofUrls");
+                  }}
                   placeholder="https://example.com/certificate"
                 />
+                {errors.achievementProofUrls ? (
+                  <FieldError id="tutor-achievement-proofs-error">
+                    {errors.achievementProofUrls}
+                  </FieldError>
+                ) : null}
+                {!errors.achievementProofUrls &&
+                Object.entries(errors).some(([key]) =>
+                  key.startsWith("achievementProofUrls."),
+                ) ? (
+                  <FieldError id="tutor-achievement-proofs-error">
+                    Check each proof link.
+                  </FieldError>
+                ) : null}
               </Field>
-            </CardBody>
-          </Card>
-
-          <Card className="min-w-0">
-            <CardHeader>
-              <IconBox variant="tertiary-subtle">
-                <IconPhoto aria-hidden="true" />
-              </IconBox>
-              <CardTitle>Source profile photo</CardTitle>
-              <CardDescription>
-                Upload the original photo for the Cogito team to edit. It will
-                not be shown publicly until an admin publishes the edited
-                version.
-              </CardDescription>
-            </CardHeader>
-            <CardBody>
-              <Field>
-                <FieldLabel htmlFor="tutor-source-photo">
-                  Original photo <span aria-hidden="true">*</span>
-                </FieldLabel>
-                <FieldDescription>
-                  JPG, PNG, or WebP, maximum 5 MB. Use a clear, high-resolution
-                  portrait.
-                </FieldDescription>
-                <Input
-                  id="tutor-source-photo"
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  disabled={isUploadingPhoto}
-                  aria-invalid={Boolean(errors.sourcePhotoUrl)}
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) void uploadSourcePhoto(file);
+              <div className="mt-8 border-t border-card-separator pt-8">
+                <TutorExperiencesEditor
+                  experienceEntries={form.experienceEntries}
+                  legacyText={form.experiences}
+                  onExperienceEntriesChange={(
+                    experienceEntries,
+                    changedField,
+                  ) => {
+                    setForm((current) => ({
+                      ...current,
+                      experienceEntries,
+                    }));
+                    clearError(changedField ?? "experienceEntries");
                   }}
+                  errors={errors}
+                  showPreview={false}
                 />
-                {form.sourcePhotoUrl ? (
-                  <Text className="text-sm text-success">
-                    Photo received and ready for admin editing.
+                <Field className="mt-6">
+                  <FieldLabel htmlFor="tutor-experience-proofs">
+                    Experience proof links
+                  </FieldLabel>
+                  <FieldDescription>
+                    Optional. If possible, put your achievement and experience
+                    proof in one Google Drive folder and use the “Anyone with
+                    the link can view” setting. These links are only used for
+                    admin verification.
+                  </FieldDescription>
+                  <Textarea
+                    id="tutor-experience-proofs"
+                    name="experienceProofUrls"
+                    rows={3}
+                    value={form.experienceProofUrls.join("\n")}
+                    aria-invalid={Boolean(
+                      errors.experienceProofUrls ||
+                      Object.keys(errors).some((key) =>
+                        key.startsWith("experienceProofUrls."),
+                      ),
+                    )}
+                    aria-describedby={
+                      errors.experienceProofUrls ||
+                      Object.keys(errors).some((key) =>
+                        key.startsWith("experienceProofUrls."),
+                      )
+                        ? "tutor-experience-proofs-error"
+                        : undefined
+                    }
+                    onChange={(event) => {
+                      setForm((current) => ({
+                        ...current,
+                        experienceProofUrls: event.target.value
+                          .split(/\r?\n/)
+                          .map((url) => url.trim())
+                          .filter(Boolean),
+                      }));
+                      clearError("experienceProofUrls");
+                    }}
+                    placeholder="https://example.com/reference"
+                  />
+                  {errors.experienceProofUrls ? (
+                    <FieldError id="tutor-experience-proofs-error">
+                      {errors.experienceProofUrls}
+                    </FieldError>
+                  ) : null}
+                  {!errors.experienceProofUrls &&
+                  Object.entries(errors).some(([key]) =>
+                    key.startsWith("experienceProofUrls."),
+                  ) ? (
+                    <FieldError id="tutor-experience-proofs-error">
+                      Check each proof link.
+                    </FieldError>
+                  ) : null}
+                </Field>
+                <div className="mt-6 rounded-lg border border-item-border bg-accent p-4">
+                  <Text className="text-sm font-medium">Public preview</Text>
+                  <Text className="mt-1 text-sm text-muted">
+                    Education, achievements, and experiences are shown together
+                    as students will see them on your profile.
                   </Text>
-                ) : null}
-                {errors.sourcePhotoUrl ? (
-                  <FieldError>{errors.sourcePhotoUrl}</FieldError>
-                ) : null}
-              </Field>
+                  <div className="mt-4 flex flex-col gap-6">
+                    {form.education.length > 0 ||
+                    form.competitionAchievements.length > 0 ? (
+                      <TutorAchievementsDisplay
+                        education={form.education}
+                        competitionAchievements={form.competitionAchievements}
+                      />
+                    ) : null}
+                    {form.experienceEntries.length > 0 ? (
+                      <TutorExperiencesDisplay
+                        experienceEntries={form.experienceEntries}
+                      />
+                    ) : null}
+                    {form.education.length === 0 &&
+                    form.competitionAchievements.length === 0 &&
+                    form.experienceEntries.length === 0 ? (
+                      <Text className="text-sm italic text-dimmed">
+                        Add an education, achievement, or experience to see the
+                        public profile preview.
+                      </Text>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
             </CardBody>
           </Card>
 
-          <Card className="sticky bottom-0 z-10 overflow-hidden">
+          <Card className="sticky bottom-0 z-10 overflow-hidden *:border-none">
             <CardFooter className="flex-col items-stretch gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <Text className="font-medium">
@@ -1159,32 +1885,45 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                 <Text className="mt-1 text-sm text-muted">
                   {isDraft
                     ? "Save a draft while you work, or submit the completed profile for admin review."
-                    : "Save public changes here; trust-sensitive edits may wait for admin review."}
+                    : "Save changes while you work, or submit the latest version for admin review. You can continue updating during review."}
                 </Text>
               </div>
               <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
                 <Button
-                  type="submit"
-                  variant={isDraft ? "secondary" : "primary"}
+                  type="button"
+                  variant="secondary"
                   className="w-full sm:w-auto"
-                  progress={updateMutation.isPending}
+                  progress={nameMutation.isPending || updateMutation.isPending}
                   disabled={
-                    updateMutation.isPending || submitMutation.isPending
+                    nameMutation.isPending ||
+                    updateMutation.isPending ||
+                    submitMutation.isPending
                   }
+                  onClick={handleSaveProgress}
                 >
                   {isDraft ? "Save draft" : "Save profile changes"}
                 </Button>
-                {isDraft ? (
+                {isEditable ? (
                   <Button
                     type="button"
                     className="w-full sm:w-auto"
-                    progress={submitMutation.isPending}
+                    progress={
+                      nameMutation.isPending
+                        ? true
+                        : isDraft
+                          ? submitMutation.isPending
+                          : updateMutation.isPending
+                    }
                     disabled={
-                      updateMutation.isPending || submitMutation.isPending
+                      nameMutation.isPending ||
+                      updateMutation.isPending ||
+                      submitMutation.isPending
                     }
                     onClick={handleSubmitForReview}
                   >
-                    Submit for review
+                    {isDraft
+                      ? "Submit for review"
+                      : "Submit changes for review"}
                   </Button>
                 ) : null}
               </div>

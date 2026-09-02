@@ -131,6 +131,18 @@ export function createAdminTutorHandler(adminTutorService: AdminTutorService) {
       );
     },
 
+    listTutorProfileHistory: async ({
+      input,
+    }: {
+      context: Context;
+      input: { tutorProfileId: string };
+    }) => {
+      return withDomainMap(
+        () => adminTutorService.listTutorProfileHistory(input.tutorProfileId),
+        mapAdminTutorError,
+      );
+    },
+
     reviewTutorProfile: async ({
       context,
       input,
