@@ -283,7 +283,7 @@ export function NextLessonSection({
               ? "Book a tutor session and your next lesson will appear here."
               : "Confirmed teaching sessions will appear here."
           }
-          tone="secondary"
+          tone="info"
           size="compact"
           action={
             isStudent ? (
