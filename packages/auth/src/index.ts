@@ -33,21 +33,12 @@ export type VerificationEmailSender = (params: {
   email: string;
   otp: string;
   type: "sign-in" | "email-verification" | "forget-password" | "change-email";
-}) => Promise<void>;
-
-/**
- * Email port for the signup-confirmation (welcome) email (PRD notification
- * matrix: "Account created" -> email to the new student). Fires once on actual
- * user creation, never on a subsequent existing-user sign-in.
- */
-export type WelcomeEmailSender = (params: {
-  user: CogitoUser;
-  loginUrl: string;
+  /** True only when Better Auth is sending the automatic signup OTP. */
+  isSignup?: boolean;
 }) => Promise<void>;
 
 let resetPasswordEmailSender: ResetPasswordEmailSender | null = null;
 let verificationEmailSender: VerificationEmailSender | null = null;
-let welcomeEmailSender: WelcomeEmailSender | null = null;
 
 /**
  * Wires the email port used by Better Auth's reset-password flow.
@@ -62,20 +53,12 @@ export function setAuthEmailSender(sender: ResetPasswordEmailSender) {
 
 /**
  * Wires the email port used by the email-OTP verification plugin (G2).
- * Same circular-dependency rationale as setAuthEmailSender.
+ * Same circular-dependency rationale as setAuthEmailSender. `isSignup` is
+ * included only for Better Auth's automatic signup OTP so the composition
+ * root can add welcome content without changing resend/other OTP emails.
  */
 export function setVerificationEmailSender(sender: VerificationEmailSender) {
   verificationEmailSender = sender;
-}
-
-/**
- * Wires the signup-confirmation (welcome) email port (P2).
- * Same circular-dependency rationale as setAuthEmailSender — the sender lives
- * in @cogito-app/api's EmailService and is wired at boot by the composition
- * root (apps/server). Fires only on actual user creation.
- */
-export function setWelcomeEmailSender(sender: WelcomeEmailSender) {
-  welcomeEmailSender = sender;
 }
 
 // C6 (foundation-hardening): passwords must contain at least one uppercase
@@ -206,7 +189,7 @@ export function createAuth() {
       // setVerificationEmailSender). sendVerificationOnSignUp sends the OTP
       // right after sign-up; the verify-email endpoint marks the user verified.
       emailOTP({
-        sendVerificationOTP: async ({ email, otp, type }) => {
+        sendVerificationOTP: async ({ email, otp, type }, ctx) => {
           const sender = verificationEmailSender;
           if (!sender) {
             console.warn(
@@ -220,7 +203,15 @@ export function createAuth() {
             return;
           }
           try {
-            await sender({ email, otp, type });
+            const isSignup =
+              type === "email-verification" &&
+              ctx?.path?.startsWith("/sign-up") === true;
+            await sender({
+              email,
+              otp,
+              type,
+              ...(isSignup ? { isSignup: true } : {}),
+            });
           } catch (error) {
             // Never surface email failures to the caller (anti-enumeration);
             // the email provider logs its own failures.
@@ -249,16 +240,12 @@ export function createAuth() {
     databaseHooks: {
       user: {
         create: {
-          // P2: send the signup-confirmation (welcome) email on actual account
-          // creation. The PRD notification matrix requires a welcome email to
-          // new students with an onboarding entry point, login link, and brief
-          // platform intro. Fires only on a genuine new signup — an existing
-          // user signing in never re-creates the user row, so it does not re-send.
+          // Keep the configured production operator usable when the account
+          // is created after the server has booted. The email-OTP plugin's
+          // sign-up after hook sends the combined welcome + verification email.
           after: async (user) => {
-            // Keep the configured production operator usable when the account
-            // is created after the server has booted. Boot reconciliation
-            // covers pre-existing accounts; this hook covers first-time
-            // signup without changing local/test defaults.
+            // Boot reconciliation covers pre-existing accounts; this hook
+            // covers first-time signup without changing local/test defaults.
             if (
               isProductionLike(env.NODE_ENV) &&
               isConfiguredAdminEmail(user.email, env.ADMIN_EMAILS)
@@ -278,36 +265,6 @@ export function createAuth() {
                   }),
                 );
               }
-            }
-
-            const sender = welcomeEmailSender;
-            if (!sender) {
-              console.warn(
-                JSON.stringify({
-                  level: "warn",
-                  action: "welcome_email_not_configured",
-                  userId: user.id,
-                }),
-              );
-              return;
-            }
-            try {
-              const origin = env.CORS_ORIGIN.replace(/\/$/, "");
-              await sender({
-                user: user as unknown as CogitoUser,
-                loginUrl: `${origin}/login`,
-              });
-            } catch (error) {
-              // Never surface email failures to the caller (anti-enumeration);
-              // the email provider logs its own failures.
-              console.error(
-                JSON.stringify({
-                  level: "error",
-                  action: "welcome_email_send_failed",
-                  userId: user.id,
-                  error: { message: String(error) },
-                }),
-              );
             }
           },
         },

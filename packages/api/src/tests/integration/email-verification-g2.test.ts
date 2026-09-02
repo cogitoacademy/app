@@ -14,8 +14,13 @@ describe("G2: email verification via email-otp plugin", () => {
   const ts = Date.now();
   const email = `verify.g2.${ts}@cogito.test`;
 
-  test("sign-up sends a verification OTP (verification row + sender invoked)", async () => {
-    const sent: Array<{ email: string; otp: string; type: string }> = [];
+  test("sign-up sends one combined welcome + verification email", async () => {
+    const sent: Array<{
+      email: string;
+      otp: string;
+      type: string;
+      isSignup?: boolean;
+    }> = [];
     const { setVerificationEmailSender } = await import("@cogito-app/auth");
     setVerificationEmailSender(async (params) => {
       sent.push(params);
@@ -35,11 +40,13 @@ describe("G2: email verification via email-otp plugin", () => {
     expect(rows.length).toBeGreaterThan(0);
     expect(rows[0]!.value).toMatch(/^\d{6}/);
 
-    // The sender was invoked with the OTP.
+    // The sender was invoked once with the signup marker used by the
+    // composition root to render the welcome copy in the same email.
     expect(sent.length).toBe(1);
     expect(sent[0]!.email).toBe(email);
     expect(sent[0]!.otp).toMatch(/^\d{6}$/);
     expect(sent[0]!.type).toBe("email-verification");
+    expect(sent[0]!.isSignup).toBe(true);
   });
 
   test("verify-email with the correct OTP marks the user verified", async () => {
