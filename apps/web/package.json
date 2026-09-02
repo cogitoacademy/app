@@ -8,7 +8,7 @@
     "build": "vite build",
     "serve": "vite preview",
     "start": "vite",
-    "check-types": "vite build && tsgo --noEmit"
+    "check-types": "tsgo --noEmit"
   },
   "dependencies": {
     "@cogito-app/api": "workspace:*",

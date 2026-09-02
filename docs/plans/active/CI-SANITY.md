@@ -1,11 +1,11 @@
 # CI Sanity & False-Positive Elimination — Plan
 
-| Field      | Value                                                                                                                                                                                                                                                                                                                                                                                                                |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status     | **F1–F7 implemented + merged 2026-08-31** (#130, #132–#137); F1 blind-spot fix (Dependabot) merged 2026-09-01; F6 verdict recorded 2026-09-01; PR #152 refreshes the exact oxlint 1.80 baseline, fixes three new React findings, and makes the lint auto-fix push hook-safe; F8 (e2e in CI) + F10 (branch protection) remain; F9 (ACTIONS_BOT_PAT) operator console; F13 (lint-warning triage) documented 2026-08-31 |
-| Created    | 2026-08-31                                                                                                                                                                                                                                                                                                                                                                                                           |
-| Depends on | #126 merged (ops.sh + APPLY-RUNBOOK + this plan's trigger); main `85841b0`                                                                                                                                                                                                                                                                                                                                           |
-| Scope      | CI workflow fixes (fail-loud infra-plan, web-deploy verification, auto-rollback, dedupe, staging decision) + DLQ age-aware health                                                                                                                                                                                                                                                                                    |
+| Field      | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status     | **F1–F7 implemented + merged 2026-08-31** (#130, #132–#137); F1 blind-spot fix (Dependabot) merged 2026-09-01; F6 verdict recorded 2026-09-01; PR #152 refreshes the exact oxlint 1.80 baseline, fixes three new React findings, and makes the lint auto-fix push hook-safe; F14 CI test/coverage performance is implemented on `f/ci-test-coverage-performance`; F8 (e2e in CI) + F10 (branch protection) remain; F9 (ACTIONS_BOT_PAT) operator console; F13 (lint-warning triage) documented 2026-08-31 |
+| Created    | 2026-08-31                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Depends on | #126 merged (ops.sh + APPLY-RUNBOOK + this plan's trigger); main `85841b0`                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Scope      | CI workflow fixes (fail-loud infra-plan, web-deploy verification, auto-rollback, dedupe, staging decision, test/coverage performance) + DLQ age-aware health                                                                                                                                                                                                                                                                                                                                              |
 
 ## Why
 
@@ -54,6 +54,28 @@ Implementation deltas vs. the original fix sketches (all documented):
 - **F5** — implemented as the trigger-drop option: `ci.yml` now triggers only on `pull_request` (+ `workflow_dispatch`). All required check contexts survive (`lint`, `Type Check`, `Build`, `Test + Coverage`, `Terraform validate + plan`, `Ansible syntax-check`, `Plan-only audit docs present`, labeler, Semantic PR, auto-merge) because they hang off `pull_request` in their own workflows. cd-prod's `push: [main]` trigger is untouched (staging has no active pipelines).
 - **F7** — `.github/workflows/cd-staging.yml` deleted (locked decision, see Status log).
 
+## F14 — CI test and coverage performance (2026-09-02)
+
+Implemented on `f/ci-test-coverage-performance`:
+
+- Restore the shared Bun install cache before `bun install` in every CI job;
+  keep separate Turbo caches for typecheck and build, with optional remote
+  cache credentials.
+- Use full history and Turbo `--affected` for pull-request typecheck/build;
+  manual dispatches continue to run the full graph.
+- Remove the web production build from `check-types`; the Build job remains the
+  owner of the Vite production build.
+- Start Test + Coverage independently from lint/typecheck, run one lcov
+  coverage suite, keep the server suite in its separate `mock.module` process,
+  and explicitly fail if the coverage test command fails.
+- Remove the duplicate uninstrumented API pass while retaining the env/auth/db
+  coverage scope and 100% lcov gate.
+
+The local workflow-equivalent benchmark measured the old duplicate API pass at
+116.24 seconds. With that pass removed, the test/coverage phase is expected to
+save that duration; the exact GitHub Actions wall-clock time remains runner and
+cache dependent.
+
 ## Operator console actions (user, not code)
 
 - [ ] Branch protection on `main`: require status checks (`lint`, `Type Check`, `Build`, `Test + Coverage`, `Terraform validate + plan`, `Semantic PR`, `Labeler`) + **require branches up to date** (kills stale-base merges).
@@ -65,6 +87,7 @@ Implementation deltas vs. the original fix sketches (all documented):
 - infra-plan job fails loudly (with exact remediation message) when creds are absent on non-fork PRs; runs a real `terraform plan` when they exist.
 - A merged commit where the web image is broken makes CD red (and auto-rolls back), not silent.
 - No duplicated CI suite on merge commits; dependabot PRs either merged green or closed with a documented reason.
+- Pull-request typecheck/build use the affected graph, while manual dispatches use the full graph; Test + Coverage has no duplicate API execution and still fails on test or coverage-gate errors.
 - All docs synced (README plans table, CONTEXT, RUNBOOK) in the wave PR.
 
 ## Status log

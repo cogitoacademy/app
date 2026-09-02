@@ -16,12 +16,21 @@ section-level achievement errors. Violating this invariant triggers Base UI
 error #28 during rendering; the fix is frontend-only and adds no service,
 repository, event-key, or API contract.
 
-## CI coverage gate (2026-08-31)
+## CI test and coverage pipeline (2026-09-02)
 
-The CI coverage comment reads the generated lcov artifact and enforces 100%
-for `packages/api` lines, overall lines, functions, and branches. A 0/0 branch
-total is treated as 100%; the gate is configured by
-`.github/workflows/ci.yml` and implemented in
+The CI workflow restores the shared Bun install cache before installing
+dependencies. Pull-request typecheck and build tasks use Turbo `--affected`
+with full history; manual dispatches run the full graph. The web typecheck
+task is TypeScript-only, so it does not repeat the production Vite build.
+
+Test + Coverage starts independently of lint and typecheck. It runs one
+lcov-producing API/env/auth/db suite, then the server suite in a separate
+process because the webhook test uses `mock.module`. The old duplicate
+uninstrumented API pass is not run. The coverage comment reads the generated
+lcov artifact and enforces 100% for `packages/api` lines, overall lines,
+functions, and branches. A 0/0 branch total is treated as 100%; coverage test
+command failures are explicitly propagated after the comment/gate step. The
+gate is configured by `.github/workflows/ci.yml` and implemented in
 `.github/scripts/coverage-comment.ts`.
 
 ## Collection transition behavior (2026-08-28)

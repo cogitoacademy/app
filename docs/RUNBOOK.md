@@ -897,7 +897,7 @@ redis-cli ZCARD "cogito-jobs:delayed" # Delayed jobs
 Run the CI-equivalent coverage suite from the repository root after starting the test Postgres and Redis services:
 
 ```bash
-bun test --coverage --timeout 30000 packages/api/src/tests/ packages/env/src/ packages/auth/src/ packages/db/src/ apps/server/src/openapi.test.ts
+bun test --coverage --coverage-reporter=lcov --timeout 30000 packages/api/src/tests/ packages/env/src/ packages/auth/src/ packages/db/src/ apps/server/src/openapi.test.ts
 ```
 
 For the contact-sharing regression path, run the database-preparing wrapper
@@ -909,7 +909,17 @@ bun scripts/run-test-suite.mjs api packages/api/src/tests/integration/contact-sh
 bun scripts/run-test-suite.mjs e2e --grep "identity surfaces"
 ```
 
-The workflow also runs the server suite in a separate process because its webhook test uses module mocking. The coverage comment script enforces 100% coverage for `packages/api` lines, overall lines, functions, and branches from `coverage/lcov.info`; a 0/0 branch total is treated as 100%. If this gate fails, inspect the missing function/line records in the generated lcov report and add a behavior-level test before pushing. The Bun command's own function/statement output is diagnostic; the lcov gate is authoritative.
+The workflow runs this single coverage-instrumented suite and then runs the
+server suite in a separate process because its webhook test uses module
+mocking. The previous duplicate uninstrumented API pass is intentionally not
+run. Test + Coverage starts independently from lint and typecheck. The
+coverage comment script enforces 100% coverage for `packages/api` lines,
+overall lines, functions, and branches from `coverage/lcov.info`; a 0/0 branch
+total is treated as 100%. If this gate fails, inspect the missing function/line
+records in the generated lcov report and add a behavior-level test before
+pushing. A failed coverage test command is also propagated explicitly after
+the comment step. The Bun command's own function/statement output is
+diagnostic; the lcov gate is authoritative.
 
 The CI lint job uses the pinned oxlint 1.80.0 and oxfmt 0.65.0 toolchain. It
 emits **documented-intentional warnings**: `no-await-in-loop` = sequential
