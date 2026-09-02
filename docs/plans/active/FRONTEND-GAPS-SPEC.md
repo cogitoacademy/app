@@ -93,6 +93,10 @@ The onboarding selector stores normalized IDs for persistence and renders all cu
 
 The admin tutor review card now resolves proposed `subjectIds` through the active taxonomy and renders category/subject labels as wrapping badges instead of exposing raw UUIDs. Other pending values also wrap safely on narrow cards. This is presentation-only; the `adminTutor.listTutorProfiles` and `adminTutor.reviewTutorProfile` contracts are unchanged.
 
+### Achievement list table follow-up (2026-09-02)
+
+The student `/achievements` list and admin `/admin-achievements` moderation queue now use compact minimum-width Selia tables instead of card grids. Rows expose core identity/status/date information and a shared detail drawer contains the full metadata, proof/documentation links, moderator notes, and the relevant student or admin actions. The table containers scroll horizontally when the viewport is narrower than the column minimums, without changing any RPC, schema, or persistence contract.
+
 ### Tutor discovery pricing matrix follow-up (2026-08-27)
 
 The student-facing tutor drawer now combines the available Online and Offline Marks maps into one group-size table. Each modality has its own price column, populated values use the shared Cogito Marks icon prefix, and an em dash makes a missing modality/size combination explicit. This is a presentation-only change; the `tutors.listPublished`/`tutors.getProfile` response and pricing contracts are unchanged.
@@ -286,7 +290,7 @@ for classmates.
 | `/_app/bookings/$bookingId`  | booking-detail-page.tsx                   | Complete baseline — detail, lifecycle, reschedule, reporting, invites, notes, history                                                                                |
 | `/_app/tutors`               | tutors-page-content.tsx                   | Exists (discovery list)                                                                                                                                              |
 | `/_app/tutors/$tutorId/book` | create-booking-page.tsx                   | Exists (solo/group/series creation)                                                                                                                                  |
-| `/_app/achievements`         | achivements-page.tsx                      | Exists (submission + list)                                                                                                                                           |
+| `/_app/achievements`         | achivements-page.tsx                      | Exists (submission + table list)                                                                                                                                     |
 | `/_app/profile`              | profile-page.tsx + tutor-profile-page.tsx | Complete — role-aware student profile and tutor profile editor; tutor state, review feedback, pricing, and consolidated actions are available at the canonical route |
 | `/_app/onboarding`           | compatibility redirect                    | Complete — legacy tutor links redirect to `/profile`; other roles redirect to `/dashboard`                                                                           |
 | `/_app/tutor-bookings`       | tutor-bookings-page.tsx                   | Compatibility redirect to the shared `/bookings` list                                                                                                                |
@@ -295,7 +299,7 @@ for classmates.
 | `/_app/admin`                | admin-dashboard-page.tsx                  | Complete F1 admin workspace entry point                                                                                                                              |
 | `/_app/admin-operations`     | admin-operations-page.tsx                 | Complete F1 queue/detail surface — filters, hydrated participants/wallets/ledger, override, rooms, and searchable wallet lookup                                      |
 | `/_app/admin-tutors`         | admin tutor invite + review               | Complete — invite/review queue plus version-checked structured achievement correction                                                                                |
-| `/_app/admin-achievements`   | achievement-moderation-page.tsx           | Exists (moderation UI)                                                                                                                                               |
+| `/_app/admin-achievements`   | achievement-moderation-page.tsx           | Exists (table-based moderation UI)                                                                                                                                   |
 | `/_app/admin-economy`        | economy-settings-page.tsx                 | Complete — admin-managed Cogito take schedule with validation, preview, optimistic versioning, and audit-backed persistence                                          |
 
 ### Remaining gaps (no complete surface yet)
@@ -824,11 +828,19 @@ Follow existing frontend conventions:
 
 ### Selia Components Available
 
-Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePicker, Field, Select, Menu, Popover, Table, Item, Avatar, Divider, Separator, Checkbox, Chip, IconBox, InputGroup, Kbd, Sidebar, Spinner, Toast. See AGENTS.md for full list + import paths.
+Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePicker, Field, Select, Menu, Popover, Drawer, Table, Item, Avatar, Divider, Separator, Checkbox, Chip, IconBox, InputGroup, Kbd, Sidebar, Spinner, Toast. See AGENTS.md for full list + import paths.
 
 ---
 
 ### Version Notes
+
+- v1.63 (2026-09-02): Made the student and admin achievement `TableContainer` full-bleed within `CardBody` so the table aligns with both card edges; the inner container retains horizontal scrolling and the page remains constrained. No RPC/schema/persistence contract changed.
+
+- v1.62 (2026-09-02): Moved non-essential achievement metadata and row actions into a shared right-side detail drawer for student and admin tables. The compact tables retain core identifiers, status, awarded date, and a keyboard-accessible detail trigger; no RPC/schema/persistence contract changed.
+
+- v1.61 (2026-09-02): Constrained the student and admin achievement table wrappers with `min-w-0`/`max-w-full` so the card and page remain within the viewport; only the minimum-width table content scrolls horizontally. No RPC/schema/persistence contract changed.
+
+- v1.60 (2026-09-02): Replaced the student achievement card list and admin moderation card grid with minimum-width Selia tables. Both lists keep their existing row actions and links, scroll horizontally inside their containers on narrow viewports, and leave all RPC/schema/persistence contracts unchanged.
 
 - v1.59 (2026-09-02): Added the admin Active rooms catalog and Add room dialog to the Room approvals tab. The dialog calls the existing `room.create` mutation, validates name/location/capacity, and refreshes room selectors after a successful create; no API or schema contract changed.
 

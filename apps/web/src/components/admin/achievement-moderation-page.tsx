@@ -2,16 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import {
-  IconCalendarEvent,
-  IconCertificate,
-  IconCheck,
-  IconEdit,
-  IconInbox,
-  IconMapPin,
-  IconPhoto,
-  IconX,
-} from "@tabler/icons-react";
+import { IconCertificate, IconEye, IconInbox } from "@tabler/icons-react";
 import {
   Avatar,
   AvatarFallback,
@@ -23,9 +14,7 @@ import {
   Card,
   CardBody,
   CardDescription,
-  CardFooter,
   CardHeader,
-  CardHeaderAction,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
@@ -46,17 +35,15 @@ import {
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
 import {
-  Item,
-  ItemContent,
-  ItemDescription,
-  ItemMedia,
-  ItemTitle,
-} from "@cogito-app/ui/components/selia/item";
-import { EmptyStateCard } from "@/components/empty-state";
-import {
-  AchievementForm,
-  type AchievementCategory,
-} from "@/components/dashboard/achievement-form";
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@cogito-app/ui/components/selia/table";
+import { Text } from "@cogito-app/ui/components/selia/text";
 import {
   Select,
   SelectItem,
@@ -66,9 +53,17 @@ import {
   SelectValue,
 } from "@cogito-app/ui/components/selia/select";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
-import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
+import { EmptyStateCard } from "@/components/empty-state";
+import {
+  AchievementForm,
+  type AchievementCategory,
+} from "@/components/dashboard/achievement-form";
+import {
+  AchievementDetailDrawer,
+  formatAchievementDate,
+} from "@/components/dashboard/achievement-table";
 import { getUserFacingError } from "@/lib/error-message";
 import { client, orpc } from "@/utils/orpc";
 
@@ -82,6 +77,7 @@ const STATUS_CONFIG = {
   pending_review: { label: "Pending review", variant: "warning" },
   approved: { label: "Approved", variant: "success" },
   rejected: { label: "Rejected", variant: "danger" },
+  archived: { label: "Archived", variant: "secondary" },
 } as const;
 
 export function AchievementModerationPage() {
@@ -186,7 +182,11 @@ export function AchievementModerationPage() {
   }
 
   return (
-    <Stack direction="column" spacing="lg">
+    <Stack
+      direction="column"
+      spacing="lg"
+      className="w-full min-w-0 max-w-full"
+    >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <Heading size="md">Achievement moderation</Heading>
@@ -230,27 +230,20 @@ export function AchievementModerationPage() {
           tone={statusFilter === "pending" ? "success" : "secondary"}
         />
       ) : (
-        <div className="grid gap-4 xl:grid-cols-2">
-          {visibleAchievements.map((achievement) => (
-            <ModerationCard
-              key={achievement.id}
-              achievement={achievement}
-              mutationPending={review.isPending}
-              reviewingId={review.variables?.achievementId}
-              reviewingStatus={review.variables?.status}
-              onApprove={(id, eventName) =>
-                setReviewTarget({ id, eventName, action: "approved" })
-              }
-              onReject={(id, eventName) =>
-                setReviewTarget({ id, eventName, action: "rejected" })
-              }
-              onEdit={(item) => {
-                setEditAchievement(item);
-                setEditOpen(true);
-              }}
-            />
-          ))}
-        </div>
+        <ModerationTable
+          achievements={visibleAchievements}
+          mutationPending={review.isPending}
+          onApprove={(id, eventName) =>
+            setReviewTarget({ id, eventName, action: "approved" })
+          }
+          onReject={(id, eventName) =>
+            setReviewTarget({ id, eventName, action: "rejected" })
+          }
+          onEdit={(item) => {
+            setEditAchievement(item);
+            setEditOpen(true);
+          }}
+        />
       )}
 
       <Dialog
@@ -347,177 +340,129 @@ export function AchievementModerationPage() {
   );
 }
 
-function ModerationCard({
-  achievement,
+function ModerationTable({
+  achievements,
   mutationPending,
-  reviewingId,
-  reviewingStatus,
   onApprove,
   onReject,
   onEdit,
 }: {
-  achievement: AdminAchievement;
+  achievements: readonly AdminAchievement[];
   mutationPending: boolean;
-  reviewingId?: string;
-  reviewingStatus?: "approved" | "rejected" | "archived";
   onApprove: (id: string, eventName: string) => void;
   onReject: (id: string, eventName: string) => void;
   onEdit: (achievement: AdminAchievement) => void;
 }) {
-  const status =
-    STATUS_CONFIG[achievement.status as keyof typeof STATUS_CONFIG] ??
-    STATUS_CONFIG.pending;
-  const studentName = achievement.student?.name ?? "Cogito student";
-  const isReviewing = mutationPending && reviewingId === achievement.id;
-  const isEditable =
-    achievement.status === "pending" || achievement.status === "pending_review";
+  const [selectedAchievement, setSelectedAchievement] =
+    useState<AdminAchievement | null>(null);
 
   return (
-    <Card className="flex flex-col">
-      <CardHeader>
-        <CardTitle>{achievement.eventName}</CardTitle>
-        <CardDescription>{achievement.award}</CardDescription>
-        <CardHeaderAction>
-          <Badge variant={status.variant} pill>
-            {status.label}
-          </Badge>
-        </CardHeaderAction>
-      </CardHeader>
-      <CardBody className="flex-1 space-y-5">
-        <Item variant="plain" size="sm">
-          <ItemMedia>
-            <Avatar>
-              <AvatarImage src={achievement.student?.image ?? undefined} />
-              <AvatarFallback>
-                {studentName.slice(0, 2).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-          </ItemMedia>
-          <ItemContent>
-            <ItemTitle>{studentName}</ItemTitle>
-            <ItemDescription>
-              {achievement.student?.email ?? achievement.userId}
-            </ItemDescription>
-          </ItemContent>
-        </Item>
-
-        <div className="flex flex-wrap gap-2">
-          <Badge variant="secondary">{achievement.category}</Badge>
-          <Badge variant="tertiary">{achievement.level}</Badge>
-          {achievement.subjects?.map((subject) => (
-            <Badge key={subject} variant="info">
-              {subject}
-            </Badge>
-          ))}
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          {achievement.awardingDate ? (
-            <AchievementFact
-              icon={<IconCalendarEvent />}
-              label="Event date"
-              value={new Intl.DateTimeFormat("en-ID", {
-                day: "numeric",
-                month: "short",
-                year: "numeric",
-              }).format(new Date(achievement.awardingDate))}
-            />
-          ) : null}
-          {achievement.location ? (
-            <AchievementFact
-              icon={<IconMapPin />}
-              label="Location"
-              value={achievement.location}
-            />
-          ) : null}
-        </div>
-
-        {achievement.description ? (
-          <Text className="text-sm text-muted">{achievement.description}</Text>
-        ) : null}
-
-        {achievement.adminNote ? (
-          <div className="rounded-lg bg-accent p-3">
-            <Text className="text-sm font-medium">Moderator note</Text>
-            <Text className="mt-1 text-sm text-muted">
-              {achievement.adminNote}
-            </Text>
-          </div>
-        ) : null}
-      </CardBody>
-      <CardFooter className="flex-wrap justify-between gap-3">
-        {achievement.evidenceUrl ? (
-          <Button
-            variant="plain"
-            size="sm"
-            render={
-              <a
-                href={achievement.evidenceUrl}
-                target="_blank"
-                rel="noreferrer"
-                aria-label={`Open evidence for ${achievement.eventName}`}
-              />
-            }
-            nativeButton={false}
-          >
-            <IconPhoto /> View evidence
-          </Button>
-        ) : (
-          <Text className="text-sm text-dimmed">No evidence attached</Text>
-        )}
-        {isEditable ? (
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button
-              variant="plain"
-              size="sm"
-              onClick={() => onEdit(achievement)}
-              disabled={mutationPending}
+    <>
+      <Card className="w-full min-w-0 max-w-full overflow-hidden">
+        <CardHeader>
+          <CardTitle>Submissions</CardTitle>
+          <CardDescription>
+            Open any submission for the full details and moderation actions.
+          </CardDescription>
+        </CardHeader>
+        <CardBody aria-busy={mutationPending} className="min-w-0 max-w-full">
+          <TableContainer className="w-[calc(100%+3rem)]! min-w-0">
+            <Table
+              aria-label="Achievement moderation submissions"
+              className="min-w-[52rem] text-sm"
             >
-              <IconEdit /> Correct
-            </Button>
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={() => onReject(achievement.id, achievement.eventName)}
-              progress={isReviewing && reviewingStatus === "rejected"}
-              disabled={mutationPending}
-            >
-              <IconX /> Reject
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => onApprove(achievement.id, achievement.eventName)}
-              progress={isReviewing && reviewingStatus === "approved"}
-              disabled={mutationPending}
-            >
-              <IconCheck /> Approve
-            </Button>
-          </div>
-        ) : null}
-      </CardFooter>
-    </Card>
-  );
-}
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="min-w-64">Student</TableHead>
+                  <TableHead className="min-w-72">Achievement</TableHead>
+                  <TableHead className="min-w-40">Awarded</TableHead>
+                  <TableHead className="min-w-36">Status</TableHead>
+                  <TableHead className="min-w-36 text-right">Details</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {achievements.map((achievement) => {
+                  const status =
+                    STATUS_CONFIG[
+                      achievement.status as keyof typeof STATUS_CONFIG
+                    ] ?? STATUS_CONFIG.pending;
+                  const studentName =
+                    achievement.student?.name ?? "Cogito student";
 
-function AchievementFact({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="flex gap-3">
-      <IconBox variant="secondary-subtle" size="sm">
-        {icon}
-      </IconBox>
-      <div className="min-w-0">
-        <Text className="text-sm text-muted">{label}</Text>
-        <Text className="truncate font-medium">{value}</Text>
-      </div>
-    </div>
+                  return (
+                    <TableRow key={achievement.id}>
+                      <TableCell className="align-top">
+                        <div className="flex min-w-48 items-center gap-3">
+                          <Avatar size="sm">
+                            <AvatarImage
+                              src={achievement.student?.image ?? undefined}
+                            />
+                            <AvatarFallback>
+                              {studentName.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                            <Text className="truncate font-medium">
+                              {studentName}
+                            </Text>
+                            <Text className="truncate text-sm text-muted">
+                              {achievement.student?.email ?? achievement.userId}
+                            </Text>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="align-top">
+                        <Text className="max-w-96 truncate font-medium">
+                          {achievement.eventName}
+                        </Text>
+                        <Text className="mt-1 max-w-96 truncate text-sm text-muted">
+                          {achievement.award}
+                        </Text>
+                      </TableCell>
+                      <TableCell className="align-top">
+                        <Text className="whitespace-nowrap font-medium">
+                          {formatAchievementDate(achievement.awardingDate)}
+                        </Text>
+                      </TableCell>
+                      <TableCell className="align-top">
+                        <Badge
+                          variant={status.variant}
+                          className="whitespace-nowrap"
+                        >
+                          {status.label}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="align-top text-right">
+                        <Button
+                          variant="plain"
+                          size="sm"
+                          onClick={() => setSelectedAchievement(achievement)}
+                        >
+                          <IconEye /> View details
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </CardBody>
+      </Card>
+
+      <AchievementDetailDrawer
+        achievement={selectedAchievement}
+        mode="admin"
+        open={selectedAchievement !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelectedAchievement(null);
+        }}
+        mutationPending={mutationPending}
+        onApprove={onApprove}
+        onReject={onReject}
+        onEdit={onEdit}
+      />
+    </>
   );
 }
 

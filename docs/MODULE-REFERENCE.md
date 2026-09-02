@@ -171,6 +171,10 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - Optimistic locking prevents lost updates (`version` field)
 - Admin correction is allowed only for `pending`/`pending_review`, can update every submission field plus public documentation, writes an audit snapshot, and does not change status; admin review changes status to `approved` or `rejected`
 
+**Web presentation:**
+
+- The student `/achievements` list and admin `/admin-achievements` queue use compact minimum-width Selia tables with status/date/identity columns and a **View details** entry point. A shared detail drawer holds the full submission metadata, attachments, moderator notes, and the relevant pending edit/delete or correct/approve/reject actions. Page/card wrappers remain constrained to the viewport, so only the table content scrolls horizontally. These layouts do not change service behavior, RPC inputs/outputs, or stored data.
+
 ---
 
 ## Admin Module

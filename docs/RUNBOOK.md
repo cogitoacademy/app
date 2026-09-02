@@ -119,7 +119,7 @@ As an authenticated student, open `/knowledge-bank`. With at least 35 total Mark
 
 ### Empty-state consistency smoke check
 
-With signed-in student, tutor, and admin sessions, exercise empty data and no-match states in the calendar, tutor discovery, Knowledge Bank, bookings, notifications, achievements, balance history, availability preview, booking detail, and admin operations surfaces. Confirm each state has the shared Selia icon/title/description treatment, uses the right density for its context, distinguishes an empty collection from an active filter with no matches, and keeps its action usable when one exists. Check the notification menu, calendar popup, dialog sections, field-level subject/proof-link states, and table/list sections for blank areas or orphaned headers. Repeat in light and dark themes and at narrow width; no horizontal overflow or duplicate empty copy should appear. This is frontend-only and must not change request payloads.
+With signed-in student, tutor, and admin sessions, exercise empty data and no-match states in the calendar, tutor discovery, Knowledge Bank, bookings, notifications, achievements, balance history, availability preview, booking detail, and admin operations surfaces. Confirm each state has the shared Selia icon/title/description treatment, uses the right density for its context, distinguishes an empty collection from an active filter with no matches, and keeps its action usable when one exists. Check the notification menu, calendar popup, dialog sections, field-level subject/proof-link states, and table/list sections for blank areas or orphaned headers. Repeat in light and dark themes and at narrow width; there should be no page-level horizontal overflow or duplicate empty copy, while intentional table containers may scroll horizontally when their minimum column widths exceed the viewport. This is frontend-only and must not change request payloads.
 
 For admin operations, confirm the booking monitor keeps body text readable, aligns multi-line cells at the top, keeps status/category badges on one line, and scrolls horizontally only when the viewport cannot fit the minimum table width. Open **View details** and verify navigation to `/admin-operations/bookings/:bookingId`; refresh that URL and confirm participant wallets, booking ledger activity, meeting fallback, report context, state history, and override controls still load. A student or tutor opening the URL must be redirected to `/dashboard`, and a missing booking must render the in-page not-found state with a route back to operations.
 
@@ -276,12 +276,30 @@ modal, select a day, and verify the trigger shows the chosen date. Open the
 calendar month/year dropdowns as well; each popup must remain clickable and
 must not be hidden behind the dialog backdrop.
 
+With at least one submission present, verify the student achievement list is a
+compact semantic table with readable achievement, status, awarded date, and
+**View details** columns. Open a row and confirm the drawer exposes category,
+level, location, description, attachments, and moderator notes; pending rows
+must keep **Edit** and **Delete** usable. At a narrow viewport, confirm the
+table reaches the card edges and scrolls horizontally inside its container
+without creating page-level overflow, and that the details trigger, drawer
+controls, and attachment links remain keyboard accessible.
+
 As an admin, open `/admin-achievements`, choose **Correct** on a pending
 submission, change each submission field and the **Public documentation image**,
 save, and confirm the row stays pending until an explicit Approve/Reject action.
 Repeat with a stale version and confirm the API returns a conflict without
 overwriting the newer correction; verify the `achievement_admin_updated` audit
 record contains before/after content. The API-level regression command is:
+
+With submissions in more than one status, verify the admin queue is a compact
+table with student identity, achievement, awarded date, status, and **View
+details** columns. Open a pending row and confirm the drawer exposes the full
+metadata, evidence/documentation, and **Correct**, **Reject**, and **Approve**
+actions; reviewed rows remain read-only. Change the status filter and confirm
+the counts and visible rows stay aligned. At a narrow viewport, the table reaches
+the card edges and may scroll horizontally within its card, but the surrounding
+page must not overflow.
 
 ```bash
 bun test packages/api/src/tests/unit/achievement.types.test.ts packages/api/src/tests/unit/achievement.router.test.ts packages/api/src/tests/unit/achievement.handler.test.ts packages/api/src/tests/unit/achievement.service.test.ts packages/api/src/tests/unit/achievement.repo.test.ts

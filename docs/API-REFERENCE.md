@@ -607,6 +607,7 @@ The web tutor profile editor groups education, competition achievements, and exp
 - **Auth:** Protected
 - **Input:** None
 - **Output:** `{ items: Achievement[] }`
+- **Description:** The student `/achievements` page consumes this unchanged list and presents a compact horizontally scrollable table; full metadata and pending edit/delete actions are available in a frontend-only detail drawer.
 
 ### `achievement.create`
 
@@ -634,6 +635,7 @@ The web tutor profile editor groups education, competition achievements, and exp
 - **Auth:** Admin
 - **Input:** `{ status?, limit?, offset? }` (`limit` default 50)
 - **Output:** `{ items: Achievement[], total, limit, offset }`
+- **Description:** The admin `/admin-achievements` page consumes this unchanged paginated list and presents submissions in a compact horizontally scrollable moderation table; full metadata and approve/reject/correct actions are available in a frontend-only detail drawer, while the mutations remain separate RPC calls.
 
 ### `achievement.adminUpdate`
 
