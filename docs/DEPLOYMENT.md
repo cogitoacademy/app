@@ -349,9 +349,9 @@ message and exits 1 (readable failure instead of a bare `curl exit 6`).
    > current pipeline is the restored `bb1ccb9a` webhook + PATCH flow described
    > above; the native endpoint remains available in Coolify for manual
    > rollbacks (Coolify UI → Rollback to previous release).
-   The migration task allowlists `DATABASE_URL` in `turbo.json`; this is required
-   because Turbo's strict environment mode otherwise filters the URL before it
-   reaches `drizzle-kit`.
+   > The migration task allowlists `DATABASE_URL` in `turbo.json`; this is required
+   > because Turbo's strict environment mode otherwise filters the URL before it
+   > reaches `drizzle-kit`.
 6. A separate step POSTs the web Coolify webhook and immediately verifies the
    web surface: `scripts/migrate-and-deploy.sh --poll-web` polls
    `https://app.cogitoacademy.id` for HTTP 200 (bounded 20×15s). The web image

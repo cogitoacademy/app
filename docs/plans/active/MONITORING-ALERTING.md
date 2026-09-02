@@ -1,11 +1,11 @@
 # Monitoring & DLQ Alerting — Plan
 
-| Field      | Value                                                                                                                                                                                                                                                                                                                                                                    |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Field      | Value                                                                                                                                                                                                                                                                                                                                      |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Status     | **DONE (2026-09-02)** — items 1–3 + 5 delivered; Kuma wired by the operator (4 monitors + `COGITO ALERT` Discord attached + `cogito` status page); disk watchdog installed and verified; memory-headroom recommendation documented (deferred — operator decision). See the status log for the two root causes fixed during the wiring pass |
-| Created    | 2026-08-31                                                                                                                                                                                                                                                                                                                                                               |
-| Depends on | DEPLOYMENT-WAVE-2 (#121/#122) merged; infra apply (Terraform + Ansible) in progress                                                                                                                                                                                                                                                                                      |
-| Scope      | Uptime Kuma + Discord alerting, DLQ age-aware health, ops visibility                                                                                                                                                                                                                                                                                                     |
+| Created    | 2026-08-31                                                                                                                                                                                                                                                                                                                                 |
+| Depends on | DEPLOYMENT-WAVE-2 (#121/#122) merged; infra apply (Terraform + Ansible) in progress                                                                                                                                                                                                                                                        |
+| Scope      | Uptime Kuma + Discord alerting, DLQ age-aware health, ops visibility                                                                                                                                                                                                                                                                       |
 
 ## Why
 
@@ -156,7 +156,7 @@ Ansible playbook (decrypted from the vault on the control node).
   - Not created: `api-cert` / `app-cert` certificate monitors (recommended
     follow-up).
   - Disk state recorded: 36% used after the operator's `docker image prune
-    -f` (99% → 36%, 2026-09-02); watchdog first run pending (cron 03:30 WIB
+-f` (99% → 36%, 2026-09-02); watchdog first run pending (cron 03:30 WIB
     — log `/var/log/cogito-disk-gc.log` did not exist yet at 17:33 UTC).
   - Memory headroom recommendation documented in RUNBOOK (deferred —
     operator decision): 2G swap + per-resource Coolify memory limits (API

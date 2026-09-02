@@ -16,12 +16,12 @@ declares the service itself; everything in this runbook is a one-time UI pass
 
 ## Live state (verified 2026-09-02)
 
-| Monitor | Type | Target | Interval | Retries | Keyword |
-|---|---|---|---|---|---|
-| `api-health` | HTTP(s) - Keyword | `https://api.cogitoacademy.id/health` | 60s | 2 | `"status":"ok"` |
-| `COGITO ACADEMY` | Group | — | 60s | 0 | — |
-| `web-app` | HTTP(s) | `https://app.cogitoacademy.id` | 60s | 2 | — |
-| `DLQ DEPTH` | HTTP(s) - Keyword | `https://api.cogitoacademy.id/health` | 60s | 3 | `"dlqDepth":0` |
+| Monitor          | Type              | Target                                | Interval | Retries | Keyword         |
+| ---------------- | ----------------- | ------------------------------------- | -------- | ------- | --------------- |
+| `api-health`     | HTTP(s) - Keyword | `https://api.cogitoacademy.id/health` | 60s      | 2       | `"status":"ok"` |
+| `COGITO ACADEMY` | Group             | —                                     | 60s      | 0       | —               |
+| `web-app`        | HTTP(s)           | `https://app.cogitoacademy.id`        | 60s      | 2       | —               |
+| `DLQ DEPTH`      | HTTP(s) - Keyword | `https://api.cogitoacademy.id/health` | 60s      | 3       | `"dlqDepth":0`  |
 
 - **Notification:** `COGITO ALERT` (Discord) — attached to **all four
   monitors** (`monitor_notification` non-empty; the 2026-09-02 fix).

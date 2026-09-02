@@ -755,14 +755,14 @@ emergency restore against the actual object list first.
 
 ### What alerts arrive
 
-| Alert                                                      | Source               | Meaning                                                         | Response                                                      |
-| ---------------------------------------------------------- | -------------------- | --------------------------------------------------------------- | ------------------------------------------------------------- |
-| Kuma: api /health down                                     | Kuma monitor         | API unreachable or `status != ok` (DB/Redis/scheduler degraded) | `./ops.sh health`, `./ops.sh status`, check Coolify logs      |
-| Kuma: app down                                             | Kuma monitor         | Web app unreachable                                             | `curl -sI https://app.cogitoacademy.id`, Coolify web resource |
+| Alert                                                      | Source               | Meaning                                                           | Response                                                      |
+| ---------------------------------------------------------- | -------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------- |
+| Kuma: api /health down                                     | Kuma monitor         | API unreachable or `status != ok` (DB/Redis/scheduler degraded)   | `./ops.sh health`, `./ops.sh status`, check Coolify logs      |
+| Kuma: app down                                             | Kuma monitor         | Web app unreachable                                               | `curl -sI https://app.cogitoacademy.id`, Coolify web resource |
 | Kuma: cert expiring                                        | Kuma monitor         | TLS cert for `api.`/`app.` near expiry (monitors not yet created) | Traefik/Let's Encrypt renewal check                           |
-| Kuma: dlqDepth > 0                                         | Kuma keyword monitor | A **fresh** DLQ failure landed in the last 24h                  | `./ops.sh dlq` to see what failed                             |
-| Discord: "VPS disk at N%"                                  | disk watchdog        | Disk ≥ 85%                                                      | `./ops.sh disk`; plan cleanup                                 |
-| Discord: "CRITICAL: VPS disk still at N% after auto-prune" | disk watchdog        | Disk ≥ 92% **after** the prune ladder                           | Operator action required — see below                          |
+| Kuma: dlqDepth > 0                                         | Kuma keyword monitor | A **fresh** DLQ failure landed in the last 24h                    | `./ops.sh dlq` to see what failed                             |
+| Discord: "VPS disk at N%"                                  | disk watchdog        | Disk ≥ 85%                                                        | `./ops.sh disk`; plan cleanup                                 |
+| Discord: "CRITICAL: VPS disk still at N% after auto-prune" | disk watchdog        | Disk ≥ 92% **after** the prune ladder                             | Operator action required — see below                          |
 
 ### Disk thresholds & auto-prune
 
@@ -824,8 +824,9 @@ operator's `docker image prune -f` reclaimed the space (99% → 36%, verified
 The VPS has 3.8G RAM, **no swap**, and **no container memory limits**
 (verified 2026-09-02: all containers `Memory: 0`). Recommended hardening
 (deferred — operator decision):
+
 - Add 2G swap: `sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
-  && sudo mkswap /swapfile && sudo swapon /swapfile` (+ fstab entry).
+&& sudo mkswap /swapfile && sudo swapon /swapfile` (+ fstab entry).
 - Set Coolify per-resource memory limits: API 512M, Redis 256M, Postgres
   512M, Kuma 256M (Coolify UI → resource → Advanced → Memory limit).
 
