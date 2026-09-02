@@ -375,8 +375,7 @@ export function BookingDetailPage({
     (booking.currentState === "confirmed" ||
       booking.currentState === "scheduled") &&
     (!booking.meetingUrl || booking.meeting?.provider === "manual");
-  const sessionHasEnded =
-    new Date(booking.scheduledEndAt).getTime() <= now;
+  const sessionHasEnded = new Date(booking.scheduledEndAt).getTime() <= now;
   const tutorActionPending =
     accept.isPending ||
     decline.isPending ||

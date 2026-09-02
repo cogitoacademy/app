@@ -5,7 +5,7 @@
 | Version | Date       | Status                | Summary                                                                                                                                                               |
 | ------- | ---------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1.1.1   | 2026-09-01 | Implemented follow-up | Booking list and detail titles reuse the canonical Calendar/Meet event-title format                                                                                   |
-| 1.1.0   | 2026-08-29 | Implemented           | Booking topic selection and immutable category/specialization snapshot drive standardized Calendar/Meet metadata                                                         |
+| 1.1.0   | 2026-08-29 | Implemented           | Booking topic selection and immutable category/specialization snapshot drive standardized Calendar/Meet metadata                                                      |
 | 1.0.1   | 2026-08-28 | Implemented follow-up | Session Notes replaces the booking-form Learning goal label; free-text notes may include reference links, while the existing API/storage field remains `learningGoal` |
 
 ## Scheduling invariants
