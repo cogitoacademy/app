@@ -51,6 +51,14 @@
         proto: tcp
       loop: [80, 443]
 
+    - name: UFW remove any public SSH allow (bootstrap leftover — self-healing)
+      community.general.ufw:
+        rule: allow
+        port: "22"
+        proto: tcp
+        delete: true
+      ignore_errors: true
+
     - name: UFW allow SSH from tailnet only
       community.general.ufw:
         rule: allow
