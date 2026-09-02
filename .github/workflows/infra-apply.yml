@@ -225,9 +225,9 @@ jobs:
 
       - name: Apply — uptime-kuma
         if: github.event_name == 'workflow_dispatch' || needs.detect.outputs.uptime-kuma == 'true'
-        run:
+        run: |
           ansible-playbook -i infra/ansible/inventory.ini infra/ansible/uptime-kuma.yml \
-          -e coolify_api_url="http://127.0.0.1:8000/api/v1"
+            -e coolify_api_url="http://127.0.0.1:8000/api/v1"
 
       - name: Post-apply verification
         run: |
