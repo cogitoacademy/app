@@ -939,7 +939,7 @@ RPC contract.
 - **Auth:** Admin
 - **Input:** `{ bookingId, roomId, startAt, endAt }`
 - **Output:** `{ roomBooking }`
-- **Description:** Confirms a room for an offline booking and transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED`; notifies tutor + confirmed students (G14, #46)
+- **Description:** Confirms a room for an offline booking and transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED`; notifies tutor + confirmed students (G14, #46). The admin UI invokes this from the Room approvals queue or the booking detail Offline room card; `bookingId` and `roomId` remain internal identifiers in the RPC input.
 
 ### `room.checkAvailability`
 
@@ -953,14 +953,14 @@ RPC contract.
 - **Auth:** Admin
 - **Input:** `{ bookingId, roomId, startAt, endAt }`
 - **Output:** `{ roomBooking }`
-- **Description:** Moves a booking to a different room, freeing the previous one
+- **Description:** Moves a booking to a different room, freeing the previous one. The admin UI invokes this from the booking detail Offline room card after the operator selects the booking contextually.
 
 ### `room.cancelBooking`
 
 - **Auth:** Admin
 - **Input:** `{ bookingId }`
 - **Output:** `{ cancelled: true }`
-- **Description:** Cancels a booking's room assignment. While the booking is awaiting room approval, this releases its holds and transitions it to `cancelled`; it also handles pending approvals that have no room-booking row because the requested room was unavailable.
+- **Description:** Cancels a booking's room assignment. While the booking is awaiting room approval, this releases its holds and transitions it to `cancelled`; it also handles pending approvals that have no room-booking row because the requested room was unavailable. The UI confirms this destructive action before sending the mutation.
 
 ---
 
