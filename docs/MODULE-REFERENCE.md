@@ -6,10 +6,10 @@ The 2026-09-02 Lefthook lint-gate alignment changes repository tooling only;
 services, modules, event keys, and business rules are unchanged.
 
 Production release orchestration is also outside module contracts. The CD
-script invokes the Coolify webhook with `force=true` to pull the current
-registry image and uses the native rollback endpoint; it does not mutate the
-application configuration and requires deploy access only. No service, event
-key, or business rule is changed.
+script selects immutable `v<GIT_SHA>` through Coolify's native image
+rollback/deployment endpoint; it does not mutate application configuration
+and requires deploy access only. No service, event key, or business rule is
+changed.
 
 The 2026-09-02 admin booking-detail consolidation is presentation-only; room,
 wallet, ledger, and state-history services and event keys are unchanged.
