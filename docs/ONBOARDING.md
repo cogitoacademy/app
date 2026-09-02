@@ -47,7 +47,7 @@ bun run db:test
 # Run migrations
 bun run db:migrate
 
-# Seed the database (optional, creates test data)
+# Default mark packages are installed by migration 0041. Optional local/test seed:
 bun run seed-packages
 
 # Start dev server (web + server)

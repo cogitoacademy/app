@@ -346,6 +346,48 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ---
 
+## Admin Mark Packages (`adminMarkPackage.*`)
+
+All routes are admin-only. Package `code` is the stable business key used by
+`payment.createPurchase`; it cannot be changed after creation.
+
+### `adminMarkPackage.list`
+
+- **RPC path:** `/rpc/admin/mark-packages/list`
+- **Auth:** Admin
+- **Input:** None
+- **Output:** `MarkPackage[]` (includes inactive packages)
+- **Description:** Lists the full mark-package catalog for administration, ordered by Marks and code.
+
+### `adminMarkPackage.create`
+
+- **RPC path:** `/rpc/admin/mark-packages/create`
+- **Auth:** Admin
+- **Input:** `{ code, name, marks, priceIdr, isActive? }`; `code` is a lowercase slug and `isActive` defaults to `true`
+- **Output:** `MarkPackage`
+- **Errors:** `MARK_PACKAGE_CODE_CONFLICT` (409)
+- **Description:** Creates a package with an application-generated UUID id. The package is immediately available for purchase when active.
+
+### `adminMarkPackage.update`
+
+- **RPC path:** `/rpc/admin/mark-packages/update`
+- **Auth:** Admin
+- **Input:** `{ id, name, marks, priceIdr }`
+- **Output:** `MarkPackage`
+- **Errors:** `MARK_PACKAGE_NOT_FOUND` (404)
+- **Description:** Updates display name, Marks, and IDR price. The package code remains immutable so existing purchase clients and payment records remain valid.
+
+### `adminMarkPackage.setActive`
+
+- **RPC path:** `/rpc/admin/mark-packages/set-active`
+- **Auth:** Admin
+- **Input:** `{ id, isActive }`
+- **Output:** `MarkPackage`
+- **Errors:** `MARK_PACKAGE_NOT_FOUND` (404)
+- **Description:** Activates or deactivates a package without deleting it. Inactive packages are omitted from `wallet.listPackages`; an unchanged active state is a no-op.
+
+---
+
 ## Admin Tutor (`adminTutor.*`)
 
 ### `adminTutor.inspectInvitee`
@@ -629,8 +671,8 @@ The web tutor profile editor groups education, competition achievements, and exp
 
 - **Auth:** Protected
 - **Input:** None
-- **Output:** `{ packages: MarkPackage[] }`
-- **Description:** Returns active purchasable mark packages. Seeded values (PRD OQ-01): Starter Pack 50 Marks / Rp 312,500; Learner Pack 120 Marks / Rp 690,000; Explorer Pack 200 Marks / Rp 1,070,000; Pioneer Pack 400 Marks / Rp 2,000,000.
+- **Output:** `MarkPackage[]`
+- **Description:** Returns active purchasable mark packages. The default catalog is installed automatically by versioned database migration `0041_seed_mark_packages.sql`; values are Starter Pack 50 Marks / Rp 312,500; Learner Pack 120 Marks / Rp 690,000; Explorer Pack 200 Marks / Rp 1,070,000; Pioneer Pack 400 Marks / Rp 2,000,000. Admins can manage later catalog changes through `adminMarkPackage.*`.
 
 ### `wallet.knowledgeBankEligible`
 

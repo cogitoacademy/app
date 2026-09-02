@@ -41,7 +41,7 @@ cp apps/server/.env.example apps/server/.env
 cp apps/web/.env.example apps/web/.env
 # Edit BETTER_AUTH_SECRET to a 32+ character string
 
-# 5. (Optional) Seed package data
+# 5. (Optional) Seed package data for local/test setup; migration 0041 installs defaults automatically
 bun run seed-packages
 ```
 
@@ -112,20 +112,20 @@ See [`docs/CONTEXT.md`](docs/CONTEXT.md) for full architecture details and [`AGE
 
 ## Available Scripts
 
-| Script                  | Description                              |
-| ----------------------- | ---------------------------------------- |
-| `bun run dev`           | Start web + server in dev mode           |
-| `bun run build`         | Build all apps                           |
-| `bun run dev:web`       | Web only                                 |
-| `bun run dev:server`    | Server only                              |
-| `bun run check`         | Oxlint + Oxfmt                           |
-| `bun run check-types`   | TypeScript check (all workspaces)        |
-| `bun run test`          | Run tests                                |
-| `bun run test:api`      | API tests (unit + integration, needs DB) |
-| `bun run test:coverage` | Tests with coverage gate                 |
-| `bun run db:start`      | Start PostgreSQL Docker container        |
-| `bun run db:stop`       | Stop PostgreSQL container                |
-| `bun run db:migrate`    | Apply migrations                         |
-| `bun run db:generate`   | Generate migration from schema changes   |
-| `bun run db:studio`     | Drizzle Studio UI                        |
-| `bun run seed-packages` | Seed mark package data                   |
+| Script                  | Description                                              |
+| ----------------------- | -------------------------------------------------------- |
+| `bun run dev`           | Start web + server in dev mode                           |
+| `bun run build`         | Build all apps                                           |
+| `bun run dev:web`       | Web only                                                 |
+| `bun run dev:server`    | Server only                                              |
+| `bun run check`         | Oxlint + Oxfmt                                           |
+| `bun run check-types`   | TypeScript check (all workspaces)                        |
+| `bun run test`          | Run tests                                                |
+| `bun run test:api`      | API tests (unit + integration, needs DB)                 |
+| `bun run test:coverage` | Tests with coverage gate                                 |
+| `bun run db:start`      | Start PostgreSQL Docker container                        |
+| `bun run db:stop`       | Stop PostgreSQL container                                |
+| `bun run db:migrate`    | Apply migrations                                         |
+| `bun run db:generate`   | Generate migration from schema changes                   |
+| `bun run db:studio`     | Drizzle Studio UI                                        |
+| `bun run seed-packages` | Seed mark package data (local/test or approved recovery) |

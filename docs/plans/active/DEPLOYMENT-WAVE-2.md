@@ -133,8 +133,12 @@ Host processes: bun 244MB (app server) · traefik 99MB · soketi 79MB ·
 4. **Xendit sandbox wiring** (see §4).
 5. **Backup `DATABASE_URL`** must resolve from the VPS host (published port /
    container IP), not the private hostname.
-6. **Seed packages on prod** before any real payment (`onConflictDoNothing`
-   keeps stale prices).
+6. **Verify the default package catalog after deploy.** Migration
+   `0041_seed_mark_packages.sql` installs Starter/Learner/Explorer/Pioneer
+   idempotently during the normal CD migration step and updates their default
+   name/Marks/price values without overriding an existing `is_active` choice.
+   Use the admin mark-package API for future catalog changes; do not seed on
+   every deploy.
 
 ---
 

@@ -9,6 +9,7 @@ import { createWalletModule } from "./modules/wallet";
 import { createAuthModule } from "./modules/auth";
 import { createAdminModule } from "./modules/admin";
 import { createAdminTutorModule } from "./modules/admin-tutor";
+import { createAdminMarkPackageModule } from "./modules/admin-mark-package";
 import { createTutorModule } from "./modules/tutor";
 import { createDiscoveryModule } from "./modules/tutor-discovery";
 import { createInviteModule } from "./modules/invite";
@@ -36,6 +37,7 @@ import type { WalletPort } from "./modules/wallet/wallet.service";
 import type { AuthService } from "./modules/auth/auth.service";
 import type { AdminService } from "./modules/admin/admin.service";
 import type { AdminTutorService } from "./modules/admin-tutor/admin-tutor.service";
+import type { AdminMarkPackageService } from "./modules/admin-mark-package/admin-mark-package.service";
 import type { TutorService } from "./modules/tutor/tutor.service";
 import type { InviteService } from "./modules/invite/invite.service";
 import type { AchievementService } from "./modules/achievement/achievement.service";
@@ -56,6 +58,7 @@ import type { RoomHandler } from "./modules/room/room.handler";
 import type { AuthHandler } from "./modules/auth/auth.handler";
 import type { AdminHandler } from "./modules/admin/admin.handler";
 import type { AdminTutorHandler } from "./modules/admin-tutor/admin-tutor.handler";
+import type { AdminMarkPackageHandler } from "./modules/admin-mark-package/admin-mark-package.handler";
 import type { TutorHandler } from "./modules/tutor/tutor.handler";
 import type { DiscoveryHandler } from "./modules/tutor-discovery/discovery.handler";
 import type { InviteHandler } from "./modules/invite/invite.handler";
@@ -78,6 +81,7 @@ export interface ServiceRegistry {
   auth: AuthService;
   admin: AdminService;
   adminTutor: AdminTutorService;
+  adminMarkPackage: AdminMarkPackageService;
   tutor: TutorService;
   invite: InviteService;
   achievement: AchievementService;
@@ -99,6 +103,7 @@ export interface HandlerRegistry {
   auth: AuthHandler;
   admin: AdminHandler;
   adminTutor: AdminTutorHandler;
+  adminMarkPackage: AdminMarkPackageHandler;
   tutor: TutorHandler;
   discovery: DiscoveryHandler;
   invite: InviteHandler;
@@ -287,6 +292,10 @@ function createServices() {
     email: email.service,
     appBaseUrl: env.CORS_ORIGIN,
   });
+  const adminMarkPackage = createAdminMarkPackageModule({
+    db,
+    audit: audit.service,
+  });
   const tutor = createTutorModule({
     db,
     pricing: pricing.service,
@@ -368,6 +377,7 @@ function createServices() {
     auth: auth.service,
     admin: admin.service,
     adminTutor: adminTutor.service,
+    adminMarkPackage: adminMarkPackage.service,
     tutor: tutor.service,
     invite: invite.service,
     achievement: achievement.service,
@@ -389,6 +399,7 @@ function createServices() {
     auth: auth.handler,
     admin: admin.handler,
     adminTutor: adminTutor.handler,
+    adminMarkPackage: adminMarkPackage.handler,
     tutor: tutor.handler,
     discovery: discovery.handler,
     invite: invite.handler,

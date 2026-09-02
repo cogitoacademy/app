@@ -433,7 +433,7 @@ when set to false.
 
 ### `refundRecord` (payment-record.ts) — refund/correction tracking, UNIQUE(provider_event_id)
 
-### `markPackage` (mark-package.ts) — purchasable mark packages
+### `markPackage` (mark-package.ts) — purchasable mark packages; application-generated UUID text ids, stable `code`, and active/inactive catalog state. Default rows are installed by the idempotent data migration `0041_seed_mark_packages.sql`.
 
 ### `notification` (notification.ts) — in-app notification records
 
@@ -441,7 +441,7 @@ when set to false.
 
 ### `supportTicket` (support-ticket.ts) — lateness/no-show + issue reports; status + sla_deadline
 
-## API Modules (19 routers + internal modules)
+## API Modules (20 routers + internal modules)
 
 All procedures are POST (oRPC convention). Auth via session cookies.
 
@@ -453,6 +453,11 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 ### Admin Module (admin)
 
 - `listUsers`, `searchUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getPendingTutorPayouts`, `markTutorPayoutPaid`, `getEconomySettings`, `updateEconomySettings`
+
+### AdminMarkPackage Module (admin)
+
+- `list`, `create`, `update`, `setActive`
+- Owns the transactional admin catalog API for mark packages. Package codes are immutable business keys used by payment creation; deactivation is a soft state change, not a delete.
 
 ### AdminTutor Module (admin)
 
@@ -1057,7 +1062,7 @@ Status: **all fixed and merged via #106 (2026-08-26)**; the follow-up re-audit f
 
 | ID      | Severity | Finding                                                                                                                                                                                                       | Fix                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | ------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| F1      | HIGH     | Seed package prices stale vs PRD OQ-01 (Starter 50/430k, Pioneer 300/2.18M — PRD: 50/312.5k, 400/2M)                                                                                                          | seed-packages.ts/seed.ts/test-client aligned; test asserts PRD values                                                                                                                                                                                                                                                                                                                                                     |
+| F1      | HIGH     | Seed package prices stale vs PRD OQ-01 (Starter 50/430k, Pioneer 300/2.18M — PRD: 50/312.5k, 400/2M)                                                                                                          | `0041_seed_mark_packages.sql` now installs/upserts the PRD catalog during normal migrations; seed-packages.ts/seed.ts/test-client remain aligned for local/test setup                                                                                                                                                                                                                                                     |
 | F2      | HIGH     | `invite.claim` silently demotes an admin to tutor (no role guard; CONTEXT claimed a guard that didn't exist)                                                                                                  | `validateClaim` throws `InvalidRoleForClaimError` for admin accounts                                                                                                                                                                                                                                                                                                                                                      |
 | F3      | HIGH     | `reconfirm` accept path skips re-reprice when headcount changed mid-cycle (PRD: recalculate + reissue)                                                                                                        | re-enters AWAITING_RECONFIRMATION + fresh 12h + reprice; survivors reset to `confirmed`                                                                                                                                                                                                                                                                                                                                   |
 | F6      | MEDIUM   | `tutorAccept` meeting failure leaves CONFIRMED booking with stale deadline (expiry can fire while retry pending)                                                                                              | deadline bumped to `scheduledEndAt + 24h` on failure                                                                                                                                                                                                                                                                                                                                                                      |

@@ -4,6 +4,7 @@ import { publicProcedure } from "./procedures";
 import { createAuthRouter } from "./modules/auth/auth.router";
 import { createAdminRouter } from "./modules/admin/admin.router";
 import { createAdminTutorRouter } from "./modules/admin-tutor/admin-tutor.router";
+import { createAdminMarkPackageRouter } from "./modules/admin-mark-package/admin-mark-package.router";
 import { createTutorRouter } from "./modules/tutor/tutor.router";
 import { createDiscoveryRouter } from "./modules/tutor-discovery/discovery.router";
 import { createInviteRouter } from "./modules/invite/invite.router";
@@ -27,6 +28,9 @@ import { handlers } from "./services";
 const authRouter = createAuthRouter(handlers.auth);
 const adminRouter = createAdminRouter(handlers.admin);
 const adminTutorRouter = createAdminTutorRouter(handlers.adminTutor);
+const adminMarkPackageRouter = createAdminMarkPackageRouter(
+  handlers.adminMarkPackage,
+);
 const tutorRouter = createTutorRouter(handlers.tutor);
 const discoveryRouter = createDiscoveryRouter(handlers.discovery);
 const inviteRouter = createInviteRouter(handlers.invite);
@@ -59,6 +63,7 @@ export const appRouter = {
   auth: authRouter,
   admin: adminRouter,
   adminTutor: adminTutorRouter,
+  adminMarkPackage: adminMarkPackageRouter,
   tutor: tutorRouter,
   tutors: discoveryRouter,
   invite: inviteRouter,
