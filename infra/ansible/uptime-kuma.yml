@@ -306,9 +306,13 @@
       register: kuma_detail
       no_log: true
 
-    - name: Build the drift comparison for an existing service
+    - name: Resolve the live fqdn of the existing service
       ansible.builtin.set_fact:
         kuma_live_fqdn: "{{ (kuma_detail.json.applications | default([]) | selectattr('name', 'equalto', kuma_compose_service) | first | default(none)).fqdn | default('') }}"
+      when: kuma_found | length > 0
+
+    - name: Build the drift comparison for an existing service
+      ansible.builtin.set_fact:
         kuma_drift: >-
           {%- set ns = namespace(parts=[]) -%}
           {%- if kuma_detail.json.name is defined and kuma_detail.json.name != kuma_service_name -%}{%- set ns.parts = ns.parts + ['name: ' ~ kuma_detail.json.name ~ ' != ' ~ kuma_service_name] -%}{%- endif -%}

@@ -151,6 +151,17 @@ service (zero config inside) and the empty `cogito` project itself.
   `|| warning` — now distinguishes exit 1 (drift) from exit 2 (API down).
   Runner-prep script also gained a curl retry (the transient `(23)` the
   operator hit 2026-09-01).
+- 2026-09-02 (lead): **runs 3–5 (dispatch) — progressive convergence to a
+  fully green apply.** Run 33612258134: uptime-kuma step YAML folded-scalar
+  mangled its backslash continuation (phantom `-e` argument) — fixed to a
+  block scalar (#168). Run 33613296725: backup-cron + disk-watchdog local
+  connections green, drift-check green, coolify-resources green; uptime-kuma
+  drifted-service branch crashed — `kuma_drift` referenced `kuma_live_fqdn`
+  registered in the SAME set_fact task (both templates evaluate before any
+  fact lands); never fired before because it only runs when the service
+  already exists — first such run. Fixed by splitting into two set_fact
+  tasks. Verified in the failing runs: post-apply /health checks green
+  whenever the playbook steps passed; terraform consistently no-drift.
 
 - 2026-09-01 (lead): **Wave 1 DONE + verified** — playbooks repointed to
   `cogito-prod`; wrong-project Kuma service deleted; empty `cogito` project
