@@ -39,7 +39,7 @@ record. No database field is removed in this compatibility step.
 The tutor profile route now uses the authenticated shell's page-level vertical
 scroll container, matching the student profile and avoiding an inner form
 scrollbar. Direct shell children cannot flex-shrink, so the tutor wrapper and
-onboarding root share the form's natural height. Subject-category fieldsets retain natural heights so
+onboarding root share the form's natural height. Specialization-category fieldsets retain natural heights so
 short categories do not create large blank areas. The final action card stays
 in normal document flow so it cannot leave trailing scroll space. This is
 presentation-only and does not change any API or database contract.
@@ -83,15 +83,19 @@ The Experiences section now stores up to five structured `experienceEntries` wit
 
 Tutor onboarding captures structured education (up to 2 entries) and one structured competition-achievement section (up to 5 entries) alongside one multiline Experiences field. Each competition entry stores a name, year, and one or more award titles; the editor accepts comma-separated awards, keeps an in-progress comma visible while the next title is being typed, keeps year values ungrouped, and previews the public format with a bold first line and readable spacing. Experience role, organization, and description text preserves comma punctuation. Published tutor discovery returns the structured arrays and falls back to legacy achievement/credential text for older profiles. Admin tutor review includes an **Edit format** action backed by `adminTutor.updateTutorAchievements`, optimistic `version` checks, and an audit event for corrections. Migration `0039_secret_blink.sql` adds the two JSONB fields after the migrations already present on `main`.
 
-### Subject taxonomy follow-up (2026-08-25)
+### Specialization taxonomy follow-up (2026-08-25)
 
-Tutor onboarding now uses the normalized competition category/child-subject catalog exposed by `tutors.listSubjects`. The current catalog has seven categories and 33 child subjects. Tutors must select at least one current child subject before submitting for review, and the student tutor catalog supports category and child-subject filters. Archived legacy subjects remain visible on existing tutor profiles but cannot be newly selected. The legacy expertise field remains a compatibility fallback; future category changes should preserve the pending-review behavior for published profiles.
+Tutor onboarding now uses the normalized competition category/specialization catalog exposed by `tutors.listSubjects`. The current catalog has seven categories and 33 specializations. Tutors must select at least one current specialization before submitting for review, and the student tutor catalog supports category and specialization filters. Archived legacy specializations remain visible on existing tutor profiles but cannot be newly selected. The legacy expertise field remains a compatibility fallback; future category changes should preserve the pending-review behavior for published profiles.
 
-The onboarding selector stores normalized IDs for persistence and renders all current categories with keyboard-accessible checkboxes. Tutors may select at most 7 active child subjects; the selector shows the cap and current count, disables an eighth choice, and the submit/API validation rejects any over-limit payload. Selected subjects appear as chips, while archived profile subjects are shown read-only. The tutor list continues to support selecting multiple mother categories and child subjects; child options are the union of the selected categories, the API matches selected values within each facet, and the list query debounces rapid search/filter changes by 300 ms.
+The onboarding selector stores normalized IDs for persistence and renders all current categories with keyboard-accessible checkboxes. Tutors may select at most 7 active specializations; the selector shows the cap and current count, disables an eighth choice, and the submit/API validation rejects any over-limit payload. Selected specializations appear as chips, while archived profile specializations are shown read-only. The tutor list continues to support selecting multiple categories and specializations; specialization options are the union of the selected categories, the API matches selected values within each facet, and the list query debounces rapid search/filter changes by 300 ms. Product-facing copy uses **specialization**; compatibility API/database names such as `subjectIds`, `subjects`, and `listSubjects` remain unchanged.
 
 ### Admin tutor review readability follow-up (2026-08-27)
 
-The admin tutor review card now resolves proposed `subjectIds` through the active taxonomy and renders category/subject labels as wrapping badges instead of exposing raw UUIDs. Other pending values also wrap safely on narrow cards. This is presentation-only; the `adminTutor.listTutorProfiles` and `adminTutor.reviewTutorProfile` contracts are unchanged.
+The admin tutor review card now resolves proposed `subjectIds` through the active taxonomy and renders category/specialization labels as wrapping badges instead of exposing raw UUIDs. Other pending values also wrap safely on narrow cards. This is presentation-only; the `adminTutor.listTutorProfiles` and `adminTutor.reviewTutorProfile` contracts are unchanged.
+
+### Achievement list table follow-up (2026-09-02)
+
+The student `/achievements` list and admin `/admin-achievements` moderation queue now use compact minimum-width Selia tables instead of card grids. Rows expose core identity/status/date information and a shared detail drawer contains the full metadata, proof/documentation links, moderator notes, and the relevant student or admin actions. The table containers scroll horizontally when the viewport is narrower than the column minimums, without changing any RPC, schema, or persistence contract.
 
 ### Tutor discovery pricing matrix follow-up (2026-08-27)
 
@@ -154,7 +158,7 @@ The frontend now routes collection empty states through the shared
 `apps/web/src/components/empty-state.tsx` presentation module. Page/card states
 use `EmptyStateCard`; embedded states use the `default`, `compact`, or `inline`
 densities. Calendar periods, filtered resource/tutor results, booking detail
-sections, notifications, Marks ledgers, subject/proof-link fields,
+sections, notifications, Marks ledgers, specialization/proof-link fields,
 availability previews, and admin tables now have intentional no-data copy
 instead of blank panels or one-off text. Month and agenda views also explain
 when the selected period has no events. No API, schema, or persistence contract
@@ -239,17 +243,25 @@ failed Google attempts remain `confirmed` for the 5-minute retry job. Manual
 admin links update the newest meeting-attempt row so the detail read remains
 consistent after retries.
 
-### Admin booking-detail modal readability follow-up (2026-08-31)
+### Admin booking-detail readability follow-up (2026-08-31)
 
-The admin Operations booking-detail modal now uses an admin-only responsive
-width override, so it opens as a wide desktop inspector without changing the
-shared/student dialog sizing. Its content area remains vertically scrollable,
-the header and footer stay stable, summary metrics step down from four columns
-to two on smaller screens, and participant/wallet cards use a non-stretching
-responsive split. This is presentation-only; no RPC, schema, or persistence
-contract changed.
+The admin Operations booking-detail surface used an admin-only responsive width
+override and stable scrolling/header treatment before the refresh-safe route was
+introduced. Those layout goals are now carried by the shared detail page and
+its admin-only extension slots. This is presentation-only; no RPC, schema, or
+persistence contract changed.
 
 ---
+
+### Shared booking-detail composition follow-up (2026-09-02)
+
+The admin-only `/admin-operations/bookings/:bookingId` page now composes the
+same responsive `BookingDetailPage` shell used by students and tutors. Explicit
+extensions supply the admin header action plus room assignment, review context,
+participant wallet/ledger inspection, wallet impact, and state-history content.
+Admin authorization and admin-specific RPC calls remain unchanged, and the
+shared shell still hides student/tutor lifecycle mutations for the admin viewer.
+This is presentation-only; no RPC, schema, or persistence contract changed.
 
 ### Admin wallet lookup search follow-up (2026-09-02)
 
@@ -286,7 +298,7 @@ for classmates.
 | `/_app/bookings/$bookingId`  | booking-detail-page.tsx                   | Complete baseline — detail, lifecycle, reschedule, reporting, invites, notes, history                                                                                |
 | `/_app/tutors`               | tutors-page-content.tsx                   | Exists (discovery list)                                                                                                                                              |
 | `/_app/tutors/$tutorId/book` | create-booking-page.tsx                   | Exists (solo/group/series creation)                                                                                                                                  |
-| `/_app/achievements`         | achivements-page.tsx                      | Exists (submission + list)                                                                                                                                           |
+| `/_app/achievements`         | achivements-page.tsx                      | Exists (submission + table list)                                                                                                                                     |
 | `/_app/profile`              | profile-page.tsx + tutor-profile-page.tsx | Complete — role-aware student profile and tutor profile editor; tutor state, review feedback, pricing, and consolidated actions are available at the canonical route |
 | `/_app/onboarding`           | compatibility redirect                    | Complete — legacy tutor links redirect to `/profile`; other roles redirect to `/dashboard`                                                                           |
 | `/_app/tutor-bookings`       | tutor-bookings-page.tsx                   | Compatibility redirect to the shared `/bookings` list                                                                                                                |
@@ -295,7 +307,7 @@ for classmates.
 | `/_app/admin`                | admin-dashboard-page.tsx                  | Complete F1 admin workspace entry point                                                                                                                              |
 | `/_app/admin-operations`     | admin-operations-page.tsx                 | Complete F1 queue/detail surface — filters, hydrated participants/wallets/ledger, override, rooms, and searchable wallet lookup                                      |
 | `/_app/admin-tutors`         | admin tutor invite + review               | Complete — invite/review queue plus version-checked structured achievement correction                                                                                |
-| `/_app/admin-achievements`   | achievement-moderation-page.tsx           | Exists (moderation UI)                                                                                                                                               |
+| `/_app/admin-achievements`   | achievement-moderation-page.tsx           | Exists (table-based moderation UI)                                                                                                                                   |
 | `/_app/admin-economy`        | economy-settings-page.tsx                 | Complete — admin-managed Cogito take schedule with validation, preview, optimistic versioning, and audit-backed persistence                                          |
 
 ### Remaining gaps (no complete surface yet)
@@ -361,7 +373,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 
 **PRD:** FR-10 (Admin Override), OQ-04 (SLA escalation), prd.tex:717-728
 
-**Current state:** **CLOSED (2026-08-22).** The dedicated `/_app/admin` route owns the admin workspace. The operations queue supports category, urgency, and SLA-status filtering; reports show affected-user count, reason/source, elapsed time, OQ-04 deadline, and escalated status with the WhatsApp escalation channel. The booking-detail dialog consumes the full admin-safe `booking.get` read model, renders the hydrated participant roster with per-wallet balances and booking-scoped ledger entries, and retains state history plus override actions.
+**Current state:** **CLOSED (2026-08-22; shared-detail follow-up 2026-09-02).** The dedicated `/_app/admin` route owns the admin workspace. The operations queue supports category, urgency, and SLA-status filtering; reports show affected-user count, reason/source, elapsed time, OQ-04 deadline, and escalated status with the WhatsApp escalation channel. The refresh-safe `/admin-operations/bookings/:bookingId` page consumes the full admin-safe `booking.get` read model through the shared `BookingDetailPage` shell, renders the hydrated participant roster with per-wallet balances and booking-scoped ledger entries, and retains state history, room controls, meeting fallback, and override actions.
 
 **Required:**
 
@@ -726,7 +738,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-07, FR-08, FR-14, FR-15, FR-21
 
-**Current state:** **CLOSED (2026-08-19; UX follow-up 2026-08-24; manual fallback follow-up 2026-08-27).** The booking detail route implements student/tutor state, schedule, participants, Marks, meeting/room access, history, cancellation, tutor review/completion, group invitation/reconfirmation, reschedule proposal/decision, lateness reporting with ticket status, and post-session notes. Its responsive task-detail presentation now prioritizes status, schedule, format/access, visible participant identities, and role-appropriate primary booking actions directly below the status badge; contextual actions remain above Marks or in the main flow. Participant rows show saved images or initials, names, roles, and confirmation states; online meeting-pending/failed states explain when the link is generated and when retries are active, while an available meeting URL is opened from the compact meeting-status popover instead of a `Ready` badge or standalone CTA. Tutor review uses a compact responsive accept/decline dialog with a session summary before the existing mutation is submitted. When automatic meeting setup is unavailable, the assigned tutor can add or replace a trusted URL for an online `confirmed`/`scheduled` booking through a shared Selia dialog; admins retain the operations fallback. The desktop overview/activity flow now stays in an independent left column from the sticky Actions/Marks rail, preventing the rail height from creating a blank row before Activity; narrow layouts retain the overview → actions/Marks → Activity order. Backend guards reject offline, terminal, pre-confirmation, and wrong-tutor requests. Admin review and override actions remain on the dedicated admin operations surface. The manual-link follow-up adds `tutorActions.setMeetingLink` and keeps the booking state machine unchanged.
+**Current state:** **CLOSED (2026-08-19; UX follow-up 2026-08-24; manual fallback follow-up 2026-08-27; admin shared-shell follow-up 2026-09-02).** The booking detail route implements student/tutor state, schedule, participants, Marks, meeting/room access, history, cancellation, tutor review/completion, group invitation/reconfirmation, reschedule proposal/decision, lateness reporting with ticket status, and post-session notes. Its responsive task-detail presentation now prioritizes status, schedule, format/access, visible participant identities, and role-appropriate primary booking actions directly below the status badge; contextual actions remain above the role-appropriate financial or operational rail content or in the main flow. Participant rows show saved images or initials, names, roles, and confirmation states; online meeting-pending/failed states explain when the link is generated and when retries are active, while an available meeting URL is opened from the compact meeting-status popover instead of a `Ready` badge or standalone CTA. Tutor review uses a compact responsive accept/decline dialog with a session summary before the existing mutation is submitted. When automatic meeting setup is unavailable, the assigned tutor can add or replace a trusted URL for an online `confirmed`/`scheduled` booking through a shared Selia dialog; admins retain the operations fallback. The desktop overview/activity flow now stays in an independent left column from the sticky Actions/financial rail, preventing the rail height from creating a blank row before Activity; narrow layouts retain the overview → actions/financial content → Activity order. Backend guards reject offline, terminal, pre-confirmation, and wrong-tutor requests. Admins now use the same page shell through explicit extensions for review context, room actions, participant wallet/ledger detail, wallet impact, state history, and override controls. The manual-link follow-up adds `tutorActions.setMeetingLink` and keeps the booking state machine unchanged.
 
 **Required:**
 
@@ -824,11 +836,21 @@ Follow existing frontend conventions:
 
 ### Selia Components Available
 
-Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePicker, Field, Select, Menu, Popover, Table, Item, Avatar, Divider, Separator, Checkbox, Chip, IconBox, InputGroup, Kbd, Sidebar, Spinner, Toast. See AGENTS.md for full list + import paths.
+Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePicker, Field, Select, Menu, Popover, Drawer, Table, Item, Avatar, Divider, Separator, Checkbox, Chip, IconBox, InputGroup, Kbd, Sidebar, Spinner, Toast. See AGENTS.md for full list + import paths.
 
 ---
 
 ### Version Notes
+
+- v1.64 (2026-09-02): Matched the student achievement summary cards to the admin moderation queue's compact label-and-pill treatment; no RPC/schema/persistence contract changed.
+
+- v1.63 (2026-09-02): Made the student and admin achievement `TableContainer` full-bleed within `CardBody` so the table aligns with both card edges; the inner container retains horizontal scrolling and the page remains constrained. No RPC/schema/persistence contract changed.
+
+- v1.62 (2026-09-02): Moved non-essential achievement metadata and row actions into a shared right-side detail drawer for student and admin tables. The compact tables retain core identifiers, status, awarded date, and a keyboard-accessible detail trigger; no RPC/schema/persistence contract changed.
+
+- v1.61 (2026-09-02): Constrained the student and admin achievement table wrappers with `min-w-0`/`max-w-full` so the card and page remain within the viewport; only the minimum-width table content scrolls horizontally. No RPC/schema/persistence contract changed.
+
+- v1.60 (2026-09-02): Replaced the student achievement card list and admin moderation card grid with minimum-width Selia tables. Both lists keep their existing row actions and links, scroll horizontally inside their containers on narrow viewports, and leave all RPC/schema/persistence contracts unchanged.
 
 - v1.59 (2026-09-02): Added the admin Active rooms catalog and Add room dialog to the Room approvals tab. The dialog calls the existing `room.create` mutation, validates name/location/capacity, and refreshes room selectors after a successful create; no API or schema contract changed.
 
@@ -852,7 +874,7 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 
 - v1.50 (2026-09-01): Granted tutors and admins Knowledge Bank access without the student 35-Mark wallet threshold across the sidebar, route guard, resource list, and protected file proxy; students retain the existing threshold. Added role-specific API, module, runbook, and regression coverage.
 
-- v1.48 (2026-09-01): Capped tutor profile subject selection at 7 active child subjects, added explicit frontend submit validation, and kept the API limit aligned with the selector. Updated the tutor taxonomy smoke check and module/API references.
+- v1.48 (2026-09-01): Capped tutor profile specialization selection at 7 active specializations, added explicit frontend submit validation, and kept the API limit aligned with the selector. Updated the tutor taxonomy smoke check and module/API references.
 
 - v1.49 (2026-09-01): Preserved in-progress comma punctuation in the structured tutor achievement editor while keeping comma-separated awards normalized for the existing payload; documented punctuation coverage for achievement and experience text. No API, schema, or persistence contract changed.
 
@@ -864,7 +886,7 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 
 - v1.45 (2026-08-31): Replaced the student account image URL input with a JPG/PNG/WebP upload flow, added circular drag/zoom cropping to a 512px square JPEG, and wired the result through the existing protected upload URL plus Better Auth account save. No new RPC, schema, or persistence contract.
 
-- v1.42 (2026-08-31): Contained tutor `/profile` scrolling to one route-owned vertical scroller, removed the action-bar bottom gap, and kept subject-category fieldsets at natural heights. No RPC, schema, or persistence contract changed.
+- v1.42 (2026-08-31): Contained tutor `/profile` scrolling to one route-owned vertical scroller, removed the action-bar bottom gap, and kept specialization-category fieldsets at natural heights. No RPC, schema, or persistence contract changed.
 
 - v1.40 (2026-08-31): Tightened CI coverage enforcement so `packages/api` lines, overall lines, overall functions, and overall branches must each reach 100% from the shared lcov artifact. The 0/0 branch case is treated as 100%; no runtime or API contract changed.
 - v1.43 (2026-08-31): Replaced the tutor Experiences text area with one structured repeatable section backed by up to five `experienceEntries`, added start/end-year validation without grouping separators, kept legacy `experiences` text as a fallback, exposed the structured entries in discovery/admin review, and added migration `0040_colossal_morlun.sql`.
@@ -876,7 +898,7 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 - v1.36 (2026-08-28): Stabilized server-backed collection transitions with TanStack Query `keepPreviousData` for admin tutor pagination, tutor discovery search/filters, and the admin booking queue. Admin tutor pagination scrolls to the selected table card by DOM ID and disables controls while loading. No RPC, schema, persistence, or URL search contract changed.
 - v1.35 (2026-08-28): Kept the booking-detail overview/activity flow independent from the sticky desktop Actions/Marks rail so rail height cannot create a blank row before Activity; narrow layouts retain actions/Marks before Activity. No RPC, schema, or persistence contract changed.
 - v1.34 (2026-08-28): Added paint-safe tab-scroller padding and overflow-safe empty-state/card boundaries for the shared bookings page, including an E2E narrow-viewport regression. No RPC, schema, or persistence contract changed.
-- v1.32 (2026-08-27): Improved admin tutor review readability by mapping pending subject IDs to active category/subject labels and wrapping long pending values. No RPC, schema, or persistence contract changed.
+- v1.32 (2026-08-27): Improved admin tutor review readability by mapping pending subject IDs to active category/specialization labels and wrapping long pending values. No RPC, schema, or persistence contract changed.
 - v1.31 (2026-08-27): Added the assigned-tutor `tutorActions.setMeetingLink` fallback plus a shared Selia manual-link dialog for tutor booking detail and admin operations. The fallback is limited to online `CONFIRMED`/`SCHEDULED` bookings, updates the active meeting-attempt row, and keeps force-majeure handling on the auditable admin override path. No schema change.
 - v1.28 (2026-08-26): Added the authenticated shell's `D` keyboard shortcut for toggling the rendered light/dark theme outside editable fields, while retaining the Light/Dark/System menu and `next-themes` persistence. No API, schema, or persistence contract changed.
 - v1.30 (2026-08-26): Constrained the shared booking status-tab strip to the available mobile width and kept horizontal tab scrolling inside a scrollbar-hidden region. No RPC, schema, or persistence contract changed.
@@ -884,7 +906,7 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 - v1.26 (2026-08-26): Added a reusable compact `IconInfoSquareRounded` preview trigger for booking-detail helper copy. Meeting-room readiness, missing offline-room details, unavailable meeting-link explanations, retry/admin setup status, and completion timing now disclose through the accessible Selia popover on hover, focus, click, or touch. No RPC, schema, or persistence contract changed.
 - v1.29 (2026-08-26): Moved the available online meeting action into the meeting-status popover and removed the standalone `Ready` badge/Google Meet CTA. Online meeting status now uses the same compact info trigger whether the URL is pending or available. No RPC, schema, or persistence contract changed.
 - v1.24 (2026-08-25): Added the shared Selia `aria-invalid` danger outline to auth inputs and ensured empty submit attempts reveal every invalid auth field without changing the auth API or persistence contract.
-- v1.23 (2026-08-25): Standardized collection empty states through the shared Selia presentation component with `default`, `compact`, and `inline` densities. Covered calendar periods, discovery filters, booking/detail sections, notifications, ledgers, subject/proof-link fields, availability previews, and admin tables. No RPC, schema, or persistence contract changed.
+- v1.23 (2026-08-25): Standardized collection empty states through the shared Selia presentation component with `default`, `compact`, and `inline` densities. Covered calendar periods, discovery filters, booking/detail sections, notifications, ledgers, specialization/proof-link fields, availability previews, and admin tables. No RPC, schema, or persistence contract changed.
 - v1.22 (2026-08-25): Added field-level login/sign-up validation on change and blur, visible password requirements, accessible Selia inline field errors, and client-side name/email normalization. No auth API or persistence contract changed.
 - v1.21 (2026-08-24): Refined the notifications inbox with row selection, select-all for loaded rows, batch read/unread actions, human-readable category badges, exact date/time display, and a protected `notification.updateReadStatus` procedure scoped to the authenticated user. No notification schema change.
 
@@ -900,7 +922,7 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 - v1.11 (2026-08-22): Moved available Booking actions above Marks in the sticky desktop rail while keeping session notes/support reports in the main content flow. Narrow layouts place actions and Marks before Activity. No booking API or state-machine contract changed.
 - v1.10 (2026-08-22): Moved format/access and participant identity details into the booking detail overview. The overview keeps meeting/room access prominent, shows participant images/names/roles/statuses in a responsive list, and leaves only Marks in the sticky metadata rail. No booking API or state-machine contract changed.
 - v1.10a (2026-08-22): Replaced app-level browser-native date/time/number/select/textarea controls with Selia wrappers and the shared minute-level date/time primitives. This is a UI-only refactor; RPC, schema, and state-machine contracts are unchanged.
-- v1.9 (2026-08-22): Tutor discovery category and child-subject filters now support multi-select values with label-preserving triggers and normalized array filters.
+- v1.9 (2026-08-22): Tutor discovery category and specialization filters now support multi-select values with label-preserving triggers and normalized array filters.
 - v1.8 (2026-08-22): Refined booking detail participants, Marks prefix, activity timeline, and online meeting status. The detail page uses profile images with initials fallback, a newest-first activity line with transition-specific icons and one destination-state badge, 30–60 second refresh while a meeting link is pending, and explicit copy for `confirmed` provider retries. The meeting providers now update the newest meeting-attempt row for manual-link fallback, and the booking read model never reports a URL-less row as `ready`.
 - v1.7 (2026-08-22): Replaced booking cancel/complete browser confirmation prompts with Selia dialogs and raised the global toast layer above dialog overlays so mutation feedback remains visible. No booking API or state-machine contract changed.
 

@@ -48,7 +48,7 @@ export class InvalidTutorSubjectSelectionError extends DomainError {
   }) {
     super(
       "INVALID_TUTOR_SUBJECT_SELECTION",
-      "Tutor subjects must be active selectable child subjects",
+      "Tutor specializations must be active and selectable",
       details,
     );
   }

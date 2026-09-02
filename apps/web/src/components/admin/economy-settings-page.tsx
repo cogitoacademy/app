@@ -177,22 +177,20 @@ export function EconomySettingsPage() {
         </Text>
       </div>
 
-      <Card className="border-info-border bg-info/10">
-        <CardBody className="flex gap-3">
-          <IconInfoCircle
-            className="mt-0.5 size-5 shrink-0 text-info-foreground"
-            aria-hidden="true"
-          />
-          <div>
-            <Text className="font-medium">Safe change policy</Text>
-            <Text className="mt-1 text-sm text-muted">
-              Every booking snapshots the active economy version. Saving this
-              page changes future bookings only; existing holds, payouts, and
-              refunds keep their original snapshot.
-            </Text>
-          </div>
-        </CardBody>
-      </Card>
+      <div className="flex items-start gap-2.5 rounded-lg border border-info-border bg-info/10 px-3 py-3">
+        <IconInfoCircle
+          className="mt-0.5 size-4 shrink-0 text-info"
+          aria-hidden="true"
+        />
+        <div>
+          <Text className="font-medium">Safe change policy</Text>
+          <Text className="mt-1 text-sm text-foreground">
+            Every booking snapshots the active economy version. Saving this page
+            changes future bookings only; existing holds, payouts, and refunds
+            keep their original snapshot.
+          </Text>
+        </div>
+      </div>
 
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.9fr)]">
         <Card>

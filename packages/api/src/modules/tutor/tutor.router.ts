@@ -1,7 +1,11 @@
 import { z } from "zod";
 
 import { tutorProcedure } from "../../procedures";
-import { updateMyProfileInput, getMyPayoutsInput } from "./tutor.types";
+import {
+  updateMyProfileInput,
+  getMyPayoutsInput,
+  submitForReviewInput,
+} from "./tutor.types";
 import {
   upsertAvailabilityInput,
   createWeeklyAvailabilityInput,
@@ -53,7 +57,7 @@ export function createTutorRouter(handler: TutorHandler) {
         summary: "Submit tutor profile",
         description: "Submits a tutor profile for admin review",
       })
-      .input(z.void())
+      .input(submitForReviewInput)
       .handler(handler.submitForReview),
 
     listAvailability: tutorProcedure

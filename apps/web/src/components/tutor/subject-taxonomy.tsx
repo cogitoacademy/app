@@ -142,13 +142,13 @@ export function SubjectSelector({
       className={`flex flex-col gap-4 rounded-lg outline-none ${
         error ? "ring-2 ring-danger-border/24" : ""
       }`}
-      aria-label="Competition subjects"
+      aria-label="Competition specializations"
       aria-invalid={Boolean(error)}
       aria-describedby={error ? `${triggerId}-error` : undefined}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Text className="text-sm text-muted">
-          Select up to {MAX_TUTOR_SUBJECTS} competition subcategories.
+          Select up to {MAX_TUTOR_SUBJECTS} competition specializations.
         </Text>
         <Text className="text-xs text-dimmed">
           {selectedIds.length} of {MAX_TUTOR_SUBJECTS} selected
@@ -158,14 +158,15 @@ export function SubjectSelector({
       {selectedIds.length > 0 ? (
         <div
           className="flex flex-wrap gap-2"
-          aria-label="Selected competition subcategories"
+          aria-label="Selected competition specializations"
         >
           {selectedIds.map((subjectId) => (
             <Chip key={subjectId} variant="primary" pill size="sm">
-              {selectedSubjectLabels.get(subjectId) ?? "Selected subject"}
+              {selectedSubjectLabels.get(subjectId) ??
+                "Selected specialization"}
               <ChipButton
                 type="button"
-                aria-label={`Remove ${selectedSubjectLabels.get(subjectId) ?? "selected subject"}`}
+                aria-label={`Remove ${selectedSubjectLabels.get(subjectId) ?? "selected specialization"}`}
                 onClick={() => toggleSubject(subjectId, false)}
               >
                 <IconX />
@@ -179,12 +180,12 @@ export function SubjectSelector({
         <div className="rounded-lg border border-item-border bg-item p-3">
           <Text className="text-sm font-medium">Previously selected</Text>
           <Text className="mt-1 text-xs text-muted">
-            These legacy subjects remain on your profile but are no longer
-            available for new selection.
+            These legacy specializations remain on your profile but are no
+            longer available for new selection.
           </Text>
           <div
             className="mt-3 flex flex-wrap gap-2"
-            aria-label="Previously selected legacy subjects"
+            aria-label="Previously selected legacy specializations"
           >
             {legacySelectedSubjects.map((subject) => (
               <Chip key={subject.id} variant="outline" pill>

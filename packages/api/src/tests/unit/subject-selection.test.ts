@@ -9,19 +9,19 @@ import {
 const child = (id: string) => ({ id });
 
 describe("tutor subject selection", () => {
-  test("accepts active child ids and rejects mother ids", () => {
+  test("accepts active specialization ids and rejects category ids", () => {
     expect(() =>
       validateTutorSubjectIds(["child-1"], [child("child-1")]),
     ).not.toThrow();
     expect(() => validateTutorSubjectIds(["mother-1"], [])).toThrow(
-      "active selectable child subjects",
+      "active and selectable",
     );
   });
 
-  test("rejects archived legacy child ids from new selections", () => {
+  test("rejects archived legacy specialization ids from new selections", () => {
     expect(() =>
       validateTutorSubjectIds(["legacy-child"], [child("current-child")]),
-    ).toThrow("active selectable child subjects");
+    ).toThrow("active and selectable");
   });
 
   test("rejects empty, duplicate, and oversized selections", () => {
@@ -39,7 +39,7 @@ describe("tutor subject selection", () => {
     ).toThrow();
   });
 
-  test("projects only joined child subjects with their parent", () => {
+  test("projects only joined specializations with their parent", () => {
     const subjects = toNormalizedTutorSubjects([
       {
         subjectId: "child-1",
@@ -85,7 +85,7 @@ describe("tutor subject selection", () => {
     ]);
   });
 
-  test("projects a subject category and its children", () => {
+  test("projects a specialization category and its specializations", () => {
     const category = {
       id: "cat-1",
       slug: "languages",
@@ -120,7 +120,7 @@ describe("tutor subject selection", () => {
     ).toEqual(expect.objectContaining({ children: [] }));
   });
 
-  test("marks archived child subjects as non-selectable for profile reads", () => {
+  test("marks archived specializations as non-selectable for profile reads", () => {
     const [subject] = toNormalizedTutorSubjects([
       {
         subjectId: "legacy-child",

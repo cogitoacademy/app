@@ -363,7 +363,7 @@ describe("AdminTutorRepo", () => {
   });
 
   describe("subject helpers", () => {
-    test("returns no child subjects for an empty id list", async () => {
+    test("returns no specializations for an empty id list", async () => {
       const { createAdminTutorRepo } =
         await import("../../modules/admin-tutor/admin-tutor.repo");
       const findMany = mock(async () => []);
@@ -378,7 +378,7 @@ describe("AdminTutorRepo", () => {
       expect(findMany).not.toHaveBeenCalled();
     });
 
-    test("lists active child subjects", async () => {
+    test("lists active specializations", async () => {
       const { createAdminTutorRepo } =
         await import("../../modules/admin-tutor/admin-tutor.repo");
       const rows = [{ id: "s1", parentId: "parent-1", isActive: true }];

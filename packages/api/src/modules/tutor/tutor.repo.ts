@@ -115,7 +115,7 @@ export async function updateProfileImage(
 }
 
 /**
- * Finds active child subjects by id. Parent categories are deliberately
+ * Finds active specializations by id. Parent categories are deliberately
  * excluded so arbitrary expertise strings or mother ids cannot be persisted
  * as tutor selections.
  */
@@ -202,10 +202,22 @@ export async function updateStatus(
   conn: DbOrTx,
   userId: string,
   status: string,
+  options: {
+    acceptTerms?: boolean;
+    termsVersion?: string;
+  } = {},
 ) {
   const [updated] = await conn
     .update(tutorProfile)
-    .set({ onboardingStatus: status })
+    .set({
+      onboardingStatus: status,
+      ...(options.acceptTerms
+        ? {
+            termsOfServiceAcceptedAt: sql`COALESCE(${tutorProfile.termsOfServiceAcceptedAt}, now())`,
+            termsOfServiceVersion: sql`COALESCE(${tutorProfile.termsOfServiceVersion}, ${options.termsVersion ?? null})`,
+          }
+        : {}),
+    })
     .where(eq(tutorProfile.userId, userId))
     .returning();
   return updated;

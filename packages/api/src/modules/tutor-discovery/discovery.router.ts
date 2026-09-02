@@ -13,9 +13,9 @@ export function createDiscoveryRouter(handler: DiscoveryHandler) {
         method: "POST",
         path: "/tutors/subjects/list",
         tags: ["Tutors"],
-        summary: "List tutor subject categories",
+        summary: "List tutor categories and specializations",
         description:
-          "Returns the active mother categories and selectable child subjects",
+          "Returns the active competition categories and selectable tutor specializations",
       })
       .input(listSubjectsInput)
       .handler(handler.listSubjects),

@@ -79,6 +79,8 @@ export const tutorProfile = pgTable(
     bankTransferDisclaimerAccepted: boolean("bank_transfer_disclaimer_accepted")
       .default(false)
       .notNull(),
+    termsOfServiceAcceptedAt: timestamp("terms_of_service_accepted_at"),
+    termsOfServiceVersion: text("terms_of_service_version"),
     availabilitySummary: text("availability_summary"),
     proofUrls: jsonb("proof_urls").$type<string[]>().default([]),
     onboardingStatus: text("onboarding_status").notNull().default("draft"),

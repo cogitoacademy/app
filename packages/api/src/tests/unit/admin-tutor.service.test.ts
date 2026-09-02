@@ -889,7 +889,7 @@ describe("AdminTutor Service", () => {
       ).rejects.toThrow(InvalidInviteActionError);
     });
 
-    test("rejects approving edits with malformed subject ids", async () => {
+    test("rejects approving edits with malformed specialization ids", async () => {
       const deps = makeDeps({
         adminTutorRepo: {
           ...makeDeps().adminTutorRepo,

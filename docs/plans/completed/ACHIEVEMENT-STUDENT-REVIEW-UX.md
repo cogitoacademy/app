@@ -23,9 +23,17 @@ audited correction step before approval.
   approval as a separate action.
 - Added queue controls and regression coverage for admin corrections, stale
   versions, and student/admin payload boundaries.
+- Replaced the student achievement card list and admin moderation card grid with
+  compact minimum-width Selia tables plus a shared right-side detail drawer.
+  Rows keep core identity, status, and date information visible; the drawer
+  contains full metadata, proof/documentation links, notes, and pending student
+  or admin actions. Both tables scroll horizontally inside their containers on
+  narrow viewports; their table containers are full-bleed within the cards while
+  the card/page wrappers remain constrained to the viewport.
 
 ## Verification
 
 - Focused achievement API unit tests pass.
 - Web TypeScript validation passes with the direct `tsgo` project check.
+- Web lint and formatting checks pass for the changed achievement surfaces.
 - The runbook contains the student/admin smoke checks and public privacy check.

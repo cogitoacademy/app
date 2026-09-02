@@ -18,6 +18,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
+import { TutorTermsOfService } from "./tutor-terms-of-service";
 import {
   Field,
   FieldDescription,
@@ -129,6 +130,8 @@ interface OnboardingFormProps {
     bankAccountOpeningCity: string | null;
     bankAccountOwnership: BankAccountOwnership | null;
     bankTransferDisclaimerAccepted: boolean | null;
+    termsOfServiceAcceptedAt: string | Date | null;
+    termsOfServiceVersion: string | null;
     prices: Record<string, number> | null;
     onboardingStatus: string;
     adminReviewNote: string | null;
@@ -175,7 +178,7 @@ const TUTOR_FIELD_LABELS: Record<string, string> = {
   bankAccountOpeningCity: "Account opening city/regency",
   bankAccountOwnership: "Account ownership",
   bankTransferDisclaimerAccepted: "Transfer-account confirmation",
-  subjects: "Subjects and competition tracks",
+  subjects: "Specializations",
   baseRatesIdr: "Base honorarium",
   education: "Education",
   achievementProofUrls: "Achievement proof links",
@@ -357,10 +360,10 @@ function readServerFieldErrors(error: unknown) {
   ) {
     fieldErrors.subjects =
       data.reason === "too_many"
-        ? `Select no more than ${MAX_TUTOR_SUBJECTS} child subjects.`
+        ? `Select no more than ${MAX_TUTOR_SUBJECTS} specializations.`
         : data.reason === "required"
-          ? "Select at least one child subject."
-          : "Some selected subjects are no longer available. Update your selection.";
+          ? "Select at least one specialization."
+          : "Some selected specializations are no longer available. Update your selection.";
   }
 
   if (Array.isArray(data.issues)) {
@@ -446,6 +449,10 @@ export function OnboardingForm({
   const [name, setName] = useState(accountUser.name ?? "");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [termsDialogMode, setTermsDialogMode] = useState<
+    "accept" | "view" | null
+  >(null);
+  const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
   const savedNameRef = useRef(accountUser.name.trim());
 
   const nameMutation = useMutation({
@@ -805,10 +812,10 @@ export function OnboardingForm({
     if (form.subjectIds.length > MAX_TUTOR_SUBJECTS) {
       addError(
         "subjects",
-        `Select no more than ${MAX_TUTOR_SUBJECTS} child subjects.`,
+        `Select no more than ${MAX_TUTOR_SUBJECTS} specializations.`,
       );
     } else if (requireComplete && form.subjectIds.length === 0) {
-      addError("subjects", "Select at least one child subject.");
+      addError("subjects", "Select at least one specialization.");
     }
 
     const ratesToCheck =
@@ -883,17 +890,7 @@ export function OnboardingForm({
     }
   }
 
-  async function handleSubmitForReview() {
-    const validationErrors = validateTutorForm(true);
-    if (Object.keys(validationErrors).length > 0) {
-      showValidationErrors(
-        validationErrors,
-        "Please fix the highlighted fields",
-        "Complete the required information before submitting for review.",
-      );
-      return;
-    }
-
+  async function submitValidatedProfile(acceptTerms = false) {
     try {
       await saveCanonicalName();
       if (profile.onboardingStatus === "published") {
@@ -905,11 +902,46 @@ export function OnboardingForm({
         return;
       }
       await updateMutation.mutateAsync(getSavePayload());
-      showUpdateSuccess(false);
-      await submitMutation.mutateAsync();
+      await submitMutation.mutateAsync(
+        acceptTerms ? { acceptTerms: true } : {},
+      );
     } catch {
       // handled by mutation callbacks
+      if (acceptTerms) setTermsDialogMode("accept");
     }
+  }
+
+  async function handleAcceptTerms() {
+    if (!hasAcceptedTerms) return;
+    await submitValidatedProfile(true);
+  }
+
+  function openTutorTerms() {
+    setHasAcceptedTerms(false);
+    setTermsDialogMode("view");
+  }
+
+  async function handleSubmitForReview() {
+    const validationErrors = validateTutorForm(true);
+    if (Object.keys(validationErrors).length > 0) {
+      showValidationErrors(
+        validationErrors,
+        "Please fix the highlighted fields",
+        "Complete the required information before submitting for review.",
+      );
+      return;
+    }
+
+    if (
+      profile.onboardingStatus !== "published" &&
+      !profile.termsOfServiceAcceptedAt
+    ) {
+      setHasAcceptedTerms(false);
+      setTermsDialogMode("accept");
+      return;
+    }
+
+    await submitValidatedProfile();
   }
 
   const isDraft =
@@ -1102,6 +1134,29 @@ export function OnboardingForm({
               />
             </div>
           </CardBody>
+        </Card>
+      ) : null}
+
+      {!isEditable ? (
+        <Card className="sticky bottom-0 z-10 overflow-hidden *:border-none">
+          <CardFooter className="flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <Text className="font-medium">Tutor Terms of Service</Text>
+              <Text className="mt-1 text-sm text-muted">
+                Review the current onboarding terms anytime. Lihat kembali
+                syarat onboarding kapan saja.
+              </Text>
+            </div>
+            <Button
+              type="button"
+              variant="underline"
+              size="sm"
+              className="w-full sm:w-auto"
+              onClick={openTutorTerms}
+            >
+              View Tutor Terms
+            </Button>
+          </CardFooter>
         </Card>
       ) : null}
 
@@ -1341,10 +1396,10 @@ export function OnboardingForm({
 
                 <Field className="sm:col-span-2">
                   <FieldLabel htmlFor="tutor-subject-category">
-                    Subjects and competition tracks *
+                    Specializations *
                   </FieldLabel>
                   <FieldDescription>
-                    Select the competition subcategories you teach. Students
+                    Select the competition specializations you teach. Students
                     will see these on your tutor profile. You can select up to{" "}
                     {MAX_TUTOR_SUBJECTS}.
                   </FieldDescription>
@@ -1888,7 +1943,16 @@ export function OnboardingForm({
                     : "Save changes while you work, or submit the latest version for admin review. You can continue updating during review."}
                 </Text>
               </div>
-              <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+              <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
+                <Button
+                  type="button"
+                  variant="underline"
+                  size="sm"
+                  className="w-full sm:w-auto"
+                  onClick={openTutorTerms}
+                >
+                  View Tutor Terms
+                </Button>
                 <Button
                   type="button"
                   variant="secondary"
@@ -1931,6 +1995,23 @@ export function OnboardingForm({
           </Card>
         </form>
       ) : null}
+
+      <TutorTermsOfService
+        open={termsDialogMode !== null}
+        readOnly={termsDialogMode === "view"}
+        accepted={hasAcceptedTerms}
+        isSubmitting={
+          nameMutation.isPending ||
+          updateMutation.isPending ||
+          submitMutation.isPending
+        }
+        onAcceptedChange={setHasAcceptedTerms}
+        onAccept={handleAcceptTerms}
+        onOpenChange={(open) => {
+          if (!open) setHasAcceptedTerms(false);
+          if (!open) setTermsDialogMode(null);
+        }}
+      />
     </div>
   );
 }

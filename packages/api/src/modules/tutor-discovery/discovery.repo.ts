@@ -138,6 +138,8 @@ async function listPublished(conn: DbOrTx, input: ListPublishedInput) {
       bankAccountOpeningCity: false,
       bankAccountOwnership: false,
       bankTransferDisclaimerAccepted: false,
+      termsOfServiceAcceptedAt: false,
+      termsOfServiceVersion: false,
     },
     where: and(...conditions),
     orderBy: [desc(tutorProfile.publishedAt)],
@@ -166,6 +168,8 @@ async function getProfileById(conn: DbOrTx, tutorId: string) {
       bankAccountOpeningCity: false,
       bankAccountOwnership: false,
       bankTransferDisclaimerAccepted: false,
+      termsOfServiceAcceptedAt: false,
+      termsOfServiceVersion: false,
     },
     where: and(
       eq(tutorProfile.id, tutorId),

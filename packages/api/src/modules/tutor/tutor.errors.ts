@@ -69,6 +69,17 @@ export class TutorProfileIncompleteError extends DomainError {
   }
 }
 
+export class TutorTermsNotAcceptedError extends DomainError {
+  readonly domain = "tutor";
+  constructor(id: string, version: string) {
+    super(
+      "TUTOR_TERMS_NOT_ACCEPTED",
+      "You must accept the Tutor Terms of Service before submitting",
+      { id, termsVersion: version },
+    );
+  }
+}
+
 export class InvalidTutorPricingError extends DomainError {
   readonly domain = "tutor";
   constructor(id: string, pricingError: string) {
@@ -120,6 +131,8 @@ export function mapTutorError(err: DomainError): ORPCError<string, unknown> {
   if (err instanceof WeeklyAvailabilityRangeError)
     return badRequest(err.message, err);
   if (err instanceof TutorProfileIncompleteError)
+    return badRequestWithTutorDetails(err);
+  if (err instanceof TutorTermsNotAcceptedError)
     return badRequestWithTutorDetails(err);
   if (err instanceof InvalidTutorPricingError)
     return badRequestWithTutorDetails(err);

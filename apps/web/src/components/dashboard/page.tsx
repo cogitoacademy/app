@@ -37,7 +37,7 @@ import { StatCard } from "./stat-card";
 const milestones = [
   {
     name: "Choose a tutor",
-    description: "Match by subject, style, and session format.",
+    description: "Match by specialization, style, and session format.",
     icon: IconSchool,
   },
   {

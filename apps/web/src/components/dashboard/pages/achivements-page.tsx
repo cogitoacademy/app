@@ -12,11 +12,11 @@ import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
 import { EmptyStateCard } from "@/components/empty-state";
 import { AchievementBanner } from "../achievement-banner";
-import { AchievementCard } from "../achievement-card";
 import { AchievementEmptyState } from "../achievement-empty-state";
 import { AchievementFilters } from "../achievement-filters";
 import { AchievementForm, type AchievementCategory } from "../achievement-form";
 import { AchievementStats } from "../achievement-stats";
+import { AchievementTable } from "../achievement-table";
 import { orpc } from "@/utils/orpc";
 
 export function AchivementsPage() {
@@ -55,7 +55,11 @@ export function AchivementsPage() {
     approved > 0 && approved === items.length && items.length > 0;
 
   return (
-    <Stack direction="column" spacing="lg">
+    <Stack
+      direction="column"
+      spacing="lg"
+      className="w-full min-w-0 max-w-full"
+    >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <Heading size="md">Achievements</Heading>
@@ -106,27 +110,20 @@ export function AchivementsPage() {
           size="compact"
         />
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((a) => (
-            <AchievementCard
-              key={a.id}
-              achievement={{
-                ...a,
-                status: a.status as "pending" | "approved" | "rejected",
-              }}
-              onDelete={(id) =>
-                deleteMutation.mutate({ id, version: a.version })
-              }
-              onEdit={(id) => {
-                const found = items.find((item) => item.id === id);
-                if (found) {
-                  setEditAchievement(found);
-                  setEditOpen(true);
-                }
-              }}
-            />
-          ))}
-        </div>
+        <AchievementTable
+          achievements={filtered}
+          onDelete={(id) => {
+            const found = items.find((item) => item.id === id);
+            if (found) deleteMutation.mutate({ id, version: found.version });
+          }}
+          onEdit={(id) => {
+            const found = items.find((item) => item.id === id);
+            if (found) {
+              setEditAchievement(found);
+              setEditOpen(true);
+            }
+          }}
+        />
       )}
 
       {editAchievement && (

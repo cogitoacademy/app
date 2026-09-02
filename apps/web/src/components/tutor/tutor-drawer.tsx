@@ -174,7 +174,7 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
             {subjectGroups.length > 0 && (
               <div className="mb-4">
                 <Heading size="sm" className="mb-2">
-                  Subjects
+                  Specializations
                 </Heading>
                 <div className="flex flex-col gap-2">
                   {subjectGroups.map((group) => (

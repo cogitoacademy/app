@@ -226,7 +226,7 @@ describe("Tutor discovery", () => {
     );
   });
 
-  test("listPublished filters by mother category", async () => {
+  test("listPublished filters by category", async () => {
     const matchingTutors = await studentClient.tutors.listPublished({
       categoryId: TAXONOMY.modelUnitedNations,
     });
@@ -240,7 +240,7 @@ describe("Tutor discovery", () => {
     );
   });
 
-  test("listPublished accepts multiple category and subject filters", async () => {
+  test("listPublished accepts multiple category and specialization filters", async () => {
     const categoryMatches = await studentClient.tutors.listPublished({
       categoryIds: [TAXONOMY.worldScholarsCup, TAXONOMY.modelUnitedNations],
     });

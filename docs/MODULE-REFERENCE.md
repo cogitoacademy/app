@@ -88,7 +88,7 @@ The shared frontend empty-state presentation is rendered by `apps/web/src/compon
 
 Theme selection is also frontend-only. `apps/web/src/components/mode-toggle.tsx` composes the `next-themes` provider with Light/Dark/System menu items and a `D` keydown handler that toggles the currently rendered light/dark mode outside editable fields. Theme preference persistence stays in `next-themes`; there is no service module, repository, event key, or API contract.
 
-The booking-detail overview keeps format/access and participant profile/name/status information together for quick scanning. Role-appropriate primary actions, including propose, cancel, review, and complete, sit directly below the status badge, while contextual actions remain in the sticky desktop rail or main flow. The desktop overview/activity flow uses an independent left column from the sticky Actions/financial rail so rail height cannot create a blank row before Activity; narrow layouts keep actions/financial information before Activity. Tutors see IDR honorarium only; student/admin views retain Marks context. Admin review and override actions remain in the dedicated admin operations surface. Dashboard cards link to the existing feature routes where mutations and detailed workflows live. This layout refinement is presentation-only and does not add a service module, event key, or API contract.
+The booking-detail overview keeps format/access and participant profile/name/status information together for quick scanning. Role-appropriate primary actions, including propose, cancel, review, and complete, sit directly below the status badge, while contextual actions remain in the sticky desktop rail or main flow. The desktop overview/activity flow uses an independent left column from the sticky Actions/financial rail so rail height cannot create a blank row before Activity; narrow layouts keep actions/financial information before Activity. Tutors see IDR honorarium, students see Marks, and admins see operational wallet impact plus review context through explicit slots on the same shared detail page. Admin override, room, participant-wallet/ledger, and state-history controls remain admin-only. Dashboard cards link to the existing feature routes where mutations and detailed workflows live. This layout refinement is presentation-only and does not add a service module, event key, or API contract.
 Editorial content integration is also read-only: Sanity remains the source of truth, while the app's API enforces session/role/Marks access before returning content or streaming Knowledge Bank files. The academy's bilingual presentation is resolved to English in the server projection; the authenticated app does not carry a locale selector for these surfaces.
 
 | File                  | Purpose                                                  |
@@ -170,6 +170,10 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - The student achievement form uses shared Selia portal controls for Category, Level, and Awarding Date; those popups must remain above the modal dialog layer.
 - Optimistic locking prevents lost updates (`version` field)
 - Admin correction is allowed only for `pending`/`pending_review`, can update every submission field plus public documentation, writes an audit snapshot, and does not change status; admin review changes status to `approved` or `rejected`
+
+**Web presentation:**
+
+- The student `/achievements` list and admin `/admin-achievements` queue use compact minimum-width Selia tables with status/date/identity columns and a **View details** entry point. A shared detail drawer holds the full submission metadata, attachments, moderator notes, and the relevant pending edit/delete or correct/approve/reject actions. Student summary counts use the same compact label-and-pill card treatment as the admin queue counts. Page/card wrappers remain constrained to the viewport, so only the table content scrolls horizontally. These layouts do not change service behavior, RPC inputs/outputs, or stored data.
 
 ---
 
@@ -317,7 +321,7 @@ payment package codes stable.
 - Invitee-controlled display names, email addresses, and URLs are escaped before rendering into HTML
 - The Manage Tutors invitation table maps `invited` to a warning badge, `accepted` to success, and `expired`/`revoked` to danger; unknown status values use the secondary fallback
 - Approving published profile edits validates and applies pending `subjectIds` to the normalized tutor-subject join table in the same transaction as the profile update
-- The admin tutor review card maps pending `subjectIds` to active category/subject labels and wraps long pending values; this is presentation-only and does not change the admin API payload
+- The admin tutor review card maps pending `subjectIds` to active category/specialization labels and wraps long pending values; this is presentation-only and does not change the admin API payload
 - Structured achievement corrections are limited to 2 education entries and 5 competition entries; a stale `version` returns `OPTIMISTIC_LOCK` and no audit record is written.
 
 ---
@@ -576,7 +580,7 @@ chat directory.
 - OAuth refresh-token mode uses `GOOGLE_MEET_CLIENT_ID`, `GOOGLE_MEET_CLIENT_SECRET`, and `GOOGLE_MEET_REFRESH_TOKEN` to call Google Calendar API v3; `GOOGLE_CALENDAR_ID` defaults to `primary`. When the dedicated client variables are absent, the resolver falls back to `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, but the Calendar refresh token is still required.
 - Service-account mode uses `GOOGLE_CLIENT_EMAIL`, `GOOGLE_PRIVATE_KEY`, and `GOOGLE_IMPERSONATED_USER`; the impersonated user is required for Workspace domain-wide delegation. `GOOGLE_MEET_ENABLED=true` requires either the complete OAuth set or the complete service-account set.
 - OAuth setup and token rotation instructions live in [`docs/GOOGLE-MEET-SETUP.md`](GOOGLE-MEET-SETUP.md).
-- Booking creation validates `subjectId` against the tutor's active tracks and stores an immutable category/subcategory snapshot in `booking.session_topic`. Scheduling uses `Cogito - {Competition} | {Tutor} x {Student}` and appends `& Friends` for group/group-series events; MUN/WSC use abbreviations. Descriptions include Session Topic, all resolved students, Session Notes/reference links, and the booking deep link. The metadata reaches service-account and OAuth paths; `learning_goal` remains the Session Notes compatibility carrier.
+- Booking creation validates `subjectId` against the tutor's active specializations and stores an immutable category/specialization snapshot in `booking.session_topic`. Scheduling uses `Cogito - {Competition} | {Tutor} x {Student}` and appends `& Friends` for group/group-series events; MUN/WSC use abbreviations. Descriptions include Session Topic, all resolved students, Session Notes/reference links, and the booking deep link. The metadata reaches service-account and OAuth paths; `learning_goal` remains the Session Notes compatibility carrier.
 - Circuit breaker: 5 failures → open for 60 seconds
 - On failure, creates a `meetingEvent` record with `status: "failed"` and `errorReason`; the booking scheduler retries failed Google attempts every 5 minutes up to the configured retry budget
 - Manual-link entry updates the newest meeting-attempt row, matching the booking read model's newest-row selection after multiple provider attempts
@@ -867,10 +871,10 @@ The web tutor profile editor groups education, competition achievements, and exp
 
 **Files:**
 
-- `tutor.types.ts` — Zod schemas for profile fields and structured achievements/experiences, `getMyPayoutsInput`
+- `tutor.types.ts` — Zod schemas for profile fields and structured achievements/experiences, `submitForReviewInput`, the `2026-09` Terms of Service version, and `getMyPayoutsInput`
 - `tutor-experiences.ts` — Structured experience entry validation and limits
 - `availability.types.ts` — Availability slot types (`upsert`, weekly-create, weekly-replace, delete)
-- `tutor.errors.ts` — `TutorProfileNotFoundError`, `TutorNotAvailableError`, `AvailabilitySlotOverlapError`, `InvalidTutorPricingError`, `OptimisticLockError`, `InvalidDateRangeError`, `WeeklyAvailabilityRangeError`
+- `tutor.errors.ts` — `TutorProfileNotFoundError`, `TutorNotAvailableError`, `AvailabilitySlotOverlapError`, `InvalidTutorPricingError`, `TutorTermsNotAcceptedError`, `OptimisticLockError`, `InvalidDateRangeError`, `WeeklyAvailabilityRangeError`
 - `tutor.repo.ts` — `findByUserId`, `create`, `update`, `listProfileHistory`, `upsertAvailability`
 - `tutor.service.ts` — `getMyProfile`, `getMyProfileHistory`, `updateMyProfile`, `submitForReview`, `listAvailability`, `upsertAvailability`, `createWeeklyAvailability`, `replaceWeeklyAvailability`, `deleteAvailability`, `getMyPayouts`
 - `tutor.handler.ts` — Maps handler context/input
@@ -881,7 +885,7 @@ The web tutor profile editor groups education, competition achievements, and exp
 - `getMyProfile(userId)` — Returns tutor profile
 - `getMyProfileHistory(userId)` — Returns the newest profile/photo review audit entries for the tutor; actor identity is limited to id and display name so account emails are not exposed to tutors
 - `updateMyProfile(userId, input)` — Updates profile fields with optimistic locking (`version`). The tutor editor uses one combined structured Achievements & experience section backed by `competitionAchievements` (up to 5 entries) and `experienceEntries` (up to 5 entries), with education rendered in the same section. Short bios are limited to 50 whitespace-delimited words (and 2,000 characters). Experience entries require a role, organization, start year, valid end year or null for ongoing work, and a brief description; year values are stored as ungrouped integers. Commas remain usable in the award and experience text editors while comma-separated award titles continue normalizing to the structured array. Legacy `achievements` and `experiences` text remains accepted for older profiles. Published profiles apply bio and `baseRatesIdr` edits immediately; a changed honorarium is used only for future bookings, while each existing booking's price snapshot remains authoritative for payout. Other trust-sensitive edits—including structured achievements and experiences—are stored as pending changes for admin review so discovery continues serving the approved values. The tutor-facing proof guidance recommends one Google Drive folder with the “Anyone with the link can view” setting for both achievement and experience evidence. The web editor's draft/save action permits incomplete required top-level fields, but validates malformed values and renders field-level errors; the separate review action performs the complete required-field validation before calling `submitForReview`.
-- `submitForReview(userId)` — Validates required fields + pricing, accepting either structured or legacy achievement/experience data, then sets `onboardingStatus` to `pending_review`; records audit log. Its incomplete-profile and pricing errors preserve missing-field/pricing details for the editor's field-level error display. The web tutor profile form at `/profile` redirects to `/dashboard` after the mutation succeeds.
+- `submitForReview(userId, input = {})` — Validates required fields + pricing, accepting either structured or legacy achievement/experience data, then sets `onboardingStatus` to `pending_review`; records audit log. The first submission requires `input.acceptTerms === true` when no prior acceptance exists, persists `termsOfServiceAcceptedAt` and `termsOfServiceVersion` (`2026-09`) once in the same transaction as the status change, and later submissions do not require the flag. Its incomplete-profile, pricing, and Terms of Service errors preserve details for the editor. The web tutor profile form at `/profile` redirects to `/dashboard` after the mutation succeeds.
 - `listAvailability(userId)` — Lists the tutor's active future availability slots
 - `upsertAvailability(userId, input)` — Creates/updates a slot, rejecting overlaps
 - `createWeeklyAvailability(userId, input)` — Materializes weekly slots through `repeatUntil` (≤ 53 occurrences), rejecting overlaps
@@ -897,38 +901,39 @@ The web tutor profile editor groups education, competition achievements, and exp
 - Availability slots must be in the future and non-overlapping
 - A one-off slot deactivates a conflicting recurring occurrence, making date overrides authoritative without changing other weeks
 - `submitForReview` can only be called from `draft`/`changes_requested` status
+- A complete first tutor submission requires bilingual Terms of Service acceptance; the acceptance timestamp/version is immutable after the first write and is not included in public tutor discovery. The sticky onboarding action area keeps the document available in read-only mode for later review
 - Profile updates use optimistic locking (`version`)
 - New tutor pricing is stored as IDR base honoraria by modality (`baseRatesIdr`) and validated against the active economy minimum and Rp 5,000 increments; published tutors may change these rates at any time, new bookings use the new rate, and existing booking snapshots remain authoritative for payout. The legacy Marks map remains readable during migration
 - The tutor profile editor at `/profile` renders selected modalities in one combined six-row IDR group-size matrix using the same table structure as the student discovery drawer; this is presentation-only. The legacy `/onboarding` path redirects to `/profile` for tutors.
 - The tutor profile editor places the profile-photo upload first and uses a clickable avatar with the shared circular crop flow. Compact Selia `InfoPreview` popovers reveal the full submitted/current/proposed image on demand. For a published tutor it labels `user.image` as the current public photo and a differing `pendingProfileChanges.profileImageUrl` as the proposed photo. The admin review drawer compares both assets side by side; `approve_edits` remains the only operation that promotes the proposal into `user.image`.
 - The admin tutor index derives the status badge from `onboardingStatus` plus `profileEditStatus`; published tutors with `pending_review` edits show **Edit review**, and edits returned with `changes_requested` show **Revision requested**, making review-needed rows visible before opening the drawer.
 - The tutor profile editor exposes one combined structured Achievements & experience section. It supports education plus competition entries and up to five role/organization/year/description entries; each subsection's optional proof URL list is protected by profile review and never enters the public discovery projection. The form recommends one shared Google Drive folder for both proof types, using the “Anyone with the link can view” setting. Legacy `achievements`, credential-summary, and `experiences` text remain readable fallback data, and migration 0032 copies the credential summary into achievements for older rows. Availability summaries and the old generic credential-proof URLs are retired from tutor editing.
-- The tutor profile editor uses the authenticated shell's page-level vertical scroll container, matching the student profile and avoiding a nested form scrollbar. Direct page children cannot flex-shrink, so the tutor wrapper and onboarding content share one natural height; subject-category fieldsets keep their natural height and the final action card stays in normal document flow without trailing scroll space. This is presentation-only and does not change the tutor RPC contract.
+- The tutor profile editor uses the authenticated shell's page-level vertical scroll container, matching the student profile and avoiding a nested form scrollbar. Direct page children cannot flex-shrink, so the tutor wrapper and onboarding content share one natural height; specialization-category fieldsets keep their natural height and the final action card stays in normal document flow without trailing scroll space. This is presentation-only and does not change the tutor RPC contract.
 - The tutor profile editor keeps draft/save and submit-for-review as distinct actions. Missing required fields are allowed during draft/save, while submit requires the complete profile; malformed fields are surfaced beside their controls and in a validation summary. A published tutor can continue editing while a profile-change proposal is under review; saving updates the pending proposal and the explicit submit action queues the latest validated version.
 - Every role uses Better Auth `user.name` as the canonical visible name. Tutor onboarding edits that account field directly and does not submit `tutorProfile.displayName`; discovery search matches `user.name`, its backward-compatible `displayName` projection is populated from `user.name`, and tutor/sidebar/booking/admin surfaces render `user.name`. The tutor-profile column remains legacy compatibility data.
 - Tutor payout calculations retain the internal split fields for accounting compatibility, but tutor-facing payout UI exposes only unpaid completed-session count and IDR honorarium. The private payout form collects bank name, account number, account-holder name, account-opening city/regency, ownership choice, and transfer-responsibility acknowledgment; submission requires all of them. Admin payout records advance the paid cutoff.
-- New tutor submissions must select at least one active child subject from the normalized catalog; mother categories cannot be selected directly
+- New tutor submissions must select at least one active specialization from the normalized catalog; categories cannot be selected directly
 - A normalized subject update replaces the tutor's join rows atomically and never accepts arbitrary legacy `expertise` strings as category ids
 - Structured tutor achievements are stored in `tutor_profile.education` and `tutor_profile.competition_achievements` as JSONB arrays. Education has at most 2 entries; the single achievement section can contain at most 5 competition entries, and each entry has a 1900–2100 year plus at least one award. Legacy `achievements`/`credentialsSummary` remains readable as a fallback when no structured competition achievements exist.
 - Structured tutor experiences are stored in `tutor_profile.experience_entries` as a JSONB array with at most 5 entries. Each entry has a role, organization, 1900–2100 start year, nullable 1900–2100 end year, and brief description; end year cannot precede start year. Legacy `experiences` remains readable as a fallback when no structured experience entries exist. Migration `0040_colossal_morlun.sql` adds the array with an empty-array default.
 
-## Tutor Subject Taxonomy Module
+## Tutor Specialization Taxonomy Module
 
-**Purpose:** Maintain the editable mother/child subject catalog and normalized tutor selections.
+**Purpose:** Maintain the editable category/specialization catalog and normalized tutor selections.
 
 **Files:**
 
 - `tutor-subject.ts` (database schema) — `subject_category` hierarchy and `tutor_profile_subject` join table
-- `tutor-subjects/subject-selection.ts` — selection limits, active-child validation, and public projection helpers
+- `tutor-subjects/subject-selection.ts` — selection limits, active-specialization validation, and public projection helpers
 - `0027_subject_taxonomy.sql` — schema migration and initial catalog schema
 - `0029_competition_taxonomy.sql` — current competition catalog and legacy-row archival
 
 **Business Rules:**
 
-- Mother categories are the seven competition areas: Model United Nations, World Scholar’s Cup, Essay & Writing, Debate, Business, Olympiad, and Public Speaking
-- The current catalog contains 33 selectable child subjects in the exact order defined by `0029_competition_taxonomy.sql`
-- Only active child rows are selectable by tutors; archived legacy rows remain readable for existing profiles and are not offered for new selection
-- Tutors may select at most 7 active child subjects; the web selector communicates the cap and disables additional choices, while the API validates the same limit
+- Categories are the seven competition areas: Model United Nations, World Scholar’s Cup, Essay & Writing, Debate, Business, Olympiad, and Public Speaking
+- The current catalog contains 33 selectable specializations in the exact order defined by `0029_competition_taxonomy.sql`
+- Only active specialization rows are selectable by tutors; archived legacy rows remain readable for existing profiles and are not offered for new selection
+- Tutors may select at most 7 active specializations; the web selector communicates the cap and disables additional choices, while the API validates the same limit
 - The legacy `expertise` JSON remains for compatibility with existing rows and clients, but normalized `subjectIds` drives new onboarding and discovery filters
 - The onboarding selector renders every current category with keyboard-accessible checkboxes, keeps normalized IDs for persistence/filtering, and shows archived profile subjects as read-only labels; raw UUIDs are an implementation detail and must not appear in user-facing controls
 
@@ -949,11 +954,11 @@ The web tutor profile editor groups education, competition achievements, and exp
 
 **Service Methods:**
 
-- `listSubjects()` — Returns the active competition mother categories grouped with their active child subjects; archived legacy rows are excluded
-- `listPublished(filters)` — Paginated list of published tutor profiles with category, child-subject, legacy expertise, and modality filters; `categoryIds` and `subjectIds` are ORed within each facet, combined as an AND across facets, and enforced through one correlated normalized subject-existence check that returns no rows when there is no match
+- `listSubjects()` — Returns the active competition categories grouped with their active specializations; archived legacy rows are excluded
+- `listPublished(filters)` — Paginated list of published tutor profiles with category, specialization, legacy expertise, and modality filters; `categoryIds` and `subjectIds` are ORed within each facet, combined as an AND across facets, and enforced through one correlated normalized specialization-existence check that returns no rows when there is no match
 - `getProfile(userId)` — Returns full tutor profile and future availability
 - IDR profiles receive `pricesByModality` Marks maps computed from the active economy config; legacy profiles keep their stored Marks map and no student discovery response exposes the tutor's IDR base honorarium
-- Frontend filter selects normalize displayed objects back to primitive category/subject ID arrays or modality values before calling `listPublished`; empty arrays represent the corresponding “All” option, child-subject options are the union of the selected mother categories, and the query is debounced by 300 ms.
+- Frontend filter selects normalize displayed objects back to primitive category/specialization ID arrays or modality values before calling `listPublished`; empty arrays represent the corresponding “All” option, specialization options are the union of the selected categories, and the query is debounced by 300 ms.
 - The student tutor drawer combines the available modality maps into one group-size pricing matrix with separate Online and Offline Marks columns, prefixing populated values with the Cogito Marks icon; missing modality/size combinations are display-only em dashes and do not change the response contract.
 - Published tutor projections include the structured education and competition achievement arrays. The student drawer renders each first line in a semibold hierarchy, separates achievement bullets with breathing room, and joins multiple awards with commas.
 - Long student and admin tutor profiles scroll inside the drawer content area while header/action regions stay outside that scroll area; local body overscroll is contained and cannot move the fixed regions. This is presentation-only and does not change the discovery or review contracts.

@@ -52,6 +52,7 @@
 | [CONTACT-SHARING.md](completed/CONTACT-SHARING.md)                                                 | `f/contact-sharing-flow`                      | **#108 (merged 2026-08-26)** — consent-based post-session contact requests, explicit email sharing, privacy leak regression coverage |
 
 | [ACHIEVEMENT-STUDENT-REVIEW-UX.md](completed/ACHIEVEMENT-STUDENT-REVIEW-UX.md) | `f/client-revisions` | **Completed locally 2026-09-02** — clearer student achievement entry, admin-only public documentation, and audited versioned correction flow |
+| [TUTOR-TERMS-ONBOARDING.md](completed/TUTOR-TERMS-ONBOARDING.md) | working tree | **Completed locally 2026-09-02** — bilingual Tutor Terms of Service modal and first-submit-only consent persistence |
 
 ## Archive (superseded / historical)
 

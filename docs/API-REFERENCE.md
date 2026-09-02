@@ -26,6 +26,22 @@ sends tutor-profile `displayName`; discovery keeps its compatible
 tutor-profile input/column remains accepted for compatibility and is not used by
 new web UI.
 
+## Tutor Terms of Service acceptance (2026-09-02)
+
+The first complete tutor onboarding submission opens a bilingual
+Indonesian/English Terms of Service dialog before review submission. Saving a
+draft remains available without accepting the terms. The tutor must check the
+agreement box before the client sends `tutor.submitForReview`.
+
+Acceptance is enforced server-side and recorded once on `tutor_profile` with
+`termsOfServiceAcceptedAt` and `termsOfServiceVersion` (`2026-09`). The
+acceptance write and the `pending_review` status transition share the same
+transaction. Subsequent submissions, including `changes_requested` revisions,
+do not need to send the acceptance again. The acceptance metadata is excluded
+from public tutor-discovery projections. The sticky onboarding action area keeps
+**View Tutor Terms** available so the current document can
+be reopened in read-only mode after acceptance.
+
 ## Tutor profile drawers (2026-08-31)
 
 The student tutor-discovery drawer and admin tutor-review drawer keep their header/action regions outside the scroll container while `Drawer.Content` owns the single vertical scroll region for long profile content. The body may overscroll locally, but that motion is contained and cannot move the fixed regions. This is client-side presentation only; no RPC path, request envelope, response shape, schema, or persistence contract changed.
@@ -436,7 +452,7 @@ All routes are admin-only. Package `code` is the stable business key used by
 - **Auth:** Admin
 - **Input:** `{ status?, limit?, offset? }` (`limit` default 50)
 - **Output:** `{ items: TutorProfile[], total, limit, offset }`
-- **Description:** The admin review UI resolves pending `subjectIds` through the active subject taxonomy and displays category/subject labels; the procedure continues to return the pending change payload unchanged.
+- **Description:** The admin review UI resolves pending `subjectIds` through the active specialization taxonomy and displays category/specialization labels; the procedure continues to return the pending change payload unchanged.
 
 ### `adminTutor.listTutorProfileHistory`
 
@@ -484,20 +500,20 @@ All routes are admin-only. Package `code` is the stable business key used by
 - **Auth:** Tutor
 - **Input:** `{ version, displayName? (legacy clients only), shortBio? (maximum 50 whitespace-delimited words and 2,000 characters), credentialsSummary?, achievements?, experiences?, achievementProofUrls?, experienceProofUrls?, profileImageUrl?, education?, competitionAchievements?, experienceEntries?, expertise?, subjectIds?, modality?, baseRatesIdr?, bankName?, bankAccountNumber?, bankAccountHolderName?, bankAccountOpeningCity?, bankAccountOwnership?: "self" | "trusted_person", bankTransferDisclaimerAccepted?, prices? }`; `experienceEntries` accepts up to 5 `{ role, organization, startYear, endYear, description }` entries, with `endYear` nullable for an ongoing role. The tutor editor saves its canonical name through Better Auth, exposes one combined structured Achievements & experience section and one profile-image field, and does not send `displayName`. The legacy `achievements`/`credentialsSummary`/`experiences` values remain accepted for older profiles.
 - **Output:** `{ profile, subjects: [{ id, slug, name, description?, isSelectable, parent: { id, slug, name } }] }`
-- **Errors:** `OPTIMISTIC_LOCK` (409) on version mismatch, `INVALID_TUTOR_PRICING` (400) on floor-price violation, `INVALID_TUTOR_SUBJECT_SELECTION` (400) when ids are not active selectable child subjects or exceed 7; tutor domain validation errors include field-specific data such as `missingFields`, `pricingError`, or `subjectIds` where available
-- **Description:** Updates the tutor profile with optimistic locking. The tutor editor presents one combined structured Achievements & experience section and one profile-image field; each experience stores a role, organization, start/end years, and a brief description. Short bios are limited to 50 whitespace-delimited words (and 2,000 characters). Year values are sent as plain integers without grouping punctuation, and an end year must be on or after its start year. Comma punctuation in award and experience text remains visible while editing; comma-separated award titles still normalize to the structured `awards` array. Legacy `achievements`/`credentialsSummary`/`experiences` text remains readable as a fallback when no structured entries exist. `achievementProofUrls` and `experienceProofUrls` accept bounded HTTP(S) URLs; `profileImageUrl` accepts bounded HTTP(S) URLs or a generated local `/uploads/...` storage path. The tutor-facing proof guidance recommends putting both achievement and experience evidence in one Google Drive folder with the “Anyone with the link can view” setting. `profileImageUrl` is the single canonical tutor profile image: draft/changes-requested updates write it to the account image, while published changes wait in `pendingProfileChanges` until admin review. The admin can replace it with the background-standardized final asset through tutor review. `subjectIds` is the normalized child-category selection. Payout-account fields remain private. A published tutor's `baseRatesIdr` takes effect immediately for future bookings; existing bookings retain their stored price snapshot for payout. Other trust-sensitive changes—including structured achievements and experiences—wait in `pendingProfileChanges`. The web editor exposes separate **Save draft**/**Save profile changes** and **Submit for review** actions: saving permits incomplete required top-level fields while still highlighting malformed values, while submission applies the complete required-field gate. Both client-side and API-side validation errors are shown beside the affected field and in the form summary.
+- **Errors:** `OPTIMISTIC_LOCK` (409) on version mismatch, `INVALID_TUTOR_PRICING` (400) on floor-price violation, `INVALID_TUTOR_SUBJECT_SELECTION` (400) when ids are not active specializations or exceed 7; tutor domain validation errors include field-specific data such as `missingFields`, `pricingError`, or `subjectIds` where available
+- **Description:** Updates the tutor profile with optimistic locking. The tutor editor presents one combined structured Achievements & experience section and one profile-image field; each experience stores a role, organization, start/end years, and a brief description. Short bios are limited to 50 whitespace-delimited words (and 2,000 characters). Year values are sent as plain integers without grouping punctuation, and an end year must be on or after its start year. Comma punctuation in award and experience text remains visible while editing; comma-separated award titles still normalize to the structured `awards` array. Legacy `achievements`/`credentialsSummary`/`experiences` text remains readable as a fallback when no structured entries exist. `achievementProofUrls` and `experienceProofUrls` accept bounded HTTP(S) URLs; `profileImageUrl` accepts bounded HTTP(S) URLs or a generated local `/uploads/...` storage path. The tutor-facing proof guidance recommends putting both achievement and experience evidence in one Google Drive folder with the “Anyone with the link can view” setting. `profileImageUrl` is the single canonical tutor profile image: draft/changes-requested updates write it to the account image, while published changes wait in `pendingProfileChanges` until admin review. The admin can replace it with the background-standardized final asset through tutor review. `subjectIds` is the normalized specialization selection. Payout-account fields remain private. A published tutor's `baseRatesIdr` takes effect immediately for future bookings; existing bookings retain their stored price snapshot for payout. Other trust-sensitive changes—including structured achievements and experiences—wait in `pendingProfileChanges`. The web editor exposes separate **Save draft**/**Save profile changes** and **Submit for review** actions: saving permits incomplete required top-level fields while still highlighting malformed values, while submission applies the complete required-field gate. Both client-side and API-side validation errors are shown beside the affected field and in the form summary.
 
 Structured tutor experience fields are submitted through `experienceEntries` as up to five `{ role, organization, startYear, endYear, description }` entries. Years are plain integers; `endYear` may be `null` for an ongoing role and cannot precede `startYear`. Legacy `experiences` text remains accepted for older profiles.
 
 ### `tutor.submitForReview`
 
-The web tutor profile editor groups education, competition achievements, and experiences into one combined **Achievements & experience** section with one public preview; the API fields and review behavior remain unchanged.
+The web tutor profile editor groups education, competition achievements, and experiences into one combined **Achievements & experience** section with one public preview; the review endpoint also enforces the one-time Terms of Service acceptance described above.
 
 - **Auth:** Tutor
-- **Input:** None
+- **Input:** `{ acceptTerms?: boolean }`
 - **Output:** `{ profile }`
-- **Errors:** `TUTOR_PROFILE_INCOMPLETE` (400) when required profile fields are missing; `INVALID_TUTOR_PRICING` (400) when a base honorarium is invalid; `INVALID_TUTOR_SUBJECT_SELECTION` (400) when subject ids are invalid
-- **Description:** Submits a draft profile for admin review. The required achievement may come from the structured competition-achievement entries or from legacy achievement text retained on an older profile. The required experience may come from `experienceEntries` or legacy experience text retained on an older profile. Incomplete and pricing errors include their missing-field or pricing detail so the web form can highlight the relevant controls.
+- **Errors:** `TUTOR_PROFILE_INCOMPLETE` (400) when required profile fields are missing; `INVALID_TUTOR_PRICING` (400) when a base honorarium is invalid; `INVALID_TUTOR_SUBJECT_SELECTION` (400) when specialization ids are invalid; `TUTOR_TERMS_NOT_ACCEPTED` (400) when the profile has never accepted the current terms and `acceptTerms` is not `true`
+- **Description:** Submits a draft profile for admin review. The required achievement may come from the structured competition-achievement entries or from legacy achievement text retained on an older profile. The required experience may come from `experienceEntries` or legacy experience text retained on an older profile. Incomplete and pricing errors include their missing-field or pricing detail so the web form can highlight the relevant controls. On the first successful submission, the caller must send `acceptTerms: true`; the server stores the acceptance timestamp/version once and transitions the profile to `pending_review` in the same transaction. Later submissions can send `{}`.
 
 ### `tutor.listAvailability`
 
@@ -555,14 +571,14 @@ The web tutor profile editor groups education, competition achievements, and exp
 - **Auth:** Public
 - **Input:** None
 - **Output:** `{ items: [{ id, slug, name, description?, children: [{ id, slug, name, description? }] }] }`
-- **Description:** Returns the seven active competition categories and their 33 selectable child subjects used by tutor onboarding and student filters. The UIs submit child/category IDs for persistence or filtering but display category and subject names to users.
+- **Description:** Returns the seven active competition categories and their 33 selectable specializations used by tutor onboarding and student filters. The UIs submit specialization/category IDs for persistence or filtering but display category and specialization names to users. The compatibility procedure and response keys retain `subject`/`subjects` naming.
 
 ### `tutors.listPublished`
 
 - **Auth:** Student
 - **Input:** `{ search?, expertise?, categoryId?, subjectId?, categoryIds?, subjectIds?, modality?, limit?, offset? }` (`limit` default 20, max 50)
 - **Output:** `{ items: TutorProfile[] }`; each profile includes `education`, `competitionAchievements`, `subjects: [{ id, slug, name, description?, isSelectable, parent }]`, and computed `pricesByModality.online/offline` Marks maps when the profile has IDR base honoraria
-- **Description:** `categoryId`/`subjectId` remain supported for single-value clients. `categoryIds` and `subjectIds` accept up to 50 unique values and match any selected value within that facet; when both facets are present, the same normalized child-subject relation must satisfy the selected parent and child constraints. Search matches normalized child subject names as well as legacy profile text; no matching normalized relation returns an empty `items` array. Structured education and competition achievements are returned in their normalized arrays; older profiles may still rely on `credentialsSummary`. Marks prices are derived from the active economy config; tutor IDR base honoraria are not exposed in this student response. The frontend may render the returned modality maps as one group-size matrix with separate Online and Offline columns, prefixing populated values with the Cogito Marks icon; this does not alter the RPC contract.
+- **Description:** `categoryId`/`subjectId` remain supported for single-value clients. `categoryIds` and `subjectIds` accept up to 50 unique values and match any selected value within that facet; when both facets are present, the same normalized category/specialization relation must satisfy the selected category and specialization constraints. Search matches normalized specialization names as well as legacy profile text; no matching normalized relation returns an empty `items` array. Structured education and competition achievements are returned in their normalized arrays; older profiles may still rely on `credentialsSummary`. Marks prices are derived from the active economy config; tutor IDR base honoraria are not exposed in this student response. The frontend may render the returned modality maps as one group-size matrix with separate Online and Offline columns, prefixing populated values with the Cogito Marks icon; this does not alter the RPC contract.
 
 ### `tutors.getProfile`
 
@@ -607,6 +623,7 @@ The web tutor profile editor groups education, competition achievements, and exp
 - **Auth:** Protected
 - **Input:** None
 - **Output:** `{ items: Achievement[] }`
+- **Description:** The student `/achievements` page consumes this unchanged list and presents compact label-and-pill summary counts plus a compact horizontally scrollable table; full metadata and pending edit/delete actions are available in a frontend-only detail drawer.
 
 ### `achievement.create`
 
@@ -634,6 +651,7 @@ The web tutor profile editor groups education, competition achievements, and exp
 - **Auth:** Admin
 - **Input:** `{ status?, limit?, offset? }` (`limit` default 50)
 - **Output:** `{ items: Achievement[], total, limit, offset }`
+- **Description:** The admin `/admin-achievements` page consumes this unchanged paginated list and presents submissions in a compact horizontally scrollable moderation table; full metadata and approve/reject/correct actions are available in a frontend-only detail drawer, while the mutations remain separate RPC calls.
 
 ### `achievement.adminUpdate`
 
@@ -728,7 +746,7 @@ The web tutor profile editor groups education, competition achievements, and exp
 ### `booking.createSolo`
 
 - **Auth:** Verified Student (`verifiedStudentProcedure` — student role with a verified email; unverified → `FORBIDDEN`)
-- **Input:** `{ tutorId, subjectId?, availabilitySlotId, modality, scheduledStartAt, timezone?, learningGoal }` (`subjectId` selects one active subcategory offered by the tutor and is snapshotted as the session topic; legacy callers may omit it and the sole tutor topic is selected automatically; `learningGoal` carries Session Notes and accepts up to 2,000 characters including reference links; duration is server-fixed to 90 minutes)
+- **Input:** `{ tutorId, subjectId?, availabilitySlotId, modality, scheduledStartAt, timezone?, learningGoal }` (`subjectId` selects one active specialization offered by the tutor and is snapshotted as the session topic; legacy callers may omit it and the sole tutor specialization is selected automatically; `learningGoal` carries Session Notes and accepts up to 2,000 characters including reference links; duration is server-fixed to 90 minutes)
 - **Output:** `{ booking }`
 - **Errors:** `BOOKING_NOT_FOUND` (404), `BOOKING_NOT_EDITABLE` (400), `BOOKING_CONFLICT` (409), `INSUFFICIENT_MARKS` (400)
 - **Description:** Creates a solo booking and holds Marks; idempotency via `idempotency-key` header
@@ -818,14 +836,14 @@ RPC contract.
 ### `booking.createGroup`
 
 - **Auth:** Verified Student (`verifiedStudentProcedure` — student role with a verified email; unverified → `FORBIDDEN`)
-- **Input:** `{ tutorId, subjectId?, availabilitySlotId, modality, targetGroupSize, inviteeUserIds, scheduledStartAt, timezone?, learningGoal, requestedRoomId? }` (`subjectId` selects an active tutor subcategory; `learningGoal` carries Session Notes including reference links; `targetGroupSize` 2–6, `inviteeUserIds` 1–5; duration is fixed to 90 minutes)
+- **Input:** `{ tutorId, subjectId?, availabilitySlotId, modality, targetGroupSize, inviteeUserIds, scheduledStartAt, timezone?, learningGoal, requestedRoomId? }` (`subjectId` selects an active tutor specialization; `learningGoal` carries Session Notes including reference links; `targetGroupSize` 2–6, `inviteeUserIds` 1–5; duration is fixed to 90 minutes)
 - **Output:** `{ booking }`
 - **Description:** Creates a group booking, holds the target headcount total from the proposer, invites participants, and releases the excess hold as invitees confirm; idempotency via `idempotency-key` header
 
 ### `booking.createSeries`
 
 - **Auth:** Verified Student (`verifiedStudentProcedure`; unverified → `FORBIDDEN`)
-- **Input:** `{ tutorId, subjectId?, availabilitySlotId, modality, sessions: [{ availabilitySlotId, scheduledStartAt }], timezone?, learningGoal }` (`subjectId` selects an active tutor subcategory; `learningGoal` carries Session Notes including reference links; 2–4 fixed 90-minute sessions)
+- **Input:** `{ tutorId, subjectId?, availabilitySlotId, modality, sessions: [{ availabilitySlotId, scheduledStartAt }], timezone?, learningGoal }` (`subjectId` selects an active tutor specialization; `learningGoal` carries Session Notes including reference links; 2–4 fixed 90-minute sessions)
 - **Output:** `{ booking }`
 - **Errors:** `BOOKING_SERIES_SIZE` (400) if sessions < 2 or > 4
 - **Description:** Creates a multi-session solo series booking
@@ -833,7 +851,7 @@ RPC contract.
 ### `booking.createGroupSeries`
 
 - **Auth:** Verified Student (`verifiedStudentProcedure` — unverified → `FORBIDDEN`)
-- **Input:** `{ tutorId, subjectId?, availabilitySlotId, modality, sessions: [...], targetGroupSize, inviteeUserIds, timezone?, learningGoal }` (`subjectId` selects an active tutor subcategory; `learningGoal` carries Session Notes/reference links; `targetGroupSize` 2–6, `inviteeUserIds` 1–5, sessions 2–4)
+- **Input:** `{ tutorId, subjectId?, availabilitySlotId, modality, sessions: [...], targetGroupSize, inviteeUserIds, timezone?, learningGoal }` (`subjectId` selects an active tutor specialization; `learningGoal` carries Session Notes/reference links; `targetGroupSize` 2–6, `inviteeUserIds` 1–5, sessions 2–4)
 - **Output:** `{ booking }`
 - **Errors:** `BOOKING_SERIES_SIZE` (400), `USER_NOT_FOUND` (400) for unknown invitees
 - **Description:** Creates a group series with upfront per-participant holds for all sessions (FR-20, #46); invitees accept/decline the full-series package via `booking.confirmInvite`/`booking.declineInvite`

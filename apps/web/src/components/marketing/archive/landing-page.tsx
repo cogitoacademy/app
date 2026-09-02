@@ -41,7 +41,7 @@ const learningFlow = [
   {
     title: "Find the right tutor",
     description:
-      "Browse verified Cogito tutors by subject, modality, availability, and learning fit.",
+      "Browse verified Cogito tutors by specialization, modality, availability, and learning fit.",
     icon: IconSchool,
   },
   {

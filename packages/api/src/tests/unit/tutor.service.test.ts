@@ -9,6 +9,7 @@ import {
   TutorProfileNotFoundError,
   InvalidTutorStatusError,
   TutorProfileIncompleteError,
+  TutorTermsNotAcceptedError,
   InvalidTutorPricingError,
   AvailabilitySlotOverlapError,
   OptimisticLockError,
@@ -34,6 +35,8 @@ function makeProfile(overrides: Record<string, unknown> = {}) {
     bankAccountOpeningCity: "Jakarta Selatan",
     bankAccountOwnership: "self",
     bankTransferDisclaimerAccepted: true,
+    termsOfServiceAcceptedAt: new Date("2026-09-01T00:00:00Z"),
+    termsOfServiceVersion: "2026-09",
     prices: { "1": 50 },
     expertise: ["math"],
     subjects: [
@@ -266,6 +269,32 @@ describe("Tutor Service", () => {
           mockPricingPort,
         ),
       ).toThrow(TutorProfileIncompleteError);
+    });
+
+    test("requires tutor terms acceptance for the first submission", () => {
+      expect(() =>
+        validateSubmitForReview(
+          makeProfile({
+            termsOfServiceAcceptedAt: null,
+            termsOfServiceVersion: null,
+          }),
+          mockPricingPort,
+        ),
+      ).toThrow(TutorTermsNotAcceptedError);
+    });
+
+    test("accepts tutor terms for the first submission", () => {
+      expect(() =>
+        validateSubmitForReview(
+          makeProfile({
+            termsOfServiceAcceptedAt: null,
+            termsOfServiceVersion: null,
+          }),
+          mockPricingPort,
+          undefined,
+          true,
+        ),
+      ).not.toThrow();
     });
 
     test("throws TutorProfileIncompleteError for empty subjects", () => {
@@ -526,7 +555,7 @@ describe("Tutor Service", () => {
       ).rejects.toThrow(OptimisticLockError);
     });
 
-    test("published profile stores changed subject ids as pending edits", async () => {
+    test("published profile stores changed specialization ids as pending edits", async () => {
       const profile = makeProfile({
         onboardingStatus: "published",
         subjects: [
@@ -752,8 +781,58 @@ describe("Tutor Service", () => {
     test("submitForReview returns updated profile", async () => {
       const deps = makeDeps();
       const service = createTutorService(deps as any);
-      const result = await service.submitForReview("u1");
+      const result = await service.submitForReview("u1", {});
       expect(result.id).toBe("tp1");
+    });
+
+    test("records terms acceptance when a tutor makes the first submission", async () => {
+      const profile = makeProfile({
+        termsOfServiceAcceptedAt: null,
+        termsOfServiceVersion: null,
+      });
+      const updatedProfile = makeProfile({
+        termsOfServiceAcceptedAt: new Date("2026-09-02T00:00:00Z"),
+        termsOfServiceVersion: "2026-09",
+      });
+      const updateStatus = mock(async () => updatedProfile);
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => profile),
+          updateStatus,
+        },
+      });
+      const service = createTutorService(deps as any);
+
+      await service.submitForReview("u1", { acceptTerms: true });
+
+      expect(updateStatus).toHaveBeenCalledWith(
+        expect.anything(),
+        "u1",
+        "pending_review",
+        { acceptTerms: true, termsVersion: "2026-09" },
+      );
+    });
+
+    test("rejects a complete first submission without terms acceptance", async () => {
+      const profile = makeProfile({
+        termsOfServiceAcceptedAt: null,
+        termsOfServiceVersion: null,
+      });
+      const updateStatus = mock(async () => profile);
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => profile),
+          updateStatus,
+        },
+      });
+      const service = createTutorService(deps as any);
+
+      await expect(service.submitForReview("u1", {})).rejects.toThrow(
+        TutorTermsNotAcceptedError,
+      );
+      expect(updateStatus).not.toHaveBeenCalled();
     });
 
     test("listAvailability returns slots", async () => {
