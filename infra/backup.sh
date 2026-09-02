@@ -3,7 +3,10 @@
 #
 # Dumps the database referenced by $DATABASE_URL, gzip-compresses it, uploads
 # it to R2 under backups/YYYY-MM-DD.sql.gz, then deletes R2 objects older than
-# $RETENTION_DAYS.
+# $RETENTION_DAYS. Also prunes the CD pre-migrate snapshots
+# (pre-migrate-<sha>.sql.gz at the bucket root) beyond the newest
+# $PRE_MIGRATE_KEEP — they were previously never pruned and accumulated
+# unbounded.
 #
 # Client tools: pg_dump (PostgreSQL client) + aws (AWS CLI v2, S3-compatible
 # against R2). No new dependencies beyond standard CLI tools.
@@ -23,14 +26,18 @@
 #                         R2_BUCKET (uploads) so database dumps are never
 #                         reachable via the public custom domain.
 #   RETENTION_DAYS        Keep backups younger than this many days (default: 30).
+#   PRE_MIGRATE_KEEP      Keep only the newest N CD pre-migrate snapshots
+#                         (default: 7). Pruned by the nightly cron alongside
+#                         the daily dumps.
 #
 # Usage:
 #   infra/backup.sh            # run the backup
 #   infra/backup.sh --dry-run  # print the exact commands without executing
 #
-# Requires GNU date (Ubuntu VPS). Run as root or the backup user (see
-# infra/ansible/backup-cron.yml); the backup user only needs read access to
-# the database and write access to the R2 bucket.
+# Requires GNU date + GNU head (Ubuntu VPS; `head -n -N` is a GNU extension).
+# Run as root or the backup user (see infra/ansible/backup-cron.yml); the
+# backup user only needs read access to the database and write access to the
+# R2 bucket.
 set -euo pipefail
 
 # The VPS AWS CLI v2 lives at /opt/cogito-actions-tools/bin (noble dropped
@@ -57,6 +64,11 @@ done
 
 R2_BACKUP_BUCKET="${R2_BACKUP_BUCKET:-cogito-backups}"
 RETENTION_DAYS="${RETENTION_DAYS:-30}"
+# Keep only the newest N CD pre-migrate snapshots (pre-migrate-<sha>.sql.gz).
+# These are uploaded by scripts/migrate-and-deploy.sh on every deploy and
+# were previously never pruned (50+ accumulated). The nightly backup cron
+# prunes them alongside the daily dumps.
+PRE_MIGRATE_KEEP="${PRE_MIGRATE_KEEP:-7}"
 R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 
 TODAY="$(date +%F)"
@@ -115,6 +127,11 @@ if [[ "${DRY_RUN}" -eq 1 ]]; then
   echo "${prune_cmd}"
   echo "for each key older than ${RETENTION_DAYS} days:"
   echo "  aws s3 rm 's3://${R2_BACKUP_BUCKET}/<key>' --endpoint-url '${R2_ENDPOINT}' --region auto"
+  echo
+  echo "# 4. Prune pre-migrate snapshots, keeping the newest ${PRE_MIGRATE_KEEP}"
+  echo "aws s3 ls 's3://${R2_BACKUP_BUCKET}/' --endpoint-url '${R2_ENDPOINT}' --region auto"
+  echo "for each pre-migrate-*.sql.gz beyond the newest ${PRE_MIGRATE_KEEP}:"
+  echo "  aws s3 rm 's3://${R2_BACKUP_BUCKET}/<key>' --endpoint-url '${R2_ENDPOINT}' --region auto"
   exit 0
 fi
 
@@ -150,4 +167,17 @@ while IFS= read -r line; do
     pruned=$((pruned + 1))
   fi
 done < <(eval "${prune_cmd}")
-echo "==> Done: uploaded ${R2_KEY}, pruned ${pruned} object(s)"
+
+echo "==> Pruning pre-migrate snapshots, keeping the newest ${PRE_MIGRATE_KEEP}"
+# s3 ls line format: "2026-08-27 02:00:00     123456 pre-migrate-<sha>.sql.gz"
+# List the bucket root, keep only CD pre-migrate snapshots, sort by date, and
+# delete everything except the newest PRE_MIGRATE_KEEP (head -n -N = all but
+# the last N lines).
+pruned_pm=0
+while IFS= read -r line; do
+  key="$(awk '{print $4}' <<<"${line}")"
+  echo "  deleting ${key} (beyond the newest ${PRE_MIGRATE_KEEP})"
+  aws s3 rm "s3://${R2_BACKUP_BUCKET}/${key}" --endpoint-url "${R2_ENDPOINT}" --region auto >/dev/null
+  pruned_pm=$((pruned_pm + 1))
+done < <(eval "aws s3 ls 's3://${R2_BACKUP_BUCKET}/' --endpoint-url '${R2_ENDPOINT}' --region auto" | grep -E 'pre-migrate-[0-9a-f]{40}\.sql\.gz$' | sort -k1,2 | head -n -${PRE_MIGRATE_KEEP})
+echo "==> Done: uploaded ${R2_KEY}, pruned ${pruned} object(s), pruned ${pruned_pm} pre-migrate snapshot(s)"
