@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -142,6 +142,7 @@ export function BookingDetailPage({
     useState<BookingConfirmation>(null);
   const [declineReason, setDeclineReason] = useState("");
   const [manualLinkDialogOpen, setManualLinkDialogOpen] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
   const isTutor = viewerRole === "tutor";
   const isAdmin = viewerRole === "admin";
   const bookingsPath = backTo ?? (isAdmin ? "/admin-operations" : "/bookings");
@@ -166,6 +167,11 @@ export function BookingDetailPage({
       return data.meeting?.status === "manual" ? 60_000 : 30_000;
     },
   });
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   function refreshBookingQueries() {
     void Promise.all([
@@ -370,7 +376,7 @@ export function BookingDetailPage({
       booking.currentState === "scheduled") &&
     (!booking.meetingUrl || booking.meeting?.provider === "manual");
   const sessionHasEnded =
-    new Date(booking.scheduledEndAt).getTime() <= Date.now();
+    new Date(booking.scheduledEndAt).getTime() <= now;
   const tutorActionPending =
     accept.isPending ||
     decline.isPending ||
@@ -798,7 +804,7 @@ export function BookingDetailPage({
                 ) : sessionsQuery.data && sessionsQuery.data.length > 0 ? (
                   sessionsQuery.data.map((session) => {
                     const sessionEnded =
-                      new Date(session.scheduledEndAt).getTime() <= Date.now();
+                      new Date(session.scheduledEndAt).getTime() <= now;
                     const completed =
                       session.currentState === "completed" ||
                       session.currentState === "cancelled";
