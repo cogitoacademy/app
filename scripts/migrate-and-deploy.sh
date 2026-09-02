@@ -52,8 +52,8 @@
 #   1. pg_dump snapshot of the production database, gzipped.
 #   2. Upload to R2 as pre-migrate-<GIT_SHA>.sql.gz (aws CLI, S3 endpoint).
 #   3. bun run db:migrate against PROD_DATABASE_URL.
-#   4. POST the Coolify deploy webhook with force=true so the registry image
-#      is pulled even when the configured tag is unchanged (`latest`).
+#   4. Deploy immutable v<GIT_SHA> through Coolify's image-selection endpoint
+#      using deploy access only (no application configuration PATCH).
 #   5. Poll HEALTH_URL until `version == GIT_SHA` (bounded 20 x 15s).
 #      On timeout: best-effort Coolify API rollback (below), then exit 1.
 #
@@ -86,8 +86,8 @@
 #     rollback is a reviewed, operator-driven decision. The pre-migrate
 #     snapshot is only uploaded (s3://<R2_BACKUP_BUCKET>/pre-migrate-<sha>.sql.gz),
 #     never consumed by this script.
-#   - Normal deploys force a fresh registry pull; rollback never changes the
-#     resource's configured image tag.
+#   - Normal deploy and rollback both select an immutable image through the
+#     native rollback endpoint; neither changes application configuration.
 set -euo pipefail
 
 # Keep the documented optional override safe under `set -u`. This must be
@@ -210,6 +210,34 @@ force_deploy_url() {
   fi
 }
 
+# Coolify's Docker Image rollback endpoint accepts any available image tag and
+# is authorized by deploy access. Use it for releases as well, selecting the
+# exact immutable tag built by this workflow without PATCH/write permission.
+deploy_release() {
+  local uuid
+  uuid="$(resolve_app_uuid)"
+  if [[ -n "${COOLIFY_API_TOKEN:-}" && -n "$uuid" ]]; then
+    local release_tag="v${GIT_SHA}"
+    log "release: POST /api/v1/applications/${uuid}/rollback → commit=${release_tag}"
+    coolify_api POST "/api/v1/applications/${uuid}/rollback" "{\"commit\":\"${release_tag}\"}"
+    if [[ "$COOLIFY_API_HTTP_CODE" != 2* ]]; then
+      die "failed to queue immutable release ${release_tag} (HTTP ${COOLIFY_API_HTTP_CODE}) — ${COOLIFY_API_BODY:0:300}"
+    fi
+    log "release queued: ${COOLIFY_API_BODY:0:300}"
+    return 0
+  fi
+
+  log "release: token or UUID unavailable — falling back to force=true webhook"
+  local deploy_url
+  deploy_url="$(force_deploy_url "$COOLIFY_WEBHOOK")"
+  if [[ -n "${COOLIFY_API_TOKEN:-}" ]]; then
+    curl --fail --max-time 30 -X POST \
+      -H "Authorization: Bearer ${COOLIFY_API_TOKEN}" "$deploy_url"
+  else
+    curl --fail --max-time 30 -X POST "$deploy_url"
+  fi
+}
+
 # Bounded HTTP 200 poll for the web surface (F3). Mirrors the API poll's
 # attempts x interval shape; returns 1 on timeout (caller decides exit).
 poll_web() {
@@ -303,19 +331,10 @@ log "4/6 triggering Coolify deploy"
 # (docs/DEPLOYMENT.md §5). Only send the header when COOLIFY_API_TOKEN is
 # set — unset behaves exactly as before (no header).
 if [[ "$DRY_RUN" == "0" ]]; then
-  deploy_url="$(force_deploy_url "$COOLIFY_WEBHOOK")"
-  if [[ -n "${COOLIFY_API_TOKEN:-}" ]]; then
-    log "    sending Authorization: Bearer <COOLIFY_API_TOKEN> (set)"
-    curl --fail --max-time 30 -X POST \
-      -H "Authorization: Bearer ${COOLIFY_API_TOKEN}" \
-      "$deploy_url"
-  else
-    log "    COOLIFY_API_TOKEN unset — no Authorization header (endpoint must not require auth)"
-    curl --fail --max-time 30 -X POST "$deploy_url"
-  fi
+  deploy_release
 else
   if [[ -n "${COOLIFY_API_TOKEN:-}" ]]; then
-    log "    [dry-run] curl --fail --max-time 30 -X POST -H \"Authorization: Bearer <token>\" <COOLIFY_WEBHOOK with force=true>"
+    log "    [dry-run] POST /api/v1/applications/<uuid>/rollback {commit:v<GIT_SHA>} using deploy access"
   else
     log "    [dry-run] curl --fail --max-time 30 -X POST <COOLIFY_WEBHOOK with force=true>"
   fi

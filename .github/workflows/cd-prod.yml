@@ -64,10 +64,21 @@ jobs:
     timeout-minutes: 25
     permissions:
       contents: read
+      packages: read
     steps:
       - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2.2.0
       - run: bun install --frozen-lockfile
+
+      - name: Login to GHCR for immutable server deploy
+        uses: docker/login-action@v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull immutable server image onto the Coolify host
+        run: docker pull ghcr.io/${{ github.repository }}/server:v${{ github.sha }}
 
       - name: Resolve private production database host
         env:
@@ -78,7 +89,7 @@ jobs:
         # Full production pipeline via scripts/migrate-and-deploy.sh:
         #   1. pg_dump snapshot → gzip → R2 (pre-migrate-<sha>.sql.gz)
         #   2. bun run db:migrate against the production DATABASE_URL
-        #   3. POST the server webhook with force=true (fresh registry pull)
+        #   3. Activate the locally pulled v<GIT_SHA> via deploy-only access
         #   4. Poll /health until `version == GIT_SHA` (bounded 20x15s)
         #   5. On timeout: best-effort Coolify API auto-rollback to
         #      v<prev-sha> (PATCH resource + redeploy trigger), then the

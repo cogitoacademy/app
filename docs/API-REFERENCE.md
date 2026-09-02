@@ -160,7 +160,7 @@ coverage test-command failure is propagated after the comment/gate step.
 
 ### `GET /health`
 
-Production CD verifies this endpoint's `version` against the target commit. The Coolify webhook is called with `force=true` so a Docker Image deployment pulls the newly published image instead of restarting a cached image for the unchanged `latest` tag.
+Production CD verifies this endpoint's `version` against the target commit. It selects the exact immutable `v<GIT_SHA>` Docker image through Coolify's native image rollback/deployment endpoint, which needs deploy access but does not mutate application configuration.
 
 - **Auth:** Public
 - **Input:** None
