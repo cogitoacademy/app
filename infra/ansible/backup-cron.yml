@@ -87,8 +87,16 @@
         group: root
         mode: "0700"
 
+    # P0 fix (2026-09-02): the full vault breaks bash sourcing — the
+    # multi-line GOOGLE_PRIVATE_KEY executes as a command and
+    # 'EMAIL_FROM=Cogito <send@...>' is a syntax error, so the cron env
+    # never loaded R2_ACCOUNT_ID and the nightly backup NEVER ran. Filter
+    # to exactly the keys backup.sh reads (also stops leaking the whole
+    # vault onto the VPS in plaintext).
     - name: Decrypt prod env on the control node (SOPS; age key stays local)
-      ansible.builtin.command: sops -d {{ backup_env_src }}
+      ansible.builtin.shell: >-
+        sops -d {{ backup_env_src }} |
+        grep -E '^(DATABASE_URL|R2_ACCOUNT_ID|R2_ACCESS_KEY_ID|R2_SECRET_ACCESS_KEY|R2_BACKUP_BUCKET|RETENTION_DAYS)='
       delegate_to: localhost
       become: false
       changed_when: false
@@ -109,7 +117,7 @@
         group: root
         mode: "0700"
 
-    - name: Write the cron environment file (root-only)
+    - name: Write the cron environment file (root-only, filtered keys)
       ansible.builtin.copy:
         dest: "{{ backup_env_dest }}"
         content: "{{ backup_env_plaintext.stdout }}\n"

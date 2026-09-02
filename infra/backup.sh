@@ -33,6 +33,15 @@
 # the database and write access to the R2 bucket.
 set -euo pipefail
 
+# The VPS AWS CLI v2 lives at /opt/cogito-actions-tools/bin (noble dropped
+# the apt package); root cron PATH does not include it.
+export PATH="${PATH}:/opt/cogito-actions-tools/bin"
+
+# The AWS CLI reads AWS_* names; the vault/env file uses R2_* (same mapping
+# as infra/apply.sh). Without this the upload silently fails auth.
+export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-${R2_ACCESS_KEY_ID:-}}"
+export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-${R2_SECRET_ACCESS_KEY:-}}"
+
 DRY_RUN=0
 if [[ "${1:-}" == "--dry-run" ]]; then
   DRY_RUN=1
@@ -58,6 +67,23 @@ R2_KEY="backups/${TODAY}.sql.gz"
 if [[ "${DRY_RUN}" -eq 0 ]]; then
   command -v pg_dump >/dev/null 2>&1 || { echo "ERROR: pg_dump not found (install postgresql-client)" >&2; exit 1; }
   command -v aws >/dev/null 2>&1 || { echo "ERROR: aws CLI not found (install awscli v2)" >&2; exit 1; }
+fi
+
+# --- 0. Resolve the DB host (Coolify-private hostname -> container IP) ------
+# The vault DATABASE_URL uses the app's private-network hostname (e.g.
+# noxeaeuxfreq0axa9unpew5r) which the VPS host cannot resolve. Same logic as
+# scripts/resolve-private-db-url.sh: if the hostname does not resolve, look
+# up the container IP on the coolify network and rewrite the URL.
+db_host="$(printf '%s' "$DATABASE_URL" | sed -E 's#^[^:/]+://[^@]*@?([^:/]+).*#\1#')"
+if ! (command -v getent >/dev/null 2>&1 && getent hosts "$db_host" >/dev/null 2>&1); then
+  db_ip="$(docker inspect --format '{{with index .NetworkSettings.Networks "coolify"}}{{.IPAddress}}{{end}}' "$db_host" 2>/dev/null || sudo -n docker inspect --format '{{with index .NetworkSettings.Networks "coolify"}}{{.IPAddress}}{{end}}' "$db_host" 2>/dev/null)"
+  if [[ -n "$db_ip" ]]; then
+    DATABASE_URL="$(printf '%s' "$DATABASE_URL" | sed "s#@${db_host}:#@${db_ip}:#")"
+    echo "==> resolved private DB host ${db_host} -> ${db_ip}"
+  else
+    echo "ERROR: cannot resolve DB host '${db_host}' (getent + docker inspect both failed)" >&2
+    exit 1
+  fi
 fi
 
 # --- 1. Dump + compress -------------------------------------------------------
