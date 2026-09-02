@@ -143,6 +143,23 @@ describe("Achievement Types (Zod schemas)", () => {
     expect(result.success).toBe(true);
   });
 
+  test("adminUpdateAchievementInput validates awarding dates", () => {
+    expect(
+      adminUpdateAchievementInput.safeParse({
+        id: "a1",
+        version: 3,
+        data: { awardingDate: "2024-01-01" },
+      }).success,
+    ).toBe(true);
+    expect(
+      adminUpdateAchievementInput.safeParse({
+        id: "a1",
+        version: 3,
+        data: { awardingDate: "not-a-date" },
+      }).success,
+    ).toBe(false);
+  });
+
   test("deleteAchievementInput requires id and version", () => {
     expect(
       deleteAchievementInput.safeParse({ id: "a1", version: 1 }).success,
