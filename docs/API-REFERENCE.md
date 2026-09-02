@@ -975,6 +975,7 @@ RPC contract.
 - **Auth:** Admin
 - **Input:** `{ name, location, capacity }`
 - **Output:** `{ room }`
+- **Frontend:** Admin → Operations → Room approvals → Active rooms → Add room. The form trims name/location, validates a positive whole-number capacity, and refreshes the active-room list after creation.
 
 ### `room.assign`
 

@@ -16,6 +16,7 @@ import {
   IconCheck,
   IconClock,
   IconCoins,
+  IconPlus,
   IconRefresh,
   IconSearch,
   IconUsers,
@@ -52,6 +53,7 @@ import {
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Input } from "@cogito-app/ui/components/selia/input";
+import { NumberField } from "@cogito-app/ui/components/selia/number-field";
 import {
   Item,
   ItemAction,
@@ -1503,6 +1505,7 @@ type PendingRoomApproval = Awaited<
 
 function RoomOperations() {
   const queryClient = useQueryClient();
+  const [createRoomOpen, setCreateRoomOpen] = useState(false);
   const [cancelApproval, setCancelApproval] =
     useState<PendingRoomApproval | null>(null);
   const pendingQuery = useQuery(
@@ -1555,22 +1558,29 @@ function RoomOperations() {
   };
   return (
     <>
-      <PendingRoomApprovals
-        items={pendingQuery.data ?? []}
-        isPending={pendingQuery.isPending}
-        errorMessage={
-          pendingQuery.isError
-            ? getUserFacingError(
-                pendingQuery.error,
-                "Pending room approvals could not be loaded.",
-              )
-            : null
-        }
-        onRetry={() => void pendingQuery.refetch()}
-        onRefresh={() => void pendingQuery.refetch()}
-        onAssignRequested={assignRequested}
-        onCancel={setCancelApproval}
-        isActionPending={assign.isPending || cancel.isPending}
+      <Stack direction="column" spacing="md">
+        <RoomCatalog onAddRoom={() => setCreateRoomOpen(true)} />
+        <PendingRoomApprovals
+          items={pendingQuery.data ?? []}
+          isPending={pendingQuery.isPending}
+          errorMessage={
+            pendingQuery.isError
+              ? getUserFacingError(
+                  pendingQuery.error,
+                  "Pending room approvals could not be loaded.",
+                )
+              : null
+          }
+          onRetry={() => void pendingQuery.refetch()}
+          onRefresh={() => void pendingQuery.refetch()}
+          onAssignRequested={assignRequested}
+          onCancel={setCancelApproval}
+          isActionPending={assign.isPending || cancel.isPending}
+        />
+      </Stack>
+      <CreateRoomDialog
+        open={createRoomOpen}
+        onOpenChange={setCreateRoomOpen}
       />
       <ConfirmationDialog
         open={cancelApproval !== null}
@@ -1593,6 +1603,251 @@ function RoomOperations() {
         }}
       />
     </>
+  );
+}
+
+function RoomCatalog({ onAddRoom }: { onAddRoom: () => void }) {
+  const roomsQuery = useQuery(
+    orpc.room.list.queryOptions({ input: undefined }),
+  );
+
+  return (
+    <Card>
+      <CardHeader className="flex-wrap">
+        <div className="min-w-0 flex-1">
+          <CardTitle>Active rooms</CardTitle>
+          <CardDescription>
+            Rooms shown here are available for offline booking and assignment.
+          </CardDescription>
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button
+            size="sm"
+            variant="plain"
+            onClick={() => void roomsQuery.refetch()}
+            disabled={roomsQuery.isFetching}
+          >
+            <IconRefresh /> Refresh
+          </Button>
+          <Button size="sm" onClick={onAddRoom}>
+            <IconPlus /> Add room
+          </Button>
+        </div>
+      </CardHeader>
+      <CardBody>
+        {roomsQuery.isPending ? (
+          <div className="min-h-24 animate-pulse rounded-lg bg-accent/30" />
+        ) : roomsQuery.isError ? (
+          <div className="flex flex-col items-start gap-3">
+            <Text className="text-muted">
+              {getUserFacingError(
+                roomsQuery.error,
+                "Active rooms could not be loaded.",
+              )}
+            </Text>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => void roomsQuery.refetch()}
+            >
+              Try again
+            </Button>
+          </div>
+        ) : roomsQuery.data.length === 0 ? (
+          <EmptyState
+            icon={<IconBuilding />}
+            title="No active rooms"
+            description="Add a room before creating or assigning an offline booking."
+            tone="secondary"
+            size="compact"
+          />
+        ) : (
+          <TableContainer>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Room</TableHead>
+                  <TableHead>Location</TableHead>
+                  <TableHead>Capacity</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {roomsQuery.data.map((room) => (
+                  <TableRow key={room.id}>
+                    <TableCell>
+                      <Text className="font-medium">{room.name}</Text>
+                    </TableCell>
+                    <TableCell>{room.location}</TableCell>
+                    <TableCell>{room.capacity} seats</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
+function CreateRoomDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const queryClient = useQueryClient();
+  const [name, setName] = useState("");
+  const [location, setLocation] = useState("");
+  const [capacity, setCapacity] = useState<number | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  function resetForm() {
+    setName("");
+    setLocation("");
+    setCapacity(null);
+    setFormError(null);
+  }
+
+  const create = useMutation(
+    orpc.room.create.mutationOptions({
+      onSuccess: () => {
+        void queryClient.invalidateQueries({
+          queryKey: orpc.room.list.key(),
+        });
+        toastManager.add({
+          title: "Room added",
+          description: "The room is now available for offline bookings.",
+          type: "success",
+        });
+        resetForm();
+        onOpenChange(false);
+      },
+      onError: (error: Error) => showError("Room could not be added", error),
+    }),
+  );
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const trimmedName = name.trim();
+    const trimmedLocation = location.trim();
+    if (!trimmedName) {
+      setFormError("Enter a room name.");
+      return;
+    }
+    if (!trimmedLocation) {
+      setFormError("Enter a room location.");
+      return;
+    }
+    if (capacity === null || !Number.isSafeInteger(capacity) || capacity < 1) {
+      setFormError("Capacity must be a whole number greater than zero.");
+      return;
+    }
+    if (trimmedName.length > 255 || trimmedLocation.length > 255) {
+      setFormError("Room name and location must be 255 characters or fewer.");
+      return;
+    }
+
+    setFormError(null);
+    create.mutate({
+      name: trimmedName,
+      location: trimmedLocation,
+      capacity,
+    });
+  }
+
+  function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen && !create.isPending) resetForm();
+    onOpenChange(nextOpen);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogPopup className="max-w-lg">
+        <DialogHeader className="flex-col items-start gap-1.5">
+          <DialogTitle>Add room</DialogTitle>
+          <DialogDescription>
+            Add an active physical room for offline bookings. Capacity is the
+            maximum number of learners.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogBody className="min-h-0">
+          {formError ? (
+            <Text className="mb-4 text-danger" role="alert">
+              {formError}
+            </Text>
+          ) : null}
+          <form id="create-room-form" onSubmit={submit}>
+            <Stack direction="column" spacing="md">
+              <Field>
+                <FieldLabel htmlFor="create-room-name">Room name</FieldLabel>
+                <Input
+                  id="create-room-name"
+                  name="name"
+                  value={name}
+                  maxLength={255}
+                  required
+                  placeholder="e.g. Classroom A"
+                  onChange={(event) => setName(event.target.value)}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="create-room-location">Location</FieldLabel>
+                <Input
+                  id="create-room-location"
+                  name="location"
+                  value={location}
+                  maxLength={255}
+                  required
+                  placeholder="e.g. Jakarta Selatan"
+                  onChange={(event) => setLocation(event.target.value)}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="create-room-capacity">Capacity</FieldLabel>
+                <NumberField
+                  id="create-room-capacity"
+                  value={capacity}
+                  min={1}
+                  step={1}
+                  allowOutOfRange
+                  inputProps={{
+                    name: "capacity",
+                    inputMode: "numeric",
+                    required: true,
+                  }}
+                  onValueChange={setCapacity}
+                />
+                <FieldDescription>
+                  Enter the maximum number of learners this room can hold.
+                </FieldDescription>
+              </Field>
+            </Stack>
+          </form>
+        </DialogBody>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => handleOpenChange(false)}
+            disabled={create.isPending}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            form="create-room-form"
+            progress={create.isPending}
+            disabled={create.isPending}
+          >
+            <IconPlus /> Add room
+          </Button>
+        </DialogFooter>
+      </DialogPopup>
+    </Dialog>
   );
 }
 
