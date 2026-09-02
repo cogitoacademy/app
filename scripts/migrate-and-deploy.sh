@@ -52,7 +52,8 @@
 #   1. pg_dump snapshot of the production database, gzipped.
 #   2. Upload to R2 as pre-migrate-<GIT_SHA>.sql.gz (aws CLI, S3 endpoint).
 #   3. bun run db:migrate against PROD_DATABASE_URL.
-#   4. Pin the Coolify resource to v<GIT_SHA>, then POST its deploy webhook.
+#   4. POST the Coolify deploy webhook with force=true so the registry image
+#      is pulled even when the configured tag is unchanged (`latest`).
 #   5. Poll HEALTH_URL until `version == GIT_SHA` (bounded 20 x 15s).
 #      On timeout: best-effort Coolify API rollback (below), then exit 1.
 #
@@ -68,13 +69,11 @@
 # Auto-rollback (F4, CI-SANITY plan): when the API health poll times out,
 # the script attempts a BEST-EFFORT rollback through the Coolify API:
 #
-#   1. Resolve the application UUID: env COOLIFY_APP_UUID when set,
-#      otherwise GET /api/v1/applications and match the app whose domains
-#      (fqdn/domains field) contain the HEALTH_URL host (api.cogitoacademy.id).
-#   2. PATCH /api/v1/applications/<uuid> with
-#      {"docker_registry_image_tag": "v<PREV_GIT_SHA>"} — the previous
-#      immutable GHCR tag.
-#   3. POST /api/v1/deploy?uuid=<uuid>&force=false to trigger the redeploy.
+#   1. Resolve the application UUID from COOLIFY_APP_UUID or the existing
+#      deploy webhook's `uuid` query parameter (no application-read access).
+#   2. POST /api/v1/applications/<uuid>/rollback with the previous immutable
+#      GHCR tag (`v<PREV_GIT_SHA>`). This queues a rollback without mutating
+#      the application's configured image tag.
 #
 # Locked decisions & invariants:
 #   - Rollback is best-effort and never throws: every step prints its
@@ -87,8 +86,8 @@
 #     rollback is a reviewed, operator-driven decision. The pre-migrate
 #     snapshot is only uploaded (s3://<R2_BACKUP_BUCKET>/pre-migrate-<sha>.sql.gz),
 #     never consumed by this script.
-#   - Because rollback changes the configured image tag, every later deploy
-#     advances the resource to the new immutable v<GIT_SHA> tag first.
+#   - Normal deploys force a fresh registry pull; rollback never changes the
+#     resource's configured image tag.
 set -euo pipefail
 
 # Keep the documented optional override safe under `set -u`. This must be
@@ -155,38 +154,8 @@ coolify_api() {
   return 0
 }
 
-# Find the application UUID matching the API public domain. Prints the UUID
-# on stdout (empty when no unique match). Reads the list from stdin as JSON.
-find_app_uuid() {
-  API_HOST="$1" python3 -c '
-import json, os, sys
-host = os.environ["API_HOST"].strip().lower()
-try:
-    apps = json.load(sys.stdin)
-except Exception:
-    sys.exit(0)
-if not isinstance(apps, list):
-    sys.exit(0)
-matches = []
-for app in apps:
-    if not isinstance(app, dict):
-        continue
-    domains = str(app.get("fqdn") or app.get("domains") or "")
-    for domain in domains.split(","):
-        d = domain.strip().lower().rstrip("/")
-        if "://" in d:
-            d = d.split("://", 1)[1]
-        d = d.split("/", 1)[0]
-        if d == host:
-            matches.append(str(app.get("uuid") or ""))
-            break
-if len(matches) == 1 and matches[0]:
-    print(matches[0])
-'
-}
-
-# Best-effort auto-rollback (F4): repoint the Coolify API resource at the
-# previous immutable image tag and trigger a redeploy. NEVER throws, NEVER
+# Best-effort auto-rollback (F4): queue Coolify's native rollback to the
+# previous immutable image tag. NEVER throws, NEVER
 # masks the deploy failure, NEVER touches the database. The caller always
 # prints the manual hint afterwards.
 attempt_rollback() {
@@ -199,46 +168,22 @@ attempt_rollback() {
     return 0
   fi
   local prev_tag="v${PREV_GIT_SHA}"
-  local uuid="${COOLIFY_APP_UUID:-}"
+  local uuid
+  uuid="$(resolve_app_uuid)"
 
-  if [[ -n "$uuid" ]]; then
-    log "rollback: using COOLIFY_APP_UUID=${uuid}"
-  else
-    local api_host
-    api_host="$(printf '%s' "$HEALTH_URL" | sed -n 's#^[A-Za-z][A-Za-z0-9+.\-]*://\([^/?#]*\)/.*#\1#p')"
-    if [[ -z "$api_host" ]]; then
-      log "rollback: could not derive the API host from HEALTH_URL='${HEALTH_URL}' — set COOLIFY_APP_UUID to enable matching"
-      return 0
-    fi
-    log "rollback: no COOLIFY_APP_UUID — matching the application by domain '${api_host}' (GET /api/v1/applications)"
-    coolify_api GET /api/v1/applications
-    if [[ "$COOLIFY_API_HTTP_CODE" != 2* || -z "$COOLIFY_API_BODY" ]]; then
-      log "rollback: GET /api/v1/applications failed (HTTP ${COOLIFY_API_HTTP_CODE}) — skipping auto-rollback (set COOLIFY_APP_UUID, use the manual hint below)"
-      return 0
-    fi
-    uuid="$(printf '%s' "$COOLIFY_API_BODY" | find_app_uuid "$api_host" || true)"
-    if [[ -z "$uuid" ]]; then
-      log "rollback: no unique application matched domain '${api_host}' — skipping auto-rollback (set COOLIFY_APP_UUID, use the manual hint below)"
-      return 0
-    fi
-    log "rollback: matched application uuid=${uuid}"
-  fi
-
-  log "rollback: PATCH /api/v1/applications/${uuid} → docker_registry_image_tag=${prev_tag}"
-  coolify_api PATCH "/api/v1/applications/${uuid}" "{\"docker_registry_image_tag\":\"${prev_tag}\"}"
-  if [[ "$COOLIFY_API_HTTP_CODE" != 2* ]]; then
-    log "rollback: PATCH failed (HTTP ${COOLIFY_API_HTTP_CODE}) — ${COOLIFY_API_BODY:0:300} — use the manual hint below"
+  if [[ -z "$uuid" ]]; then
+    log "rollback: no UUID in COOLIFY_APP_UUID or COOLIFY_WEBHOOK — skipping auto-rollback (use the manual hint below)"
     return 0
   fi
-  log "rollback: resource repointed at image tag ${prev_tag} (HTTP ${COOLIFY_API_HTTP_CODE})"
+  log "rollback: using application uuid=${uuid}"
 
-  log "rollback: POST /api/v1/deploy?uuid=${uuid} (trigger redeploy)"
-  coolify_api POST "/api/v1/deploy?uuid=${uuid}&force=false"
+  log "rollback: POST /api/v1/applications/${uuid}/rollback → commit=${prev_tag}"
+  coolify_api POST "/api/v1/applications/${uuid}/rollback" "{\"commit\":\"${prev_tag}\"}"
   if [[ "$COOLIFY_API_HTTP_CODE" != 2* ]]; then
-    log "rollback: redeploy trigger failed (HTTP ${COOLIFY_API_HTTP_CODE}) — ${COOLIFY_API_BODY:0:300} — use the manual hint below"
+    log "rollback: native rollback failed (HTTP ${COOLIFY_API_HTTP_CODE}) — ${COOLIFY_API_BODY:0:300} — use the manual hint below"
     return 0
   fi
-  log "rollback: redeploy queued: ${COOLIFY_API_BODY:0:300}"
+  log "rollback: native rollback queued: ${COOLIFY_API_BODY:0:300}"
   return 0
 }
 
@@ -252,23 +197,16 @@ resolve_app_uuid() {
     sed -n 's/.*[?&]uuid=\([^&]*\).*/\1/p'
 }
 
-# A rollback pins the resource to an immutable old tag. Advance it before
-# each later release or the webhook will redeploy that old image forever.
-prepare_release_tag() {
-  if [[ -z "${COOLIFY_API_TOKEN:-}" ]]; then
-    log "release-tag: COOLIFY_API_TOKEN unset — keeping the resource's configured tag"
-    return 0
-  fi
-  local uuid
-  uuid="$(resolve_app_uuid)"
-  if [[ -z "$uuid" ]]; then
-    die "cannot resolve the Coolify application UUID from COOLIFY_APP_UUID or COOLIFY_WEBHOOK; refusing to deploy without advancing the immutable image tag"
-  fi
-  local release_tag="v${GIT_SHA}"
-  log "release-tag: PATCH /api/v1/applications/${uuid} → docker_registry_image_tag=${release_tag}"
-  coolify_api PATCH "/api/v1/applications/${uuid}" "{\"docker_registry_image_tag\":\"${release_tag}\"}"
-  if [[ "$COOLIFY_API_HTTP_CODE" != 2* ]]; then
-    die "failed to advance the Coolify resource to ${release_tag} (HTTP ${COOLIFY_API_HTTP_CODE}) — ${COOLIFY_API_BODY:0:300}"
+# Ensure Docker Image deployments pull the current registry image instead of
+# restarting the locally cached image for an unchanged tag such as `latest`.
+force_deploy_url() {
+  local url="$1"
+  if [[ "$url" == *"force="* ]]; then
+    printf '%s' "$url" | sed 's/\([?&]\)force=[^&]*/\1force=true/'
+  elif [[ "$url" == *"?"* ]]; then
+    printf '%s&force=true' "$url"
+  else
+    printf '%s?force=true' "$url"
   fi
 }
 
@@ -365,21 +303,21 @@ log "4/6 triggering Coolify deploy"
 # (docs/DEPLOYMENT.md §5). Only send the header when COOLIFY_API_TOKEN is
 # set — unset behaves exactly as before (no header).
 if [[ "$DRY_RUN" == "0" ]]; then
-  prepare_release_tag
+  deploy_url="$(force_deploy_url "$COOLIFY_WEBHOOK")"
   if [[ -n "${COOLIFY_API_TOKEN:-}" ]]; then
     log "    sending Authorization: Bearer <COOLIFY_API_TOKEN> (set)"
     curl --fail --max-time 30 -X POST \
       -H "Authorization: Bearer ${COOLIFY_API_TOKEN}" \
-      "$COOLIFY_WEBHOOK"
+      "$deploy_url"
   else
     log "    COOLIFY_API_TOKEN unset — no Authorization header (endpoint must not require auth)"
-    curl --fail --max-time 30 -X POST "$COOLIFY_WEBHOOK"
+    curl --fail --max-time 30 -X POST "$deploy_url"
   fi
 else
   if [[ -n "${COOLIFY_API_TOKEN:-}" ]]; then
-    log "    [dry-run] curl --fail --max-time 30 -X POST -H \"Authorization: Bearer <token>\" \"\$COOLIFY_WEBHOOK\""
+    log "    [dry-run] curl --fail --max-time 30 -X POST -H \"Authorization: Bearer <token>\" <COOLIFY_WEBHOOK with force=true>"
   else
-    log "    [dry-run] curl --fail --max-time 30 -X POST \"\$COOLIFY_WEBHOOK\""
+    log "    [dry-run] curl --fail --max-time 30 -X POST <COOLIFY_WEBHOOK with force=true>"
   fi
 fi
 

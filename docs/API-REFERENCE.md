@@ -160,7 +160,7 @@ coverage test-command failure is propagated after the comment/gate step.
 
 ### `GET /health`
 
-Production CD verifies this endpoint's `version` against the target commit. Before triggering Coolify, the pipeline advances the server resource to the immutable `v<GIT_SHA>` image tag so a tag left pinned by an earlier rollback cannot cause another deployment of the previous version.
+Production CD verifies this endpoint's `version` against the target commit. The Coolify webhook is called with `force=true` so a Docker Image deployment pulls the newly published image instead of restarting a cached image for the unchanged `latest` tag.
 
 - **Auth:** Public
 - **Input:** None
