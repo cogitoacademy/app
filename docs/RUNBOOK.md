@@ -277,8 +277,9 @@ calendar month/year dropdowns as well; each popup must remain clickable and
 must not be hidden behind the dialog backdrop.
 
 With at least one submission present, verify the student achievement list is a
-compact semantic table with readable achievement, status, awarded date, and
-**View details** columns. Open a row and confirm the drawer exposes category,
+compact summary with small label-and-pill count cards matching the admin queue,
+followed by a semantic table with readable achievement, status, awarded date,
+and **View details** columns. Open a row and confirm the drawer exposes category,
 level, location, description, attachments, and moderator notes; pending rows
 must keep **Edit** and **Delete** usable. At a narrow viewport, confirm the
 table reaches the card edges and scrolls horizontally inside its container

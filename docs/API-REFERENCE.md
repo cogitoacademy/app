@@ -607,7 +607,7 @@ The web tutor profile editor groups education, competition achievements, and exp
 - **Auth:** Protected
 - **Input:** None
 - **Output:** `{ items: Achievement[] }`
-- **Description:** The student `/achievements` page consumes this unchanged list and presents a compact horizontally scrollable table; full metadata and pending edit/delete actions are available in a frontend-only detail drawer.
+- **Description:** The student `/achievements` page consumes this unchanged list and presents compact label-and-pill summary counts plus a compact horizontally scrollable table; full metadata and pending edit/delete actions are available in a frontend-only detail drawer.
 
 ### `achievement.create`
 

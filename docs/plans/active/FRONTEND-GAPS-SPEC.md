@@ -834,6 +834,8 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 
 ### Version Notes
 
+- v1.64 (2026-09-02): Matched the student achievement summary cards to the admin moderation queue's compact label-and-pill treatment; no RPC/schema/persistence contract changed.
+
 - v1.63 (2026-09-02): Made the student and admin achievement `TableContainer` full-bleed within `CardBody` so the table aligns with both card edges; the inner container retains horizontal scrolling and the page remains constrained. No RPC/schema/persistence contract changed.
 
 - v1.62 (2026-09-02): Moved non-essential achievement metadata and row actions into a shared right-side detail drawer for student and admin tables. The compact tables retain core identifiers, status, awarded date, and a keyboard-accessible detail trigger; no RPC/schema/persistence contract changed.
