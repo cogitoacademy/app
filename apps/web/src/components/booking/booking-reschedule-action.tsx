@@ -44,6 +44,13 @@ import {
   isValidMinuteTime,
   MinuteTimeInput,
 } from "./minute-time-input";
+import {
+  formatDateValue,
+  formatTimeValue,
+  toSessionStart,
+} from "./booking-session-time";
+
+const RESCHEDULE_TIMEZONE = "Asia/Jakarta";
 
 export function canProposeBookingReschedule({
   viewerRole,
@@ -125,11 +132,15 @@ export function BookingRescheduleAction({
     );
   const selectedSlot = slots.find((slot) => slot.id === selectedSlotId);
   const minTime = selectedSlot
-    ? formatTimeValue(getEarliestStart(selectedSlot.startDate))
+    ? formatTimeValue(
+        getEarliestStart(selectedSlot.startDate),
+        RESCHEDULE_TIMEZONE,
+      )
     : undefined;
   const maxTime = selectedSlot
     ? formatTimeValue(
         new Date(new Date(selectedSlot.endDate).getTime() - 90 * 60_000),
+        RESCHEDULE_TIMEZONE,
       )
     : undefined;
   const usingAvailability = mode === "availability";
@@ -255,8 +266,18 @@ export function BookingRescheduleAction({
                               slot.startDate,
                             );
                             setSelectedSlotId(slot.id);
-                            setNewDate(formatDateValue(earliestStart));
-                            setNewTime(formatTimeValue(earliestStart));
+                            setNewDate(
+                              formatDateValue(
+                                earliestStart,
+                                RESCHEDULE_TIMEZONE,
+                              ),
+                            );
+                            setNewTime(
+                              formatTimeValue(
+                                earliestStart,
+                                RESCHEDULE_TIMEZONE,
+                              ),
+                            );
                           }}
                         >
                           <span className="flex min-w-0 flex-col items-start gap-1">
@@ -265,8 +286,16 @@ export function BookingRescheduleAction({
                             </span>
                             <span className="flex items-center gap-1.5 text-sm opacity-80">
                               <IconClock />
-                              {formatTimeValue(slot.startDate)}–
-                              {formatTimeValue(slot.endDate)} WIB
+                              {formatTimeValue(
+                                slot.startDate,
+                                RESCHEDULE_TIMEZONE,
+                              )}
+                              –
+                              {formatTimeValue(
+                                slot.endDate,
+                                RESCHEDULE_TIMEZONE,
+                              )}{" "}
+                              WIB
                             </span>
                           </span>
                           {selected ? <IconCheck className="ml-auto" /> : null}
@@ -373,7 +402,11 @@ export function BookingRescheduleAction({
               onClick={() =>
                 propose.mutate({
                   bookingId,
-                  proposedStartAt: new Date(`${newDate}T${newTime}:00+07:00`),
+                  proposedStartAt: toSessionStart(
+                    newDate,
+                    newTime,
+                    RESCHEDULE_TIMEZONE,
+                  ),
                   availabilitySlotId:
                     usingAvailability && selectedSlotId
                       ? selectedSlotId
@@ -406,23 +439,11 @@ export function isSameScheduleMinute(
   time: string,
 ) {
   if (!currentStartAt || !date || !isValidMinuteTime(time)) return false;
-  const proposed = new Date(`${date}T${time}:00+07:00`);
+  const proposed = toSessionStart(date, time, RESCHEDULE_TIMEZONE);
   return (
     Math.floor(new Date(currentStartAt).getTime() / 60_000) ===
     Math.floor(proposed.getTime() / 60_000)
   );
-}
-
-function formatDateValue(value: Date | string) {
-  const parts = new Intl.DateTimeFormat("en", {
-    timeZone: "Asia/Jakarta",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date(value));
-  const part = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((candidate) => candidate.type === type)?.value ?? "";
-  return `${part("year")}-${part("month")}-${part("day")}`;
 }
 
 function getEarliestStart(slotStart: Date | string) {
@@ -433,22 +454,13 @@ function getEarliestStart(slotStart: Date | string) {
   return start > now ? start : now;
 }
 
-function formatTimeValue(value: Date | string) {
-  return new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Asia/Jakarta",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).format(new Date(value));
-}
-
 function formatSlotLabel(start: Date | string, end: Date | string) {
-  return `${formatSlotDate(start)} · ${formatTimeValue(start)}–${formatTimeValue(end)} WIB`;
+  return `${formatSlotDate(start)} · ${formatTimeValue(start, RESCHEDULE_TIMEZONE)}–${formatTimeValue(end, RESCHEDULE_TIMEZONE)} WIB`;
 }
 
 function formatSlotDate(value: Date | string) {
   return new Intl.DateTimeFormat("en-ID", {
-    timeZone: "Asia/Jakarta",
+    timeZone: RESCHEDULE_TIMEZONE,
     weekday: "short",
     day: "numeric",
     month: "short",
@@ -462,6 +474,6 @@ function formatSchedule(value?: Date | string | null) {
 }
 
 function formatProposedSchedule(date: string, time: string) {
-  const start = new Date(`${date}T${time}:00+07:00`);
+  const start = toSessionStart(date, time, RESCHEDULE_TIMEZONE);
   return formatSlotLabel(start, new Date(start.getTime() + 90 * 60_000));
 }
