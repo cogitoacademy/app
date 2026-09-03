@@ -440,7 +440,7 @@ Routers access handlers via `context.services.{module}.{method}`. Other modules 
 - **Redis:** Shared instance for sessions, idempotency, rate limiting, circuit breaker state, BullMQ persistence (after production readiness)
 - **Scheduler:** BullMQ with Redis persistence for booking expiry, hold release, email dispatch
 - **Email:** Resend (production) / stub (development) via EmailService
-- **Meeting:** Google Meet (production) / manual link fallback via CircuitBreaker. Booking creation selects one active tutor competition specialization and snapshots its category/specialization metadata in `booking.session_topic`. Calendar titles use `Cogito - {Competition} | {Tutor} x {Student}` for solo bookings and append `& Friends` for groups; MUN/WSC use their standard abbreviations. Descriptions list tutor/students, `Session Topic: {category} - {specialization}`, Session Notes (including reference links), and `/bookings/{bookingId}`. `learning_goal` remains the Session Notes compatibility carrier; file uploads are deferred. OAuth refresh-token and service-account setup is documented in [`docs/GOOGLE-MEET-SETUP.md`](GOOGLE-MEET-SETUP.md).
+- **Meeting/Calendar:** Online bookings use Google Meet (production) / manual link fallback via CircuitBreaker. When an offline booking receives a room and becomes `scheduled`, the provider creates a normal Google Calendar event without conference data or a Meet URL. Offline events carry the assigned room name/location and the same attendees, title, description, schedule, and booking deep link as online events. Assignment/relocation sync runs best-effort after the room transaction commits; repeat syncs reuse the live provider row. Reschedules update the event, and terminal booking paths delete it through the shared lifecycle hooks. Booking creation selects one active tutor competition specialization and snapshots its category/specialization metadata in `booking.session_topic`. Calendar titles use `Cogito - {Competition} | {Tutor} x {Student}` for solo bookings and append `& Friends` for groups; MUN/WSC use their standard abbreviations. Descriptions list tutor/students, `Session Topic: {category} - {specialization}`, Session Notes (including reference links), and `/bookings/{bookingId}`. `learning_goal` remains the Session Notes compatibility carrier; file uploads are deferred. OAuth refresh-token and service-account setup is documented in [`docs/GOOGLE-MEET-SETUP.md`](GOOGLE-MEET-SETUP.md).
 - **Deployment:** Coolify on the OVH VPS; production API and web images are pulled from GHCR
 - **Database TLS:** Controlled by `DB_SSL_ENABLED`; Coolify's bundled PostgreSQL is non-TLS, while external managed databases may require it
 
@@ -491,7 +491,7 @@ when set to false.
 
 ### `roomBooking` (booking.ts) — room assignment with status requested/confirmed/relocated/cancelled
 
-### `meetingEvent` (booking.ts) — meeting links (google_meet/manual), status + error_reason. Calendar title/description metadata is provider-side and is rebuilt when a meeting attempt is created; it is not a new database field.
+### `meetingEvent` (booking.ts) — provider event/link state (google_meet/manual), status + error_reason. `google_meet` identifies the shared Google Calendar provider row; offline rows intentionally have no `meetingUrl`. Calendar title/description/location metadata is provider-side and is not a new database field.
 
 ### `paymentRecord` (payment-record.ts) — payment status tracking
 

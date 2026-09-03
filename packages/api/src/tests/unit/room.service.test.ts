@@ -719,6 +719,8 @@ describe("room service notifications (P1-3)", () => {
     const notificationPort = { writeBestEffort: mock(async () => {}) };
     const bookingPort = {
       transitionBookingToScheduled: mock(async () => {}),
+      syncOfflineCalendarEvent: mock(async () => {}),
+      syncOfflineCalendarAfterRoomRemoval: mock(async () => {}),
       getBookingRecipients: mock(async () => ({
         tutorId: "tutor1",
         participantUserIds: ["student1", "student2"],
@@ -755,7 +757,20 @@ describe("room service notifications (P1-3)", () => {
       "b1",
       "admin1",
     );
+    expect(bookingPort.syncOfflineCalendarEvent).toHaveBeenCalledWith(
+      "b1",
+      { name: "Room A", location: "Building 1" },
+      {
+        startAt: new Date("2024-01-01T10:00:00Z"),
+        endAt: new Date("2024-01-01T11:00:00Z"),
+      },
+    );
     expect(notificationPort.writeBestEffort).toHaveBeenCalledTimes(3);
+    expect(bookingPort.syncOfflineCalendarEvent).toHaveBeenCalledWith(
+      "b1",
+      { name: "Room A", location: "Building 1" },
+      expect.any(Object),
+    );
     const calls = notificationPort.writeBestEffort.mock.calls.map(
       (c: any) => c[0],
     );
@@ -833,5 +848,8 @@ describe("room service notifications (P1-3)", () => {
       (c: any) => c[0],
     );
     expect(calls[0].eventKey).toContain("room.b1.cancelled");
+    expect(
+      bookingPort.syncOfflineCalendarAfterRoomRemoval,
+    ).toHaveBeenCalledWith("b1");
   });
 });

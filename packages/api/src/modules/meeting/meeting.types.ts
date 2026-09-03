@@ -20,6 +20,10 @@ export interface MeetingEventDetails {
   title: string;
   /** Optional provider-calendar description, including any app deep link. */
   description?: string;
+  /** Optional physical location shown on a non-Meet calendar event. */
+  location?: string;
+  /** Defaults to true. Offline bookings set this to false. */
+  createConference?: boolean;
 }
 
 export interface MeetingPort {
@@ -47,7 +51,7 @@ export interface MeetingPort {
    */
   updateEvent(
     bookingId: string,
-    changes: { startAt?: Date; endAt?: Date },
+    changes: { startAt?: Date; endAt?: Date; location?: string },
   ): Promise<void>;
   /**
    * Deletes the provider-side event when the booking reaches a terminal state

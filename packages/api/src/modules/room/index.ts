@@ -22,6 +22,12 @@ export interface RoomBookingPort {
     bookingId: string,
     actorId: string,
   ): Promise<void>;
+  syncOfflineCalendarEvent?(
+    bookingId: string,
+    room: { name: string; location: string },
+    schedule: { startAt: Date; endAt: Date },
+  ): Promise<void>;
+  syncOfflineCalendarAfterRoomRemoval?(bookingId: string): Promise<void>;
   getBookingRecipients(
     tx: DbOrTx,
     bookingId: string,

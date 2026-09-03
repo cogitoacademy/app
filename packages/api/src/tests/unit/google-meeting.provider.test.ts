@@ -208,6 +208,73 @@ describe("createGoogleMeetingProvider", () => {
     ]);
   });
 
+  test("createEvent creates an idempotent offline Calendar event without Meet", async () => {
+    mockCalendarEventsInsert.mockImplementationOnce(async () => ({
+      data: { id: "evt_offline" },
+    }));
+    const row = {
+      id: "me-offline",
+      bookingId: "offline-1",
+      provider: "google_meet",
+      externalEventId: "evt_offline",
+      meetingUrl: null,
+      status: "created",
+      errorReason: null,
+    };
+    let lookup = 0;
+    const db = {
+      select: mock(() => ({
+        from: mock(() => ({
+          where: mock(() => ({
+            orderBy: mock(() => ({
+              limit: mock(async () => (lookup++ === 0 ? [] : [row])),
+            })),
+          })),
+        })),
+      })),
+      insert: mock(() => ({
+        values: mock(() => ({ returning: mock(async () => [row]) })),
+      })),
+    } as any;
+    const provider = createGoogleMeetingProvider(config, db);
+    const start = new Date("2030-03-01T08:00:00Z");
+    const end = new Date("2030-03-01T09:30:00Z");
+    const details = {
+      title: "Cogito - IMO | Tutor x Student",
+      description: "Session details",
+      location: "Room A — Main Campus",
+      createConference: false,
+    };
+
+    const first = await provider.createEvent(
+      "offline-1",
+      start,
+      end,
+      [{ email: "student@example.com" }],
+      undefined,
+      details,
+    );
+    const second = await provider.createEvent(
+      "offline-1",
+      start,
+      end,
+      [{ email: "student@example.com" }],
+      undefined,
+      details,
+    );
+
+    expect(first.meetingUrl).toBeNull();
+    expect(second).toEqual(row);
+    const offlineCalls = mockCalendarEventsInsert.mock.calls.filter(
+      (call) => call[0]?.requestBody?.summary === details.title,
+    );
+    expect(offlineCalls).toHaveLength(1);
+    expect(offlineCalls[0]?.[0]?.requestBody?.location).toBe(details.location);
+    expect(offlineCalls[0]?.[0]?.requestBody?.id).toMatch(/^cogito[0-9a-f]+$/);
+    expect(offlineCalls[0]?.[0]?.requestBody?.conferenceData).toBeUndefined();
+    expect(offlineCalls[0]?.[0]?.conferenceDataVersion).toBeUndefined();
+  });
+
   test("createEvent returns failed status on Google API error", async () => {
     mockCalendarEventsInsert.mockImplementationOnce(async () => {
       throw new Error("Google API error");
@@ -624,6 +691,26 @@ describe("createGoogleMeetingProvider updateEvent/cancelEvent (OQ-05)", () => {
     );
     expect(call?.requestBody?.start?.dateTime).toBe(start.toISOString());
     expect(call?.requestBody?.end?.dateTime).toBe(end.toISOString());
+  });
+
+  test("updateEvent relocates an offline provider event without adding Meet", async () => {
+    const db = makeSelectDb({ ...liveRow, meetingUrl: null });
+    mockCalendarEventsGet.mockImplementationOnce(async () => ({
+      data: {
+        id: "evt_123",
+        summary: "Cogito offline session",
+        location: "Room A — Main Campus",
+      },
+    }));
+    const provider = createGoogleMeetingProvider(config, db);
+
+    await provider.updateEvent("b1", {
+      location: "Room B — North Campus",
+    });
+
+    const call = mockCalendarEventsUpdate.mock.calls.at(-1)?.[0];
+    expect(call?.requestBody?.location).toBe("Room B — North Campus");
+    expect(call?.requestBody?.conferenceData).toBeUndefined();
   });
 
   test("updateEvent is a no-op without a live provider event", async () => {

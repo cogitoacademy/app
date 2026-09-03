@@ -1,6 +1,6 @@
 # Google Calendar Event Metadata
 
-Status: Completed (2026-08-29)
+Status: Completed (2026-08-29; offline lifecycle extension 2026-09-03)
 
 ## Outcome
 
@@ -32,6 +32,15 @@ reference links, and the same content is rendered under a `Session Notes:`
 heading in newly created Calendar/Meet event descriptions. The existing
 `learningGoal` API key and `learning_goal` database column remain as a
 compatibility carrier for now; file upload/Calendar attachments are deferred.
+
+## Offline extension (2026-09-03)
+
+Room assignment creates a standard Calendar event after the database
+transaction commits. It uses the same summary, description, attendees, and
+schedule as online events, adds the assigned room name/location, and omits
+conference data. Room relocation and accepted rescheduling update the same
+event; terminal booking paths delete it. Creation is idempotent against the
+live local provider row, and all provider writes remain best-effort.
 
 ## Verification
 

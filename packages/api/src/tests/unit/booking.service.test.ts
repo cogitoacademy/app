@@ -8547,4 +8547,112 @@ describe("BookingService coverage paths", () => {
       failed: 1,
     });
   });
+
+  test("syncs a scheduled offline booking to Calendar with room metadata", async () => {
+    const booking = makeBooking({
+      modality: "offline",
+      currentState: "scheduled",
+    });
+    const { service, meeting } = createService({
+      repo: {
+        findBookingById: mock(async () => booking),
+        findConfirmedParticipants: mock(async () => [
+          makeParticipant({ userId: "student1" }),
+        ]),
+        findUserEmails: mock(async () => [
+          { id: "tutor1", email: "tutor@example.com", name: "Tutor" },
+          { id: "student1", email: "student@example.com", name: "Student" },
+        ]),
+      },
+    });
+    const schedule = {
+      startAt: booking.scheduledStartAt,
+      endAt: booking.scheduledEndAt,
+    };
+
+    await service.syncOfflineCalendarEvent(
+      "b1",
+      { name: "Room A", location: "Main Campus" },
+      schedule,
+    );
+
+    expect(meeting.createEvent).toHaveBeenCalledWith(
+      "b1",
+      schedule.startAt,
+      schedule.endAt,
+      expect.arrayContaining([
+        { email: "tutor@example.com", name: "Tutor" },
+        { email: "student@example.com", name: "Student" },
+      ]),
+      undefined,
+      expect.objectContaining({
+        location: "Room A — Main Campus",
+        createConference: false,
+      }),
+    );
+    expect(meeting.updateEvent).toHaveBeenCalledWith("b1", {
+      startAt: schedule.startAt,
+      endAt: schedule.endAt,
+      location: "Room A — Main Campus",
+    });
+  });
+
+  test("offline Calendar sync is best-effort and ignores ineligible bookings", async () => {
+    const findBookingById = mock(async () =>
+      makeBooking({ modality: "online", currentState: "scheduled" }),
+    );
+    const { service, meeting } = createService({ repo: { findBookingById } });
+    await service.syncOfflineCalendarEvent(
+      "b1",
+      { name: "Room A", location: "Campus" },
+      { startAt: new Date(), endAt: new Date() },
+    );
+    expect(meeting.createEvent).not.toHaveBeenCalled();
+
+    findBookingById.mockImplementationOnce(async () =>
+      makeBooking({ modality: "offline", currentState: "scheduled" }),
+    );
+    meeting.createEvent.mockImplementationOnce(async () => {
+      throw new Error("calendar unavailable");
+    });
+    await expect(
+      service.syncOfflineCalendarEvent(
+        "b1",
+        { name: "Room A", location: "Campus" },
+        { startAt: new Date(), endAt: new Date() },
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  test("syncs room removal by clearing scheduled location or cancelling terminal events", async () => {
+    const findBookingById = mock(async () =>
+      makeBooking({ modality: "offline", currentState: "scheduled" }),
+    );
+    const { service, meeting } = createService({ repo: { findBookingById } });
+
+    await service.syncOfflineCalendarAfterRoomRemoval("b1");
+    expect(meeting.updateEvent).toHaveBeenCalledWith("b1", { location: "" });
+
+    findBookingById.mockImplementationOnce(async () =>
+      makeBooking({ modality: "offline", currentState: "cancelled" }),
+    );
+    await service.syncOfflineCalendarAfterRoomRemoval("b1");
+    expect(meeting.cancelEvent).toHaveBeenCalledWith("b1");
+
+    findBookingById.mockImplementationOnce(async () => null);
+    await service.syncOfflineCalendarAfterRoomRemoval("b1");
+  });
+
+  test("room-removal Calendar sync absorbs provider failures", async () => {
+    const { service } = createService({
+      repo: {
+        findBookingById: mock(async () => {
+          throw new Error("database unavailable");
+        }),
+      },
+    });
+    await expect(
+      service.syncOfflineCalendarAfterRoomRemoval("b1"),
+    ).resolves.toBeUndefined();
+  });
 });

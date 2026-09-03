@@ -1025,7 +1025,7 @@ RPC contract.
 - **Auth:** Admin
 - **Input:** `{ bookingId, roomId, startAt, endAt }`
 - **Output:** `{ roomBooking }`
-- **Description:** Confirms a room for an offline booking and transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED`; it may also assign a new room to an already `SCHEDULED` offline booking after its prior room was removed. A scheduled booking with an active room must use relocation instead. Notifies tutor + confirmed students (G14, #46). The admin UI invokes this from the Room approvals queue or the booking detail room controls; `bookingId` and `roomId` remain internal identifiers in the RPC input.
+- **Description:** Confirms a room for an offline booking and transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED`; it may also assign a new room to an already `SCHEDULED` offline booking after its prior room was removed. After commit, it best-effort creates or refreshes a normal Google Calendar event with the room/location and no Meet conference; provider failure never rolls back scheduling, and repeated sync reuses the live event. A scheduled booking with an active room must use relocation instead. Notifies tutor + confirmed students (G14, #46). The admin UI invokes this from the Room approvals queue or the booking detail room controls; `bookingId` and `roomId` remain internal identifiers in the RPC input.
 
 ### `room.checkAvailability`
 
@@ -1035,6 +1035,8 @@ RPC contract.
 - **Description:** Returns whether a room is free for a time slot; **known gap G13** — not yet integrated into booking creation (tracked U14 in `docs/plans/active/PRD-GAPS-PHASE3.md`)
 
 ### `room.relocate`
+
+The successful mutation also best-effort updates the existing offline Calendar event's room/location and schedule after commit. It never adds conference data or a Meet URL.
 
 - **Auth:** Admin
 - **Input:** `{ bookingId, roomId, startAt, endAt }`

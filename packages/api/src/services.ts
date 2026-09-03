@@ -261,6 +261,14 @@ function createServices() {
     bookingPort: {
       transitionBookingToScheduled: (tx, bookingId, actorId) =>
         bookingService!.transitionBookingToScheduled(tx, bookingId, actorId),
+      syncOfflineCalendarEvent: (bookingId, assignedRoom, schedule) =>
+        bookingService!.syncOfflineCalendarEvent(
+          bookingId,
+          assignedRoom,
+          schedule,
+        ),
+      syncOfflineCalendarAfterRoomRemoval: (bookingId) =>
+        bookingService!.syncOfflineCalendarAfterRoomRemoval(bookingId),
       getBookingRecipients: (tx, bookingId) =>
         bookingService!.getBookingRecipients(tx, bookingId),
       cancelOfflineBooking: (tx, bookingId, actorId) =>
