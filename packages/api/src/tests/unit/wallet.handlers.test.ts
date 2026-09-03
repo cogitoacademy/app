@@ -57,13 +57,29 @@ describe("walletHandler", () => {
   });
 
   describe("listPackages", () => {
-    test("calls wallet.listActivePackages", async () => {
+    test("calls wallet.listActivePackages and reports no Xendit mode for the stub provider", async () => {
       const result = await walletHandler.listPackages({
         context: { session: { user: { id: "u1" } } },
       } as any);
 
       expect(walletService.listActivePackages).toHaveBeenCalledWith();
-      expect(result).toEqual([{ id: "pkg1" }]);
+      expect(result).toEqual({ xenditMode: null, packages: [{ id: "pkg1" }] });
+    });
+
+    test("reports the Xendit mode when the deployment runs Xendit Test Mode", async () => {
+      const testModeHandler = createWalletHandler({
+        wallet: walletService as any,
+        xenditMode: "test",
+      });
+
+      const result = await testModeHandler.listPackages({
+        context: { session: { user: { id: "u1" } } },
+      } as any);
+
+      expect(result).toEqual({
+        xenditMode: "test",
+        packages: [{ id: "pkg1" }],
+      });
     });
   });
 

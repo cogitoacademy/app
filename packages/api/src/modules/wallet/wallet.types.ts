@@ -18,3 +18,22 @@ export const knowledgeBankOutput = z.object({
   balance: z.number(),
   threshold: z.number(),
 });
+
+export const packagesOutput = z.object({
+  // Client-visible payment mode signal: "test" when the deployment uses
+  // Xendit Test Mode, "live" for Live Mode, null when the stub provider is
+  // active. Drives the Test Mode amount-cap labels on package cards.
+  xenditMode: z.enum(["test", "live"]).nullable(),
+  packages: z.array(
+    z.object({
+      id: z.string(),
+      code: z.string(),
+      name: z.string(),
+      marks: z.number(),
+      priceIdr: z.number(),
+      isActive: z.boolean(),
+      createdAt: z.date(),
+      updatedAt: z.date(),
+    }),
+  ),
+});

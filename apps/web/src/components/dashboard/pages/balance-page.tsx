@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@cogito-app/ui/components/selia/button";
+import { Badge } from "@cogito-app/ui/components/selia/badge";
 import {
   Card,
   CardBody,
@@ -15,6 +16,7 @@ import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Separator } from "@cogito-app/ui/components/selia/separator";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
+import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import {
   IconBook,
   IconCoin,
@@ -34,6 +36,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { EmptyState } from "@/components/empty-state";
 import { StatCard } from "../stat-card";
 import { orpc } from "@/utils/orpc";
+import { getUserFacingError } from "@/lib/error-message";
 
 const LEDGER_LABELS: Record<string, string> = {
   credit: "Marks added",
@@ -77,9 +80,11 @@ export function BalancePage() {
   const { data: wallet, isLoading: walletLoading } = useQuery(
     orpc.wallet.get.queryOptions(),
   );
-  const { data: packages = [], isLoading: packagesLoading } = useQuery(
+  const { data: packagesData, isLoading: packagesLoading } = useQuery(
     orpc.wallet.listPackages.queryOptions(),
   );
+  const packages = packagesData?.packages ?? [];
+  const xenditTestMode = packagesData?.xenditMode === "test";
   const { data: ledgerData, isLoading: ledgerLoading } = useQuery(
     orpc.wallet.listLedger.queryOptions({ input: { limit: 50 } }),
   );
@@ -111,6 +116,12 @@ export function BalancePage() {
           queryKey: orpc.wallet.listLedger.key(),
         });
       },
+      onError: (error: Error) =>
+        toastManager.add({
+          title: "Purchase could not be completed",
+          description: getUserFacingError(error),
+          type: "error",
+        }),
     }),
   );
 
@@ -339,6 +350,16 @@ export function BalancePage() {
                 >
                   <CardHeader>
                     <CardTitle>{pkg.name}</CardTitle>
+                    {xenditTestMode &&
+                    (pkg.code === "explorer" || pkg.code === "pioneer") ? (
+                      <Badge
+                        variant="warning"
+                        size="sm"
+                        className="justify-self-end"
+                      >
+                        Test Mode limit
+                      </Badge>
+                    ) : null}
                   </CardHeader>
                   <CardBody>
                     <div className="space-y-1">
@@ -361,6 +382,13 @@ export function BalancePage() {
                       <Text className="text-dimmed text-xs">
                         ~{formatIdr(Math.round(pkg.priceIdr / pkg.marks))}/Mark
                       </Text>
+                      {xenditTestMode &&
+                      (pkg.code === "explorer" || pkg.code === "pioneer") ? (
+                        <Text className="text-xs text-warning">
+                          Xendit Test Mode caps payments at IDR 1,000,000 — this
+                          package is available in Live Mode.
+                        </Text>
+                      ) : null}
                     </div>
                   </CardBody>
                   <CardFooter>
