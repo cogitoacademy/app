@@ -30,6 +30,7 @@
     "dompurify": "^3.4.14",
     "dotenv": "catalog:",
     "next-themes": "catalog:",
+    "qrcode.react": "^4.2.0",
     "react": "catalog:",
     "react-dom": "catalog:",
     "recharts": "^3.10.1",

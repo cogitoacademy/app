@@ -1,6 +1,6 @@
 # Cogito API Reference
 
-Last updated: 2026-09-02
+Last updated: 2026-09-03
 
 The 2026-09-02 local pre-push lint-gate alignment changes developer tooling
 only. It does not change any RPC path, request envelope, response shape,
@@ -731,7 +731,7 @@ The web tutor profile editor groups education, competition achievements, and exp
 ### Xendit environment selection
 
 - `PAYMENT_PROVIDER=xendit` selects the Xendit provider. `XENDIT_MODE` is required and must be `test` or `live`; the Xendit API key, created in the matching Xendit Dashboard mode, selects the actual transaction environment. `XENDIT_MODE` is not sent as an API field.
-- In production/staging, `XENDIT_MODE=test` also requires `XENDIT_TEST_ALLOWED_EMAILS`; only those verified student emails can call `payment.createPurchase`. This keeps production-domain UAT from granting sandbox-funded Marks to arbitrary accounts.
+- In production/staging, `XENDIT_MODE=test` also requires `XENDIT_TEST_ALLOWED_EMAILS`; only those verified student emails can call `payment.createPurchase`. This keeps production-domain UAT from granting sandbox-funded Marks to arbitrary accounts. The default provider channel is QRIS; `checkoutUrl` carries Xendit's `PRESENT_TO_CUSTOMER` dynamic QR payload for the Balance page to render (the legacy field name is retained for API compatibility).
 - Test and live webhooks use the same endpoint path, but must be configured in the matching Xendit Dashboard mode and must use that mode's `x-callback-token`.
 
 ### `payment.getPurchase`

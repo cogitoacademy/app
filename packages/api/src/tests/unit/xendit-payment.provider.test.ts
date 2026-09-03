@@ -16,7 +16,10 @@ afterEach(() => {
 });
 
 describe("XenditPaymentProvider (2024-11-11 API)", () => {
-  const provider = createXenditPaymentProvider(opts);
+  const provider = createXenditPaymentProvider({
+    ...opts,
+    defaultPaymentMethod: "ewallet_ovo",
+  });
 
   test("createIntent posts the 2024-11-11 request shape and parses the top-level response", async () => {
     const calls: Array<{ url: string; init: RequestInit }> = [];
@@ -114,9 +117,13 @@ describe("XenditPaymentProvider (2024-11-11 API)", () => {
     const body = JSON.parse(calls[0]!.init.body as string);
     expect(body.channel_code).toBe("QRIS");
     expect(body.channel_properties).toMatchObject({
-      success_return_url: opts.successRedirectUrl,
-      failure_return_url: opts.failureRedirectUrl,
+      qr_string_type: "DYNAMIC",
     });
+    expect(Date.parse(body.channel_properties.expires_at)).toBeGreaterThan(
+      Date.now(),
+    );
+    expect(body.channel_properties.success_return_url).toBeUndefined();
+    expect(body.channel_properties.failure_return_url).toBeUndefined();
   });
 
   test("createIntent maps va_bca channel to BCA", async () => {

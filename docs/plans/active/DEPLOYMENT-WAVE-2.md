@@ -175,7 +175,7 @@ webhooks still flow. If unstable, leave empty (signature-only gating).
 | `XENDIT_SUCCESS_REDIRECT_URL` / `XENDIT_FAILURE_REDIRECT_URL` | Your choice                                                                         | Where the customer lands after paying/cancelling — defaults `https://app.cogitoacademy.id/balance` work fine      |
 
 **Can the app really transact with Xendit now? YES — in Test Mode, on the
-production domain, restricted to UAT emails.** Student picks OVO/QRIS/BCA →
+production domain, restricted to UAT emails.** QRIS is the default production channel; the student receives a dynamic QR on the Balance page →
 redirected to Xendit's test page → completes with dummy credentials → webhook
 fires → wallet credits Marks. **No real money.** Go-live = switch
 `XENDIT_MODE=live` + Live keys + one real small transaction (RUNBOOK

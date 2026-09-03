@@ -99,7 +99,7 @@ export function createXenditPaymentProvider(opts: {
     },
   });
   const authHeader = `Basic ${Buffer.from(`${opts.secretKey}:`).toString("base64")}`;
-  const defaultMethod = opts.defaultPaymentMethod ?? "ewallet_ovo";
+  const defaultMethod = opts.defaultPaymentMethod ?? "qris";
   const methodConfig = PAYMENT_METHOD_CONFIG[defaultMethod];
 
   async function createIntent(params: {
@@ -109,8 +109,21 @@ export function createXenditPaymentProvider(opts: {
   }): Promise<{ checkoutUrl: string; paymentRequestId?: string | null }> {
     // 2024-11-11 request shape: type:"PAY", country:"ID", currency:"IDR",
     // request_amount (NOT amount), channel_code (NOT payment_method),
-    // channel_properties.{success_return_url,failure_return_url}, optional
-    // customer + customer_notification_preference (e-wallets).
+    // channel_properties vary by channel: redirects for e-wallet/VA and a
+    // dynamic QR configuration for QRIS.
+    const channelProperties =
+      defaultMethod === "qris"
+        ? {
+            qr_string_type: "DYNAMIC",
+            expires_at: new Date(
+              Date.now() + 48 * 60 * 60 * 1000,
+            ).toISOString(),
+          }
+        : {
+            success_return_url: opts.successRedirectUrl,
+            failure_return_url: opts.failureRedirectUrl,
+          };
+
     const body: Record<string, unknown> = {
       reference_id: params.providerReference,
       type: "PAY",
@@ -118,10 +131,7 @@ export function createXenditPaymentProvider(opts: {
       currency: "IDR",
       request_amount: params.amountIdr,
       channel_code: methodConfig.channel_code,
-      channel_properties: {
-        success_return_url: opts.successRedirectUrl,
-        failure_return_url: opts.failureRedirectUrl,
-      },
+      channel_properties: channelProperties,
       metadata: {
         paymentId: params.paymentId,
       },

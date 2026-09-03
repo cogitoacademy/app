@@ -29,6 +29,7 @@ import {
 } from "@tabler/icons-react";
 import { cn } from "@cogito-app/ui/lib/utils";
 import { Link } from "@tanstack/react-router";
+import { QRCodeSVG } from "qrcode.react";
 
 import { EmptyState } from "@/components/empty-state";
 import { StatCard } from "../stat-card";
@@ -68,7 +69,7 @@ function formatIdr(amount: number) {
 
 export function BalancePage() {
   const queryClient = useQueryClient();
-  const [buying, setBuying] = useState(false);
+  const [qrPayload, setQrPayload] = useState<string | null>(null);
 
   const { data: wallet, isLoading: walletLoading } = useQuery(
     orpc.wallet.get.queryOptions(),
@@ -86,9 +87,8 @@ export function BalancePage() {
   const purchase = useMutation(
     orpc.payment.createPurchase.mutationOptions({
       onSuccess: async (res) => {
-        setBuying(true);
         if (res.checkoutUrl) {
-          await fetch(res.checkoutUrl, { credentials: "include" });
+          setQrPayload(res.checkoutUrl);
         }
         await queryClient.invalidateQueries({
           queryKey: orpc.wallet.get.queryKey(),
@@ -96,7 +96,6 @@ export function BalancePage() {
         await queryClient.invalidateQueries({
           queryKey: orpc.wallet.listLedger.key(),
         });
-        setBuying(false);
       },
     }),
   );
@@ -226,6 +225,29 @@ export function BalancePage() {
               credited only after a verified webhook.
             </Text>
           </div>
+          {qrPayload ? (
+            <Card className="mb-4">
+              <CardHeader>
+                <CardTitle>Scan QRIS to pay</CardTitle>
+                <CardDescription>
+                  Open your banking or e-wallet app, scan this code, and
+                  complete the payment. Your Marks are credited after Xendit
+                  confirms the payment.
+                </CardDescription>
+              </CardHeader>
+              <CardBody className="flex justify-center">
+                <div className="rounded-lg bg-background p-4 text-foreground">
+                  <QRCodeSVG
+                    value={qrPayload}
+                    size={240}
+                    level="M"
+                    bgColor="var(--color-background)"
+                    fgColor="var(--color-foreground)"
+                  />
+                </div>
+              </CardBody>
+            </Card>
+          ) : null}
           {packagesLoading ? (
             <Text className="text-muted">Loading packages...</Text>
           ) : packages.length === 0 ? (
@@ -276,11 +298,14 @@ export function BalancePage() {
                   <CardFooter>
                     <Button
                       block
-                      progress={buying}
-                      disabled={buying}
-                      onClick={() => purchase.mutate({ packageCode: pkg.code })}
+                      progress={purchase.isPending}
+                      disabled={purchase.isPending}
+                      onClick={() => {
+                        setQrPayload(null);
+                        purchase.mutate({ packageCode: pkg.code });
+                      }}
                     >
-                      {buying ? (
+                      {purchase.isPending ? (
                         <IconLoader2 className="animate-spin" />
                       ) : (
                         <IconShoppingCart />

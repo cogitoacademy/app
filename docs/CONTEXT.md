@@ -1,6 +1,12 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-09-02
+Last updated: 2026-09-03
+
+Production payment checkout defaults to Xendit QRIS. The provider sends
+QRIS-specific channel properties (`qr_string_type=DYNAMIC`, 48-hour expiry),
+and the Balance page renders the returned QR payload instead of treating it as
+a fetchable redirect URL. `XENDIT_DEFAULT_PAYMENT_METHOD` is declared in the
+production examples and Coolify env synchronization list.
 
 ## Website audit P2 hardening
 
