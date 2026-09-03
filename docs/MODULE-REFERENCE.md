@@ -279,7 +279,7 @@ payment package codes stable.
 
 ## Admin-Booking Module
 
-**Purpose:** Admin operations console for bookings — filtered override queue with urgency/SLA projection, a dedicated admin-only booking detail/history page, hydrated participant wallet/ledger inspection, before/after override preview, state history, and admin refunds. Queue rows navigate to `/admin-operations/bookings/:bookingId`; the page resolves its own queue item with the exact `bookingId` filter instead of relying on modal state.
+**Purpose:** Admin operations console for bookings — filtered override queue with urgency/SLA projection, a dedicated admin-only booking detail/history page, hydrated participant wallet/ledger inspection, before/after override preview, state history, and admin refunds. Queue rows navigate to `/admin-operations/bookings/:bookingId`; the page resolves its own queue item with the exact `bookingId` filter instead of relying on modal state. The override form reads the booking roster through protected `booking.get` and uses a name/avatar/role multi-select for affected participants; only selected user IDs are serialized into the existing override input.
 
 **Files:**
 
@@ -656,8 +656,8 @@ chat directory.
 **Files:**
 
 - `payment.types.ts` — purchase, Test Mode simulation, and lookup schemas
-- `payment.errors.ts` — `PackageNotFoundError`, `PaymentNotFoundError`, `PackageAlreadyPurchasedError`, `PaymentProviderError`
-- `payment.repo.ts` — `findPackageByCode`, `insertPayment`, `findPaymentByProviderReference`, `findPaymentByProviderEventId`, `findPaymentById`, `updatePaymentStatus`
+- `payment.errors.ts` — `PackageNotFoundError`, `PaymentNotFoundError`, `PackageAlreadyPurchasedError` (legacy), `PaymentProviderError`
+- `payment.repo.ts` — `findPackageByCode`, `insertPayment`, `findPaymentByProviderReference`, `findLatestPaymentByUserAndPackage`, `findPaymentByProviderEventId`, `findPaymentById`, `updatePaymentStatus`
 - `payment.service.ts` — `createIntent`, `confirmFromWebhook`, `getPurchase`; exposes `provider`
 - `payment.handler.ts` — `createPurchase`, approved-UAT-only `simulatePurchase`, `getPurchase`
 - `payment.router.ts` — `createPurchase` and `simulatePurchase` use `verifiedStudentProcedure` (student role + verified email; `getPurchase` stays protected)
@@ -667,8 +667,8 @@ chat directory.
 
 **Service Methods:**
 
-- `createIntent(userId, walletId, packageCode)` — Creates a purchase intent; reuses an existing PENDING intent for the same provider+user+package (returning the persisted `checkoutUrl` when available — H4, migration 0026 adds `payment_record.checkout_url`); resets FAILED/EXPIRED payments to PENDING and re-creates the intent, rotating `providerRequestId` to the new attempt while retaining the previous `providerEventId` as a stale-generation marker (re-purchase, #46; H3 wave-6b); returns `{ paymentId, providerReference, checkoutUrl }`
-- `confirmFromWebhook({ provider, providerReference, providerEventId, status, ... })` — Enforces the `ALLOWED_TRANSITIONS` state machine (PENDING → PAID/SETTLED/FAILED/EXPIRED; PAID → SETTLED/REFUNDED), credits the wallet on first PAID/SETTLED, idempotent via provider event ID + DB UNIQUE; writes `payment.{id}.credited` notification (B6, #46). A late FAILED/EXPIRED terminal event on a PENDING re-purchase whose `providerEventId` equals the retained stale marker is ignored (H3 wave-6b). On REFUNDED it reads the wallet through the transaction (`getByUserId`, N4) and reverses the credited Marks from the **total balance** (`held + available`): held Marks are released (`refund.{id}.release`) then the full payment Marks are reversed via `compensate_deduct` (`refund.{id}.reverse`); when the total is below the payment marks (spent all, H4) it marks the payment REFUNDED, writes a `refund_webhook_reconciliation` audit + `refund_record` row for admin, and skips the reversal + refund notification (P2.7/H4, M1/N4 wave-6b)
+- `createIntent(userId, walletId, packageCode)` — Creates a purchase intent; reuses the latest PENDING intent for the same provider+user+package (returning the persisted `checkoutUrl` when available — H4, migration 0026 adds `payment_record.checkout_url`); after any terminal outcome (`PAID`, `SETTLED`, `FAILED`, `EXPIRED`, or `REFUNDED`), creates a fresh payment row and unique provider reference while retaining the previous attempt as history; returns `{ paymentId, providerReference, checkoutUrl }`
+- `confirmFromWebhook({ provider, providerReference, providerEventId, status, ... })` — Enforces the `ALLOWED_TRANSITIONS` state machine (PENDING → PAID/SETTLED/FAILED/EXPIRED; PAID → SETTLED/REFUNDED), credits the wallet on first PAID/SETTLED, idempotent via provider event ID + DB UNIQUE; writes `payment.{id}.credited` notification (B6, #46). Each repeat purchase has its own provider reference and row, so webhooks are resolved to the matching attempt and cannot mutate a different attempt or suppress its wallet credit. Legacy rows that were reset in an older deployment may still use the stale provider-event marker protection for a late FAILED/EXPIRED event. On REFUNDED it reads the wallet through the transaction (`getByUserId`, N4) and reverses the credited Marks from the **total balance** (`held + available`): held Marks are released (`refund.{id}.release`) then the full payment Marks are reversed via `compensate_deduct` (`refund.{id}.reverse`); when the total is below the payment marks (spent all, H4) it marks the payment REFUNDED, writes a `refund_webhook_reconciliation` audit + `refund_record` row for admin, and skips the reversal + refund notification (P2.7/H4, M1/N4 wave-6b)
 - `getPurchase(paymentId, userId)` — Returns the payment record if owned by the user
 
 **Dependencies:** `PaymentRepo`, `PaymentWalletPort`, `PaymentProvider`, `NotificationPort`, `AuditPort`, `RefundRecordPort`
@@ -679,6 +679,7 @@ chat directory.
 - Webhook idempotency is atomic — `IdempotencyStore.claim` keys lifecycle events by provider + verified payment/event id (or provider reference fallback) + normalized status. This prevents a PENDING event from suppressing a later PAID event for the same Xendit payment while still deduplicating provider retries of the same state; transient processing failures release the claim (#46)
 - Circuit breaker prevents cascading failures to the provider
 - Payment statuses: `PENDING` → `PAID`/`SETTLED`/`EXPIRED`/`FAILED`/`REFUNDED`
+- Package purchases are repeatable: the latest PENDING attempt is reused, while terminal attempts remain immutable history and do not block a new payment row/provider reference.
 - Payment/refund notifications are written per the PRD matrix (B6, #46); `PAYMENT_PROVIDER=xendit` requires Xendit credentials and an explicit `XENDIT_MODE` (no silent stub fallback)
 - Xendit selects the actual environment from the API key. In production/staging Test Mode, `XENDIT_TEST_ALLOWED_EMAILS` restricts `payment.createPurchase` to approved UAT accounts; the allowlist is normalized case-insensitively. The default channel is QRIS; its payment request sends channel-specific `qr_string_type=DYNAMIC` plus a 48-hour expiry, and the web client renders the returned `PRESENT_TO_CUSTOMER` QR string.
 - Test QRIS cannot be paid from a real banking app. For an owned pending purchase, `simulatePurchase` calls Xendit's `/v3/payment_requests/{id}/simulate` only in Test Mode and only for an approved UAT account. It never credits Marks directly; provider-confirmed status must pass through the transactional confirmation service.

@@ -1,4 +1,4 @@
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { paymentRecord, markPackage } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
@@ -37,6 +37,34 @@ export async function findPaymentByProviderReference(
     .select()
     .from(paymentRecord)
     .where(eq(paymentRecord.providerReference, providerReference))
+    .limit(1);
+  return record ?? null;
+}
+
+/**
+ * Finds the most recent payment attempt for one user's package and provider.
+ *
+ * A package may be purchased repeatedly. The latest PENDING attempt remains
+ * idempotent (the checkout can be resumed), while terminal attempts are kept
+ * as history and the service creates a new payment record for the next try.
+ */
+export async function findLatestPaymentByUserAndPackage(
+  conn: DbOrTx,
+  userId: string,
+  packageId: string,
+  provider: string,
+) {
+  const [record] = await conn
+    .select()
+    .from(paymentRecord)
+    .where(
+      and(
+        eq(paymentRecord.userId, userId),
+        eq(paymentRecord.packageId, packageId),
+        eq(paymentRecord.provider, provider),
+      ),
+    )
+    .orderBy(desc(paymentRecord.createdAt), desc(paymentRecord.id))
     .limit(1);
   return record ?? null;
 }
@@ -160,6 +188,19 @@ export function createPaymentRepo(db: DbType) {
     },
     findPaymentByProviderReference(providerReference: string, conn?: DbOrTx) {
       return findPaymentByProviderReference(conn ?? db, providerReference);
+    },
+    findLatestPaymentByUserAndPackage(
+      userId: string,
+      packageId: string,
+      provider: string,
+      conn?: DbOrTx,
+    ) {
+      return findLatestPaymentByUserAndPackage(
+        conn ?? db,
+        userId,
+        packageId,
+        provider,
+      );
     },
     findPaymentById(id: string, conn?: DbOrTx) {
       return findPaymentById(conn ?? db, id);

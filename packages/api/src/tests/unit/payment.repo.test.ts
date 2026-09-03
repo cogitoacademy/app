@@ -2,6 +2,7 @@ import { describe, test, expect, mock } from "bun:test";
 import {
   findPackageByCode,
   findPaymentByProviderReference,
+  findLatestPaymentByUserAndPackage,
   findPaymentById,
   findPaymentByProviderEventId,
   insertPayment,
@@ -76,6 +77,46 @@ describe("findPaymentByProviderReference", () => {
     const conn: any = { select };
 
     const result = await findPaymentByProviderReference(conn, "missing");
+
+    expect(result).toBeNull();
+  });
+});
+
+describe("findLatestPaymentByUserAndPackage", () => {
+  test("returns the most recent matching provider attempt", async () => {
+    const row = {
+      id: "p2",
+      userId: "u1",
+      packageId: "pkg1",
+      provider: "xendit",
+    };
+    const { select, chain } = makeSelectConn([row]);
+    const conn: any = { select };
+
+    const result = await findLatestPaymentByUserAndPackage(
+      conn,
+      "u1",
+      "pkg1",
+      "xendit",
+    );
+
+    expect(result).toEqual(row);
+    expect(chain.from).toHaveBeenCalledTimes(1);
+    expect(chain.where).toHaveBeenCalledTimes(1);
+    expect(chain.orderBy).toHaveBeenCalledTimes(1);
+    expect(chain.limit).toHaveBeenCalledWith(1);
+  });
+
+  test("returns null when no matching attempt exists", async () => {
+    const { select } = makeSelectConn([]);
+    const conn: any = { select };
+
+    const result = await findLatestPaymentByUserAndPackage(
+      conn,
+      "u1",
+      "pkg1",
+      "xendit",
+    );
 
     expect(result).toBeNull();
   });
@@ -228,6 +269,7 @@ describe("createPaymentRepo", () => {
 
     expect(repo).toHaveProperty("findPackageByCode");
     expect(repo).toHaveProperty("findPaymentByProviderReference");
+    expect(repo).toHaveProperty("findLatestPaymentByUserAndPackage");
     expect(repo).toHaveProperty("findPaymentById");
     expect(repo).toHaveProperty("findPaymentByProviderEventId");
     expect(repo).toHaveProperty("insertPayment");

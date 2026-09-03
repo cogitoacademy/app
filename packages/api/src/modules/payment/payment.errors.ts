@@ -24,6 +24,11 @@ export class PaymentNotFoundError extends DomainError {
 
 export class PackageAlreadyPurchasedError extends DomainError {
   readonly domain = "payment";
+
+  /**
+   * @deprecated Payment attempts are repeatable. Kept for compatibility with
+   * older callers/error mappings; createIntent no longer throws this error.
+   */
   constructor(code: string, userId: string) {
     super(
       "PACKAGE_ALREADY_PURCHASED",
