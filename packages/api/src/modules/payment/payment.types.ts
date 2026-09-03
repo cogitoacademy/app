@@ -10,6 +10,15 @@ export const createPurchaseOutput = z.object({
   checkoutUrl: z.string().max(2048),
 });
 
+export const simulatePurchaseInput = z.object({
+  paymentId: z.string().uuid(),
+});
+
+export const simulatePurchaseOutput = z.object({
+  status: z.literal("PENDING"),
+  message: z.string().max(500),
+});
+
 export const getPurchaseInput = z.object({
   paymentId: z.string().max(100),
 });

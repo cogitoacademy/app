@@ -7,6 +7,9 @@ QRIS-specific channel properties (`qr_string_type=DYNAMIC`, 48-hour expiry),
 and the Balance page renders the returned QR payload instead of treating it as
 a fetchable redirect URL. `XENDIT_DEFAULT_PAYMENT_METHOD` is declared in the
 production examples and Coolify env synchronization list.
+Approved UAT accounts also receive a Test Mode-only simulation action. The API
+validates payment ownership and mode, calls Xendit's official simulation
+endpoint, and waits for the normal verified webhook to credit Marks.
 
 ## Website audit P2 hardening
 

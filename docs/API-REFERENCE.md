@@ -732,6 +732,13 @@ The web tutor profile editor groups education, competition achievements, and exp
 
 - `PAYMENT_PROVIDER=xendit` selects the Xendit provider. `XENDIT_MODE` is required and must be `test` or `live`; the Xendit API key, created in the matching Xendit Dashboard mode, selects the actual transaction environment. `XENDIT_MODE` is not sent as an API field.
 - In production/staging, `XENDIT_MODE=test` also requires `XENDIT_TEST_ALLOWED_EMAILS`; only those verified student emails can call `payment.createPurchase`. This keeps production-domain UAT from granting sandbox-funded Marks to arbitrary accounts. The default provider channel is QRIS; `checkoutUrl` carries Xendit's `PRESENT_TO_CUSTOMER` dynamic QR payload for the Balance page to render (the legacy field name is retained for API compatibility).
+- `payment.createPurchase` also returns `canSimulate`. When true, the Balance page may call `payment.simulatePurchase` with the owned payment UUID. That procedure is rejected outside Xendit Test Mode and for accounts outside `XENDIT_TEST_ALLOWED_EMAILS`; wallet credit still occurs only through the verified asynchronous webhook.
+
+### `payment.simulatePurchase`
+
+- Input: `{ paymentId: string (UUID) }`
+- Output: `{ status: "PENDING", message: string }`
+- Auth: verified student, approved Test Mode email, and ownership of a pending payment with a stored Xendit payment-request id.
 - Test and live webhooks use the same endpoint path, but must be configured in the matching Xendit Dashboard mode and must use that mode's `x-callback-token`.
 
 ### `payment.getPurchase`

@@ -54,6 +54,16 @@ export class PaymentTestModeRestrictedError extends DomainError {
   }
 }
 
+export class PaymentSimulationUnavailableError extends DomainError {
+  readonly domain = "payment";
+  constructor() {
+    super(
+      "PAYMENT_SIMULATION_UNAVAILABLE",
+      "Payment simulation is only available to approved Xendit Test Mode accounts",
+    );
+  }
+}
+
 export function mapPaymentError(
   err: DomainError,
 ): ORPCError<string, undefined> {
@@ -62,6 +72,8 @@ export function mapPaymentError(
   if (err instanceof PackageAlreadyPurchasedError)
     return conflict(err.message, err);
   if (err instanceof PaymentTestModeRestrictedError)
+    return forbidden(err.message, err);
+  if (err instanceof PaymentSimulationUnavailableError)
     return forbidden(err.message, err);
   if (err instanceof PaymentProviderError)
     return serviceUnavailable(err.message, err);

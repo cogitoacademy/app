@@ -655,12 +655,12 @@ chat directory.
 
 **Files:**
 
-- `payment.types.ts` — `createPurchaseInput`/`getPurchaseInput` + output schemas
+- `payment.types.ts` — purchase, Test Mode simulation, and lookup schemas
 - `payment.errors.ts` — `PackageNotFoundError`, `PaymentNotFoundError`, `PackageAlreadyPurchasedError`, `PaymentProviderError`
 - `payment.repo.ts` — `findPackageByCode`, `insertPayment`, `findPaymentByProviderReference`, `findPaymentByProviderEventId`, `findPaymentById`, `updatePaymentStatus`
 - `payment.service.ts` — `createIntent`, `confirmFromWebhook`, `getPurchase`; exposes `provider`
-- `payment.handler.ts` — `createPurchase`, `getPurchase`
-- `payment.router.ts` — `createPurchase` uses `verifiedStudentProcedure` (student role + verified email — paid actions require a verified email; `getPurchase` stays protected)
+- `payment.handler.ts` — `createPurchase`, approved-UAT-only `simulatePurchase`, `getPurchase`
+- `payment.router.ts` — `createPurchase` and `simulatePurchase` use `verifiedStudentProcedure` (student role + verified email; `getPurchase` stays protected)
 - `xendit-payment.provider.ts` — Xendit API integration with circuit breaker and retry; explicit Test/Live mode label; `verifyWebhook`
 - `stub-payment.provider.ts` — Development stub
 - Webhook route lives in `apps/server/src/webhooks/payments.ts` (`POST /webhooks/payments/:provider`)
@@ -681,6 +681,7 @@ chat directory.
 - Payment statuses: `PENDING` → `PAID`/`SETTLED`/`EXPIRED`/`FAILED`/`REFUNDED`
 - Payment/refund notifications are written per the PRD matrix (B6, #46); `PAYMENT_PROVIDER=xendit` requires Xendit credentials and an explicit `XENDIT_MODE` (no silent stub fallback)
 - Xendit selects the actual environment from the API key. In production/staging Test Mode, `XENDIT_TEST_ALLOWED_EMAILS` restricts `payment.createPurchase` to approved UAT accounts; the allowlist is normalized case-insensitively. The default channel is QRIS; its payment request sends channel-specific `qr_string_type=DYNAMIC` plus a 48-hour expiry, and the web client renders the returned `PRESENT_TO_CUSTOMER` QR string.
+- Test QRIS cannot be paid from a real banking app. For an owned pending purchase, `simulatePurchase` calls Xendit's `/v3/payment_requests/{id}/simulate` only in Test Mode and only for an approved UAT account. It never credits Marks directly; the normal authenticated Xendit webhook remains the sole credit path.
 
 ---
 
