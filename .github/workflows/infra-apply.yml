@@ -37,6 +37,7 @@ on:
       - "infra/terraform/**"
       - "infra/ansible/**"
       - "infra/disk-watchdog.sh"
+      - "infra/secrets/**"
       - ".github/workflows/infra-apply.yml"
   workflow_dispatch:
     inputs:
