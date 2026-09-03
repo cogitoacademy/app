@@ -75,7 +75,7 @@ const serverShape = {
   XENDIT_FAILURE_REDIRECT_URL: z.string().url().optional(),
   XENDIT_DEFAULT_PAYMENT_METHOD: z
     .enum(["ewallet_ovo", "qris", "va_bca"])
-    .default("ewallet_ovo"),
+    .default("qris"),
   GOOGLE_CLIENT_ID: z.string().min(1).optional(),
   GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
   PORT: z.coerce.number().default(3001),
