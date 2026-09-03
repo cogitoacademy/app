@@ -2,13 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **SCOPE CHANGE (2026-08-31, user decision):** **web is out of scope.** Tasks 1 and 2 (frontend lint fixes: tutor-drawer refs, Date.now purity, setState-in-effect) are **DESCOOPED** — the 62 web `react(*)` errors are documented, not fixed, and the toolchain re-bump (Task 4) is **cancelled** (1.80 would fail CI on the web errors). The pin stays at 1.78/0.63. What remains: **backend/infra only** — Task 3 (test-file non-null guards), Task 6 (CI deprecations + ansible group), Task 7 docs sync. The backend test-file cleanup (~20 no-non-null-asserted-optional-chain) is still in scope as it touches `packages/api`.
+> **SCOPE CHANGE (2026-08-31, user decision):** **web is out of scope.** Tasks 1 and 2 (frontend lint fixes: tutor-drawer refs, Date.now purity, setState-in-effect) are **DESCOOPED** — the 62 web `react(*)` errors are documented in `.github/lint/baseline.txt`, not fixed. **Status update (2026-09-03):** the toolchain re-bump (Task 4) **landed anyway** — oxlint is pinned at **1.80.0** / oxfmt **0.65.0** (`package.json`, `.github/lint/check-baseline.sh`/`.ts` since #143; baseline refreshed by #152). What remains: **backend/infra only** — Task 3 (test-file non-null guards), Task 6 (CI deprecations + ansible group), Task 7 docs sync. The backend test-file cleanup (~20 no-non-null-asserted-optional-chain) is still in scope as it touches `packages/api`.
 
 **Goal:** Drive CI from "green-but-noisy" to "green-and-silent": zero unsurfaced lint warnings, zero deprecation notices, and live monitoring wired — prioritizing correctness and security over premature optimization.
 
 **Architecture:** Three overlap-safe waves executed through the herd (lead integrates via PRs, squash-merge). Wave A is the lint/deprecation hygiene wave (frontend-heavy, test-only backend touches); Wave B is the already-planned Uptime Kuma + Discord monitoring wave (MONITORING-ALERTING.md); Wave C is CI-deprecation + inventory hygiene (actions bumps, ansible warning). Each worker runs the `worker-feature` role (`ollama-cloud/glm-5.3-flash`) in its own worktree per the parallel-worktrees skill.
 
-**Tech Stack:** oxlint/oxfmt (pinned 1.78/0.63, deliberate re-bump to 1.80/0.65 at the end), Bun 1.3.14, GitHub Actions, Ansible (community.general), Uptime Kuma 1, Discord webhooks, oRPC/Better Auth (no changes).
+**Tech Stack:** oxlint/oxfmt (pinned 1.80.0/0.65.0 — re-bump landed via #143/#152), Bun 1.3.14, GitHub Actions, Ansible (community.general), Uptime Kuma 1, Discord webhooks, oRPC/Better Auth (no changes).
 
 ## Global Constraints
 
@@ -26,7 +26,7 @@
 | #   | Finding                                                                           | Count             | Where                                                                                                                                                          |
 | --- | --------------------------------------------------------------------------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | E1  | oxlint 1.80 **errors** blocking the re-bump                                       | 81                | 45 `tutor-drawer.tsx` react(refs); 20 test `no-non-null-asserted-optional-chain`; 8 `react(purity)` Date.now-in-render; 8 `react(set-state-in-effect)`; 1 misc |
-| E2  | oxlint 1.78 **warnings** (visible in CI today)                                    | 123               | 53 `no-await-in-loop`, 35 `consistent-function-scoping`, 13 `no-underscore-dangle`, 11 `prefer-add-event-listener`, rest misc                                  |
+| E2  | oxlint 1.80 **warnings** (visible in CI today)                                    | 123               | 53 `no-await-in-loop`, 35 `consistent-function-scoping`, 13 `no-underscore-dangle`, 11 `prefer-add-event-listener`, rest misc                                  |
 | E3  | GitHub Actions **Node 20 deprecation** warnings                                   | every CI job      | `oven-sh/setup-bun@v2` + `actions/checkout@v4` (checkout v6+ runs Node 24)                                                                                     |
 | E4  | Ansible **"Invalid characters in group names"** warning                           | every ansible run | `infra/ansible/inventory.ini` group name `[cogito-vps]` contains a hyphen                                                                                      |
 | E5  | Terraform `endpoint` **deprecated parameter** (backend s3)                        | terraform init    | `infra/terraform/backend.tf` — already fixed to `endpoints.s3` by the user's commit `6c5d092` (merged); verified no warning in latest run — DO NOT touch       |
@@ -107,7 +107,7 @@ if (!booking) throw new Error("expected a booking row");
 - [x] **Step 2: Targeted re-run per file** — suite green (local env-schema failure is pre-existing/environmental, verified on the base commit; CI is the authority).
 - [x] **Step 3: Commit** — done (`2654e30 test(api): ... fail-loud guards`)
 
-## Task 4: Deliberate toolchain re-bump (oxlint 1.78.0 → 1.80.0, oxfmt 0.63.0 → 0.65.0)
+## Task 4: Deliberate toolchain re-bump (oxlint 1.78.0 → 1.80.0, oxfmt 0.63.0 → 0.65.0) — **DONE (2026-09-03, landed via #143/#152)**
 
 **Files:** `package.json`, `bun.lock`, plus any formatting fallout (`oxfmt --write`).
 
@@ -143,7 +143,7 @@ Decision (user principle: _correct & secure, no premature churn_), per category:
 
 ## Task 7: Docs sync (AGENTS.md rule 11)
 
-Update in the same PRs as the code (workers do this per task): CONTEXT.md (lint-wave row in plans table, toolchain version), plans/README.md, CI-SANITY.md statuses, RUNBOOK (workflow versions). The lead verifies no doc references stale pin "1.78.0/0.63.0" after Task 4.
+Update in the same PRs as the code (workers do this per task): CONTEXT.md (lint-wave row in plans table, toolchain version), plans/README.md, CI-SANITY.md statuses, RUNBOOK (workflow versions). The lead verifies no doc references stale pin "1.78.0/0.63.0" after Task 4 — **verified 2026-09-03: all references updated to 1.80.0/0.65.0**.
 
 ---
 
@@ -161,7 +161,7 @@ Merge order: W1 → W2 → W3 → lead re-bump (each gated by CI green; the pin 
 ## Exit gates
 
 - `bunx oxlint@1.80.0` → 0 errors; warnings only from documented-intentional classes.
-- `bunx oxlint` (1.78) → 123 → **< 40 warnings** (await-in-loop + scoping documented).
+- `bunx oxlint` (1.80) → 123 → **< 40 warnings** (await-in-loop + scoping documented).
 - CI run logs: **zero** "Node 20 is being deprecated"; **zero** "[WARNING]: Invalid characters".
 - `bun run check-types` + full test suite + coverage gate green on every PR.
 - Docs synced in the same PRs.
