@@ -10,6 +10,9 @@ production examples and Coolify env synchronization list.
 Approved UAT accounts also receive a Test Mode-only simulation action. The API
 validates payment ownership and mode and calls Xendit's official simulation
 endpoint. Marks are credited only after Xendit reports a successful status.
+Structured Xendit HTTP failures preserve only a bounded status, error code, and
+message so UAT can distinguish a key/permission or request-validation problem
+from a genuine provider outage without exposing credentials.
 As a sandbox reliability fallback, approved-user status polling reads the
 authoritative Xendit payment-request status and feeds terminal results through
 the same transactional, idempotent confirmation path.

@@ -58,6 +58,17 @@ describe("payment.errors", () => {
       expect(err.message).toBe("Payment provider temporarily unavailable");
       expect(err.name).toBe("PaymentProviderError");
     });
+    it("preserves bounded provider HTTP diagnostics", () => {
+      const err = new PaymentProviderError(
+        "xendit",
+        new Error(
+          "Payment simulation error: 403 REQUEST_FORBIDDEN_ERROR - Use a Test Mode API key",
+        ),
+      );
+      expect(err.message).toBe(
+        "Payment simulation error: 403 REQUEST_FORBIDDEN_ERROR - Use a Test Mode API key",
+      );
+    });
   });
   describe("mapPaymentError", () => {
     it("should map PackageNotFoundError to NOT_FOUND", () => {

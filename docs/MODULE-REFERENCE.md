@@ -661,7 +661,7 @@ chat directory.
 - `payment.service.ts` — `createIntent`, `confirmFromWebhook`, `getPurchase`; exposes `provider`
 - `payment.handler.ts` — `createPurchase`, approved-UAT-only `simulatePurchase`, `getPurchase`
 - `payment.router.ts` — `createPurchase` and `simulatePurchase` use `verifiedStudentProcedure` (student role + verified email; `getPurchase` stays protected)
-- `xendit-payment.provider.ts` — Xendit API integration with circuit breaker and retry; explicit Test/Live mode label; `verifyWebhook`
+- `xendit-payment.provider.ts` — Xendit API integration with circuit breaker and retry; explicit Test/Live mode label; bounded provider error diagnostics; `verifyWebhook`
 - `stub-payment.provider.ts` — Development stub
 - Webhook route lives in `apps/server/src/webhooks/payments.ts` (`POST /webhooks/payments/:provider`)
 
@@ -682,6 +682,7 @@ chat directory.
 - Payment/refund notifications are written per the PRD matrix (B6, #46); `PAYMENT_PROVIDER=xendit` requires Xendit credentials and an explicit `XENDIT_MODE` (no silent stub fallback)
 - Xendit selects the actual environment from the API key. In production/staging Test Mode, `XENDIT_TEST_ALLOWED_EMAILS` restricts `payment.createPurchase` to approved UAT accounts; the allowlist is normalized case-insensitively. The default channel is QRIS; its payment request sends channel-specific `qr_string_type=DYNAMIC` plus a 48-hour expiry, and the web client renders the returned `PRESENT_TO_CUSTOMER` QR string.
 - Test QRIS cannot be paid from a real banking app. For an owned pending purchase, `simulatePurchase` calls Xendit's `/v3/payment_requests/{id}/simulate` only in Test Mode and only for an approved UAT account. It never credits Marks directly; provider-confirmed status must pass through the transactional confirmation service.
+- Structured Xendit non-2xx responses are reduced to a single-line, bounded `status + error_code + message` diagnostic. That detail is safe to return as the `PAYMENT_PROVIDER_ERROR` message; arbitrary response bodies and credentials are never echoed.
 - Test-mode status polling is also a recovery path: `getPurchase` checks Xendit's authoritative payment-request status for approved UAT users. If Xendit reports a terminal status, it delegates to the same transactional/idempotent `confirmFromWebhook` logic, so a missing sandbox webhook cannot leave a completed simulation stuck forever.
 
 ---

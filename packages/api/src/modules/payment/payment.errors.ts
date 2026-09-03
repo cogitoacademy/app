@@ -36,11 +36,24 @@ export class PackageAlreadyPurchasedError extends DomainError {
 export class PaymentProviderError extends DomainError {
   readonly domain = "payment";
   constructor(provider: string, originalError: unknown) {
-    super(
-      "PAYMENT_PROVIDER_ERROR",
-      "Payment provider temporarily unavailable",
-      { provider, originalError: String(originalError) },
-    );
+    // The provider adapter only exposes bounded, single-line operation
+    // diagnostics (HTTP status + provider error code/message). Preserve those
+    // diagnostics for the client; arbitrary errors stay generic so internal
+    // infrastructure details never leak through the API.
+    const originalMessage =
+      originalError instanceof Error
+        ? originalError.message.replace(/\s+/g, " ").trim()
+        : "";
+    const publicMessage =
+      /^(?:Payment provider(?: refund)?|Payment simulation|Payment status) error: \d{3}\b/.test(
+        originalMessage,
+      )
+        ? originalMessage.slice(0, 320)
+        : "Payment provider temporarily unavailable";
+    super("PAYMENT_PROVIDER_ERROR", publicMessage, {
+      provider,
+      originalError: String(originalError),
+    });
   }
 }
 

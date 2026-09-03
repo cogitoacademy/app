@@ -202,6 +202,27 @@ describe("XenditPaymentProvider (2024-11-11 API)", () => {
     ).rejects.toMatchObject({ code: "SERVICE_UNAVAILABLE" });
   });
 
+  test("surfaces bounded Xendit error details for simulation failures", async () => {
+    globalThis.fetch = mock(
+      async () =>
+        new Response(
+          JSON.stringify({
+            error_code: "REQUEST_FORBIDDEN_ERROR",
+            message: "Simulation requires a Test Mode API key",
+          }),
+          { status: 403, statusText: "Forbidden" },
+        ),
+    ) as typeof fetch;
+
+    await expect(
+      provider.simulatePayment!("pr-test-forbidden", 100_000),
+    ).rejects.toMatchObject({
+      code: "SERVICE_UNAVAILABLE",
+      message:
+        "Payment simulation error: 403 REQUEST_FORBIDDEN_ERROR - Simulation requires a Test Mode API key",
+    });
+  });
+
   test("getPaymentRequestStatus maps the provider-authoritative result", async () => {
     const calls: Array<{ url: string; init: RequestInit }> = [];
     globalThis.fetch = mock(async (url: string | URL, init?: RequestInit) => {
