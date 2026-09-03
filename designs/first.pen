@@ -7342,7 +7342,7 @@
                               "id": "jlhbH",
                               "name": "Placeholder Affected participants",
                               "fill": "#9AA1AD",
-                              "content": "Select or enter affected participants",
+                              "content": "Choose affected participants",
                               "fontFamily": "Inter",
                               "fontSize": 13,
                               "fontWeight": "normal"

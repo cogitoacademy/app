@@ -279,7 +279,7 @@ payment package codes stable.
 
 ## Admin-Booking Module
 
-**Purpose:** Admin operations console for bookings — filtered override queue with urgency/SLA projection, a dedicated admin-only booking detail/history page, hydrated participant wallet/ledger inspection, before/after override preview, state history, and admin refunds. Queue rows navigate to `/admin-operations/bookings/:bookingId`; the page resolves its own queue item with the exact `bookingId` filter instead of relying on modal state.
+**Purpose:** Admin operations console for bookings — filtered override queue with urgency/SLA projection, a dedicated admin-only booking detail/history page, hydrated participant wallet/ledger inspection, before/after override preview, state history, and admin refunds. Queue rows navigate to `/admin-operations/bookings/:bookingId`; the page resolves its own queue item with the exact `bookingId` filter instead of relying on modal state. The override form reads the booking roster through protected `booking.get` and uses a name/avatar/role multi-select for affected participants; only selected user IDs are serialized into the existing override input.
 
 **Files:**
 

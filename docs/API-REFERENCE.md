@@ -1098,6 +1098,7 @@ The successful mutation also best-effort updates the existing offline Calendar e
 - **Output:** `{ booking }` — the updated booking
 - **Errors:** `BOOKING_NOT_FOUND` (404), terminal-state override rejected
 - **Description:** Force state transition bypassing the state machine; optionally adjusts held Marks per participant; records audit log + state history + participant notification
+- **Frontend note:** The admin override form reads the booking roster through protected `booking.get` and presents names/roles in a multi-select. It submits the selected participant user IDs automatically in `affectedParticipants`; the API input remains unchanged.
 
 ### `adminBooking.previewOverride`
 

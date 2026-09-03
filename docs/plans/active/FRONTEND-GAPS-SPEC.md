@@ -402,7 +402,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 
 **PRD:** FR-10, prd.tex:717-728 (Emergency Override UI/UX Requirements)
 
-**Current state:** **CLOSED (2026-08-19).** Override dialog with category/marks-action/reason/participants/user+internal notes and before/after preview (`previewOverride` → `applyOverride`) in `admin-operations-page.tsx` (merged #55).
+**Current state:** **CLOSED (2026-08-19; participant-selector follow-up 2026-09-03).** Override dialog with category/marks-action/reason/participants/user+internal notes and before/after preview (`previewOverride` → `applyOverride`) in `admin-operations-page.tsx` (merged #55). Affected participants are selected from the booking roster by name/avatar/role; the frontend serializes their user IDs for the unchanged API input.
 
 **Required:**
 
@@ -843,6 +843,8 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 ---
 
 ### Version Notes
+
+- v1.65 (2026-09-03): Replaced the admin override form's comma-separated affected-participant user-ID input with a booking-roster name/avatar/role multi-select. Selected user IDs continue to populate the existing `affectedParticipants` payload; no RPC, schema, or persistence contract changed.
 
 - v1.64 (2026-09-02): Matched the student achievement summary cards to the admin moderation queue's compact label-and-pill treatment; no RPC/schema/persistence contract changed.
 

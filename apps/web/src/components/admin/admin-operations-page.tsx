@@ -66,6 +66,7 @@ import {
 import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import {
   getSelectItemValue,
+  getSelectItemValues,
   Select,
   SelectItem,
   SelectList,
@@ -938,19 +939,38 @@ function OverrideDialog({
     useState<OverrideCategory>("admin_correction");
   const [marksAction, setMarksAction] = useState<MarksAction | "none">("none");
   const [reason, setReason] = useState("");
-  const [participantIds, setParticipantIds] = useState("");
+  const [participantIds, setParticipantIds] = useState<string[]>([]);
   const [userNote, setUserNote] = useState("");
   const [internalNote, setInternalNote] = useState("");
   const [preview, setPreview] = useState<PreviewResult | null>(null);
+  const participantQuery = useQuery({
+    ...orpc.booking.get.queryOptions({
+      input: { bookingId: booking?.id ?? "" },
+    }),
+    enabled: booking !== null,
+  });
+  const participants = participantQuery.data?.participants ?? [];
+
+  function resetForm() {
+    setCategory("admin_correction");
+    setMarksAction("none");
+    setReason("");
+    setParticipantIds([]);
+    setUserNote("");
+    setInternalNote("");
+    setPreview(null);
+  }
+
+  function handleClose() {
+    resetForm();
+    onClose();
+  }
 
   const buildInput = () => ({
     bookingId: booking!.id,
     category,
     reason: reason.trim(),
-    affectedParticipants: participantIds
-      .split(",")
-      .map((id) => id.trim())
-      .filter(Boolean),
+    affectedParticipants: participantIds,
     ...(marksAction !== "none" ? { marksAction } : {}),
     userNote: userNote.trim() || undefined,
     internalNote: internalNote.trim() || undefined,
@@ -965,6 +985,7 @@ function OverrideDialog({
     orpc.adminBooking.applyOverride.mutationOptions({
       onSuccess: () => {
         toastManager.add({ title: "Override applied", type: "success" });
+        resetForm();
         onApplied();
       },
       onError: (error: Error) =>
@@ -973,7 +994,10 @@ function OverrideDialog({
   );
 
   return (
-    <Dialog open={booking !== null} onOpenChange={(open) => !open && onClose()}>
+    <Dialog
+      open={booking !== null}
+      onOpenChange={(open) => !open && handleClose()}
+    >
       <DialogPopup className="max-w-2xl">
         <DialogHeader className="flex-col items-start gap-1">
           <DialogTitle>Emergency override</DialogTitle>
@@ -1047,21 +1071,81 @@ function OverrideDialog({
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor="participant-ids">
-              Affected participant user IDs
-            </FieldLabel>
-            <Input
-              id="participant-ids"
+            <FieldLabel>Affected participants</FieldLabel>
+            <Select
+              multiple
               value={participantIds}
-              onChange={(event) => {
-                setParticipantIds(event.target.value);
+              disabled={
+                participantQuery.isPending ||
+                participantQuery.isError ||
+                participants.length === 0
+              }
+              onValueChange={(value) => {
+                setParticipantIds(getSelectItemValues(value));
                 setPreview(null);
               }}
-              placeholder="user-id-1, user-id-2"
-            />
+            >
+              <SelectTrigger>
+                <SelectValue
+                  className="min-w-0 flex-1 truncate text-left"
+                  placeholder={
+                    participantQuery.isPending
+                      ? "Loading participants…"
+                      : participants.length > 0
+                        ? "Choose participants"
+                        : "No participants available"
+                  }
+                />
+              </SelectTrigger>
+              <SelectPopup>
+                <SelectList>
+                  {participants.map((participant) => {
+                    const name = participant.user?.name ?? "Participant";
+                    return (
+                      <SelectItem
+                        key={participant.userId}
+                        value={participant.userId}
+                      >
+                        <span className="flex min-w-0 items-center gap-2.5">
+                          <Avatar size="sm" aria-hidden="true">
+                            {participant.user?.image ? (
+                              <AvatarImage
+                                src={participant.user.image}
+                                alt=""
+                              />
+                            ) : null}
+                            <AvatarFallback>
+                              {getUserInitials(name)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="min-w-0">
+                            <span className="block truncate">{name}</span>
+                            <span className="block truncate text-xs text-muted">
+                              {humanize(participant.role)} ·{" "}
+                              {humanize(participant.confirmationState)}
+                            </span>
+                          </span>
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectList>
+              </SelectPopup>
+            </Select>
             <FieldDescription>
-              Required for Marks changes and user notifications.
+              Choose who should receive the override notification or Marks
+              adjustment. User IDs are handled automatically.
             </FieldDescription>
+            {participantQuery.isError ? (
+              <Button
+                type="button"
+                size="xs"
+                variant="underline"
+                onClick={() => void participantQuery.refetch()}
+              >
+                Try loading participants again
+              </Button>
+            ) : null}
           </Field>
           <Field>
             <FieldLabel htmlFor="user-note">User-visible note</FieldLabel>
@@ -1107,7 +1191,7 @@ function OverrideDialog({
           ) : null}
         </DialogBody>
         <DialogFooter>
-          <Button variant="secondary" onClick={onClose}>
+          <Button variant="secondary" onClick={handleClose}>
             Cancel
           </Button>
           <Button
