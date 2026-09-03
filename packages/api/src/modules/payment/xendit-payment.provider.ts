@@ -209,6 +209,47 @@ export function createXenditPaymentProvider(opts: {
     return { checkoutUrl, paymentRequestId };
   }
 
+  async function simulatePayment(paymentRequestId: string, amountIdr: number) {
+    if (opts.mode !== "test") {
+      throw badRequest("Payment simulation requires Xendit Test Mode");
+    }
+    const res = await xenditCircuitBreaker.execute(() =>
+      retryWithBackoff(
+        () =>
+          fetchWithTimeout(
+            `${XENDIT_API_BASE}/payment_requests/${encodeURIComponent(paymentRequestId)}/simulate`,
+            {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                "api-version": XENDIT_API_VERSION,
+                authorization: authHeader,
+              },
+              body: JSON.stringify({ amount: amountIdr }),
+            },
+          ),
+        {
+          maxAttempts: 3,
+          retryable: (err) =>
+            err instanceof TypeError ||
+            (err instanceof Error &&
+              (err.name === "AbortError" || err.name === "TimeoutError")),
+        },
+      ),
+    );
+
+    if (!res.ok) {
+      throw serviceUnavailable(
+        `Payment simulation error: ${res.status} ${res.statusText}`,
+      );
+    }
+    const json = (await res.json()) as { message?: string };
+    return {
+      status: "PENDING" as const,
+      message: json.message ?? "Simulated payment is being processed",
+    };
+  }
+
   async function verifyWebhook(
     rawBody: string,
     token: string,
@@ -331,5 +372,5 @@ export function createXenditPaymentProvider(opts: {
     return { providerRefundId: json.id };
   }
 
-  return { createIntent, verifyWebhook, refund };
+  return { createIntent, simulatePayment, verifyWebhook, refund };
 }

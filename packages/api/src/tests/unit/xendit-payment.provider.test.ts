@@ -163,6 +163,27 @@ describe("XenditPaymentProvider (2024-11-11 API)", () => {
     expect(JSON.parse(calls[0]!.init.body as string).channel_code).toBe("BCA");
   });
 
+  test("simulatePayment calls the official Test Mode simulation endpoint", async () => {
+    const calls: Array<{ url: string; init: RequestInit }> = [];
+    globalThis.fetch = mock(async (url: string | URL, init?: RequestInit) => {
+      calls.push({ url: String(url), init: init ?? {} });
+      return new Response(
+        JSON.stringify({ status: "PENDING", message: "being processed" }),
+        { status: 200 },
+      );
+    }) as typeof fetch;
+
+    const result = await provider.simulatePayment!("pr-test-123", 100_000);
+
+    expect(calls[0]!.url).toEndWith(
+      "/v3/payment_requests/pr-test-123/simulate",
+    );
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({
+      amount: 100_000,
+    });
+    expect(result).toEqual({ status: "PENDING", message: "being processed" });
+  });
+
   test("createIntent includes customer for e-wallet channels", async () => {
     const calls: Array<{ init: RequestInit }> = [];
     globalThis.fetch = mock((_url: string, init: RequestInit) => {

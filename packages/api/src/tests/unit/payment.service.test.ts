@@ -16,6 +16,10 @@ function makeProvider() {
     createIntent: mock(async () => ({
       checkoutUrl: "https://checkout.test/123",
     })),
+    simulatePayment: mock(async () => ({
+      status: "PENDING" as const,
+      message: "being processed",
+    })),
     verifyWebhook: mock(async () => ({
       providerReference: "stub-user1-pkg1",
       providerEventId: "evt_1",
@@ -592,6 +596,62 @@ describe("PaymentService", () => {
       }
 
       expect(updatePaymentStatus).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("simulatePurchase", () => {
+    test("simulates an owned pending payment using the stored provider request id", async () => {
+      const provider = makeProvider();
+      const repo = makeRepo({
+        findPaymentById: mock(async () => ({
+          id: "pay1",
+          userId: "user1",
+          status: "PENDING",
+          providerRequestId: "pr-test-1",
+          amountIdr: 100_000,
+        })),
+      });
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo,
+        provider: provider as any,
+        providerName: "xendit",
+      });
+
+      await expect(service.simulatePurchase("pay1", "user1")).resolves.toEqual({
+        status: "PENDING",
+        message: "being processed",
+      });
+      expect(provider.simulatePayment).toHaveBeenCalledWith(
+        "pr-test-1",
+        100_000,
+      );
+    });
+
+    test("does not expose or simulate another user's payment", async () => {
+      const provider = makeProvider();
+      const repo = makeRepo({
+        findPaymentById: mock(async () => ({
+          id: "pay1",
+          userId: "user2",
+          status: "PENDING",
+          providerRequestId: "pr-test-1",
+          amountIdr: 100_000,
+        })),
+      });
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo,
+        provider: provider as any,
+        providerName: "xendit",
+      });
+
+      await expect(
+        service.simulatePurchase("pay1", "user1"),
+      ).rejects.toBeInstanceOf(PaymentNotFoundError);
+      expect(provider.simulatePayment).not.toHaveBeenCalled();
     });
   });
 

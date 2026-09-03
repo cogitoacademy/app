@@ -8,6 +8,7 @@ import {
   PaymentNotFoundError,
   PackageAlreadyPurchasedError,
   PaymentProviderError,
+  PaymentSimulationUnavailableError,
 } from "./payment.errors";
 import type { PaymentWalletPort } from "./index";
 import type { PaymentAuditPort } from "./index";
@@ -51,6 +52,10 @@ export interface PaymentProvider {
     amountIdr: number,
     reason?: string,
   ): Promise<{ providerRefundId: string }>;
+  simulatePayment?(
+    paymentRequestId: string,
+    amountIdr: number,
+  ): Promise<{ status: "PENDING"; message: string }>;
 }
 
 export type PaymentPort = PaymentProvider;
@@ -276,6 +281,29 @@ export function createPaymentService(deps: {
       await repo.updatePaymentStatus(paymentId, {
         status: PAYMENT_STATUS.EXPIRED,
       });
+      throw new PaymentProviderError(providerName, error);
+    }
+  }
+
+  async function simulatePurchase(paymentId: string, userId: string) {
+    const record = await repo.findPaymentById(paymentId);
+    if (!record || record.userId !== userId) {
+      throw new PaymentNotFoundError(paymentId);
+    }
+    if (
+      record.status !== PAYMENT_STATUS.PENDING ||
+      !record.providerRequestId ||
+      !provider.simulatePayment
+    ) {
+      throw new PaymentSimulationUnavailableError();
+    }
+
+    try {
+      return await provider.simulatePayment(
+        record.providerRequestId,
+        record.amountIdr,
+      );
+    } catch (error) {
       throw new PaymentProviderError(providerName, error);
     }
   }
@@ -538,5 +566,11 @@ export function createPaymentService(deps: {
     return record;
   }
 
-  return { createIntent, confirmFromWebhook, getPurchase, provider };
+  return {
+    createIntent,
+    simulatePurchase,
+    confirmFromWebhook,
+    getPurchase,
+    provider,
+  };
 }

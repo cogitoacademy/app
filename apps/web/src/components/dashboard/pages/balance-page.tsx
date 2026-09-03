@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
@@ -70,6 +70,9 @@ function formatIdr(amount: number) {
 export function BalancePage() {
   const queryClient = useQueryClient();
   const [qrPayload, setQrPayload] = useState<string | null>(null);
+  const [simulatedPaymentId, setSimulatedPaymentId] = useState<string | null>(
+    null,
+  );
 
   const { data: wallet, isLoading: walletLoading } = useQuery(
     orpc.wallet.get.queryOptions(),
@@ -83,6 +86,17 @@ export function BalancePage() {
   const ledger = ledgerData as
     | { items: LedgerEntry[]; nextCursor: string | null }
     | undefined;
+
+  const simulatedPurchase = useQuery({
+    ...orpc.payment.getPurchase.queryOptions({
+      input: {
+        paymentId: simulatedPaymentId ?? "00000000-0000-0000-0000-000000000000",
+      },
+    }),
+    enabled: simulatedPaymentId !== null,
+    refetchInterval: (query) =>
+      query.state.data?.status === "PENDING" ? 1_000 : false,
+  });
 
   const purchase = useMutation(
     orpc.payment.createPurchase.mutationOptions({
@@ -99,6 +113,30 @@ export function BalancePage() {
       },
     }),
   );
+
+  const simulation = useMutation(
+    orpc.payment.simulatePurchase.mutationOptions({
+      onSuccess: (_result, variables) => {
+        setSimulatedPaymentId(variables.paymentId);
+      },
+    }),
+  );
+
+  useEffect(() => {
+    if (
+      simulatedPurchase.data?.status !== "PAID" &&
+      simulatedPurchase.data?.status !== "SETTLED"
+    ) {
+      return;
+    }
+    setQrPayload(null);
+    void queryClient.invalidateQueries({
+      queryKey: orpc.wallet.get.queryKey(),
+    });
+    void queryClient.invalidateQueries({
+      queryKey: orpc.wallet.listLedger.key(),
+    });
+  }, [queryClient, simulatedPurchase.data?.status]);
 
   const totalBalance = wallet?.totalBalance ?? 0;
   const heldBalance = wallet?.heldBalance ?? 0;
@@ -235,7 +273,7 @@ export function BalancePage() {
                   confirms the payment.
                 </CardDescription>
               </CardHeader>
-              <CardBody className="flex justify-center">
+              <CardBody className="flex flex-col items-center gap-4">
                 <div className="rounded-lg bg-background p-4 text-foreground">
                   <QRCodeSVG
                     value={qrPayload}
@@ -245,6 +283,37 @@ export function BalancePage() {
                     fgColor="var(--color-foreground)"
                   />
                 </div>
+                {purchase.data?.canSimulate ? (
+                  <>
+                    <Button
+                      variant="secondary"
+                      progress={simulation.isPending}
+                      disabled={
+                        simulation.isPending || simulatedPaymentId !== null
+                      }
+                      onClick={() =>
+                        simulation.mutate({
+                          paymentId: purchase.data.paymentId,
+                        })
+                      }
+                    >
+                      {simulation.isPending ? (
+                        <IconLoader2 className="animate-spin" />
+                      ) : null}
+                      {simulatedPaymentId
+                        ? "Waiting for confirmation"
+                        : "Simulate successful payment"}
+                    </Button>
+                    {simulatedPaymentId ? (
+                      <Text className="text-dimmed text-sm">
+                        {simulatedPurchase.data?.status === "PAID" ||
+                        simulatedPurchase.data?.status === "SETTLED"
+                          ? "Payment confirmed. Your Marks balance has been updated."
+                          : "Simulation submitted. Waiting for Xendit's webhook…"}
+                      </Text>
+                    ) : null}
+                  </>
+                ) : null}
               </CardBody>
             </Card>
           ) : null}
@@ -302,6 +371,7 @@ export function BalancePage() {
                       disabled={purchase.isPending}
                       onClick={() => {
                         setQrPayload(null);
+                        setSimulatedPaymentId(null);
                         purchase.mutate({ packageCode: pkg.code });
                       }}
                     >
