@@ -4,7 +4,6 @@ import { createPaymentService } from "../../modules/payment/payment.service";
 import {
   PackageNotFoundError,
   PaymentNotFoundError,
-  PackageAlreadyPurchasedError,
   PaymentProviderError,
 } from "../../modules/payment/payment.errors";
 import { PAYMENT_STATUS } from "../../shared/constants";
@@ -68,6 +67,7 @@ function makeRepo(overrides: Partial<PaymentRepo> = {}): PaymentRepo {
   return {
     findPackageByCode: mock(async () => null),
     findPaymentByProviderReference: mock(async () => null),
+    findLatestPaymentByUserAndPackage: mock(async () => null),
     findPaymentById: mock(async () => null),
     findPaymentByProviderEventId: mock(async () => null),
     insertPayment: mock(async () => {}),
@@ -108,7 +108,8 @@ describe("PaymentService", () => {
       }
     });
 
-    test("throws PackageAlreadyPurchasedError when package already purchased (non-pending)", async () => {
+    test("creates a new payment attempt after a successful purchase", async () => {
+      const provider = makeProvider();
       const repo = makeRepo({
         findPackageByCode: mock(async () => ({
           id: "pkg1",
@@ -117,11 +118,12 @@ describe("PaymentService", () => {
           priceIdr: 50000,
           marks: 100,
         })),
-        findPaymentByProviderReference: mock(async () => ({
+        findLatestPaymentByUserAndPackage: mock(async () => ({
           id: "pay_existing",
           status: "PAID",
           providerReference: "stub:user1:pkg1",
         })),
+        insertPayment: mock(async (values) => values as any),
       });
       const db = makeDb();
 
@@ -129,17 +131,19 @@ describe("PaymentService", () => {
         db,
         wallet: makeWallet() as any,
         repo,
-        provider: makeProvider() as any,
+        provider: provider as any,
         providerName: "stub",
       });
 
-      try {
-        await service.createIntent("user1", "w1", "pkg1");
-        expect(true).toBe(false);
-      } catch (e: any) {
-        expect(e).toBeInstanceOf(PackageAlreadyPurchasedError);
-        expect(e.code).toBe("PACKAGE_ALREADY_PURCHASED");
-      }
+      const result = await service.createIntent("user1", "w1", "pkg1");
+
+      expect(result.paymentId).not.toBe("pay_existing");
+      expect(result.providerReference).toMatch(/^stub:user1:pkg1:/);
+      expect(provider.createIntent).toHaveBeenCalledWith({
+        paymentId: result.paymentId,
+        amountIdr: 50000,
+        providerReference: result.providerReference,
+      });
     });
 
     test("returns existing intent for PENDING payment", async () => {
@@ -417,7 +421,7 @@ describe("PaymentService", () => {
       });
     });
 
-    test("createIntent re-purchases after a FAILED payment (new checkout)", async () => {
+    test("createIntent re-purchases after a FAILED payment with a new payment row", async () => {
       const updatePaymentStatus = mock(async () => {});
       const repo = makeRepo({
         findPackageByCode: mock(async () => ({
@@ -427,11 +431,12 @@ describe("PaymentService", () => {
           priceIdr: 50000,
           marks: 100,
         })),
-        findPaymentByProviderReference: mock(async () => ({
+        findLatestPaymentByUserAndPackage: mock(async () => ({
           id: "pay_existing",
           status: PAYMENT_STATUS.FAILED,
           providerReference: "stub:user1:pkg1",
         })),
+        insertPayment: mock(async (values) => values as any),
         updatePaymentStatus,
       });
       const db = makeDb();
@@ -445,16 +450,16 @@ describe("PaymentService", () => {
       });
 
       const result = await service.createIntent("user1", "w1", "pkg1");
-      expect(result.paymentId).toBe("pay_existing");
-      expect(result.providerReference).toBe("stub:user1:pkg1");
+      expect(result.paymentId).not.toBe("pay_existing");
+      expect(result.providerReference).toMatch(/^stub:user1:pkg1:/);
       expect(result.checkoutUrl).toBe("https://checkout.test/123");
-      expect(updatePaymentStatus).toHaveBeenCalledWith("pay_existing", {
+      expect(updatePaymentStatus).toHaveBeenCalledWith(result.paymentId, {
         status: PAYMENT_STATUS.PENDING,
         checkoutUrl: "https://checkout.test/123",
       });
     });
 
-    test("createIntent re-purchases after an EXPIRED payment (new checkout)", async () => {
+    test("createIntent re-purchases after an EXPIRED payment with a new payment row", async () => {
       const updatePaymentStatus = mock(async () => {});
       const repo = makeRepo({
         findPackageByCode: mock(async () => ({
@@ -464,11 +469,12 @@ describe("PaymentService", () => {
           priceIdr: 50000,
           marks: 100,
         })),
-        findPaymentByProviderReference: mock(async () => ({
+        findLatestPaymentByUserAndPackage: mock(async () => ({
           id: "pay_existing",
           status: PAYMENT_STATUS.EXPIRED,
           providerReference: "stub:user1:pkg1",
         })),
+        insertPayment: mock(async (values) => values as any),
         updatePaymentStatus,
       });
       const db = makeDb();
@@ -482,9 +488,10 @@ describe("PaymentService", () => {
       });
 
       const result = await service.createIntent("user1", "w1", "pkg1");
-      expect(result.paymentId).toBe("pay_existing");
+      expect(result.paymentId).not.toBe("pay_existing");
+      expect(result.providerReference).toMatch(/^stub:user1:pkg1:/);
       expect(result.checkoutUrl).toBe("https://checkout.test/123");
-      expect(updatePaymentStatus).toHaveBeenCalledWith("pay_existing", {
+      expect(updatePaymentStatus).toHaveBeenCalledWith(result.paymentId, {
         status: PAYMENT_STATUS.PENDING,
         checkoutUrl: "https://checkout.test/123",
       });
@@ -1824,7 +1831,7 @@ describe("PaymentService", () => {
       expect(notification.writeBestEffort).toHaveBeenCalledTimes(0);
     });
 
-    test("H3: createIntent re-purchase after FAILED retains old providerEventId as stale marker", async () => {
+    test("createIntent preserves the failed attempt and creates a fresh payment row", async () => {
       const updatePaymentStatus = mock(async () => {});
       const repo = makeRepo({
         findPackageByCode: mock(async () => ({
@@ -1834,12 +1841,13 @@ describe("PaymentService", () => {
           priceIdr: 50000,
           marks: 100,
         })),
-        findPaymentByProviderReference: mock(async () => ({
+        findLatestPaymentByUserAndPackage: mock(async () => ({
           id: "pay_existing",
           status: PAYMENT_STATUS.FAILED,
           providerReference: "stub:user1:pkg1",
           providerEventId: "evt_old_failed",
         })),
+        insertPayment: mock(async (values) => values as any),
         updatePaymentStatus,
       });
       const db = makeDb();
@@ -1860,10 +1868,11 @@ describe("PaymentService", () => {
       });
 
       const result = await service.createIntent("user1", "w1", "pkg1");
-      expect(result.paymentId).toBe("pay_existing");
-      // The providerRequestId rotates to the new attempt; the old providerEventId
-      // is retained as the stale marker (not cleared).
-      expect(updatePaymentStatus).toHaveBeenCalledWith("pay_existing", {
+      expect(result.paymentId).not.toBe("pay_existing");
+      expect(result.providerReference).toMatch(/^stub:user1:pkg1:/);
+      // The new attempt receives its own provider request; the failed row and
+      // its event marker remain unchanged as history.
+      expect(updatePaymentStatus).toHaveBeenCalledWith(result.paymentId, {
         status: PAYMENT_STATUS.PENDING,
         providerRequestId: "pr_new_attempt",
         checkoutUrl: "https://checkout.test/new",

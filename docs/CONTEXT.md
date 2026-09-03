@@ -19,6 +19,9 @@ and reuses the idempotent confirmation path if the payment already succeeded.
 As a sandbox reliability fallback, approved-user status polling reads the
 authoritative Xendit payment-request status and feeds terminal results through
 the same transactional, idempotent confirmation path.
+Payment packages are repeatable: the latest PENDING attempt is reused for a
+resume-safe checkout, while PAID, SETTLED, FAILED, EXPIRED, and REFUNDED
+attempts remain history and never block a new payment row/provider reference.
 
 ## Website audit P2 hardening
 

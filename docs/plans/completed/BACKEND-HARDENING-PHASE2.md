@@ -35,7 +35,7 @@ All tasks below were implemented and merged to main via **PR #46** (squash commi
 | 2.2 Late-cancel penalty              | `cancel`/`withdraw` post-H2 paths call `wallet.deduct` (penalty) instead of `release`; `cancelAllSessions` gated to `scheduled` sessions                         |
 | 2.3 Offline room → scheduled         | `transitionBookingToScheduled` on `room.assign` (`booking.service.ts:2396-2409`)                                                                                 |
 | 3.1 Email outbox                     | `writeInternal` queues dispatch rows only; `dispatchQueuedEmails(limit)` consumer wired to the `send-notification-email` job (`notification.service.ts:213-270`) |
-| 3.2 Re-purchase after FAILED/EXPIRED | `createIntent` resets FAILED/EXPIRED to PENDING and re-creates the intent (`payment.service.ts:123-142`)                                                         |
+| 3.2 Re-purchase after terminal payment | `createIntent` reuses only PENDING and creates a fresh row/provider reference after terminal outcomes (`payment.service.ts:123-142`)                          |
 | 4.1 Upload (R2)                      | `packages/api/src/lib/storage.ts` + `modules/upload/` (4-layer), `upload.createUploadUrl`, `/uploads/*` serve-through, R2 signed URLs                            |
 | 5.1 Group deadline repricing         | `expireBookings` headcount branch: `confirmed ≥ 2 && < target` → reprice + `AWAITING_RECONFIRMATION` + 12h deadline + notify (`booking.service.ts:2456-2492`)    |
 | 5.2 KB total-balance                 | **NOT implemented** — B4 still open (`wallet.service.ts:431` uses `availableBalance`); tracked in `docs/plans/active/PRD-GAPS-PHASE3.md` (U13)                   |
@@ -921,7 +921,7 @@ git commit -m "fix(notification): outbox pattern — queue dispatch rows, schedu
 
 ### Task 3.2: Allow FAILED/EXPIRED package re-purchase
 
-> **Status (verified 2026-08-14, HEAD `9b7df5e`):** NOT IMPLEMENTED — `createIntent` still throws `PackageAlreadyPurchasedError` for FAILED/EXPIRED existing payments (`payment.service.ts:115`).
+> **Status (superseded 2026-09-03):** IMPLEMENTED with a safer repeat-attempt model. `createIntent` now reuses only the latest PENDING attempt; every terminal attempt (`PAID`, `SETTLED`, `FAILED`, `EXPIRED`, or `REFUNDED`) remains history and the next purchase gets a new payment row/provider reference. See [`docs/plans/completed/PAYMENT-REPURCHASE.md`](./PAYMENT-REPURCHASE.md). The original task below described resetting the same row and is retained as historical planning context.
 
 **Files:**
 
@@ -931,7 +931,7 @@ git commit -m "fix(notification): outbox pattern — queue dispatch rows, schedu
 **Interfaces:**
 
 - Consumes: `repo.findPaymentByProviderReference`, `repo.updatePaymentStatus` (check existence), `provider.createIntent`.
-- Produces: when an existing payment for the same providerReference is `FAILED`/`EXPIRED`, reset it to `PENDING` and re-create the intent (fresh checkout) instead of throwing `PackageAlreadyPurchasedError`; `PENDING` is still reused; `PAID`/`SETTLED`/`REFUNDED` still throw.
+- Produces (historical design, superseded): when an existing payment for the same providerReference is `FAILED`/`EXPIRED`, reset it to `PENDING` and re-create the intent (fresh checkout) instead of throwing `PackageAlreadyPurchasedError`; `PENDING` is still reused; `PAID`/`SETTLED`/`REFUNDED` still throw. The implementation now creates a new row/reference after every terminal state so both successful and failed purchases are repeatable without rewriting payment history.
 
 - [ ] **Step 1: Write the failing test**
 

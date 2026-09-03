@@ -186,16 +186,24 @@ describe("PaymentService", () => {
       "starter",
     );
 
-    expect(retry.paymentId).toBe(first.paymentId);
-    expect(retry.providerReference).toBe(first.providerReference);
+    expect(retry.paymentId).not.toBe(first.paymentId);
+    expect(retry.providerReference).not.toBe(first.providerReference);
+    expect(retry.providerReference).toContain(first.providerReference);
     expect(retry.checkoutUrl).toBeDefined();
 
-    const [record] = await db
+    const [firstRecord] = await db
       .select()
       .from(paymentRecord)
       .where(eq(paymentRecord.id, first.paymentId))
       .limit(1);
-    expect(record!.status).toBe("PENDING");
+    expect(firstRecord!.status).toBe("FAILED");
+
+    const [retryRecord] = await db
+      .select()
+      .from(paymentRecord)
+      .where(eq(paymentRecord.id, retry.paymentId))
+      .limit(1);
+    expect(retryRecord!.status).toBe("PENDING");
 
     await services.payment.confirmFromWebhook({
       provider: "stub",
@@ -206,6 +214,50 @@ describe("PaymentService", () => {
 
     const w = await services.wallet.getByUserId(db, user.id);
     expect(w!.totalBalance).toBe(50);
+  });
+
+  test("TC-re-success: PAID payment can be purchased again without reusing its row", async () => {
+    const user = await createTestUser("rerepurchase-paid@cogito.test");
+    const walletRow = await services.wallet.getOrCreate(user.id);
+
+    const first = await services.payment.createIntent(
+      user.id,
+      walletRow.id,
+      "starter",
+    );
+    await services.payment.confirmFromWebhook({
+      provider: "stub",
+      providerReference: first.providerReference,
+      providerEventId: "evt_rep_paid1",
+      status: "PAID",
+    });
+
+    const retry = await services.payment.createIntent(
+      user.id,
+      walletRow.id,
+      "starter",
+    );
+
+    expect(retry.paymentId).not.toBe(first.paymentId);
+    expect(retry.providerReference).not.toBe(first.providerReference);
+    expect(retry.checkoutUrl).toBeDefined();
+
+    const [firstRecord] = await db
+      .select()
+      .from(paymentRecord)
+      .where(eq(paymentRecord.id, first.paymentId))
+      .limit(1);
+    expect(firstRecord!.status).toBe("PAID");
+
+    await services.payment.confirmFromWebhook({
+      provider: "stub",
+      providerReference: retry.providerReference,
+      providerEventId: "evt_rep_paid2",
+      status: "PAID",
+    });
+
+    const w = await services.wallet.getByUserId(db, user.id);
+    expect(w!.totalBalance).toBe(100);
   });
 
   test("TC-notif: webhook credit writes a payment notification (in-app + email) for the payer", async () => {

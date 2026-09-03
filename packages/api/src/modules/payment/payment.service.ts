@@ -6,7 +6,6 @@ import type { NotificationWriteParams } from "../notification/notification.servi
 import {
   PackageNotFoundError,
   PaymentNotFoundError,
-  PackageAlreadyPurchasedError,
   PaymentProviderError,
   PaymentSimulationUnavailableError,
 } from "./payment.errors";
@@ -130,14 +129,18 @@ export function createPaymentService(deps: {
   } = deps;
 
   /**
-   * Creates a payment intent for a mark package purchase, reusing pending intents.
+   * Creates a payment intent for a mark package purchase.
+   *
+   * A current PENDING attempt is reused so retrying the checkout remains
+   * idempotent. Once an attempt reaches a terminal state, the next purchase
+   * gets a new payment row and provider reference; earlier attempts stay as
+   * immutable payment history.
    *
    * @param userId - the purchasing student
    * @param walletId - the student's wallet to credit on confirmation
    * @param packageCode - the mark package code to purchase
    * @returns the payment id, provider reference, and checkout URL
    * @throws {PackageNotFoundError} if the package is missing or inactive
-   * @throws {PackageAlreadyPurchasedError} if the user already has a non-pending purchase
    * @throws {PaymentProviderError} if the provider rejects intent creation
    */
   async function createIntent(
@@ -148,8 +151,20 @@ export function createPaymentService(deps: {
     const pkg = await repo.findPackageByCode(packageCode);
     if (!pkg || !pkg.isActive) throw new PackageNotFoundError(packageCode);
 
-    const idempotencyKey = `${providerName}:${userId}:${packageCode}`;
-    const existing = await repo.findPaymentByProviderReference(idempotencyKey);
+    const baseProviderReference = `${providerName}:${userId}:${packageCode}`;
+    // Keep the old reference fallback for rows created before repeat purchases
+    // were supported. New rows are selected by their relational keys so an
+    // earlier terminal attempt does not become a permanent package lock.
+    const existingByPackage = repo.findLatestPaymentByUserAndPackage
+      ? await repo.findLatestPaymentByUserAndPackage(
+          userId,
+          pkg.id,
+          providerName,
+        )
+      : null;
+    const existing =
+      existingByPackage ??
+      (await repo.findPaymentByProviderReference(baseProviderReference));
     if (existing) {
       if (existing.status === PAYMENT_STATUS.PENDING) {
         // H4: reuse the persisted checkout URL when available so a PENDING
@@ -184,45 +199,16 @@ export function createPaymentService(deps: {
           checkoutUrl: existingIntent.checkoutUrl,
         };
       }
-      if (
-        existing.status === PAYMENT_STATUS.FAILED ||
-        existing.status === PAYMENT_STATUS.EXPIRED
-      ) {
-        // Reset to PENDING so the webhook can credit, then re-create the intent.
-        // Xendit allows reusing the reference_id for a fresh payment request.
-        // H3: each re-purchase is a new attempt. We rotate providerRequestId to
-        // the new attempt's id but RETAIN the previous providerEventId as the
-        // stale-generation marker: confirmFromWebhook ignores any terminal event
-        // whose providerEventId equals the retained one, so a late FAILED/EXPIRED
-        // for the OLD attempt cannot flip the re-purchased PENDING row terminal.
-        // (We cannot match against providerRequestId because Xendit payment
-        // events carry payment_id, not payment_request_id.)
-        const freshIntent = await provider.createIntent({
-          paymentId: existing.id,
-          amountIdr: pkg.priceIdr,
-          providerReference: existing.providerReference,
-        });
-        const update: {
-          status: string;
-          providerRequestId?: string;
-          checkoutUrl?: string | null;
-        } = { status: PAYMENT_STATUS.PENDING };
-        if (freshIntent.paymentRequestId) {
-          update.providerRequestId = freshIntent.paymentRequestId;
-        }
-        update.checkoutUrl = freshIntent.checkoutUrl;
-        await repo.updatePaymentStatus(existing.id, update);
-        return {
-          paymentId: existing.id,
-          providerReference: existing.providerReference,
-          checkoutUrl: freshIntent.checkoutUrl,
-        };
-      }
-      throw new PackageAlreadyPurchasedError(packageCode, userId);
+      // PAID, SETTLED, FAILED, EXPIRED, and REFUNDED are historical outcomes,
+      // not a package-level lock. Fall through and create a new payment record
+      // below. Keeping each attempt in its own row ensures its webhook and
+      // wallet-credit idempotency key remain independent of earlier attempts.
     }
 
     const paymentId = crypto.randomUUID();
-    const providerReference = idempotencyKey;
+    const providerReference = existing
+      ? `${baseProviderReference}:${paymentId}`
+      : baseProviderReference;
 
     const inserted = await repo.insertPayment({
       id: paymentId,
@@ -239,7 +225,7 @@ export function createPaymentService(deps: {
     // B6: a concurrent request won the check-then-insert race and its row
     // was committed first — reuse the existing (PENDING) payment instead of
     // creating a zombie duplicate.
-    if (!inserted) {
+    if (inserted === null) {
       const existingRow =
         await repo.findPaymentByProviderReference(providerReference);
       if (existingRow) {

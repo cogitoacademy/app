@@ -1081,6 +1081,7 @@ Concurrent modification conflict. The `version` field didn't match. Retry the op
 - `Payment simulation error: 403 REQUEST_FORBIDDEN_ERROR` — verify the production key is a Test Mode secret (`xnd_development_...`) with **Money-in / Payments → Write** permission, while `XENDIT_MODE=test`; then create a fresh purchase.
 - `Payment simulation error: 400 INACTIVE_PAYMENT_METHOD` — the dynamic QR has already been completed, canceled, or expired. On the patched build, retrying once performs an authoritative status reconciliation; if it still fails, use a fresh pending intent rather than retrying the inactive QR indefinitely.
 - `Payment simulation error: 400 ...` — inspect the Xendit error code/message for amount mismatch or another request validation failure. Do not retry an old payment indefinitely; create a fresh pending intent after correcting the request/configuration.
+- Re-purchase behavior — a PAID, SETTLED, FAILED, EXPIRED, or REFUNDED attempt is retained as history and the next `payment.createPurchase` call creates a new payment row/provider reference. Only the latest PENDING attempt is reused. Test transactions in the production database therefore do not permanently lock a package for the UAT account.
 
 ### Database Connection Errors
 
@@ -1266,7 +1267,7 @@ Steps to validate the Xendit integration on the production domain before accepti
 4. Click **Simulate successful payment** below the QR. The button is emitted only for an approved UAT account in Xendit Test Mode and calls Xendit's test-only payment-request simulation endpoint. Completion is asynchronous by webhook; while waiting, app polling also reconciles against [`GET /v3/payment_requests/{payment_request_id}`](https://docs.xendit.co/apidocs/get-payment-request) so a delayed/rejected sandbox callback cannot leave a remotely completed payment stuck. Never attempt to pay the sandbox QR with a real banking app.
 5. Confirm the webhook reaches the production API with `api-version: 2024-11-11`, `data.payment_id` or `data.payment_request_id`, and `status=SUCCEEDED`; the payment becomes `PAID` and Marks are credited once. Check the boot log for `action=payment_provider_configured` and `xenditMode=test`; the secret must never appear in logs.
 6. Verify the wrong Test Mode token returns 401, a non-allowlisted webhook source returns 403, a duplicate webhook is idempotent, and a REFUNDED webhook follows the reconciliation rules. Xendit timestamp validation is intentionally skipped because the current integration relies on `x-callback-token`.
-7. Record the test payment IDs and remove/expire the UAT data or use dedicated test accounts before switching to Live Mode. Test transactions in the production database are still application data and may affect “package already purchased” checks.
+7. Record the test payment IDs and remove/expire the UAT data or use dedicated test accounts before switching to Live Mode. Test transactions in the production database remain application data for reconciliation/audit, but terminal attempts no longer prevent the same account from purchasing that package again.
 8. Only after all checks pass, follow the go-live checklist and switch the key/token + `XENDIT_MODE` from `test` to `live`.
 
 ### Google Meet refresh-token acquisition (X3)
