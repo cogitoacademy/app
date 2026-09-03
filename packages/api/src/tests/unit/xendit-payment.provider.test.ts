@@ -184,6 +184,24 @@ describe("XenditPaymentProvider (2024-11-11 API)", () => {
     expect(result).toEqual({ status: "PENDING", message: "being processed" });
   });
 
+  test("simulatePayment rejects Live Mode and provider errors", async () => {
+    const liveProvider = createXenditPaymentProvider({
+      ...opts,
+      mode: "live",
+    });
+    await expect(
+      liveProvider.simulatePayment!("pr-live-1", 100_000),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+    globalThis.fetch = mock(
+      async () =>
+        new Response("unavailable", { status: 503, statusText: "Unavailable" }),
+    ) as typeof fetch;
+    await expect(
+      provider.simulatePayment!("pr-test-error", 100_000),
+    ).rejects.toMatchObject({ code: "SERVICE_UNAVAILABLE" });
+  });
+
   test("createIntent includes customer for e-wallet channels", async () => {
     const calls: Array<{ init: RequestInit }> = [];
     globalThis.fetch = mock((_url: string, init: RequestInit) => {

@@ -653,6 +653,57 @@ describe("PaymentService", () => {
       ).rejects.toBeInstanceOf(PaymentNotFoundError);
       expect(provider.simulatePayment).not.toHaveBeenCalled();
     });
+
+    test("rejects a payment that cannot be simulated", async () => {
+      const provider = makeProvider();
+      const repo = makeRepo({
+        findPaymentById: mock(async () => ({
+          id: "pay1",
+          userId: "user1",
+          status: "PAID",
+          providerRequestId: "pr-test-1",
+          amountIdr: 100_000,
+        })),
+      });
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo,
+        provider: provider as any,
+        providerName: "xendit",
+      });
+
+      await expect(
+        service.simulatePurchase("pay1", "user1"),
+      ).rejects.toMatchObject({ code: "PAYMENT_SIMULATION_UNAVAILABLE" });
+    });
+
+    test("wraps provider simulation failures", async () => {
+      const provider = makeProvider();
+      provider.simulatePayment.mockImplementation(async () => {
+        throw new Error("provider unavailable");
+      });
+      const repo = makeRepo({
+        findPaymentById: mock(async () => ({
+          id: "pay1",
+          userId: "user1",
+          status: "PENDING",
+          providerRequestId: "pr-test-1",
+          amountIdr: 100_000,
+        })),
+      });
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo,
+        provider: provider as any,
+        providerName: "xendit",
+      });
+
+      await expect(
+        service.simulatePurchase("pay1", "user1"),
+      ).rejects.toBeInstanceOf(PaymentProviderError);
+    });
   });
 
   describe("confirmFromWebhook", () => {

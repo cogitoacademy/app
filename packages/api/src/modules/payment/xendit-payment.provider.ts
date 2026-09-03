@@ -18,6 +18,14 @@ import type {
 const XENDIT_API_BASE = "https://api.xendit.co/v3";
 const XENDIT_API_VERSION = "2024-11-11";
 
+function isRetryableProviderError(err: unknown) {
+  return (
+    err instanceof TypeError ||
+    (err instanceof Error &&
+      (err.name === "AbortError" || err.name === "TimeoutError"))
+  );
+}
+
 type XenditPaymentMethod = "ewallet_ovo" | "qris" | "va_bca";
 
 export type XenditMode = "test" | "live";
@@ -162,10 +170,7 @@ export function createXenditPaymentProvider(opts: {
           }),
         {
           maxAttempts: 3,
-          retryable: (err) =>
-            err instanceof TypeError ||
-            (err instanceof Error &&
-              (err.name === "AbortError" || err.name === "TimeoutError")),
+          retryable: isRetryableProviderError,
         },
       ),
     );
@@ -230,10 +235,7 @@ export function createXenditPaymentProvider(opts: {
           ),
         {
           maxAttempts: 3,
-          retryable: (err) =>
-            err instanceof TypeError ||
-            (err instanceof Error &&
-              (err.name === "AbortError" || err.name === "TimeoutError")),
+          retryable: isRetryableProviderError,
         },
       ),
     );
@@ -340,10 +342,7 @@ export function createXenditPaymentProvider(opts: {
           }),
         {
           maxAttempts: 3,
-          retryable: (err) =>
-            err instanceof TypeError ||
-            (err instanceof Error &&
-              (err.name === "AbortError" || err.name === "TimeoutError")),
+          retryable: isRetryableProviderError,
         },
       ),
     );

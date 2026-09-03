@@ -148,6 +148,26 @@ describe("paymentHandler", () => {
       );
       expect(result.status).toBe("PENDING");
     });
+
+    test("rejects simulation outside an approved Test Mode account", async () => {
+      const payment = { simulatePurchase: mock(async () => ({})) };
+      const handler = createPaymentHandler(payment as any, {} as any, {
+        xenditMode: "live",
+        testAllowedEmails: ["qa@cogitoacademy.id"],
+      });
+
+      await expect(
+        handler.simulatePurchase({
+          context: {
+            session: { user: { id: "u1", email: "qa@cogitoacademy.id" } },
+          } as any,
+          input: {
+            paymentId: "550e8400-e29b-41d4-a716-446655440000",
+          },
+        }),
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      expect(payment.simulatePurchase).not.toHaveBeenCalled();
+    });
   });
 
   describe("getPurchase", () => {
