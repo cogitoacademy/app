@@ -26,6 +26,51 @@ function isRetryableProviderError(err: unknown) {
   );
 }
 
+/**
+ * Xendit returns structured error bodies, but the provider message is not
+ * guaranteed to be present (for example on a proxy-generated response). Keep
+ * the diagnostic detail bounded and single-line before it is surfaced through
+ * our domain error. Never include request headers or response bodies verbatim.
+ */
+function sanitizeProviderMessage(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const message = value.replace(/\s+/g, " ").trim();
+  return message ? message.slice(0, 240) : undefined;
+}
+
+function sanitizeProviderCode(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const code = value.trim();
+  return /^[A-Z0-9_]{1,100}$/.test(code) ? code : undefined;
+}
+
+async function throwProviderHttpError(
+  response: Response,
+  operation: string,
+): Promise<never> {
+  const text = await response.text().catch(() => "");
+  let errorCode: string | undefined;
+  let providerMessage: string | undefined;
+
+  try {
+    const body = JSON.parse(text) as {
+      error_code?: unknown;
+      message?: unknown;
+    };
+    errorCode = sanitizeProviderCode(body.error_code);
+    providerMessage = sanitizeProviderMessage(body.message);
+  } catch {
+    // Some upstream/proxy errors are plain text. Do not echo that text because
+    // it may contain HTML or infrastructure details; the HTTP status is enough.
+  }
+
+  const statusDetail = (errorCode ?? response.statusText) || "HTTP error";
+  const messageDetail = providerMessage ? ` - ${providerMessage}` : "";
+  throw serviceUnavailable(
+    `${operation} error: ${response.status} ${statusDetail}${messageDetail}`,
+  );
+}
+
 type XenditPaymentMethod = "ewallet_ovo" | "qris" | "va_bca";
 
 export type XenditMode = "test" | "live";
@@ -177,17 +222,7 @@ export function createXenditPaymentProvider(opts: {
     );
 
     if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      let errCode: string | undefined;
-      try {
-        const errJson = JSON.parse(text);
-        errCode = errJson.error_code;
-      } catch {
-        errCode = undefined;
-      }
-      throw serviceUnavailable(
-        `Payment provider error: ${res.status} ${errCode ?? res.statusText}`,
-      );
+      await throwProviderHttpError(res, "Payment provider");
     }
 
     // 2024-11-11 responses are a TOP-LEVEL object (no `data` wrapper).
@@ -242,9 +277,7 @@ export function createXenditPaymentProvider(opts: {
     );
 
     if (!res.ok) {
-      throw serviceUnavailable(
-        `Payment simulation error: ${res.status} ${res.statusText}`,
-      );
+      await throwProviderHttpError(res, "Payment simulation");
     }
     const json = (await res.json()) as { message?: string };
     return {
@@ -272,9 +305,7 @@ export function createXenditPaymentProvider(opts: {
       ),
     );
     if (!res.ok) {
-      throw serviceUnavailable(
-        `Payment status error: ${res.status} ${res.statusText}`,
-      );
+      await throwProviderHttpError(res, "Payment status");
     }
     const json = (await res.json()) as {
       payment_request_id?: string;
@@ -389,17 +420,7 @@ export function createXenditPaymentProvider(opts: {
     );
 
     if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      let errCode: string | undefined;
-      try {
-        const errJson = JSON.parse(text);
-        errCode = errJson.error_code;
-      } catch {
-        errCode = undefined;
-      }
-      throw serviceUnavailable(
-        `Payment provider refund error: ${res.status} ${errCode ?? res.statusText}`,
-      );
+      await throwProviderHttpError(res, "Payment provider refund");
     }
 
     const json = (await res.json()) as { id?: string };

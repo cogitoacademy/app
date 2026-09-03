@@ -167,7 +167,7 @@ webhooks still flow. If unstable, leave empty (signature-only gating).
 | Vault var                                                     | Where to get it                                                                     | What it is                                                                                                        |
 | ------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `XENDIT_MODE`                                                 | Your choice — `test` for UAT, `live` for go-live                                    | Explicit deployment-mode assertion (required with xendit)                                                         |
-| `XENDIT_SECRET_KEY`                                           | Settings → API Keys (Test Mode section)                                             | Authenticates API calls; Test Mode = test key                                                                     |
+| `XENDIT_SECRET_KEY`                                           | Settings → API Keys (Test Mode section)                                             | Authenticates API calls; Test Mode = test key with Money-in / Payments **Write** permission                       |
 | `XENDIT_WEBHOOK_TOKEN`                                        | Settings → Webhooks → Callback Token                                                | Sent as `x-callback-token` header on every webhook; the server compares it (constant-time)                        |
 | `XENDIT_TEST_ALLOWED_EMAILS`                                  | Your UAT accounts                                                                   | Who may purchase while `XENDIT_MODE=test` (required in prod-like envs)                                            |
 | Webhook URL (set in Xendit dashboard)                         | Settings → Webhooks → per event type                                                | `https://api.cogitoacademy.id/webhooks/payments/xendit` — events: payment succeeded / refunded / failed / expired |
@@ -183,6 +183,9 @@ status through the same idempotent credit path. Real banking apps are not used
 and **no real money moves.** Go-live = switch
 `XENDIT_MODE=live` + Live keys + one real small transaction (RUNBOOK
 checklist).
+If a simulation is rejected, the API returns a bounded provider status,
+`error_code`, and message so operators can distinguish a Test Mode key or
+permission mismatch from a malformed/expired payment request.
 
 ---
 
