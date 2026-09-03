@@ -2377,10 +2377,17 @@ export function createBookingService(deps: {
     // Move the provider-side meeting event to the new time (FR-21/OQ-05).
     // Best-effort: a Google failure must not roll back the accepted reschedule.
     if (finalized) {
-      await meeting.updateEvent(bookingId, {
-        startAt: proposal.proposedStartAt,
-        endAt: proposal.proposedEndAt,
-      });
+      if (
+        updated.modality === MODALITY.OFFLINE &&
+        updated.currentState !== BOOKING_STATE.SCHEDULED
+      ) {
+        await meeting.cancelEvent(bookingId);
+      } else {
+        await meeting.updateEvent(bookingId, {
+          startAt: proposal.proposedStartAt,
+          endAt: proposal.proposedEndAt,
+        });
+      }
     }
 
     return updated;
@@ -3883,6 +3890,86 @@ export function createBookingService(deps: {
   }
 
   /**
+   * Creates or refreshes the normal Google Calendar event for a scheduled
+   * offline booking. This is deliberately best-effort and is called after the
+   * room transaction commits: provider failure never changes booking state.
+   */
+  async function syncOfflineCalendarEvent(
+    bookingId: string,
+    assignedRoom: { name: string; location: string },
+    schedule: { startAt: Date; endAt: Date },
+  ): Promise<void> {
+    try {
+      const b = await repo.findBookingById(db, bookingId);
+      if (
+        !b ||
+        b.modality !== MODALITY.OFFLINE ||
+        b.currentState !== BOOKING_STATE.SCHEDULED
+      ) {
+        return;
+      }
+      const participants = await repo.findConfirmedParticipants(db, bookingId);
+      const users = await repo.findUserEmails(db, [
+        b.tutorId,
+        ...participants.map((participant) => participant.userId),
+      ]);
+      const location = [assignedRoom.name, assignedRoom.location]
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .join(" — ");
+      const event = await meeting.createEvent(
+        bookingId,
+        schedule.startAt,
+        schedule.endAt,
+        users.map((user) => ({ email: user.email, name: user.name })),
+        undefined,
+        {
+          ...buildMeetingEventDetails(b, users),
+          location,
+          createConference: false,
+        },
+      );
+      if (event.externalEventId) {
+        await meeting.updateEvent(bookingId, {
+          startAt: schedule.startAt,
+          endAt: schedule.endAt,
+          location,
+        });
+      }
+    } catch (error) {
+      log({
+        level: "error",
+        action: "offline_calendar_sync_failed",
+        bookingId,
+        error: { message: String(error) },
+      });
+    }
+  }
+
+  async function syncOfflineCalendarAfterRoomRemoval(
+    bookingId: string,
+  ): Promise<void> {
+    try {
+      const b = await repo.findBookingById(db, bookingId);
+      if (!b || b.modality !== MODALITY.OFFLINE) return;
+      if (b.currentState === BOOKING_STATE.SCHEDULED) {
+        await meeting.updateEvent(bookingId, { location: "" });
+        return;
+      }
+      if (TERMINAL_STATES.includes(b.currentState as BookingState)) {
+        await meeting.cancelEvent(bookingId);
+      }
+    } catch (error) {
+      log({
+        level: "error",
+        action: "offline_calendar_room_removal_sync_failed",
+        bookingId,
+        error: { message: String(error) },
+      });
+    }
+  }
+
+  /**
    * Cancels an offline booking whose room could not be provided (FR-22:
    * "cancel only if no room is available"). Called by the room module inside
    * `cancelRoomBooking` when the booking is still awaiting room approval.
@@ -4633,6 +4720,8 @@ export function createBookingService(deps: {
     transition,
     canTransition,
     transitionBookingToScheduled,
+    syncOfflineCalendarEvent,
+    syncOfflineCalendarAfterRoomRemoval,
     cancelOfflineBooking,
     getBookingRecipients,
   };

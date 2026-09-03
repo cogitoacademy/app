@@ -1,5 +1,6 @@
 import { google } from "googleapis";
 import type { calendar_v3 } from "googleapis";
+import { createHash } from "node:crypto";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { meetingEvent } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
@@ -26,6 +27,12 @@ interface GoogleMeetingConfig {
 }
 
 type GoogleCalendarEvent = calendar_v3.Schema$Event;
+
+function offlineCalendarEventId(bookingId: string): string {
+  // Google event ids accept base32hex characters. A stable digest makes
+  // concurrent/replayed room assignment safe even before the local row exists.
+  return `cogito${createHash("sha256").update(bookingId).digest("hex")}`;
+}
 
 interface GoogleOAuthTokenResponse {
   access_token?: string;
@@ -265,8 +272,14 @@ export function createGoogleMeetingProvider(
           "content-type": "application/json",
         },
         body: JSON.stringify({
+          ...(details?.createConference === false
+            ? { id: offlineCalendarEventId(bookingId) }
+            : {}),
           summary,
           ...(description ? { description } : {}),
+          ...(details?.location?.trim()
+            ? { location: details.location.trim() }
+            : {}),
           start: { dateTime: start.toISOString() },
           end: { dateTime: end.toISOString() },
           ...(attendees?.length
@@ -277,12 +290,16 @@ export function createGoogleMeetingProvider(
                 })),
               }
             : {}),
-          conferenceData: {
-            createRequest: {
-              requestId: bookingId,
-              conferenceSolutionKey: { type: "hangoutsMeet" },
-            },
-          },
+          ...(details?.createConference === false
+            ? {}
+            : {
+                conferenceData: {
+                  createRequest: {
+                    requestId: bookingId,
+                    conferenceSolutionKey: { type: "hangoutsMeet" },
+                  },
+                },
+              }),
         }),
       },
       timeoutMs,
@@ -301,34 +318,6 @@ export function createGoogleMeetingProvider(
       {
         method: "GET",
         headers: { authorization: `Bearer ${accessToken}` },
-      },
-      timeoutMs,
-    );
-  }
-
-  async function updateEventWithOauth(
-    accessToken: string,
-    eventId: string,
-    start: Date,
-    end: Date,
-    timeoutMs: number,
-  ): Promise<GoogleCalendarEvent> {
-    const calendarId = encodeURIComponent(config.calendarId);
-    const encodedEventId = encodeURIComponent(eventId);
-    const current = await getEventWithOauth(accessToken, eventId, timeoutMs);
-    return fetchJson<GoogleCalendarEvent>(
-      `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodedEventId}`,
-      {
-        method: "PUT",
-        headers: {
-          authorization: `Bearer ${accessToken}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          ...current,
-          start: { dateTime: start.toISOString() },
-          end: { dateTime: end.toISOString() },
-        }),
       },
       timeoutMs,
     );
@@ -375,9 +364,10 @@ export function createGoogleMeetingProvider(
 
   async function updateEvent(
     bookingId: string,
-    changes: { startAt?: Date; endAt?: Date },
+    changes: { startAt?: Date; endAt?: Date; location?: string },
   ): Promise<void> {
-    if (!changes.startAt && !changes.endAt) return;
+    if (!changes.startAt && !changes.endAt && changes.location === undefined)
+      return;
     const startedAt = Date.now();
     const row = await findLiveProviderEvent(bookingId);
     if (!row) return;
@@ -390,11 +380,34 @@ export function createGoogleMeetingProvider(
             ? await refreshOAuthAccessToken(TIMEOUT_MS)
             : null;
         if (config.authType === "oauth_refresh_token") {
-          await updateEventWithOauth(
+          const current = await getEventWithOauth(
             oauthAccessToken!,
             row.externalEventId!,
-            changes.startAt ?? new Date(),
-            changes.endAt ?? new Date(),
+            TIMEOUT_MS,
+          );
+          const calendarId = encodeURIComponent(config.calendarId);
+          const encodedEventId = encodeURIComponent(row.externalEventId!);
+          await fetchJson<GoogleCalendarEvent>(
+            `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodedEventId}`,
+            {
+              method: "PUT",
+              headers: {
+                authorization: `Bearer ${oauthAccessToken}`,
+                "content-type": "application/json",
+              },
+              body: JSON.stringify({
+                ...current,
+                ...(changes.startAt
+                  ? { start: { dateTime: changes.startAt.toISOString() } }
+                  : {}),
+                ...(changes.endAt
+                  ? { end: { dateTime: changes.endAt.toISOString() } }
+                  : {}),
+                ...(changes.location !== undefined
+                  ? { location: changes.location }
+                  : {}),
+              }),
+            },
             TIMEOUT_MS,
           );
         } else {
@@ -418,12 +431,15 @@ export function createGoogleMeetingProvider(
                 eventId: row.externalEventId!,
                 requestBody: {
                   ...current,
-                  start: {
-                    dateTime: (changes.startAt ?? new Date()).toISOString(),
-                  },
-                  end: {
-                    dateTime: (changes.endAt ?? new Date()).toISOString(),
-                  },
+                  ...(changes.startAt
+                    ? { start: { dateTime: changes.startAt.toISOString() } }
+                    : {}),
+                  ...(changes.endAt
+                    ? { end: { dateTime: changes.endAt.toISOString() } }
+                    : {}),
+                  ...(changes.location !== undefined
+                    ? { location: changes.location }
+                    : {}),
                 },
               }),
             ).then(() => undefined),
@@ -596,6 +612,26 @@ export function createGoogleMeetingProvider(
     // duplicate the provider event).
     const write = conn ?? db;
     try {
+      // Offline room assignment can be retried by an admin or caller. Reuse a
+      // previously-created provider row so a retry never duplicates the
+      // physical Calendar event. The online path retains its existing Meet
+      // request-id behavior unchanged.
+      if (details?.createConference === false) {
+        const [existing] = await write
+          .select()
+          .from(meetingEvent)
+          .where(
+            and(
+              eq(meetingEvent.bookingId, bookingId),
+              eq(meetingEvent.provider, "google_meet"),
+              eq(meetingEvent.status, "created"),
+            ),
+          )
+          .orderBy(desc(meetingEvent.createdAt), desc(meetingEvent.id))
+          .limit(1);
+        if (existing?.externalEventId) return existing as MeetingEvent;
+      }
+
       const TIMEOUT_MS = 30_000;
       const oauthAccessToken =
         config.authType === "oauth_refresh_token"
@@ -623,10 +659,16 @@ export function createGoogleMeetingProvider(
                 calendar!.events.insert({
                   calendarId: config.calendarId,
                   requestBody: {
+                    ...(details?.createConference === false
+                      ? { id: offlineCalendarEventId(bookingId) }
+                      : {}),
                     summary:
                       details?.title?.trim() || `Cogito Booking ${bookingId}`,
                     ...(details?.description?.trim()
                       ? { description: details.description.trim() }
+                      : {}),
+                    ...(details?.location?.trim()
+                      ? { location: details.location.trim() }
                       : {}),
                     start: { dateTime: start.toISOString() },
                     end: { dateTime: end.toISOString() },
@@ -640,14 +682,20 @@ export function createGoogleMeetingProvider(
                           })),
                         }
                       : {}),
-                    conferenceData: {
-                      createRequest: {
-                        requestId: bookingId,
-                        conferenceSolutionKey: { type: "hangoutsMeet" },
-                      },
-                    },
+                    ...(details?.createConference === false
+                      ? {}
+                      : {
+                          conferenceData: {
+                            createRequest: {
+                              requestId: bookingId,
+                              conferenceSolutionKey: { type: "hangoutsMeet" },
+                            },
+                          },
+                        }),
                   },
-                  conferenceDataVersion: 1,
+                  ...(details?.createConference === false
+                    ? {}
+                    : { conferenceDataVersion: 1 }),
                 }),
               ).then((response) => response.data as GoogleCalendarEvent),
               TIMEOUT_MS,
@@ -660,7 +708,7 @@ export function createGoogleMeetingProvider(
       let meetingUrl: string | null = null;
       if (immediateMeetingUrl) {
         meetingUrl = immediateMeetingUrl;
-      } else if (externalEventId) {
+      } else if (externalEventId && details?.createConference !== false) {
         // R8: the Google event was already created — a failure to poll for
         // the Meet URL must NOT discard the created event (a `failed` row
         // would cause a duplicate Google event on retry). Log and continue

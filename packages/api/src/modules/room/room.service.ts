@@ -137,7 +137,7 @@ export function createRoomService(
     endAt: Date,
     actorId?: string,
   ) {
-    return db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       const roomRow = await repo.findRoomById(tx, roomId);
       if (!roomRow) throw new RoomNotFoundError(roomId);
 
@@ -198,8 +198,16 @@ export function createRoomService(
         `Your offline session was confirmed in room ${roomRow.name}.`,
       );
 
-      return inserted;
+      return { inserted, room: roomRow };
     });
+    // Provider work runs after commit and is best-effort. A Calendar outage
+    // must not roll back a valid room assignment or SCHEDULED transition.
+    await bookingPort?.syncOfflineCalendarEvent?.(
+      bookingId,
+      { name: result.room.name, location: result.room.location },
+      { startAt, endAt },
+    );
+    return result.inserted;
   }
 
   async function relocateRoom(
@@ -209,7 +217,7 @@ export function createRoomService(
     endAt: Date,
     actorId?: string,
   ) {
-    return db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       const roomRow = await repo.findRoomById(tx, roomId);
       if (!roomRow) throw new RoomNotFoundError(roomId);
 
@@ -273,12 +281,18 @@ export function createRoomService(
         `Your offline session was relocated to room ${roomRow.name}.`,
       );
 
-      return inserted;
+      return { inserted, room: roomRow };
     });
+    await bookingPort?.syncOfflineCalendarEvent?.(
+      bookingId,
+      { name: result.room.name, location: result.room.location },
+      { startAt, endAt },
+    );
+    return result.inserted;
   }
 
   async function cancelRoomBooking(bookingId: string, actorId?: string) {
-    return db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       const current = await repo.findCancellableRoomBookingByBookingId(
         tx,
         bookingId,
@@ -339,6 +353,8 @@ export function createRoomService(
 
       return updated;
     });
+    await bookingPort?.syncOfflineCalendarAfterRoomRemoval?.(bookingId);
+    return result;
   }
 
   /**
