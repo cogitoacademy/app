@@ -56,6 +56,7 @@ export interface PaymentProvider {
     paymentRequestId: string,
     amountIdr: number,
   ): Promise<{ status: "PENDING"; message: string }>;
+  getPaymentRequestStatus?(paymentRequestId: string): Promise<WebhookPayload>;
 }
 
 export type PaymentPort = PaymentProvider;
@@ -303,6 +304,39 @@ export function createPaymentService(deps: {
         record.providerRequestId,
         record.amountIdr,
       );
+    } catch (error) {
+      throw new PaymentProviderError(providerName, error);
+    }
+  }
+
+  async function reconcilePurchase(paymentId: string, userId: string) {
+    const record = await repo.findPaymentById(paymentId);
+    if (!record || record.userId !== userId) {
+      throw new PaymentNotFoundError(paymentId);
+    }
+    if (
+      record.status !== PAYMENT_STATUS.PENDING ||
+      !record.providerRequestId ||
+      !provider.getPaymentRequestStatus
+    ) {
+      return { status: record.status };
+    }
+
+    try {
+      const remote = await provider.getPaymentRequestStatus(
+        record.providerRequestId,
+      );
+      if (remote.status === PAYMENT_STATUS.PENDING) {
+        return { status: record.status };
+      }
+      return confirmFromWebhook({
+        provider: providerName,
+        ...remote,
+        // Xendit includes reference_id on this endpoint, but retain the
+        // database reference as a safe fallback if a provider response omits
+        // it while still reporting a terminal status.
+        providerReference: remote.providerReference || record.providerReference,
+      });
     } catch (error) {
       throw new PaymentProviderError(providerName, error);
     }
@@ -569,6 +603,7 @@ export function createPaymentService(deps: {
   return {
     createIntent,
     simulatePurchase,
+    reconcilePurchase,
     confirmFromWebhook,
     getPurchase,
     provider,

@@ -177,8 +177,10 @@ webhooks still flow. If unstable, leave empty (signature-only gating).
 **Can the app really transact with Xendit now? YES — in Test Mode, on the
 production domain, restricted to UAT emails.** QRIS is the default production channel; the student receives a dynamic QR on the Balance page →
 approved UAT students trigger Xendit's Test Mode simulation from the QR card →
-webhook fires → wallet credits Marks. Real banking apps are not used and **no
-real money moves.** Go-live = switch
+webhook fires → wallet credits Marks. If the sandbox webhook is delayed or
+rejected, approved-user polling reconciles Xendit's authoritative request
+status through the same idempotent credit path. Real banking apps are not used
+and **no real money moves.** Go-live = switch
 `XENDIT_MODE=live` + Live keys + one real small transaction (RUNBOOK
 checklist).
 

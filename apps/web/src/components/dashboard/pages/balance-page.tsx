@@ -259,7 +259,7 @@ export function BalancePage() {
               Checkout is controlled by the server payment configuration. If
               this deployment is using Xendit Test Mode, use an approved UAT
               account: test transactions do not charge real money and Marks are
-              credited only after a verified webhook.
+              credited only after verified Xendit confirmation.
             </Text>
           </div>
           {qrPayload ? (
@@ -308,7 +308,7 @@ export function BalancePage() {
                         {simulatedPurchase.data?.status === "PAID" ||
                         simulatedPurchase.data?.status === "SETTLED"
                           ? "Payment confirmed. Your Marks balance has been updated."
-                          : "Simulation submitted. Waiting for Xendit's webhook…"}
+                          : "Simulation submitted. Waiting for Xendit confirmation…"}
                       </Text>
                     ) : null}
                   </>

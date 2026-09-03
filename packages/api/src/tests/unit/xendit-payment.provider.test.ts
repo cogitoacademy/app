@@ -202,6 +202,64 @@ describe("XenditPaymentProvider (2024-11-11 API)", () => {
     ).rejects.toMatchObject({ code: "SERVICE_UNAVAILABLE" });
   });
 
+  test("getPaymentRequestStatus maps the provider-authoritative result", async () => {
+    const calls: Array<{ url: string; init: RequestInit }> = [];
+    globalThis.fetch = mock(async (url: string | URL, init?: RequestInit) => {
+      calls.push({ url: String(url), init: init ?? {} });
+      return Response.json({
+        payment_request_id: "pr-test-1",
+        latest_payment_id: "py-test-1",
+        reference_id: "xendit:user1:starter",
+        status: "SUCCEEDED",
+      });
+    }) as typeof fetch;
+
+    await expect(
+      provider.getPaymentRequestStatus!("pr-test-1"),
+    ).resolves.toEqual({
+      providerReference: "xendit:user1:starter",
+      providerEventId: "py-test-1",
+      status: "PAID",
+      failureReason: null,
+      receiptUrl: null,
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.url).toBe(
+      "https://api.xendit.co/v3/payment_requests/pr-test-1",
+    );
+    expect(calls[0]!.init.headers).toMatchObject({
+      "api-version": "2024-11-11",
+    });
+  });
+
+  test("maps ACCEPTING_PAYMENTS to a pending local payment", async () => {
+    globalThis.fetch = mock(async () =>
+      Response.json({
+        payment_request_id: "pr-test-accepting",
+        reference_id: "xendit:user1:starter",
+        status: "ACCEPTING_PAYMENTS",
+      }),
+    ) as typeof fetch;
+
+    await expect(
+      provider.getPaymentRequestStatus!("pr-test-accepting"),
+    ).resolves.toMatchObject({
+      providerReference: "xendit:user1:starter",
+      providerEventId: "pr-test-accepting",
+      status: "PENDING",
+    });
+  });
+
+  test("getPaymentRequestStatus rejects provider errors", async () => {
+    globalThis.fetch = mock(
+      async () =>
+        new Response("unavailable", { status: 503, statusText: "Unavailable" }),
+    ) as typeof fetch;
+    await expect(
+      provider.getPaymentRequestStatus!("pr-test-error"),
+    ).rejects.toMatchObject({ code: "SERVICE_UNAVAILABLE" });
+  });
+
   test("createIntent includes customer for e-wallet channels", async () => {
     const calls: Array<{ init: RequestInit }> = [];
     globalThis.fetch = mock((_url: string, init: RequestInit) => {

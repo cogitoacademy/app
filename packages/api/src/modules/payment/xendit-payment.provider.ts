@@ -45,7 +45,7 @@ const PAYMENT_METHOD_CONFIG: Record<
  * the internal PaymentStatus.
  *
  *   SUCCEEDED        -> PAID
- *   REQUIRES_ACTION  -> PENDING (customer action pending)
+ *   ACCEPTING_PAYMENTS/REQUIRES_ACTION -> PENDING (customer action pending)
  *   AUTHORIZED       -> PENDING (capture pending)
  *   CANCELED         -> FAILED
  *   PENDING/FAILED/EXPIRED/PAID/SETTLED/REFUNDED -> unchanged (legacy webhook
@@ -54,6 +54,7 @@ const PAYMENT_METHOD_CONFIG: Record<
 export function mapXenditStatus(status: string): PaymentStatus {
   const map: Record<string, PaymentStatus> = {
     SUCCEEDED: "PAID",
+    ACCEPTING_PAYMENTS: "PENDING",
     REQUIRES_ACTION: "PENDING",
     AUTHORIZED: "PENDING",
     CANCELED: "FAILED",
@@ -252,6 +253,46 @@ export function createXenditPaymentProvider(opts: {
     };
   }
 
+  async function getPaymentRequestStatus(
+    paymentRequestId: string,
+  ): Promise<WebhookPayload> {
+    const res = await xenditCircuitBreaker.execute(() =>
+      retryWithBackoff(
+        () =>
+          fetchWithTimeout(
+            `${XENDIT_API_BASE}/payment_requests/${encodeURIComponent(paymentRequestId)}`,
+            {
+              headers: {
+                "api-version": XENDIT_API_VERSION,
+                authorization: authHeader,
+              },
+            },
+          ),
+        { maxAttempts: 3, retryable: isRetryableProviderError },
+      ),
+    );
+    if (!res.ok) {
+      throw serviceUnavailable(
+        `Payment status error: ${res.status} ${res.statusText}`,
+      );
+    }
+    const json = (await res.json()) as {
+      payment_request_id?: string;
+      latest_payment_id?: string;
+      reference_id?: string;
+      status?: string;
+      failure_code?: string;
+    };
+    return {
+      providerReference: json.reference_id ?? "",
+      providerEventId:
+        json.latest_payment_id ?? json.payment_request_id ?? paymentRequestId,
+      status: mapXenditStatus(json.status ?? ""),
+      failureReason: json.failure_code ?? null,
+      receiptUrl: null,
+    };
+  }
+
   async function verifyWebhook(
     rawBody: string,
     token: string,
@@ -371,5 +412,11 @@ export function createXenditPaymentProvider(opts: {
     return { providerRefundId: json.id };
   }
 
-  return { createIntent, simulatePayment, verifyWebhook, refund };
+  return {
+    createIntent,
+    simulatePayment,
+    getPaymentRequestStatus,
+    verifyWebhook,
+    refund,
+  };
 }

@@ -188,5 +188,27 @@ describe("paymentHandler", () => {
       expect(payment.getPurchase).toHaveBeenCalledWith("pay1", "u1");
       expect(result).toEqual({ id: "pay1", status: "paid" });
     });
+
+    test("reconciles an approved Test Mode purchase before returning it", async () => {
+      const payment = {
+        reconcilePurchase: mock(async () => ({ status: "PAID" })),
+        getPurchase: mock(async () => ({ id: "pay1", status: "PAID" })),
+      };
+      const handler = createPaymentHandler(payment as any, {} as any, {
+        xenditMode: "test",
+        testAllowedEmails: ["qa@cogitoacademy.id"],
+      });
+      const context = {
+        session: { user: { id: "u1", email: "qa@cogitoacademy.id" } },
+      };
+
+      await handler.getPurchase({
+        context: context as any,
+        input: { paymentId: "pay1" },
+      });
+
+      expect(payment.reconcilePurchase).toHaveBeenCalledWith("pay1", "u1");
+      expect(payment.getPurchase).toHaveBeenCalledWith("pay1", "u1");
+    });
   });
 });

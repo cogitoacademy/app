@@ -20,6 +20,13 @@ function makeProvider() {
       status: "PENDING" as const,
       message: "being processed",
     })),
+    getPaymentRequestStatus: mock(async () => ({
+      providerReference: "stub-user1-pkg1",
+      providerEventId: "py-test-1",
+      status: "PAID" as PaymentStatus,
+      receiptUrl: null,
+      failureReason: null,
+    })),
     verifyWebhook: mock(async () => ({
       providerReference: "stub-user1-pkg1",
       providerEventId: "evt_1",
@@ -702,6 +709,143 @@ describe("PaymentService", () => {
 
       await expect(
         service.simulatePurchase("pay1", "user1"),
+      ).rejects.toBeInstanceOf(PaymentProviderError);
+    });
+  });
+
+  describe("reconcilePurchase", () => {
+    test("rejects a payment owned by another user", async () => {
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo: makeRepo({
+          findPaymentById: mock(async () => ({
+            id: "pay1",
+            userId: "user2",
+          })),
+        }),
+        provider: makeProvider() as any,
+        providerName: "xendit",
+      });
+
+      await expect(
+        service.reconcilePurchase("pay1", "user1"),
+      ).rejects.toBeInstanceOf(PaymentNotFoundError);
+    });
+
+    test("does not query Xendit for an already terminal payment", async () => {
+      const provider = makeProvider();
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo: makeRepo({
+          findPaymentById: mock(async () => ({
+            id: "pay1",
+            userId: "user1",
+            status: "PAID",
+          })),
+        }),
+        provider: provider as any,
+        providerName: "xendit",
+      });
+
+      await expect(service.reconcilePurchase("pay1", "user1")).resolves.toEqual(
+        { status: "PAID" },
+      );
+      expect(provider.getPaymentRequestStatus).not.toHaveBeenCalled();
+    });
+
+    test("confirms a provider-authoritative successful payment", async () => {
+      const provider = makeProvider();
+      provider.getPaymentRequestStatus.mockImplementation(async () => ({
+        providerReference: "",
+        providerEventId: "py-test-1",
+        status: "PAID" as PaymentStatus,
+        receiptUrl: null,
+        failureReason: null,
+      }));
+      const record = {
+        id: "pay1",
+        userId: "user1",
+        walletId: "w1",
+        status: "PENDING",
+        providerRequestId: "pr-test-1",
+        providerReference: "stub-user1-pkg1",
+        amountIdr: 100_000,
+        marks: 100,
+      };
+      const repo = makeRepo({
+        findPaymentById: mock(async () => record),
+        findPaymentByProviderReference: mock(async () => record),
+      });
+      const wallet = makeWallet();
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: wallet as any,
+        repo,
+        provider: provider as any,
+        providerName: "xendit",
+      });
+
+      await expect(service.reconcilePurchase("pay1", "user1")).resolves.toEqual(
+        { status: "PAID" },
+      );
+      expect(provider.getPaymentRequestStatus).toHaveBeenCalledWith(
+        "pr-test-1",
+      );
+      expect(wallet.credit).toHaveBeenCalledTimes(1);
+    });
+
+    test("leaves a remotely pending payment unchanged", async () => {
+      const provider = makeProvider();
+      provider.getPaymentRequestStatus.mockImplementation(async () => ({
+        providerReference: "stub-user1-pkg1",
+        providerEventId: "pr-test-1",
+        status: "PENDING" as PaymentStatus,
+      }));
+      const repo = makeRepo({
+        findPaymentById: mock(async () => ({
+          id: "pay1",
+          userId: "user1",
+          status: "PENDING",
+          providerRequestId: "pr-test-1",
+        })),
+      });
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo,
+        provider: provider as any,
+        providerName: "xendit",
+      });
+
+      await expect(service.reconcilePurchase("pay1", "user1")).resolves.toEqual(
+        { status: "PENDING" },
+      );
+    });
+
+    test("wraps provider status lookup failures", async () => {
+      const provider = makeProvider();
+      provider.getPaymentRequestStatus.mockImplementation(async () => {
+        throw new Error("status unavailable");
+      });
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo: makeRepo({
+          findPaymentById: mock(async () => ({
+            id: "pay1",
+            userId: "user1",
+            status: "PENDING",
+            providerRequestId: "pr-test-1",
+          })),
+        }),
+        provider: provider as any,
+        providerName: "xendit",
+      });
+
+      await expect(
+        service.reconcilePurchase("pay1", "user1"),
       ).rejects.toBeInstanceOf(PaymentProviderError);
     });
   });
