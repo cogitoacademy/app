@@ -91,10 +91,15 @@ export function createPaymentHandler(
       context: Context;
       input: GetPurchaseInput;
     }) => {
-      return withDomainMap(
-        () => payment.getPurchase(input.paymentId, context.session!.user.id),
-        mapPaymentError,
-      );
+      return withDomainMap(async () => {
+        if (isApprovedTestAccount(context)) {
+          await payment.reconcilePurchase(
+            input.paymentId,
+            context.session!.user.id,
+          );
+        }
+        return payment.getPurchase(input.paymentId, context.session!.user.id);
+      }, mapPaymentError);
     },
   };
 }

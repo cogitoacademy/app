@@ -681,7 +681,8 @@ chat directory.
 - Payment statuses: `PENDING` → `PAID`/`SETTLED`/`EXPIRED`/`FAILED`/`REFUNDED`
 - Payment/refund notifications are written per the PRD matrix (B6, #46); `PAYMENT_PROVIDER=xendit` requires Xendit credentials and an explicit `XENDIT_MODE` (no silent stub fallback)
 - Xendit selects the actual environment from the API key. In production/staging Test Mode, `XENDIT_TEST_ALLOWED_EMAILS` restricts `payment.createPurchase` to approved UAT accounts; the allowlist is normalized case-insensitively. The default channel is QRIS; its payment request sends channel-specific `qr_string_type=DYNAMIC` plus a 48-hour expiry, and the web client renders the returned `PRESENT_TO_CUSTOMER` QR string.
-- Test QRIS cannot be paid from a real banking app. For an owned pending purchase, `simulatePurchase` calls Xendit's `/v3/payment_requests/{id}/simulate` only in Test Mode and only for an approved UAT account. It never credits Marks directly; the normal authenticated Xendit webhook remains the sole credit path.
+- Test QRIS cannot be paid from a real banking app. For an owned pending purchase, `simulatePurchase` calls Xendit's `/v3/payment_requests/{id}/simulate` only in Test Mode and only for an approved UAT account. It never credits Marks directly; provider-confirmed status must pass through the transactional confirmation service.
+- Test-mode status polling is also a recovery path: `getPurchase` checks Xendit's authoritative payment-request status for approved UAT users. If Xendit reports a terminal status, it delegates to the same transactional/idempotent `confirmFromWebhook` logic, so a missing sandbox webhook cannot leave a completed simulation stuck forever.
 
 ---
 
