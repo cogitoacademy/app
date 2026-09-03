@@ -92,6 +92,17 @@ const ALLOWED_TRANSITIONS: Record<string, readonly string[]> = {
 };
 
 /**
+ * A Test Mode simulation can be retried after Xendit has already completed the
+ * payment. In that case Xendit rejects the now-consumed dynamic QR with this
+ * provider error instead of returning the completed status. The status lookup
+ * below is the safe recovery path; other simulation failures must retain their
+ * original diagnostics.
+ */
+function isInactiveSimulationError(error: unknown): boolean {
+  return String(error).includes("400 INACTIVE_PAYMENT_METHOD");
+}
+
+/**
  * Creates the payment service for purchase intents, webhook confirmation, and purchase lookups.
  *
  * @param deps - the dependency ports (db, wallet, repo, provider, providerName)
@@ -305,6 +316,29 @@ export function createPaymentService(deps: {
         record.amountIdr,
       );
     } catch (error) {
+      if (isInactiveSimulationError(error)) {
+        try {
+          const reconciled = await reconcilePurchase(paymentId, userId);
+          if (
+            reconciled.status === PAYMENT_STATUS.PAID ||
+            reconciled.status === PAYMENT_STATUS.SETTLED
+          ) {
+            // Keep the simulation response contract PENDING. The client starts
+            // its normal getPurchase poll after a successful mutation, which
+            // then observes the reconciled terminal status and refreshes the
+            // wallet. The credit itself is performed by confirmFromWebhook's
+            // idempotent transaction above.
+            return {
+              status: "PENDING" as const,
+              message:
+                "Payment was already completed; confirmation has been reconciled",
+            };
+          }
+        } catch {
+          // Preserve the original inactive-payment diagnostic if the
+          // best-effort status lookup cannot recover the payment.
+        }
+      }
       throw new PaymentProviderError(providerName, error);
     }
   }

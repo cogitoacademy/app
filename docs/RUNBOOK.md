@@ -1075,7 +1075,8 @@ Concurrent modification conflict. The `version` field didn't match. Retry the op
 - `Google Meet API timeout after 30s` — Google Meet circuit breaker is open. Wait 1 minute or reset manually.
 - `Payment provider error` — Xendit circuit breaker is open. Wait 30 seconds or reset manually.
 - `Payment simulation error: 403 REQUEST_FORBIDDEN_ERROR` — verify the production key is a Test Mode secret (`xnd_development_...`) with **Money-in / Payments → Write** permission, while `XENDIT_MODE=test`; then create a fresh purchase.
-- `Payment simulation error: 400 ...` — inspect the Xendit error code/message for amount mismatch, an inactive payment request, or another request validation failure. Do not retry an old payment indefinitely; create a fresh pending intent after correcting the request/configuration.
+- `Payment simulation error: 400 INACTIVE_PAYMENT_METHOD` — the dynamic QR has already been completed, canceled, or expired. On the patched build, retrying once performs an authoritative status reconciliation; if it still fails, use a fresh pending intent rather than retrying the inactive QR indefinitely.
+- `Payment simulation error: 400 ...` — inspect the Xendit error code/message for amount mismatch or another request validation failure. Do not retry an old payment indefinitely; create a fresh pending intent after correcting the request/configuration.
 
 ### Database Connection Errors
 

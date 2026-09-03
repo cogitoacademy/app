@@ -13,6 +13,9 @@ endpoint. Marks are credited only after Xendit reports a successful status.
 Structured Xendit HTTP failures preserve only a bounded status, error code, and
 message so UAT can distinguish a key/permission or request-validation problem
 from a genuine provider outage without exposing credentials.
+When a retry hits Xendit's `INACTIVE_PAYMENT_METHOD` response after a previous
+simulation, the service checks the authoritative payment-request status once
+and reuses the idempotent confirmation path if the payment already succeeded.
 As a sandbox reliability fallback, approved-user status polling reads the
 authoritative Xendit payment-request status and feeds terminal results through
 the same transactional, idempotent confirmation path.

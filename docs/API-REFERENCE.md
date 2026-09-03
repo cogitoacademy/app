@@ -740,6 +740,7 @@ The web tutor profile editor groups education, competition achievements, and exp
 - Output: `{ status: "PENDING", message: string }`
 - Auth: verified student, approved Test Mode email, and ownership of a pending payment with a stored Xendit payment-request id.
 - Provider failures are returned as `PAYMENT_PROVIDER_ERROR` (503). The message preserves a bounded Xendit HTTP status, `error_code`, and diagnostic message when Xendit returns a structured error body; arbitrary upstream/infrastructure errors remain the generic `Payment provider temporarily unavailable` message.
+- If Xendit rejects a retry with `400 INACTIVE_PAYMENT_METHOD`, the server performs one authoritative status lookup. A terminal `PAID`/`SETTLED` result is reconciled through the idempotent confirmation path before the client starts its normal status poll; an unresolved request keeps the provider diagnostic.
 - While an approved Test Mode client polls `payment.getPurchase`, the server reconciles a still-pending local record against Xendit's authoritative `GET /v3/payment_requests/{id}` result. A remote terminal status runs through the same idempotent confirmation service used by webhooks, recovering safely from a delayed or rejected sandbox callback.
 - Test and live webhooks use the same endpoint path, but must be configured in the matching Xendit Dashboard mode and must use that mode's `x-callback-token`.
 
