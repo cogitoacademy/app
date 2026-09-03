@@ -711,6 +711,162 @@ describe("PaymentService", () => {
         service.simulatePurchase("pay1", "user1"),
       ).rejects.toBeInstanceOf(PaymentProviderError);
     });
+
+    test("reconciles an already-completed payment when Xendit reports an inactive QR", async () => {
+      const provider = makeProvider();
+      provider.simulatePayment.mockImplementation(async () => {
+        throw new Error(
+          "Payment simulation error: 400 INACTIVE_PAYMENT_METHOD - Could not pay QR code that is inactive",
+        );
+      });
+      const record = {
+        id: "pay1",
+        userId: "user1",
+        walletId: "w1",
+        status: "PENDING",
+        providerRequestId: "pr-test-1",
+        providerReference: "stub-user1-pkg1",
+        amountIdr: 100_000,
+        marks: 100,
+      };
+      const repo = makeRepo({
+        findPaymentById: mock(async () => record),
+        findPaymentByProviderReference: mock(async () => record),
+      });
+      const wallet = makeWallet();
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: wallet as any,
+        repo,
+        provider: provider as any,
+        providerName: "xendit",
+      });
+
+      await expect(service.simulatePurchase("pay1", "user1")).resolves.toEqual({
+        status: "PENDING",
+        message:
+          "Payment was already completed; confirmation has been reconciled",
+      });
+      expect(provider.getPaymentRequestStatus).toHaveBeenCalledWith(
+        "pr-test-1",
+      );
+      expect(wallet.credit).toHaveBeenCalledTimes(1);
+    });
+
+    test("reconciles an inactive QR that Xendit reports as settled", async () => {
+      const provider = makeProvider();
+      provider.simulatePayment.mockImplementation(async () => {
+        throw new Error(
+          "Payment simulation error: 400 INACTIVE_PAYMENT_METHOD - Could not pay QR code that is inactive",
+        );
+      });
+      provider.getPaymentRequestStatus.mockImplementation(async () => ({
+        providerReference: "stub-user1-pkg1",
+        providerEventId: "py-test-settled",
+        status: "SETTLED" as PaymentStatus,
+      }));
+      const record = {
+        id: "pay1",
+        userId: "user1",
+        walletId: "w1",
+        status: "PENDING",
+        providerRequestId: "pr-test-1",
+        providerReference: "stub-user1-pkg1",
+        amountIdr: 100_000,
+        marks: 100,
+      };
+      const repo = makeRepo({
+        findPaymentById: mock(async () => record),
+        findPaymentByProviderReference: mock(async () => record),
+      });
+      const wallet = makeWallet();
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: wallet as any,
+        repo,
+        provider: provider as any,
+        providerName: "xendit",
+      });
+
+      await expect(service.simulatePurchase("pay1", "user1")).resolves.toEqual({
+        status: "PENDING",
+        message:
+          "Payment was already completed; confirmation has been reconciled",
+      });
+      expect(wallet.credit).toHaveBeenCalledTimes(1);
+    });
+
+    test("preserves the inactive QR error while the authoritative status is pending", async () => {
+      const provider = makeProvider();
+      provider.simulatePayment.mockImplementation(async () => {
+        throw new Error(
+          "Payment simulation error: 400 INACTIVE_PAYMENT_METHOD - Could not pay QR code that is inactive",
+        );
+      });
+      provider.getPaymentRequestStatus.mockImplementation(async () => ({
+        providerReference: "stub-user1-pkg1",
+        providerEventId: "pr-test-1",
+        status: "PENDING" as PaymentStatus,
+      }));
+      const repo = makeRepo({
+        findPaymentById: mock(async () => ({
+          id: "pay1",
+          userId: "user1",
+          status: "PENDING",
+          providerRequestId: "pr-test-1",
+        })),
+      });
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo,
+        provider: provider as any,
+        providerName: "xendit",
+      });
+
+      await expect(
+        service.simulatePurchase("pay1", "user1"),
+      ).rejects.toMatchObject({
+        code: "PAYMENT_PROVIDER_ERROR",
+        message:
+          "Payment simulation error: 400 INACTIVE_PAYMENT_METHOD - Could not pay QR code that is inactive",
+      });
+    });
+
+    test("preserves the inactive QR error when reconciliation is unavailable", async () => {
+      const provider = makeProvider();
+      provider.simulatePayment.mockImplementation(async () => {
+        throw new Error(
+          "Payment simulation error: 400 INACTIVE_PAYMENT_METHOD - Could not pay QR code that is inactive",
+        );
+      });
+      provider.getPaymentRequestStatus.mockImplementation(async () => {
+        throw new Error("status unavailable");
+      });
+      const repo = makeRepo({
+        findPaymentById: mock(async () => ({
+          id: "pay1",
+          userId: "user1",
+          status: "PENDING",
+          providerRequestId: "pr-test-1",
+        })),
+      });
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo,
+        provider: provider as any,
+        providerName: "xendit",
+      });
+
+      await expect(
+        service.simulatePurchase("pay1", "user1"),
+      ).rejects.toMatchObject({
+        code: "PAYMENT_PROVIDER_ERROR",
+        message:
+          "Payment simulation error: 400 INACTIVE_PAYMENT_METHOD - Could not pay QR code that is inactive",
+      });
+    });
   });
 
   describe("reconcilePurchase", () => {

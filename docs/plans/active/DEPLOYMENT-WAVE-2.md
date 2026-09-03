@@ -186,6 +186,10 @@ checklist).
 If a simulation is rejected, the API returns a bounded provider status,
 `error_code`, and message so operators can distinguish a Test Mode key or
 permission mismatch from a malformed/expired payment request.
+If the rejection is `INACTIVE_PAYMENT_METHOD` after an earlier successful
+simulation, the service checks Xendit's authoritative request status once and
+credits through the normal idempotent confirmation path when it is already
+terminal-success.
 
 ---
 
