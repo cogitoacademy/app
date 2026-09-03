@@ -384,6 +384,38 @@ describe("PaymentService", () => {
       expect(provider.createIntent).not.toHaveBeenCalled();
     });
 
+    test("B6: continues when a conflicting row disappears before the re-read", async () => {
+      const provider = makeProvider();
+      const repo = makeRepo({
+        findPackageByCode: mock(async () => ({
+          id: "pkg1",
+          code: "pkg1",
+          isActive: true,
+          priceIdr: 50000,
+          marks: 100,
+        })),
+        findPaymentByProviderReference: mock(async () => null),
+        insertPayment: mock(async () => null),
+      });
+
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo,
+        provider: provider as any,
+        providerName: "stub",
+      });
+
+      const result = await service.createIntent("user1", "w1", "pkg1");
+
+      expect(result.paymentId).toBeDefined();
+      expect(provider.createIntent).toHaveBeenCalledWith({
+        paymentId: result.paymentId,
+        amountIdr: 50000,
+        providerReference: result.providerReference,
+      });
+    });
+
     test("persists a provider request id for a newly created intent", async () => {
       const updatePaymentStatus = mock(async () => {});
       const provider = {
