@@ -75,7 +75,10 @@ export function validateWebhookTimestamp(
   // there is no reliable `Date`/`x-timestamp` header to validate against, so
   // the timestamp check is skipped for xendit (verified against a real
   // sandbox event; revisit if Xendit starts sending a timestamp header).
-  if (provider === "xendit") return;
+  // Midtrans notifications carry no timestamp header either — authenticity is
+  // established by the body `signature_key` (SHA512), so the check is skipped
+  // there too.
+  if (provider === "xendit" || provider === "midtrans") return;
   const timestamp =
     request.headers.get("x-timestamp") ?? request.headers.get("date");
   if (!timestamp) {
@@ -95,6 +98,10 @@ export function paymentsWebhook(app: Elysia) {
     "/webhooks/payments/:provider",
     async ({ request, params, set, server }: ElysiaContext) => {
       const provider = params.provider as string;
+      // Xendit signs via the `x-callback-token` header. Midtrans signs via the
+      // `signature_key` INSIDE the body (SHA512 of order_id+status_code+
+      // gross_amount+signature key) — there is no signature header, so the
+      // header value is left empty and the provider verifies the body.
       const signature =
         provider === "xendit"
           ? (request.headers.get("x-callback-token") ?? "")

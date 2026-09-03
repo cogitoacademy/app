@@ -18,6 +18,8 @@ import { createPaymentRepo } from "./payment.repo";
 import { createStubPaymentProvider } from "./stub-payment.provider";
 import { createXenditPaymentProvider } from "./xendit-payment.provider";
 import type { XenditMode } from "./xendit-payment.provider";
+import { createMidtransPaymentProvider } from "./midtrans-payment.provider";
+import type { MidtransMode } from "./midtrans-payment.provider";
 import type { PaymentService } from "./payment.service";
 import type { PaymentHandler } from "./payment.handler";
 
@@ -56,10 +58,12 @@ export interface PaymentRefundRecordPort {
   ): Promise<unknown>;
 }
 
+export type PaymentProviderName = "xendit" | "midtrans" | "stub";
+
 export function createPaymentModule(deps: {
   db: DbType;
   wallet: PaymentWalletPort;
-  provider: "xendit" | "stub";
+  provider: PaymentProviderName;
   xenditConfig?: {
     secretKey: string;
     webhookToken: string;
@@ -69,6 +73,12 @@ export function createPaymentModule(deps: {
     failureRedirectUrl: string;
     defaultPaymentMethod?: string;
   };
+  midtransConfig?: {
+    serverKey: string;
+    merchantId: string;
+    mode: MidtransMode;
+    webhookSignatureKey?: string;
+  };
   webhookSecret: string;
   notification?: PaymentNotificationPort;
   audit?: PaymentAuditPort;
@@ -76,33 +86,70 @@ export function createPaymentModule(deps: {
   redis?: RedisClient;
 }) {
   const useXendit = deps.provider === "xendit";
+  const useMidtrans = deps.provider === "midtrans";
   if (useXendit && !deps.xenditConfig) {
     throw new Error(
       "PAYMENT_PROVIDER=xendit but Xendit credentials are missing — refusing to silently fall back to the stub provider",
     );
   }
-  if (!useXendit && deps.provider !== "stub") {
+  if (useMidtrans && !deps.midtransConfig) {
+    throw new Error(
+      "PAYMENT_PROVIDER=midtrans but Midtrans credentials are missing — refusing to silently fall back to the stub provider",
+    );
+  }
+  if (!useXendit && !useMidtrans && deps.provider !== "stub") {
     throw new Error(`Unknown payment provider: ${deps.provider}`);
   }
 
-  const provider: PaymentProvider = useXendit
-    ? createXenditPaymentProvider({
-        secretKey: deps.xenditConfig!.secretKey,
-        webhookToken: deps.xenditConfig!.webhookToken,
-        mode: deps.xenditConfig!.mode,
-        successRedirectUrl: deps.xenditConfig!.successRedirectUrl,
-        failureRedirectUrl: deps.xenditConfig!.failureRedirectUrl,
-        defaultPaymentMethod: deps.xenditConfig!.defaultPaymentMethod as
-          | "ewallet_ovo"
-          | "qris"
-          | "va_bca"
-          | undefined,
-        redis: deps.redis,
-      })
-    : createStubPaymentProvider(deps.webhookSecret);
-  const providerName = useXendit ? "xendit" : "stub";
+  let provider: PaymentProvider;
+  let providerName: PaymentProviderName;
+  let providerMode: "test" | "live" | undefined;
+  let testAllowedEmails: readonly string[] | undefined;
+  let simulationEnabled = false;
 
   const repo = createPaymentRepo(deps.db);
+
+  if (useXendit) {
+    provider = createXenditPaymentProvider({
+      secretKey: deps.xenditConfig!.secretKey,
+      webhookToken: deps.xenditConfig!.webhookToken,
+      mode: deps.xenditConfig!.mode,
+      successRedirectUrl: deps.xenditConfig!.successRedirectUrl,
+      failureRedirectUrl: deps.xenditConfig!.failureRedirectUrl,
+      defaultPaymentMethod: deps.xenditConfig!.defaultPaymentMethod as
+        | "ewallet_ovo"
+        | "qris"
+        | "va_bca"
+        | undefined,
+      redis: deps.redis,
+    });
+    providerName = "xendit";
+    providerMode = deps.xenditConfig!.mode;
+    testAllowedEmails = deps.xenditConfig!.testAllowedEmails;
+    simulationEnabled = true;
+  } else if (useMidtrans) {
+    provider = createMidtransPaymentProvider({
+      serverKey: deps.midtransConfig!.serverKey,
+      merchantId: deps.midtransConfig!.merchantId,
+      mode: deps.midtransConfig!.mode,
+      webhookSignatureKey: deps.midtransConfig!.webhookSignatureKey,
+      redis: deps.redis,
+      // Midtrans order_id is the payment UUID; resolve it back to the stored
+      // provider reference so webhook/status payloads match the payment row.
+      resolvePayment: async (paymentId) => {
+        const record = await repo.findPaymentById(paymentId);
+        return record ? { providerReference: record.providerReference } : null;
+      },
+    });
+    providerName = "midtrans";
+    providerMode = deps.midtransConfig!.mode;
+    // Midtrans sandbox has no simulation endpoint; test payments use the
+    // sandbox test cards on the Snap page. simulationEnabled stays false.
+  } else {
+    provider = createStubPaymentProvider(deps.webhookSecret);
+    providerName = "stub";
+  }
+
   const service = createPaymentService({
     db: deps.db,
     wallet: deps.wallet,
@@ -114,10 +161,9 @@ export function createPaymentModule(deps: {
     refundRecord: deps.refundRecord,
   });
   const handler = createPaymentHandler(service, deps.wallet, {
-    xenditMode: useXendit ? deps.xenditConfig!.mode : undefined,
-    testAllowedEmails: useXendit
-      ? deps.xenditConfig!.testAllowedEmails
-      : undefined,
+    providerMode,
+    testAllowedEmails,
+    simulationEnabled,
   });
   return { service, handler };
 }

@@ -80,14 +80,24 @@ const port = env.PORT;
 const { services } = await import("@cogito-app/api/services");
 
 // Xendit Test/Live is selected by the API key, while XENDIT_MODE records the
-// intended deployment mode and drives the production UAT allowlist. Log only
-// the non-secret mode so operators can verify a Coolify rollout safely.
+// intended deployment mode and drives the production UAT allowlist. Midtrans
+// Sandbox/Production is likewise selected by the Server Key, with MIDTRANS_MODE
+// as the explicit deployment assertion. Log only the non-secret mode so
+// operators can verify a Coolify rollout safely.
 if (env.PAYMENT_PROVIDER === "xendit") {
   log({
     level: "info",
     action: "payment_provider_configured",
     provider: "xendit",
     xenditMode: env.XENDIT_MODE,
+  });
+}
+if (env.PAYMENT_PROVIDER === "midtrans") {
+  log({
+    level: "info",
+    action: "payment_provider_configured",
+    provider: "midtrans",
+    midtransMode: env.MIDTRANS_MODE,
   });
 }
 

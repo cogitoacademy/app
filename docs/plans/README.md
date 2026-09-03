@@ -55,6 +55,7 @@
 | [ACHIEVEMENT-STUDENT-REVIEW-UX.md](completed/ACHIEVEMENT-STUDENT-REVIEW-UX.md) | `f/client-revisions` | **Completed locally 2026-09-02** — clearer student achievement entry, admin-only public documentation, and audited versioned correction flow |
 | [TUTOR-TERMS-ONBOARDING.md](completed/TUTOR-TERMS-ONBOARDING.md) | working tree | **Completed locally 2026-09-02** — bilingual Tutor Terms of Service modal and first-submit-only consent persistence |
 | [OPS-VISIBILITY-WAVE.md](completed/OPS-VISIBILITY-WAVE.md) | main (merged #179) | **Merged #179 (2026-09-03)** — FAILURES.md guide, circuit breakers in `/health`, DLQ retention, ops.sh DB-name fix + `cb`, pre-migrate snapshot pruning, vault-triggered infra-apply, Kuma wiring docs, CD `COOLIFY_API_BASE_URL` fix; deployed + sha-verified |
+| [MIDTRANS-MIGRATION.md](../MIDTRANS-MIGRATION.md) | `wave/midtrans-migration` | **Implemented 2026-09-03** — Midtrans Snap provider behind the `PaymentProvider` port (env schema + services wiring + webhook route + tests + operator guide); Xendit kept as default/rollback; operator cutover pending |
 
 ## Archive (superseded / historical)
 

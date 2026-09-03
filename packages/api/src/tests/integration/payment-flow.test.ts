@@ -20,6 +20,7 @@ import { services } from "../../services";
 import { createTestUser } from "../helpers/factories";
 import { resetDatabase } from "../helpers/test-client";
 import { createXenditPaymentProvider } from "../../modules/payment/xendit-payment.provider";
+import { createMidtransPaymentProvider } from "../../modules/payment/midtrans-payment.provider";
 import { createPaymentService } from "../../modules/payment/payment.service";
 import { createPaymentRepo } from "../../modules/payment/payment.repo";
 import { createWalletRepo } from "../../modules/wallet/wallet.repo";
@@ -553,6 +554,172 @@ describe("PaymentService", () => {
         .from(ledgerEntry)
         .where(eq(ledgerEntry.walletId, walletRow.id));
       expect(entries.length).toBe(1);
+    });
+  });
+
+  const midtransProvider = createMidtransPaymentProvider({
+    serverKey: "SB-Mid-server-test",
+    merchantId: "G123456789",
+    mode: "test",
+    resolvePayment: async (paymentId) => {
+      const [record] = await db
+        .select()
+        .from(paymentRecord)
+        .where(eq(paymentRecord.id, paymentId))
+        .limit(1);
+      return record ? { providerReference: record.providerReference } : null;
+    },
+  });
+
+  const midtransWallet = createWalletService(createWalletRepo(), db);
+  const midtransPayment = createPaymentService({
+    db,
+    wallet: midtransWallet,
+    repo: createPaymentRepo(db),
+    provider: midtransProvider,
+    providerName: "midtrans",
+  });
+
+  describe("PaymentService (Midtrans provider)", () => {
+    let originalFetch: typeof globalThis.fetch;
+
+    beforeAll(async () => {
+      await resetDatabase();
+    });
+
+    beforeEach(() => {
+      originalFetch = globalThis.fetch;
+      globalThis.fetch = mock(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              token: "66e4fa55-fdac-4ef9-91b5-733b97d1b862",
+              redirect_url:
+                "https://app.sandbox.midtrans.com/snap/v2/vtweb/66e4fa55-fdac-4ef9-91b5-733b97d1b862",
+            }),
+            { status: 201, headers: { "content-type": "application/json" } },
+          ),
+        ),
+      ) as never;
+    });
+
+    afterEach(() => {
+      globalThis.fetch = originalFetch;
+    });
+
+    test("createIntent creates PENDING record with midtrans provider reference and Snap redirect URL", async () => {
+      const user = await createTestUser("mc01@cogito.test");
+      const walletRow = await midtransWallet.getOrCreate(user.id);
+
+      const intent = await midtransPayment.createIntent(
+        user.id,
+        walletRow.id,
+        "starter",
+      );
+      expect(intent.providerReference).toContain("midtrans:");
+      expect(intent.checkoutUrl).toContain("app.sandbox.midtrans.com");
+
+      const [record] = await db
+        .select()
+        .from(paymentRecord)
+        .where(eq(paymentRecord.id, intent.paymentId))
+        .limit(1);
+      expect(record!.provider).toBe("midtrans");
+      expect(record!.status).toBe("PENDING");
+      // The provider request id is the payment UUID (Snap order_id).
+      expect(record!.providerRequestId).toBe(intent.paymentId);
+    });
+
+    test("SETTLED webhook credits wallet once (idempotent)", async () => {
+      const user = await createTestUser("mc02@cogito.test");
+      const walletRow = await midtransWallet.getOrCreate(user.id);
+
+      const intent = await midtransPayment.createIntent(
+        user.id,
+        walletRow.id,
+        "starter",
+      );
+
+      await midtransPayment.confirmFromWebhook({
+        provider: "midtrans",
+        providerReference: intent.providerReference,
+        providerEventId: "evt_mc02",
+        status: "SETTLED",
+      });
+      await midtransPayment.confirmFromWebhook({
+        provider: "midtrans",
+        providerReference: intent.providerReference,
+        providerEventId: "evt_mc02",
+        status: "SETTLED",
+      });
+
+      const w = await midtransWallet.getByUserId(db, user.id);
+      expect(w!.totalBalance).toBe(50);
+
+      const entries = await db
+        .select()
+        .from(ledgerEntry)
+        .where(eq(ledgerEntry.walletId, walletRow.id));
+      expect(entries.length).toBe(1);
+    });
+
+    test("EXPIRED webhook does not credit", async () => {
+      const user = await createTestUser("mc03@cogito.test");
+      const walletRow = await midtransWallet.getOrCreate(user.id);
+
+      const intent = await midtransPayment.createIntent(
+        user.id,
+        walletRow.id,
+        "starter",
+      );
+
+      await midtransPayment.confirmFromWebhook({
+        provider: "midtrans",
+        providerReference: intent.providerReference,
+        providerEventId: "evt_mc03",
+        status: "EXPIRED",
+      });
+
+      const w = await midtransWallet.getByUserId(db, user.id);
+      expect(w!.totalBalance).toBe(0);
+
+      const [record] = await db
+        .select()
+        .from(paymentRecord)
+        .where(eq(paymentRecord.id, intent.paymentId))
+        .limit(1);
+      expect(record!.status).toBe("EXPIRED");
+    });
+
+    test("reconcilePurchase resolves the stored provider reference from the order_id", async () => {
+      const user = await createTestUser("mc04@cogito.test");
+      const walletRow = await midtransWallet.getOrCreate(user.id);
+
+      const intent = await midtransPayment.createIntent(
+        user.id,
+        walletRow.id,
+        "starter",
+      );
+
+      globalThis.fetch = mock(() =>
+        Promise.resolve(
+          Response.json({
+            transaction_status: "settlement",
+            transaction_id: "txn_mc04",
+            order_id: intent.paymentId,
+            fraud_status: "accept",
+          }),
+        ),
+      ) as never;
+
+      const reconciled = await midtransPayment.reconcilePurchase(
+        intent.paymentId,
+        user.id,
+      );
+      expect(reconciled.status).toBe("SETTLED");
+
+      const w = await midtransWallet.getByUserId(db, user.id);
+      expect(w!.totalBalance).toBe(50);
     });
   });
 });

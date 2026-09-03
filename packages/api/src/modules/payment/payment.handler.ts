@@ -13,7 +13,6 @@ import type {
 } from "./payment.types";
 import type { PaymentService } from "./payment.service";
 import type { WalletSnapshot } from "../wallet/wallet.service";
-import type { XenditMode } from "./xendit-payment.provider";
 
 interface PaymentHandlerWalletPort {
   getOrCreate(userId: string): Promise<WalletSnapshot>;
@@ -29,12 +28,23 @@ export function createPaymentHandler(
   payment: PaymentService,
   wallet: PaymentHandlerWalletPort,
   config: {
-    xenditMode?: XenditMode;
+    /**
+     * The active provider's environment mode ("test" for Xendit Test Mode /
+     * Midtrans Sandbox, "live" for the real environment). Drives the Test Mode
+     * purchase restriction and the `canSimulate` flag.
+     */
+    providerMode?: "test" | "live";
     testAllowedEmails?: readonly string[];
+    /**
+     * Whether the active provider exposes a Test Mode simulation endpoint
+     * (Xendit does; Midtrans sandbox does not — test payments use the sandbox
+     * test cards on the Snap page).
+     */
+    simulationEnabled?: boolean;
   } = {},
 ) {
   function isApprovedTestAccount(context: Context) {
-    if (config.xenditMode !== "test") return false;
+    if (config.providerMode !== "test") return false;
     const email = context.session!.user.email.trim().toLowerCase();
     return Boolean(
       config.testAllowedEmails?.length &&
@@ -51,7 +61,7 @@ export function createPaymentHandler(
       input: CreatePurchaseInput;
     }) => {
       return withDomainMap(async () => {
-        if (config.xenditMode === "test") {
+        if (config.providerMode === "test") {
           if (!isApprovedTestAccount(context)) {
             throw new PaymentTestModeRestrictedError();
           }
@@ -62,7 +72,11 @@ export function createPaymentHandler(
           w.id,
           input.packageCode,
         );
-        return { ...purchase, canSimulate: isApprovedTestAccount(context) };
+        return {
+          ...purchase,
+          canSimulate:
+            config.simulationEnabled === true && isApprovedTestAccount(context),
+        };
       }, mapPaymentError);
     },
 
@@ -74,7 +88,10 @@ export function createPaymentHandler(
       input: SimulatePurchaseInput;
     }) => {
       return withDomainMap(async () => {
-        if (!isApprovedTestAccount(context)) {
+        if (
+          config.simulationEnabled !== true ||
+          !isApprovedTestAccount(context)
+        ) {
           throw new PaymentSimulationUnavailableError();
         }
         return payment.simulatePurchase(

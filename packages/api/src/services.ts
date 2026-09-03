@@ -30,6 +30,7 @@ import { createUploadModule } from "./modules/upload";
 import { createContactModule } from "./modules/contact";
 import { createStorage } from "./lib/storage";
 import type { XenditMode } from "./modules/payment/xendit-payment.provider";
+import type { MidtransMode } from "./modules/payment/midtrans-payment.provider";
 
 import type { AuditPort } from "./modules/audit/audit.service";
 import type { PricingPort } from "./modules/pricing/pricing.service";
@@ -196,6 +197,32 @@ export function resolveXenditConfig(input: XenditConfigInput) {
   };
 }
 
+export interface MidtransConfigInput {
+  provider: string;
+  serverKey?: string;
+  merchantId?: string;
+  mode?: MidtransMode;
+  webhookSignatureKey?: string;
+}
+
+export function resolveMidtransConfig(input: MidtransConfigInput) {
+  if (
+    input.provider !== "midtrans" ||
+    !input.serverKey ||
+    !input.merchantId ||
+    !input.mode
+  ) {
+    return undefined;
+  }
+
+  return {
+    serverKey: input.serverKey,
+    merchantId: input.merchantId,
+    mode: input.mode,
+    webhookSignatureKey: input.webhookSignatureKey,
+  };
+}
+
 export function createProviderRefundDelegate(provider: {
   refund(
     paymentRequestId: string,
@@ -336,6 +363,13 @@ function createServices() {
       successRedirectUrl: env.XENDIT_SUCCESS_REDIRECT_URL,
       failureRedirectUrl: env.XENDIT_FAILURE_REDIRECT_URL,
       defaultPaymentMethod: env.XENDIT_DEFAULT_PAYMENT_METHOD,
+    }),
+    midtransConfig: resolveMidtransConfig({
+      provider: env.PAYMENT_PROVIDER,
+      serverKey: env.MIDTRANS_SERVER_KEY,
+      merchantId: env.MIDTRANS_MERCHANT_ID,
+      mode: env.MIDTRANS_MODE,
+      webhookSignatureKey: env.MIDTRANS_WEBHOOK_SIGNATURE_KEY,
     }),
     webhookSecret: env.PAYMENT_WEBHOOK_SECRET,
     notification: notification.service,

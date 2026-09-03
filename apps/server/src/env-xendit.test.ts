@@ -53,6 +53,33 @@ describe("server env schema", () => {
     expect(() => serverEnvSchema.parse(validEnv)).not.toThrow();
   });
 
+  test("PAYMENT_PROVIDER=midtrans requires Midtrans credentials", () => {
+    const base = { ...validEnv, PAYMENT_PROVIDER: "midtrans" };
+    expect(() => serverEnvSchema.parse(base)).toThrow();
+    expect(() =>
+      serverEnvSchema.parse({
+        ...base,
+        MIDTRANS_SERVER_KEY: "SB-Mid-server-test",
+        MIDTRANS_CLIENT_KEY: "SB-Mid-client-test",
+        MIDTRANS_MERCHANT_ID: "G123456789",
+        MIDTRANS_MODE: "test",
+      }),
+    ).not.toThrow();
+  });
+
+  test("PAYMENT_PROVIDER=midtrans rejects a partial credential set", () => {
+    const base = { ...validEnv, PAYMENT_PROVIDER: "midtrans" };
+    const err = serverEnvSchema.safeParse({
+      ...base,
+      MIDTRANS_SERVER_KEY: "SB-Mid-server-test",
+    });
+    expect(err.success).toBe(false);
+    const paths = (err.error?.issues ?? []).map((i) => i.path.join("."));
+    expect(paths).toContain("MIDTRANS_CLIENT_KEY");
+    expect(paths).toContain("MIDTRANS_MERCHANT_ID");
+    expect(paths).toContain("MIDTRANS_MODE");
+  });
+
   test("P4.1: NODE_ENV=production requires RESEND_API_KEY and a non-default EMAIL_FROM", () => {
     const prod = {
       ...validEnv,
