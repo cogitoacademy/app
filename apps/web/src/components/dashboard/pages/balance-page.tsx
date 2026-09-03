@@ -129,7 +129,6 @@ export function BalancePage() {
     ) {
       return;
     }
-    setQrPayload(null);
     void queryClient.invalidateQueries({
       queryKey: orpc.wallet.get.queryKey(),
     });
