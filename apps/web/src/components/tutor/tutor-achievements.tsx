@@ -20,6 +20,7 @@ import { NumberField } from "@cogito-app/ui/components/selia/number-field";
 import { Text } from "@cogito-app/ui/components/selia/text";
 
 import { TutorTextDraftInput } from "./tutor-text-draft-input";
+import type { TutorExperienceEntry } from "./tutor-experiences";
 
 export type TutorEducationEntry = {
   university: string;
@@ -141,6 +142,9 @@ function parseAwardTitles(value: string) {
 type TutorAchievementsDisplayProps = {
   education?: readonly TutorEducationEntry[] | null;
   competitionAchievements?: readonly TutorCompetitionAchievement[] | null;
+  experienceEntries?: readonly TutorExperienceEntry[] | null;
+  legacyAchievementText?: string | null;
+  legacyExperienceText?: string | null;
   emptyMessage?: string;
   className?: string;
   idPrefix?: string;
@@ -149,14 +153,24 @@ type TutorAchievementsDisplayProps = {
 export function TutorAchievementsDisplay({
   education,
   competitionAchievements,
-  emptyMessage = "No education or competition achievements added yet.",
+  experienceEntries,
+  legacyAchievementText,
+  legacyExperienceText,
+  emptyMessage = "No education, achievements, or experiences added yet.",
   className,
   idPrefix = "tutor-achievements",
 }: TutorAchievementsDisplayProps) {
   const educationEntries = education ?? [];
   const competitionEntries = competitionAchievements ?? [];
+  const experienceEntriesList = experienceEntries ?? [];
+  const legacyAchievement = legacyAchievementText?.trim() ?? "";
+  const legacyExperience = legacyExperienceText?.trim() ?? "";
   const hasEntries =
-    educationEntries.length > 0 || competitionEntries.length > 0;
+    educationEntries.length > 0 ||
+    competitionEntries.length > 0 ||
+    experienceEntriesList.length > 0 ||
+    legacyAchievement.length > 0 ||
+    legacyExperience.length > 0;
   const educationRows = getDisplayRows(
     educationEntries,
     (entry) => `${entry.university}-${entry.degree}`,
@@ -165,6 +179,11 @@ export function TutorAchievementsDisplay({
     competitionEntries,
     (entry) =>
       `${entry.competitionName}-${entry.year}-${entry.awards.join(",")}`,
+  );
+  const experienceRows = getDisplayRows(
+    experienceEntriesList,
+    (entry) =>
+      `${entry.role}-${entry.organization}-${entry.startYear}-${entry.endYear}-${entry.description}`,
   );
 
   if (!hasEntries) {
@@ -208,7 +227,7 @@ export function TutorAchievementsDisplay({
             id={`${idPrefix}-competition-achievements-heading`}
             size="sm"
           >
-            Competition achievements
+            Achievements
           </Heading>
           <ul className="mt-3 flex list-none flex-col gap-4 p-0">
             {competitionRows.map(({ entry, key }) => (
@@ -227,6 +246,54 @@ export function TutorAchievementsDisplay({
               </li>
             ))}
           </ul>
+        </section>
+      ) : null}
+
+      {competitionEntries.length === 0 && legacyAchievement ? (
+        <section aria-labelledby={`${idPrefix}-legacy-achievements-heading`}>
+          <Heading id={`${idPrefix}-legacy-achievements-heading`} size="sm">
+            Achievements
+          </Heading>
+          <Text className="mt-3 whitespace-pre-line text-muted">
+            {legacyAchievement}
+          </Text>
+        </section>
+      ) : null}
+
+      {experienceEntriesList.length > 0 ? (
+        <section aria-labelledby={`${idPrefix}-experiences-heading`}>
+          <Heading id={`${idPrefix}-experiences-heading`} size="sm">
+            Experiences
+          </Heading>
+          <ul className="mt-3 flex list-none flex-col gap-4 p-0">
+            {experienceRows.map(({ entry, key }) => (
+              <li key={key} className="flex items-start gap-2.5">
+                <span aria-hidden="true" className="mt-0.5 text-muted">
+                  •
+                </span>
+                <div className="min-w-0">
+                  <Text className="font-semibold leading-snug">
+                    {entry.role} · {entry.organization}
+                  </Text>
+                  <Text className="mt-0.5 text-sm text-muted">
+                    {entry.startYear}–{entry.endYear ?? "Present"}
+                  </Text>
+                  <Text className="mt-1 whitespace-pre-line text-muted">
+                    {entry.description}
+                  </Text>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : legacyExperience ? (
+        <section aria-labelledby={`${idPrefix}-legacy-experiences-heading`}>
+          <Heading id={`${idPrefix}-legacy-experiences-heading`} size="sm">
+            Experiences
+          </Heading>
+          <Text className="mt-3 whitespace-pre-line text-muted">
+            {legacyExperience}
+          </Text>
         </section>
       ) : null}
     </div>

@@ -151,6 +151,17 @@ identity and modality lead, the bio gets two lines, specialization labels omit
 the redundant category prefix, and pricing occupies a separated footer with a
 Marks prefix and profile chevron. Desktop keeps the horizontal summary.
 
+### Tutor discovery profile presentation follow-up (2026-09-04)
+
+The student tutor drawer now uses a full-width 300px image hero with
+top-aligned cover cropping, a bottom gradient, close control, and overlaid
+specialization badges. Education, achievements, and experiences render in one
+combined **Achievements & experience** panel, with legacy text fallbacks for
+older profiles. Desktop tutor cards progressively reveal one, two, or three
+natural-width child specialization labels without repeating the parent
+category by breakpoint while keeping the `From [Marks icon] #` price treatment
+on one line. This is presentation-only; discovery contracts remain unchanged.
+
 ### Competition Calendar parity follow-up (2026-08-23)
 
 The authenticated calendar now carries the full read-only interaction model from `cogito-acad`: a responsive month grid with multi-day spans and overflow popup, a 30-day agenda view with rich event cards, period navigation, `M`/`A` keyboard shortcuts, and a responsive details modal with metadata and external actions. The app intentionally keeps its own Selia components, design tokens, Tabler icon set, and English-only copy; Sanity remains the source of truth and the API contract is unchanged.
@@ -910,6 +921,22 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
   Base UI's available viewport width so tutor discovery filters remain fully
   visible at the 320 px CSS minimum. No RPC, schema, persistence, or URL
   contract changed.
+
+- v1.71 (2026-09-04): Tuned desktop tutor-card specialization metadata to use
+  natural-width child labels without a repeated parent category while keeping
+  breakpoint-aware badge counts and the starting-price block on one line, and
+  restored the prior hover-only card interaction without translating the card
+  or adding a pressed-scale effect. No RPC, schema, or persistence contract changed.
+
+- v1.70 (2026-09-04): Fixed Knowledge Bank category labels in the filter
+  dropdown and resource cards by mapping known Sanity slugs and title-casing
+  unknown hyphenated/underscored slugs; raw category values remain unchanged
+  for filtering. No RPC or persistence contract changed.
+
+- v1.69 (2026-09-04): Updated student tutor discovery presentation with a
+  public-profile-style image hero, combined education/achievement/experience
+  drawer content, and breakpoint-aware single-line desktop specialization
+  metadata. No RPC, schema, or persistence contract changed.
 
 - v1.67 (2026-09-04): Moved the transfer-fee policy copy behind the payout card’s contextual `InfoPreview` trigger, keeping the fee and estimated payout values visible while reducing default card density. No RPC, schema, or persistence contract changed.
 

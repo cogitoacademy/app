@@ -31,6 +31,19 @@ category and specialization options inside the available viewport when
 multiple values are selected. This is frontend-only presentation behavior; no
 RPC, schema, persistence, or operational contract changed.
 
+## Tutor discovery profile presentation (2026-09-04)
+
+The student tutor drawer mirrors the public tutor profile treatment with a
+full-width 300px hero using the published profile image, top-aligned cover
+cropping, a bottom gradient, a close affordance, and specialization badges
+overlaid at the bottom. Education, achievements, and experiences render inside
+one combined **Achievements & experience** panel, while legacy achievement and
+experience text remains a fallback for older profiles. Tutor cards keep their
+desktop metadata on one line with natural-width specialization labels that do
+not repeat the parent category, reveal one, two, or three badges at
+progressively wider breakpoints, and retain a `From [Marks icon] #` price
+label; no RPC, schema, or persistence contract changed.
+
 ## Student dashboard balance widget (2026-09-04)
 
 The student dashboard replaces its standalone Knowledge Bank promo card with a
@@ -377,11 +390,11 @@ safe display identity; meeting attendee email arrays remain server-only.
 
 ## Authenticated editorial content
 
-Competition Calendar and Knowledge Bank content are now delivered inside the authenticated app. Sanity remains the editorial source of truth; content is not duplicated into PostgreSQL. The API uses a server-side Sanity client with the `published` perspective and projects English values from the academy's bilingual competition fields. The app UI is English-only.
+Competition Calendar and Knowledge Bank content are now delivered inside the authenticated app. Sanity remains the editorial source of truth; content is not duplicated into PostgreSQL. The API uses a server-side Sanity client with the `published` perspective and projects English values from the academy's bilingual competition fields. The app UI is English-only. Knowledge Bank category slugs are mapped to known labels or title-cased when rendered, while their raw values remain the filter keys.
 
 - `content.listCompetitions` is protected for every authenticated role and powers `/_app/calendar`.
 - The authenticated calendar keeps the academy's full read-only interaction model: month view with multi-day event spans and overflow popup, 30-day agenda view, keyboard shortcuts (`M`/`A`), period navigation, and a responsive event-details modal. Its colors, controls, and icons use the app's Selia design system; the academy's bilingual copy is not carried into the English-only app. The calendar route uses a contained viewport shell: the page heading and calendar toolbar stay in place while the calendar body owns vertical scrolling, and the month grid owns horizontal scrolling. A month with no events still renders the normal calendar grid so users can navigate dates; only the page-level no-competition state and event-free agenda period use empty-state messaging.
-- `content.listStudentResources` powers the authenticated `/knowledge-bank` route for students, tutors, and admins. Students receive resources only after `wallet.knowledgeBankEligible` confirms the existing 35-Mark total-balance threshold (held Marks count); tutors and admins bypass that wallet threshold.
+- `content.listStudentResources` powers the authenticated `/knowledge-bank` route for students, tutors, and admins. Students receive resources only after `wallet.knowledgeBankEligible` confirms the existing 35-Mark total-balance threshold (held Marks count); tutors and admins bypass that wallet threshold. Resource category slugs are presented as readable labels in the UI without changing the API values used for filtering.
 - Knowledge Bank list responses never expose Sanity asset URLs. `GET /content/knowledge-bank/:resourceId/file` rechecks the student/tutor/admin role and wallet threshold, with the threshold bypassed for tutors and admins, fetches the published Sanity asset server-side, and streams it with private/no-store cache headers. The proxy is hardened (`apps/server/src/content-proxy.ts`): host allowlist (`cdn.sanity.io` / `*.sanity.io` — anything else is a 502 before any fetch), a 10s `AbortController` timeout, and a 5MB cap enforced on `content-length` and on the streamed body; the route is rate-limited 30/min per IP (`content` kind, `rate-limit-paths.ts`).
 - The academy landing site remains bilingual. Its calendar and Knowledge Bank navigation uses app-login CTAs with an internal redirect target; the old localized URLs remain compatibility redirects rather than public content pages.
 
@@ -697,9 +710,9 @@ The tutor `/profile` editor presents education, competition achievements, and ex
 - `listSubjects` (public — the seven active competition categories with 33 selectable specializations)
 - `listPublished`, `getProfile` (student-only; supports single or multi-value `categoryId`/`subjectId` filters via normalized specialization joins; a missing match returns an empty list)
 - Shared Selia controls keep category/specialization IDs and modality values for query inputs while rendering labels; tutor onboarding shows all competition categories with checkboxes, while the tutor list allows multiple categories and specializations, with empty arrays meaning “All”. Tutor discovery keeps search visible and places category, specialization, and modality controls in a collapsed-by-default filter panel; its trigger retains an active-selection count when the panel is closed. The panel expands with a short height/fade transition, rotates its chevron, remains outside keyboard navigation while closed, and disables motion when reduced motion is requested. Multi-select values truncate only the leading label while keeping the `+N more` chip and its ring visible. Search and filter changes debounce `listPublished` by 300 ms so rapid typing or multi-select toggles coalesce into one request.
-- On mobile, tutor discovery cards use a compact profile composition: a 56-pixel avatar and identity header, two-line bio, short specialization badges, and a separated price footer with the shared Marks prefix plus a chevron. Desktop retains the denser horizontal summary. The whole card remains the profile trigger and uses a reduced-motion-safe pressed state.
+- On mobile, tutor discovery cards use a compact profile composition: a 56-pixel avatar and identity header, two-line bio, short specialization badges, and a separated price footer with the shared Marks prefix plus a chevron. Desktop retains the denser horizontal summary, uses natural-width child specialization labels without a repeated parent category, keeps its metadata on one line, and progressively reveals additional specialization badges at wider breakpoints while preserving the `From [Marks icon] #` price label. The whole card remains the profile trigger with a smooth hover-shadow treatment and no translate or pressed-scale effect.
 - The student-facing tutor drawer renders available pricing maps as one group-size matrix with separate Online and Offline Marks columns, prefixing populated price cells with the Cogito Marks icon. This is presentation-only; the discovery response and pricing contracts remain unchanged.
-- The student-facing tutor drawer opens as a swipe-down bottom sheet below the `sm` breakpoint and as a right-side drawer at `sm` and above. It keeps its header and booking footer outside the profile body's single vertical scroll container; the body may overscroll locally without moving those fixed regions, so long structured profiles remain reachable on short viewports. This is presentation-only; the discovery response and pricing contracts remain unchanged.
+- The student-facing tutor drawer opens as a swipe-down bottom sheet below the `sm` breakpoint and as a right-side drawer at `sm` and above. It keeps its 300px image hero and booking footer outside the profile body's single vertical scroll container; the body may overscroll locally without moving those fixed regions, so long structured profiles remain reachable on short viewports. Education, achievements, and experiences share one combined profile-highlights panel with legacy text fallbacks. This is presentation-only; the discovery response and pricing contracts remain unchanged.
 
 ### Invite Module (public + protected)
 

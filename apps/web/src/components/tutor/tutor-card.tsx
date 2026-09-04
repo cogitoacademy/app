@@ -100,7 +100,7 @@ export function TutorSummary({
 }) {
   const tutorName = tutor.user?.name ?? "Tutor";
   const startingPrice = getStartingPrice(tutor);
-  const subjectLabels = getTutorSubjectLabels(tutor, true);
+  const subjectLabels = getTutorSubjectLabels(tutor, false);
 
   return (
     <Item className="items-center border-0 bg-transparent p-0!" size="lg">
@@ -125,20 +125,64 @@ export function TutorSummary({
         <ItemDescription className="line-clamp-1">
           {tutor.shortBio ?? "A verified Cogito tutor ready to help you learn."}
         </ItemDescription>
-        <ItemMeta className="flex flex-wrap gap-1.5">
-          {subjectLabels.slice(0, 1).map((subject) => (
-            <Badge key={subject.id} variant="tertiary" size="sm">
-              {subject.label}
+        <ItemMeta className="flex w-fit max-w-full min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden">
+          {subjectLabels[0] ? (
+            <Badge
+              variant="tertiary"
+              size="sm"
+              className="min-w-0 max-w-[12rem] shrink truncate whitespace-nowrap"
+            >
+              {subjectLabels[0].label}
             </Badge>
-          ))}
-          {subjectLabels.length > 1 && (
-            <Badge variant="secondary" size="sm">
+          ) : null}
+          {subjectLabels[1] ? (
+            <Badge
+              variant="tertiary"
+              size="sm"
+              className="hidden min-w-0 max-w-[12rem] shrink truncate whitespace-nowrap lg:inline-flex"
+            >
+              {subjectLabels[1].label}
+            </Badge>
+          ) : null}
+          {subjectLabels[2] ? (
+            <Badge
+              variant="tertiary"
+              size="sm"
+              className="hidden min-w-0 max-w-[12rem] shrink truncate whitespace-nowrap 2xl:inline-flex"
+            >
+              {subjectLabels[2].label}
+            </Badge>
+          ) : null}
+          {subjectLabels.length > 1 ? (
+            <Badge
+              variant="secondary"
+              size="sm"
+              className="shrink-0 whitespace-nowrap lg:hidden"
+            >
               +{subjectLabels.length - 1}
             </Badge>
-          )}
+          ) : null}
+          {subjectLabels.length > 2 ? (
+            <Badge
+              variant="secondary"
+              size="sm"
+              className="hidden shrink-0 whitespace-nowrap lg:inline-flex 2xl:hidden"
+            >
+              +{subjectLabels.length - 2}
+            </Badge>
+          ) : null}
+          {subjectLabels.length > 3 ? (
+            <Badge
+              variant="secondary"
+              size="sm"
+              className="hidden shrink-0 whitespace-nowrap 2xl:inline-flex"
+            >
+              +{subjectLabels.length - 3}
+            </Badge>
+          ) : null}
           {startingPrice !== null && (
             <span
-              className="ml-1 inline-flex items-center gap-1 self-center whitespace-nowrap"
+              className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap"
               aria-label={`From ${startingPrice} Marks`}
             >
               From
@@ -247,7 +291,7 @@ export function TutorCard({ tutor, onClick }: TutorCardProps) {
   return (
     <Card
       render={<button type="button" aria-label={accessibleName} />}
-      className="w-full cursor-pointer text-left transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-card active:scale-[0.99] motion-reduce:transition-none motion-reduce:active:scale-100 [&_[data-slot=avatar]]:rounded-md [&_[data-slot=avatar-image]]:rounded-md [&_[data-slot=avatar-fallback]]:rounded-md"
+      className="w-full cursor-pointer text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card [&_[data-slot=avatar]]:rounded-md [&_[data-slot=avatar-image]]:rounded-md [&_[data-slot=avatar-fallback]]:rounded-md"
       aria-label={accessibleName}
       onClick={onClick}
     >

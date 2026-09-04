@@ -194,7 +194,7 @@ Sanity is queried only by the API server. The browser receives normalized conten
 - **Auth:** Protected (student, tutor, or admin)
 - **Input:** None
 - **Output:** `{ items: [{ id, title, description, category }], access: { eligible, balance, threshold } }`
-- **Description:** Returns published Knowledge Bank metadata for the authenticated `/knowledge-bank` app route. Students must meet the 35-Mark total-balance threshold (held Marks count toward eligibility); below the threshold, `items` is empty and the access state explains the lock. Tutors and admins are eligible regardless of wallet balance.
+- **Description:** Returns published Knowledge Bank metadata for the authenticated `/knowledge-bank` app route. Students must meet the 35-Mark total-balance threshold (held Marks count toward eligibility); below the threshold, `items` is empty and the access state explains the lock. Tutors and admins are eligible regardless of wallet balance. `category` remains the Sanity slug in the API response; the web UI maps known slugs and title-cases hyphenated or underscored slugs for display while retaining the raw value for filtering.
 
 ### `GET /content/knowledge-bank/:resourceId/file`
 
@@ -671,15 +671,15 @@ The web tutor profile editor groups education, competition achievements, and exp
 
 - **Auth:** Student
 - **Input:** `{ search?, expertise?, categoryId?, subjectId?, categoryIds?, subjectIds?, modality?, limit?, offset? }` (`limit` default 20, max 50)
-- **Output:** `{ items: TutorProfile[] }`; each profile includes `education`, `competitionAchievements`, `subjects: [{ id, slug, name, description?, isSelectable, parent }]`, and computed `pricesByModality.online/offline` Marks maps when the profile has IDR base honoraria
-- **Description:** `categoryId`/`subjectId` remain supported for single-value clients. `categoryIds` and `subjectIds` accept up to 50 unique values and match any selected value within that facet; when both facets are present, the same normalized category/specialization relation must satisfy the selected category and specialization constraints. Search matches normalized specialization names as well as legacy profile text; no matching normalized relation returns an empty `items` array. Structured education and competition achievements are returned in their normalized arrays; older profiles may still rely on `credentialsSummary`. Marks prices are derived from the active economy config; tutor IDR base honoraria are not exposed in this student response. The frontend may render the returned modality maps as one group-size matrix with separate Online and Offline columns, prefixing populated values with the Cogito Marks icon; this does not alter the RPC contract.
+- **Output:** `{ items: TutorProfile[] }`; each profile includes its published `user.image` when available, `education`, `competitionAchievements`, `experienceEntries`, `subjects: [{ id, slug, name, description?, isSelectable, parent }]`, and computed `pricesByModality.online/offline` Marks maps when the profile has IDR base honoraria
+- **Description:** `categoryId`/`subjectId` remain supported for single-value clients. `categoryIds` and `subjectIds` accept up to 50 unique values and match any selected value within that facet; when both facets are present, the same normalized category/specialization relation must satisfy the selected category and specialization constraints. Search matches normalized specialization names as well as legacy profile text; no matching normalized relation returns an empty `items` array. Structured education, competition achievements, and experience entries are returned in their normalized arrays; older profiles may still rely on legacy `achievements`, `experiences`, or `credentialsSummary` text. Marks prices are derived from the active economy config; tutor IDR base honoraria are not exposed in this student response. The frontend may render the returned modality maps as one group-size matrix with separate Online and Offline columns, prefixing populated values with the Cogito Marks icon; tutor cards render natural-width child specialization names without repeating the parent category, keep their desktop metadata on one line, and use a smooth hover-shadow treatment without translate or pressed-scale effects. These are presentation details and do not alter the RPC contract.
 
 ### `tutors.getProfile`
 
 - **Auth:** Student
 - **Input:** `{ tutorId }`
 - **Output:** `{ profile }` with computed `pricesByModality` Marks maps
-- **Description:** Returns the published tutor profile and future availability slots for the booking form, including structured education and competition achievements. Marks prices use the active economy config for new IDR profiles; legacy profiles continue to return their stored Marks map.
+- **Description:** Returns the published tutor profile and future availability slots for the booking form, including the published image plus structured education, competition achievements, and experience entries. Legacy achievement/experience text remains available for older profiles. Marks prices use the active economy config for new IDR profiles; legacy profiles continue to return their stored Marks map.
 
 ---
 

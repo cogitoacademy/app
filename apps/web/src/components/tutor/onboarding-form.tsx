@@ -49,7 +49,7 @@ import {
   IconBuildingBank,
   IconPhoto,
   IconSchool,
-  IconShieldCheck,
+  IconChalkboardTeacher,
   IconUser,
 } from "@tabler/icons-react";
 
@@ -68,7 +68,6 @@ import {
   validateTutorAchievementDraft,
 } from "./tutor-achievements";
 import {
-  TutorExperiencesDisplay,
   TutorExperiencesEditor,
   type TutorExperienceEntry,
   validateTutorExperienceDraft,
@@ -998,10 +997,7 @@ export function OnboardingForm({
     <div className="mx-auto flex w-full flex-col gap-6">
       <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <Badge variant="info" pill>
-            Tutor profile
-          </Badge>
-          <Heading className="mt-3" size="lg">
+          <Heading size="lg">
             {isDraft ? "Build your tutor profile" : "Your tutor profile"}
           </Heading>
           <Text className="mt-2 max-w-2xl text-muted">
@@ -1010,11 +1006,11 @@ export function OnboardingForm({
           </Text>
         </div>
         <div className="flex flex-wrap gap-2 md:justify-end">
-          <Badge variant={statusBadge.variant} size="lg" pill>
+          <Badge variant={statusBadge.variant} size="md">
             {statusBadge.label}
           </Badge>
           {profile.profileEditStatus === "pending_review" ? (
-            <Badge variant="warning" size="lg" pill>
+            <Badge variant="warning" size="md">
               Changes under review
             </Badge>
           ) : null}
@@ -1023,8 +1019,8 @@ export function OnboardingForm({
 
       <Card>
         <CardBody className="flex items-start gap-3">
-          <IconBox variant={statusIconVariant} circle>
-            <IconShieldCheck aria-hidden="true" />
+          <IconBox variant={statusIconVariant} size="lg">
+            <IconChalkboardTeacher aria-hidden="true" />
           </IconBox>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -1896,27 +1892,13 @@ export function OnboardingForm({
                     Education, achievements, and experiences are shown together
                     as students will see them on your profile.
                   </Text>
-                  <div className="mt-4 flex flex-col gap-6">
-                    {form.education.length > 0 ||
-                    form.competitionAchievements.length > 0 ? (
-                      <TutorAchievementsDisplay
-                        education={form.education}
-                        competitionAchievements={form.competitionAchievements}
-                      />
-                    ) : null}
-                    {form.experienceEntries.length > 0 ? (
-                      <TutorExperiencesDisplay
-                        experienceEntries={form.experienceEntries}
-                      />
-                    ) : null}
-                    {form.education.length === 0 &&
-                    form.competitionAchievements.length === 0 &&
-                    form.experienceEntries.length === 0 ? (
-                      <Text className="text-sm italic text-dimmed">
-                        Add an education, achievement, or experience to see the
-                        public profile preview.
-                      </Text>
-                    ) : null}
+                  <div className="mt-4">
+                    <TutorAchievementsDisplay
+                      education={form.education}
+                      competitionAchievements={form.competitionAchievements}
+                      experienceEntries={form.experienceEntries}
+                      emptyMessage="Add an education, achievement, or experience to see the public profile preview."
+                    />
                   </div>
                 </div>
               </div>
