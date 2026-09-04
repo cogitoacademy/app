@@ -12,12 +12,10 @@ import {
   startOfMonth,
   startOfWeek,
 } from "date-fns";
-import { IconCalendarEvent } from "@tabler/icons-react";
 import { useMemo, useState, type MouseEvent } from "react";
 
 import { Button } from "@cogito-app/ui/components/selia/button";
 
-import { EmptyState } from "@/components/empty-state";
 import { CalendarEventItem } from "./calendar-event-item";
 import { CalendarEventsPopup } from "./calendar-events-popup";
 import {
@@ -74,11 +72,6 @@ export function CalendarMonthView({
     return result;
   }, [days]);
 
-  const hasEvents = useMemo(
-    () => days.some((day) => getAllEventsForDay(events, day).length > 0),
-    [days, events],
-  );
-
   function handleMoreClick(
     day: Date,
     dayEvents: CalendarCompetition[],
@@ -94,17 +87,6 @@ export function CalendarMonthView({
         top: rect.bottom + 6,
       },
     });
-  }
-
-  if (!hasEvents) {
-    return (
-      <EmptyState
-        icon={<IconCalendarEvent />}
-        title="No events this month"
-        description="Events scheduled for this month will appear here."
-        className="min-h-[28rem]"
-      />
-    );
   }
 
   return (

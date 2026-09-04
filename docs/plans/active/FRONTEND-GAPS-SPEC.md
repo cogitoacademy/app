@@ -117,6 +117,15 @@ The authenticated calendar now carries the full read-only interaction model from
 
 The calendar route now uses a viewport-contained app shell. The page heading and calendar toolbar remain stationary, the calendar card body owns vertical scrolling, and the month grid owns horizontal scrolling on narrow screens. This is presentation-only; the read-only `content.listCompetitions` contract and event interactions are unchanged.
 
+### Competition Calendar empty-month follow-up (2026-09-04)
+
+The month view keeps its normal weekday/date grid visible when the selected
+month has no events, preserving date navigation and the calendar layout. The
+page-level empty state still covers the case where no published competitions
+exist at all, and the agenda view may still show its event-free period message.
+This is presentation-only; the `content.listCompetitions` contract is
+unchanged.
+
 ### Theme shortcut follow-up (2026-08-26)
 
 The authenticated shell's existing Light/Dark/System menu now also responds to `D`. Outside editable fields, the shortcut toggles between the currently rendered light and dark modes, including when the saved preference is System; repeated keydown events and modifier-key combinations are ignored. `next-themes` continues to own preference persistence. This is frontend-only and adds no API, schema, or persistence contract.
@@ -168,8 +177,9 @@ use `EmptyStateCard`; embedded states use the `default`, `compact`, or `inline`
 densities. Calendar periods, filtered resource/tutor results, booking detail
 sections, notifications, Marks ledgers, specialization/proof-link fields,
 availability previews, and admin tables now have intentional no-data copy
-instead of blank panels or one-off text. Month and agenda views also explain
-when the selected period has no events. No API, schema, or persistence contract
+instead of blank panels or one-off text. The agenda view explains when the
+selected period has no events, while the month view keeps its normal grid
+visible for an event-free month. No API, schema, or persistence contract
 changed.
 
 ### Loading-state follow-up (2026-08-25)
