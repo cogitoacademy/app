@@ -141,3 +141,18 @@ not supplied: token` before any check ran. Live evidence: PRs #142 and
   Playwright reports are uploaded on every CI run. The migration task passes
   the isolated `.env.test` through Turbo explicitly. Remaining operator-owned
   work is F10 branch protection.
+- 2026-09-04 (docs sync, REFACTOR-PR wave): **F10 ruleset discovery —
+  branch protection EXISTS as rulesets.** The operator confirmed two
+  rulesets on `main`: `main-1` and `main-2`. `main-2` requires the status
+  checks Lint, Type Check, Build, Test + Coverage, plus the
+  Coverage/label/semantic-pr checks, with a strict policy (branches must be
+  up to date). The `lint` check context was renamed to `semantic-pr` by the
+  #190 fix, and the operator updated the ruleset to match. **#145 closed as
+  genuinely broken** — the 17-dep group failed with an oRPC version mismatch
+  (not a flake), so it was closed rather than recreated. **#142/#144 merged**
+  (upload-artifact v6→v7, setup-terraform v3.1.2→v4.0.1). **#71 closed
+  stale** (nginx bump on a pre-format base; superseded by the pinned
+  toolchain). **#193 merged** — the Semantic PR workflow gained the `docker`
+  type so Dockerfile-only PRs are labeled correctly. F9 (`ACTIONS_BOT_PAT`)
+  remains an optional operator decision; the `|| github.token` fallback
+  keeps Dependabot green without it.

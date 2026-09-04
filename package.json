@@ -44,7 +44,7 @@
     "db:watch": "turbo run db:watch --filter=@cogito-app/db",
     "db:stop": "turbo run db:stop --filter=@cogito-app/db",
     "db:down": "turbo run db:down --filter=@cogito-app/db",
-    "seed-packages": "bun --env-file apps/server/.env apps/server/src/seed-packages.ts",
+    "seed-packages": "bun --env-file apps/server/.env apps/server/src/seed/seed-packages.ts",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "format": "oxfmt --write",

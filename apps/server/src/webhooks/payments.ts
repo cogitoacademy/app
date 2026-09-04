@@ -5,7 +5,12 @@ import { log } from "@cogito-app/api/lib/logger";
 import { getClientIp, readBodyWithLimit } from "@cogito-app/api/lib/request-id";
 import { isProductionLike } from "@cogito-app/env/node-env";
 import { env } from "@cogito-app/env/server";
-import { PaymentNotFoundError } from "@cogito-app/api/modules/payment/payment.errors";
+import {
+  PaymentNotFoundError,
+  UnknownPaymentStatusError,
+  WebhookSignatureError,
+  WebhookTimestampError,
+} from "@cogito-app/api/modules/payment/payment.errors";
 
 const MAX_WEBHOOK_AGE_MS = 5 * 60 * 1000;
 const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
@@ -29,16 +34,15 @@ export function paymentWebhookIdempotencyKey(
  * (a dependency hiccup worth retrying).
  *
  * Permanent failures are answered with a 4xx and the idempotency claim is NOT
- * released (or is marked processed), so Xendit stops retrying a delivery that
- * can never succeed. Transient failures (DB/Redis) are answered 5xx and the
- * claim is released so the provider's retry re-processes.
+ * released (or is marked processed), so the provider stops retrying a delivery
+ * that can never succeed. Transient failures (DB/Redis) are answered 5xx and
+ * the claim is released so the provider's retry re-processes.
  */
 function isPermanentWebhookError(error: unknown): boolean {
-  if (error instanceof PaymentNotFoundError) return true;
-  const message = error instanceof Error ? error.message : String(error);
-  // `mapXenditStatus` throws "Unknown payment status: <status>" for a status we
-  // don't understand — a permanent provider-side bug, not a transient failure.
-  return message.toLowerCase().includes("unknown payment status");
+  return (
+    error instanceof PaymentNotFoundError ||
+    error instanceof UnknownPaymentStatusError
+  );
 }
 
 function permanentWebhookStatus(error: unknown): number {
@@ -82,14 +86,16 @@ export function validateWebhookTimestamp(
   const timestamp =
     request.headers.get("x-timestamp") ?? request.headers.get("date");
   if (!timestamp) {
-    throw new Error("Webhook timestamp header is required");
+    throw new WebhookTimestampError("Webhook timestamp header is required");
   }
   const webhookTime = new Date(timestamp).getTime();
   if (Number.isNaN(webhookTime)) {
-    throw new Error("Invalid webhook timestamp");
+    throw new WebhookTimestampError("Invalid webhook timestamp");
   }
   if (Math.abs(Date.now() - webhookTime) > MAX_WEBHOOK_AGE_MS) {
-    throw new Error("Webhook timestamp too old or too far in the future");
+    throw new WebhookTimestampError(
+      "Webhook timestamp too old or too far in the future",
+    );
   }
 }
 
@@ -207,10 +213,7 @@ export function paymentsWebhook(app: Elysia) {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
 
-        if (
-          message.toLowerCase().includes("signature") ||
-          message.toLowerCase().includes("unauthorized")
-        ) {
+        if (error instanceof WebhookSignatureError) {
           log({
             level: "error",
             action: "webhook_signature_failed",
@@ -221,7 +224,7 @@ export function paymentsWebhook(app: Elysia) {
           return { error: "Invalid webhook signature" };
         }
 
-        if (message.toLowerCase().includes("timestamp")) {
+        if (error instanceof WebhookTimestampError) {
           log({
             level: "warn",
             action: "webhook_timestamp_rejected",

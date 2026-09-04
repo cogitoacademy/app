@@ -71,7 +71,7 @@ await ensureConfiguredProductionAdmins();
 // while evlog/elysia is already loaded segfaults Bun 1.3.14 (engine bug —
 // "panic: Segmentation fault", see bun.report on the server boot crash).
 // Keep this import order; do not hoist ./routes or ./scheduler back to the top.
-const { createServer } = await import("./routes");
+const { createServer } = await import("./routes/create-server");
 const { initScheduler, shutdownScheduler } = await import("./scheduler");
 
 const app = createServer();

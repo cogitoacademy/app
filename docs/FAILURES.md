@@ -58,6 +58,30 @@
 - Recovery: 4xx → verify `XENDIT_WEBHOOK_TOKEN` + `WEBHOOK_ALLOWED_IPS` in
   the vault; 5xx → transient, Xendit retries
 
+### 1.5b Webhook failures (Midtrans)
+
+- Route: `POST /webhooks/payments/midtrans` (same handler as Xendit,
+  provider-selected by the path segment)
+- Detect: `./infra/ops.sh logs | grep webhook`; 4xx dead-letter rows
+- Meaning: signature rejection (4xx, permanent) or provider retry (5xx)
+- Signature: Midtrans signs **inside the body** — `signature_key` is
+  `SHA512(order_id + status_code + gross_amount + MIDTRANS_WEBHOOK_SIGNATURE_KEY)`,
+  verified by the provider (`verifySignatureKey` in
+  `midtrans-payment.provider.ts`); there is no signature header, so the
+  header value is left empty for this provider. A bad signature → 401
+  (`WebhookSignatureError`). A signed notification for a different
+  `merchant_id` is also rejected (defense-in-depth).
+- Idempotency: key `midtrans:{transaction_id ?? order_id}:{status}` (the
+  same `paymentWebhookIdempotencyKey` shape as Xendit — 120s claim + 24h
+  processed record), so retries of one lifecycle event stay idempotent
+  while PENDING and PAID for one payment both run.
+- Timestamp: Midtrans has no timestamp header — the L4 timestamp check is
+  skipped for this provider (the body signature is the gate).
+- Recovery: 4xx → verify `MIDTRANS_SERVER_KEY` / `MIDTRANS_MERCHANT_ID` /
+  `MIDTRANS_WEBHOOK_SIGNATURE_KEY` in the vault and that the Midtrans
+  dashboard notification URL points at the midtrans route; 5xx →
+  transient, Midtrans retries
+
 ### 1.6 Outbox stuck rows
 
 - Detect: `send_notification_email_complete` log shows `failed > 0`; rows
@@ -143,6 +167,26 @@
 - Meaning: purchases fail loudly (no silent stub)
 - Recovery: check Xendit status; verify `XENDIT_MODE` + keys; webhook
   idempotency (120s claim + 24h processed record) prevents double-credit
+
+### 3.4b Midtrans down
+
+- Detect: Snap page unreachable at checkout (hosted `redirect_url` fails to
+  load); payment webhooks failing; breaker open
+- Meaning: purchases fail at checkout — the Snap page is hosted by Midtrans,
+  so a Midtrans outage blocks the payment step itself (unlike Xendit, where
+  the QRIS payload is rendered in-app)
+- Recovery: check Midtrans status; verify `MIDTRANS_MODE` + keys; if the
+  outage persists, **roll back to Xendit** per `docs/MIDTRANS-MIGRATION.md`
+  §6 (set `PAYMENT_PROVIDER=xendit` in Coolify, restore the Xendit keys +
+  webhook URL, redeploy, verify the boot log shows `provider=xendit`).
+  Midtrans webhooks arriving after the flip are rejected by signature
+  verification and retried by Midtrans; in-flight Midtrans payments created
+  before the flip are reconciled by `reconcilePurchase` only while the
+  midtrans provider is active — prefer completing the cutover checklist or
+  reconcile stragglers manually via the Midtrans dashboard
+- Note: the Midtrans circuit breaker is mode-scoped like Xendit
+  (`cogito:cb:midtrans-test` / `cogito:cb:midtrans-live`); force-close only
+  after fixing the root cause
 
 ### 3.5 R2 down
 

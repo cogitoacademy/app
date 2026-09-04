@@ -3,9 +3,12 @@ import { CircuitBreaker } from "../../lib/circuit-breaker";
 import {
   internalServerError,
   serviceUnavailable,
-  unauthorized,
   badRequest,
 } from "../../lib/errors";
+import {
+  UnknownPaymentStatusError,
+  WebhookSignatureError,
+} from "./payment.errors";
 import { log } from "../../lib/logger";
 import { fetchWithTimeout, retryWithBackoff } from "../../lib/retry";
 import type { RedisClient } from "../../lib/redis";
@@ -111,7 +114,7 @@ export function mapXenditStatus(status: string): PaymentStatus {
     REFUNDED: "REFUNDED",
   };
   const mapped = map[status];
-  if (!mapped) throw internalServerError("Unknown payment status: " + status);
+  if (!mapped) throw new UnknownPaymentStatusError(status);
   return mapped;
 }
 
@@ -336,7 +339,7 @@ export function createXenditPaymentProvider(opts: {
       tokenBuf.length !== expectedBuf.length ||
       !timingSafeEqual(tokenBuf, expectedBuf)
     ) {
-      throw unauthorized("Invalid webhook token");
+      throw new WebhookSignatureError();
     }
 
     let body: {

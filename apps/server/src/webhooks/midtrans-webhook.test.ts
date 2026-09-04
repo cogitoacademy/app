@@ -2,6 +2,7 @@ import { createHash } from "crypto";
 import { describe, expect, mock, test } from "bun:test";
 import { Elysia } from "elysia";
 import { webhookIdempotency } from "@cogito-app/api/lib/idempotency";
+import { WebhookSignatureError } from "@cogito-app/api/modules/payment/payment.errors";
 
 const ORDER_ID = "550e8400-e29b-41d4-a716-446655440000";
 const SERVER_KEY = "SB-Mid-server-test123";
@@ -85,7 +86,7 @@ describe("midtrans webhook route", () => {
         payment: {
           provider: {
             verifyWebhook: async () => {
-              throw new Error("Invalid webhook signature");
+              throw new WebhookSignatureError();
             },
           },
           confirmFromWebhook: mock(async () => ({ status: "SETTLED" })),
