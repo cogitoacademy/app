@@ -174,7 +174,7 @@ export function TutorInviteForm() {
             <Input
               value={internalNotes}
               onChange={(e) => setInternalNotes(e.target.value)}
-              placeholder="Recommended by... / Specialization: ..."
+              placeholder="Recommended by… / Specialization: …"
             />
           </Field>
           {latestInviteUrl ? (

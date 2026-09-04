@@ -190,6 +190,8 @@ function PhotoReviewPanel({
           <img
             src={resolvedImageUrl}
             alt={label}
+            width={512}
+            height={512}
             className="aspect-square w-full rounded-lg object-cover"
           />
         </a>
@@ -886,7 +888,7 @@ export function TutorReviewCard({
                     type="url"
                     value={profileImageUrl}
                     onChange={(event) => setProfileImageUrl(event.target.value)}
-                    placeholder="https://..."
+                    placeholder="https://…"
                   />
                   <FieldDescription>
                     Use this only when the edited asset is already hosted.

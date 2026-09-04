@@ -87,6 +87,8 @@ export function LoginPage() {
           <img
             src="/logo extended.png"
             alt="Cogito Academy"
+            width={256}
+            height={64}
             className="relative z-10 ml-1.5 h-auto w-40 max-w-full object-contain object-left sm:w-56 lg:absolute lg:left-10 lg:top-10 lg:ml-0 lg:w-64"
           />
         </section>

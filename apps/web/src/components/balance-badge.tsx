@@ -20,7 +20,14 @@ export function BalanceBadge() {
         <span className="text-muted">—</span>
       ) : (
         <>
-          <img src="/cogito-mark.png" className="size-3 w-auto" alt="" />
+          <img
+            src="/cogito-mark.png"
+            alt=""
+            aria-hidden="true"
+            width={12}
+            height={12}
+            className="size-3 w-auto"
+          />
           <span>{balance}</span>
         </>
       )}

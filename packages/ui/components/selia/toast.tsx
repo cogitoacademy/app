@@ -5,18 +5,12 @@ import { buttonVariants } from "./button";
 import { cn } from "@cogito-app/ui/lib/utils";
 
 export const toastManager = BaseToast.createToastManager();
-export const anchoredToastManager = BaseToast.createToastManager();
 
 export function Toast() {
   return (
-    <>
-      <BaseToast.Provider toastManager={toastManager}>
-        <StackedToasts />
-      </BaseToast.Provider>
-      <BaseToast.Provider toastManager={anchoredToastManager}>
-        <AnchoredToasts />
-      </BaseToast.Provider>
-    </>
+    <BaseToast.Provider toastManager={toastManager}>
+      <StackedToasts />
+    </BaseToast.Provider>
   );
 }
 
@@ -57,38 +51,6 @@ function StackedToasts() {
           >
             <ToastContent toast={toast} />
           </BaseToast.Root>
-        ))}
-      </BaseToast.Viewport>
-    </BaseToast.Portal>
-  );
-}
-
-function AnchoredToasts() {
-  const { toasts } = BaseToast.useToastManager();
-
-  return (
-    <BaseToast.Portal>
-      <BaseToast.Viewport className="z-[1000] outline-0">
-        {toasts.map((toast) => (
-          <BaseToast.Positioner
-            key={toast.id}
-            toast={toast}
-            className="z-[calc(1000-var(--toast-index))]"
-          >
-            <BaseToast.Root
-              toast={toast}
-              className={cn(
-                "group flex w-max origin-(--transform-origin) flex-col outline-none",
-                "shadow bg-toast border border-toast-border rounded",
-                "transition-[transform,scale,opacity]",
-                "data-ending-style:scale-90 data-ending-style:opacity-0",
-                "data-starting-style:scale-90 data-starting-style:opacity-0",
-                toast.data?.size === "sm" ? "p-2" : "p-4",
-              )}
-            >
-              <ToastContent toast={toast} />
-            </BaseToast.Root>
-          </BaseToast.Positioner>
         ))}
       </BaseToast.Viewport>
     </BaseToast.Portal>

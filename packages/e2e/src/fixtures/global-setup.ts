@@ -47,8 +47,12 @@ async function globalSetup() {
   // that production safeguard before the economy specs begin.
   const authDir = path.resolve(process.cwd(), ".auth");
   mkdirSync(authDir, { recursive: true });
+  const serverUrl =
+    process.env.SERVER_URL ??
+    process.env.BETTER_AUTH_URL ??
+    "http://localhost:3101";
   const authContext = await request.newContext({
-    baseURL: "http://localhost:3101",
+    baseURL: serverUrl,
   });
   const signIn = await authContext.post("/api/auth/sign-in/email", {
     data: {

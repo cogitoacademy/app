@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type FormEvent,
-  type ReactNode,
-} from "react";
+import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   IconCalendarEvent,
@@ -52,6 +45,7 @@ import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { formatBookingTimeRange } from "@/components/booking/booking-ui";
 import { MinuteTimeInput } from "@/components/booking/minute-time-input";
 import { EmptyState } from "@/components/empty-state";
+import { useNow } from "@/hooks/use-now";
 import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
 
@@ -141,9 +135,66 @@ function timeValue(value: string | Date) {
   }).format(new Date(value));
 }
 
+function scheduleFromSlots(slots: readonly AvailabilitySlot[]) {
+  const recurring = slots.filter((slot) => slot.isRecurring);
+  if (recurring.length === 0) return null;
+
+  const next = initialSchedule();
+  for (const day of DAYS) next[day[0]] = { enabled: false, ranges: [] };
+  for (const slot of recurring) {
+    const day = new Date(
+      `${dateKey(new Date(slot.startDate))}T00:00:00Z`,
+    ).getUTCDay();
+    const candidate = {
+      id: crypto.randomUUID(),
+      start: timeValue(slot.startDate),
+      end: timeValue(slot.endDate),
+      modality: slot.modality ?? "online",
+    } satisfies TimeRange;
+    const current = next[day]!;
+    if (
+      !current.ranges.some(
+        (range) =>
+          range.start === candidate.start &&
+          range.end === candidate.end &&
+          range.modality === candidate.modality,
+      )
+    ) {
+      current.ranges.push(candidate);
+    }
+    current.enabled = true;
+  }
+  for (const day of DAYS) {
+    if (next[day[0]]!.ranges.length === 0) {
+      next[day[0]]!.ranges = [newRange()];
+    }
+  }
+
+  return next;
+}
+
 export function AvailabilityPage() {
+  const availability = useQuery(orpc.tutor.listAvailability.queryOptions());
+  if (availability.isPending) return <AvailabilitySkeleton />;
+
+  const slots = ((availability.data ?? []) as AvailabilitySlot[]).toSorted(
+    (a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime(),
+  );
+  const hasRecurringSlots = slots.some((slot) => slot.isRecurring);
+
+  return (
+    <AvailabilityPageContent
+      key={hasRecurringSlots ? "recurring" : "empty"}
+      slots={slots}
+    />
+  );
+}
+
+function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
   const queryClient = useQueryClient();
-  const [schedule, setSchedule] = useState<WeeklySchedule>(initialSchedule);
+  const [schedule, setSchedule] = useState<WeeklySchedule>(
+    () => scheduleFromSlots(slots) ?? initialSchedule(),
+  );
   const [repeatUntil, setRepeatUntil] = useState(() =>
     dateKey(Date.now() + 12 * 7 * DAY_MS),
   );
@@ -152,8 +203,8 @@ export function AvailabilityPage() {
   );
   const [override, setOverride] = useState<TimeRange>(newRange);
   const [previewStart, setPreviewStart] = useState(() => weekStart(dateKey()));
-  const hydratedSchedule = useRef(false);
-  const availability = useQuery(orpc.tutor.listAvailability.queryOptions());
+  const now = useNow();
+  const minimumDate = useMemo(() => dateKey(now + DAY_MS), [now]);
   const refresh = () =>
     queryClient.invalidateQueries({
       queryKey: orpc.tutor.listAvailability.key(),
@@ -161,10 +212,10 @@ export function AvailabilityPage() {
 
   const replaceWeekly = useMutation(
     orpc.tutor.replaceWeeklyAvailability.mutationOptions({
-      onSuccess: (slots) => {
+      onSuccess: (generatedSlots) => {
         toastManager.add({
           title: "Weekly hours saved",
-          description: `${slots.length} availability windows generated.`,
+          description: `${generatedSlots.length} availability windows generated.`,
           type: "success",
         });
         void refresh();
@@ -197,46 +248,6 @@ export function AvailabilityPage() {
     }),
   );
 
-  const slots = ((availability.data ?? []) as AvailabilitySlot[]).toSorted(
-    (a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime(),
-  );
-  useEffect(() => {
-    if (hydratedSchedule.current || slots.length === 0) return;
-    const recurring = slots.filter((slot) => slot.isRecurring);
-    if (recurring.length === 0) return;
-    const next = initialSchedule();
-    for (const day of DAYS) next[day[0]] = { enabled: false, ranges: [] };
-    for (const slot of recurring) {
-      const day = new Date(
-        `${dateKey(new Date(slot.startDate))}T00:00:00Z`,
-      ).getUTCDay();
-      const candidate = {
-        id: crypto.randomUUID(),
-        start: timeValue(slot.startDate),
-        end: timeValue(slot.endDate),
-        modality: slot.modality ?? "online",
-      };
-      const current = next[day]!;
-      if (
-        !current.ranges.some(
-          (range) =>
-            range.start === candidate.start &&
-            range.end === candidate.end &&
-            range.modality === candidate.modality,
-        )
-      ) {
-        current.ranges.push(candidate);
-      }
-      current.enabled = true;
-    }
-    for (const day of DAYS) {
-      if (next[day[0]]!.ranges.length === 0) {
-        next[day[0]]!.ranges = [newRange()];
-      }
-    }
-    hydratedSchedule.current = true;
-    setSchedule(next);
-  }, [slots]);
   const previewDays = useMemo(
     () => Array.from({ length: 7 }, (_, index) => addDays(previewStart, index)),
     [previewStart],
@@ -297,13 +308,13 @@ export function AvailabilityPage() {
     });
   }
 
-  if (availability.isPending) return <AvailabilitySkeleton />;
-
   return (
     <Stack direction="column" spacing="lg">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <Heading size="md">Availability</Heading>
+          <Heading level={1} size="md">
+            Availability
+          </Heading>
           <Text className="mt-1 text-muted">
             Set recurring hours once, then add exceptions for specific dates.
           </Text>
@@ -477,7 +488,7 @@ export function AvailabilityPage() {
                 <FieldLabel htmlFor="schedule-until">Generate until</FieldLabel>
                 <DatePicker
                   id="schedule-until"
-                  minDate={dateKey(Date.now() + DAY_MS)}
+                  minDate={minimumDate}
                   value={repeatUntil}
                   onChange={setRepeatUntil}
                 />
@@ -506,7 +517,7 @@ export function AvailabilityPage() {
                   <FieldLabel htmlFor="override-date">Date</FieldLabel>
                   <DatePicker
                     id="override-date"
-                    minDate={dateKey(Date.now() + DAY_MS)}
+                    minDate={minimumDate}
                     value={overrideDate}
                     onChange={setOverrideDate}
                   />

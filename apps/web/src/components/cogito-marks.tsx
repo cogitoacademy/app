@@ -9,6 +9,13 @@ const MARK_ICON_SIZES = {
   "6": "size-6",
 } as const;
 
+const MARK_ICON_DIMENSIONS = {
+  "3": 12,
+  "4": 16,
+  "5": 20,
+  "6": 24,
+} as const;
+
 export type CogitoMarksProps = {
   value: number | string;
   size?: keyof typeof MARK_ICON_SIZES;
@@ -32,6 +39,8 @@ export function CogitoMarks({
         src="/cogito-mark.png"
         alt=""
         aria-hidden="true"
+        width={MARK_ICON_DIMENSIONS[size]}
+        height={MARK_ICON_DIMENSIONS[size]}
         className={cn(MARK_ICON_SIZES[size], "shrink-0 object-contain")}
       />
       <span>{value}</span>

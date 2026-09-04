@@ -36,7 +36,7 @@
     },
     "db:migrate": {
       "cache": false,
-      "env": ["DATABASE_URL"]
+      "env": ["DATABASE_URL", "ENV_FILE"]
     },
     "db:studio": {
       "cache": false,

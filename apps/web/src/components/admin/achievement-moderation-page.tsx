@@ -189,7 +189,9 @@ export function AchievementModerationPage() {
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <Heading size="md">Achievement moderation</Heading>
+          <Heading level={1} size="md">
+            Achievement moderation
+          </Heading>
           <Text className="text-muted">
             Review student evidence before achievements become public.
           </Text>

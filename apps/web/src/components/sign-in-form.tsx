@@ -167,7 +167,7 @@ export default function SignInForm({
     <div className="w-full flex items-center justify-center p-4 lg:min-h-[calc(100svh-6rem)]">
       <Card className="w-full lg:w-5/12 xl:w-md">
         <CardHeader align="center">
-          <CardTitle>Sign in to your account</CardTitle>
+          <CardTitle level={1}>Sign in to your account</CardTitle>
           <CardDescription>
             Sign in with your Email or Google account
           </CardDescription>
@@ -207,6 +207,8 @@ export default function SignInForm({
                 src="/google-logo.svg"
                 alt=""
                 aria-hidden="true"
+                width={18}
+                height={18}
                 className="size-4.5 object-contain"
               />
               Sign in with Google
@@ -245,7 +247,7 @@ export default function SignInForm({
                     id={field.name}
                     name={field.name}
                     type="email"
-                    placeholder="Enter your email"
+                    placeholder="Enter your email…"
                     autoComplete="email"
                     aria-required="true"
                     aria-invalid={
@@ -299,7 +301,7 @@ export default function SignInForm({
                       id={field.name}
                       name={field.name}
                       type={showPassword ? "text" : "password"}
-                      placeholder="Enter your password"
+                      placeholder="Enter your password…"
                       autoComplete="current-password"
                       aria-required="true"
                       aria-invalid={

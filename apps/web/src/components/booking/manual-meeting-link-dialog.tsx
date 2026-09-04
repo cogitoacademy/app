@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Dialog,
@@ -34,15 +34,41 @@ export function ManualMeetingLinkDialog({
   initialUrl?: string | null;
   actor: "tutor" | "admin";
 }) {
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!pending) onOpenChange(nextOpen);
+      }}
+    >
+      {open ? (
+        <ManualMeetingLinkDialogContent
+          initialUrl={initialUrl}
+          pending={pending}
+          actor={actor}
+          onOpenChange={onOpenChange}
+          onSubmit={onSubmit}
+        />
+      ) : null}
+    </Dialog>
+  );
+}
+
+function ManualMeetingLinkDialogContent({
+  initialUrl,
+  pending,
+  actor,
+  onOpenChange,
+  onSubmit,
+}: {
+  initialUrl?: string | null;
+  pending: boolean;
+  actor: "tutor" | "admin";
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (url: string) => void;
+}) {
   const [url, setUrl] = useState(initialUrl ?? "");
   const [validationError, setValidationError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (open) {
-      setUrl(initialUrl ?? "");
-      setValidationError(null);
-    }
-  }, [initialUrl, open]);
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -70,73 +96,64 @@ export function ManualMeetingLinkDialog({
   }
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(nextOpen) => {
-        if (!pending) onOpenChange(nextOpen);
-      }}
-    >
-      <DialogPopup className="sm:max-w-lg">
-        <form className="contents" onSubmit={submit}>
-          <DialogHeader className="flex-col items-start gap-1">
-            <DialogTitle>
-              {initialUrl ? "Replace meeting link" : "Add meeting link"}
-            </DialogTitle>
-            <DialogDescription>
-              Automatic Google Meet setup may be unavailable. Paste the link
-              students should use for this session.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogBody>
-            <Field>
-              <FieldLabel htmlFor="manual-meeting-link">
-                Meeting link
-              </FieldLabel>
-              <Input
-                id="manual-meeting-link"
-                type="url"
-                value={url}
-                onChange={(event) => {
-                  setUrl(event.target.value);
-                  if (validationError) setValidationError(null);
-                }}
-                placeholder="https://meet.google.com/..."
-                autoComplete="url"
-                aria-invalid={validationError ? true : undefined}
-                disabled={pending}
-              />
-              {validationError ? (
-                <FieldError>{validationError}</FieldError>
-              ) : (
-                <FieldDescription>
-                  {actor === "tutor"
-                    ? "Use the link you want the student to open at session time."
-                    : "You can use Google Meet, Zoom, or another trusted meeting provider."}
-                </FieldDescription>
-              )}
-            </Field>
-          </DialogBody>
-          <DialogFooter className="flex-col-reverse items-stretch sm:flex-row sm:items-center">
-            <Button
-              variant="secondary"
-              type="button"
-              onClick={() => onOpenChange(false)}
+    <DialogPopup className="sm:max-w-lg">
+      <form className="contents" onSubmit={submit}>
+        <DialogHeader className="flex-col items-start gap-1">
+          <DialogTitle>
+            {initialUrl ? "Replace meeting link" : "Add meeting link"}
+          </DialogTitle>
+          <DialogDescription>
+            Automatic Google Meet setup may be unavailable. Paste the link
+            students should use for this session.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogBody>
+          <Field>
+            <FieldLabel htmlFor="manual-meeting-link">Meeting link</FieldLabel>
+            <Input
+              id="manual-meeting-link"
+              type="url"
+              value={url}
+              onChange={(event) => {
+                setUrl(event.target.value);
+                if (validationError) setValidationError(null);
+              }}
+              placeholder="https://meet.google.com/…"
+              autoComplete="url"
+              aria-invalid={validationError ? true : undefined}
               disabled={pending}
-              className="w-full sm:w-auto"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              progress={pending}
-              disabled={pending}
-              className="w-full sm:w-auto"
-            >
-              Save meeting link
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogPopup>
-    </Dialog>
+            />
+            {validationError ? (
+              <FieldError>{validationError}</FieldError>
+            ) : (
+              <FieldDescription>
+                {actor === "tutor"
+                  ? "Use the link you want the student to open at session time."
+                  : "You can use Google Meet, Zoom, or another trusted meeting provider."}
+              </FieldDescription>
+            )}
+          </Field>
+        </DialogBody>
+        <DialogFooter className="flex-col-reverse items-stretch sm:flex-row sm:items-center">
+          <Button
+            variant="secondary"
+            type="button"
+            onClick={() => onOpenChange(false)}
+            disabled={pending}
+            className="w-full sm:w-auto"
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            progress={pending}
+            disabled={pending}
+            className="w-full sm:w-auto"
+          >
+            Save meeting link
+          </Button>
+        </DialogFooter>
+      </form>
+    </DialogPopup>
   );
 }

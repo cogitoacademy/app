@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@cogito-app/ui/components/selia/select";
 import { Text } from "@cogito-app/ui/components/selia/text";
+import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import {
@@ -282,6 +283,15 @@ function RouteComponent() {
 
   return (
     <div className="flex flex-col gap-6">
+      <div>
+        <Heading level={1} size="md">
+          Manage tutors
+        </Heading>
+        <Text className="mt-1 text-muted">
+          Invite tutors, review profiles, and keep the published directory
+          accurate.
+        </Text>
+      </div>
       <div className="grid lg:grid-cols-[1fr_2fr] gap-6">
         <TutorInviteForm />
 

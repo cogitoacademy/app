@@ -9,6 +9,14 @@ renders the complete logo white in dark mode. This is frontend-only
 presentation behavior; no RPC path, request envelope, response shape, schema,
 or persistence contract changed.
 
+## Production UI and E2E audit (2026-09-04)
+
+The UI/E2E hardening in this audit does not add or change an API endpoint,
+procedure key, request input, response output, authentication rule, schema, or
+persistence contract. Browser coverage continues to use the existing slash
+RPC paths and the `{"json": <input>}` request envelope, with responses shaped as
+`{"json": <data>, "meta": [...]}`.
+
 The 2026-09-02 local pre-push lint-gate alignment changes developer tooling
 only. It does not change any RPC path, request envelope, response shape,
 authentication rule, or API behavior.
@@ -582,7 +590,7 @@ The web tutor profile editor groups education, competition achievements, and exp
 - **Input:** `{ dateFrom?, dateTo? }`
 - **Output:** `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }` (internal split fields remain for compatibility; the tutor UI renders only `tutorPayoutIdr`)
 - **Errors:** `INVALID_DATE_RANGE` (400)
-- **Description:** The authenticated tutor's unpaid honorarium summary. With no date filters, completed sessions are selected after the latest admin-paid cutoff; the cutoff advances only when an admin records a payout. Weekly processing is an operational cadence, not an automatic Monday reset.
+- **Description:** The authenticated tutor's unpaid honorarium summary. With no date filters, completed sessions are selected after the latest admin-paid cutoff; the cutoff advances only when an admin records a payout. Weekly processing is an operational cadence, not an automatic Monday reset. The tutor dashboard presents this summary in its Payout details card and exposes the processing and transfer-fee explanations through UI info popovers; no additional API field or endpoint is required.
 
 ---
 

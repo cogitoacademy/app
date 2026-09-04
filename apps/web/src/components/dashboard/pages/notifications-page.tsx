@@ -42,6 +42,7 @@ import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { cn } from "@cogito-app/ui/lib/utils";
 
 import { EmptyStateCard } from "@/components/empty-state";
+import { useNow } from "@/hooks/use-now";
 import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
 
@@ -75,9 +76,9 @@ function formatNotificationDate(date: Date | string) {
   return format(toDate(date), "d MMM yyyy 'at' h:mm a");
 }
 
-function formatRelativeTime(date: Date | string) {
+function formatRelativeTime(date: Date | string, now: number) {
   const value = toDate(date);
-  const diff = Date.now() - value.getTime();
+  const diff = now - value.getTime();
   const minutes = Math.floor(diff / 60_000);
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
@@ -107,6 +108,7 @@ function getCategoryVariant(category: string) {
 }
 
 export function NotificationsPage() {
+  const now = useNow();
   const queryClient = useQueryClient();
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(
     () => new Set(),
@@ -201,6 +203,14 @@ export function NotificationsPage() {
 
   return (
     <Stack direction="column" spacing="lg">
+      <div>
+        <Heading level={1} size="md">
+          Notifications
+        </Heading>
+        <Text className="mt-1 text-muted">
+          Review booking and account updates in one place.
+        </Text>
+      </div>
       {notificationsQuery.isPending ? (
         <NotificationsLoading />
       ) : notificationsQuery.isError ? (
@@ -317,6 +327,7 @@ export function NotificationsPage() {
                 <NotificationItem
                   key={notification.id}
                   notification={notification}
+                  now={now}
                   selected={selectedIds.has(notification.id)}
                   isPending={
                     updateReadStatus.isPending &&
@@ -355,12 +366,14 @@ export function NotificationsPage() {
 
 function NotificationItem({
   notification,
+  now,
   selected,
   isPending,
   onToggleSelected,
   onUpdateReadStatus,
 }: {
   notification: NotificationItemData;
+  now: number;
   selected: boolean;
   isPending: boolean;
   onToggleSelected: () => void;
@@ -418,7 +431,7 @@ function NotificationItem({
             {formatNotificationDate(notification.createdAt)}
           </time>
           <span aria-hidden="true">·</span>
-          <span>{formatRelativeTime(notification.createdAt)}</span>
+          <span>{formatRelativeTime(notification.createdAt, now)}</span>
         </ItemMeta>
       </ItemContent>
       <ItemAction className="self-start">

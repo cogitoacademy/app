@@ -1,7 +1,6 @@
 "use client";
 
 import { Button } from "@cogito-app/ui/components/selia/button";
-import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { cn } from "@cogito-app/ui/lib/utils";
 import {
   IconLayoutSidebarLeftCollapse,
@@ -45,26 +44,35 @@ export function Layout({
 
   return (
     <>
+      <a
+        href="#main-content"
+        className="fixed left-4 top-4 z-[60] -translate-y-24 rounded-md bg-background px-3 py-2 text-sm font-medium text-foreground ring ring-border shadow focus:translate-y-0 focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary motion-reduce:transition-none"
+      >
+        Skip to main content
+      </a>
       <button
         type="button"
         aria-label="Close sidebar overlay"
         className={cn(
-          "fixed inset-0 z-10 hidden bg-black backdrop-blur-sm transition-all max-xl:block",
+          "fixed inset-0 z-10 hidden bg-foreground/20 backdrop-blur-sm transition-[opacity,visibility] duration-200 motion-reduce:transition-none max-xl:block",
           sidebarOpen ? "visible opacity-40" : "invisible opacity-0",
         )}
         onClick={toggleSidebar}
       />
       <div
+        id="app-sidebar"
         className={cn(
-          "fixed top-0 z-50 h-dvh w-full max-w-72 transition-all *:h-full md:w-72",
+          "fixed top-0 z-50 h-dvh w-full max-w-72 transition-[left] duration-200 motion-reduce:transition-none *:h-full md:w-72",
           sidebarOpen ? "left-0" : "-left-full",
         )}
       >
         {sidebar}
       </div>
       <main
+        id="main-content"
+        tabIndex={-1}
         className={cn(
-          "flex h-dvh min-h-0 min-w-0 max-w-full flex-col overflow-hidden transition-all",
+          "flex h-dvh min-h-0 min-w-0 max-w-full flex-col overflow-hidden transition-[margin] duration-200 motion-reduce:transition-none",
           sidebarOpen ? "xl:ml-72" : "xl:ml-0",
         )}
       >
@@ -78,6 +86,9 @@ export function Layout({
             variant="plain"
             size="sm-icon"
             className="shrink-0"
+            aria-label={sidebarOpen ? "Close sidebar" : "Open sidebar"}
+            aria-controls="app-sidebar"
+            aria-expanded={sidebarOpen}
             onClick={toggleSidebar}
           >
             <span className="sr-only">
@@ -89,10 +100,10 @@ export function Layout({
               <IconLayoutSidebarLeftExpand />
             )}
           </Button>
-          <Heading size="sm" className="min-w-0 truncate">
+          <span className="min-w-0 truncate text-lg font-semibold text-foreground">
             {title}
-          </Heading>
-          <div className="ml-auto mr-0 flex shrink-0 items-center gap-2">
+          </span>
+          <div className="ml-auto mr-0 flex shrink-0 items-center gap-2 max-[20rem]:hidden">
             {role === "student" ? <BalanceBadge /> : null}
             {role === "student" ? (
               <Separator orientation="vertical" className="mr-2" />

@@ -62,7 +62,9 @@ export function AchivementsPage() {
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <Heading size="md">Achievements</Heading>
+          <Heading level={1} size="md">
+            Achievements
+          </Heading>
           <Text className="text-muted">
             Your competition achievements, showcased on cogitoacademy.id
           </Text>

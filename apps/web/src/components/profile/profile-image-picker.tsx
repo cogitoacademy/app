@@ -489,6 +489,8 @@ export function ProfileImagePicker({
                   src={previewUrl}
                   alt=""
                   aria-hidden="true"
+                  width={512}
+                  height={512}
                   className="pointer-events-none absolute left-1/2 top-1/2 max-w-none"
                   style={(() => {
                     const layout = getImageLayout(
@@ -516,6 +518,8 @@ export function ProfileImagePicker({
                   src={previewUrl}
                   alt=""
                   aria-hidden="true"
+                  width={512}
+                  height={512}
                   className="pointer-events-none absolute inset-0 size-full object-contain"
                   onLoad={handleImageLoad}
                   onError={() =>

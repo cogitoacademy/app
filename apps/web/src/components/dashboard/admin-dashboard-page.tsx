@@ -5,7 +5,6 @@ import { Link } from "@tanstack/react-router";
 import {
   IconAlertTriangle,
   IconArrowRight,
-  IconCalendarCog,
   IconCertificate,
   IconShieldCheck,
   IconUserCheck,
@@ -15,7 +14,6 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
-  CardDescription,
   CardHeader,
   CardHeaderAction,
   CardTitle,
@@ -78,44 +76,22 @@ export function AdminDashboardPage({ adminName }: { adminName: string }) {
   );
   const tutorCount = tutors.data?.length ?? 0;
   const achievementCount = achievements.data?.length ?? 0;
-  const totalActions = priorityItems.length + tutorCount + achievementCount;
-
   return (
     <Stack direction="column" spacing="lg">
-      <Card className="overflow-hidden bg-primary/10">
-        <CardBody className="grid gap-6 p-6 md:grid-cols-[1fr_auto] md:items-center">
-          <div>
-            <Badge variant="primary" pill>
-              <IconShieldCheck className="size-3.5" /> Admin workspace
-            </Badge>
-            <Heading className="mt-4 text-3xl">
-              Good to see you, {firstName}
-            </Heading>
-            <Text className="mt-2 max-w-2xl text-muted">
-              Clear time-sensitive operations first, then move through tutor and
-              achievement reviews.
-            </Text>
-          </div>
-          <Button
-            nativeButton={false}
-            render={
-              <Link to="/admin-operations" aria-label="Open operations queue" />
-            }
-          >
-            {totalActions > 0
-              ? `${totalActions} actions to review`
-              : "Open operations"}
-            <IconArrowRight />
-          </Button>
-        </CardBody>
-      </Card>
+      <div>
+        <Heading className="text-3xl">Good to see you, {firstName}</Heading>
+        <Text className="mt-2 max-w-2xl text-muted">
+          Clear time-sensitive operations first, then move through tutor and
+          achievement reviews.
+        </Text>
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Metric
           icon={<IconAlertTriangle />}
           label="Escalated operations"
           value={escalations.isPending ? "—" : String(priorityItems.length)}
-          tone={priorityItems.length ? "danger-subtle" : "secondary-subtle"}
+          tone={priorityItems.length ? "danger-subtle" : "tertiary-subtle"}
         />
         <Metric
           icon={<IconUserCheck />}
@@ -137,14 +113,8 @@ export function AdminDashboardPage({ adminName }: { adminName: string }) {
 
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]">
         <Card>
-          <CardHeader>
-            <IconBox variant="danger-subtle">
-              <IconCalendarCog />
-            </IconBox>
+          <CardHeader className="py-3">
             <CardTitle>Priority operations</CardTitle>
-            <CardDescription>
-              Escalated and exception bookings that need intervention.
-            </CardDescription>
             <CardHeaderAction>
               <Button
                 variant="plain"
@@ -222,32 +192,6 @@ export function AdminDashboardPage({ adminName }: { adminName: string }) {
             )}
           </CardBody>
         </Card>
-
-        <Card>
-          <CardHeader>
-            <IconBox variant="primary-subtle">
-              <IconUserCheck />
-            </IconBox>
-            <CardTitle>Review queues</CardTitle>
-            <CardDescription>
-              Moderation work waiting for an admin decision.
-            </CardDescription>
-          </CardHeader>
-          <CardBody className="flex flex-col gap-3">
-            <QueueLink
-              to="/admin-tutors"
-              icon={<IconUserCheck />}
-              title="Tutor profiles"
-              count={tutorCount}
-            />
-            <QueueLink
-              to="/admin-achievements"
-              icon={<IconCertificate />}
-              title="Achievements"
-              count={achievementCount}
-            />
-          </CardBody>
-        </Card>
       </div>
     </Stack>
   );
@@ -271,11 +215,16 @@ function Metric({
   icon: React.ReactNode;
   label: string;
   value: string;
-  tone: "danger-subtle" | "secondary-subtle" | "warning-subtle" | "info-subtle";
+  tone:
+    | "danger-subtle"
+    | "secondary-subtle"
+    | "tertiary-subtle"
+    | "warning-subtle"
+    | "info-subtle";
 }) {
   return (
     <Card>
-      <CardBody className="flex items-center gap-4 p-5">
+      <CardBody className="flex items-center gap-4 p-3">
         <IconBox variant={tone}>{icon}</IconBox>
         <div>
           <Text className="text-sm text-muted">{label}</Text>
@@ -283,36 +232,5 @@ function Metric({
         </div>
       </CardBody>
     </Card>
-  );
-}
-
-function QueueLink({
-  to,
-  icon,
-  title,
-  count,
-}: {
-  to: "/admin-tutors" | "/admin-achievements";
-  icon: React.ReactNode;
-  title: string;
-  count: number;
-}) {
-  return (
-    <Button
-      variant="secondary"
-      size="lg"
-      block
-      nativeButton={false}
-      render={<Link to={to} aria-label={`Open ${title}`} />}
-    >
-      <span className="mr-auto inline-flex items-center gap-2">
-        {icon}
-        {title}
-      </span>
-      <Badge variant={count ? "warning" : "secondary"} pill>
-        {count}
-      </Badge>
-      <IconArrowRight />
-    </Button>
   );
 }
