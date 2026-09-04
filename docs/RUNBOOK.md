@@ -431,6 +431,22 @@ In the same drawer, select the booking's current date and start minute. Confirm 
 
 ### Tutor specialization taxonomy smoke check
 
+On the tutor list, search remains visible while category, specialization, and
+modality start inside the closed **Filters** panel. Toggle it with pointer and
+keyboard, apply filters, close it, and confirm the trigger preserves the active
+selection count. The height/fade and chevron transitions should be smooth, with
+no animation under reduced-motion preferences. Closed controls must not receive
+keyboard focus. For multiple selections, the leading label may truncate but the
+`+N more` chip must remain fully visible without a clipped border. **Clear**
+resets these panel filters without clearing search.
+
+Below the `sm` breakpoint, verify each tutor card shows a compact identity row,
+a bio of at most two lines, a short specialization plus optional count, and a
+separated **Starting from** footer using the Marks icon prefix and chevron. The
+whole card must open the tutor drawer and provide a subtle pressed state; with
+reduced motion enabled, it must not scale. At `sm` and above, the existing
+horizontal tutor summary remains in use.
+
 Open `/profile` as a tutor and verify the selector loads exactly seven active competition categories and 33 specializations from `tutors.listSubjects`. All categories should be visible with keyboard-accessible checkboxes, no manual specialization input, selected-specialization chips, and a 7-specialization limit. The selector should show the current count, disable an eighth selection, and the submit validation should reject any over-limit state. Select specializations from multiple categories, save a draft, and confirm the selections reload with the profile. A submission with no current specialization must be blocked; archived legacy specializations on an existing profile should remain visible as read-only labels. Published tutor discovery should expose current specializations and allow students to filter by category or specialization. On the tutor list page, category, specialization, and modality filter triggers must show their labels rather than raw IDs or values. Confirm category and specialization filters support multiple values, retain overlapping specializations while categories are added, remove specializations that are no longer available after a category is removed, and wait about 300 ms after typing/toggling before `listPublished` runs. Open a tutor drawer with both modalities and verify pricing appears in one table with `Group Size`, `Online (Marks)`, and `Offline (Marks)` columns; populated prices should have the Cogito Marks icon as a prefix, and a size available in only one modality should show an em dash in the other column. Below the `sm` breakpoint, confirm the student tutor profile opens from the bottom and dismisses with a downward swipe; at `sm` and wider, confirm it opens from the right and dismisses rightward. On a short viewport, confirm the profile body scrolls independently while its header and booking/close footer remain visible; body overscroll may bounce locally, but the fixed regions must not move.
 
 ### Tutor achievement and experience formatting smoke check

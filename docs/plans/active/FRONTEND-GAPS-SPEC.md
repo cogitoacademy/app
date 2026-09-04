@@ -132,7 +132,7 @@ Tutor onboarding captures structured education (up to 2 entries) and one structu
 
 Tutor onboarding now uses the normalized competition category/specialization catalog exposed by `tutors.listSubjects`. The current catalog has seven categories and 33 specializations. Tutors must select at least one current specialization before submitting for review, and the student tutor catalog supports category and specialization filters. Archived legacy specializations remain visible on existing tutor profiles but cannot be newly selected. The legacy expertise field remains a compatibility fallback; future category changes should preserve the pending-review behavior for published profiles.
 
-The onboarding selector stores normalized IDs for persistence and renders all current categories with keyboard-accessible checkboxes. Tutors may select at most 7 active specializations; the selector shows the cap and current count, disables an eighth choice, and the submit/API validation rejects any over-limit payload. Selected specializations appear as chips, while archived profile specializations are shown read-only. The tutor list continues to support selecting multiple categories and specializations; specialization options are the union of the selected categories, the API matches selected values within each facet, and the list query debounces rapid search/filter changes by 300 ms. Product-facing copy uses **specialization**; compatibility API/database names such as `subjectIds`, `subjects`, and `listSubjects` remain unchanged.
+The onboarding selector stores normalized IDs for persistence and renders all current categories with keyboard-accessible checkboxes. Tutors may select at most 7 active specializations; the selector shows the cap and current count, disables an eighth choice, and the submit/API validation rejects any over-limit payload. Selected specializations appear as chips, while archived profile specializations are shown read-only. The tutor list continues to support selecting multiple categories and specializations; specialization options are the union of the selected categories, the API matches selected values within each facet, and the list query debounces rapid search/filter changes by 300 ms. Search stays visible while category, specialization, and modality controls live in a collapsed-by-default filter panel whose trigger shows the active-selection count. The panel uses a reduced-motion-aware height/fade transition and removes closed controls from keyboard navigation. Product-facing copy uses **specialization**; compatibility API/database names such as `subjectIds`, `subjects`, and `listSubjects` remain unchanged.
 
 ### Admin tutor review readability follow-up (2026-08-27)
 
@@ -145,6 +145,11 @@ The student `/achievements` list and admin `/admin-achievements` moderation queu
 ### Tutor discovery pricing matrix follow-up (2026-08-27)
 
 The student-facing tutor drawer now combines the available Online and Offline Marks maps into one group-size table. Each modality has its own price column, populated values use the shared Cogito Marks icon prefix, and an em dash makes a missing modality/size combination explicit. The profile uses a bottom sheet on mobile and a right-side drawer from the `sm` breakpoint. This is a presentation-only change; the `tutors.listPublished`/`tutors.getProfile` response and pricing contracts are unchanged.
+
+Tutor discovery cards use a dedicated compact mobile composition below `sm`:
+identity and modality lead, the bio gets two lines, specialization labels omit
+the redundant category prefix, and pricing occupies a separated footer with a
+Marks prefix and profile chevron. Desktop keeps the horizontal summary.
 
 ### Competition Calendar parity follow-up (2026-08-23)
 

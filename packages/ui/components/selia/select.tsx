@@ -282,10 +282,10 @@ function SelectRenderValue({
       );
 
     return (
-      <>
-        {firstValueLabel}
+      <span className="flex min-w-0 items-center overflow-visible">
+        <span className="min-w-0 truncate">{firstValueLabel}</span>
         {additionalValues}
-      </>
+      </span>
     );
   }
 
