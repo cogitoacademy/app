@@ -28,7 +28,7 @@ RUN bun run build:web
 # C5: pin the nginx base to a digest and run as the unprivileged nginx user.
 # The pid/cache dirs are made writable by nginx so the master can drop
 # privileges after startup.
-FROM nginx:alpine@sha256:1d40e3eb3bf4f138de1d67193f2aa5309fcaf343eb5ffadbf5e9439de1eb1ebb AS runner
+FROM nginx:alpine@sha256:72ba65eb42c10344912a84ff42408db7d34f2feb642204570ab8fc5ffd29f1d3 AS runner
 COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
 COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
 RUN touch /var/run/nginx.pid \
