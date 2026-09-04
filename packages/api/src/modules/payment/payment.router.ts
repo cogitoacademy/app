@@ -27,7 +27,7 @@ export function createPaymentRouter(handler: PaymentHandler) {
         tags: ["Payments"],
         summary: "Simulate a Test Mode purchase",
         description:
-          "Completes an owned pending Xendit Test Mode purchase through Xendit's simulation API",
+          "Completes an owned pending Test Mode purchase through the active provider's simulation API (Xendit only; Midtrans sandbox has no simulation endpoint)",
       })
       .input(simulatePurchaseInput)
       .handler(handler.simulatePurchase),

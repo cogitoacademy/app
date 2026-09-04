@@ -32,8 +32,18 @@ jobs:
         # v7 commit step fails with "ref HEAD is not a symbolic ref".
         # Checking out the head ref keeps a real branch checked out so the
         # auto-fix commit + push works exactly as it did on v5.
+        #
+        # S8: checkout with the fine-grained PAT so the auto-fix push is
+        # attributed to a human and the re-triggered pull_request runs are
+        # NOT gated behind the "action_required" approval that
+        # github-actions[bot] pushes trigger. git-auto-commit-action@v7 has
+        # no token input and ignores GITHUB_TOKEN env overrides — it pushes
+        # with whatever credentials checkout configured (verified 2026-09-04:
+        # both a `token:` input and a GITHUB_TOKEN env var left the push
+        # attributed to github-actions[bot]).
         with:
           ref: ${{ github.head_ref }}
+          token: ${{ secrets.ACTIONS_BOT_PAT }}
       - uses: oven-sh/setup-bun@v2.2.0
       - uses: actions/cache@v5
         with:
@@ -67,6 +77,11 @@ jobs:
         # The action pushes its commit from the checkout; do not run the local
         # pre-push hook there. The dedicated baseline and format gates below
         # are the CI checks for this job.
+        #
+        # S8: the push uses the credentials actions/checkout configured —
+        # the ACTIONS_BOT_PAT passed to checkout above — so the auto-fix
+        # commit is attributed to a human and the re-triggered runs are not
+        # gated behind approval (verified 2026-09-04).
         env:
           LEFTHOOK: "0"
         with:

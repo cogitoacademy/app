@@ -77,7 +77,7 @@ export class PaymentSimulationUnavailableError extends DomainError {
   constructor() {
     super(
       "PAYMENT_SIMULATION_UNAVAILABLE",
-      "Payment simulation is only available to approved Xendit Test Mode accounts",
+      "Payment simulation is only available to approved Test Mode accounts",
     );
   }
 }

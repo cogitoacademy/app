@@ -50,6 +50,12 @@ export function getUserFacingError(
   ) {
     return NETWORK_ERROR_MESSAGE;
   }
+  if (
+    normalized.includes("payment provider") ||
+    normalized.includes("service unavailable")
+  ) {
+    return "The payment provider is temporarily unavailable. Please try again in a few minutes.";
+  }
 
   return message;
 }

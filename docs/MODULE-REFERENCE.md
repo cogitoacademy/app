@@ -651,7 +651,7 @@ chat directory.
 
 ## Payment Module
 
-**Purpose:** Mark package purchases via a payment provider (Xendit) with webhook confirmation, idempotency, and wallet crediting.
+**Purpose:** Mark package purchases via a payment provider (Xendit default; Midtrans Snap selectable) with webhook confirmation, idempotency, and wallet crediting.
 
 **Files:**
 
@@ -659,9 +659,10 @@ chat directory.
 - `payment.errors.ts` — `PackageNotFoundError`, `PaymentNotFoundError`, `PackageAlreadyPurchasedError` (legacy), `PaymentProviderError`
 - `payment.repo.ts` — `findPackageByCode`, `insertPayment`, `findPaymentByProviderReference`, `findLatestPaymentByUserAndPackage`, `findPaymentByProviderEventId`, `findPaymentById`, `updatePaymentStatus`
 - `payment.service.ts` — `createIntent`, `confirmFromWebhook`, `getPurchase`; exposes `provider`
-- `payment.handler.ts` — `createPurchase`, approved-UAT-only `simulatePurchase`, `getPurchase`
+- `payment.handler.ts` — `createPurchase`, approved-UAT-only `simulatePurchase`, `getPurchase`; config `providerMode` (test/live) + `simulationEnabled` (Xendit only)
 - `payment.router.ts` — `createPurchase` and `simulatePurchase` use `verifiedStudentProcedure` (student role + verified email; `getPurchase` stays protected)
 - `xendit-payment.provider.ts` — Xendit API integration with circuit breaker and retry; explicit Test/Live mode label; bounded provider error diagnostics; `verifyWebhook`
+- `midtrans-payment.provider.ts` — Midtrans Snap integration (`POST /snap/v1/transactions` → `redirect_url`; webhook `signature_key` = `SHA512(order_id + status_code + gross_amount + key)` verified in the body; status mapping `capture`→PAID / `settlement`→SETTLED / `pending`→PENDING / `deny|cancel|failure`→FAILED / `expire`→EXPIRED / `refund|partial_refund`→REFUNDED; `order_id` = payment UUID resolved back to the stored provider reference; circuit breaker + retry; `refund()` port)
 - `stub-payment.provider.ts` — Development stub
 - Webhook route lives in `apps/server/src/webhooks/payments.ts` (`POST /webhooks/payments/:provider`)
 
@@ -675,17 +676,18 @@ chat directory.
 
 **Business Rules:**
 
-- Webhook signature verified via `verifyWebhook` (provider-specific) + timestamp window (5 min) + IP allowlist (honors `TRUST_PROXY`)
-- Webhook idempotency is atomic — `IdempotencyStore.claim` keys lifecycle events by provider + verified payment/event id (or provider reference fallback) + normalized status. This prevents a PENDING event from suppressing a later PAID event for the same Xendit payment while still deduplicating provider retries of the same state; transient processing failures release the claim (#46)
+- Webhook signature verified via `verifyWebhook` (provider-specific) + timestamp window (5 min, skipped for xendit/midtrans) + IP allowlist (honors `TRUST_PROXY`)
+- Webhook idempotency is atomic — `IdempotencyStore.claim` keys lifecycle events by provider + verified payment/event id (or provider reference fallback) + normalized status. This prevents a PENDING event from suppressing a later PAID event for the same payment while still deduplicating provider retries of the same state; transient processing failures release the claim (#46)
 - Circuit breaker prevents cascading failures to the provider
 - Payment statuses: `PENDING` → `PAID`/`SETTLED`/`EXPIRED`/`FAILED`/`REFUNDED`
 - Package purchases are repeatable: the latest PENDING attempt is reused, while terminal attempts remain immutable history and do not block a new payment row/provider reference.
-- Payment/refund notifications are written per the PRD matrix (B6, #46); `PAYMENT_PROVIDER=xendit` requires Xendit credentials and an explicit `XENDIT_MODE` (no silent stub fallback)
+- Payment/refund notifications are written per the PRD matrix (B6, #46); `PAYMENT_PROVIDER=xendit` requires Xendit credentials and an explicit `XENDIT_MODE` (no silent stub fallback); `PAYMENT_PROVIDER=midtrans` requires `MIDTRANS_SERVER_KEY`/`MIDTRANS_CLIENT_KEY`/`MIDTRANS_MERCHANT_ID`/`MIDTRANS_MODE` (no silent stub fallback)
 - Xendit selects the actual environment from the API key. In production/staging Test Mode, `XENDIT_TEST_ALLOWED_EMAILS` restricts `payment.createPurchase` to approved UAT accounts; the allowlist is normalized case-insensitively. The default channel is QRIS; its payment request sends channel-specific `qr_string_type=DYNAMIC` plus a 48-hour expiry, and the web client renders the returned `PRESENT_TO_CUSTOMER` QR string.
+- Midtrans selects the actual environment from the Server Key (Sandbox vs Production). `MIDTRANS_MODE` is the explicit deployment assertion. Snap returns a hosted `redirect_url` as `checkoutUrl`; `order_id` is the payment UUID (unique per repurchase attempt) and is resolved back to the stored provider reference for webhook/status matching. Midtrans Sandbox has **no simulation endpoint** — `canSimulate` is false and `simulatePurchase` returns `PAYMENT_SIMULATION_UNAVAILABLE` in Midtrans mode; sandbox test payments use the Snap test cards.
 - Test QRIS cannot be paid from a real banking app. For an owned pending purchase, `simulatePurchase` calls Xendit's `/v3/payment_requests/{id}/simulate` only in Test Mode and only for an approved UAT account. It never credits Marks directly; provider-confirmed status must pass through the transactional confirmation service.
-- Structured Xendit non-2xx responses are reduced to a single-line, bounded `status + error_code + message` diagnostic. That detail is safe to return as the `PAYMENT_PROVIDER_ERROR` message; arbitrary response bodies and credentials are never echoed.
+- Structured provider non-2xx responses (Xendit and Midtrans) are reduced to a single-line, bounded `status + error_code + message` diagnostic. That detail is safe to return as the `PAYMENT_PROVIDER_ERROR` message; arbitrary response bodies and credentials are never echoed.
 - If a Test Mode simulation retry receives `400 INACTIVE_PAYMENT_METHOD`, the payment service performs one authoritative status lookup. A terminal `PAID`/`SETTLED` result is confirmed through the same idempotent wallet-credit path used by webhooks; unresolved status lookup leaves the original provider diagnostic intact.
-- Test-mode status polling is also a recovery path: `getPurchase` checks Xendit's authoritative payment-request status for approved UAT users. If Xendit reports a terminal status, it delegates to the same transactional/idempotent `confirmFromWebhook` logic, so a missing sandbox webhook cannot leave a completed simulation stuck forever.
+- Test-mode status polling is also a recovery path: `getPurchase` checks the provider's authoritative status for approved UAT users (Xendit `GET /v3/payment_requests/{id}`, Midtrans `GET /v2/{order_id}/status`). If the provider reports a terminal status, it delegates to the same transactional/idempotent `confirmFromWebhook` logic, so a missing sandbox webhook cannot leave a completed payment stuck forever.
 
 ---
 

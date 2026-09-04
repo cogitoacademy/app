@@ -60,6 +60,53 @@ describe("server environment schema", () => {
     }
   });
 
+  test("requires Midtrans credentials when selected", () => {
+    const result = serverEnvSchema.safeParse({
+      ...baseEnv(),
+      PAYMENT_PROVIDER: "midtrans",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((issue) => issue.path.join("."))).toEqual(
+        expect.arrayContaining([
+          "MIDTRANS_SERVER_KEY",
+          "MIDTRANS_CLIENT_KEY",
+          "MIDTRANS_MERCHANT_ID",
+          "MIDTRANS_MODE",
+        ]),
+      );
+    }
+  });
+
+  test("accepts a complete Midtrans configuration", () => {
+    const result = serverEnvSchema.safeParse({
+      ...baseEnv(),
+      PAYMENT_PROVIDER: "midtrans",
+      MIDTRANS_SERVER_KEY: "SB-Mid-server-test",
+      MIDTRANS_CLIENT_KEY: "SB-Mid-client-test",
+      MIDTRANS_MERCHANT_ID: "G123456789",
+      MIDTRANS_MODE: "test",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  test("accepts a Midtrans configuration with a dedicated webhook signature key", () => {
+    const result = serverEnvSchema.safeParse({
+      ...baseEnv(),
+      PAYMENT_PROVIDER: "midtrans",
+      MIDTRANS_SERVER_KEY: "SB-Mid-server-test",
+      MIDTRANS_CLIENT_KEY: "SB-Mid-client-test",
+      MIDTRANS_MERCHANT_ID: "G123456789",
+      MIDTRANS_MODE: "live",
+      MIDTRANS_WEBHOOK_SIGNATURE_KEY: "dedicated-signature-key",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  test("PAYMENT_PROVIDER=stub does not require Midtrans credentials", () => {
+    expect(() => serverEnvSchema.parse(baseEnv())).not.toThrow();
+  });
+
   test("requires production email and R2 configuration", () => {
     const missing = serverEnvSchema.safeParse({
       ...baseEnv(),

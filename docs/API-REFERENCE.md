@@ -704,8 +704,8 @@ The web tutor profile editor groups education, competition achievements, and exp
 
 - **Auth:** Protected
 - **Input:** None
-- **Output:** `MarkPackage[]`
-- **Description:** Returns active purchasable mark packages. The default catalog is installed automatically by versioned database migration `0041_seed_mark_packages.sql`; values are Starter Pack 50 Marks / Rp 312,500; Learner Pack 120 Marks / Rp 690,000; Explorer Pack 200 Marks / Rp 1,070,000; Pioneer Pack 400 Marks / Rp 2,000,000. Admins can manage later catalog changes through `adminMarkPackage.*`.
+- **Output:** `{ xenditMode: "test" | "live" | null, packages: MarkPackage[] }`
+- **Description:** Returns active purchasable mark packages plus the client-visible payment mode signal. `xenditMode` is `"test"` when `PAYMENT_PROVIDER=xendit` and `XENDIT_MODE=test`, `"live"` for Live Mode, and `null` when the stub provider is active — the web app uses it to label packages that exceed the Xendit Test Mode amount cap (~IDR 1,000,000; Explorer/Pioneer are rejected in Test Mode but work in Live Mode). The default catalog is installed automatically by versioned database migration `0041_seed_mark_packages.sql`; values are Starter Pack 50 Marks / Rp 312,500; Learner Pack 120 Marks / Rp 690,000; Explorer Pack 200 Marks / Rp 1,070,000; Pioneer Pack 400 Marks / Rp 2,000,000. Admins can manage later catalog changes through `adminMarkPackage.*`.
 
 ### `wallet.knowledgeBankEligible`
 
@@ -734,6 +734,13 @@ The web tutor profile editor groups education, competition achievements, and exp
 - In production/staging, `XENDIT_MODE=test` also requires `XENDIT_TEST_ALLOWED_EMAILS`; only those verified student emails can call `payment.createPurchase`. This keeps production-domain UAT from granting sandbox-funded Marks to arbitrary accounts. The default provider channel is QRIS; `checkoutUrl` carries Xendit's `PRESENT_TO_CUSTOMER` dynamic QR payload for the Balance page to render (the legacy field name is retained for API compatibility).
 - `payment.createPurchase` also returns `canSimulate`. When true, the Balance page may call `payment.simulatePurchase` with the owned payment UUID. That procedure is rejected outside Xendit Test Mode and for accounts outside `XENDIT_TEST_ALLOWED_EMAILS`; wallet credit still occurs only after provider confirmation through the verified webhook or the approved Test Mode reconciliation fallback.
 
+### Midtrans (Snap) environment selection
+
+- `PAYMENT_PROVIDER=midtrans` selects the Midtrans Snap provider. `MIDTRANS_MODE` is required and must be `test` (Sandbox) or `live` (Production); the Server Key, created in the matching Midtrans dashboard mode, selects the actual environment. `MIDTRANS_SERVER_KEY`, `MIDTRANS_CLIENT_KEY`, and `MIDTRANS_MERCHANT_ID` are required (fail-loud env guard).
+- `checkoutUrl` carries the Snap `redirect_url` (hosted payment page) — the frontend checkout handling is unchanged (the field name and redirect semantics are the same as Xendit's e-wallet redirect).
+- `canSimulate` is **always false** in Midtrans mode: the Midtrans Sandbox has no simulation endpoint. Sandbox test payments use the Snap test cards (`4811 1111 1111 1114`, CVV `123`, OTP `112233`). `payment.simulatePurchase` returns `PAYMENT_SIMULATION_UNAVAILABLE` (403) in Midtrans mode.
+- `order_id` is the payment UUID (unique per repurchase attempt); webhooks and status lookups resolve it back to the stored provider reference.
+
 ### `payment.simulatePurchase`
 
 - Input: `{ paymentId: string (UUID) }`
@@ -755,10 +762,18 @@ The web tutor profile editor groups education, competition achievements, and exp
 ### `POST /webhooks/payments/:provider` (external)
 
 - **Auth:** Public (non-oRPC route)
-- **Input:** Raw body; headers `x-callback-token` (xendit) / `x-webhook-signature`, `x-timestamp` (timestamp validation is **skipped for xendit** — the API documents only `x-callback-token`, P3.5/L4)
+- **Input:** Raw body; headers `x-callback-token` (xendit) / `x-webhook-signature` (stub), `x-timestamp` (timestamp validation is **skipped for xendit and midtrans** — Xendit documents only `x-callback-token` (P3.5/L4); Midtrans signs via the body `signature_key` and sends no timestamp header)
 - **Output:** `{ ok: true }`
-- **Errors:** 401 signature failure, 408 stale timestamp (> 5 min, non-xendit), 403 IP not allowlisted, 500 processing failure
+- **Errors:** 401 signature failure, 408 stale timestamp (> 5 min, non-xendit/non-midtrans), 403 IP not allowlisted, 500 processing failure
 - **Description:** Provider webhook; verifies signature, validates timestamp (provider-conditional), then atomically claims the idempotency key (released on transient processing failure), calls `payment.confirmFromWebhook`, and updates payment status (`PENDING → PAID/SETTLED/FAILED/EXPIRED`; `PAID/SETTLED → REFUNDED`); credits the wallet on PAID/SETTLED and writes the payment notification (#46). Xendit lifecycle keys combine provider, `data.payment_id ?? data.payment_request_id`, and normalized status because 2024-11-11 webhooks carry no unique `event_id`: distinct lifecycle states for one payment are processed, while retries of the same state dedupe. A missing event id falls back to the provider reference rather than a shared placeholder. Every repeat purchase uses a separate payment row and provider reference, so late webhooks from an earlier attempt cannot change the newer attempt's state or suppress its wallet credit. A REFUNDED webhook reads the wallet through the transaction (`wallet.getByUserId(tx, ...)`, N4) and reverses the credited Marks from the **total balance** (`held + available`): held Marks are released back to available (`refund.{id}.release`) then the full payment Marks are reversed via `compensate_deduct` (`refund.{id}.reverse`) when total ≥ marks; if the Marks were already spent (`totalBalance < marks`, H4), the payment is still marked REFUNDED and a `refund_webhook_reconciliation` audit + `refund_record` row are written for admin (no reversal, no throw, no 500/retry loop — P2.7/H4, M1/N4 wave-6b)
+
+### Midtrans (Snap) webhook (`POST /webhooks/payments/midtrans`)
+
+- **Signature:** the `signature_key` is **inside the JSON body** — `SHA512(order_id + status_code + gross_amount + signatureKey)` where `signatureKey` is `MIDTRANS_WEBHOOK_SIGNATURE_KEY` or, when unset, the Server Key. There is no signature header; the route passes an empty header value and the provider verifies the body. As defense-in-depth, a signed notification whose `merchant_id` does not match `MIDTRANS_MERCHANT_ID` is rejected (401).
+- **Payload fields:** `order_id` (our payment UUID), `transaction_id`, `transaction_status`, `status_code`, `gross_amount`, `fraud_status`, `status_message`, `payment_type`, `merchant_id`.
+- **Status mapping:** `capture`→PAID (with `fraud_status=accept`; `challenge`→PENDING, `deny`→FAILED), `settlement`→SETTLED, `pending`/`authorize`→PENDING, `deny`/`cancel`/`failure`→FAILED, `expire`→EXPIRED, `refund`/`partial_refund`→REFUNDED.
+- **Reference resolution:** `order_id` is the payment UUID (Snap `order_id` max 50 chars, `[A-Za-z0-9._~-]` — the provider reference contains colons and can exceed 50 chars). The provider resolves the UUID back to the stored `providerReference` via a DB lookup; when unresolvable it falls back to the `order_id` and the service's DB reference fallback.
+- **Idempotency:** the same lifecycle key derivation applies — `midtrans:{transaction_id ?? order_id}:{status}` — so a `settlement` retry dedupes while a later `refund` for the same payment still processes.
 
 ### Provider refunds (X1, P3.6 — superseded by N1, 2026-08-19)
 
