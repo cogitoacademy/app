@@ -33,6 +33,7 @@ import { Link } from "@tanstack/react-router";
 import { QRCodeSVG } from "qrcode.react";
 
 import { EmptyState } from "@/components/empty-state";
+import { CogitoMarks } from "@/components/cogito-marks";
 import { BalanceWidget } from "@/components/dashboard/balance-widget";
 import { orpc } from "@/utils/orpc";
 import { getUserFacingError } from "@/lib/error-message";
@@ -153,7 +154,11 @@ export function BalancePage() {
   const kbAccessible = totalBalance >= 35;
 
   return (
-    <Stack direction="column" spacing="lg">
+    <Stack
+      className="w-full min-w-0 max-w-full"
+      direction="column"
+      spacing="lg"
+    >
       <div>
         <Heading level={1} size="md">
           Balance
@@ -162,7 +167,7 @@ export function BalancePage() {
           Track your Marks, active holds, and top-up options.
         </Text>
       </div>
-      <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-[1fr_2fr]">
+      <div className="grid min-w-0 grid-cols-1 items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
         <BalanceWidget
           availableBalance={availableBalance}
           heldBalance={heldBalance}
@@ -172,7 +177,7 @@ export function BalancePage() {
           actionHref="/tutors"
           actionIcon={<IconUsers />}
         />
-        <Card className="h-full">
+        <Card className="h-full min-w-0">
           <CardHeader>
             <CardTitle>Knowledge Bank Access</CardTitle>
             <CardDescription>
@@ -185,7 +190,7 @@ export function BalancePage() {
               <IconBox variant="tertiary">
                 {kbAccessible ? <IconBook /> : <IconLockOpen />}
               </IconBox>
-              <div>
+              <div className="min-w-0">
                 <Heading size="sm">
                   {kbAccessible
                     ? "You have access"
@@ -225,7 +230,7 @@ export function BalancePage() {
         </Card>
       </div>
 
-      <Card id="top-up-marks">
+      <Card id="top-up-marks" className="w-full min-w-0 max-w-full">
         <CardHeader>
           <CardTitle>Top Up Marks</CardTitle>
           <CardDescription>
@@ -245,7 +250,7 @@ export function BalancePage() {
             </Text>
           </div>
           {qrPayload ? (
-            <Card className="mb-4">
+            <Card className="mb-4 min-w-0 max-w-full">
               <CardHeader>
                 <CardTitle>Scan QRIS to pay</CardTitle>
                 <CardDescription>
@@ -254,14 +259,15 @@ export function BalancePage() {
                   confirms the payment.
                 </CardDescription>
               </CardHeader>
-              <CardBody className="flex flex-col items-center gap-4">
-                <div className="rounded-lg bg-background p-4 text-foreground">
+              <CardBody className="flex min-w-0 flex-col items-center gap-4">
+                <div className="w-full max-w-68 rounded-lg bg-background p-4 text-foreground">
                   <QRCodeSVG
                     value={qrPayload}
                     size={240}
                     level="M"
                     bgColor="var(--color-background)"
                     fgColor="var(--color-foreground)"
+                    className="h-auto w-full"
                   />
                 </div>
                 {purchase.data?.canSimulate ? (
@@ -391,7 +397,7 @@ export function BalancePage() {
         </CardBody>
       </Card>
 
-      <Card>
+      <Card className="w-full min-w-0 max-w-full">
         <CardHeader>
           <CardTitle>Marks history</CardTitle>
           <CardDescription>
@@ -399,7 +405,7 @@ export function BalancePage() {
             payments
           </CardDescription>
         </CardHeader>
-        <CardBody>
+        <CardBody className="min-w-0 overflow-hidden">
           {ledgerLoading ? (
             <Text className="text-muted">Loading transaction history...</Text>
           ) : !ledger?.items.length ? (
@@ -425,7 +431,7 @@ export function BalancePage() {
                 return (
                   <div
                     key={entry.id}
-                    className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
+                    className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-1 py-3 first:pt-0 last:pb-0 sm:grid-cols-[auto_minmax(0,1fr)_auto]"
                   >
                     <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent text-muted">
                       <EntryIcon className="size-4" />
@@ -435,7 +441,9 @@ export function BalancePage() {
                         {LEDGER_LABELS[entry.entryType] ?? "Marks activity"}
                       </Text>
                       <Text className="truncate text-sm text-muted">
-                        {entry.reason ?? "Cogito Marks transaction"} ·{" "}
+                        {entry.reason ?? "Cogito Marks transaction"}
+                      </Text>
+                      <Text className="text-xs text-dimmed">
                         {new Intl.DateTimeFormat("en-GB", {
                           day: "numeric",
                           month: "short",
@@ -445,7 +453,7 @@ export function BalancePage() {
                         }).format(new Date(entry.createdAt))}
                       </Text>
                     </div>
-                    <div className="text-right">
+                    <div className="col-start-2 min-w-0 text-left sm:col-start-3 sm:row-start-1 sm:text-right">
                       <Text
                         className={cn(
                           "font-semibold",
@@ -456,11 +464,13 @@ export function BalancePage() {
                               : "text-foreground",
                         )}
                       >
-                        {direction > 0 ? "+" : direction < 0 ? "-" : ""}
-                        {entry.amount} Marks
+                        <CogitoMarks
+                          value={`${direction > 0 ? "+" : direction < 0 ? "-" : ""}${entry.amount}`}
+                        />
                       </Text>
-                      <Text className="text-sm text-muted">
-                        Balance {entry.afterBalance}
+                      <Text className="inline-flex items-center gap-1 text-sm text-muted sm:justify-end">
+                        Balance
+                        <CogitoMarks value={entry.afterBalance} size="3" />
                       </Text>
                     </div>
                   </div>

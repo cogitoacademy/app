@@ -29,8 +29,8 @@ export function BalanceWidget({
   actionIcon,
 }: BalanceWidgetProps) {
   return (
-    <div className="rounded-3xl bg-accent p-2">
-      <Card className="h-full ring-0">
+    <div className="w-full min-w-0 max-w-full overflow-hidden rounded-3xl bg-accent p-2">
+      <Card className="h-full min-w-0 ring-0">
         <CardBody className="flex h-full flex-col p-4">
           <Text className="pt-1 text-sm text-muted">Available balance</Text>
 
@@ -38,14 +38,14 @@ export function BalanceWidget({
             <CogitoMarks value={isLoading ? "—" : availableBalance} size="6" />
           </div>
 
-          <div className="mt-5 flex items-end justify-between gap-4 text-xs">
-            <div className="flex flex-col leading-tight">
+          <div className="mt-5 grid min-w-0 grid-cols-2 gap-4 text-xs">
+            <div className="min-w-0 flex flex-col leading-tight">
               <Text className="text-xs text-muted md:text-sm">Held</Text>
               <Text className="mt-1 text-base font-semibold tabular-nums md:text-lg">
                 <CogitoMarks value={isLoading ? "—" : heldBalance} />
               </Text>
             </div>
-            <div className="flex flex-col items-end leading-tight">
+            <div className="min-w-0 flex flex-col items-end overflow-hidden leading-tight">
               <Text className="text-xs text-muted md:text-sm">Total</Text>
               <Text className="mt-1 text-base font-semibold tabular-nums md:text-lg">
                 <CogitoMarks value={isLoading ? "—" : totalBalance} />

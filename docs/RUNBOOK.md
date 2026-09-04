@@ -10,7 +10,13 @@ the Balance page places the widget beside Knowledge Bank Access on desktop and
 stacks them cleanly on narrow screens. On the student dashboard, confirm the
 widget's **Find a tutor** action opens `/tutors`; its dashboard counterpart keeps
 **Top up** and opens `/balance`. Confirm the widget remains contained beside the
-Competition Calendar card on the student dashboard.
+Competition Calendar card on the student dashboard. At 320 px and 390 px wide,
+confirm the Balance page has no page-level horizontal clipping before and after
+creating a QRIS purchase; the QR code must scale within its nested payment card.
+Test with populated Marks history as well: mobile amounts should sit below their
+descriptions, while desktop amounts remain right-aligned on the same row. Each
+date must appear below its transaction reason, and both the amount and resulting
+balance must use the shared Marks icon as a prefix.
 
 The admin dashboard Booking activity card now opens its explanatory copy from a
 compact info icon directly beside the title. Verify the popover opens with

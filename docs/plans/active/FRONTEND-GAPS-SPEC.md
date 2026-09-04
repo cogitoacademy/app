@@ -22,6 +22,14 @@ on desktop. Existing wallet data and routes are reused without an API change.
 The Balance-page CTA is labeled **Find a tutor** and links to `/tutors`; the
 student dashboard keeps the widget's **Top up** action.
 
+**Mobile containment follow-up:** the page grid and reusable widget expose
+shrinkable, width-bounded columns; transaction amounts move below their details
+on mobile so populated Marks history cannot widen the page; and the QRIS code
+scales within the nested payment card. This removes page-level horizontal
+clipping at narrow viewport widths without changing wallet or payment contracts.
+Ledger dates occupy a dedicated metadata line below the reason, and amounts plus
+resulting balances reuse the shared icon-prefixed `CogitoMarks` presentation.
+
 ### Booking-detail card header follow-up (2026-09-04)
 
 Booking-detail cards now move explanatory `CardDescription` copy into the

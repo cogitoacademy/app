@@ -16,6 +16,17 @@ The reusable widget keeps its dashboard **Top up** CTA by default; the Balance
 page configures the same action as **Find a tutor** and routes to `/tutors`,
 which is the next step before creating a booking.
 
+The Balance page and reusable widget explicitly allow their grid/flex children
+to shrink on narrow screens. Held and total values use equal bounded columns,
+and mobile ledger amounts move below their transaction descriptions so Marks
+history cannot impose a desktop-sized intrinsic width on the entire page. The
+QRIS payment code also scales to the nested card's available width instead of
+enforcing a fixed 272-pixel padded box.
+
+Marks history renders the transaction date on its own metadata line below the
+reason. Transaction amounts and resulting balances use the shared `CogitoMarks`
+icon-prefix presentation instead of spelling out Marks as a text suffix.
+
 ## Card title info preview (2026-09-04)
 
 The shared Selia `Card` now provides `CardInfoPreview`, an optional inline slot
