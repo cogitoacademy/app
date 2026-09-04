@@ -1,11 +1,11 @@
 # CI Sanity & False-Positive Elimination — Plan
 
-| Field      | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status     | **F1–F7 implemented + merged 2026-08-31** (#130, #132–#137); F1 blind-spot fix (Dependabot) merged 2026-09-01; F6 verdict recorded 2026-09-01; PR #152 refreshes the exact oxlint 1.80 baseline, fixes three new React findings, and makes the lint auto-fix push hook-safe; F14 CI test/coverage performance is implemented on `f/ci-test-coverage-performance`; F8 (e2e in CI) + F10 (branch protection) remain; F9 (ACTIONS_BOT_PAT) operator console; F13 (lint-warning triage) documented 2026-08-31 |
-| Created    | 2026-08-31                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| Depends on | #126 merged (ops.sh + APPLY-RUNBOOK + this plan's trigger); main `85841b0`                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| Scope      | CI workflow fixes (fail-loud infra-plan, web-deploy verification, auto-rollback, dedupe, staging decision, test/coverage performance) + DLQ age-aware health                                                                                                                                                                                                                                                                                                                                              |
+| Field      | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status     | **F1–F7 implemented + merged 2026-08-31** (#130, #132–#137); F1 blind-spot fix (Dependabot) merged 2026-09-01; F6 verdict recorded 2026-09-01; PR #152 refreshes the exact oxlint 1.80 baseline, fixes three new React findings, and makes the lint auto-fix push hook-safe; F14 CI test/coverage performance is implemented on `f/ci-test-coverage-performance`; F8 (e2e in CI) + F10 (branch protection) remain; F9 (ACTIONS_BOT_PAT) **regressed in #189 and fixed 2026-09-04 (see Status log)**; F13 (lint-warning triage) documented 2026-08-31 |
+| Created    | 2026-08-31                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Depends on | #126 merged (ops.sh + APPLY-RUNBOOK + this plan's trigger); main `85841b0`                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Scope      | CI workflow fixes (fail-loud infra-plan, web-deploy verification, auto-rollback, dedupe, staging decision, test/coverage performance) + DLQ age-aware health                                                                                                                                                                                                                                                                                                                                                                                         |
 
 ## Why
 
@@ -110,3 +110,25 @@ cache dependent.
   legacy React findings remain visible but no longer
   reject every local push, and any non-baselined lint error still fails. The
   gate also removes its temporary GitHub-format output on exit.
+- 2026-09-04 (PR with the wave #189 merge, `fix/ci-dependabot-checkout`):
+  **F9 REGRESSED and fixed.** PR #189 replaced the Lint job's
+  `token: ${{ secrets.ACTIONS_BOT_PAT || github.token }}` input with a bare
+  `secrets.ACTIONS_BOT_PAT`, deleting the 2026-08-27 fallback (`479956f`)
+  and the comment that described the failure mode. Dependabot branches
+  receive **no repository secrets** (F1 blind-spot class), so the input
+  arrived empty and `actions/checkout@v6` failed with `Input required and
+not supplied: token` before any check ran. Live evidence: PRs #142 and
+  #144 went red (run 33831763336 log: `Secret source: Dependabot` →
+  `##[error]Input required and not supplied: token`), auto-merge stopped,
+  and the weekly bun group (#145) additionally failed in Build with
+  `Failed to resolve base ref 'main'` (turbo `--affected` could not resolve
+  its merge base on a dependabot checkout). Fixes in this PR: restored
+  `|| github.token` on the checkout; added an explicit default-branch fetch
+  before `turbo --affected` in the typecheck and build jobs; renamed the
+  Semantic PR workflow job `lint` → `semantic-pr` (the job name is the PR
+  check context and collided with the CI Lint job — every PR showed a
+  duplicate `lint` check); pinned the lint/format auto-fix and check steps
+  to the baseline versions (oxlint@1.80.0, oxfmt@0.65.0) so the auto-fix
+  can never diverge from the gate. **F10 (branch protection) still
+  unverified from a write-collaborator account — operator console check
+  required.**
