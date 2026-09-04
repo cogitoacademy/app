@@ -5,7 +5,10 @@ on:
     types: [opened, edited, synchronize]
 
 jobs:
-  lint:
+  # Named `semantic-pr` (was `lint`): the job name is the check context shown
+  # on PRs, and `lint` collided with the CI workflow's Lint job — every PR
+  # showed a confusing duplicate `lint` check.
+  semantic-pr:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: read

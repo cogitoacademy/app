@@ -43,7 +43,14 @@ jobs:
         # attributed to github-actions[bot]).
         with:
           ref: ${{ github.head_ref }}
-          token: ${{ secrets.ACTIONS_BOT_PAT }}
+          # S8/F9 regression (2026-09-04): PR #189 replaced this input with a
+          # bare `secrets.ACTIONS_BOT_PAT`. Dependabot branches receive NO
+          # repository secrets, so the input arrived EMPTY and actions/checkout
+          # failed with "Input required and not supplied: token" — every
+          # dependabot PR went red and auto-merge stopped. The `|| github.token`
+          # fallback (479956f, ci/self-approve-bot-commits) degrades to the
+          # default token on dependabot runs; human PRs still use the PAT.
+          token: ${{ secrets.ACTIONS_BOT_PAT || github.token }}
       - uses: oven-sh/setup-bun@v2.2.0
       - uses: actions/cache@v5
         with:
@@ -53,8 +60,8 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Apply auto-fixable lint and format fixes
         run: |
-          bunx oxlint --fix || true
-          bunx oxfmt --write || true
+          bunx oxlint@1.80.0 --fix || true
+          bunx oxfmt@0.65.0 --write || true
       - name: Check last commit message
         id: commit-check
         run: echo "last-commit-msg=$(git log -1 --format='%s')" >> "$GITHUB_OUTPUT"
@@ -93,7 +100,7 @@ jobs:
       - name: Verify lint (errors fail; desceded web findings checked against baseline)
         run: bun .github/lint/check-baseline.ts
       - name: Verify formatting
-        run: bunx oxfmt --check
+        run: bunx oxfmt@0.65.0 --check
 
   typecheck:
     name: Type Check
@@ -116,6 +123,14 @@ jobs:
             .turbo
           key: ${{ runner.os }}-turbo-typecheck-${{ github.sha }}-${{ hashFiles('bun.lock', '**/package.json', 'turbo.json', '**/tsconfig*.json') }}
           restore-keys: ${{ runner.os }}-turbo-typecheck-
+      - name: Ensure main is fetchable (Turbo --affected base)
+        # Turbo --affected resolves its merge base against the repository's
+        # default branch ("main"). On Dependabot pull_request runs the checkout
+        # omits the base and turbo failed with "Failed to resolve base ref
+        # 'main'" (see PR #145 / the weekly bun group). Fetching the default
+        # branch once makes the merge-base computation deterministic — no
+        # behavior change for human PRs (main is already present there).
+        run: git fetch origin "${{ github.event.repository.default_branch }}" --depth=1 || git fetch origin "${{ github.event.repository.default_branch }}"
       - run: bun install --frozen-lockfile
       - name: Type-check affected packages on pull requests
         if: ${{ github.event_name == 'pull_request' }}
@@ -145,6 +160,8 @@ jobs:
             .turbo
           key: ${{ runner.os }}-turbo-build-${{ github.sha }}-${{ hashFiles('bun.lock', '**/package.json', 'turbo.json', '**/tsconfig*.json', '**/vite.config.*', '**/tsdown.config.*') }}
           restore-keys: ${{ runner.os }}-turbo-build-
+      - name: Ensure main is fetchable (Turbo --affected base)
+        run: git fetch origin "${{ github.event.repository.default_branch }}" --depth=1 || git fetch origin "${{ github.event.repository.default_branch }}"
       - run: bun install --frozen-lockfile
       - name: Build affected packages on pull requests
         if: ${{ github.event_name == 'pull_request' }}
