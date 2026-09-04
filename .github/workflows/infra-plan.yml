@@ -208,7 +208,7 @@ jobs:
 
       - name: Upload plan artifact
         if: steps.check-creds.outputs.skip-plan == 'false'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: terraform-plan
           # terraform show writes tfplan.txt relative to the job's
