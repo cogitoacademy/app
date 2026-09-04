@@ -8,14 +8,12 @@ import {
   IconClock,
   IconCoins,
   IconInbox,
-  IconUserCheck,
 } from "@tabler/icons-react";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
-  CardDescription,
   CardHeader,
   CardHeaderAction,
   CardTitle,
@@ -26,6 +24,7 @@ import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 
 import { EmptyState } from "@/components/empty-state";
+import { InfoPreview } from "@/components/info-preview";
 import {
   isUpcomingBooking,
   NextLessonSection,
@@ -37,11 +36,13 @@ import {
   getBookingStateLabel,
   getBookingStateVariant,
 } from "@/components/booking/booking-ui";
+import { useNow } from "@/hooks/use-now";
 import { orpc } from "@/utils/orpc";
 
 const NON_BCA_TRANSFER_FEE_IDR = 2_500;
 
 export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
+  const now = useNow();
   const bookings = useQuery(
     orpc.booking.listMine.queryOptions({ input: { limit: 100 } }),
   );
@@ -54,7 +55,7 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
     (booking) => booking.currentState === "awaiting_tutor_review",
   );
   const upcoming = items
-    .filter((booking) => isUpcomingBooking(booking))
+    .filter((booking) => isUpcomingBooking(booking, now))
     .toSorted(
       (a, b) =>
         new Date(a.scheduledStartAt).getTime() -
@@ -139,19 +140,16 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
       <div className="grid items-start gap-4 lg:grid-cols-2">
         <TeachingSetupCard profileStatus={profileStatus} />
 
-        <Card>
+        <Card className="min-w-0">
           <CardHeader>
-            <IconBox variant="success-subtle">
-              <IconCoins />
-            </IconBox>
-            <div>
-              <CardTitle>Payout details</CardTitle>
-              <CardDescription>
-                Honorarium from completed sessions that have not yet been paid
-                by an admin. Payouts are processed weekly, then this amount is
-                cleared against the recorded payout.
-              </CardDescription>
-            </div>
+            <CardTitle>Payout details</CardTitle>
+            <CardHeaderAction>
+              <InfoPreview
+                title="Payout details"
+                description="Honorarium from completed sessions that have not yet been paid by an admin. Payouts are processed weekly, then this amount is cleared against the recorded payout."
+                label="About payout details"
+              />
+            </CardHeaderAction>
           </CardHeader>
           <CardBody>
             <div className="grid grid-cols-2 gap-4">
@@ -174,13 +172,20 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
             </div>
             <div className="mt-4 rounded-lg bg-accent p-4">
               <div className="flex items-center justify-between gap-3">
-                <Text className="text-sm text-muted">
-                  {!hasBankDetails
-                    ? "Transfer fee"
-                    : usesBca
-                      ? "BCA transfer fee"
-                      : "Non-BCA transfer fee"}
-                </Text>
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <Text className="text-sm text-muted">
+                    {!hasBankDetails
+                      ? "Transfer fee"
+                      : usesBca
+                        ? "BCA transfer fee"
+                        : "Non-BCA transfer fee"}
+                  </Text>
+                  <InfoPreview
+                    title="Transfer fee"
+                    description="Conventional BCA is free. BCA Syariah, blu (BCA Digital), and other banks incur Rp2.500 once per payout, deducted from your honorarium. The amount clears after an admin marks the payout as paid."
+                    label="About transfer fees"
+                  />
+                </div>
                 <Text className="font-medium">
                   {transferFee > 0
                     ? `−Rp${transferFee.toLocaleString("id-ID")}`
@@ -193,12 +198,6 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
                   Rp{estimatedPayout.toLocaleString("id-ID")}
                 </Text>
               </div>
-              <Text className="mt-2 text-sm text-muted">
-                Only conventional BCA is fee-free. BCA Syariah, blu (BCA
-                Digital), and other banks are charged Rp2.500 once per payout,
-                deducted from the tutor fee. The amount clears only after an
-                admin records the payout as paid.
-              </Text>
               {!hasBankDetails ? (
                 <Text className="mt-2 text-sm text-warning">
                   Complete your payout account details in your tutor profile
@@ -217,13 +216,7 @@ function TeachingSetupCard({ profileStatus }: { profileStatus: string }) {
   return (
     <Card className="min-w-0">
       <CardHeader>
-        <IconBox variant="primary-subtle">
-          <IconUserCheck />
-        </IconBox>
         <CardTitle>Teaching setup</CardTitle>
-        <CardDescription>
-          Keep your profile and bookable hours ready.
-        </CardDescription>
       </CardHeader>
       <CardBody className="flex flex-col gap-3">
         <div className="flex items-center justify-between rounded-lg bg-accent p-4">
@@ -270,14 +263,8 @@ function ReviewRequestsCard({
 }) {
   return (
     <Card className="min-w-0">
-      <CardHeader>
-        <IconBox variant="warning-subtle">
-          <IconInbox />
-        </IconBox>
+      <CardHeader className="py-3">
         <CardTitle>Requests to review</CardTitle>
-        <CardDescription>
-          Student requests waiting for your decision.
-        </CardDescription>
         <CardHeaderAction>
           <Button
             variant="plain"

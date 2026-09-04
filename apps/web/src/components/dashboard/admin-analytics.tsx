@@ -22,7 +22,6 @@ import {
   IconAlertTriangle,
   IconChartAreaLine,
   IconChartBar,
-  IconChartDonut,
   IconChartHistogram,
   IconRefresh,
   IconTargetArrow,
@@ -176,9 +175,6 @@ export function AdminAnalytics() {
     <section aria-labelledby="admin-analytics-heading">
       <div className="mb-4 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <Badge variant="info" pill>
-            <IconChartAreaLine className="size-3.5" /> Business insights
-          </Badge>
           <Heading
             id="admin-analytics-heading"
             level={2}
@@ -391,13 +387,7 @@ function AnalyticsContent({
 
         <Card>
           <CardHeader>
-            <IconBox variant="danger-subtle">
-              <IconChartDonut />
-            </IconBox>
             <CardTitle>Current booking portfolio</CardTitle>
-            <CardDescription>
-              Live state mix across all bookings, useful for prioritising work.
-            </CardDescription>
           </CardHeader>
           <CardBody>
             {stateData.length > 0 ? (

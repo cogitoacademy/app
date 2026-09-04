@@ -589,6 +589,8 @@ function MarkAmount({ value }: { value: number }) {
         src="/cogito-mark.png"
         alt=""
         aria-hidden="true"
+        width={16}
+        height={16}
         className="size-4 shrink-0 object-contain"
       />
       <span>{value}</span>

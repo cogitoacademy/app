@@ -535,7 +535,7 @@ export function AchievementForm({
                         value={field.state.value}
                         onBlur={field.handleBlur}
                         onChange={(e) => field.handleChange(e.target.value)}
-                        placeholder="https://..."
+                        placeholder="https://…"
                       />
                       {field.state.meta.errors.map((error) => (
                         <FieldError key={String(error)}>

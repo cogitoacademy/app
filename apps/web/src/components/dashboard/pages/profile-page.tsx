@@ -155,20 +155,16 @@ export function ProfilePage({
   const completedFields = Object.values(profileValues).filter(
     (value): value is string => typeof value === "string" && value.length > 0,
   ).length;
-  const [accountForm, setAccountForm] = useState(() => ({
+  const [accountFormDraft, setAccountFormDraft] = useState<{
+    name: string;
+    image: string;
+  } | null>(() =>
+    user ? { name: user.name ?? "", image: user.image ?? "" } : null,
+  );
+  const accountForm = accountFormDraft ?? {
     name: user?.name ?? "",
     image: user?.image ?? "",
-  }));
-
-  useEffect(() => {
-    if (!user) return;
-
-    setAccountForm((current) =>
-      current.name || current.image
-        ? current
-        : { name: user.name ?? "", image: user.image ?? "" },
-    );
-  }, [user]);
+  };
 
   const accountChanged =
     accountForm.name.trim() !== (user?.name ?? "").trim() ||
@@ -289,10 +285,22 @@ export function ProfilePage({
           isSaving={accountMutation.isPending}
           footerNote="Your account identity is separate from your learning profile and does not need admin review."
           onNameChange={(name) =>
-            setAccountForm((current) => ({ ...current, name }))
+            setAccountFormDraft((current) => ({
+              ...(current ?? {
+                name: user?.name ?? "",
+                image: user?.image ?? "",
+              }),
+              name,
+            }))
           }
           onImageChange={(image) =>
-            setAccountForm((current) => ({ ...current, image }))
+            setAccountFormDraft((current) => ({
+              ...(current ?? {
+                name: user?.name ?? "",
+                image: user?.image ?? "",
+              }),
+              image,
+            }))
           }
           onSave={() => accountMutation.mutate()}
         />

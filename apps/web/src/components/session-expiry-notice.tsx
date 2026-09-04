@@ -5,7 +5,7 @@ import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { IconAlertTriangle } from "@tabler/icons-react";
-import { useEffect, useState } from "react";
+import { useNow } from "@/hooks/use-now";
 
 const SESSION_WARNING_WINDOW_MS = 30 * 60 * 1000;
 const SESSION_TIMER_INTERVAL_MS = 30 * 1000;
@@ -22,8 +22,8 @@ function toTimestamp(value: SessionExpiryValue) {
   return Number.isFinite(timestamp) ? timestamp : null;
 }
 
-function getRemainingMs(expiresAt: number | null) {
-  return expiresAt === null ? null : Math.max(0, expiresAt - Date.now());
+function getRemainingMs(expiresAt: number | null, now: number) {
+  return expiresAt === null ? null : Math.max(0, expiresAt - now);
 }
 
 function formatRemaining(remainingMs: number) {
@@ -55,27 +55,8 @@ export function SessionExpiryNotice({
   expiresAt?: SessionExpiryValue;
 }) {
   const expiryTimestamp = toTimestamp(expiresAt);
-  const [remainingMs, setRemainingMs] = useState(() =>
-    getRemainingMs(expiryTimestamp),
-  );
-
-  useEffect(() => {
-    if (expiryTimestamp === null) {
-      return;
-    }
-
-    const updateRemaining = () => {
-      setRemainingMs(getRemainingMs(expiryTimestamp));
-    };
-
-    updateRemaining();
-    const timer = window.setInterval(
-      updateRemaining,
-      SESSION_TIMER_INTERVAL_MS,
-    );
-
-    return () => window.clearInterval(timer);
-  }, [expiryTimestamp]);
+  const now = useNow(SESSION_TIMER_INTERVAL_MS);
+  const remainingMs = getRemainingMs(expiryTimestamp, now);
 
   if (
     expiryTimestamp === null ||

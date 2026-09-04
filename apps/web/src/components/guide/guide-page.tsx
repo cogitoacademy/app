@@ -100,9 +100,14 @@ export function GuidePage({
   role?: string;
   requestedView?: GuideView;
 }) {
+  const view = resolveGuideView(role, requestedView);
+
+  return <GuidePageContent key={view} role={role} view={view} />;
+}
+
+function GuidePageContent({ role, view }: { role?: string; view: GuideView }) {
   const navigate = useNavigate();
   const allowedViews = getAllowedGuideViews(role);
-  const view = resolveGuideView(role, requestedView);
   const content = GUIDE_CONTENT[view];
   const firstChapterId = content.chapters[0]?.id ?? null;
   const stepIds = getGuideStepIds(content);
@@ -112,11 +117,6 @@ export function GuidePage({
   const [activeChapterId, setActiveChapterId] = useState<string | null>(
     firstChapterId,
   );
-
-  useEffect(() => {
-    setExpandedStepIds(new Set(getGuideStepIds(content)));
-    setActiveChapterId(firstChapterId);
-  }, [content, firstChapterId]);
 
   useEffect(() => {
     if (typeof IntersectionObserver === "undefined") return;

@@ -51,6 +51,7 @@ import { formatBookingDate, formatBookingTimeRange } from "./booking-ui";
 import { SessionNoteEditor } from "./session-note-editor";
 import { sanitizeSessionNoteHtml } from "./session-note-sanitizer";
 import { getUserFacingError } from "@/lib/error-message";
+import { useNow } from "@/hooks/use-now";
 import { orpc } from "@/utils/orpc";
 
 type DialogKind = "report" | "decline-invite" | "withdraw-invite" | null;
@@ -119,6 +120,7 @@ export function BookingLifecycleActions({
   } | null>(null);
   const [note, setNote] = useState("");
   const invitees = pendingInvitees ?? [];
+  const now = useNow();
 
   const isStudent = viewerRole === "student";
   const isCompleted = currentState === "completed";
@@ -131,7 +133,7 @@ export function BookingLifecycleActions({
   const canReportLateness =
     isStudent &&
     ["scheduled", "no_show"].includes(currentState) &&
-    Date.now() >= new Date(scheduledStartAt).getTime() + 15 * 60_000;
+    now >= new Date(scheduledStartAt).getTime() + 15 * 60_000;
   const canRespondToInvite =
     isStudent &&
     bookingType === "group" &&

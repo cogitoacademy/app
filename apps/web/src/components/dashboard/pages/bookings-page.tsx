@@ -37,6 +37,7 @@ import {
 } from "@/components/booking/booking-card";
 import { EmptyStateCard } from "@/components/empty-state";
 import { useRole } from "@/hooks/use-role";
+import { useNow } from "@/hooks/use-now";
 import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
 
@@ -78,7 +79,7 @@ export function BookingsPage() {
         []) as BookingListItem[],
     [bookingsQuery.data?.pages],
   );
-  const now = Date.now();
+  const now = useNow();
   const tabCounts = useMemo(() => getTabCounts(bookings, now), [bookings, now]);
   const activeTab =
     requestedTab ??
@@ -128,7 +129,9 @@ export function BookingsPage() {
       <div className="flex w-full min-w-0 max-w-full flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0 max-w-full">
           <div className="flex items-center gap-2">
-            <Heading size="md">Bookings</Heading>
+            <Heading level={1} size="md">
+              Bookings
+            </Heading>
             {bookingsQuery.isFetching &&
             !bookingsQuery.isPending &&
             !bookingsQuery.isFetchingNextPage ? (
@@ -150,7 +153,7 @@ export function BookingsPage() {
         ) : null}
       </div>
 
-      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex w-full min-w-0 max-w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <BookingTabBar
           activeTab={activeTab}
           counts={tabCounts}
@@ -277,10 +280,10 @@ function BookingTabBar({
 }) {
   return (
     <div className="w-full min-w-0 max-w-full overflow-visible pb-1">
-      <div className="w-full min-w-0 max-w-full overflow-visible rounded-full bg-accent/60 p-1 sm:w-fit">
+      <div className="w-full min-w-0 max-w-full overflow-visible rounded-full bg-accent/60 p-1 lg:w-fit">
         <div
           data-slot="booking-tab-scroller"
-          className="w-full min-w-0 max-w-full overflow-x-auto overflow-y-hidden overscroll-x-contain scrollbar-hidden sm:w-fit"
+          className="w-full min-w-0 max-w-full overflow-x-auto overflow-y-hidden overscroll-x-contain scrollbar-hidden lg:w-fit"
           role="tablist"
           aria-label="Booking status"
         >

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   IconCalculator,
@@ -46,6 +46,20 @@ const EMPTY_FORM: FormValues = {
   offlineCogitoIncrementIdr: "",
 };
 
+function formFromSettings(settings: {
+  onlineCogitoBaseIdr: number;
+  onlineCogitoIncrementIdr: number;
+  offlineCogitoBaseIdr: number;
+  offlineCogitoIncrementIdr: number;
+}): FormValues {
+  return {
+    onlineCogitoBaseIdr: String(settings.onlineCogitoBaseIdr),
+    onlineCogitoIncrementIdr: String(settings.onlineCogitoIncrementIdr),
+    offlineCogitoBaseIdr: String(settings.offlineCogitoBaseIdr),
+    offlineCogitoIncrementIdr: String(settings.offlineCogitoIncrementIdr),
+  };
+}
+
 function formatIdr(value: number) {
   return "Rp " + value.toLocaleString("id-ID");
 }
@@ -60,20 +74,13 @@ function parseAmount(value: string) {
 export function EconomySettingsPage() {
   const queryClient = useQueryClient();
   const settings = useQuery(orpc.admin.getEconomySettings.queryOptions());
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [draftForm, setDraftForm] = useState(EMPTY_FORM);
+  const [draftVersion, setDraftVersion] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!settings.data) return;
-    setForm({
-      onlineCogitoBaseIdr: String(settings.data.onlineCogitoBaseIdr),
-      onlineCogitoIncrementIdr: String(settings.data.onlineCogitoIncrementIdr),
-      offlineCogitoBaseIdr: String(settings.data.offlineCogitoBaseIdr),
-      offlineCogitoIncrementIdr: String(
-        settings.data.offlineCogitoIncrementIdr,
-      ),
-    });
-  }, [settings.data]);
+  const form =
+    settings.data && draftVersion !== settings.data.version
+      ? formFromSettings(settings.data)
+      : draftForm;
 
   const values = useMemo(
     () => ({
@@ -111,7 +118,13 @@ export function EconomySettingsPage() {
   );
 
   function updateField(key: keyof FormValues, value: string) {
-    setForm((current) => ({ ...current, [key]: value }));
+    setDraftForm(() => ({
+      ...(settings.data && draftVersion !== settings.data.version
+        ? formFromSettings(settings.data)
+        : draftForm),
+      [key]: value,
+    }));
+    setDraftVersion(settings.data?.version ?? null);
     setError(null);
   }
 
@@ -165,7 +178,9 @@ export function EconomySettingsPage() {
     <Stack direction="column" spacing="lg">
       <div>
         <div className="flex flex-wrap items-center gap-2">
-          <Heading size="md">Economy settings</Heading>
+          <Heading level={1} size="md">
+            Economy settings
+          </Heading>
           <Badge variant="warning" pill>
             Admin only
           </Badge>

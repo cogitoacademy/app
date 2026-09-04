@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -68,6 +68,7 @@ import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
 import { EmptyState } from "@/components/empty-state";
+import { useNow } from "@/hooks/use-now";
 import { InfoPreview } from "@/components/info-preview";
 import { getUserFacingError } from "@/lib/error-message";
 import {
@@ -148,7 +149,7 @@ export function BookingDetailPage({
   const [declineReason, setDeclineReason] = useState("");
   const [cancellationReason, setCancellationReason] = useState("");
   const [manualLinkDialogOpen, setManualLinkDialogOpen] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
+  const now = useNow();
   const isTutor = viewerRole === "tutor";
   const isAdmin = viewerRole === "admin";
   const bookingsPath = backTo ?? (isAdmin ? "/admin-operations" : "/bookings");
@@ -173,11 +174,6 @@ export function BookingDetailPage({
       return data.meeting?.status === "manual" ? 60_000 : 30_000;
     },
   });
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
-    return () => window.clearInterval(timer);
-  }, []);
 
   function refreshBookingQueries() {
     void Promise.all([
@@ -375,7 +371,7 @@ export function BookingDetailPage({
   const canCancel =
     !isTutor &&
     !isAdmin &&
-    canCancelBooking(booking.currentState, booking.scheduledStartAt);
+    canCancelBooking(booking.currentState, booking.scheduledStartAt, now);
   const canSetManualLink =
     (isTutor || isAdmin) &&
     booking.modality === "online" &&

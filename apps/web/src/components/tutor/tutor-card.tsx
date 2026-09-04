@@ -61,6 +61,17 @@ type TutorCardProps = {
   onClick: () => void;
 };
 
+function getStartingPrice(tutor: TutorSummaryData) {
+  const allPrices = tutor.pricesByModality
+    ? Object.values(tutor.pricesByModality).flatMap((prices) =>
+        prices ? Object.values(prices) : [],
+      )
+    : tutor.prices
+      ? Object.values(tutor.prices)
+      : [];
+  return allPrices.length > 0 ? Math.min(...allPrices) : null;
+}
+
 export function TutorSummary({
   tutor,
   action,
@@ -69,14 +80,7 @@ export function TutorSummary({
   action?: ReactNode;
 }) {
   const tutorName = tutor.user?.name ?? "Tutor";
-  const allPrices = tutor.pricesByModality
-    ? Object.values(tutor.pricesByModality).flatMap((prices) =>
-        prices ? Object.values(prices) : [],
-      )
-    : tutor.prices
-      ? Object.values(tutor.prices)
-      : [];
-  const startingPrice = allPrices.length > 0 ? Math.min(...allPrices) : null;
+  const startingPrice = getStartingPrice(tutor);
   const subjectLabels = groupTutorSubjects(
     tutor.subjects,
     tutor.expertise,
@@ -131,6 +135,8 @@ export function TutorSummary({
                 src="/cogito-mark.png"
                 alt=""
                 aria-hidden="true"
+                width={12}
+                height={12}
                 className="size-3 shrink-0 object-contain"
               />
               <span>{startingPrice}</span>
@@ -146,18 +152,18 @@ export function TutorSummary({
 }
 
 export function TutorCard({ tutor, onClick }: TutorCardProps) {
+  const tutorName = tutor.user?.name ?? "Tutor";
+  const startingPrice = getStartingPrice(tutor);
+  const accessibleName = `${tutorName}${
+    startingPrice !== null ? `, From ${startingPrice} Marks` : ""
+  }`;
+
   return (
     <Card
-      className="cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card [&_[data-slot=avatar]]:rounded-md [&_[data-slot=avatar-image]]:rounded-md [&_[data-slot=avatar-fallback]]:rounded-md"
+      render={<button type="button" aria-label={accessibleName} />}
+      className="w-full cursor-pointer text-left transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-card motion-reduce:transition-none [&_[data-slot=avatar]]:rounded-md [&_[data-slot=avatar-image]]:rounded-md [&_[data-slot=avatar-fallback]]:rounded-md"
+      aria-label={accessibleName}
       onClick={onClick}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onClick();
-        }
-      }}
-      role="button"
-      tabIndex={0}
     >
       <CardBody>
         <TutorSummary tutor={tutor} />

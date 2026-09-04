@@ -1,6 +1,5 @@
 "use client";
 
-import { useRef } from "react";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import {
   Avatar,
@@ -118,9 +117,7 @@ function getPricingTableData(
 }
 
 export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
-  const lastTutorRef = useRef(tutor);
-  if (tutor) lastTutorRef.current = tutor;
-  const t = lastTutorRef.current;
+  const t = tutor;
   if (!t) return null;
 
   const selectedTutor = t;

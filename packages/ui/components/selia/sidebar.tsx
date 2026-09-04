@@ -211,7 +211,7 @@ export function SidebarItem({
 }
 
 export const sidebarItemActionVariants = cva(
-  "absolute right-0 shrink-0 z-10 transition-all duration-100",
+  "absolute right-0 shrink-0 z-10 transition-[opacity,transform] duration-100",
   {
     variants: {
       size: {
@@ -236,7 +236,7 @@ export function SidebarItemAction({
       className={cn(
         "absolute right-0 shrink-0 z-10 **:[svg]:size-4",
         "*:[button]:cursor-pointer",
-        "transition-all duration-200 ease-linear",
+        "transition-[opacity,transform] duration-200 ease-linear",
         showOnHover && "opacity-0 group-hover/sidebar-item:opacity-100",
         className,
       )}
@@ -377,7 +377,7 @@ export function SidebarCollapsibleTrigger({
       data-expandable
       {...props}
       className={cn(
-        "**:data-[slot=expandable-indicator]:transition-all",
+        "**:data-[slot=expandable-indicator]:transition-[transform]",
         "**:data-[slot=expandable-indicator]:duration-200",
         "**:data-[slot=expandable-indicator]:ease-linear",
         className,
@@ -395,7 +395,7 @@ export function SidebarCollapsiblePanel({
       data-slot="sidebar-collapsible-panel"
       {...props}
       className={cn(
-        "transition-all duration-200 ease-linear",
+        "transition-[height] duration-200 ease-linear",
         "h-(--collapsible-panel-height) overflow-hidden",
         "data-[ending-style]:h-0 data-[starting-style]:h-0",
         className,

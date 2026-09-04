@@ -90,7 +90,7 @@ export const NumberFieldGroupVariants = cva(
     "aria-invalid:ring-danger-border/24 aria-invalid:ring-2",
     "[&_svg:not([class*=size-])]:size-4.5",
     "*:[button]:size-9.5 *:[button]:flex *:[button]:items-center *:[button]:justify-center",
-    "*:[button]:transition-all *:[button]:duration-100",
+    "*:[button]:transition-[background-color,opacity] *:[button]:duration-100",
     "*:[button]:cursor-pointer *:[button]:text-foreground",
     "*:[button]:disabled:cursor-not-allowed *:[button]:disabled:opacity-70",
     "*:first:rounded-l *:last:rounded-r",
@@ -157,7 +157,7 @@ export function NumberFieldInput({
       data-slot="number-field-input"
       {...props}
       className={cn(
-        "z-10 w-28 px-2.5 text-center text-foreground outline-none transition-all placeholder:text-dimmed disabled:pointer-events-none disabled:opacity-70",
+        "z-10 w-28 px-2.5 text-center text-foreground outline-none transition-[color,box-shadow] placeholder:text-dimmed disabled:pointer-events-none disabled:opacity-70",
         "aria-invalid:text-danger aria-invalid:ring-danger-border/24 aria-invalid:ring-2",
         className,
       )}

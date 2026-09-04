@@ -63,7 +63,7 @@ export const drawerPopupVariants = cva(
           "after:absolute after:inset-0 after:rounded-[inherit]",
           'after:bg-transparent after:pointer-events-none after:content-[""]',
           "after:transition-[background-color] after:duration-[450ms] after:ease-[cubic-bezier(0.32,0.72,0,1)]",
-          "data-[nested-drawer-open]:after:bg-black/5",
+          "data-[nested-drawer-open]:after:bg-foreground/5",
           "data-[nested-drawer-open]:h-[calc(var(--height)+var(--bleed))]",
           "data-[nested-drawer-open]:overflow-hidden",
           "data-[nested-drawer-swiping]:[transition-duration:0ms]",
@@ -358,7 +358,7 @@ export function DrawerIndentBackground({
     <BaseDrawer.IndentBackground
       data-slot="drawer-indent-background"
       {...props}
-      className={cn("absolute inset-0 bg-black dark:bg-foreground", className)}
+      className={cn("absolute inset-0 bg-foreground", className)}
     >
       {children}
     </BaseDrawer.IndentBackground>

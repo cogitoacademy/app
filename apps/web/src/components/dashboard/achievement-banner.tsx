@@ -4,7 +4,7 @@ import { cn } from "@cogito-app/ui/lib/utils";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { IconCheck, IconClock, IconX } from "@tabler/icons-react";
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 type BannerType = "pending" | "allApproved";
 
@@ -37,16 +37,28 @@ const BANNER_CONFIG: Record<
   },
 };
 
-export function AchievementBanner({ type }: AchievementBannerProps) {
-  const [dismissed, setDismissed] = useState(false);
-  const config = BANNER_CONFIG[type];
+function subscribeToDismissal(onStoreChange: () => void) {
+  window.addEventListener("storage", onStoreChange);
+  return () => window.removeEventListener("storage", onStoreChange);
+}
 
-  useEffect(() => {
-    const stored = localStorage.getItem(config.storageKey);
-    if (stored === "true") {
-      setDismissed(true);
-    }
-  }, [config.storageKey]);
+function getDismissedSnapshot(storageKey: string) {
+  try {
+    return localStorage.getItem(storageKey) === "true";
+  } catch {
+    return false;
+  }
+}
+
+export function AchievementBanner({ type }: AchievementBannerProps) {
+  const config = BANNER_CONFIG[type];
+  const [dismissedLocally, setDismissedLocally] = useState(false);
+  const dismissedPersisted = useSyncExternalStore(
+    subscribeToDismissal,
+    () => getDismissedSnapshot(config.storageKey),
+    () => false,
+  );
+  const dismissed = dismissedLocally || dismissedPersisted;
 
   if (dismissed) return null;
 
@@ -68,11 +80,15 @@ export function AchievementBanner({ type }: AchievementBannerProps) {
         className="-mr-1 shrink-0"
         aria-label="Dismiss achievement status"
         onClick={() => {
-          setDismissed(true);
-          localStorage.setItem(config.storageKey, "true");
+          setDismissedLocally(true);
+          try {
+            localStorage.setItem(config.storageKey, "true");
+          } catch {
+            // The in-memory dismissal still applies if storage is unavailable.
+          }
         }}
       >
-        <IconX className="size-3.5" />
+        <IconX className="size-3.5" aria-hidden="true" />
       </Button>
     </div>
   );

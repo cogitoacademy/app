@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { IconClock } from "@tabler/icons-react";
 import { Text } from "@cogito-app/ui/components/selia/text";
+import { useNow } from "@/hooks/use-now";
 
 export const BOOKING_DEADLINE_STATES = new Set([
   "awaiting_tutor_review",
@@ -25,14 +25,7 @@ export function BookingDeadlineNotice({
   timezone?: string;
 }) {
   const deadlineTimestamp = deadlineAt ? new Date(deadlineAt).getTime() : NaN;
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    if (!Number.isFinite(deadlineTimestamp)) return;
-
-    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
-    return () => window.clearInterval(timer);
-  }, [deadlineTimestamp]);
+  const now = useNow();
 
   if (
     !BOOKING_DEADLINE_STATES.has(currentState) ||
