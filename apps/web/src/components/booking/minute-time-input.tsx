@@ -1,11 +1,67 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { IconClock } from "@tabler/icons-react";
+import { IconClock, IconMinus, IconPlus } from "@tabler/icons-react";
+import { Button } from "@cogito-app/ui/components/selia/button";
 import { Input } from "@cogito-app/ui/components/selia/input";
 import { DatePicker } from "@cogito-app/ui/components/selia/date-picker";
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+export function QuarterHourTimeStepper({
+  value,
+  onChange,
+  id,
+  disabled,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  id?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <div
+      data-slot="quarter-hour-time-stepper"
+      className="inline-flex w-full max-w-64 items-center gap-2"
+    >
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        aria-label="Start 15 minutes earlier"
+        disabled={
+          disabled ||
+          !isValidMinuteTime(value) ||
+          (timeToMinutes(value) ?? 0) <= 0
+        }
+        onClick={() => onChange(stepQuarterHour(value, -1))}
+      >
+        <IconMinus />
+      </Button>
+      <output
+        id={id}
+        aria-live="polite"
+        className="flex h-9.5 min-w-24 flex-1 items-center justify-center rounded border border-input-border bg-background px-3 font-mono text-base font-medium shadow-input"
+      >
+        {value || "—"}
+      </output>
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        aria-label="Start 15 minutes later"
+        disabled={
+          disabled ||
+          !isValidMinuteTime(value) ||
+          (timeToMinutes(value) ?? 1440) >= 23 * 60 + 45
+        }
+        onClick={() => onChange(stepQuarterHour(value, 1))}
+      >
+        <IconPlus />
+      </Button>
+    </div>
+  );
+}
 
 export function MinuteTimeInput({
   value,
@@ -143,6 +199,26 @@ export function addMinutesToTime(value: string, minutes: number) {
   const [hour, minute] = value.split(":").map(Number) as [number, number];
   const total = hour * 60 + minute + minutes;
   const normalized = ((total % 1440) + 1440) % 1440;
+  return `${String(Math.floor(normalized / 60)).padStart(2, "0")}:${String(normalized % 60).padStart(2, "0")}`;
+}
+
+export function stepQuarterHour(value: string, direction: -1 | 1) {
+  if (!isValidMinuteTime(value)) return value;
+  const [hour, minute] = value.split(":").map(Number) as [number, number];
+  const total = hour * 60 + minute;
+  const next =
+    direction === 1
+      ? Math.floor(total / 15) * 15 + 15
+      : Math.ceil(total / 15) * 15 - 15;
+  const normalized = Math.max(0, Math.min(23 * 60 + 45, next));
+  return `${String(Math.floor(normalized / 60)).padStart(2, "0")}:${String(normalized % 60).padStart(2, "0")}`;
+}
+
+export function snapTimeToQuarter(value: string) {
+  if (!isValidMinuteTime(value)) return value;
+  const [hour, minute] = value.split(":").map(Number) as [number, number];
+  const rounded = Math.round((hour * 60 + minute) / 15) * 15;
+  const normalized = Math.min(23 * 60 + 45, rounded);
   return `${String(Math.floor(normalized / 60)).padStart(2, "0")}:${String(normalized % 60).padStart(2, "0")}`;
 }
 

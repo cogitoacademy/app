@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Dialog,
+  DialogBody,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -19,6 +20,8 @@ export function ConfirmationDialog({
   confirmLabel,
   confirmVariant = "primary",
   pending = false,
+  confirmDisabled = false,
+  children,
   onConfirm,
 }: {
   open: boolean;
@@ -28,6 +31,8 @@ export function ConfirmationDialog({
   confirmLabel: string;
   confirmVariant?: "primary" | "danger";
   pending?: boolean;
+  confirmDisabled?: boolean;
+  children?: ReactNode;
   onConfirm: () => void;
 }) {
   return (
@@ -43,12 +48,13 @@ export function ConfirmationDialog({
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
+        {children ? <DialogBody>{children}</DialogBody> : null}
         <DialogFooter className="flex-col-reverse items-stretch sm:flex-row sm:items-center">
           <Button
             variant="secondary"
             type="button"
             onClick={() => onOpenChange(false)}
-            disabled={pending}
+            disabled={pending || confirmDisabled}
             className="w-full sm:w-auto"
           >
             Cancel

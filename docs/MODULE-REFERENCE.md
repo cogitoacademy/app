@@ -1,6 +1,13 @@
 # Cogito Module Reference
 
-Last updated: 2026-09-03
+Last updated: 2026-09-04
+
+## Sidebar logo contrast (2026-09-04)
+
+The authenticated sidebar applies a dark-mode-only filter to the existing
+Cogito Academy logo so the full wordmark renders white. This is client-side
+presentation behavior and adds no service, repository, event-key, or business
+rule.
 
 The 2026-09-02 Lefthook lint-gate alignment changes repository tooling only;
 services, modules, event keys, and business rules are unchanged.
@@ -417,7 +424,9 @@ recipient consent.
 
 **Purpose:** Core booking lifecycle — solo, group, and series bookings with state machine transitions, reschedule approval, session notes, wallet holds, payouts, and meeting integration.
 
-Reschedule proposals must change the active booking or target-session start minute and cannot repeat the pending proposal for the same target. `proposeReschedule` serializes replacements with a booking-scoped transaction advisory lock; `reschedule_booking_pending_uniq` independently guarantees at most one pending proposal per booking. The booking-detail proposal editor is presented in a height-constrained bottom Selia drawer on mobile and a right-side drawer on desktop; this presentation does not change the service contract.
+Reschedule proposals must include a non-blank reason, change the active booking or target-session start minute, and cannot repeat the pending proposal for the same target. `proposeReschedule` serializes replacements with a booking-scoped transaction advisory lock; `reschedule_booking_pending_uniq` independently guarantees at most one pending proposal per booking. The booking-detail proposal editor is presented in a height-constrained bottom Selia drawer on mobile and a right-side drawer on desktop.
+
+The create-booking module keeps all submit state in the parent form while presenting it through two responsive surfaces: a desktop right-rail summary and a mobile bottom summary drawer. Each selected availability card renders its own adjacent time stepper from the shared `selectedSlotIds`/`startTimes` state; there is no separate consolidated time-editor panel. The drawer button uses the form `id`, so there is no duplicate mutation path.
 
 **Files:**
 
@@ -446,13 +455,13 @@ Reschedule proposals must change the active booking or target-session start minu
 - `withdrawInvite(proposerId, bookingId, inviteeUserId, reason?)` — Proposer withdraws one pending group invite; marks the invitee `withdrawn_pre_h2`, leaves headcount/holds unchanged, and notifies the invitee. The user-supplied `reason` is HTML-escaped (`escapeHtml`) before interpolation into the notification/email body (F5 convention — user-supplied text must not inject markup)
 - `reconfirm(userId, bookingId, accept)` — Participant accepts/rejects the repriced offer after repricing. **F3 (headcount-change reprice):** when an accept lands and the confirmed headcount no longer matches the headcount the current snapshot was priced for (a participant declined or withdrew mid-cycle, e.g. withdrawing from `awaiting_reconfirmation` decrements the headcount without repricing), the booking does **not** finalize — all reconfirmed participants are reset to plain `confirmed` (`resetReconfirmedParticipants`), the group is repriced for the current headcount, every survivor gets a fresh 12h window, and a `reissue_reconfirm` notification is sent. The booking only moves to `AWAITING_TUTOR_REVIEW` when all confirmed participants reconfirm against the current snapshot. **N1:** when a flat or rounded price map produces the same per-student rate at two headcounts, `repriceGroupForHeadcount` still synchronizes `holdAmount` to the sum of participant-held amounts, preventing the reconfirmation mismatch from re-firing forever.
 - `withdraw(userId, bookingId, reason?)` — Participant withdrawal closes at `scheduledStartAt`; before then, pre-H2 releases hold and post-H2 forfeits it, with group survival/repricing rules unchanged. At/after start it throws `BOOKING_CANCELLATION_DEADLINE_PASSED`; group-series (`type === "series" && targetGroupSize > 1`) remains rejected with `BOOKING_SERIES_NO_OPT_OUT` (U4 no-opt-out rule).
-- `cancel(userId, bookingId, reason?)` — Cancels a booking only before `scheduledStartAt`; releases holds before H-2, while a pre-start late cancel becomes `late_cancelled` and forfeits holds. At/after start it throws `BOOKING_CANCELLATION_DEADLINE_PASSED`, preserving the live booking for tutor completion and routing delivery disputes through support/admin review.
+- `cancel(userId, bookingId, reason)` — Requires a non-blank student reason, then cancels a booking only before `scheduledStartAt`; releases holds before H-2, while a pre-start late cancel becomes `late_cancelled` and forfeits holds. At/after start it throws `BOOKING_CANCELLATION_DEADLINE_PASSED`, preserving the live booking for tutor completion and routing delivery disputes through support/admin review.
 - `tutorAccept(bookingId, tutorId)` — Tutor accepts booking; attempts meeting creation for online bookings and schedules on success, while a provider failure leaves the booking `CONFIRMED` for scheduler retry; sets room approval for offline. **F6:** whenever meeting creation fails (provider throw or `status === "failed"`), `finalizeMeetingSchedule` bumps `deadlineAt` to `scheduledEndAt + 24h` so the 5-minute retry window is respected — the old tutor-review `now+12h` deadline can never expire the booking (release holds) or no-show the session while a meeting retry is pending. The proposer notification distinguishes `scheduled` from `confirmed`/meeting-setup attention, so a provider failure is not presented as a scheduled session. The booking-detail UI confirms the scheduled date/time, modality, and attendance before invoking this method; cancel/complete actions use the same in-app confirmation pattern.
-- `tutorDecline(bookingId, tutorId, reason?)` — Tutor declines; releases all holds
+- `tutorDecline(bookingId, tutorId, reason)` — Requires a non-blank tutor reason, declines the request, and releases all holds
 - `tutorSetMeetingLink(bookingId, tutorId, url)` — Assigned tutor adds or replaces a manual URL for an online `CONFIRMED`/`SCHEDULED` booking when automatic meeting setup is unavailable; updates the active meeting row, notifies confirmed participants, and records `tutor_set_meeting_link`
 - `completeSession(bookingId, tutorId, sessionId?)` — Marks a session complete; deducts held marks (sessionId for series children)
 - `cancelSession(userId, sessionId)` — Student cancels an individual series session only before that session starts; pre-H2 releases its hold, a pre-start post-H2 cancellation forfeits it, and at/after start the call throws `BOOKING_CANCELLATION_DEADLINE_PASSED`.
-- `proposeReschedule(actorId, actorRole, bookingId, sessionId, start, reason?)` — Shared service used by the student-proposer and tutor RPC routes; proposes a fixed 90-minute replacement for one session
+- `proposeReschedule(actorId, actorRole, bookingId, sessionId, start, reason)` — Shared service used by the student-proposer and tutor RPC routes; requires a non-blank reason and proposes a fixed 90-minute replacement for one session
 - `acceptReschedule(actorId, bookingId, proposalId?)` / `rejectReschedule(...)` — Records a required tutor/student vote against the active, unexpired proposal under a booking advisory lock; `proposalId` prevents stale UI actions from deciding a superseded proposal. Final acceptance additionally locks the tutor and rechecks booking overlap, target-series ownership/state, and sibling-session overlap before applying the schedule. Only unanimous acceptance applies the schedule, then the booking returns to its pre-proposal state; any rejection keeps the old schedule and also returns to that state. For booking-level offline proposals, the confirmed room assignment is synchronized with the new time on acceptance and restored to the original time on rejection/expiry. A missing or conflicting room returns the booking to `awaiting_admin_room_approval`, and the rollback path uses `roomPort.resyncRoomBookingToSchedule` so the room never stays blocked for the wrong window.
 - `addSessionNote(userId, bookingId, content)` — Adds a server-sanitized HTML note to a completed session; the web editor emits only the supported paragraph/heading/emphasis/list/link markup
 - `getSessionNotes(userId, bookingId)` — Lists every party's notes for a completed session; the web client applies a DOMPurify allow-list before rendering

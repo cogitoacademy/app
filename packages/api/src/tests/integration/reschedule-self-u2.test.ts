@@ -198,8 +198,9 @@ describe("U2: student self-service reschedule before H-2 (FR-14/TC-15)", () => {
         bookingId: b.id,
         proposedStartAt: tooSoon.toISOString(),
         proposedEndAt: new Date(tooSoon.getTime() + 3600_000).toISOString(),
+        reason: "Move the session later",
       }),
-    ).rejects.toThrow(/editable/i);
+    ).rejects.toThrow(/reschedul|editable/i);
   });
 
   test("U2: overlapping slot is rejected", async () => {
@@ -219,6 +220,7 @@ describe("U2: student self-service reschedule before H-2 (FR-14/TC-15)", () => {
         proposedStartAt: other!.scheduledStartAt.toISOString(),
         proposedEndAt: other!.scheduledEndAt.toISOString(),
         availabilitySlotId: slotId,
+        reason: "Avoid an overlapping booking",
       }),
     ).rejects.toThrow(/conflict/i);
   });

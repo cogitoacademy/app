@@ -276,6 +276,18 @@ describe("Validation bounds — string .max()", () => {
     }
   });
 
+  test("booking cancellation requires a non-blank reason", () => {
+    expect(cancelBookingInput.safeParse({ bookingId: "b1" }).success).toBe(
+      false,
+    );
+    expect(
+      cancelBookingInput.safeParse({
+        bookingId: "b1",
+        cancellationReason: "   ",
+      }).success,
+    ).toBe(false);
+  });
+
   test("M5: tutor decline reason rejects >500 chars", () => {
     const longReason = "a".repeat(501);
     const result = declineBookingInput.safeParse({
@@ -286,6 +298,31 @@ describe("Validation bounds — string .max()", () => {
     if (!result.success) {
       expect(result.error.issues[0].message).toMatch(/<=500/i);
     }
+  });
+
+  test("tutor decline requires a non-blank reason", () => {
+    expect(declineBookingInput.safeParse({ bookingId: "b1" }).success).toBe(
+      false,
+    );
+    expect(
+      declineBookingInput.safeParse({ bookingId: "b1", reason: "   " }).success,
+    ).toBe(false);
+  });
+
+  test("reschedule proposal requires a non-blank reason", () => {
+    expect(
+      proposeRescheduleInput.safeParse({
+        bookingId: "b1",
+        proposedStartAt: new Date(Date.now() + 60_000),
+      }).success,
+    ).toBe(false);
+    expect(
+      proposeRescheduleInput.safeParse({
+        bookingId: "b1",
+        proposedStartAt: new Date(Date.now() + 60_000),
+        reason: "   ",
+      }).success,
+    ).toBe(false);
   });
 
   test("Correction reason rejects >2000 chars", () => {
@@ -502,6 +539,7 @@ describe("Validation bounds — date in the future", () => {
       bookingId: "b1",
       proposedStartAt: pastDate(),
       proposedEndAt: futureDate(2),
+      reason: "Schedule conflict",
     });
     expect(result.success).toBe(false);
     if (!result.success) {

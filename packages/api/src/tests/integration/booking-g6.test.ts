@@ -238,6 +238,7 @@ describe("G6: tutor reschedule with student approval", () => {
       bookingId: id,
       proposedStartAt: proposed.start,
       proposedEndAt: proposed.end,
+      reason: "Tutor needs to change the schedule",
     });
 
     const updated = await tutorClient.booking.acceptReschedule({

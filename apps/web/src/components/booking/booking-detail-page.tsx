@@ -64,6 +64,7 @@ import {
 } from "@cogito-app/ui/components/selia/item";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
+import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
 import { EmptyState } from "@/components/empty-state";
@@ -145,6 +146,7 @@ export function BookingDetailPage({
   const [confirmationDialog, setConfirmationDialog] =
     useState<BookingConfirmation>(null);
   const [declineReason, setDeclineReason] = useState("");
+  const [cancellationReason, setCancellationReason] = useState("");
   const [manualLinkDialogOpen, setManualLinkDialogOpen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const isTutor = viewerRole === "tutor";
@@ -202,6 +204,7 @@ export function BookingDetailPage({
     orpc.booking.cancel.mutationOptions({
       onSuccess: () => {
         setConfirmationDialog(null);
+        setCancellationReason("");
         toastManager.add({ title: "Booking cancelled", type: "success" });
         refreshBookingQueries();
       },
@@ -465,7 +468,9 @@ export function BookingDetailPage({
     if (!confirmationDialog) return;
 
     if (confirmationDialog.action === "cancel") {
-      cancel.mutate({ bookingId });
+      const reason = cancellationReason.trim();
+      if (!reason) return;
+      cancel.mutate({ bookingId, cancellationReason: reason });
       return;
     }
 
@@ -1138,7 +1143,10 @@ export function BookingDetailPage({
       <ConfirmationDialog
         open={confirmationDialog !== null}
         onOpenChange={(open) => {
-          if (!open) setConfirmationDialog(null);
+          if (!open) {
+            setConfirmationDialog(null);
+            setCancellationReason("");
+          }
         }}
         title={
           confirmationDialog?.action === "cancel"
@@ -1163,8 +1171,29 @@ export function BookingDetailPage({
           confirmationDialog?.action === "cancel" ? "danger" : "primary"
         }
         pending={confirmationPending}
+        confirmDisabled={
+          confirmationDialog?.action === "cancel" && !cancellationReason.trim()
+        }
         onConfirm={confirmBookingAction}
-      />
+      >
+        {confirmationDialog?.action === "cancel" ? (
+          <Field>
+            <FieldLabel htmlFor="booking-cancellation-reason">
+              Reason
+            </FieldLabel>
+            <Textarea
+              id="booking-cancellation-reason"
+              value={cancellationReason}
+              maxLength={500}
+              onChange={(event) => setCancellationReason(event.target.value)}
+              placeholder="Explain why you need to cancel this booking."
+            />
+            <FieldDescription>
+              This reason will be shared with the tutor.
+            </FieldDescription>
+          </Field>
+        ) : null}
+      </ConfirmationDialog>
       <ManualMeetingLinkDialog
         open={manualLinkDialogOpen}
         onOpenChange={setManualLinkDialogOpen}

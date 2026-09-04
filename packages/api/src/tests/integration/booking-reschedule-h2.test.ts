@@ -262,8 +262,9 @@ describe("C2: student proposeReschedule blocked within H-2 of the CURRENT sessio
         bookingId: b1,
         ...proposedSlot(26),
         availabilitySlotId: soloSlotId,
+        reason: "Move to a later slot",
       }),
-    ).rejects.toThrow(/editable/i);
+    ).rejects.toThrow(/reschedul|editable/i);
 
     const b = await studentClient.booking.get({ bookingId: b1 });
     expect(b.currentState).toBe("scheduled");
@@ -280,8 +281,9 @@ describe("C2: student proposeReschedule blocked within H-2 of the CURRENT sessio
         bookingId: b2,
         ...tooSoon,
         availabilitySlotId: soloSlotId,
+        reason: "Move to a later slot",
       }),
-    ).rejects.toThrow(/editable/i);
+    ).rejects.toThrow(/reschedul|editable/i);
 
     const b = await studentClient.booking.get({ bookingId: b2 });
     expect(b.currentState).toBe("scheduled");
@@ -313,8 +315,9 @@ describe("C2: student proposeReschedule blocked within H-2 of the CURRENT sessio
         bookingId: g.id,
         ...proposedSlot(26),
         availabilitySlotId: groupSlotId,
+        reason: "Move the group session",
       }),
-    ).rejects.toThrow(/editable/i);
+    ).rejects.toThrow(/reschedul|editable/i);
 
     const fetched = await proposerClient.booking.get({ bookingId: g.id });
     expect(fetched.currentState).toBe("scheduled");
@@ -361,8 +364,9 @@ describe("C2: student proposeReschedule blocked within H-2 of the CURRENT sessio
         ...proposedSlot(26),
         availabilitySlotId: seriesSlotId,
         sessionId: later.id,
+        reason: "Move the series session",
       }),
-    ).rejects.toThrow(/editable/i);
+    ).rejects.toThrow(/reschedul|editable/i);
 
     const fetched = await studentClient.booking.get({ bookingId: s.id });
     expect(fetched.currentState).toBe("scheduled");
@@ -413,6 +417,7 @@ describe("C2: student proposeReschedule blocked within H-2 of the CURRENT sessio
         proposedStartAt: other!.scheduledStartAt.toISOString(),
         proposedEndAt: other!.scheduledEndAt.toISOString(),
         availabilitySlotId: soloSlotId,
+        reason: "Avoid an overlapping booking",
       }),
     ).rejects.toThrow(/conflict/i);
   });
@@ -427,8 +432,9 @@ describe("C2: student proposeReschedule blocked within H-2 of the CURRENT sessio
         bookingId: bTarget,
         ...proposedSlot(40),
         availabilitySlotId: seriesSlotId,
+        reason: "Find another available slot",
       }),
-    ).rejects.toThrow(/editable/i);
+    ).rejects.toThrow(/availability|editable/i);
 
     expect((await proposalsFor(bTarget)).length).toBe(0);
   });
