@@ -77,7 +77,10 @@ describe("matchRateLimitPath maps real slash-key RPC URLs", () => {
 });
 
 describe("routes/rate-limits.ts uses the slash-key patterns", () => {
-  const routes = readFileSync(new URL("./routes/rate-limits.ts", import.meta.url), "utf-8");
+  const routes = readFileSync(
+    new URL("./routes/rate-limits.ts", import.meta.url),
+    "utf-8",
+  );
 
   test("rate-limit hook delegates to matchRateLimitPath", () => {
     expect(routes).toContain("matchRateLimitPath");
