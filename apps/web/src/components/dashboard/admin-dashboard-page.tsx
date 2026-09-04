@@ -1,35 +1,18 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import {
   IconAlertTriangle,
-  IconArrowRight,
   IconCertificate,
-  IconShieldCheck,
   IconUserCheck,
 } from "@tabler/icons-react";
-import { Badge } from "@cogito-app/ui/components/selia/badge";
-import { Button } from "@cogito-app/ui/components/selia/button";
-import {
-  Card,
-  CardBody,
-  CardHeader,
-  CardHeaderAction,
-  CardTitle,
-} from "@cogito-app/ui/components/selia/card";
+import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { lazy, Suspense } from "react";
 
-import {
-  formatBookingDate,
-  getBookingStateLabel,
-  getBookingStateVariant,
-} from "@/components/booking/booking-ui";
-import { EmptyState } from "@/components/empty-state";
 import { orpc } from "@/utils/orpc";
 
 const AdminAnalytics = lazy(() =>
@@ -110,89 +93,6 @@ export function AdminDashboardPage({ adminName }: { adminName: string }) {
       <Suspense fallback={<AnalyticsLoading />}>
         <AdminAnalytics />
       </Suspense>
-
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]">
-        <Card>
-          <CardHeader className="py-3">
-            <CardTitle>Priority operations</CardTitle>
-            <CardHeaderAction>
-              <Button
-                variant="plain"
-                size="sm"
-                nativeButton={false}
-                render={
-                  <Link
-                    to="/admin-operations"
-                    aria-label="Open admin operations queue"
-                  />
-                }
-              >
-                Open queue <IconArrowRight />
-              </Button>
-            </CardHeaderAction>
-          </CardHeader>
-          <CardBody>
-            {bookingQueue.isPending || escalations.isPending ? (
-              <div className="h-32 animate-pulse rounded-lg bg-accent" />
-            ) : priorityItems.length ? (
-              <Stack direction="column" spacing="sm" className="m-0!">
-                {priorityItems.slice(0, 4).map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex flex-col gap-3 rounded-lg border border-item-border bg-item p-4 sm:flex-row sm:items-center"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Text className="font-mono text-xs">{item.id}</Text>
-                        <Badge
-                          variant={getBookingStateVariant(item.currentState)}
-                          pill
-                        >
-                          {getBookingStateLabel(item.currentState)}
-                        </Badge>
-                        {item.escalated ? (
-                          <Badge variant="danger" pill>
-                            Escalated
-                          </Badge>
-                        ) : null}
-                      </div>
-                      <Text className="mt-1 text-sm text-muted">
-                        {formatBookingDate(
-                          item.scheduledStartAt,
-                          item.timezone,
-                        )}{" "}
-                        · {item.modality}
-                      </Text>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      nativeButton={false}
-                      render={
-                        <Link
-                          to="/admin-operations"
-                          aria-label={`Investigate booking ${item.id}`}
-                        />
-                      }
-                    >
-                      Investigate <IconArrowRight />
-                    </Button>
-                  </div>
-                ))}
-              </Stack>
-            ) : (
-              <EmptyState
-                icon={<IconShieldCheck />}
-                title="Priority queue is clear"
-                description="New escalations and booking exceptions will appear here."
-                tone="success"
-                size="compact"
-                className="rounded-lg"
-              />
-            )}
-          </CardBody>
-        </Card>
-      </div>
     </Stack>
   );
 }
