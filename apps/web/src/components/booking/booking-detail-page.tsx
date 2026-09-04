@@ -958,7 +958,7 @@ export function BookingDetailPage({
           {extensions?.sidebar ?? (
             <Card className="min-w-0 overflow-hidden">
               <CardHeader>
-                <IconBox variant="warning">
+                <IconBox variant="warning" size="sm">
                   <IconCoins />
                 </IconBox>
                 <CardTitle>

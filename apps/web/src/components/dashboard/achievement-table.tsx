@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   IconCheck,
   IconEdit,
@@ -35,6 +35,16 @@ import {
   DrawerPopup,
   DrawerTitle,
 } from "@cogito-app/ui/components/selia/drawer";
+import {
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogPopup,
+  DialogTitle,
+} from "@cogito-app/ui/components/selia/dialog";
 import {
   Table,
   TableBody,
@@ -221,6 +231,21 @@ export function AchievementDetailDrawer<T extends StudentAchievementTableItem>({
   onReject?: (id: string, eventName: string) => void;
   mutationPending?: boolean;
 }) {
+  const [isDesktop, setIsDesktop] = useState(false);
+  const [previewAttachment, setPreviewAttachment] = useState<{
+    label: string;
+    url: string;
+  } | null>(null);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 640px)");
+    const updateViewport = () => setIsDesktop(mediaQuery.matches);
+
+    updateViewport();
+    mediaQuery.addEventListener("change", updateViewport);
+    return () => mediaQuery.removeEventListener("change", updateViewport);
+  }, []);
+
   const status = achievement
     ? (STATUS_CONFIG[achievement.status] ?? STATUS_CONFIG.pending)
     : STATUS_CONFIG.pending;
@@ -233,8 +258,15 @@ export function AchievementDetailDrawer<T extends StudentAchievementTableItem>({
   );
 
   return (
-    <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerPopup direction="right" className="w-full max-w-xl">
+    <Drawer
+      open={open}
+      onOpenChange={onOpenChange}
+      swipeDirection={isDesktop ? "right" : "down"}
+    >
+      <DrawerPopup
+        direction={isDesktop ? "right" : "bottom"}
+        className={isDesktop ? "w-full max-w-xl" : undefined}
+      >
         <DrawerHeader className="justify-between border-b border-drawer-border pb-4.5">
           <div className="min-w-0">
             <DrawerTitle className="truncate">
@@ -275,26 +307,32 @@ export function AchievementDetailDrawer<T extends StudentAchievementTableItem>({
                 </div>
               ) : null}
 
-              <div className="flex flex-wrap gap-1.5">
-                <Badge variant={status.variant} className="whitespace-nowrap">
-                  {mode === "admin" && isPending
-                    ? "Pending review"
-                    : status.label}
-                </Badge>
-                <Badge variant="secondary">
-                  {formatAchievementLabel(achievement.category)}
-                </Badge>
-                <Badge variant="tertiary">
-                  {formatAchievementLabel(achievement.level)}
-                </Badge>
-                {achievement.subjects?.map((subject) => (
-                  <Badge key={subject} variant="info">
-                    {subject}
-                  </Badge>
-                ))}
-              </div>
-
               <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Text className="text-xs font-medium uppercase tracking-wide text-muted">
+                    Status
+                  </Text>
+                  <Badge
+                    variant={status.variant}
+                    className="mt-1 whitespace-nowrap"
+                  >
+                    {mode === "admin" && isPending
+                      ? "Pending review"
+                      : status.label}
+                  </Badge>
+                </div>
+                <AchievementDetailField
+                  label="Category"
+                  value={formatAchievementLabel(achievement.category)}
+                />
+                <AchievementDetailField
+                  label="Level"
+                  value={formatAchievementLabel(achievement.level)}
+                />
+                <AchievementDetailField
+                  label="Subjects"
+                  value={achievement.subjects?.join(", ") || "No subjects"}
+                />
                 <AchievementDetailField
                   label="Award"
                   value={achievement.award}
@@ -321,34 +359,28 @@ export function AchievementDetailDrawer<T extends StudentAchievementTableItem>({
                     <Button
                       variant="outline"
                       size="sm"
-                      render={
-                        <a
-                          href={achievement.evidenceUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          aria-label={`Open proof for ${achievement.eventName}`}
-                        />
+                      onClick={() =>
+                        setPreviewAttachment({
+                          label: "Verification evidence",
+                          url: achievement.evidenceUrl!,
+                        })
                       }
-                      nativeButton={false}
                     >
-                      <IconExternalLink /> Proof
+                      <IconPhoto /> View proof
                     </Button>
                   ) : null}
                   {achievement.documentationUrl ? (
                     <Button
                       variant="outline"
                       size="sm"
-                      render={
-                        <a
-                          href={achievement.documentationUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          aria-label={`Open documentation for ${achievement.eventName}`}
-                        />
+                      onClick={() =>
+                        setPreviewAttachment({
+                          label: "Public documentation",
+                          url: achievement.documentationUrl!,
+                        })
                       }
-                      nativeButton={false}
                     >
-                      <IconPhoto /> Documentation
+                      <IconPhoto /> View documentation
                     </Button>
                   ) : null}
                   {!hasAttachments ? (
@@ -439,7 +471,98 @@ export function AchievementDetailDrawer<T extends StudentAchievementTableItem>({
           ) : null}
         </DrawerFooter>
       </DrawerPopup>
+
+      <AttachmentImageViewer
+        attachment={previewAttachment}
+        achievementName={achievement?.eventName ?? "Achievement"}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setPreviewAttachment(null);
+        }}
+      />
     </Drawer>
+  );
+}
+
+function AttachmentImageViewer({
+  attachment,
+  achievementName,
+  onOpenChange,
+}: {
+  attachment: { label: string; url: string } | null;
+  achievementName: string;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  return (
+    <Dialog
+      open={attachment !== null}
+      onOpenChange={(open) => {
+        if (open) return;
+        setImageFailed(false);
+        onOpenChange(false);
+      }}
+    >
+      <DialogPopup className="sm:max-w-4xl">
+        <DialogHeader className="justify-between border-b border-dialog-border">
+          <div className="min-w-0">
+            <DialogTitle className="truncate">
+              {attachment?.label ?? "Attachment"}
+            </DialogTitle>
+            <DialogDescription className="truncate">
+              {achievementName}
+            </DialogDescription>
+          </div>
+          <DialogClose
+            render={<Button variant="plain" size="sm" aria-label="Close" />}
+          >
+            <IconX />
+          </DialogClose>
+        </DialogHeader>
+        <DialogBody className="flex min-h-64 items-center justify-center bg-background/50 p-3 sm:min-h-96">
+          {attachment && !imageFailed ? (
+            <img
+              key={attachment.url}
+              src={attachment.url}
+              alt={`${attachment.label} for ${achievementName}`}
+              className="max-h-[65dvh] max-w-full rounded-lg object-contain"
+              onError={() => setImageFailed(true)}
+            />
+          ) : (
+            <div className="max-w-md space-y-2 text-center">
+              <IconPhoto className="mx-auto size-8 text-dimmed" />
+              <Text className="font-medium">Preview unavailable</Text>
+              <Text className="text-sm text-muted">
+                This attachment cannot be displayed as an image. Open the
+                original file to view it.
+              </Text>
+            </div>
+          )}
+        </DialogBody>
+        <DialogFooter>
+          <DialogClose
+            render={<Button variant="plain" aria-label="Close image preview" />}
+          >
+            Close
+          </DialogClose>
+          {attachment ? (
+            <Button
+              render={
+                <a
+                  href={attachment.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={`Open original ${attachment.label.toLowerCase()}`}
+                />
+              }
+              nativeButton={false}
+            >
+              <IconExternalLink /> Open original
+            </Button>
+          ) : null}
+        </DialogFooter>
+      </DialogPopup>
+    </Dialog>
   );
 }
 

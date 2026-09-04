@@ -351,7 +351,7 @@ export function TutorsPageContent() {
         />
       ) : (
         <div
-          className="grid grid-cols-1 gap-4 xl:grid-cols-2"
+          className="grid grid-cols-1 gap-4 md:grid-cols-2"
           aria-busy={isFetching}
         >
           {tutors.map((tutor: PublishedTutor) => (

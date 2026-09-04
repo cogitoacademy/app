@@ -10,19 +10,19 @@ and their admin extensions use the same pattern instead of standalone header
 descriptions. This frontend-only change adds no RPC path and changes no request
 envelope, response shape, schema, or persistence contract.
 
-## Sidebar booking-action badge (2026-09-04)
-
-The authenticated sidebar reuses `booking.listMine` with the existing pending
-booking states to show the role-visible count beside `/bookings`. It caps the
-display at `99+` when another cursor remains. No new RPC path, request input,
-response output, schema, or persistence contract was added.
-
 ## Competition Calendar empty months (2026-09-04)
 
 The month-view presentation keeps its standard calendar grid when the selected
 month has no returned events, so month navigation and date cells remain usable.
 This is a frontend-only behavior change; `content.listCompetitions` keeps the
 same input, output, authentication, and response envelope.
+
+## Sidebar booking-action badge (2026-09-04)
+
+The authenticated sidebar reuses `booking.listMine` with the existing pending
+booking states to show the role-visible count beside `/bookings`. It caps the
+display at `99+` when another cursor remains. No new RPC path, request input,
+response output, schema, or persistence contract was added.
 
 ## Sidebar logo contrast (2026-09-04)
 
@@ -85,7 +85,7 @@ be reopened in read-only mode after acceptance.
 
 ## Tutor profile drawers (2026-08-31)
 
-The student tutor-discovery drawer and admin tutor-review drawer keep their header/action regions outside the scroll container while `Drawer.Content` owns the single vertical scroll region for long profile content. The body may overscroll locally, but that motion is contained and cannot move the fixed regions. This is client-side presentation only; no RPC path, request envelope, response shape, schema, or persistence contract changed.
+The student tutor-discovery drawer opens as a swipe-down bottom sheet below the `sm` breakpoint and a right-side drawer at `sm` and above. It and the admin tutor-review drawer keep their header/action regions outside the scroll container while `Drawer.Content` owns the single vertical scroll region for long profile content. The body may overscroll locally, but that motion is contained and cannot move the fixed regions. This is client-side presentation only; no RPC path, request envelope, response shape, schema, or persistence contract changed.
 
 ## Stable collection transitions (2026-08-28)
 
@@ -675,7 +675,7 @@ The web tutor profile editor groups education, competition achievements, and exp
 - **Auth:** Protected
 - **Input:** None
 - **Output:** `{ items: Achievement[] }`
-- **Description:** The student `/achievements` page consumes this unchanged list and presents compact label-and-pill summary counts plus a compact horizontally scrollable table; full metadata and pending edit/delete actions are available in a frontend-only detail drawer.
+- **Description:** The student `/achievements` page consumes this unchanged list and presents compact label-and-pill summary counts plus a compact horizontally scrollable table; consistently labeled metadata, an evidence image preview with an original-link fallback, and pending edit/delete actions are available in a frontend-only detail drawer that uses a mobile bottom sheet and a right-side desktop layout.
 
 ### `achievement.create`
 
@@ -703,7 +703,7 @@ The web tutor profile editor groups education, competition achievements, and exp
 - **Auth:** Admin
 - **Input:** `{ status?, limit?, offset? }` (`limit` default 50)
 - **Output:** `{ items: Achievement[], total, limit, offset }`
-- **Description:** The admin `/admin-achievements` page consumes this unchanged paginated list and presents submissions in a compact horizontally scrollable moderation table; full metadata and approve/reject/correct actions are available in a frontend-only detail drawer, while the mutations remain separate RPC calls.
+- **Description:** The admin `/admin-achievements` page consumes this unchanged paginated list and presents submissions in a compact horizontally scrollable moderation table; consistently labeled metadata, evidence and public-documentation image previews with original-link fallbacks, and approve/reject/correct actions are available in a frontend-only detail drawer that uses a mobile bottom sheet and a right-side desktop layout, while the mutations remain separate RPC calls.
 
 ### `achievement.adminUpdate`
 

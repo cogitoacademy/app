@@ -111,18 +111,18 @@ export function TutorSummary({
             </Badge>
           )}
         </div>
-        <ItemDescription className="line-clamp-2">
+        <ItemDescription className="line-clamp-1">
           {tutor.shortBio ?? "A verified Cogito tutor ready to help you learn."}
         </ItemDescription>
         <ItemMeta className="flex flex-wrap gap-1.5">
-          {subjectLabels.slice(0, 3).map((subject) => (
+          {subjectLabels.slice(0, 1).map((subject) => (
             <Badge key={subject.id} variant="tertiary" size="sm">
               {subject.label}
             </Badge>
           ))}
-          {subjectLabels.length > 3 && (
+          {subjectLabels.length > 1 && (
             <Badge variant="secondary" size="sm">
-              +{subjectLabels.length - 3}
+              +{subjectLabels.length - 1}
             </Badge>
           )}
           {startingPrice !== null && (

@@ -14,6 +14,16 @@ sessions, Activity, Honorarium/Marks, lifecycle, contact, room-assignment, and
 admin-extension cards. This is presentation-only and changes no RPC or
 persisted data contract.
 
+## Competition Calendar empty months (2026-09-04)
+
+The authenticated Competition Calendar keeps the normal month grid visible when
+the selected month has no events. Dates, weekday headings, outside-month cells,
+and month navigation remain available; the month view does not replace the grid
+with an empty state. The page-level empty state is still used when no published
+competitions exist at all, while the agenda view may continue to explain an
+event-free selected period. This is frontend-only and changes no API, schema, or
+persistence contract.
+
 ## Sidebar booking-action badge (2026-09-04)
 
 The authenticated sidebar now shows a compact count badge beside the shared
@@ -24,16 +34,6 @@ when the result exceeds the compact limit, and stays hidden while the count is
 zero or still loading. The state tuple is shared by the sidebar, booking list,
 and booking cards. This is frontend-only; no RPC, schema, persistence, or
 booking lifecycle rule changed.
-
-## Competition Calendar empty months (2026-09-04)
-
-The authenticated Competition Calendar keeps the normal month grid visible when
-the selected month has no events. Dates, weekday headings, outside-month cells,
-and month navigation remain available; the month view does not replace the grid
-with an empty state. The page-level empty state is still used when no published
-competitions exist at all, while the agenda view may continue to explain an
-event-free selected period. This is frontend-only and changes no API, schema, or
-persistence contract.
 
 ## Sidebar logo contrast (2026-09-04)
 
@@ -621,7 +621,7 @@ The tutor `/profile` editor presents education, competition achievements, and ex
 - `listPublished`, `getProfile` (student-only; supports single or multi-value `categoryId`/`subjectId` filters via normalized specialization joins; a missing match returns an empty list)
 - Shared Selia controls keep category/specialization IDs and modality values for query inputs while rendering labels; tutor onboarding shows all competition categories with checkboxes, while the tutor list allows multiple categories and specializations, with empty arrays meaning “All”. Search and filter changes debounce `listPublished` by 300 ms so rapid typing or multi-select toggles coalesce into one request.
 - The student-facing tutor drawer renders available pricing maps as one group-size matrix with separate Online and Offline Marks columns, prefixing populated price cells with the Cogito Marks icon. This is presentation-only; the discovery response and pricing contracts remain unchanged.
-- The student-facing tutor drawer keeps its header and booking footer outside the profile body's single vertical scroll container; the body may overscroll locally without moving those fixed regions, so long structured profiles remain reachable on short viewports. This is presentation-only; the discovery response and pricing contracts remain unchanged.
+- The student-facing tutor drawer opens as a swipe-down bottom sheet below the `sm` breakpoint and as a right-side drawer at `sm` and above. It keeps its header and booking footer outside the profile body's single vertical scroll container; the body may overscroll locally without moving those fixed regions, so long structured profiles remain reachable on short viewports. This is presentation-only; the discovery response and pricing contracts remain unchanged.
 
 ### Invite Module (public + protected)
 
@@ -632,7 +632,7 @@ The tutor `/profile` editor presents education, competition achievements, and ex
 - `list`, `create`, `update`, `delete`
 - `adminList`, `adminUpdate`, `adminReview`
 - `listApproved` (public — consumed by the public `cogito-acad` achievement archive and homepage preview)
-- The student `/achievements` list and admin `/admin-achievements` moderation queue use compact, horizontally scrollable Selia tables with minimum column widths; each row opens a shared detail drawer for category, level, description, location, attachments, notes, and available edit/delete or correct/approve/reject actions. The student summary counts use the same compact label-and-pill cards as the admin moderation counts. The table containers are full-bleed within their card bodies, while the page/card wrappers stay constrained to the viewport so only the table content scrolls horizontally. This is presentation-only and does not change the achievement RPC or persistence contract.
+- The student `/achievements` list and admin `/admin-achievements` moderation queue use compact, horizontally scrollable Selia tables with minimum column widths; each row opens a shared detail drawer for category, level, description, location, attachments, notes, and available edit/delete or correct/approve/reject actions. The drawer presents metadata as consistent labeled values while retaining a semantic status badge, opens as a swipe-down bottom sheet below the `sm` breakpoint, and becomes a right-side drawer at `sm` and above. Evidence and public-documentation attachments open in a lightweight image preview with an original-file fallback. The student summary counts use the same compact label-and-pill cards as the admin moderation counts. The table containers are full-bleed within their card bodies, while the page/card wrappers stay constrained to the viewport so only the table content scrolls horizontally. This is presentation-only and does not change the achievement RPC or persistence contract.
 - The public projection is an allowlist: it includes approved + visible records and the owner's display name, but never `userId` or private `evidenceUrl`. Optional activity documentation remains public-safe.
 - Student achievement levels are presented in this order: `International`, `National`, `Province/State`, `City/Regency`, `School`. The student proof field gives Google Drive guidance (upload proof, set General access to “Anyone with the link” + Viewer, then paste the link); students do not provide the public documentation image.
 - The student form uses one clear Location value (for example `Jakarta, Indonesia`, `Geneva, Switzerland`, or `Online`) and a long-answer `Brief Description` field with a ranked-result example. The public documentation image is an admin-only correction field.

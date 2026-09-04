@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import {
   Avatar,
@@ -117,6 +118,17 @@ function getPricingTableData(
 }
 
 export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 640px)");
+    const updateViewport = () => setIsDesktop(mediaQuery.matches);
+
+    updateViewport();
+    mediaQuery.addEventListener("change", updateViewport);
+    return () => mediaQuery.removeEventListener("change", updateViewport);
+  }, []);
+
   const t = tutor;
   if (!t) return null;
 
@@ -134,8 +146,15 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
   );
 
   return (
-    <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerPopup direction="right" className="w-full max-w-lg">
+    <Drawer
+      open={open}
+      onOpenChange={onOpenChange}
+      swipeDirection={isDesktop ? "right" : "down"}
+    >
+      <DrawerPopup
+        direction={isDesktop ? "right" : "bottom"}
+        className={isDesktop ? "w-full max-w-lg" : undefined}
+      >
         <DrawerHeader className="flex justify-between">
           <div className="flex min-w-0 items-center gap-3">
             <Avatar size="lg">

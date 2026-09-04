@@ -112,11 +112,11 @@ The admin tutor review card now resolves proposed `subjectIds` through the activ
 
 ### Achievement list table follow-up (2026-09-02)
 
-The student `/achievements` list and admin `/admin-achievements` moderation queue now use compact minimum-width Selia tables instead of card grids. Rows expose core identity/status/date information and a shared detail drawer contains the full metadata, proof/documentation links, moderator notes, and the relevant student or admin actions. The table containers scroll horizontally when the viewport is narrower than the column minimums, without changing any RPC, schema, or persistence contract.
+The student `/achievements` list and admin `/admin-achievements` moderation queue now use compact minimum-width Selia tables instead of card grids. Rows expose core identity/status/date information and a shared responsive detail drawer contains consistently labeled metadata, proof/documentation image previews with original-link fallbacks, moderator notes, and the relevant student or admin actions. It opens as a bottom sheet on mobile and from the right at the `sm` breakpoint and above. The table containers scroll horizontally when the viewport is narrower than the column minimums, without changing any RPC, schema, or persistence contract.
 
 ### Tutor discovery pricing matrix follow-up (2026-08-27)
 
-The student-facing tutor drawer now combines the available Online and Offline Marks maps into one group-size table. Each modality has its own price column, populated values use the shared Cogito Marks icon prefix, and an em dash makes a missing modality/size combination explicit. This is a presentation-only change; the `tutors.listPublished`/`tutors.getProfile` response and pricing contracts are unchanged.
+The student-facing tutor drawer now combines the available Online and Offline Marks maps into one group-size table. Each modality has its own price column, populated values use the shared Cogito Marks icon prefix, and an em dash makes a missing modality/size combination explicit. The profile uses a bottom sheet on mobile and a right-side drawer from the `sm` breakpoint. This is a presentation-only change; the `tutors.listPublished`/`tutors.getProfile` response and pricing contracts are unchanged.
 
 ### Competition Calendar parity follow-up (2026-08-23)
 
