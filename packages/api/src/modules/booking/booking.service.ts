@@ -85,16 +85,19 @@ import {
  * in `expireBookings` (targets the pre-proposal state) and is deliberately
  * absent here.
  */
-const EXPIRY_TARGET: Record<string, BookingState> = {
-  [BOOKING_STATE.SCHEDULED]: BOOKING_STATE.NO_SHOW,
-  [BOOKING_STATE.AWAITING_ADMIN_ROOM_APPROVAL]: BOOKING_STATE.CANCELLED,
-};
+import {
+  getTutorPayoutTransferFeeIdr,
+  EXPIRY_TARGET,
+  computeMeetingInfo,
+} from "./booking.helpers";
 
-export const NON_BCA_TRANSFER_FEE_IDR = 2_500;
-
-export function getTutorPayoutTransferFeeIdr(bankName: string): number {
-  return bankName.trim().toUpperCase() === "BCA" ? 0 : NON_BCA_TRANSFER_FEE_IDR;
-}
+export {
+  NON_BCA_TRANSFER_FEE_IDR,
+  getTutorPayoutTransferFeeIdr,
+  EXPIRY_TARGET,
+  computeMeetingInfo,
+  type MeetingStatus,
+} from "./booking.helpers";
 
 export interface CreateSoloInput {
   tutorId: string;
@@ -170,39 +173,6 @@ export interface BookingTransition {
   metadata?: Record<string, unknown>;
 }
 
-export type MeetingStatus = "pending" | "ready" | "failed";
-
-/**
- * Derives the frontend-facing meeting status for a booking.
- *
- * `meeting.createEvent` fires only on tutor accept (online bookings), and
- * for group bookings tutor accept only happens after every participant
- * confirmed — so "all confirmed AND tutor accepted" is satisfied by
- * construction. Withdrawal after creation does not revoke the link. A
- * non-failed provider row without a URL stays pending rather than being
- * reported as ready, so the detail page never renders an empty link as usable.
- */
-function computeMeetingInfo(b: {
-  meeting: { status: string; meetingUrl: string | null } | null;
-}): { meetingStatus: MeetingStatus; meetingUrl: string | null } {
-  const event = b.meeting;
-  if (!event) {
-    return { meetingStatus: "pending", meetingUrl: null };
-  }
-  if (event.status === "failed") {
-    return { meetingStatus: "failed", meetingUrl: null };
-  }
-  if (
-    event.status === "pending" ||
-    event.status === "manual" ||
-    event.status === "cancelled" ||
-    !event.meetingUrl
-  ) {
-    return { meetingStatus: "pending", meetingUrl: null };
-  }
-  return { meetingStatus: "ready", meetingUrl: event.meetingUrl };
-}
-
 export type BookingService = ReturnType<typeof createBookingService>;
 
 type BookingRow = NonNullable<
@@ -227,6 +197,9 @@ export function createBookingService(deps: {
 }) {
   const { db, repo, wallet, pricing, audit, notification, meeting, roomPort } =
     deps;
+
+  // ── Internal helpers (access, transitions, pricing) ──────────────────────
+  // Shared by the public methods below; keep them above their consumers.
 
   async function assertBookingAccess(
     b: { proposerId: string; tutorId: string },
@@ -730,6 +703,8 @@ export function createBookingService(deps: {
 
   /**
   /**
+  // ── Reads (getById, listMine, listForTutor, listAccessible) ───────────────
+
   /**
    * Gets a booking by id, enforcing that the requesting user has access.
    *
@@ -844,6 +819,8 @@ export function createBookingService(deps: {
    * @throws {InsufficientMarksError} if the student cannot cover the hold
    * @throws {BookingConflictError} if the tutor already has an overlapping booking
    */
+  // ── Creation (createSolo, createGroup, createSeries, createGroupSeries) ──
+
   async function createSolo(proposerId: string, input: CreateSoloInput) {
     const profile = await repo.findTutorProfile(db, input.tutorId, {
       publishedOnly: true,
@@ -1005,6 +982,8 @@ export function createBookingService(deps: {
    * @returns the updated booking
    * @throws {BookingStateTransitionError} if the booking is in a terminal state
    */
+  // ── Lifecycle mutations (cancel, tutor accept/decline, completion) ────────
+
   async function cancel(
     userId: string,
     bookingId: string,
@@ -2007,6 +1986,7 @@ export function createBookingService(deps: {
     });
   }
 
+  // ── Reschedule (propose/accept/reject) ─────────────────────────────────
   async function proposeReschedule(
     userId: string,
     bookingId: string,
@@ -2505,6 +2485,8 @@ export function createBookingService(deps: {
       return updated;
     });
   }
+
+  // ── Group flows (createGroup, confirm/decline/withdraw invite, reconfirm) ──
 
   async function createGroup(proposerId: string, input: CreateGroupInput) {
     const profile = await repo.findTutorProfile(db, input.tutorId, {
@@ -3330,6 +3312,8 @@ export function createBookingService(deps: {
     return result;
   }
 
+  // ── Series flows (createSeries, createGroupSeries, listSessions) ──────────
+
   async function createSeries(proposerId: string, input: CreateSeriesInput) {
     const profile = await repo.findTutorProfile(db, input.tutorId, {
       publishedOnly: true,
@@ -3863,6 +3847,7 @@ export function createBookingService(deps: {
    * consumer-driven port so an assigned offline booking can actually be
    * completed (G14).
    */
+  // ── Offline room scheduling + meeting finalization ───────────────────────
   async function transitionBookingToScheduled(
     tx: DbOrTx,
     bookingId: string,
@@ -4225,6 +4210,7 @@ export function createBookingService(deps: {
     return { succeeded, failed };
   }
 
+  // ── Scheduler jobs (expireBookings, releaseExpiredHolds, checkTutorLateness) ─
   async function expireBookings() {
     const candidates = await repo.findBookingsExpiringByDeadline(db, [
       BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION,
