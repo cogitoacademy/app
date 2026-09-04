@@ -156,7 +156,10 @@ describe("OQ-05: meeting event lifecycle follows the booking state", () => {
   });
 
   test("cancelling the booking marks the meeting event cancelled (no leaked event)", async () => {
-    await studentClient.booking.cancel({ bookingId });
+    await studentClient.booking.cancel({
+      bookingId,
+      cancellationReason: "Student cancelled",
+    });
 
     expect(await getMeetingStatus(bookingId)).toBe("cancelled");
 

@@ -1258,7 +1258,9 @@ describe("BookingService", () => {
         },
       });
 
-      await expect(service.cancel("student1", "nonexistent")).rejects.toThrow(
+      await expect(
+        service.cancel("student1", "nonexistent", "test reason"),
+      ).rejects.toThrow(
         BookingNotFoundError,
       );
     });
@@ -1273,7 +1275,9 @@ describe("BookingService", () => {
         },
       });
 
-      await expect(service.cancel("student1", "b1")).rejects.toThrow(
+      await expect(
+        service.cancel("student1", "b1", "test reason"),
+      ).rejects.toThrow(
         BookingNotOwnedError,
       );
     });
@@ -1288,7 +1292,9 @@ describe("BookingService", () => {
         },
       });
 
-      await expect(service.cancel("student1", "b1")).rejects.toThrow(
+      await expect(
+        service.cancel("student1", "b1", "test reason"),
+      ).rejects.toThrow(
         BookingStateTransitionError,
       );
     });
@@ -1306,7 +1312,9 @@ describe("BookingService", () => {
         },
       });
 
-      await expect(service.cancel("student1", "b1")).rejects.toThrow(
+      await expect(
+        service.cancel("student1", "b1", "test reason"),
+      ).rejects.toThrow(
         BookingCancellationDeadlinePassedError,
       );
       expect(wallet.deduct).not.toHaveBeenCalled();
@@ -1371,7 +1379,7 @@ describe("BookingService", () => {
         },
       });
 
-      await service.cancel("student1", "b1");
+      await service.cancel("student1", "b1", "late cancellation");
 
       expect(wallet.release).not.toHaveBeenCalled();
       expect(wallet.deduct).toHaveBeenCalledTimes(1);
@@ -1404,7 +1412,7 @@ describe("BookingService", () => {
         },
       });
 
-      await service.cancel("student1", "b1");
+      await service.cancel("student1", "b1", "no held marks");
 
       expect(wallet.release).not.toHaveBeenCalled();
     });
@@ -1427,7 +1435,7 @@ describe("BookingService", () => {
         },
       });
 
-      await service.cancel("student1", "b1");
+      await service.cancel("student1", "b1", "cancel booking");
 
       expect(meeting.cancelEvent).toHaveBeenCalledWith("b1");
     });
@@ -1469,7 +1477,9 @@ describe("BookingService", () => {
         },
       });
 
-      await expect(service.cancel("student1", "b1")).rejects.toThrow(
+      await expect(
+        service.cancel("student1", "b1", "test reason"),
+      ).rejects.toThrow(
         BookingSeriesNoOptOutError,
       );
     });
@@ -1531,7 +1541,7 @@ describe("BookingService", () => {
         },
       });
 
-      await service.cancel("student1", "b1");
+      await service.cancel("student1", "b1", "solo series cancellation");
 
       expect(wallet.release).toHaveBeenCalledTimes(1);
     });
@@ -1927,7 +1937,9 @@ describe("BookingService", () => {
         repo: { findBookingById: mock(async () => null) },
       });
 
-      await expect(service.tutorDecline("b1", "tutor1")).rejects.toThrow(
+      await expect(
+        service.tutorDecline("b1", "tutor1", "test reason"),
+      ).rejects.toThrow(
         BookingNotFoundError,
       );
     });
@@ -1941,7 +1953,9 @@ describe("BookingService", () => {
         },
       });
 
-      await expect(service.tutorDecline("b1", "tutor1")).rejects.toThrow(
+      await expect(
+        service.tutorDecline("b1", "tutor1", "test reason"),
+      ).rejects.toThrow(
         BookingNotOwnedError,
       );
     });
@@ -1992,7 +2006,7 @@ describe("BookingService", () => {
         },
       });
 
-      await service.tutorDecline("b1", "tutor1");
+      await service.tutorDecline("b1", "tutor1", "no held marks");
 
       expect(wallet.release).not.toHaveBeenCalled();
     });
@@ -4191,6 +4205,132 @@ describe("BookingService", () => {
       expect(repo.insertRescheduleProposal).toHaveBeenCalledTimes(1);
     });
 
+    test("blocks a student reschedule when the current session is within H-2", async () => {
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () =>
+            makeBooking({
+              scheduledStartAt: new Date(Date.now() + 60 * 60 * 1000),
+            }),
+          ),
+        },
+      });
+      const start = new Date(Date.now() + 72 * 60 * 60 * 1000);
+
+      await expect(
+        service.proposeReschedule(
+          "student1",
+          "b1",
+          start,
+          new Date(start.getTime() + 90 * 60 * 1000),
+        ),
+      ).rejects.toThrow(
+        "Booking can no longer be rescheduled within 2 hours of the current session (H-2)",
+      );
+      expect(repo.findAvailabilityWindowContaining).not.toHaveBeenCalled();
+    });
+
+    test("blocks a student reschedule when the new session is within H-2", async () => {
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => makeBooking()),
+        },
+      });
+      const start = new Date(Date.now() + 60 * 60 * 1000);
+
+      await expect(
+        service.proposeReschedule(
+          "student1",
+          "b1",
+          start,
+          new Date(start.getTime() + 90 * 60 * 1000),
+        ),
+      ).rejects.toThrow(
+        "Reschedule must be at least 2 hours before the new session start (H-2)",
+      );
+      expect(repo.findAvailabilityWindowContaining).not.toHaveBeenCalled();
+    });
+
+    test("rejects a student reschedule without matching tutor availability", async () => {
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => makeBooking()),
+        },
+      });
+      const start = new Date(Date.now() + 72 * 60 * 60 * 1000);
+
+      await expect(
+        service.proposeReschedule(
+          "student1",
+          "b1",
+          start,
+          new Date(start.getTime() + 90 * 60 * 1000),
+        ),
+      ).rejects.toThrow("No tutor availability covers this session");
+      expect(repo.findAvailabilityWindowContaining).toHaveBeenCalledTimes(1);
+    });
+
+    test("rejects a series reschedule that overlaps a sibling session", async () => {
+      const targetStart = new Date(Date.now() + 48 * 60 * 60 * 1000);
+      const start = new Date(Date.now() + 72 * 60 * 60 * 1000);
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () =>
+            makeBooking({ type: "series", scheduledStartAt: targetStart }),
+          ),
+          findSessionById: mock(async () => ({
+            id: "s1",
+            seriesBookingId: "b1",
+            currentState: "scheduled",
+            scheduledStartAt: targetStart,
+            scheduledEndAt: new Date(targetStart.getTime() + 90 * 60 * 1000),
+          })),
+          listSessionsBySeriesId: mock(async () => [
+            {
+              id: "s2",
+              seriesBookingId: "b1",
+              currentState: "scheduled",
+              scheduledStartAt: new Date(start.getTime() - 30 * 60 * 1000),
+              scheduledEndAt: new Date(start.getTime() + 60 * 60 * 1000),
+            },
+          ]),
+        },
+      });
+
+      await expect(
+        service.proposeReschedule(
+          "tutor1",
+          "b1",
+          start,
+          new Date(start.getTime() + 90 * 60 * 1000),
+          "Sibling session conflict",
+          undefined,
+          "s1",
+        ),
+      ).rejects.toThrow(BookingConflictError);
+      expect(repo.findOverlappingBookings).not.toHaveBeenCalled();
+    });
+
+    test("rejects a reschedule that overlaps another booking", async () => {
+      const start = new Date(Date.now() + 72 * 60 * 60 * 1000);
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => makeBooking()),
+          findOverlappingBookings: mock(async () => [{ id: "existing" }]),
+        },
+      });
+
+      await expect(
+        service.proposeReschedule(
+          "tutor1",
+          "b1",
+          start,
+          new Date(start.getTime() + 90 * 60 * 1000),
+        ),
+      ).rejects.toThrow(BookingConflictError);
+      expect(repo.findOverlappingBookings).toHaveBeenCalledTimes(1);
+    });
+
     test("rejects a proposed time matching the current schedule", async () => {
       const scheduledStartAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
       scheduledStartAt.setSeconds(0, 0);
@@ -4896,7 +5036,7 @@ describe("BookingService", () => {
         },
       });
 
-      await service.cancel("student1", "b1");
+      await service.cancel("student1", "b1", "group cancellation");
 
       expect(wallet.release).toHaveBeenCalledTimes(3);
       expect(repo.updateParticipantState).toHaveBeenCalledTimes(3);
@@ -4936,7 +5076,7 @@ describe("BookingService", () => {
         },
       });
 
-      await service.tutorDecline("b1", "tutor1");
+      await service.tutorDecline("b1", "tutor1", "group decline");
 
       expect(wallet.release).toHaveBeenCalledTimes(3);
       expect(repo.updateParticipantState).toHaveBeenCalledTimes(3);
@@ -5072,7 +5212,7 @@ describe("BookingService", () => {
         },
       });
 
-      await service.cancel("student1", "b1");
+      await service.cancel("student1", "b1", "series cancellation");
 
       expect(repo.cancelAllSessions).toHaveBeenCalledWith(
         expect.anything(),
@@ -5102,7 +5242,7 @@ describe("BookingService", () => {
         },
       });
 
-      await service.cancel("student1", "b1");
+      await service.cancel("student1", "b1", "no held marks");
 
       expect(wallet.release).not.toHaveBeenCalled();
       expect(repo.updateParticipantState).not.toHaveBeenCalled();
@@ -7072,7 +7212,9 @@ describe("BookingService additional coverage paths", () => {
       },
     });
 
-    await expect(service.cancel("tutor1", "b1")).rejects.toThrow(
+      await expect(
+        service.cancel("tutor1", "b1", "test reason"),
+      ).rejects.toThrow(
       BookingNotOwnedError,
     );
   });
@@ -7107,7 +7249,9 @@ describe("BookingService additional coverage paths", () => {
       },
     });
 
-    await expect(service.tutorDecline("b1", "tutor1")).rejects.toThrow(
+    await expect(
+      service.tutorDecline("b1", "tutor1", "test reason"),
+    ).rejects.toThrow(
       BookingNotAwaitingReviewError,
     );
   });

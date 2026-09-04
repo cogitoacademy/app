@@ -2059,6 +2059,7 @@ export function createBookingService(deps: {
           LATE_CANCEL_THRESHOLD_MS
         ) {
           throw new BookingNotEditableError(
+            bookingId,
             "Booking can no longer be rescheduled within 2 hours of the current session (H-2)",
           );
         }
@@ -2069,6 +2070,7 @@ export function createBookingService(deps: {
           Date.now() + LATE_CANCEL_THRESHOLD_MS
         ) {
           throw new BookingNotEditableError(
+            bookingId,
             "Reschedule must be at least 2 hours before the new session start (H-2)",
           );
         }
@@ -2082,6 +2084,7 @@ export function createBookingService(deps: {
             );
         if (!slot)
           throw new BookingNotEditableError(
+            bookingId,
             "No tutor availability covers this session",
           );
         assertSessionFitsAvailability(
