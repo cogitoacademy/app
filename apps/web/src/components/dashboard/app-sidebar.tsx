@@ -56,25 +56,25 @@ const BOOKING_ACTION_QUERY_INPUT = {
 
 const studentNavItems = [
   { to: "/dashboard", label: "Dashboard", icon: IconHome },
-  { to: "/balance", label: "Balance", icon: IconCoins },
-  { to: "/bookings", label: "My Bookings", icon: IconCalendarEvent },
-  { to: "/achievements", label: "Achievements", icon: IconCertificate },
   { to: "/tutors", label: "Tutors", icon: IconUserSquare },
+  { to: "/bookings", label: "My Bookings", icon: IconCalendarEvent },
+  { to: "/balance", label: "Balance", icon: IconCoins },
+  { to: "/achievements", label: "Achievements", icon: IconCertificate },
 ] as const;
 
 const tutorNavItems = [
   { to: "/dashboard", label: "Dashboard", icon: IconHome },
-  { to: "/profile", label: "Tutor Profile", icon: IconUser },
-  { to: "/availability", label: "Availability", icon: IconTimelineEventText },
   { to: "/bookings", label: "Bookings", icon: IconCalendarEvent },
+  { to: "/availability", label: "Availability", icon: IconTimelineEventText },
+  { to: "/profile", label: "Tutor Profile", icon: IconUser },
 ] as const;
 
 const adminNavItems = [
   { to: "/admin", label: "Dashboard", icon: IconHome },
-  { to: "/bookings", label: "Bookings", icon: IconCalendarEvent },
   { to: "/admin-operations", label: "Operations", icon: IconShieldCheck },
-  { to: "/admin-economy", label: "Economy", icon: IconAdjustments },
+  { to: "/bookings", label: "Bookings", icon: IconCalendarEvent },
   { to: "/admin-tutors", label: "Tutors", icon: IconUsersGroup },
+  { to: "/admin-economy", label: "Economy", icon: IconAdjustments },
   {
     to: "/admin-achievements",
     label: "Achievements",

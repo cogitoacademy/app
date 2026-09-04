@@ -47,6 +47,17 @@ shared with the booking card/list presentation, and the existing list query is
 invalidated by booking mutations. This is presentation-only and does not add an
 RPC, schema, persistence, or lifecycle change.
 
+### Sidebar navigation order follow-up (2026-09-04)
+
+The authenticated sidebar keeps its Navigation, Resources, and footer account
+zones while ordering role-specific primary links by workflow: students see
+**Dashboard**, **Tutors**, **My Bookings**, **Balance**, **Achievements**;
+tutors see **Dashboard**, **Bookings**, **Availability**, **Tutor Profile**;
+admins see **Dashboard**, **Operations**, **Bookings**, **Tutors**, **Economy**,
+**Achievements**. Resource links, account-menu behavior, and the existing
+**Tutor Profile** label remain unchanged. This is frontend-only and does not
+change an API, schema, persistence, or lifecycle contract.
+
 ### Tutor profile route follow-up (2026-08-31)
 
 The tutor-owned profile editor is now presented at the canonical `/profile`

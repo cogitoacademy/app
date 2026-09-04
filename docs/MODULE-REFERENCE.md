@@ -29,6 +29,16 @@ Cogito Academy logo so the full wordmark renders white. This is client-side
 presentation behavior and adds no service, repository, event-key, or business
 rule.
 
+## Sidebar navigation order (2026-09-04)
+
+`apps/web/src/components/dashboard/app-sidebar.tsx` keeps the shared resource
+group and account footer while ordering primary links by role-specific workflow:
+students use `Dashboard`, `Tutors`, `My Bookings`, `Balance`, and `Achievements`;
+tutors use `Dashboard`, `Bookings`, `Availability`, and `Tutor Profile`; admins
+use `Dashboard`, `Operations`, `Bookings`, `Tutors`, `Economy`, and
+`Achievements`. This is frontend presentation only; services, repositories,
+event keys, and business rules are unchanged.
+
 ## Production UI and E2E audit (2026-09-04)
 
 The audit hardens browser workflows and shared Selia composition only. No API

@@ -41,6 +41,16 @@ renders the complete logo white in dark mode. This is frontend-only
 presentation behavior; no RPC path, request envelope, response shape, schema,
 or persistence contract changed.
 
+## Sidebar navigation order (2026-09-04)
+
+The authenticated shell reorders existing role-specific sidebar links so the
+primary journey comes first for each role: students see `Dashboard`, `Tutors`,
+`My Bookings`, `Balance`, and `Achievements`; tutors see `Dashboard`, `Bookings`,
+`Availability`, and `Tutor Profile`; admins see `Dashboard`, `Operations`,
+`Bookings`, `Tutors`, `Economy`, and `Achievements`. Resources and the footer
+account menu are unchanged, as are all RPC paths, request envelopes, response
+shapes, authentication rules, schemas, and persistence contracts.
+
 ## Production UI and E2E audit (2026-09-04)
 
 The UI/E2E hardening in this audit does not add or change an API endpoint,

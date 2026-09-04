@@ -40,6 +40,14 @@ action** view, disappear when there are none, and render `99+` when the result
 exceeds the compact display limit. Confirm the link remains keyboard accessible
 and the badge does not widen or overflow the sidebar.
 
+Also verify the primary sidebar order: students see **Dashboard**, **Tutors**,
+**My Bookings**, **Balance**, **Achievements**; tutors see **Dashboard**,
+**Bookings**, **Availability**, **Tutor Profile**; and admins see **Dashboard**,
+**Operations**, **Bookings**, **Tutors**, **Economy**, **Achievements**. The
+shared Resources group and footer account menu should remain available, and the
+**Tutor Profile** wording should remain unchanged. This is presentation-only;
+no environment or operational change is required.
+
 ## Production UI and E2E audit (2026-09-04)
 
 The full browser workflow passed **13/13 tests across four specs**. It covers

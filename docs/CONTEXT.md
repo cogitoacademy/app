@@ -68,6 +68,18 @@ white, including both the wordmark and academy label. This is frontend-only
 presentation behavior with no RPC, schema, persistence, or operational
 contract change.
 
+## Sidebar navigation order (2026-09-04)
+
+The authenticated sidebar keeps its three semantic zones: role-specific primary
+navigation, shared resources, and the account menu in the footer. Student
+navigation follows the main journey (`Dashboard`, `Tutors`, `My Bookings`,
+`Balance`, `Achievements`); tutor navigation prioritizes work actions
+(`Dashboard`, `Bookings`, `Availability`, `Tutor Profile`); and admin navigation
+starts with the action queue (`Dashboard`, `Operations`, `Bookings`, `Tutors`,
+`Economy`, `Achievements`). Resource labels and the **Tutor Profile** wording
+remain unchanged. This is frontend-only presentation behavior with no RPC,
+schema, persistence, or operational contract change.
+
 ## Production UI and E2E audit (2026-09-04)
 
 The authenticated web shell now exposes a semantic skip link, an accessible
