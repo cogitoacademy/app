@@ -3,9 +3,12 @@ import { CircuitBreaker } from "../../lib/circuit-breaker";
 import {
   internalServerError,
   serviceUnavailable,
-  unauthorized,
   badRequest,
 } from "../../lib/errors";
+import {
+  UnknownPaymentStatusError,
+  WebhookSignatureError,
+} from "./payment.errors";
 import { log } from "../../lib/logger";
 import { fetchWithTimeout, retryWithBackoff } from "../../lib/retry";
 import type { RedisClient } from "../../lib/redis";
@@ -114,7 +117,7 @@ export function mapMidtransStatus(
     case "partial_refund":
       return "REFUNDED";
     default:
-      throw internalServerError("Unknown payment status: " + status);
+      throw new UnknownPaymentStatusError(status);
   }
 }
 
@@ -148,7 +151,7 @@ function verifySignatureKey(
     typeof gross_amount !== "string" ||
     typeof signature_key !== "string"
   ) {
-    throw unauthorized("Invalid webhook signature");
+    throw new WebhookSignatureError();
   }
   const expected = createHash("sha512")
     .update(order_id + status_code + gross_amount + signatureKey)
@@ -161,7 +164,7 @@ function verifySignatureKey(
       new TextEncoder().encode(provided),
     )
   ) {
-    throw unauthorized("Invalid webhook signature");
+    throw new WebhookSignatureError();
   }
 }
 
@@ -347,7 +350,7 @@ export function createMidtransPaymentProvider(opts: {
     // merchant (e.g. a misconfigured dashboard pointing at our URL) must not
     // be processed.
     if (body.merchant_id && body.merchant_id !== opts.merchantId) {
-      throw unauthorized("Invalid webhook signature");
+      throw new WebhookSignatureError();
     }
 
     const orderId = body.order_id ?? "";

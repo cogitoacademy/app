@@ -11,7 +11,7 @@ mock.module("@cogito-app/api/lib/db-health", () => ({
   healthStatus: (status: string) => (status === "ok" ? 200 : 503),
 }));
 
-const { createServer } = await import("./routes");
+const { createServer } = await import("./routes/create-server");
 
 /**
  * Consolidation contract: every HTTP request emits exactly ONE structured

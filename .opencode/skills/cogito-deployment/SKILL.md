@@ -22,7 +22,11 @@ Code plane (git)          Control plane (operator machine)     Data plane (VPS)
   migrate → deploy → sha-verified health poll). Only merges to main deploy.
 - **Infra/env changes are manual** (operator machine): Terraform for DNS/R2,
   Ansible for everything inside the box. The Age private key NEVER enters CI
-  or the VPS.
+  or the VPS — with one documented exception: `SOPS_AGE_KEY` is deliberately
+  a GitHub Actions secret for the `infra-apply` workflow (INFRA-AUTOMATION
+  wave, 2026-09-02). It is used only on manual dispatch / vault-path PRs,
+  written to a 0600 temp file, and deleted in a `finally` step; it is never
+  used by the normal CI/CD path.
 - **The proxy is Traefik v3.6** (Coolify's bundled proxy), NOT Caddy. Any doc
   saying "Caddy" is stale — fix it.
 
@@ -59,10 +63,10 @@ Code plane (git)          Control plane (operator machine)     Data plane (VPS)
    terraform import cloudflare_r2_custom_domain.uploads r2bucket.cogitoacademy.id
    CLOUDFLARE_API_TOKEN=... terraform apply
    ```
-4. **Ansible** (from repo root, in order):
+4. **Ansible** (from repo root, in order — tailscale BEFORE hardening: hardening locks SSH to the tailnet, so joining first prevents an operator lockout; `apply.sh` refuses `harden` without `tailscale-verified`):
    ```bash
-   ansible-playbook -i infra/ansible/inventory.ini infra/ansible/host-hardening.yml --ask-become-pass
    ansible-playbook -i infra/ansible/inventory.ini infra/ansible/tailscale.yml --ask-become-pass -e "ts_auth_key=$(sops -d infra/secrets/prod.env | grep TS_AUTH_KEY | cut -d= -f2-)"
+   ansible-playbook -i infra/ansible/inventory.ini infra/ansible/host-hardening.yml --ask-become-pass
    ansible-playbook -i infra/ansible/inventory.ini infra/ansible/coolify-resources.yml --ask-become-pass
    ansible-playbook -i infra/ansible/inventory.ini infra/ansible/backup-cron.yml --ask-become-pass
    ```

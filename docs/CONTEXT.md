@@ -491,6 +491,33 @@ cogito-app/
 └── designs/                 # .pen design files
 ```
 
+### Server layout (2026-09-04, REFACTOR-PR)
+
+`apps/server/src/routes.ts` was split into a plugin-per-area layout under
+`apps/server/src/routes/`:
+
+- `create-server.ts` — composition root: builds the Elysia app, mounts the
+  route plugins, wires the logger and error handling.
+- `middlewares.ts` — `identifyUser` (evlog/better-auth) and shared request
+  middleware.
+- `rate-limits.ts` — RPC + auth rate-limit path matching
+  (`matchRateLimitPath`/`matchAuthPath`).
+- `auth-routes.ts` — Better Auth `/api/auth/*` mounting.
+- `rpc-routes.ts` — oRPC `/rpc/*` mounting.
+- `upload-routes.ts` — `/uploads/*` local serving + presigned upload.
+- `content-routes.ts` — protected Sanity content proxy.
+- `openapi-routes.ts` — OpenAPI spec (auth-gated outside production).
+- `health-metrics.ts` — `/health` + metrics.
+- `webhooks/` — payment webhook routes (`payments.ts` + provider tests).
+- `seed/` — guarded production seed scripts.
+
+Typed webhook errors live in
+`packages/api/src/modules/payment/payment.errors.ts`:
+`WebhookSignatureError` (bad signature → 401), `WebhookTimestampError`
+(stale timestamp → 408), `UnknownPaymentStatusError` (unmapped provider
+status → 400). The webhook route classifies them as permanent (4xx, no
+provider retry) vs transient (5xx, claim released).
+
 ## 4-Layer Architecture
 
 **Router → Handler → Service → Repository**
@@ -845,7 +872,7 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 | `docs/plans/completed/WEBSITE-AUDIT-P3-PAYMENT-WEBHOOK.md`        | `f/website-audit-hardening`                                                         | **Completed (2026-08-29)** — lifecycle-aware Xendit webhook idempotency without cross-status or missing-event-id collisions                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `docs/plans/completed/WEBSITE-AUDIT-P4-EDGE-CASES.md`             | `f/website-audit-hardening`                                                         | **Completed (2026-08-29)** — malformed signup JSON handling and half-open room availability checks                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `docs/MIDTRANS-MIGRATION.md`                                      | `release/2026-09-03-log-midtrans-booking`                                           | **Implemented + merged (2026-09-04)** — Midtrans Snap provider behind the `PaymentProvider` port (env schema + services wiring + webhook route + tests + operator guide); Xendit kept as default/rollback; operator cutover pending per the guide                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `docs/plans/active/LOG-CONSOLIDATION-PAYMENT-UX.md`               | `release/2026-09-03-log-midtrans-booking`                                           | **DONE (2026-09-04)** — one consolidated `request_complete` log line per request (method/path/status/requestId/durationMs/userId; `rpc_error` correlated); purchase error toast + Test Mode labels; Midtrans migration + booking date fix landed in the same wave PR                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `docs/plans/completed/LOG-CONSOLIDATION-PAYMENT-UX.md`            | `release/2026-09-03-log-midtrans-booking`                                           | **Completed (merged #189, 2026-09-04)** — one consolidated `request_complete` log line per request (method/path/status/requestId/durationMs/userId; `rpc_error` correlated); purchase error toast + Test Mode labels; Midtrans migration + booking date fix landed in the same wave PR                                                                                                                                                                                                                                                                                                                                                                                                |
 | `docs/plans/completed/REVIEW-FIXES-4.md`                          | main (merged)                                                                       | Completed (2026-08-18) — wave-4 audit fixes merged via #68–#70, #75–#76 (docs/sdd reconciliation, money bugs C1–M9, Xendit rewrite, fail-loud 3P guards, G2 email verification)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `docs/plans/completed/WAVE-6-REVIEW-FIXES.md`                     | `fix/wave6-a` (PR #82), `fix/wave6-b` (PR #83), `fix/wave6-c` (PR #84) — all merged | **Completed (2026-08-19)** — all wave-6 findings (H1–H3, M1–M5, L1–L3, N1–N4, P1–P3) fixed & merged; L3 closed as defense-in-depth                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `docs/plans/completed/PRD-GAPS-PHASE3.md`                         | main (merged)                                                                       | Active — all U-items closed (U9 closed by REVIEW-FIXES-4 P2.8)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
@@ -896,6 +923,11 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 13. Post-Finalization Re-Audit (REAUDIT-FINDINGS.md — N1 reconfirm loop, N2 suspended restore, W1 env drift, env prod guards) → **merged #107 (2026-08-26)**
 14. Deployment Wave (DEPLOYMENT-PLAN.md + DEPLOYMENT-DISPATCH.md — infra scaffold #115, DLQ health #116, nightly backups #117, CD pipeline #118) → **merged 2026-08-27; APPLIED 2026-08-31 (Terraform + Ansible via infra/apply.sh)**
 15. Production Ops (DEFERRED-OPS-TASKS §2 Redis session caching, §3 manual verification, §4 production ops) → requires live env + Coolify
+16. CI Performance (CI-SANITY F14 — cache restores, Turbo `--affected` for PR typecheck/build, web build moved to the Build job, single coverage suite) → **merged #165 (2026-09-02)**
+17. Ops Visibility (OPS-VISIBILITY-WAVE — FAILURES.md, circuit breakers in `/health`, DLQ retention, ops.sh `cb`, pre-migrate snapshot pruning, vault-triggered infra-apply, Kuma wiring docs, CD `COOLIFY_API_BASE_URL` fix) → **merged #179 (2026-09-03)**
+18. Log Consolidation + Midtrans + Booking Date Fix + Payment UX (LOG-CONSOLIDATION-PAYMENT-UX — one `request_complete` log line, `rpc_error` correlation, purchase error toast + Test Mode labels, Midtrans Snap provider behind the `PaymentProvider` port, timezone-derived session start) → **merged #189 (2026-09-04)**
+19. CI Dependabot Fix (CI-SANITY F9 regression — restored `|| github.token` checkout fallback, explicit default-branch fetch before `turbo --affected`, Semantic PR job renamed `lint` → `semantic-pr`, pinned lint/format auto-fix versions) → **merged #190 (2026-09-04)**
+20. Semantic PR Docker Type (CI-SANITY follow-up — `docker` type added to the Semantic PR workflow) → **merged #193 (2026-09-04)**
 ```
 
 Production Readiness (#18) and Infrastructure (#19) merged to main. Deferred ops code gaps (1.1–1.8) are merged; Redis session caching remains deferred. PRD gaps backend (G1–G20) landed on main, and **BACKEND-HARDENING-PHASE2 (PRs 1–6) merged to main via #46** — security hardening, group-booking money correctness, late-cancel penalty, email outbox, R2 uploads, group-series, deadline repricing, payment notifications, meeting event lifecycle, SLA escalation. **BACKEND-REVIEW-HARDENING merged to main via #48** — the 2026-08-15 review fixes (money correctness, security, reliability, Redis mandatory). **REVIEW-FIXES-2 merged via #50–#57** (wave-2 findings), **REVIEW-FIXES-3 merged via #59–#65** (wave-3 findings), **REVIEW-FIXES-4 merged via #68–#70, #75–#76** (wave-4: docs/sdd reconciliation, money-correctness bugs C1–C3/H1–H6/M1–M9/L1–L5, Xendit provider rewrite for the 2024-11-11 API, fail-loud Resend/Google Meet/R2 guards, G2 email verification). Next: remaining frontend-gap work and production ops.

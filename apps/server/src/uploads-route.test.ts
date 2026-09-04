@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { rmSync } from "node:fs";
-import { createServer } from "./routes";
+import { createServer } from "./routes/create-server";
 
 const UPLOAD_ROOT = "./uploads";
 
