@@ -88,7 +88,7 @@ describe("seed guards", () => {
       DB_SSL_ENABLED: "false",
     };
 
-    const blocked = spawnSync("bun", ["src/seed-packages.ts"], {
+    const blocked = spawnSync("bun", ["seed/seed-packages.ts"], {
       cwd: fileURLToPath(new URL("..", import.meta.url)),
       env: { ...process.env, ...prodEnv },
       encoding: "utf8",

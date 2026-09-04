@@ -604,7 +604,7 @@ describe("XenditPaymentProvider verifyWebhook (2024-11-11)", () => {
     });
 
     await expect(provider.verifyWebhook(body, "wrong_token")).rejects.toThrow(
-      "Invalid webhook token",
+      "Invalid webhook signature",
     );
   });
 

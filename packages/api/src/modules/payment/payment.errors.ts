@@ -82,6 +82,42 @@ export class PaymentSimulationUnavailableError extends DomainError {
   }
 }
 
+/**
+ * Webhook signature verification failed (Xendit `x-callback-token` header or
+ * Midtrans body `signature_key`). Typed so the webhook route can classify the
+ * failure as a 401 without message sniffing.
+ */
+export class WebhookSignatureError extends DomainError {
+  readonly domain = "payment";
+  constructor() {
+    super("WEBHOOK_SIGNATURE_INVALID", "Invalid webhook signature");
+  }
+}
+
+/**
+ * Webhook timestamp missing/invalid/stale (non-Xendit, non-Midtrans
+ * providers). Typed so the webhook route can classify the failure as a 408
+ * without message sniffing.
+ */
+export class WebhookTimestampError extends DomainError {
+  readonly domain = "payment";
+  constructor(message: string) {
+    super("WEBHOOK_TIMESTAMP_INVALID", message);
+  }
+}
+
+/**
+ * The provider reported a status the mapping table does not know — a
+ * permanent provider-side bug that retrying will never fix. Typed so the
+ * webhook route can dead-letter it (4xx) without message sniffing.
+ */
+export class UnknownPaymentStatusError extends DomainError {
+  readonly domain = "payment";
+  constructor(status: string) {
+    super("UNKNOWN_PAYMENT_STATUS", `Unknown payment status: ${status}`);
+  }
+}
+
 export function mapPaymentError(
   err: DomainError,
 ): ORPCError<string, undefined> {

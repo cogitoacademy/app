@@ -33,7 +33,7 @@ describe("C6: password policy", () => {
 
   test("server route guards sign-up with the policy", () => {
     const routes = readFileSync(
-      new URL("./routes.ts", import.meta.url),
+      new URL("./routes/auth-routes.ts", import.meta.url),
       "utf-8",
     );
     expect(routes).toContain("assertPasswordPolicy");

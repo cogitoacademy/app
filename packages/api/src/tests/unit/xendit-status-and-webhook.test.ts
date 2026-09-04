@@ -72,7 +72,7 @@ describe("XenditPaymentProvider verifyWebhook (2024-11-11)", () => {
         JSON.stringify({ data: { status: "SUCCEEDED" } }),
         "",
       ),
-    ).rejects.toThrow("Invalid webhook token");
+    ).rejects.toThrow("Invalid webhook signature");
   });
 
   test("rejects mismatched token", async () => {
@@ -82,7 +82,7 @@ describe("XenditPaymentProvider verifyWebhook (2024-11-11)", () => {
         JSON.stringify({ data: { status: "SUCCEEDED" } }),
         "wrong-token",
       ),
-    ).rejects.toThrow("Invalid webhook token");
+    ).rejects.toThrow("Invalid webhook signature");
   });
 
   test("rejects malformed JSON", async () => {

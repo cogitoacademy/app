@@ -19,13 +19,13 @@ describe("invite and booking rate limit paths", () => {
       "utf-8",
     );
     const routes = readFileSync(
-      new URL("./routes.ts", import.meta.url),
+      new URL("./routes/rate-limits.ts", import.meta.url),
       "utf-8",
     );
     expect(paths).toContain('"/rpc/invite/verify"');
     expect(paths).toContain('"/rpc/booking/"');
-    expect(routes).toContain('keyPrefix: "invite"');
-    expect(routes).toContain('keyPrefix: "booking"');
+    expect(routes).toContain("invite: { windowMs: 60_000, maxRequests: 10 }");
+    expect(routes).toContain("booking: { windowMs: 60_000, maxRequests: 30 }");
   });
 });
 
@@ -36,7 +36,7 @@ describe("L3: email-OTP verify is throttled by the app-level auth limiter (defen
       "utf-8",
     );
     const routes = readFileSync(
-      new URL("./routes.ts", import.meta.url),
+      new URL("./routes/rate-limits.ts", import.meta.url),
       "utf-8",
     );
 
@@ -49,8 +49,8 @@ describe("L3: email-OTP verify is throttled by the app-level auth limiter (defen
     expect(paths).toContain('"/api/auth/reset-password"');
     expect(paths).toContain("urlPath === p || urlPath.startsWith(`${p}/`)");
 
-    // routes.ts must apply authRateLimit to matched auth paths.
-    expect(routes).toContain("authRateLimit");
+    // routes/rate-limits.ts must apply the auth limiter to matched auth paths.
+    expect(routes).toContain('limiters.get("auth")');
     expect(routes).toContain("matchAuthPath(path)");
   });
 });

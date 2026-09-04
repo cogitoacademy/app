@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from "bun:test";
 import { Elysia } from "elysia";
 import { webhookIdempotency } from "@cogito-app/api/lib/idempotency";
-import { PaymentNotFoundError } from "@cogito-app/api/modules/payment/payment.errors";
+import { PaymentNotFoundError, UnknownPaymentStatusError } from "@cogito-app/api/modules/payment/payment.errors";
 import { paymentWebhookIdempotencyKey } from "./payments";
 
 const basePayload = {
@@ -125,7 +125,7 @@ describe("webhook M5/L1 failure handling", () => {
             verifyWebhook: async () => basePayload,
           },
           confirmFromWebhook: mock(async () => {
-            throw new Error("Unknown payment status: BOGUS");
+            throw new UnknownPaymentStatusError("BOGUS");
           }),
         },
       },
