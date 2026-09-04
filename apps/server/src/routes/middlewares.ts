@@ -47,51 +47,53 @@ export function requestBodyLimit(request: Request): Response | null {
  * the consolidated request_complete log, and the request_error log.
  */
 export function registerRequestLogging(app: Elysia) {
-  return app
-    // Keep evlog's per-user identification available (context.log via
-    // requestState) but suppress its per-request wide-event log line — the
-    // consolidated request_complete line below carries method/path/status/
-    // requestId/durationMs/userId. `exclude: ["**"]` makes shouldLog() false
-    // for every path (evlog globs: `*` alone does not cross `/`), so the
-    // plugin only wires up the logger, which identifyUser needs.
-    .use(evlog({ exclude: ["**"] }))
-    .derive(({ request }) => {
-      const requestId =
-        request.headers.get("x-request-id") || generateRequestId();
-      const startTime = performance.now();
-      return { requestId, startTime };
-    })
-    .onAfterHandle(({ requestId, startTime, request, set }) => {
-      const durationMs = performance.now() - startTime;
-      const path = new URL(request.url).pathname;
-      recordRequest(path, durationMs);
-      appLog({
-        level: "info",
-        requestId,
-        action: "request_complete",
-        durationMs,
-        method: request.method,
-        path,
-        // Elysia's set.status may be a StatusText string literal; only the
-        // numeric form (which defaults to 200) belongs in the log line.
-        status: typeof set.status === "number" ? set.status : 200,
-        userId: requestUserId.get(request),
-      });
-    })
-    .onError(({ requestId, request, error }) => {
-      const path = new URL(request.url).pathname;
-      appLog({
-        level: "error",
-        requestId,
-        action: "request_error",
-        method: request.method,
-        path,
-        error: {
-          message: String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-        },
-      });
-    });
+  return (
+    app
+      // Keep evlog's per-user identification available (context.log via
+      // requestState) but suppress its per-request wide-event log line — the
+      // consolidated request_complete line below carries method/path/status/
+      // requestId/durationMs/userId. `exclude: ["**"]` makes shouldLog() false
+      // for every path (evlog globs: `*` alone does not cross `/`), so the
+      // plugin only wires up the logger, which identifyUser needs.
+      .use(evlog({ exclude: ["**"] }))
+      .derive(({ request }) => {
+        const requestId =
+          request.headers.get("x-request-id") || generateRequestId();
+        const startTime = performance.now();
+        return { requestId, startTime };
+      })
+      .onAfterHandle(({ requestId, startTime, request, set }) => {
+        const durationMs = performance.now() - startTime;
+        const path = new URL(request.url).pathname;
+        recordRequest(path, durationMs);
+        appLog({
+          level: "info",
+          requestId,
+          action: "request_complete",
+          durationMs,
+          method: request.method,
+          path,
+          // Elysia's set.status may be a StatusText string literal; only the
+          // numeric form (which defaults to 200) belongs in the log line.
+          status: typeof set.status === "number" ? set.status : 200,
+          userId: requestUserId.get(request),
+        });
+      })
+      .onError(({ requestId, request, error }) => {
+        const path = new URL(request.url).pathname;
+        appLog({
+          level: "error",
+          requestId,
+          action: "request_error",
+          method: request.method,
+          path,
+          error: {
+            message: String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          },
+        });
+      })
+  );
 }
 
 export function registerCors(app: Elysia) {
