@@ -111,7 +111,6 @@ cache dependent.
   legacy React findings remain visible but no longer
   reject every local push, and any non-baselined lint error still fails. The
   gate also removes its temporary GitHub-format output on exit.
-<<<<<<< HEAD
 - 2026-09-04 (PR with the wave #189 merge, `fix/ci-dependabot-checkout`):
   **F9 REGRESSED and fixed.** PR #189 replaced the Lint job's
   `token: ${{ secrets.ACTIONS_BOT_PAT || github.token }}` input with a bare
@@ -134,7 +133,6 @@ not supplied: token` before any check ran. Live evidence: PRs #142 and
   can never diverge from the gate. **F10 (branch protection) still
   unverified from a write-collaborator account — operator console check
   required.**
-=======
 - 2026-09-04 (production UI/E2E audit): **F8 browser workflow verified and CI coverage added.**
   The isolated E2E job provisions Postgres 16 and Redis 7, creates the test
   environment, migrates the database, installs Chromium, and runs the complete
@@ -142,5 +140,4 @@ not supplied: token` before any check ran. Live evidence: PRs #142 and
   booking, responsive layout, contact sharing, and economy/role coverage;
   Playwright reports are uploaded on every CI run. The migration task passes
   the isolated `.env.test` through Turbo explicitly. Remaining operator-owned
-  work is F9 (`ACTIONS_BOT_PAT`) and F10 branch protection.
->>>>>>> 5cf1bdec (feat(ui): harden e2e workflow and production UX)
+  work is F10 branch protection.
