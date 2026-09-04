@@ -59,6 +59,10 @@ import {
   isValidMinuteTime,
   MinuteTimeInput,
 } from "@/components/booking/minute-time-input";
+import {
+  formatTimeValue,
+  toSessionStart,
+} from "@/components/booking/booking-session-time";
 
 const BOOKING_TIMEZONE = "Asia/Jakarta";
 const DEFAULT_SOLO_PRICE = 42;
@@ -88,31 +92,7 @@ function formatSlotDate(value: Date | string) {
 }
 
 function formatSlotTime(start: Date | string, end: Date | string) {
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: BOOKING_TIMEZONE,
-  });
-  return `${formatter.format(new Date(start))} - ${formatter.format(new Date(end))} WIB`;
-}
-
-function formatDateValue(value: Date | string) {
-  return new Intl.DateTimeFormat("en-CA", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    timeZone: BOOKING_TIMEZONE,
-  }).format(new Date(value));
-}
-
-function formatTimeValue(value: Date | string) {
-  return new Intl.DateTimeFormat("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: BOOKING_TIMEZONE,
-  }).format(new Date(value));
+  return `${formatTimeValue(start, BOOKING_TIMEZONE)} - ${formatTimeValue(end, BOOKING_TIMEZONE)} WIB`;
 }
 
 export function CreateBookingPage({ tutorId }: { tutorId: string }) {
@@ -336,7 +316,8 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
   const hasEnoughMarks = availableBalance >= requiredHold;
   const tutorName = profile.user?.name ?? "Cogito tutor";
   const hasInvalidStartTime = selectedSlots.some((slot) => {
-    const value = startTimes[slot.id] ?? formatTimeValue(slot.startDate);
+    const value =
+      startTimes[slot.id] ?? formatTimeValue(slot.startDate, BOOKING_TIMEZONE);
     const latestStart = new Date(
       new Date(slot.endDate).getTime() - 90 * 60_000,
     );
@@ -344,8 +325,8 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
       !isValidMinuteTime(value) ||
       !isTimeWithinRange(
         value,
-        formatTimeValue(slot.startDate),
-        formatTimeValue(latestStart),
+        formatTimeValue(slot.startDate, BOOKING_TIMEZONE),
+        formatTimeValue(latestStart, BOOKING_TIMEZONE),
       )
     );
   });
@@ -354,9 +335,11 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
     event.preventDefault();
     if (!selectedSlot) return;
 
-    const toSessionStart = (slot: (typeof availableSlots)[number]) => {
-      const time = startTimes[slot.id] ?? formatTimeValue(slot.startDate);
-      return new Date(`${formatDateValue(slot.startDate)}T${time}:00+07:00`);
+    const buildSessionStart = (slot: (typeof availableSlots)[number]) => {
+      const time =
+        startTimes[slot.id] ??
+        formatTimeValue(slot.startDate, BOOKING_TIMEZONE);
+      return toSessionStart(slot.startDate, time, BOOKING_TIMEZONE);
     };
     if (hasInvalidStartTime) return;
 
@@ -379,7 +362,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
           inviteeUserIds: invitees.map((student) => student.id),
           sessions: selectedSlots.map((slot) => ({
             availabilitySlotId: slot.id,
-            scheduledStartAt: toSessionStart(slot),
+            scheduledStartAt: buildSessionStart(slot),
           })),
         });
         return;
@@ -388,7 +371,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
         ...baseInput,
         targetGroupSize: invitees.length + 1,
         inviteeUserIds: invitees.map((student) => student.id),
-        scheduledStartAt: toSessionStart(selectedSlot),
+        scheduledStartAt: buildSessionStart(selectedSlot),
       });
       return;
     }
@@ -397,14 +380,14 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
         ...baseInput,
         sessions: selectedSlots.map((slot) => ({
           availabilitySlotId: slot.id,
-          scheduledStartAt: toSessionStart(slot),
+          scheduledStartAt: buildSessionStart(slot),
         })),
       });
       return;
     }
     createBooking.mutate({
       ...baseInput,
-      scheduledStartAt: toSessionStart(selectedSlot),
+      scheduledStartAt: buildSessionStart(selectedSlot),
     });
   }
 
@@ -771,7 +754,10 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                                 id={`start-${slot.id}`}
                                 value={
                                   startTimes[slot.id] ??
-                                  formatTimeValue(slot.startDate)
+                                  formatTimeValue(
+                                    slot.startDate,
+                                    BOOKING_TIMEZONE,
+                                  )
                                 }
                                 onChange={(value) =>
                                   setStartTimes((current) => ({
@@ -779,28 +765,40 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                                     [slot.id]: value,
                                   }))
                                 }
-                                minTime={formatTimeValue(slot.startDate)}
+                                minTime={formatTimeValue(
+                                  slot.startDate,
+                                  BOOKING_TIMEZONE,
+                                )}
                                 maxTime={formatTimeValue(
                                   new Date(
                                     new Date(slot.endDate).getTime() -
                                       90 * 60_000,
                                   ),
+                                  BOOKING_TIMEZONE,
                                 )}
                               />
                               <FieldDescription>
                                 Fixed 90 minutes · ends at{" "}
                                 {addMinutesToTime(
                                   startTimes[slot.id] ??
-                                    formatTimeValue(slot.startDate),
+                                    formatTimeValue(
+                                      slot.startDate,
+                                      BOOKING_TIMEZONE,
+                                    ),
                                   90,
                                 )}{" "}
                                 WIB · valid starts{" "}
-                                {formatTimeValue(slot.startDate)}–
+                                {formatTimeValue(
+                                  slot.startDate,
+                                  BOOKING_TIMEZONE,
+                                )}
+                                –
                                 {formatTimeValue(
                                   new Date(
                                     new Date(slot.endDate).getTime() -
                                       90 * 60_000,
                                   ),
+                                  BOOKING_TIMEZONE,
                                 )}{" "}
                                 WIB
                               </FieldDescription>

@@ -78,3 +78,6 @@ infra/secrets/prod.env
 
 terraform_key.txt
 ansible_key.txt
+
+# worktree-local bun install cache (never committed)
+.bun-cache/
