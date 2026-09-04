@@ -46,22 +46,15 @@ import {
   DrawerPopup,
   DrawerTitle,
 } from "@cogito-app/ui/components/selia/drawer";
-import {
-  Pagination,
-  PaginationButton,
-  PaginationItem,
-  PaginationList,
-} from "@cogito-app/ui/components/selia/pagination";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import type { CogitoUser } from "@cogito-app/auth";
 import { client, orpc } from "@/utils/orpc";
 import { TutorInviteForm } from "@/components/admin/tutor-invite-form";
 import { TutorReviewCard } from "@/components/admin/tutor-review-card";
+import { TablePagination } from "@/components/table-pagination";
 import { useSubjectTaxonomy } from "@/components/tutor/subject-taxonomy";
 import {
   IconCopy,
-  IconChevronLeft,
-  IconChevronRight,
   IconDots,
   IconInbox,
   IconRefresh,
@@ -325,8 +318,16 @@ function RouteComponent() {
             {invites.length === 0 ? (
               <EmptyState
                 icon={<IconInbox />}
-                title="No invitations found"
-                description="New tutor invitations will appear here."
+                title={
+                  invitePage === 0
+                    ? "No invitations found"
+                    : "No invitations on this page"
+                }
+                description={
+                  invitePage === 0
+                    ? "New tutor invitations will appear here."
+                    : "Go back to the previous page to continue browsing invitations."
+                }
                 tone="secondary"
                 size="compact"
                 className="rounded-lg"
@@ -456,11 +457,12 @@ function RouteComponent() {
               </TableContainer>
             )}
             {invites.length > 0 || invitePage > 0 ? (
-              <PaginationControls
+              <TablePagination
                 targetId="admin-tutor-invites"
                 label="invitations"
                 pageSize={INVITATIONS_PAGE_SIZE}
                 page={invitePage}
+                itemCount={visibleInvites.length}
                 hasNext={invites.length > INVITATIONS_PAGE_SIZE}
                 isFetching={invitesFetching}
                 onPrevious={() =>
@@ -509,8 +511,16 @@ function RouteComponent() {
           {profiles.length === 0 ? (
             <EmptyState
               icon={<IconInbox />}
-              title="No tutor profiles found"
-              description="Tutor profiles matching this status will appear here."
+              title={
+                profilePage === 0
+                  ? "No tutor profiles found"
+                  : "No tutor profiles on this page"
+              }
+              description={
+                profilePage === 0
+                  ? "Tutor profiles matching this status will appear here."
+                  : "Go back to the previous page to continue browsing tutor profiles."
+              }
               tone="secondary"
               size="compact"
               className="rounded-lg"
@@ -573,11 +583,12 @@ function RouteComponent() {
             </TableContainer>
           )}
           {profiles.length > 0 || profilePage > 0 ? (
-            <PaginationControls
+            <TablePagination
               targetId="admin-tutor-profiles"
               label="tutor profiles"
               pageSize={TUTOR_PROFILES_PAGE_SIZE}
               page={profilePage}
+              itemCount={visibleProfiles.length}
               hasNext={profiles.length > TUTOR_PROFILES_PAGE_SIZE}
               isFetching={profilesFetching}
               onPrevious={() => setProfilePage((page) => Math.max(0, page - 1))}
@@ -637,83 +648,5 @@ function RouteComponent() {
         </DrawerPopup>
       </Drawer>
     </div>
-  );
-}
-
-function PaginationControls({
-  targetId,
-  label,
-  pageSize,
-  page,
-  hasNext,
-  isFetching,
-  onPrevious,
-  onNext,
-}: {
-  targetId: string;
-  label: string;
-  pageSize: number;
-  page: number;
-  hasNext: boolean;
-  isFetching: boolean;
-  onPrevious: () => void;
-  onNext: () => void;
-}) {
-  function changePage(change: () => void) {
-    change();
-    requestAnimationFrame(() => {
-      const target = document.getElementById(targetId);
-      if (!target) return;
-
-      target.scrollIntoView({
-        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-          ? "auto"
-          : "smooth",
-        block: "start",
-      });
-    });
-  }
-
-  return (
-    <Pagination className="mt-4 flex-col gap-3 border-t border-card-separator pt-4 sm:flex-row sm:items-center sm:justify-between">
-      <Text className="text-sm text-muted">
-        Page {page + 1} · Up to {pageSize} {label} per page
-      </Text>
-      <PaginationList>
-        <PaginationItem>
-          <PaginationButton
-            type="button"
-            aria-label="Previous page"
-            aria-controls={targetId}
-            disabled={page === 0 || isFetching}
-            onClick={
-              page === 0 || isFetching
-                ? undefined
-                : () => changePage(onPrevious)
-            }
-          >
-            <IconChevronLeft /> Previous
-          </PaginationButton>
-        </PaginationItem>
-        <PaginationItem>
-          <PaginationButton active aria-label={`Page ${page + 1}`}>
-            {page + 1}
-          </PaginationButton>
-        </PaginationItem>
-        <PaginationItem>
-          <PaginationButton
-            type="button"
-            aria-label="Next page"
-            aria-controls={targetId}
-            disabled={!hasNext || isFetching}
-            onClick={
-              !hasNext || isFetching ? undefined : () => changePage(onNext)
-            }
-          >
-            Next <IconChevronRight />
-          </PaginationButton>
-        </PaginationItem>
-      </PaginationList>
-    </Pagination>
   );
 }

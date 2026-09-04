@@ -2,6 +2,18 @@
 
 Last updated: 2026-09-04
 
+## Server-backed table pagination (2026-09-04)
+
+Data-table pagination is owned by the module that reads the collection. The
+achievement and room repositories apply `limit`/`offset` directly to their
+ordered SQL queries; admin booking and ledger repositories continue to expose
+cursor pages; and admin tutor lists keep their offset pages. Web components
+render a bounded page plus a one-row sentinel where needed, use
+`keepPreviousData` during transitions, and reset pagination after filter or
+selection changes. Aggregate achievement counts come from dedicated stats
+queries rather than counting the current page. Fixed pricing/economy matrices
+are finite configuration previews and are not collection tables.
+
 ## Student dashboard balance widget (2026-09-04)
 
 The student dashboard balance widget is a frontend projection of the existing
@@ -217,17 +229,19 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `achievement.errors.ts` — `AchievementNotFoundError`, `AchievementNotOwnedError`, `AchievementNotEditableError`, `OptimisticLockError`
 - `achievement.repo.ts` — CRUD with optimistic locking (`updateWithVersion`, `updateByIdWithVersion`, `deleteWithVersion`)
 - `achievement.service.ts` — Ownership checks, admin correction/review workflow, audit and optimistic lock handling
-- `achievement.handler.ts` — `list`, `listApproved`, `create`, `update`, `remove`, `adminList`, `adminUpdate`, `adminReview`
-- `achievement.router.ts` — Protected routes for student ops, admin routes for correction/review, public `listApproved` route
+- `achievement.handler.ts` — `list`, `stats`, `listApproved`, `create`, `update`, `remove`, `adminList`, `adminStats`, `adminUpdate`, `adminReview`
+- `achievement.router.ts` — Protected list/stats routes, admin list/stats/correction/review routes, public `listApproved` route
 
 **Service Methods:**
 
-- `list(userId)` — Returns achievements for a user
+- `list(userId, input?)` — Returns a server-paginated user page with optional category/status filters; `pending` includes `pending_review`
+- `stats(userId)` — Returns total/approved/pending/rejected/archived counts, with pending statuses combined
 - `listApprovedPublic()` — Returns the allowlisted approved + visible achievement projection with the owner's display name for the public `cogito-acad` homepage and archive (F16)
 - `create(userId, input)` — Creates achievement in `pending` status
 - `update(userId, input)` — Updates with optimistic lock check (`input.version` + `input.data`)
 - `remove(userId, id, expectedVersion)` — Deletes with optimistic lock check
-- `adminList(input)` — Paginated list with optional status filter
+- `adminList(input)` — Server-paginated list with optional status filter; `pending` includes `pending_review`
+- `adminStats()` — Returns aggregate moderation counts without a page limit
 - `adminUpdate(adminId, input)` — Corrects a `pending`/`pending_review` submission with optimistic locking, before/after audit content, and no status change; admins can also set or clear `documentationUrl`
 - `adminReview(id, status, adminNote?)` — Moderation action. **F12:** transition table — `pending`/`pending_review` → `approved`/`rejected`/`archived`; `approved`/`rejected` → `archived`; `archived` → `approved`/`rejected` (restore). Other transitions throw `AchievementNotEditableError`. Reads and updates inside one transaction using the current status/version as a compare-and-swap; a lost race throws `OptimisticLockError` before notification/audit side effects. Notifies the owner and writes an `achievement_{status}` audit record after success
 
@@ -244,6 +258,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - The student achievement form uses shared Selia portal controls for Category, Level, and Awarding Date; those popups must remain above the modal dialog layer.
 - Optimistic locking prevents lost updates (`version` field)
 - Admin correction is allowed only for `pending`/`pending_review`, can update every submission field plus public documentation, writes an audit snapshot, and does not change status; admin review changes status to `approved` or `rejected`
+- Student and admin list pages use database pagination; the UI may request one extra row as a `hasNext` sentinel, but never loads the complete achievement collection into the browser.
 
 **Web presentation:**
 
@@ -854,8 +869,8 @@ workflow does not change the RPC contracts.
 
 **Service Methods:**
 
-- `listActive()` — Returns active rooms
-- `listPendingApprovals(limit?)` — Returns offline bookings in `AWAITING_ADMIN_ROOM_APPROVAL`, including bookings with no requested room row after a requested-room conflict
+- `listActive(input?)` — Returns active rooms; `{ limit, offset }` applies deterministic server pagination, while omitted input preserves the full selector-compatible list
+- `listPendingApprovals(input?)` — Returns a server-paginated page of offline bookings in `AWAITING_ADMIN_ROOM_APPROVAL`, including bookings with no requested room row after a requested-room conflict
 - `createRoom({ name, location, capacity })` — Creates a room
 - `assignRoom(bookingId, roomId, startAt, endAt)` — Confirms a room for a booking with conflict check; transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED`, then best-effort creates/refreshes its non-Meet Calendar event after commit, and notifies tutor + confirmed students (#46, G14). **F22 state guard:** the booking must be `AWAITING_ADMIN_ROOM_APPROVAL` (or `RESCHEDULE_PROPOSED`, the H3 pre-assignment carve-out) — any other state throws `ROOM_BOOKING_STATE` before the roomBooking row is inserted (no orphan CONFIRMED rows)
 - `checkAvailability(roomId, startAt, endAt)` — Returns whether the room is free for the slot
@@ -871,6 +886,7 @@ workflow does not change the RPC contracts.
 - Room bookings have status `requested`/`confirmed`/`relocated`/`cancelled`
 - Room conflict-check/write paths take a transaction-scoped advisory lock keyed by `roomId`. Both normal and `FOR UPDATE` repository checks use strict half-open overlap (`existing.start < requested.end AND existing.end > requested.start`). Migration `0038_room_booking_overlap_guard.sql` adds the matching database backstop: a partial GiST exclusion constraint rejects overlapping `[startAt,endAt)` ranges for `confirmed` rows in the same room while allowing adjacent sessions.
 - The admin pending-approval queue is sourced from offline bookings in `awaiting_admin_room_approval`; the requested room is optional because room creation can report a conflict and let the booking continue to admin review
+- Room catalog and pending-approval tables use ordered `limit`/`offset` queries and a one-row sentinel in the web UI; room selectors intentionally use the unpaginated compatibility path.
 - G14 (assign → scheduled + notifications) fixed in #46
 - Offline booking-level reschedules keep the room assignment aligned with the booking schedule; conflict/missing results remain in the admin room-approval queue rather than reserving a room at a stale time
 - Remaining gap G13: `checkAvailability` is not yet integrated into booking creation — tracked U14 in `docs/plans/active/PRD-GAPS-PHASE3.md`

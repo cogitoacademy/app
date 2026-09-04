@@ -60,6 +60,7 @@ export function PaginationButton({
       "aria-current": active ? "page" : undefined,
       "aria-disabled": disabled ? true : undefined,
       "data-disabled": disabled ? true : undefined,
+      disabled,
       className: cn(
         buttonVariants({ variant: active ? "secondary" : "plain" }),
         active && "pointer-events-none",

@@ -1,4 +1,12 @@
-import { eq, desc, and, getTableColumns, sql } from "drizzle-orm";
+import {
+  and,
+  count,
+  desc,
+  eq,
+  getTableColumns,
+  inArray,
+  sql,
+} from "drizzle-orm";
 import { achievement, user } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
 
@@ -39,6 +47,13 @@ export interface AdminListInput {
   offset: number;
 }
 
+export interface AchievementListInput {
+  category?: string;
+  status?: string;
+  limit: number;
+  offset: number;
+}
+
 /**
  * Lists achievements for a user, newest first.
  *
@@ -46,12 +61,46 @@ export interface AdminListInput {
  * @param userId - the owner of the achievements
  * @returns the user's achievement rows
  */
-async function listByUserId(conn: DbOrTx, userId: string) {
-  return conn
+async function listByUserId(
+  conn: DbOrTx,
+  userId: string,
+  input?: AchievementListInput,
+) {
+  const conditions = [eq(achievement.userId, userId)];
+  if (input?.category) {
+    conditions.push(eq(achievement.category, input.category));
+  }
+  if (input?.status) {
+    conditions.push(
+      input.status === "pending"
+        ? inArray(achievement.status, ["pending", "pending_review"])
+        : eq(achievement.status, input.status),
+    );
+  }
+
+  const query = conn
     .select()
     .from(achievement)
-    .where(eq(achievement.userId, userId))
+    .where(and(...conditions))
     .orderBy(desc(achievement.createdAt));
+
+  if (!input) return query;
+  return query.limit(input.limit).offset(input.offset);
+}
+
+async function countByUserId(conn: DbOrTx, userId: string) {
+  return conn
+    .select({ status: achievement.status, count: count() })
+    .from(achievement)
+    .where(eq(achievement.userId, userId))
+    .groupBy(achievement.status);
+}
+
+async function countAll(conn: DbOrTx) {
+  return conn
+    .select({ status: achievement.status, count: count() })
+    .from(achievement)
+    .groupBy(achievement.status);
 }
 
 /**
@@ -252,7 +301,13 @@ async function adminList(conn: DbOrTx, input: AdminListInput) {
     })
     .from(achievement)
     .leftJoin(user, eq(achievement.userId, user.id))
-    .where(status ? eq(achievement.status, status) : undefined)
+    .where(
+      status === "pending"
+        ? inArray(achievement.status, ["pending", "pending_review"])
+        : status
+          ? eq(achievement.status, status)
+          : undefined,
+    )
     .orderBy(desc(achievement.createdAt))
     .limit(limit)
     .offset(offset);
@@ -313,6 +368,8 @@ async function updateStatus(
 export function createAchievementRepo() {
   return {
     listByUserId,
+    countByUserId,
+    countAll,
     listApprovedPublic,
     insert,
     findByIdForUser,

@@ -5,6 +5,7 @@ import {
   updateAchievementInput,
   adminUpdateAchievementInput,
   deleteAchievementInput,
+  achievementListInput,
   adminListInput,
   adminReviewInput,
 } from "../../modules/achievement/achievement.types";
@@ -171,6 +172,34 @@ describe("Achievement Types (Zod schemas)", () => {
   test("adminListInput defaults limit and offset", () => {
     const result = adminListInput.safeParse(undefined);
     expect(result.success).toBe(true);
+  });
+
+  test("achievementListInput validates filters and applies pagination defaults", () => {
+    const result = achievementListInput.safeParse({
+      category: "competition",
+      status: "pending",
+      limit: 10,
+      offset: 20,
+    });
+    expect(result.success).toBe(true);
+
+    const defaults = achievementListInput.safeParse({});
+    expect(defaults.success).toBe(true);
+    if (defaults.success) {
+      expect(defaults.data.limit).toBe(50);
+      expect(defaults.data.offset).toBe(0);
+    }
+  });
+
+  test("achievementListInput rejects invalid filters and page bounds", () => {
+    expect(
+      achievementListInput.safeParse({ category: "academic" }).success,
+    ).toBe(false);
+    expect(
+      achievementListInput.safeParse({ status: "in_review" }).success,
+    ).toBe(false);
+    expect(achievementListInput.safeParse({ limit: 0 }).success).toBe(false);
+    expect(achievementListInput.safeParse({ offset: -1 }).success).toBe(false);
   });
 
   test("adminReviewInput validates status enum", () => {

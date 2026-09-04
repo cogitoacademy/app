@@ -9,8 +9,10 @@ import {
   updateAchievementInput,
   adminUpdateAchievementInput,
   deleteAchievementInput,
+  achievementListInput,
   adminListInput,
   adminReviewInput,
+  achievementStatsInput,
 } from "./achievement.types";
 import type { AchievementHandler } from "./achievement.handler";
 
@@ -33,9 +35,23 @@ export function createAchievementRouter(handler: AchievementHandler) {
         path: "/achievements/list",
         tags: ["Achievements"],
         summary: "List achievements",
-        description: "Returns the authenticated user's achievements",
+        description:
+          "Returns a server-paginated page of the authenticated user's achievements",
       })
+      .input(achievementListInput)
       .handler(handler.list),
+
+    stats: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/achievements/stats",
+        tags: ["Achievements"],
+        summary: "Get achievement statistics",
+        description:
+          "Returns aggregate achievement status counts for the authenticated user",
+      })
+      .input(achievementStatsInput)
+      .handler(handler.stats),
 
     create: studentProcedure
       .route({
@@ -80,6 +96,18 @@ export function createAchievementRouter(handler: AchievementHandler) {
       })
       .input(adminListInput)
       .handler(handler.adminList),
+
+    adminStats: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/achievements/stats",
+        tags: ["Admin", "Achievements"],
+        summary: "Get achievement moderation statistics",
+        description:
+          "Returns aggregate achievement status counts for admin moderation",
+      })
+      .input(achievementStatsInput)
+      .handler(handler.adminStats),
 
     adminUpdate: adminProcedure
       .route({

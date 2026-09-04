@@ -23,6 +23,8 @@ describe("achievementRouter", () => {
         adminUpdate: mock(async () => ({})),
         remove: mock(async () => {}),
         adminList: mock(async () => []),
+        stats: mock(async () => ({})),
+        adminStats: mock(async () => ({})),
         adminReview: mock(async () => ({})),
       } as any,
     });
@@ -30,11 +32,13 @@ describe("achievementRouter", () => {
     expect(Object.keys(router).toSorted()).toEqual([
       "adminList",
       "adminReview",
+      "adminStats",
       "adminUpdate",
       "create",
       "delete",
       "list",
       "listApproved",
+      "stats",
       "update",
     ]);
   });

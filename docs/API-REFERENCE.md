@@ -2,6 +2,18 @@
 
 Last updated: 2026-09-04
 
+## Server-backed table pagination (2026-09-04)
+
+All database-backed web tables now request bounded pages from the API. The
+offset-backed achievement and room procedures accept `limit` and `offset`; the
+admin booking queue and wallet ledger use their existing cursor contracts; and
+the admin tutor tables retain their existing offset contract. Table UIs request
+one sentinel row (`pageSize + 1`) where needed to determine `hasNext`, render
+only the requested page size, keep the current page visible while fetching, and
+reset the page when filters or the selected wallet change. Fixed schedule and
+pricing reference tables are intentionally not paginated because they render a
+small, finite configuration matrix rather than a database collection.
+
 ## Tutor discovery filter viewport containment (2026-09-04)
 
 The student `/tutors` filter stack now uses shrinkable, viewport-bounded
@@ -118,11 +130,12 @@ The student tutor-discovery drawer opens as a swipe-down bottom sheet below the 
 
 ## Stable collection transitions (2026-08-28)
 
-Pagination and filter-transition stability is client-side only. The admin tutor
-tables, tutor discovery list, and admin booking queue retain their previous
-successful collection while the next query is loading; pagination scrolls to
-the selected table card by DOM ID. No RPC path, request envelope, response
-shape, cursor/offset contract, or URL search parameter changes.
+The admin tutor tables, tutor discovery list, and admin booking queue retain
+their previous successful collection while the next query is loading;
+pagination scrolls to the selected table card by DOM ID. Achievement and room
+tables use the server-backed contracts documented below, while the admin
+booking queue and wallet ledger use cursor pagination. No URL search parameter
+is added for table pagination.
 
 Booking-list UI note: `/bookings` uses Needs action, Upcoming, Recurring, History, and All tabs. Students and tutors default to Needs action when a response is pending and Upcoming otherwise; admins default to All. URL-backed Recommended, Soonest, and Latest sorting is client-side; Recommended ranks pending, active, then terminal bookings, and History consolidates terminal outcomes. The web list consumes the existing `nextCursor` in batches of 20 through an infinite query and appends with **Load more bookings**; loaded cards remain visible during the next-page request. Tab counts are lower bounds and show `+` while more pages remain. The RPC contract is unchanged.
 
@@ -702,9 +715,16 @@ The web tutor profile editor groups education, competition achievements, and exp
 ### `achievement.list`
 
 - **Auth:** Protected
+- **Input:** `{ category?, status?, limit?, offset? }` (`category` is one of `competition`/`award`/`certificate`/`leadership`/`publication`/`other`; `status` is one of `draft`/`pending`/`pending_review`/`approved`/`rejected`/`archived`; `limit` defaults to 50 and is capped at 100; `offset` defaults to 0)
+- **Output:** `Achievement[]` for the requested page
+- **Description:** Returns the authenticated user's achievements from a bounded database query. A `status` of `pending` includes both `pending` and legacy `pending_review` rows. The student `/achievements` page uses this contract for server-side category/status filtering and offset pagination, while aggregate cards use `achievement.stats`.
+
+### `achievement.stats`
+
+- **Auth:** Protected
 - **Input:** None
-- **Output:** `{ items: Achievement[] }`
-- **Description:** The student `/achievements` page consumes this unchanged list and presents compact label-and-pill summary counts plus a compact horizontally scrollable table; consistently labeled metadata, an evidence image preview with an original-link fallback, and pending edit/delete actions are available in a frontend-only detail drawer that uses a mobile bottom sheet and a right-side desktop layout.
+- **Output:** `{ total, approved, pending, rejected, archived }`
+- **Description:** Returns aggregate status counts for the authenticated user's achievements. `pending` combines `pending` and `pending_review`.
 
 ### `achievement.create`
 
@@ -731,8 +751,15 @@ The web tutor profile editor groups education, competition achievements, and exp
 
 - **Auth:** Admin
 - **Input:** `{ status?, limit?, offset? }` (`limit` default 50)
-- **Output:** `{ items: Achievement[], total, limit, offset }`
-- **Description:** The admin `/admin-achievements` page consumes this unchanged paginated list and presents submissions in a compact horizontally scrollable moderation table; consistently labeled metadata, evidence and public-documentation image previews with original-link fallbacks, and approve/reject/correct actions are available in a frontend-only detail drawer that uses a mobile bottom sheet and a right-side desktop layout, while the mutations remain separate RPC calls.
+- **Output:** `Achievement[]` for the requested page
+- **Description:** Returns a server-paginated moderation page. `status: "pending"` includes both `pending` and `pending_review` rows. The admin `/admin-achievements` page uses a `limit + 1` sentinel to detect the next page; aggregate status cards use `achievement.adminStats`.
+
+### `achievement.adminStats`
+
+- **Auth:** Admin
+- **Input:** None
+- **Output:** `{ total, approved, pending, rejected, archived }`
+- **Description:** Returns aggregate status counts across all achievement submissions. `pending` combines `pending` and `pending_review`.
 
 ### `achievement.adminUpdate`
 
@@ -1084,16 +1111,16 @@ RPC contract.
 ### `room.list`
 
 - **Auth:** Protected
-- **Input:** None
-- **Output:** `{ items: Room[] }` — active rooms
-- **Description:** Lists active rooms for offline scheduling
+- **Input:** Optional `{ limit, offset }` (`limit` 1–100; `offset` ≥ 0)
+- **Output:** `Room[]` — active rooms
+- **Description:** Lists active rooms for offline scheduling. The admin room catalog supplies `limit` and `offset` for server-side pagination; callers that omit the input retain the unbounded selector-compatible list.
 
 ### `room.listPendingApprovals`
 
 - **Auth:** Admin
-- **Input:** `{ limit? }` (1–100, default 50)
+- **Input:** Optional `{ limit, offset }` (`limit` 1–100; `offset` ≥ 0; omitted input defaults to the legacy 50-row query)
 - **Output:** `PendingRoomApproval[]`
-- **Description:** Lists offline bookings in `awaiting_admin_room_approval`, ordered by session start. Each item includes booking timing/participant summary and the optional requested room; bookings whose requested room was unavailable are included with `requestedRoomId: null`.
+- **Description:** Lists offline bookings in `awaiting_admin_room_approval`, ordered by session start, using a bounded database query when pagination input is supplied. Each item includes booking timing/participant summary and the optional requested room; bookings whose requested room was unavailable are included with `requestedRoomId: null`.
 
 ### `room.create`
 

@@ -12,8 +12,17 @@ export type RoomRepo = ReturnType<typeof createRoomRepo>;
  * @param conn - the database connection or active transaction
  * @returns the active room rows
  */
-export async function findActiveRooms(conn: DbOrTx) {
-  return conn.select().from(room).where(eq(room.isActive, true));
+export async function findActiveRooms(
+  conn: DbOrTx,
+  options?: { limit: number; offset: number },
+) {
+  const query = conn.select().from(room).where(eq(room.isActive, true));
+  if (!options) return query;
+
+  return query
+    .orderBy(asc(room.name), asc(room.id))
+    .limit(options.limit)
+    .offset(options.offset);
 }
 
 /**
@@ -21,8 +30,12 @@ export async function findActiveRooms(conn: DbOrTx) {
  * have a requested room row when the requested room was already occupied, so
  * this intentionally starts from booking and left-joins the optional request.
  */
-export async function findPendingRoomApprovals(conn: DbOrTx, limit = 50) {
-  return conn
+export async function findPendingRoomApprovals(
+  conn: DbOrTx,
+  limit = 50,
+  offset?: number,
+) {
+  const query = conn
     .select({
       bookingId: booking.id,
       bookingType: booking.type,
@@ -62,6 +75,9 @@ export async function findPendingRoomApprovals(conn: DbOrTx, limit = 50) {
     )
     .orderBy(asc(booking.scheduledStartAt), asc(booking.id))
     .limit(limit);
+
+  if (offset === undefined) return query;
+  return query.offset(offset);
 }
 
 /**

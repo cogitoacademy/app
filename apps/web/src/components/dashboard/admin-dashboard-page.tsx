@@ -35,10 +35,8 @@ export function AdminDashboardPage({ adminName }: { adminName: string }) {
       input: { status: "pending_review", limit: 20, offset: 0 },
     }),
   );
-  const achievements = useQuery(
-    orpc.achievement.adminList.queryOptions({
-      input: { status: "pending", limit: 20, offset: 0 },
-    }),
+  const achievementStats = useQuery(
+    orpc.achievement.adminStats.queryOptions({ input: undefined }),
   );
   const firstName = adminName.trim().split(/\s+/)[0] || "Admin";
   const urgentBookings = (bookingQueue.data?.items ?? []).filter(
@@ -58,7 +56,7 @@ export function AdminDashboardPage({ adminName }: { adminName: string }) {
       items.findIndex((candidate) => candidate.id === item.id) === index,
   );
   const tutorCount = tutors.data?.length ?? 0;
-  const achievementCount = achievements.data?.length ?? 0;
+  const achievementCount = achievementStats.data?.pending ?? 0;
   return (
     <Stack direction="column" spacing="lg">
       <div>
@@ -85,7 +83,7 @@ export function AdminDashboardPage({ adminName }: { adminName: string }) {
         <Metric
           icon={<IconCertificate />}
           label="Achievement reviews"
-          value={achievements.isPending ? "—" : String(achievementCount)}
+          value={achievementStats.isPending ? "—" : String(achievementCount)}
           tone="info-subtle"
         />
       </div>

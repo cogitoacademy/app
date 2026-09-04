@@ -2,6 +2,25 @@
 
 Last updated: 2026-09-04
 
+## Server-backed table pagination (2026-09-04)
+
+All database-backed tables in the web app now paginate at the API/database
+boundary. Student and admin achievement lists, the active-room catalog, and
+pending-room approvals use deterministic offset pages; the admin booking queue
+and wallet ledger use cursor pages; and Manage Tutors continues to use its
+independent offset pages. The UI requests a bounded page plus one sentinel row
+when it needs to discover `hasNext`, keeps previous rows visible through
+`keepPreviousData`, scrolls the owning card back into view after navigation, and
+resets pagination when filters or the selected wallet change.
+
+Achievement status cards use dedicated `achievement.stats` and
+`achievement.adminStats` aggregates, so counts do not describe only the
+visible page. `pending` aggregates both `pending` and legacy `pending_review`.
+The unpaginated `room.list` compatibility path remains available for the
+booking room selector. The economy schedule preview and tutor pricing matrix
+are finite configuration/reference tables, not database collections, so they
+remain intentionally unpaginated.
+
 ## Tutor discovery filter viewport containment (2026-09-04)
 
 The student `/tutors` page bounds its search row and collapsible filter panel

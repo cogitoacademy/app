@@ -69,6 +69,20 @@ describe("createRoomService", () => {
       const result = await service.listActive();
       expect(result).toEqual(rooms);
     });
+
+    test("passes pagination input to the repository", async () => {
+      const rooms = [makeRoom()];
+      const findActiveRooms = mock(async (_conn, input) => {
+        expect(input).toEqual({ limit: 10, offset: 20 });
+        return rooms;
+      });
+      const repo = makeRepo({ findActiveRooms });
+
+      const service = createRoomService(repo, makeDb());
+      await expect(
+        service.listActive({ limit: 10, offset: 20 }),
+      ).resolves.toEqual(rooms);
+    });
   });
 
   describe("listPendingApprovals", () => {
@@ -91,6 +105,21 @@ describe("createRoomService", () => {
       const result = await service.listPendingApprovals(25);
 
       expect(result).toEqual(approvals);
+    });
+
+    test("passes an offset page to the repository", async () => {
+      const approvals = [{ bookingId: "b2" }];
+      const findPendingRoomApprovals = mock(async (_conn, limit, offset) => {
+        expect(limit).toBe(10);
+        expect(offset).toBe(20);
+        return approvals;
+      });
+      const repo = makeRepo({ findPendingRoomApprovals });
+
+      const service = createRoomService(repo, makeDb());
+      await expect(
+        service.listPendingApprovals({ limit: 10, offset: 20 }),
+      ).resolves.toEqual(approvals);
     });
   });
 

@@ -55,6 +55,7 @@ import {
   TableRow,
 } from "@cogito-app/ui/components/selia/table";
 import { Text } from "@cogito-app/ui/components/selia/text";
+import { TablePagination } from "@/components/table-pagination";
 
 export type StudentAchievementTableItem = {
   id: string;
@@ -113,10 +114,22 @@ export function AchievementTable({
   achievements,
   onEdit,
   onDelete,
+  page,
+  pageSize,
+  hasNext,
+  isFetching,
+  onPrevious,
+  onNext,
 }: {
   achievements: readonly StudentAchievementTableItem[];
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
+  page: number;
+  pageSize: number;
+  hasNext: boolean;
+  isFetching: boolean;
+  onPrevious: () => void;
+  onNext: () => void;
 }) {
   const [selectedAchievement, setSelectedAchievement] =
     useState<StudentAchievementTableItem | null>(null);
@@ -187,6 +200,16 @@ export function AchievementTable({
               </TableBody>
             </Table>
           </TableContainer>
+          <TablePagination
+            label="achievements"
+            pageSize={pageSize}
+            page={page}
+            itemCount={achievements.length}
+            hasNext={hasNext}
+            isFetching={isFetching}
+            onPrevious={onPrevious}
+            onNext={onNext}
+          />
         </CardBody>
       </Card>
 

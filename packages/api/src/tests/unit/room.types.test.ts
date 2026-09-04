@@ -1,6 +1,7 @@
 import { describe, test, expect } from "bun:test";
 import {
   listRoomsInput,
+  listPendingRoomApprovalsInput,
   createRoomInput,
   assignRoomInput,
 } from "../../modules/room/room.types";
@@ -8,6 +9,20 @@ import {
 describe("Room Types (Zod schemas)", () => {
   test("listRoomsInput accepts void", () => {
     expect(listRoomsInput.safeParse(undefined).success).toBe(true);
+  });
+
+  test("room list inputs accept bounded offset pages", () => {
+    const input = { limit: 10, offset: 20 };
+    expect(listRoomsInput.safeParse(input).success).toBe(true);
+    expect(listPendingRoomApprovalsInput.safeParse(input).success).toBe(true);
+    expect(listRoomsInput.safeParse({ limit: 101, offset: 0 }).success).toBe(
+      false,
+    );
+    const legacyInput = listPendingRoomApprovalsInput.safeParse({ limit: 10 });
+    expect(legacyInput.success).toBe(true);
+    if (legacyInput.success) {
+      expect(legacyInput.data.offset).toBe(0);
+    }
   });
 
   test("createRoomInput parses valid input", () => {

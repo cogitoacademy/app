@@ -8,11 +8,16 @@ const dateRangeFields = {
 const endAfterStart = (d: { startAt: Date; endAt: Date }) =>
   d.endAt.getTime() > d.startAt.getTime();
 
-export const listRoomsInput = z.void();
-
-export const listPendingRoomApprovalsInput = z.object({
-  limit: z.number().int().min(1).max(100).optional(),
+const paginatedListInput = z.object({
+  limit: z.number().int().min(1).max(100).default(50),
+  offset: z.number().int().min(0).default(0),
 });
+
+export const listRoomsInput = paginatedListInput.optional();
+
+export const listPendingRoomApprovalsInput = paginatedListInput.optional();
+
+export type ListRoomsInput = z.infer<typeof listRoomsInput>;
 
 export const createRoomInput = z.object({
   name: z.string().min(1).max(255),
