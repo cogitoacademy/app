@@ -7,7 +7,11 @@ import { log as appLog } from "@cogito-app/api/lib/logger";
 import { generateRequestId } from "@cogito-app/api/lib/request-id";
 import { identifyUser as identifyUserFromSession } from "evlog/better-auth";
 import { useLogger } from "evlog/elysia";
-import { MAX_BODY_BYTES, bodyLimitResponse, requestUserId } from "./middlewares";
+import {
+  MAX_BODY_BYTES,
+  bodyLimitResponse,
+  requestUserId,
+} from "./middlewares";
 import type { Elysia } from "elysia";
 
 export function logRpcError(
