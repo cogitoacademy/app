@@ -452,7 +452,10 @@ describe("Booking group series flow (FR-20)", () => {
     // past participant confirmation — the package holds are committed and the
     // escape hatch is an admin override.
     await expect(
-      proposerClient.booking.cancel({ bookingId, reason: "Change of plans" }),
+      proposerClient.booking.cancel({
+        bookingId,
+        cancellationReason: "Change of plans",
+      }),
     ).rejects.toMatchObject({ code: "CONFLICT" });
 
     const sessions = await proposerClient.booking.listSessions({ bookingId });

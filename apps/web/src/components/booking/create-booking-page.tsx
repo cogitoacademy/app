@@ -7,6 +7,7 @@ import {
   IconArrowLeft,
   IconCalendarEvent,
   IconCheck,
+  IconChevronUp,
   IconClock,
   IconCoins,
   IconDeviceLaptop,
@@ -29,9 +30,19 @@ import {
 import {
   Field,
   FieldDescription,
+  FieldError,
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
+import {
+  Drawer,
+  DrawerBody,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerPopup,
+  DrawerTitle,
+} from "@cogito-app/ui/components/selia/drawer";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Input } from "@cogito-app/ui/components/selia/input";
 import { Textarea } from "@cogito-app/ui/components/selia/textarea";
@@ -57,7 +68,7 @@ import {
   addMinutesToTime,
   isTimeWithinRange,
   isValidMinuteTime,
-  MinuteTimeInput,
+  QuarterHourTimeStepper,
 } from "@/components/booking/minute-time-input";
 import {
   formatTimeValue,
@@ -106,6 +117,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
   const [studentSearch, setStudentSearch] = useState("");
   const [debouncedStudentSearch, setDebouncedStudentSearch] = useState("");
   const [invitees, setInvitees] = useState<StudentMatch[]>([]);
+  const [summaryOpen, setSummaryOpen] = useState(false);
 
   const profileQuery = useQuery(
     orpc.tutors.getProfile.queryOptions({ input: { tutorId } }),
@@ -330,6 +342,30 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
       )
     );
   });
+  const createPending =
+    createBooking.isPending ||
+    createGroup.isPending ||
+    createSeries.isPending ||
+    createGroupSeries.isPending;
+  const submitDisabled =
+    !selectedSlot ||
+    hasInvalidStartTime ||
+    createPending ||
+    !sessionNotes.trim() ||
+    (subjects.length > 0 && !effectiveSubjectId) ||
+    invitees.length > 5;
+  const submitLabel =
+    selectedSlots.length > 1
+      ? `Send series request (${selectedSlots.length})`
+      : isGroupBooking
+        ? "Send group booking request"
+        : "Send booking request";
+  const scheduleSummary =
+    selectedSlots.length > 1
+      ? `${selectedSlots.length} of 2–4 sessions selected`
+      : selectedSlot
+        ? `${formatSlotDate(selectedSlot.startDate)}, ${formatSlotTime(selectedSlot.startDate, selectedSlot.endDate)}`
+        : "Choose a time";
 
   function submitBooking(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -392,7 +428,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
   }
 
   return (
-    <Stack direction="column" spacing="lg">
+    <Stack direction="column" spacing="lg" className="pb-24 lg:pb-0">
       <div>
         <Button
           variant="underline"
@@ -430,10 +466,11 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
       </div>
 
       <form
+        id="create-booking-form"
         onSubmit={submitBooking}
         className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(18rem,0.65fr)] lg:items-start"
       >
-        <div className="space-y-4">
+        <div className="order-2 space-y-4 lg:order-1">
           <Card>
             <CardHeader>
               <IconBox variant="info-subtle">
@@ -640,6 +677,128 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
 
           <Card>
             <CardHeader>
+              <IconBox variant="success-subtle">
+                <IconCalendarEvent />
+              </IconBox>
+              <CardTitle>Available times</CardTitle>
+              <CardDescription>
+                Times are displayed in Western Indonesia Time
+              </CardDescription>
+            </CardHeader>
+            <CardBody>
+              {availableSlots.length === 0 ? (
+                <EmptyState
+                  icon={<IconCalendarEvent />}
+                  title="No matching slots yet"
+                  description={`This tutor has no future ${effectiveModality} availability. Try another modality or tutor.`}
+                  tone="secondary"
+                  size="compact"
+                  className="rounded-lg border border-item-border"
+                />
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {availableSlots.map((slot) => {
+                    const selected = selectedSlotIds.includes(slot.id);
+                    const startTime =
+                      startTimes[slot.id] ??
+                      formatTimeValue(slot.startDate, BOOKING_TIMEZONE);
+                    const minTime = formatTimeValue(
+                      slot.startDate,
+                      BOOKING_TIMEZONE,
+                    );
+                    const maxTime = formatTimeValue(
+                      new Date(new Date(slot.endDate).getTime() - 90 * 60_000),
+                      BOOKING_TIMEZONE,
+                    );
+                    const startTimeInvalid = !isTimeWithinRange(
+                      startTime,
+                      minTime,
+                      maxTime,
+                    );
+                    return (
+                      <div
+                        key={slot.id}
+                        className={
+                          selected
+                            ? "grid gap-3 sm:col-span-2 sm:grid-cols-2"
+                            : "contents"
+                        }
+                      >
+                        <Button
+                          type="button"
+                          variant={selected ? "primary" : "outline"}
+                          aria-pressed={selected}
+                          className="h-auto min-h-20 justify-start px-4 py-3 text-left"
+                          onClick={() => {
+                            setSelectedSlotIds((current) => {
+                              if (current.includes(slot.id)) {
+                                return current.filter((id) => id !== slot.id);
+                              }
+                              return current.length < 4
+                                ? [...current, slot.id]
+                                : current;
+                            });
+                            createBooking.reset();
+                            createSeries.reset();
+                          }}
+                        >
+                          <span className="flex min-w-0 flex-col items-start gap-1">
+                            <span className="font-medium">
+                              {formatSlotDate(slot.startDate)}
+                            </span>
+                            <span className="flex items-center gap-1.5 text-sm opacity-80">
+                              <IconClock
+                                className="size-4"
+                                aria-hidden="true"
+                              />
+                              {formatSlotTime(slot.startDate, slot.endDate)}
+                            </span>
+                          </span>
+                          {selected ? (
+                            <IconCheck className="ml-auto" aria-hidden="true" />
+                          ) : null}
+                        </Button>
+                        {selected ? (
+                          <div className="rounded-lg bg-item p-4">
+                            <Field>
+                              <FieldLabel htmlFor={`start-${slot.id}`}>
+                                Session start
+                              </FieldLabel>
+                              <QuarterHourTimeStepper
+                                id={`start-${slot.id}`}
+                                value={startTime}
+                                onChange={(value) =>
+                                  setStartTimes((current) => ({
+                                    ...current,
+                                    [slot.id]: value,
+                                  }))
+                                }
+                              />
+                              <FieldDescription>
+                                Fixed 90 minutes · Ends at{" "}
+                                {addMinutesToTime(startTime, 90)} WIB
+                              </FieldDescription>
+                              {startTimeInvalid ? (
+                                <FieldError>
+                                  The tutor is only available for session starts
+                                  between {minTime} and {maxTime} WIB.
+                                </FieldError>
+                              ) : null}
+                            </Field>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardBody>
+          </Card>
+        </div>
+
+        <div className="order-1 space-y-4 lg:order-2 lg:sticky lg:top-6">
+          <Card>
+            <CardHeader>
               <IconBox variant="info-subtle">
                 <IconDeviceLaptop />
               </IconBox>
@@ -684,145 +843,162 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
             </CardBody>
           </Card>
 
-          <Card>
+          <Card className="hidden lg:block">
             <CardHeader>
-              <IconBox variant="success-subtle">
-                <IconCalendarEvent />
+              <IconBox variant="warning-subtle">
+                <IconCoins />
               </IconBox>
-              <CardTitle>Available times</CardTitle>
-              <CardDescription>
-                Times are displayed in Western Indonesia Time
-              </CardDescription>
+              <CardTitle>Booking summary</CardTitle>
+              <CardDescription>Review before requesting</CardDescription>
             </CardHeader>
-            <CardBody>
-              {availableSlots.length === 0 ? (
-                <EmptyState
-                  icon={<IconCalendarEvent />}
-                  title="No matching slots yet"
-                  description={`This tutor has no future ${effectiveModality} availability. Try another modality or tutor.`}
-                  tone="secondary"
-                  size="compact"
-                  className="rounded-lg border border-item-border"
-                />
-              ) : (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {availableSlots.map((slot) => {
-                    const selected = selectedSlotIds.includes(slot.id);
-                    return (
-                      <div key={slot.id} className="contents">
-                        <Button
-                          type="button"
-                          variant={selected ? "primary" : "outline"}
-                          aria-pressed={selected}
-                          className="h-auto min-h-20 justify-start px-4 py-3 text-left"
-                          onClick={() => {
-                            setSelectedSlotIds((current) => {
-                              if (current.includes(slot.id)) {
-                                return current.filter((id) => id !== slot.id);
-                              }
-                              return current.length < 4
-                                ? [...current, slot.id]
-                                : current;
-                            });
-                            createBooking.reset();
-                            createSeries.reset();
-                          }}
-                        >
-                          <span className="flex min-w-0 flex-col items-start gap-1">
-                            <span className="font-medium">
-                              {formatSlotDate(slot.startDate)}
-                            </span>
-                            <span className="flex items-center gap-1.5 text-sm opacity-80">
-                              <IconClock
-                                className="size-4"
-                                aria-hidden="true"
-                              />
-                              {formatSlotTime(slot.startDate, slot.endDate)}
-                            </span>
-                          </span>
-                          {selected ? (
-                            <IconCheck className="ml-auto" aria-hidden="true" />
-                          ) : null}
-                        </Button>
-                        {selected ? (
-                          <div className="rounded-lg border border-item-border bg-item p-3 sm:col-span-2">
-                            <Field>
-                              <FieldLabel htmlFor={`start-${slot.id}`}>
-                                Session start
-                              </FieldLabel>
-                              <MinuteTimeInput
-                                id={`start-${slot.id}`}
-                                value={
-                                  startTimes[slot.id] ??
-                                  formatTimeValue(
-                                    slot.startDate,
-                                    BOOKING_TIMEZONE,
-                                  )
-                                }
-                                onChange={(value) =>
-                                  setStartTimes((current) => ({
-                                    ...current,
-                                    [slot.id]: value,
-                                  }))
-                                }
-                                minTime={formatTimeValue(
-                                  slot.startDate,
-                                  BOOKING_TIMEZONE,
-                                )}
-                                maxTime={formatTimeValue(
-                                  new Date(
-                                    new Date(slot.endDate).getTime() -
-                                      90 * 60_000,
-                                  ),
-                                  BOOKING_TIMEZONE,
-                                )}
-                              />
-                              <FieldDescription>
-                                Fixed 90 minutes · ends at{" "}
-                                {addMinutesToTime(
-                                  startTimes[slot.id] ??
-                                    formatTimeValue(
-                                      slot.startDate,
-                                      BOOKING_TIMEZONE,
-                                    ),
-                                  90,
-                                )}{" "}
-                                WIB · valid starts{" "}
-                                {formatTimeValue(
-                                  slot.startDate,
-                                  BOOKING_TIMEZONE,
-                                )}
-                                –
-                                {formatTimeValue(
-                                  new Date(
-                                    new Date(slot.endDate).getTime() -
-                                      90 * 60_000,
-                                  ),
-                                  BOOKING_TIMEZONE,
-                                )}{" "}
-                                WIB
-                              </FieldDescription>
-                            </Field>
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })}
+            <CardBody className="space-y-5">
+              <SummaryRow label="Tutor" value={tutorName} />
+              <SummaryRow
+                label="Modality"
+                value={effectiveModality === "online" ? "Online" : "Offline"}
+                icon={
+                  effectiveModality === "online" ? (
+                    <IconDeviceLaptop />
+                  ) : (
+                    <IconMapPin />
+                  )
+                }
+              />
+              <SummaryRow label="Schedule" value={scheduleSummary} />
+              <div className="rounded-lg border border-item-border bg-item p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <Text className="text-sm text-muted">
+                      {selectedSlots.length > 1
+                        ? "Series total"
+                        : isGroupBooking
+                          ? "Price per student"
+                          : "Session price"}
+                    </Text>
+                    <Text className="text-xl font-semibold">{price} Marks</Text>
+                    {selectedSlots.length > 1 ? (
+                      <Text className="text-xs text-muted">
+                        {baseSessionPrice} Marks per session
+                      </Text>
+                    ) : null}
+                  </div>
+                  <IconBox variant="warning-subtle">
+                    <IconCoins />
+                  </IconBox>
                 </div>
-              )}
+                <Text className="mt-3 text-sm text-muted">
+                  Held now and only deducted according to the booking lifecycle.
+                </Text>
+                {isGroupBooking && selectedSlots.length === 1 ? (
+                  <Text className="mt-2 text-xs text-muted">
+                    A temporary hold covers {invitees.length + 1} target
+                    participants. Excess Marks are released as invitees confirm.
+                  </Text>
+                ) : null}
+              </div>
+              {isGroupBooking && selectedSlots.length === 1 ? (
+                <SummaryRow
+                  label="Temporary hold"
+                  value={`${requiredHold} Marks`}
+                />
+              ) : null}
+              <div className="flex items-center justify-between gap-4">
+                <span className="flex items-center gap-2 text-muted">
+                  <IconWallet className="size-4" aria-hidden="true" /> Available
+                </span>
+                <Text className="font-medium">
+                  {walletQuery.isPending
+                    ? "Loading…"
+                    : `${availableBalance} Marks`}
+                </Text>
+              </div>
+              {!walletQuery.isPending && !hasEnoughMarks ? (
+                <div className="rounded-lg border border-danger-border bg-danger/10 p-3">
+                  <Text className="text-sm text-danger">
+                    You need {requiredHold - availableBalance} more Marks for
+                    the temporary hold.
+                  </Text>
+                </div>
+              ) : null}
             </CardBody>
+            <CardFooter className="flex-col">
+              {walletQuery.isPending ? (
+                <Button block size="lg" disabled progress>
+                  Checking balance…
+                </Button>
+              ) : hasEnoughMarks ? (
+                <Button
+                  type="submit"
+                  block
+                  size="lg"
+                  progress={createPending}
+                  disabled={submitDisabled}
+                >
+                  {submitLabel}
+                </Button>
+              ) : (
+                <Button
+                  block
+                  size="lg"
+                  nativeButton={false}
+                  render={<Link to="/balance" aria-label="Top up Marks" />}
+                >
+                  Top up Marks
+                </Button>
+              )}
+              {createBooking.isError ||
+              createGroup.isError ||
+              createSeries.isError ||
+              createGroupSeries.isError ? (
+                <div className="w-full rounded-lg border border-danger-border bg-danger/10 p-3">
+                  <Text className="text-center text-sm text-danger">
+                    {getBookingErrorMessage(
+                      (createBooking.error ??
+                        createGroup.error ??
+                        createSeries.error ??
+                        createGroupSeries.error) as Error,
+                    )}
+                  </Text>
+                </div>
+              ) : null}
+              <Text className="text-center text-xs text-muted">
+                The tutor will review your request before the session is
+                confirmed.
+              </Text>
+            </CardFooter>
           </Card>
         </div>
+      </form>
 
-        <Card className="lg:sticky lg:top-6">
-          <CardHeader>
-            <IconBox variant="warning-subtle">
-              <IconCoins />
-            </IconBox>
-            <CardTitle>Booking summary</CardTitle>
-            <CardDescription>Review before requesting</CardDescription>
-          </CardHeader>
-          <CardBody className="space-y-5">
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 p-3 shadow-popover backdrop-blur lg:hidden">
+        <div className="mx-auto flex max-w-7xl items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <Text className="truncate text-xs text-muted">
+              {scheduleSummary}
+            </Text>
+            <Text className="font-semibold">{price} Marks</Text>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => setSummaryOpen(true)}
+          >
+            Review <IconChevronUp />
+          </Button>
+        </div>
+      </div>
+
+      <Drawer
+        open={summaryOpen}
+        onOpenChange={setSummaryOpen}
+        swipeDirection="down"
+      >
+        <DrawerPopup direction="bottom" className="z-50 lg:hidden">
+          <DrawerHeader className="flex-col items-start gap-1.5 border-b border-drawer-border pb-4.5">
+            <DrawerTitle>Booking summary</DrawerTitle>
+            <DrawerDescription>Review before requesting</DrawerDescription>
+          </DrawerHeader>
+          <DrawerBody className="space-y-5">
             <SummaryRow label="Tutor" value={tutorName} />
             <SummaryRow
               label="Modality"
@@ -835,65 +1011,15 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                 )
               }
             />
+            <SummaryRow label="Schedule" value={scheduleSummary} />
+            <SummaryRow label="Total" value={`${price} Marks`} />
             <SummaryRow
-              label="Schedule"
+              label="Available balance"
               value={
-                selectedSlots.length > 1
-                  ? selectedSlots.length > 0
-                    ? `${selectedSlots.length} of 2–4 sessions selected`
-                    : "Choose 2–4 times"
-                  : selectedSlot
-                    ? `${formatSlotDate(selectedSlot.startDate)}, ${formatSlotTime(selectedSlot.startDate, selectedSlot.endDate)}`
-                    : "Choose a time"
+                walletQuery.isPending ? "Loading…" : `${availableBalance} Marks`
               }
+              icon={<IconWallet />}
             />
-            <div className="rounded-lg border border-item-border bg-item p-4">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <Text className="text-sm text-muted">
-                    {selectedSlots.length > 1
-                      ? "Series total"
-                      : isGroupBooking
-                        ? "Price per student"
-                        : "Session price"}
-                  </Text>
-                  <Text className="text-xl font-semibold">{price} Marks</Text>
-                  {selectedSlots.length > 1 ? (
-                    <Text className="text-xs text-muted">
-                      {baseSessionPrice} Marks per session
-                    </Text>
-                  ) : null}
-                </div>
-                <IconBox variant="warning-subtle">
-                  <IconCoins />
-                </IconBox>
-              </div>
-              <Text className="mt-3 text-sm text-muted">
-                Held now and only deducted according to the booking lifecycle.
-              </Text>
-              {isGroupBooking && selectedSlots.length === 1 ? (
-                <Text className="mt-2 text-xs text-muted">
-                  A temporary hold covers {invitees.length + 1} target
-                  participants. Excess Marks are released as invitees confirm.
-                </Text>
-              ) : null}
-            </div>
-            {isGroupBooking && selectedSlots.length === 1 ? (
-              <SummaryRow
-                label="Temporary hold"
-                value={`${requiredHold} Marks`}
-              />
-            ) : null}
-            <div className="flex items-center justify-between gap-4">
-              <span className="flex items-center gap-2 text-muted">
-                <IconWallet className="size-4" aria-hidden="true" /> Available
-              </span>
-              <Text className="font-medium">
-                {walletQuery.isPending
-                  ? "Loading…"
-                  : `${availableBalance} Marks`}
-              </Text>
-            </div>
             {!walletQuery.isPending && !hasEnoughMarks ? (
               <div className="rounded-lg border border-danger-border bg-danger/10 p-3">
                 <Text className="text-sm text-danger">
@@ -902,8 +1028,8 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                 </Text>
               </div>
             ) : null}
-          </CardBody>
-          <CardFooter className="flex-col">
+          </DrawerBody>
+          <DrawerFooter>
             {walletQuery.isPending ? (
               <Button block size="lg" disabled progress>
                 Checking balance…
@@ -911,31 +1037,13 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
             ) : hasEnoughMarks ? (
               <Button
                 type="submit"
+                form="create-booking-form"
                 block
                 size="lg"
-                progress={
-                  createBooking.isPending ||
-                  createGroup.isPending ||
-                  createSeries.isPending ||
-                  createGroupSeries.isPending
-                }
-                disabled={
-                  !selectedSlot ||
-                  hasInvalidStartTime ||
-                  createBooking.isPending ||
-                  createGroup.isPending ||
-                  createSeries.isPending ||
-                  createGroupSeries.isPending ||
-                  !sessionNotes.trim() ||
-                  (subjects.length > 0 && !effectiveSubjectId) ||
-                  invitees.length > 5
-                }
+                progress={createPending}
+                disabled={submitDisabled}
               >
-                {selectedSlots.length > 1
-                  ? `Send series request (${selectedSlots.length})`
-                  : isGroupBooking
-                    ? "Send group booking request"
-                    : "Send booking request"}
+                {submitLabel}
               </Button>
             ) : (
               <Button
@@ -947,28 +1055,9 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                 Top up Marks
               </Button>
             )}
-            {createBooking.isError ||
-            createGroup.isError ||
-            createSeries.isError ||
-            createGroupSeries.isError ? (
-              <div className="w-full rounded-lg border border-danger-border bg-danger/10 p-3">
-                <Text className="text-center text-sm text-danger">
-                  {getBookingErrorMessage(
-                    (createBooking.error ??
-                      createGroup.error ??
-                      createSeries.error ??
-                      createGroupSeries.error) as Error,
-                  )}
-                </Text>
-              </div>
-            ) : null}
-            <Text className="text-center text-xs text-muted">
-              The tutor will review your request before the session is
-              confirmed.
-            </Text>
-          </CardFooter>
-        </Card>
-      </form>
+          </DrawerFooter>
+        </DrawerPopup>
+      </Drawer>
     </Stack>
   );
 }

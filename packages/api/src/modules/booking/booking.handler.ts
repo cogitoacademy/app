@@ -165,7 +165,7 @@ export function createBookingHandler(booking: BookingService) {
       input,
     }: {
       context: Context;
-      input: BookingActionInput & { cancellationReason?: string };
+      input: BookingActionInput & { cancellationReason: string };
     }) => {
       return withDomainMap(
         () =>
@@ -514,7 +514,7 @@ export function createTutorActionsHandler(booking: BookingService) {
       input,
     }: {
       context: Context;
-      input: BookingActionInput & { reason?: string };
+      input: BookingActionInput & { reason: string };
     }) => {
       return withDomainMap(
         () =>

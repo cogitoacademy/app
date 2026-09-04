@@ -225,6 +225,7 @@ describe("U7: per-session tutor reschedule within a series (FR-20/TC-33)", () =>
         proposedStartAt: other.scheduledStartAt.toISOString(),
         proposedEndAt: other.scheduledEndAt.toISOString(),
         sessionId: target.id,
+        reason: "Avoid an overlapping session",
       }),
     ).rejects.toThrow(/conflict/i);
   });

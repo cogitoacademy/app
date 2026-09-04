@@ -17,6 +17,7 @@ import {
 import {
   Field,
   FieldDescription,
+  FieldError,
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
@@ -42,7 +43,8 @@ import {
   addMinutesToTime,
   isTimeWithinRange,
   isValidMinuteTime,
-  MinuteTimeInput,
+  QuarterHourTimeStepper,
+  snapTimeToQuarter,
 } from "./minute-time-input";
 import {
   formatDateValue,
@@ -221,7 +223,16 @@ export function BookingRescheduleAction({
                     if (next === "availability" || next === "custom") {
                       setMode(next);
                       setNewDate("");
-                      setNewTime("");
+                      setNewTime(
+                        next === "custom" && currentStartAt
+                          ? snapTimeToQuarter(
+                              formatTimeValue(
+                                currentStartAt,
+                                RESCHEDULE_TIMEZONE,
+                              ),
+                            )
+                          : "",
+                      );
                       setSelectedSlotId("");
                     }
                   }}
@@ -348,25 +359,34 @@ export function BookingRescheduleAction({
             )}
             <Field>
               <FieldLabel htmlFor="reschedule-time">New start time</FieldLabel>
-              <MinuteTimeInput
+              <QuarterHourTimeStepper
                 id="reschedule-time"
                 value={newTime}
                 onChange={setNewTime}
-                minTime={usingAvailability ? minTime : undefined}
-                maxTime={usingAvailability ? maxTime : undefined}
                 disabled={usingAvailability && !selectedSlot}
               />
               <FieldDescription>
-                Fixed 90 minutes · ends at {addMinutesToTime(newTime, 90)} WIB
-                {usingAvailability && minTime && maxTime
-                  ? ` · valid starts ${minTime}–${maxTime}`
-                  : ""}
-                {matchesCurrentSchedule
-                  ? " · choose a time different from the current schedule"
-                  : matchesPendingProposal
-                    ? " · choose a time different from the pending proposal"
-                    : ""}
+                Fixed 90 minutes · Ends at {addMinutesToTime(newTime, 90)} WIB
               </FieldDescription>
+              {usingAvailability &&
+              newTime &&
+              !validTime &&
+              minTime &&
+              maxTime ? (
+                <FieldError>
+                  The tutor is only available for session starts between{" "}
+                  {minTime}
+                  and {maxTime} WIB.
+                </FieldError>
+              ) : matchesCurrentSchedule ? (
+                <FieldError>
+                  Choose a time different from the current schedule.
+                </FieldError>
+              ) : matchesPendingProposal ? (
+                <FieldError>
+                  Choose a time different from the pending proposal.
+                </FieldError>
+              ) : null}
             </Field>
             {newDate && validTime ? (
               <div className="rounded-lg border border-item-border bg-item p-3 text-sm">
@@ -378,9 +398,7 @@ export function BookingRescheduleAction({
               </div>
             ) : null}
             <Field>
-              <FieldLabel htmlFor="reschedule-reason">
-                Reason (optional)
-              </FieldLabel>
+              <FieldLabel htmlFor="reschedule-reason">Reason</FieldLabel>
               <Textarea
                 id="reschedule-reason"
                 value={reason}
@@ -411,7 +429,7 @@ export function BookingRescheduleAction({
                     usingAvailability && selectedSlotId
                       ? selectedSlotId
                       : undefined,
-                  reason: reason.trim() || undefined,
+                  reason: reason.trim(),
                 })
               }
               progress={propose.isPending}
@@ -420,6 +438,7 @@ export function BookingRescheduleAction({
                 !validTime ||
                 matchesCurrentSchedule ||
                 matchesPendingProposal ||
+                !reason.trim() ||
                 (usingAvailability && !selectedSlotId) ||
                 propose.isPending
               }
@@ -451,7 +470,9 @@ function getEarliestStart(slotStart: Date | string) {
   const now = new Date();
   now.setSeconds(0, 0);
   now.setMinutes(now.getMinutes() + 1);
-  return start > now ? start : now;
+  const earliest = start > now ? start : now;
+  earliest.setUTCMinutes(Math.ceil(earliest.getUTCMinutes() / 15) * 15, 0, 0);
+  return earliest;
 }
 
 function formatSlotLabel(start: Date | string, end: Date | string) {

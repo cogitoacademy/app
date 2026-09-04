@@ -89,11 +89,11 @@ export const bookingActionInput = z.object({
 });
 
 export const cancelBookingInput = bookingActionInput.extend({
-  cancellationReason: z.string().max(500).optional(),
+  cancellationReason: z.string().trim().min(1).max(500),
 });
 
 export const declineBookingInput = bookingActionInput.extend({
-  reason: z.string().max(500).optional(),
+  reason: z.string().trim().min(1).max(500),
 });
 
 export const confirmInviteInput = z.object({
@@ -127,7 +127,7 @@ export const proposeRescheduleInput = z.object({
   availabilitySlotId: z.string().max(100).optional(),
   proposedStartAt: futureStart,
   proposedEndAt: z.coerce.date().optional(),
-  reason: z.string().max(2000).optional(),
+  reason: z.string().trim().min(1).max(2000),
 });
 
 export const completeSessionInput = z.object({
