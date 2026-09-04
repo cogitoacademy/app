@@ -1864,14 +1864,10 @@ function PendingRoomApprovals({
       <CardHeader className="flex-wrap">
         <div className="min-w-0 flex-1">
           <CardTitle>Pending room approvals</CardTitle>
-          <CardDescription>
-            Offline bookings accepted by a tutor and waiting for an admin room
-            decision.
-          </CardDescription>
         </div>
         <Button
           size="sm"
-          variant="plain"
+          variant="outline"
           onClick={onRefresh}
           disabled={isPending}
         >

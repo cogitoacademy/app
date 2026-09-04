@@ -212,7 +212,7 @@ export function TutorsPageContent() {
     <Stack direction="column" spacing="lg">
       <div>
         <Heading level={1} size="md">
-          Tutors
+          Book a Session
         </Heading>
         <Text className="text-muted">
           Find a verified tutor by name, field of competition, and
@@ -351,7 +351,7 @@ export function TutorsPageContent() {
         />
       ) : (
         <div
-          className="grid grid-cols-1 gap-4 md:grid-cols-2"
+          className="grid grid-cols-1 gap-4 xl:grid-cols-2"
           aria-busy={isFetching}
         >
           {tutors.map((tutor: PublishedTutor) => (

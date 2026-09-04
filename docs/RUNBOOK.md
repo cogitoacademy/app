@@ -2,6 +2,16 @@
 
 Last updated: 2026-09-04
 
+On the student dashboard, verify the balance widget shows available, held, and
+total Marks from the wallet snapshot. **Top up** must open `/balance`. At 35 or
+more total Marks, the Balance page's Knowledge Bank card must show access and
+open `/knowledge-bank`; below the threshold it must offer a top-up path. Confirm
+the Balance page places the widget beside Knowledge Bank Access on desktop and
+stacks them cleanly on narrow screens. On the student dashboard, confirm the
+widget's **Find a tutor** action opens `/tutors`; its dashboard counterpart keeps
+**Top up** and opens `/balance`. Confirm the widget remains contained beside the
+Competition Calendar card on the student dashboard.
+
 The admin dashboard Booking activity card now opens its explanatory copy from a
 compact info icon directly beside the title. Verify the popover opens with
 hover, keyboard focus, click, and touch; remains readable in light and dark

@@ -13,17 +13,16 @@ import {
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
+import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Separator } from "@cogito-app/ui/components/selia/separator";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import {
   IconBook,
-  IconCoin,
-  IconLock,
   IconLockOpen,
   IconShoppingCart,
-  IconWallet,
+  IconUsers,
   IconLoader2,
   IconArrowDown,
   IconArrowUp,
@@ -34,7 +33,7 @@ import { Link } from "@tanstack/react-router";
 import { QRCodeSVG } from "qrcode.react";
 
 import { EmptyState } from "@/components/empty-state";
-import { StatCard } from "../stat-card";
+import { BalanceWidget } from "@/components/dashboard/balance-widget";
 import { orpc } from "@/utils/orpc";
 import { getUserFacingError } from "@/lib/error-message";
 
@@ -163,113 +162,68 @@ export function BalancePage() {
           Track your Marks, active holds, and top-up options.
         </Text>
       </div>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <StatCard
-          icon={<IconWallet />}
-          title="Total Balance"
-          value={
-            <span className="inline-flex items-center gap-1.5">
-              {walletLoading ? "—" : totalBalance}
-              <img
-                src="/cogito-mark.png"
-                alt=""
-                aria-hidden="true"
-                width={16}
-                height={16}
-                className="h-[0.75em] w-auto"
-              />
-            </span>
-          }
-          change={`${kbAccessible ? "✓" : "✗"} Knowledge Bank`}
+      <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-[1fr_2fr]">
+        <BalanceWidget
+          availableBalance={availableBalance}
+          heldBalance={heldBalance}
+          totalBalance={totalBalance}
+          isLoading={walletLoading}
+          actionLabel="Find a tutor"
+          actionHref="/tutors"
+          actionIcon={<IconUsers />}
         />
-        <StatCard
-          icon={<IconLock />}
-          title="Held Balance"
-          value={
-            <span className="inline-flex items-center gap-1.5">
-              {walletLoading ? "—" : heldBalance}
-              <img
-                src="/cogito-mark.png"
-                alt=""
-                aria-hidden="true"
-                width={16}
-                height={16}
-                className="h-[0.75em] w-auto"
-              />
-            </span>
-          }
-          change="In active bookings"
-        />
-        <StatCard
-          icon={<IconCoin />}
-          title="Available Balance"
-          value={
-            <span className="inline-flex items-center gap-1.5">
-              {walletLoading ? "—" : availableBalance}
-              <img
-                src="/cogito-mark.png"
-                alt=""
-                aria-hidden="true"
-                width={16}
-                height={16}
-                className="h-[0.75em] w-auto"
-              />
-            </span>
-          }
-          change="Ready to spend"
-        />
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Knowledge Bank Access</CardTitle>
-          <CardDescription>
-            Knowledge Bank access requires at least 35 Marks in your wallet. You
-            are not paying 35 Marks to open it.
-          </CardDescription>
-        </CardHeader>
-        <CardBody>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3 rounded-lg border border-border p-4">
-            {kbAccessible ? (
-              <IconBook className="size-6 text-success" />
-            ) : (
-              <IconLockOpen className="size-6 text-danger" />
-            )}
-            <div>
-              <Heading size="sm">
-                {kbAccessible
-                  ? "You have access"
-                  : `${Math.max(0, 35 - totalBalance)} Marks needed`}
-              </Heading>
-              <Text className="text-dimmed text-sm">
-                {kbAccessible
-                  ? "You meet the 35-Mark threshold. Visit the Knowledge Bank to explore materials."
-                  : "Top up your wallet to unlock the Knowledge Bank."}
-              </Text>
+        <Card className="h-full">
+          <CardHeader>
+            <CardTitle>Knowledge Bank Access</CardTitle>
+            <CardDescription>
+              Knowledge Bank access requires at least 35 Marks in your wallet.
+              You are not paying 35 Marks to open it.
+            </CardDescription>
+          </CardHeader>
+          <CardBody>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3 rounded-lg border border-border p-4">
+              <IconBox variant="tertiary">
+                {kbAccessible ? <IconBook /> : <IconLockOpen />}
+              </IconBox>
+              <div>
+                <Heading size="sm">
+                  {kbAccessible
+                    ? "You have access"
+                    : `${Math.max(0, 35 - totalBalance)} Marks needed`}
+                </Heading>
+                <Text className="text-dimmed text-sm">
+                  {kbAccessible
+                    ? "You meet the 35-Mark threshold. Visit the Knowledge Bank to explore materials."
+                    : "Top up your wallet to unlock the Knowledge Bank."}
+                </Text>
+              </div>
+              {kbAccessible ? (
+                <Button
+                  className="w-full sm:ml-auto sm:w-auto sm:shrink-0 group"
+                  render={
+                    <Link
+                      to="/knowledge-bank"
+                      aria-label="Open Knowledge Bank"
+                    />
+                  }
+                  nativeButton={false}
+                >
+                  Open Knowledge Bank
+                </Button>
+              ) : (
+                <Button
+                  className="w-full sm:ml-auto sm:w-auto sm:shrink-0"
+                  variant="secondary"
+                  render={<a href="#top-up-marks" aria-label="Top up wallet" />}
+                  nativeButton={false}
+                >
+                  Top up wallet
+                </Button>
+              )}
             </div>
-            {kbAccessible ? (
-              <Button
-                className="w-full sm:ml-auto sm:w-auto sm:shrink-0 group"
-                render={
-                  <Link to="/knowledge-bank" aria-label="Open Knowledge Bank" />
-                }
-                nativeButton={false}
-              >
-                Open Knowledge Bank
-              </Button>
-            ) : (
-              <Button
-                className="w-full sm:ml-auto sm:w-auto sm:shrink-0"
-                variant="secondary"
-                render={<a href="#top-up-marks" aria-label="Top up wallet" />}
-                nativeButton={false}
-              >
-                Top up wallet
-              </Button>
-            )}
-          </div>
-        </CardBody>
-      </Card>
+          </CardBody>
+        </Card>
+      </div>
 
       <Card id="top-up-marks">
         <CardHeader>

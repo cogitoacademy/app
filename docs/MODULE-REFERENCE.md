@@ -2,6 +2,17 @@
 
 Last updated: 2026-09-04
 
+## Student dashboard balance widget (2026-09-04)
+
+The student dashboard balance widget is a frontend projection of the existing
+wallet snapshot: available balance is primary, with held and total balances as
+context. Its Knowledge Bank shortcut follows the wallet module's canonical
+35-total-Mark eligibility rule on the Balance page, where the access card sits
+beside the widget on desktop. No service, repository, event key, or business
+beside the widget on desktop. The widget exposes a route/label-configurable CTA
+so Balance uses **Find a tutor** and the dashboard uses **Top up**. No service,
+repository, event key, or business rule changed.
+
 ## Card title info preview (2026-09-04)
 
 The shared Selia card module exposes `CardInfoPreview` as an inline title slot

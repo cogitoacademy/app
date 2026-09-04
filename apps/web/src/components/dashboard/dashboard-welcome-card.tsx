@@ -1,9 +1,5 @@
 "use client";
 
-import { Link } from "@tanstack/react-router";
-import { IconArrowRight, IconSparkles } from "@tabler/icons-react";
-import { Badge } from "@cogito-app/ui/components/selia/badge";
-import { Button } from "@cogito-app/ui/components/selia/button";
 import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Text } from "@cogito-app/ui/components/selia/text";
@@ -19,23 +15,16 @@ export function DashboardWelcomeCard({
   name,
   viewerRole,
   hasUpcomingLesson = false,
-  reviewCount = 0,
 }: DashboardWelcomeCardProps) {
   const isStudent = viewerRole === "student";
   const firstName =
     name.trim().split(/\s+/)[0] || (isStudent ? "Student" : "Tutor");
-  const reviewLabel = `${reviewCount} request${reviewCount === 1 ? "" : "s"}`;
-
   return (
-    <Card className="relative min-h-64 overflow-hidden bg-primary/10">
+    <Card className="relative min-h-40 overflow-hidden bg-primary/10">
       <LearningOrbitIllustration />
       <CardBody className="relative z-1 flex h-full flex-col items-start justify-between gap-8 p-6">
         <div>
-          <Badge variant="primary" pill>
-            <IconSparkles className="size-3.5" />
-            {isStudent ? "Student space" : "Tutor workspace"}
-          </Badge>
-          <Heading className="mt-5 max-w-sm text-3xl">
+          <Heading className="max-w-sm text-3xl">
             {isStudent ? (
               <>
                 Hi, {firstName}! <span aria-hidden="true">👋</span>
@@ -52,22 +41,6 @@ export function DashboardWelcomeCard({
               : "Start with student requests, then keep your next session and teaching availability on track."}
           </Text>
         </div>
-        <Button
-          nativeButton={false}
-          render={
-            <Link
-              to={isStudent ? "/tutors" : "/bookings"}
-              aria-label={isStudent ? "Find a tutor" : "Review bookings"}
-            />
-          }
-        >
-          {isStudent
-            ? "Find a tutor"
-            : reviewCount > 0
-              ? `Review ${reviewLabel}`
-              : "View bookings"}
-          <IconArrowRight />
-        </Button>
       </CardBody>
     </Card>
   );
@@ -78,7 +51,7 @@ function LearningOrbitIllustration() {
     <svg
       viewBox="0 0 320 240"
       aria-hidden="true"
-      className="pointer-events-none absolute -bottom-8 -right-8 h-64 w-80 text-primary opacity-80"
+      className="pointer-events-none absolute -bottom-12 -right-8 h-64 w-80 text-primary opacity-80"
     >
       <path
         d="M75 160c34-58 105-92 177-66"

@@ -2,6 +2,16 @@
 
 Last updated: 2026-09-04
 
+## Student dashboard balance widget (2026-09-04)
+
+The student dashboard now presents the existing `wallet.get` total, held, and
+available values in a compact balance widget. Knowledge Bank access is derived
+from the existing 35-total-Mark rule on the Balance page, which reuses the same
+widget beside its access card on desktop. Existing routes are reused; no RPC
+path, input, response, schema, or persistence contract changed.
+The widget's Balance-page CTA is presentation-only: **Find a tutor** links to
+`/tutors`, while the dashboard variant retains **Top up** to `/balance`.
+
 ## Card title info preview (2026-09-04)
 
 The admin Booking activity explanation now opens from the shared Selia

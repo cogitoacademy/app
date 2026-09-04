@@ -2,6 +2,20 @@
 
 Last updated: 2026-09-04
 
+## Student dashboard balance widget (2026-09-04)
+
+The student dashboard replaces its standalone Knowledge Bank promo card with a
+compact Selia balance widget inspired by the Watermelon quota-card composition.
+It shows available Marks as the primary value, held and total Marks as supporting
+values, and links to the Balance page for top-up. The Balance page reuses the
+same widget beside its Knowledge Bank access card on desktop. Eligibility uses
+the canonical total-balance threshold of 35 Marks. This is presentation-only
+and adds no new data source.
+
+The reusable widget keeps its dashboard **Top up** CTA by default; the Balance
+page configures the same action as **Find a tutor** and routes to `/tutors`,
+which is the next step before creating a booking.
+
 ## Card title info preview (2026-09-04)
 
 The shared Selia `Card` now provides `CardInfoPreview`, an optional inline slot

@@ -13,6 +13,15 @@ This document catalogs all PRD-required frontend surfaces that are not yet imple
 
 The backend spec is `docs/plans/completed/PRD-GAPS-SPEC.md` (backend-only). This is the frontend counterpart.
 
+### Student dashboard balance-widget follow-up (2026-09-04)
+
+The student dashboard replaces its Knowledge Bank promo tile with a compact
+Selia wallet widget showing available, held, and total Marks, a top-up action,
+while the Balance page reuses the widget beside its Knowledge Bank access card
+on desktop. Existing wallet data and routes are reused without an API change.
+The Balance-page CTA is labeled **Find a tutor** and links to `/tutors`; the
+student dashboard keeps the widget's **Top up** action.
+
 ### Booking-detail card header follow-up (2026-09-04)
 
 Booking-detail cards now move explanatory `CardDescription` copy into the
