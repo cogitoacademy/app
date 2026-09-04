@@ -1,6 +1,6 @@
 # LOG-CONSOLIDATION-PAYMENT-UX
 
-**Status:** Active (2026-09-03)
+**Status:** **DONE (2026-09-04)** — all tasks implemented, verified, and merged via PR (log consolidation `67895bb`, payment UX `3a45472`, Midtrans migration, booking date fix). See status log.
 
 ## Goal
 
@@ -90,3 +90,31 @@ with path, statusCode, description, requestId, requestClient (userId).
 - 2026-09-03: Created. Workers spawned (log-worker, payment-ux-worker) in
   herdr worktrees. Repurchase (#188) and sanitized provider errors (#185)
   already merged — out of scope.
+- 2026-09-04: **Wave executed.** Worker A (log consolidation) delivered
+  `67895bb` (verified: 125/125 server tests, 2445/2445 api tests, logger.ts
+  100% coverage, check-types green, lint baseline green). Worker B (Midtrans
+  migration) delivered `8df0db4` + `ff46d6a` (verified: 2488 api, 126 server,
+  31 env tests, coverage gate passed). Worker C (booking date fix) delivered
+  `509f51e` + `8326c6e` (verified: 11 helper + 2 trace tests, 2499 suite,
+  coverage gate passed). payment-ux `3a45472` verified (2500 suite, gate
+  passed). All four merged into `release/2026-09-03-log-midtrans-booking`;
+  `services.ts` conflict (hoisted `resolveXenditConfig` vs new
+  `resolveMidtransConfig`) resolved by keeping both. Integrated tree: 2549
+  tests pass, 130 server tests pass, coverage gate 100% passed, check-types
+  green, lint baseline green. PR → CI → squash-merge → auto-deploy.
+
+## Module-convention audit (2026-09-03, lead)
+
+All 19 SQL-touching modules have `.repo.ts`; `content`/`email`/`meeting`/
+`pricing`/`upload`/`scheduler`/`tutor-subjects` have no SQL so having no repo
+is correct (content talks to Sanity, not Postgres). Coverage gate is 100%
+lines/functions/branches enforced in CI (`.github/scripts/coverage-comment.ts`).
+No worker needed — recorded for the record.
+
+## Coverage verification (2026-09-04, lead)
+
+Re-ran the CI coverage command on the integrated tree:
+`bun test --coverage --coverage-reporter=lcov --timeout 30000 packages/api/src/tests/ packages/env/src/ packages/auth/src/ packages/db/src/ apps/server/src/openapi.test.ts`
+→ 2549 pass / 0 fail; `bun .github/scripts/coverage-comment.ts` → **"Coverage
+gate passed (api lines ≥ 100%, overall lines ≥ 100%, functions ≥ 100%,
+branches ≥ 100%)"**.
