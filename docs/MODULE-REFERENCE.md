@@ -1,6 +1,13 @@
 # Cogito Module Reference
 
-Last updated: 2026-09-03
+Last updated: 2026-09-04
+
+## Sidebar logo contrast (2026-09-04)
+
+The authenticated sidebar applies a dark-mode-only filter to the existing
+Cogito Academy logo so the full wordmark renders white. This is client-side
+presentation behavior and adds no service, repository, event-key, or business
+rule.
 
 The 2026-09-02 Lefthook lint-gate alignment changes repository tooling only;
 services, modules, event keys, and business rules are unchanged.

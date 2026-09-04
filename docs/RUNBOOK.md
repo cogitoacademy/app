@@ -1,6 +1,9 @@
 # Cogito Runbook
 
-Last updated: 2026-09-03
+Last updated: 2026-09-04
+
+The 2026-09-04 sidebar logo contrast polish is frontend-only. It adds no
+environment variables, migrations, jobs, or operational steps.
 
 The 2026-09-02 admin booking-detail layout consolidation adds no environment
 variables, migrations, jobs, or operational steps.
@@ -126,7 +129,7 @@ After a web deployment, sign in once as each supported role and open `/dashboard
 
 ### Theme shortcut smoke check
 
-From any authenticated shell page, press `D` once and verify the UI switches between the rendered light and dark themes; press it again to switch back. Confirm the theme menu still supports Light, Dark, and System, and that the explicit selection survives a page reload. While focused in an input, textarea, or editable field, press `D` and confirm the field receives the character without changing the theme. Modifier-key combinations and holding the key should not cause extra toggles.
+From any authenticated shell page, press `D` once and verify the UI switches between the rendered light and dark themes; press it again to switch back. In dark mode, confirm the complete Cogito Academy sidebar logo, including the wordmark and academy label, renders white rather than orange/purple; in light mode, confirm the original logo colors remain. Confirm the theme menu still supports Light, Dark, and System, and that the explicit selection survives a page reload. While focused in an input, textarea, or editable field, press `D` and confirm the field receives the character without changing the theme. Modifier-key combinations and holding the key should not cause extra toggles.
 
 ### Competition Calendar smoke check
 

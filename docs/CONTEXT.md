@@ -1,6 +1,14 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-09-03
+Last updated: 2026-09-04
+
+## Sidebar logo contrast (2026-09-04)
+
+The authenticated sidebar keeps the branded `/cogito-academy-logo.webp` asset
+in light mode and applies a dark-mode filter so the complete logo renders
+white, including both the wordmark and academy label. This is frontend-only
+presentation behavior with no RPC, schema, persistence, or operational
+contract change.
 
 Production payment checkout defaults to Xendit QRIS. The provider sends
 QRIS-specific channel properties (`qr_string_type=DYNAMIC`, 48-hour expiry),

@@ -1,6 +1,13 @@
 # Cogito API Reference
 
-Last updated: 2026-09-03
+Last updated: 2026-09-04
+
+## Sidebar logo contrast (2026-09-04)
+
+The authenticated sidebar keeps the branded logo colors in light mode and
+renders the complete logo white in dark mode. This is frontend-only
+presentation behavior; no RPC path, request envelope, response shape, schema,
+or persistence contract changed.
 
 The 2026-09-02 local pre-push lint-gate alignment changes developer tooling
 only. It does not change any RPC path, request envelope, response shape,

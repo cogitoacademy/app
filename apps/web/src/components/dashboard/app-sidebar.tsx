@@ -143,7 +143,7 @@ export function AppSidebar({
           <img
             src="/cogito-academy-logo.webp"
             alt="logo"
-            className="relative z-1 h-12"
+            className="relative z-1 h-12 dark:brightness-0 dark:invert"
           />
           {/* <span className="font-semibold">Cogito Academy</span> */}
         </SidebarLogo>
