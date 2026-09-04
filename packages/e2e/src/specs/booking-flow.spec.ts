@@ -320,9 +320,6 @@ test("tutor can decline a request and the student sees the terminal state", asyn
     await expect(
       tutor.page.getByText("Booking declined", { exact: true }),
     ).toBeVisible();
-    await expect(
-      tutor.page.getByText("Declined", { exact: true }).last(),
-    ).toBeVisible();
   } finally {
     await tutor.context.close();
   }

@@ -61,7 +61,9 @@ test("student sees closed-loop Marks pricing and cannot open admin economy", asy
 
   await page.goto("/admin-economy");
   await page.waitForURL("/dashboard");
-  await expect(page.getByText("Student space")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /Hi, .+!/ }).first(),
+  ).toBeVisible();
 });
 
 test("tutor sees IDR honorarium setup without the old Marks cash-out copy", async ({
