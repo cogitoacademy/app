@@ -33,8 +33,8 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
-  CardDescription,
   CardHeader,
+  CardInfoPreview,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
@@ -603,10 +603,16 @@ export function BookingDetailPage({
         <div className="contents lg:col-start-1 lg:flex lg:flex-col lg:gap-4">
           <Card className="order-1 min-w-0 overflow-hidden lg:order-none">
             <CardHeader>
-              <CardTitle>Session overview</CardTitle>
-              <CardDescription>
-                When, how, and who for this booking.
-              </CardDescription>
+              <CardTitle>
+                Session overview
+                <CardInfoPreview>
+                  <InfoPreview
+                    title="Session overview"
+                    description="When, how, and who for this booking."
+                    label="About session overview"
+                  />
+                </CardInfoPreview>
+              </CardTitle>
             </CardHeader>
             <CardBody className="space-y-6">
               <section
@@ -793,12 +799,20 @@ export function BookingDetailPage({
           {booking.type === "series" ? (
             <Card className="order-1 min-w-0 overflow-hidden lg:order-none">
               <CardHeader>
-                <CardTitle>Series sessions</CardTitle>
-                <CardDescription>
-                  {isTutor
-                    ? "Each session is completed individually to record its IDR honorarium."
-                    : "Each session is completed individually to settle its held Marks."}
-                </CardDescription>
+                <CardTitle>
+                  Series sessions
+                  <CardInfoPreview>
+                    <InfoPreview
+                      title="Series sessions"
+                      description={
+                        isTutor
+                          ? "Each session is completed individually to record its IDR honorarium."
+                          : "Each session is completed individually to settle its held Marks."
+                      }
+                      label="About series sessions"
+                    />
+                  </CardInfoPreview>
+                </CardTitle>
               </CardHeader>
               <CardBody className="grid gap-3">
                 {sessionsQuery.isPending ? (
@@ -897,10 +911,16 @@ export function BookingDetailPage({
             {extensions?.activity ?? (
               <Card className="min-w-0 overflow-hidden">
                 <CardHeader>
-                  <CardTitle>Activity</CardTitle>
-                  <CardDescription>
-                    A chronological record of this booking
-                  </CardDescription>
+                  <CardTitle>
+                    Activity
+                    <CardInfoPreview>
+                      <InfoPreview
+                        title="Activity"
+                        description="A chronological record of this booking"
+                        label="About booking activity"
+                      />
+                    </CardInfoPreview>
+                  </CardTitle>
                 </CardHeader>
                 <CardBody className="px-6">
                   {history.length > 0 ? (
@@ -941,12 +961,20 @@ export function BookingDetailPage({
                 <IconBox variant="warning">
                   <IconCoins />
                 </IconBox>
-                <CardTitle>{isTutor ? "Honorarium" : "Marks"}</CardTitle>
-                <CardDescription className="leading-none">
-                  {isTutor
-                    ? "Amount earned after completion"
-                    : "Cost and reservation"}
-                </CardDescription>
+                <CardTitle>
+                  {isTutor ? "Honorarium" : "Marks"}
+                  <CardInfoPreview>
+                    <InfoPreview
+                      title={isTutor ? "Honorarium" : "Marks"}
+                      description={
+                        isTutor
+                          ? "Amount earned after completion"
+                          : "Cost and reservation"
+                      }
+                      label={isTutor ? "About honorarium" : "About Marks"}
+                    />
+                  </CardInfoPreview>
+                </CardTitle>
               </CardHeader>
               <CardBody className="space-y-4">
                 {isTutor ? (

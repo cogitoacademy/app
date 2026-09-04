@@ -13,6 +13,14 @@ This document catalogs all PRD-required frontend surfaces that are not yet imple
 
 The backend spec is `docs/plans/completed/PRD-GAPS-SPEC.md` (backend-only). This is the frontend counterpart.
 
+### Booking-detail card header follow-up (2026-09-04)
+
+Booking-detail cards now move explanatory `CardDescription` copy into the
+shared `CardInfoPreview`/`InfoPreview` popover immediately beside each title.
+This covers the shared student/tutor cards, contact and lifecycle cards, room
+assignment, and the admin review-context, wallet-impact, and state-history
+extensions without changing an API or persistence contract.
+
 ### Tutor profile route follow-up (2026-08-31)
 
 The tutor-owned profile editor is now presented at the canonical `/profile`

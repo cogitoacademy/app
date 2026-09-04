@@ -12,7 +12,10 @@ import { cn } from "@cogito-app/ui/lib/utils";
 
 type InfoPreviewTone = "info" | "success" | "warning";
 
+const defaultInfoPreviewIcon = <IconInfoSquareRounded />;
+
 export function InfoPreview({
+  icon = defaultInfoPreviewIcon,
   title,
   description,
   label,
@@ -20,6 +23,7 @@ export function InfoPreview({
   children,
   className,
 }: {
+  icon?: React.ReactNode;
   title: string;
   description: React.ReactNode;
   label?: string;
@@ -49,7 +53,12 @@ export function InfoPreview({
         render={<button type="button" aria-label={triggerLabel} />}
         className={triggerClassName}
       >
-        <IconInfoSquareRounded className="size-4" aria-hidden="true" />
+        <span
+          aria-hidden="true"
+          className="flex items-center [&_svg:not([class*=size-])]:size-4"
+        >
+          {icon}
+        </span>
       </PopoverTrigger>
       <PopoverPopup sideOffset={8} className="space-y-2">
         <PopoverTitle>{title}</PopoverTitle>

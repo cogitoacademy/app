@@ -2,6 +2,18 @@
 
 Last updated: 2026-09-04
 
+## Card title info preview (2026-09-04)
+
+The shared Selia `Card` now provides `CardInfoPreview`, an optional inline slot
+that places the existing `InfoPreview` popover trigger directly beside
+`CardTitle`. `InfoPreview` also accepts a custom icon alongside its accessible
+label, title, and explanatory content. The admin dashboard's Booking activity
+card uses this composition instead of a separate header description. The shared
+booking-detail surface follows the same treatment for Session overview, Series
+sessions, Activity, Honorarium/Marks, lifecycle, contact, room-assignment, and
+admin-extension cards. This is presentation-only and changes no RPC or
+persisted data contract.
+
 ## Sidebar logo contrast (2026-09-04)
 
 The authenticated sidebar keeps the branded `/cogito-academy-logo.webp` asset

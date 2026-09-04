@@ -28,9 +28,10 @@ export const cardHeaderVariants = cva(
   [
     "p-6 gap-x-3.5 gap-y-2 border-b border-card-separator",
     "grid grid-cols-[1fr_auto]",
-    "has-[svg]:grid-cols-[auto_1fr_auto]",
+    "has-[>svg]:grid-cols-[auto_1fr_auto]",
+    "has-[[data-slot=iconbox]]:grid-cols-[auto_1fr_auto]",
     "has-[[data-slot=iconbox]]:*:data-[slot=card-description]:col-start-2",
-    "**:[svg,[data-slot=iconbox]]:row-span-2",
+    "[&>svg]:row-span-2",
     "*:data-[slot=iconbox]:row-span-2",
     "*:data-[slot=card-description]:row-start-2",
     "not-[:has([data-slot=iconbox])]:items-center",
@@ -91,10 +92,30 @@ export function CardTitle({
     defaultTagName: `h${level}` as keyof React.JSX.IntrinsicElements,
     props: {
       "data-slot": "card-title",
-      className: cn("text-lg font-semibold leading-none", className),
+      className: cn(
+        "text-lg font-semibold leading-none",
+        "has-[>[data-slot=card-info-preview]]:flex has-[>[data-slot=card-info-preview]]:flex-wrap has-[>[data-slot=card-info-preview]]:items-center has-[>[data-slot=card-info-preview]]:gap-2",
+        className,
+      ),
       ...props,
     },
   });
+}
+
+export function CardInfoPreview({
+  className,
+  children,
+  ...props
+}: React.ComponentProps<"span">) {
+  return (
+    <span
+      data-slot="card-info-preview"
+      className={cn("inline-flex shrink-0", className)}
+      {...props}
+    >
+      {children}
+    </span>
+  );
 }
 
 export function CardDescription({
