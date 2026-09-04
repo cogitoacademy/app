@@ -26,8 +26,7 @@ export function registerHealthMetricsRoutes(app: Elysia) {
       );
     })
     .get("/metrics", ({ request }) => {
-      if (!env.METRICS_TOKEN)
-        return new Response("Not Found", { status: 404 });
+      if (!env.METRICS_TOKEN) return new Response("Not Found", { status: 404 });
       const authHeader = request.headers.get("authorization") ?? "";
       const expected = `Bearer ${env.METRICS_TOKEN}`;
       if (

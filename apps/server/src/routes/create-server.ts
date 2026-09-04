@@ -1,7 +1,12 @@
 import { Elysia } from "elysia";
 
 import { paymentsWebhook } from "../webhooks/payments";
-import { registerRequestLogging, registerCors, registerSecurityHeaders, requestBodyLimit } from "./middlewares";
+import {
+  registerRequestLogging,
+  registerCors,
+  registerSecurityHeaders,
+  requestBodyLimit,
+} from "./middlewares";
 import { registerRateLimits } from "./rate-limits";
 import { registerAuthRoutes } from "./auth-routes";
 import { registerRpcRoutes } from "./rpc-routes";
@@ -21,19 +26,17 @@ import { registerHealthMetricsRoutes } from "./health-metrics";
  * @returns a configured Elysia instance with security headers, rate limits, and CORS applied
  */
 export function createServer() {
-  return (
-    new Elysia()
-      .use(registerRequestLogging)
-      .use(registerCors)
-      .use(registerSecurityHeaders)
-      .onRequest(({ request }) => requestBodyLimit(request))
-      .use(registerRateLimits)
-      .use(registerAuthRoutes)
-      .use(registerRpcRoutes)
-      .use(registerUploadRoutes)
-      .use(registerContentRoutes)
-      .use(registerOpenApiRoutes)
-      .use(registerHealthMetricsRoutes)
-      .use(paymentsWebhook)
-  );
+  return new Elysia()
+    .use(registerRequestLogging)
+    .use(registerCors)
+    .use(registerSecurityHeaders)
+    .onRequest(({ request }) => requestBodyLimit(request))
+    .use(registerRateLimits)
+    .use(registerAuthRoutes)
+    .use(registerRpcRoutes)
+    .use(registerUploadRoutes)
+    .use(registerContentRoutes)
+    .use(registerOpenApiRoutes)
+    .use(registerHealthMetricsRoutes)
+    .use(paymentsWebhook);
 }
