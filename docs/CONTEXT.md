@@ -14,6 +14,17 @@ sessions, Activity, Honorarium/Marks, lifecycle, contact, room-assignment, and
 admin-extension cards. This is presentation-only and changes no RPC or
 persisted data contract.
 
+## Sidebar booking-action badge (2026-09-04)
+
+The authenticated sidebar now shows a compact count badge beside the shared
+`/bookings` navigation item when the role-visible booking list contains rows in
+the same pending states used by the **Needs action** tab. The badge uses the
+existing protected `booking.listMine` read with those states, displays `99+`
+when the result exceeds the compact limit, and stays hidden while the count is
+zero or still loading. The state tuple is shared by the sidebar, booking list,
+and booking cards. This is frontend-only; no RPC, schema, persistence, or
+booking lifecycle rule changed.
+
 ## Competition Calendar empty months (2026-09-04)
 
 The authenticated Competition Calendar keeps the normal month grid visible when

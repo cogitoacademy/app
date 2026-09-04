@@ -10,6 +10,13 @@ and their admin extensions use the same pattern instead of standalone header
 descriptions. This frontend-only change adds no RPC path and changes no request
 envelope, response shape, schema, or persistence contract.
 
+## Sidebar booking-action badge (2026-09-04)
+
+The authenticated sidebar reuses `booking.listMine` with the existing pending
+booking states to show the role-visible count beside `/bookings`. It caps the
+display at `99+` when another cursor remains. No new RPC path, request input,
+response output, schema, or persistence contract was added.
+
 ## Competition Calendar empty months (2026-09-04)
 
 The month-view presentation keeps its standard calendar grid when the selected

@@ -82,6 +82,13 @@ The shared booking list uses Needs action, Upcoming, Recurring, History, and All
 `BookingListCard` derives one contextual time chip from server facts: pending states read `deadlineAt`, confirmed/scheduled states read the scheduled window, and terminal states render none. A module-level external clock store updates all mounted cards from one 30-second interval rather than allocating one timer per row.
 The reusable card exposes `showFinancialInfo`; booking lists keep it enabled and place the time chip after it, while dashboard next-lesson cards disable it.
 
+The authenticated sidebar reuses `booking.listMine` with the shared
+`BOOKING_ACTION_STATES` tuple and shows a compact `99+`-capped badge beside
+`/bookings` when role-visible pending rows exist. The tuple is shared with the
+booking list/card presentation so the badge and **Needs action** tab remain
+aligned. This is frontend presentation only; the booking service, repository,
+event keys, and lifecycle rules are unchanged.
+
 Tutor invitations use the shared email provider: create sends once, **Generate & copy link** only rotates the token, and the separate **Send again** procedure rotates then explicitly delivers through Resend. Delivery failure does not roll back the valid invite.
 
 The invite form performs an admin-only account preflight by exact normalized email. Provider facts come from Better Auth `account.providerId` rows (`google`, `credential`, or both); admin-role accounts are shown as ineligible and cannot be submitted from the UI.

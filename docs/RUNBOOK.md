@@ -17,6 +17,13 @@ beside its title without leaving a blank description row.
 The 2026-09-04 sidebar logo contrast polish is frontend-only. It adds no
 environment variables, migrations, jobs, or operational steps.
 
+On the authenticated student, tutor, and admin shells, create or seed pending
+booking rows and verify the sidebar shows a compact badge beside **My Bookings**
+or **Bookings**. The number must match the pending rows in the shared **Needs
+action** view, disappear when there are none, and render `99+` when the result
+exceeds the compact display limit. Confirm the link remains keyboard accessible
+and the badge does not widen or overflow the sidebar.
+
 ## Production UI and E2E audit (2026-09-04)
 
 The full browser workflow passed **13/13 tests across four specs**. It covers

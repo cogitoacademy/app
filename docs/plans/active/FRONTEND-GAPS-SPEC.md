@@ -21,6 +21,15 @@ This covers the shared student/tutor cards, contact and lifecycle cards, room
 assignment, and the admin review-context, wallet-impact, and state-history
 extensions without changing an API or persistence contract.
 
+### Sidebar booking-action badge follow-up (2026-09-04)
+
+The authenticated sidebar now shows a compact, `99+`-capped badge beside the
+shared `/bookings` item when the role-visible `booking.listMine` result contains
+the same pending states shown by the **Needs action** tab. The state tuple is
+shared with the booking card/list presentation, and the existing list query is
+invalidated by booking mutations. This is presentation-only and does not add an
+RPC, schema, persistence, or lifecycle change.
+
 ### Tutor profile route follow-up (2026-08-31)
 
 The tutor-owned profile editor is now presented at the canonical `/profile`
