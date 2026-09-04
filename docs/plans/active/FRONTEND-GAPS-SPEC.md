@@ -906,6 +906,11 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 
 ### Version Notes
 
+- v1.72 (2026-09-04): Constrained the shared select positioner and popup to
+  Base UI's available viewport width so tutor discovery filters remain fully
+  visible at the 320 px CSS minimum. No RPC, schema, persistence, or URL
+  contract changed.
+
 - v1.67 (2026-09-04): Moved the transfer-fee policy copy behind the payout card’s contextual `InfoPreview` trigger, keeping the fee and estimated payout values visible while reducing default card density. No RPC, schema, or persistence contract changed.
 
 - v1.66 (2026-09-04): Added the tutor dashboard payout-details `InfoPreview` popover so the unpaid-honorarium explanation is available from the compact card header. No RPC, schema, or persistence contract changed.

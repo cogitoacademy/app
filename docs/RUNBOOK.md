@@ -103,6 +103,12 @@ Booking-list smoke check: verify Needs action, Upcoming, Recurring, History, and
 Timing-chip check: pending rows with `deadlineAt` show Respond in, switch to warning within three hours and danger within 30 minutes, then say Response overdue without pretending the state is Expired. Confirmed/scheduled rows show Today, Starts in within three hours, Starting soon within 30 minutes, and In progress between start and end. Completed, declined, cancelled, expired, and other terminal rows show no chip. Leave the page open and confirm labels refresh without reloading.
 On `/bookings`, verify the timing chip follows the role-appropriate financial summary (IDR Honorarium for tutors; Earns/Total or You pay for student/admin views) and has a vertical divider on its left. On student and tutor dashboards, verify the shared next-lesson card hides You pay/Earns/Total while retaining the timing chip.
 
+On the student `/tutors` page, open **Filters** at a 320 px CSS viewport and
+verify the filter card and category/specialization popups stay inside the
+viewport. Select multiple categories and confirm the selected indicators and
+the popup's right edge remain visible; the page itself must not gain horizontal
+overflow. Repeat at 390 px.
+
 For manual tutor-invite delivery, copy the visible latest link. After reloading the page, use **Generate & copy link** on a pending invitation history entry; this safely rotates the token instead of persisting plaintext secrets.
 
 **Generate & copy link** never sends email. Use the separate **Send again** action when an admin intentionally wants Resend to deliver a replacement link.

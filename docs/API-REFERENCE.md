@@ -2,6 +2,15 @@
 
 Last updated: 2026-09-04
 
+## Tutor discovery filter viewport containment (2026-09-04)
+
+The student `/tutors` filter stack now uses shrinkable, viewport-bounded
+containers, and shared Selia select positioners/popups cap at Base UI's
+`--available-width` boundary so category/specialization options do not get
+clipped at narrow widths. This is a presentation-only fix;
+`tutors.listSubjects` and `tutors.listPublished` keep the same RPC paths,
+request envelope, inputs, outputs, and authentication.
+
 ## Student dashboard balance widget (2026-09-04)
 
 The student dashboard now presents the existing `wallet.get` total, held, and

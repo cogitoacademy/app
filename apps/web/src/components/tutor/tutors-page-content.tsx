@@ -226,7 +226,11 @@ export function TutorsPageContent() {
   }
 
   return (
-    <Stack direction="column" spacing="lg">
+    <Stack
+      direction="column"
+      spacing="lg"
+      className="w-full min-w-0 max-w-full"
+    >
       <div>
         <Heading level={1} size="md">
           Book a Session
@@ -237,7 +241,7 @@ export function TutorsPageContent() {
         </Text>
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      <div className="flex w-full min-w-0 max-w-full flex-col gap-3 sm:flex-row sm:items-center">
         <InputGroup className="flex-1">
           <InputGroupAddon>
             <IconSearch className="size-4" />
@@ -276,11 +280,14 @@ export function TutorsPageContent() {
       <div
         id="tutor-discovery-filters"
         aria-hidden={!filtersOpen}
-        className={`grid relative transition-[grid-template-rows,opacity,margin] duration-300 ease-out motion-reduce:transition-none ${filtersOpen ? "grid-rows-[1fr] opacity-100" : "-mb-6 grid-rows-[0fr] opacity-0"}`}
+        className={`relative grid w-full min-w-0 max-w-full transition-[grid-template-rows,opacity,margin] duration-300 ease-out motion-reduce:transition-none ${filtersOpen ? "grid-rows-[1fr] opacity-100" : "-mb-6 grid-rows-[0fr] opacity-0"}`}
       >
-        <div className="min-h-0 z-0" inert={!filtersOpen}>
-          <Card>
-            <CardBody className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_0.75fr_auto] lg:items-center">
+        <div
+          className="z-0 min-h-0 w-full min-w-0 max-w-full"
+          inert={!filtersOpen}
+        >
+          <Card className="w-full min-w-0 max-w-full">
+            <CardBody className="grid w-full min-w-0 max-w-full gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_0.75fr_auto] lg:items-center">
               <Select
                 multiple
                 value={selectedCategoryValues}

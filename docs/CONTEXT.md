@@ -2,6 +2,16 @@
 
 Last updated: 2026-09-04
 
+## Tutor discovery filter viewport containment (2026-09-04)
+
+The student `/tutors` page bounds its search row and collapsible filter panel
+with shrinkable, full-width containers so responsive controls cannot create a
+wider intrinsic page than the viewport. Shared Selia select positioners and
+popups also cap their width at Base UI's `--available-width` boundary, keeping
+category and specialization options inside the available viewport when
+multiple values are selected. This is frontend-only presentation behavior; no
+RPC, schema, persistence, or operational contract changed.
+
 ## Student dashboard balance widget (2026-09-04)
 
 The student dashboard replaces its standalone Knowledge Bank promo card with a

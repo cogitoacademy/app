@@ -326,7 +326,7 @@ export function SelectPopup({
     <BaseSelect.Portal>
       <BaseSelect.Backdrop />
       <BaseSelect.Positioner
-        className="z-[1000]"
+        className="z-[1000] max-w-(--available-width)"
         align={align}
         alignOffset={alignOffset}
         side={side}
@@ -341,7 +341,7 @@ export function SelectPopup({
           {...props}
           className={cn(
             "group origin-(--transform-origin) bg-popover ring ring-popover-border rounded shadow-popover",
-            "p-1 outline-none max-lg:w-(--anchor-width)",
+            "p-1 outline-none max-w-(--available-width) max-lg:w-(--anchor-width)",
             className,
           )}
         >
