@@ -494,12 +494,14 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-15
 
-**Current state:** **CLOSED (2026-08-19; role-dispatch follow-up 2026-08-22; no-op/race guards 2026-08-28; drawer follow-up 2026-09-02).** `booking-reschedule-action.tsx` (calendar + time input + reason; role-aware `booking.proposeReschedule`/`tutorActions.proposeReschedule`, per-session `sessionId`, supersedes pending proposal) — merged via #55 with the tutor route wiring corrected in the follow-up. The proposal editor now uses a height-constrained bottom Selia drawer on mobile and a right-side drawer on desktop, with a scrollable body and separate action footer. The UI disables proposals matching either the active start or pending proposal; the service applies the same invariant to booking and series-session targets, serializes replacement, and the database permits only one pending proposal per booking.
+**Current state:** **CLOSED (2026-08-19; role-dispatch follow-up 2026-08-22; no-op/race guards 2026-08-28; drawer follow-up 2026-09-02; time/reason UX follow-up 2026-09-04).** `booking-reschedule-action.tsx` uses 15-minute minus/plus controls, derives the fixed 90-minute end, surfaces tutor-window errors only when invalid, and requires the reason for both student and tutor proposals. The role-aware `booking.proposeReschedule`/`tutorActions.proposeReschedule` routes enforce the same non-blank reason contract, support per-session `sessionId`, and supersede pending proposals. The editor remains a height-constrained bottom Selia drawer on mobile and a right-side drawer on desktop, with a scrollable body and separate action footer.
+
+**Create-booking layout follow-up (2026-09-04):** the form now balances desktop content with modality and summary in a sticky right rail. Availability stays in its original card grid; selecting a card expands that item into a row with its own adjacent start-time editor rather than moving all editors into one panel. On narrow screens the editor stacks below its card, and the summary becomes a compact sticky preview plus bottom review drawer. Both responsive submit surfaces reuse the same form state and mutation path.
 
 **Required (after G6 backend fix):**
 
 1. On tutor booking detail (`_app.tutor-bookings`), add "Propose reschedule" action for bookings in `confirmed`/`scheduled` state
-2. Form: new date/time picker, reason (optional)
+2. Form: new date/time picker and required reason
 3. Calls `tutorActions.proposeReschedule` for tutors (the student proposer path uses `booking.proposeReschedule`)
 4. Shows pending status after submission
 

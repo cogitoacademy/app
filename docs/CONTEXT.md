@@ -113,7 +113,7 @@ show only results for the submitted query because retaining another user's
 data would be misleading. Notifications already retain loaded pages through
 `useInfiniteQuery`.
 
-Student cancellation closes at the exact scheduled start. The backend rejects `booking.cancel`, participant `withdraw`, and per-series-session cancellation at or after the applicable `scheduledStartAt`, leaving the booking live for tutor completion; the booking-detail UI hides the primary cancel action on the same boundary. Pre-start H-2 penalties remain unchanged. Attendance or delivery problems after start use support/admin review instead of allowing a student cancellation path to strand tutor payout.
+Student cancellation closes at the exact scheduled start and requires a written reason that is persisted in activity and shared with the tutor. Tutor request declines and student/tutor reschedule proposals likewise require a non-blank reason at the API boundary. The backend rejects `booking.cancel`, participant `withdraw`, and per-series-session cancellation at or after the applicable `scheduledStartAt`, leaving the booking live for tutor completion; the booking-detail UI hides the primary cancel action on the same boundary. Pre-start H-2 penalties remain unchanged. Attendance or delivery problems after start use support/admin review instead of allowing a student cancellation path to strand tutor payout.
 
 The shared `/bookings` surface is task-oriented with Needs action, Upcoming, Recurring, History, and All tabs. Students and tutors are taken to Needs action when a response is pending. History consolidates terminal outcomes. URL-backed Recommended sorting keeps pending decisions above active bookings and terminal outcomes at the bottom, with Soonest and Latest alternatives.
 
@@ -206,7 +206,9 @@ Invitation history keeps metadata but never stores plaintext invite secrets. The
 
 Before submission, the admin tutor invite form checks whether the normalized email is registered and displays the user's current role and linked Better Auth methods (Google, email/password, or both). This preflight is admin-only and resets whenever the email input changes.
 
-Booking scheduling and reschedule rules: [Booking Scheduling and Reschedule Specification](./booking-scheduling-and-reschedule-spec.md) (v1.0.0, 2026-08-16).
+Booking scheduling and reschedule rules: [Booking Scheduling and Reschedule Specification](./booking-scheduling-and-reschedule-spec.md) (v1.0.0, 2026-08-16). Student booking and reschedule forms expose 15-minute minus/plus controls, derive the fixed 90-minute end time, and show tutor-window validation only when the chosen start is outside the allowed range.
+
+The student booking form uses a balanced responsive composition. At desktop widths, session format and the sticky booking summary occupy the right rail; availability remains a card grid, and selecting a slot expands that slot into a two-column row with its own start-time editor directly beside it. On narrower screens, the same editor stacks below its selected slot, modality returns to the start of the form flow, and the full summary moves into a bottom drawer opened from a persistent compact price/schedule preview; the drawer submit button remains associated with the booking form.
 
 Booking list rows and the booking-detail header reuse the canonical
 Calendar/Meet event-title format (`Cogito - {Competition} | {Tutor} x

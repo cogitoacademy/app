@@ -1001,14 +1001,14 @@ export function createBookingService(deps: {
    *
    * @param userId - the user cancelling (must have access)
    * @param bookingId - the booking to cancel
-   * @param cancellationReason - optional reason for the cancellation
+   * @param cancellationReason - reason shared with the tutor
    * @returns the updated booking
    * @throws {BookingStateTransitionError} if the booking is in a terminal state
    */
   async function cancel(
     userId: string,
     bookingId: string,
-    cancellationReason?: string,
+    cancellationReason: string,
   ) {
     const result = await db.transaction(async (tx) => {
       const b = await loadBookingAndAssertAccess(tx, userId, bookingId);
@@ -1096,7 +1096,7 @@ export function createBookingService(deps: {
         await releaseAllParticipantHolds(
           tx,
           bookingId,
-          `Booking ${toState}: ${cancellationReason ?? "no reason"}`,
+          `Booking ${toState}: ${cancellationReason}`,
           ACTOR_TYPE.STUDENT,
         );
       }
@@ -1112,7 +1112,7 @@ export function createBookingService(deps: {
       await repo.updateBookingCancellationReason(
         tx,
         bookingId,
-        cancellationReason ?? null,
+        cancellationReason,
       );
 
       await notification.writeBestEffort({
@@ -1122,7 +1122,7 @@ export function createBookingService(deps: {
         category: NOTIFICATION_CATEGORY.BOOKING,
         severity: NOTIFICATION_SEVERITY.ACTION,
         title: `Booking ${toState}`,
-        body: `A student has ${toState} the booking.`,
+        body: `A student has ${toState} the booking. Reason: ${escapeHtml(cancellationReason)}`,
         eventKey: `booking.${bookingId}.${toState}`,
         emailRequired: true,
       });
@@ -1252,7 +1252,7 @@ export function createBookingService(deps: {
   async function tutorDecline(
     bookingId: string,
     tutorId: string,
-    reason?: string,
+    reason: string,
   ) {
     const result = await db.transaction(async (tx) => {
       const b = await repo.findBookingById(tx, bookingId);
@@ -1263,12 +1263,7 @@ export function createBookingService(deps: {
         throw new BookingNotAwaitingReviewError(bookingId, b.currentState);
       }
 
-      await releaseAllParticipantHolds(
-        tx,
-        bookingId,
-        reason ?? "Tutor declined",
-        ACTOR_TYPE.TUTOR,
-      );
+      await releaseAllParticipantHolds(tx, bookingId, reason, ACTOR_TYPE.TUTOR);
 
       await repo.updateBookingHoldAmount(tx, bookingId, 0);
 
@@ -1285,7 +1280,7 @@ export function createBookingService(deps: {
         category: NOTIFICATION_CATEGORY.BOOKING,
         severity: NOTIFICATION_SEVERITY.ACTION,
         title: "Booking declined",
-        body: `Tutor declined the booking. ${escapeHtml(reason ?? "")}`,
+        body: `Tutor declined the booking. ${escapeHtml(reason)}`,
         eventKey: `booking.${bookingId}.declined`,
         emailRequired: true,
       });

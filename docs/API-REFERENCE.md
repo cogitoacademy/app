@@ -790,6 +790,7 @@ The web tutor profile editor groups education, competition achievements, and exp
 - **Output:** `{ booking }`
 - **Errors:** `BOOKING_NOT_FOUND` (404), `BOOKING_NOT_EDITABLE` (400), `BOOKING_CONFLICT` (409), `INSUFFICIENT_MARKS` (400)
 - **Description:** Creates a solo booking and holds Marks; idempotency via `idempotency-key` header
+- **Frontend note:** The student form places modality and the summary in a desktop right rail. Availability remains a card grid; each selected slot reveals its own adjacent start-time editor when width permits and stacks it below on narrow screens. Mobile uses a compact sticky bottom preview plus review drawer. The drawer submission targets the same form and does not change this RPC contract.
 
 ### `booking.get`
 
@@ -818,7 +819,7 @@ RPC contract.
 ### `booking.cancel`
 
 - **Auth:** Student
-- **Input:** `{ bookingId, cancellationReason? }`
+- **Input:** `{ bookingId, cancellationReason }` (`cancellationReason` is trimmed, required, and limited to 500 characters)
 - **Output:** `{ booking }`
 - **Description:** Cancels a booking before its scheduled start. A cancellation within H-2 becomes `late_cancelled` and forfeits held Marks; at or after `scheduledStartAt`, the procedure rejects with `BOOKING_CANCELLATION_DEADLINE_PASSED` so the live booking remains available for tutor completion. Session-delivery or attendance problems after start go through support/admin review.
 
@@ -848,7 +849,7 @@ RPC contract.
 ### `booking.proposeReschedule`
 
 - **Auth:** Student (booking proposer)
-- **Input:** `{ bookingId, sessionId?, availabilitySlotId?, proposedStartAt, proposedEndAt?, reason? }`
+- **Input:** `{ bookingId, sessionId?, availabilitySlotId?, proposedStartAt, proposedEndAt?, reason }` (`reason` is trimmed, required, and limited to 2,000 characters)
 - **Output:** `{ booking }`
 - **Description:** Proposes a new fixed 90-minute time for one booking session; the booking proposer may use the route in the eligible pre-terminal states, including `confirmed` and `scheduled`. Student proposals must remain outside the current and proposed session's H-2 window; otherwise the API rejects the mutation as not editable. Proposals expire after 24 hours and require tutor plus all active-student approval. Force-majeure exceptions are handled through support/admin operations and an auditable admin override, not by bypassing this route. The booking-detail frontend collects this unchanged input in a bottom drawer on mobile and a right-side drawer on desktop.
 
@@ -953,7 +954,7 @@ RPC contract.
 
 - **RPC path:** `/rpc/tutorActions/proposeReschedule`
 - **Auth:** Tutor
-- **Input:** `{ bookingId, sessionId?, availabilitySlotId?, proposedStartAt, proposedEndAt?, reason? }`
+- **Input:** `{ bookingId, sessionId?, availabilitySlotId?, proposedStartAt, proposedEndAt?, reason }` (`reason` is trimmed, required, and limited to 2,000 characters)
 - **Output:** `{ booking }`
 - **Description:** Tutor proposes a new fixed 90-minute time for one session; tutor proposals may be outside the original availability window and require every active student's acceptance
 
@@ -979,7 +980,7 @@ RPC contract.
 
 - **RPC path:** `/rpc/tutorActions/declineBooking`
 - **Auth:** Tutor
-- **Input:** `{ bookingId, reason? }`
+- **Input:** `{ bookingId, reason }` (`reason` is trimmed, required, and limited to 500 characters)
 - **Output:** `{ booking }`
 - **Description:** Tutor declines a booking and releases held Marks
 
