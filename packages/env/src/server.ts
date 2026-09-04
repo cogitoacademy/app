@@ -46,7 +46,7 @@ const serverShape = {
   // account deterministic while additional admins remain possible through
   // the normal admin role-management flow.
   ADMIN_EMAILS: z.string().default(DEFAULT_PRODUCTION_ADMIN_EMAIL),
-  PAYMENT_PROVIDER: z.enum(["stub", "xendit"]).default("stub"),
+  PAYMENT_PROVIDER: z.enum(["stub", "xendit", "midtrans"]).default("stub"),
   STUB_WEBHOOK_ALLOWED: boolSchema(false),
   PAYMENT_WEBHOOK_SECRET: z.string().min(32),
   SANITY_PROJECT_ID: z.string().min(1).default("skfmwuke"),
@@ -76,6 +76,17 @@ const serverShape = {
   XENDIT_DEFAULT_PAYMENT_METHOD: z
     .enum(["ewallet_ovo", "qris", "va_bca"])
     .default("qris"),
+  // Midtrans (Snap) — required when PAYMENT_PROVIDER=midtrans. The Server Key
+  // selects the actual environment (Sandbox vs Production); MIDTRANS_MODE is
+  // our explicit deployment assertion, like XENDIT_MODE.
+  MIDTRANS_SERVER_KEY: z.string().min(1).optional(),
+  MIDTRANS_CLIENT_KEY: z.string().min(1).optional(),
+  MIDTRANS_MERCHANT_ID: z.string().min(1).optional(),
+  // Optional dedicated webhook signature key. When unset, the Server Key is
+  // used to verify the notification signature_key (Midtrans has no separate
+  // webhook signature key — the Server Key IS the signature key).
+  MIDTRANS_WEBHOOK_SIGNATURE_KEY: z.string().min(1).optional(),
+  MIDTRANS_MODE: z.enum(["test", "live"]).optional(),
   GOOGLE_CLIENT_ID: z.string().min(1).optional(),
   GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
   PORT: z.coerce.number().default(3001),
@@ -170,6 +181,38 @@ export const serverEnvSchema = z.object(serverShape).superRefine((val, ctx) => {
         code: z.ZodIssueCode.custom,
         path: ["XENDIT_FAILURE_REDIRECT_URL"],
         message: "required when PAYMENT_PROVIDER=xendit",
+      });
+    }
+  }
+
+  if (val.PAYMENT_PROVIDER === "midtrans") {
+    if (!val.MIDTRANS_SERVER_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["MIDTRANS_SERVER_KEY"],
+        message: "required when PAYMENT_PROVIDER=midtrans",
+      });
+    }
+    if (!val.MIDTRANS_CLIENT_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["MIDTRANS_CLIENT_KEY"],
+        message: "required when PAYMENT_PROVIDER=midtrans",
+      });
+    }
+    if (!val.MIDTRANS_MERCHANT_ID) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["MIDTRANS_MERCHANT_ID"],
+        message: "required when PAYMENT_PROVIDER=midtrans",
+      });
+    }
+    if (!val.MIDTRANS_MODE) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["MIDTRANS_MODE"],
+        message:
+          "required when PAYMENT_PROVIDER=midtrans; choose test for Midtrans Sandbox or live for Production",
       });
     }
   }

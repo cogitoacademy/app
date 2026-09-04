@@ -2,6 +2,7 @@ import { describe, test, expect } from "bun:test";
 import {
   createProviderRefundDelegate,
   resolveGoogleMeetConfig,
+  resolveMidtransConfig,
   resolveXenditConfig,
 } from "../../services";
 
@@ -67,6 +68,38 @@ describe("Services conditional logic", () => {
       resolveXenditConfig({
         provider: "stub",
         defaultPaymentMethod: "ewallet_ovo",
+      }),
+    ).toBeUndefined();
+  });
+
+  test("resolves Midtrans configuration only for a complete Midtrans setup", () => {
+    expect(
+      resolveMidtransConfig({
+        provider: "midtrans",
+        serverKey: "SB-Mid-server-test",
+        merchantId: "G123456789",
+        mode: "test",
+        webhookSignatureKey: "dedicated-key",
+      }),
+    ).toEqual({
+      serverKey: "SB-Mid-server-test",
+      merchantId: "G123456789",
+      mode: "test",
+      webhookSignatureKey: "dedicated-key",
+    });
+    expect(
+      resolveMidtransConfig({
+        provider: "stub",
+        serverKey: "SB-Mid-server-test",
+        merchantId: "G123456789",
+        mode: "test",
+      }),
+    ).toBeUndefined();
+    expect(
+      resolveMidtransConfig({
+        provider: "midtrans",
+        serverKey: "SB-Mid-server-test",
+        merchantId: "G123456789",
       }),
     ).toBeUndefined();
   });

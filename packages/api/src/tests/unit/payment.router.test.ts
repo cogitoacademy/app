@@ -90,8 +90,9 @@ describe("paymentHandler", () => {
       };
       const wallet = { getOrCreate: mock(async () => ({ id: "w1" })) };
       const handler = createPaymentHandler(payment as any, wallet as any, {
-        xenditMode: "test",
+        providerMode: "test",
         testAllowedEmails: ["qa@cogitoacademy.id"],
+        simulationEnabled: true,
       });
 
       await expect(
@@ -118,6 +119,33 @@ describe("paymentHandler", () => {
         canSimulate: true,
       });
     });
+
+    test("never advertises canSimulate when the provider has no simulation endpoint (midtrans)", async () => {
+      const payment = {
+        createIntent: mock(async () => ({
+          id: "pay1",
+          status: "pending",
+        })),
+      };
+      const wallet = { getOrCreate: mock(async () => ({ id: "w1" })) };
+      const handler = createPaymentHandler(payment as any, wallet as any, {
+        providerMode: "test",
+        testAllowedEmails: ["qa@cogitoacademy.id"],
+        simulationEnabled: false,
+      });
+
+      const result = await handler.createPurchase({
+        context: {
+          session: { user: { id: "u1", email: "qa@cogitoacademy.id" } },
+        } as any,
+        input: { packageCode: "basic" } as any,
+      });
+      expect(result).toEqual({
+        id: "pay1",
+        status: "pending",
+        canSimulate: false,
+      });
+    });
   });
 
   describe("simulatePurchase", () => {
@@ -129,8 +157,9 @@ describe("paymentHandler", () => {
         })),
       };
       const handler = createPaymentHandler(payment as any, {} as any, {
-        xenditMode: "test",
+        providerMode: "test",
         testAllowedEmails: ["qa@cogitoacademy.id"],
+        simulationEnabled: true,
       });
 
       const result = await handler.simulatePurchase({
@@ -152,8 +181,30 @@ describe("paymentHandler", () => {
     test("rejects simulation outside an approved Test Mode account", async () => {
       const payment = { simulatePurchase: mock(async () => ({})) };
       const handler = createPaymentHandler(payment as any, {} as any, {
-        xenditMode: "live",
+        providerMode: "live",
         testAllowedEmails: ["qa@cogitoacademy.id"],
+        simulationEnabled: true,
+      });
+
+      await expect(
+        handler.simulatePurchase({
+          context: {
+            session: { user: { id: "u1", email: "qa@cogitoacademy.id" } },
+          } as any,
+          input: {
+            paymentId: "550e8400-e29b-41d4-a716-446655440000",
+          },
+        }),
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      expect(payment.simulatePurchase).not.toHaveBeenCalled();
+    });
+
+    test("rejects simulation when the provider has no simulation endpoint (midtrans)", async () => {
+      const payment = { simulatePurchase: mock(async () => ({})) };
+      const handler = createPaymentHandler(payment as any, {} as any, {
+        providerMode: "test",
+        testAllowedEmails: ["qa@cogitoacademy.id"],
+        simulationEnabled: false,
       });
 
       await expect(
@@ -195,8 +246,9 @@ describe("paymentHandler", () => {
         getPurchase: mock(async () => ({ id: "pay1", status: "PAID" })),
       };
       const handler = createPaymentHandler(payment as any, {} as any, {
-        xenditMode: "test",
+        providerMode: "test",
         testAllowedEmails: ["qa@cogitoacademy.id"],
+        simulationEnabled: true,
       });
       const context = {
         session: { user: { id: "u1", email: "qa@cogitoacademy.id" } },

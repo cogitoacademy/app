@@ -74,4 +74,14 @@ describe("validateWebhookTimestamp", () => {
     );
     expect(() => validateWebhookTimestamp(request, "xendit")).not.toThrow();
   });
+
+  test("L4: skips timestamp validation for midtrans (signature_key in body is the gate)", () => {
+    const request = new Request(
+      "https://example.com/webhooks/payments/midtrans",
+      {
+        method: "POST",
+      },
+    );
+    expect(() => validateWebhookTimestamp(request, "midtrans")).not.toThrow();
+  });
 });
