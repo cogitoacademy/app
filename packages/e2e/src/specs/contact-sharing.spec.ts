@@ -1,9 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const STUDENT_EMAIL = "student.seed@cogitoacademy.id";
-const STUDENT_PASSWORD = "Student123!";
-const TUTOR_EMAIL = "tutor.seed@cogitoacademy.id";
-const FRIEND_EMAIL = "student.friend1.seed@cogitoacademy.id";
+import {
+  FRIEND_EMAIL,
+  STUDENT_EMAIL,
+  STUDENT_PASSWORD,
+  TUTOR_EMAIL,
+} from "../fixtures/test-accounts";
 
 async function login(page: Page) {
   await page.goto("/login");
@@ -16,20 +18,18 @@ async function login(page: Page) {
 test("student identity surfaces never expose tutor or invitee email", async ({
   page,
 }) => {
-  await login(page);
-
   const tutorListResponsePromise = page.waitForResponse(
     (response) =>
-      response.url().includes("/rpc/tutors/list") &&
+      response.url().includes("/rpc/tutors/listPublished") &&
       response.request().method() === "POST",
   );
+  await login(page);
   await page.goto("/tutors");
   const tutorListResponse = await tutorListResponsePromise;
   expect(await tutorListResponse.text()).not.toContain(TUTOR_EMAIL);
 
   const seedTutorCard = page
-    .locator('[data-slot="card"]')
-    .filter({ hasText: "Mathematics" })
+    .getByRole("button", { name: /\[seed\] Tutor/ })
     .first();
   await expect(seedTutorCard).toBeVisible();
   await seedTutorCard.click();

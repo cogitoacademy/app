@@ -142,8 +142,10 @@ export function AppSidebar({
           </IconBox> */}
           <img
             src="/cogito-academy-logo.webp"
-            alt="logo"
-            className="relative z-1 h-12 dark:brightness-0 dark:invert"
+            alt="Cogito Academy"
+            width={256}
+            height={64}
+            className="relative z-1 h-12 w-auto dark:brightness-0 dark:invert"
           />
           {/* <span className="font-semibold">Cogito Academy</span> */}
         </SidebarLogo>

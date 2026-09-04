@@ -19,7 +19,7 @@ export const headingVariants = cva("font-semibold text-foreground", {
 });
 
 export function Heading({
-  level = 1,
+  level,
   size,
   className,
   render,
@@ -34,7 +34,7 @@ export function Heading({
     sm: 3,
   };
 
-  const selectedLevel = levelMap[size || "lg"] || level;
+  const selectedLevel = level ?? levelMap[size || "lg"] ?? 1;
 
   return useRender({
     defaultTagName: `h${selectedLevel}` as keyof React.JSX.IntrinsicElements,

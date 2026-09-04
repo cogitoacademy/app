@@ -1,29 +1,37 @@
 "use client";
 
 import * as React from "react";
+import { useRender } from "@base-ui/react/use-render";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@cogito-app/ui/lib/utils";
 
-export function Card({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card"
-      className={cn(
+export function Card({
+  className,
+  render,
+  ...props
+}: useRender.ComponentProps<"div">) {
+  return useRender({
+    defaultTagName: "div",
+    render,
+    props: {
+      "data-slot": "card",
+      className: cn(
         "text-foreground ring ring-card-border rounded-xl shadow-card bg-card",
         className,
-      )}
-      {...props}
-    />
-  );
+      ),
+      ...props,
+    },
+  });
 }
 
 export const cardHeaderVariants = cva(
   [
     "p-6 gap-x-3.5 gap-y-2 border-b border-card-separator",
     "grid grid-cols-[1fr_auto]",
-    "has-[svg]:grid-cols-[auto_1fr_auto]",
+    "has-[>svg]:grid-cols-[auto_1fr_auto]",
+    "has-[[data-slot=iconbox]]:grid-cols-[auto_1fr_auto]",
     "has-[[data-slot=iconbox]]:*:data-[slot=card-description]:col-start-2",
-    "**:[svg,[data-slot=iconbox]]:row-span-2",
+    "[&>svg]:row-span-2",
     "*:data-[slot=iconbox]:row-span-2",
     "*:data-[slot=card-description]:row-start-2",
     "not-[:has([data-slot=iconbox])]:items-center",
@@ -73,13 +81,40 @@ export function CardHeaderAction({
   );
 }
 
-export function CardTitle({ className, ...props }: React.ComponentProps<"h3">) {
+export function CardTitle({
+  level = 3,
+  className,
+  ...props
+}: React.ComponentProps<"h3"> & {
+  level?: 1 | 2 | 3 | 4 | 5 | 6;
+}) {
+  return useRender({
+    defaultTagName: `h${level}` as keyof React.JSX.IntrinsicElements,
+    props: {
+      "data-slot": "card-title",
+      className: cn(
+        "text-lg font-semibold leading-none",
+        "has-[>[data-slot=card-info-preview]]:flex has-[>[data-slot=card-info-preview]]:flex-wrap has-[>[data-slot=card-info-preview]]:items-center has-[>[data-slot=card-info-preview]]:gap-2",
+        className,
+      ),
+      ...props,
+    },
+  });
+}
+
+export function CardInfoPreview({
+  className,
+  children,
+  ...props
+}: React.ComponentProps<"span">) {
   return (
-    <h3
-      data-slot="card-title"
-      className={cn("text-lg font-semibold leading-none", className)}
+    <span
+      data-slot="card-info-preview"
+      className={cn("inline-flex shrink-0", className)}
       {...props}
-    />
+    >
+      {children}
+    </span>
   );
 }
 

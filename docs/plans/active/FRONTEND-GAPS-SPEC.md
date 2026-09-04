@@ -1,17 +1,25 @@
 # Cogito Frontend — PRD Gaps Specification
 
-| Field      | Value                                                                                                                                                                                                                                                                                   |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status     | Living gap inventory (updated 2026-09-02; F1/F8/F9/F13/F14/F18 closed; F16 scope retired; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F12 closed; competition taxonomy and tutor-achievement-format follow-ups implemented; meeting fallback and admin wallet-search follow-ups added) |
-| Branch     | `f/frontend-prd-gaps` (merged #55); `f/competition-taxonomy` (PR pending)                                                                                                                                                                                                               |
-| Created    | 2026-07-29                                                                                                                                                                                                                                                                              |
-| Audited    | 2026-09-02                                                                                                                                                                                                                                                                              |
-| Depends on | Backend PRD gaps (G1-G19) where API is needed                                                                                                                                                                                                                                           |
-| Scope      | Frontend surfaces plus the admin queue projection needed for SLA detail (`apps/web/`, `packages/api/`)                                                                                                                                                                                  |
+| Field      | Value                                                                                                                                                                                                                                                                                                                     |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status     | Living gap inventory (updated 2026-09-04; F1/F8/F9/F13/F14/F18 closed; F16 scope retired; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F12 closed; competition taxonomy and tutor-achievement-format follow-ups implemented; meeting fallback and admin wallet-search follow-ups added; production UI/E2E audit verified) |
+| Branch     | `f/frontend-prd-gaps` (merged #55); `f/competition-taxonomy` (PR pending)                                                                                                                                                                                                                                                 |
+| Created    | 2026-07-29                                                                                                                                                                                                                                                                                                                |
+| Audited    | 2026-09-04                                                                                                                                                                                                                                                                                                                |
+| Depends on | Backend PRD gaps (G1-G19) where API is needed                                                                                                                                                                                                                                                                             |
+| Scope      | Frontend surfaces plus the admin queue projection needed for SLA detail (`apps/web/`, `packages/api/`)                                                                                                                                                                                                                    |
 
 This document catalogs all PRD-required frontend surfaces that are not yet implemented. It runs in parallel with (or after) the backend PRD gaps spec — each frontend gap references the backend gap it depends on.
 
 The backend spec is `docs/plans/completed/PRD-GAPS-SPEC.md` (backend-only). This is the frontend counterpart.
+
+### Booking-detail card header follow-up (2026-09-04)
+
+Booking-detail cards now move explanatory `CardDescription` copy into the
+shared `CardInfoPreview`/`InfoPreview` popover immediately beside each title.
+This covers the shared student/tutor cards, contact and lifecycle cards, room
+assignment, and the admin review-context, wallet-impact, and state-history
+extensions without changing an API or persistence contract.
 
 ### Tutor profile route follow-up (2026-08-31)
 
@@ -649,11 +657,11 @@ Full override form per PRD §Emergency Override UI/UX:
 
 ### F13: Tutor Payout View
 
-**Status: CLOSED (REVIEW-FIXES-3 P6)** — payout details card on the tutor dashboard (completed sessions, total Marks, Cogito take, tutor payout + Rp 7,000 conversion) backed by `tutor.getMyPayouts`.
+**Status: CLOSED (REVIEW-FIXES-3 P6)** — payout details card on the tutor dashboard (completed sessions, total Marks, Cogito take, tutor payout + Rp 7,000 conversion) backed by `tutor.getMyPayouts`, with unpaid-honorarium and transfer-fee explanations available through shared `InfoPreview` popovers.
 
 **PRD:** DL-11
 
-**Current state:** **CLOSED (2026-08-19).** Payout details card on the tutor dashboard (completed sessions, total Marks, Cogito take, tutor payout + Rp 7,000 conversion) backed by `tutor.getMyPayouts` (`tutor-dashboard-page.tsx:53`).
+**Current state:** **CLOSED (2026-08-19).** Payout details card on the tutor dashboard (completed sessions, total Marks, Cogito take, tutor payout + Rp 7,000 conversion) backed by `tutor.getMyPayouts` (`tutor-dashboard-page.tsx:53`), with accessible info popovers for the unpaid-honorarium and transfer-fee explanations.
 
 **Required (backend ready):**
 
@@ -846,6 +854,10 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 
 ### Version Notes
 
+- v1.67 (2026-09-04): Moved the transfer-fee policy copy behind the payout card’s contextual `InfoPreview` trigger, keeping the fee and estimated payout values visible while reducing default card density. No RPC, schema, or persistence contract changed.
+
+- v1.66 (2026-09-04): Added the tutor dashboard payout-details `InfoPreview` popover so the unpaid-honorarium explanation is available from the compact card header. No RPC, schema, or persistence contract changed.
+
 - v1.65 (2026-09-03): Replaced the admin override form's comma-separated affected-participant user-ID input with a booking-roster name/avatar/role multi-select. Selected user IDs continue to populate the existing `affectedParticipants` payload; no RPC, schema, or persistence contract changed.
 
 - v1.64 (2026-09-02): Matched the student achievement summary cards to the admin moderation queue's compact label-and-pill treatment; no RPC/schema/persistence contract changed.
@@ -961,3 +973,15 @@ fallback. Retired economy rate-change notices are omitted from the inbox and
 unread count, and the bell/full-inbox title, time, and description text follow
 the updated size/color hierarchy. The notification schema and RPC inputs are
 unchanged.
+
+### Production UI and E2E audit follow-up (2026-09-04)
+
+The authenticated shell and primary workflow surfaces were re-audited for
+production behavior and responsive accessibility. The audit added explicit
+page-heading hierarchy, a keyboard skip link, sidebar ARIA state, deterministic
+time refresh handling, bounded mobile tab overflow, stable tutor-card semantics,
+image dimensions, reduced-motion transitions, and production-only suppression
+of development tools. The isolated Playwright workflow now covers booking,
+responsive layout at 390px and 170px, contact sharing, and economy/role access;
+the complete local run is 13/13 passing. No API, schema, persistence, or
+business-rule contract changed.

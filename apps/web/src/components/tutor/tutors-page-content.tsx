@@ -76,6 +76,8 @@ export function TutorsPageContent() {
   const [subjectIds, setSubjectIds] = useState<string[]>([]);
   const [modality, setModality] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedTutorSnapshot, setSelectedTutorSnapshot] =
+    useState<PublishedTutor | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { data: categories, isError: isTaxonomyError } = useSubjectTaxonomy();
 
@@ -192,19 +194,26 @@ export function TutorsPageContent() {
   });
 
   const selected = selectedId
-    ? (tutors.find((t: PublishedTutor) => t.id === selectedId) ?? null)
-    : null;
+    ? (tutors.find((t: PublishedTutor) => t.id === selectedId) ??
+      selectedTutorSnapshot)
+    : selectedTutorSnapshot;
 
   function openTutor(tutorId: string) {
+    const nextTutor = tutors.find((t: PublishedTutor) => t.id === tutorId);
+    if (!nextTutor) return;
+
     setDrawerOpen(false);
     setSelectedId(tutorId);
+    setSelectedTutorSnapshot(nextTutor);
     requestAnimationFrame(() => setDrawerOpen(true));
   }
 
   return (
     <Stack direction="column" spacing="lg">
       <div>
-        <Heading size="md"></Heading>
+        <Heading level={1} size="md">
+          Tutors
+        </Heading>
         <Text className="text-muted">
           Find a verified tutor by name, field of competition, and
           specialization.
@@ -217,7 +226,7 @@ export function TutorsPageContent() {
             <IconSearch className="size-4" />
           </InputGroupAddon>
           <Input
-            placeholder="Search tutors or specializations..."
+            placeholder="Search tutors or specializations…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />

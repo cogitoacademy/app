@@ -4,7 +4,6 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
-  CardDescription,
   CardHeader,
   CardHeaderAction,
   CardTitle,
@@ -36,6 +35,7 @@ import {
   type TutorSummaryData,
 } from "@/components/tutor/tutor-card";
 import { orpc } from "@/utils/orpc";
+import { useNow } from "@/hooks/use-now";
 
 export function StudentDashboardPage({ studentName }: { studentName: string }) {
   const bookings = useQuery(
@@ -48,7 +48,7 @@ export function StudentDashboardPage({ studentName }: { studentName: string }) {
   );
   const wallet = useQuery(orpc.wallet.get.queryOptions());
 
-  const now = Date.now();
+  const now = useNow();
   const bookingItems = (bookings.data?.items ?? []) as BookingCardData[];
   const nextBooking = bookingItems
     .filter((booking) => isUpcomingBooking(booking, now))
@@ -181,14 +181,8 @@ function RecommendedTutorsCard({
 }) {
   return (
     <Card className="[&_[data-slot=avatar]]:rounded-md [&_[data-slot=avatar-image]]:rounded-md [&_[data-slot=avatar-fallback]]:rounded-md">
-      <CardHeader>
-        <IconBox variant="primary-subtle">
-          <IconSchool />
-        </IconBox>
+      <CardHeader className="py-3">
         <CardTitle>Recommended tutors</CardTitle>
-        <CardDescription>
-          Recently published tutors ready for your next learning goal.
-        </CardDescription>
         <CardHeaderAction>
           <Button
             variant="plain"

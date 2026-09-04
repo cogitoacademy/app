@@ -448,7 +448,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                   ? "Group session"
                   : "Solo session"}
             </Badge>
-            <Heading size="md" className="mt-3">
+            <Heading level={1} size="md" className="mt-3">
               Book {tutorName}
             </Heading>
             <Text className="mt-1 text-muted">

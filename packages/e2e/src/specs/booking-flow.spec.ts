@@ -1,10 +1,12 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
 
-const SEED_EMAIL = "student.seed@cogitoacademy.id";
-const SEED_PASSWORD = "Student123!";
-const FRIEND_EMAIL = "student.friend1.seed@cogitoacademy.id";
-const TUTOR_EMAIL = "tutor.seed@cogitoacademy.id";
-const TUTOR_PASSWORD = "Tutor123!";
+import {
+  FRIEND_EMAIL,
+  STUDENT_EMAIL as SEED_EMAIL,
+  STUDENT_PASSWORD as SEED_PASSWORD,
+  TUTOR_EMAIL,
+  TUTOR_PASSWORD,
+} from "../fixtures/test-accounts";
 
 async function login(page: Page, email = SEED_EMAIL, password = SEED_PASSWORD) {
   if (email === SEED_EMAIL) {
@@ -34,8 +36,7 @@ async function openBookingPage(page: Page) {
   ).toBeVisible();
 
   const seedTutorCard = page
-    .locator('[data-slot="card"]')
-    .filter({ hasText: "Mathematics" })
+    .getByRole("button", { name: /\[seed\] Tutor/ })
     .first();
   await expect(seedTutorCard).toBeVisible();
   await seedTutorCard.click();
@@ -54,6 +55,14 @@ async function openBookingPage(page: Page) {
   await expect(
     page.getByRole("heading", { name: "Book [seed] Tutor" }),
   ).toBeVisible();
+
+  const specialization = page.getByRole("combobox", {
+    name: "Specialization",
+  });
+  if (await specialization.isEnabled()) {
+    await specialization.click();
+    await page.getByRole("option").first().click();
+  }
 }
 
 async function chooseAvailableSlot(page: Page, index = 0) {
@@ -98,7 +107,7 @@ async function openTutorBooking(browser: Browser, bookingId: string) {
   const context = await browser.newContext();
   const page = await context.newPage();
   await login(page, TUTOR_EMAIL, TUTOR_PASSWORD);
-  await page.goto("/bookings?tab=pending");
+  await page.goto("/bookings?tab=action");
   await expect(
     page.getByRole("heading", { name: "Bookings", exact: true }).last(),
   ).toBeVisible();
@@ -110,7 +119,7 @@ async function openTutorBooking(browser: Browser, bookingId: string) {
   await reviewLink.click();
   await page.waitForURL(`/bookings/${bookingId}`);
   await expect(
-    page.getByRole("heading", { name: /booking request/i }),
+    page.getByRole("heading", { name: /\[seed\] Tutor/ }),
   ).toBeVisible();
   return { context, page };
 }
@@ -171,7 +180,7 @@ test("student can book a solo session from tutor discovery", async ({
 
   await page.waitForURL(/\/bookings\/[^/]+$/);
   await expect(
-    page.getByRole("heading", { name: /Session with \[seed\] Tutor/ }),
+    page.getByRole("heading", { name: /\[seed\] Tutor x \[seed\] Student/ }),
   ).toBeVisible();
   await expect(page.getByText("Respond by")).toBeVisible();
   await expect(page.getByText("Online", { exact: true }).first()).toBeVisible();

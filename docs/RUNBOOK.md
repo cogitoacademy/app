@@ -2,8 +2,41 @@
 
 Last updated: 2026-09-04
 
+The admin dashboard Booking activity card now opens its explanatory copy from a
+compact info icon directly beside the title. Verify the popover opens with
+hover, keyboard focus, click, and touch; remains readable in light and dark
+themes; and does not displace the WIB badge. No environment or operational
+change is required.
+
+Repeat the interaction check on booking-detail cards with explanatory header
+copy: Session overview, Series sessions, Activity, Honorarium/Marks, Booking
+actions, Session notes, Support reports, Stay in touch, Room assignment, Admin
+review context, Wallet impact, and State history. The trigger must sit directly
+beside its title without leaving a blank description row.
+
 The 2026-09-04 sidebar logo contrast polish is frontend-only. It adds no
 environment variables, migrations, jobs, or operational steps.
+
+## Production UI and E2E audit (2026-09-04)
+
+The full browser workflow passed **13/13 tests across four specs**. It covers
+the seeded student solo and group booking flows, tutor acceptance/decline,
+cross-student access denial, contact privacy, all-role economy checks, and
+booking layout containment at 170px and 390px. The layout check is safe to run
+after state-changing tests because it accepts either booking rows or the
+empty-state collection view.
+
+The root `bun run check-types` gate also type-checks `packages/e2e` with the
+browser DOM library enabled, so layout assertions cannot drift outside the
+repository's normal typecheck coverage. CI retains both the HTML report and
+failure screenshots/traces for diagnosis.
+The migration step explicitly passes `ENV_FILE=../../apps/server/.env.test`
+through the Turbo `db:migrate` task, keeping the browser database isolated.
+
+The authenticated shell has a skip link, accessible sidebar state, semantic
+tutor-card buttons, explicit page headings, and production-only devtools
+guards. Time-sensitive labels refresh through a shared 30-second clock hook;
+reduced-motion and token-based overlay styles remain in effect.
 
 The 2026-09-02 admin booking-detail layout consolidation adds no environment
 variables, migrations, jobs, or operational steps.
@@ -121,7 +154,7 @@ For Google sign-in, start from `https://app.cogitoacademy.id/login` in an incogn
 After a web deployment, sign in once as each supported role and open `/dashboard`. Verify the sidebar user menu shows the authenticated profile image when one is configured and uses initials when it is not:
 
 - Student: learning welcome, next lesson, Knowledge Bank/calendar, and tutor recommendations. Confirm the welcome card shows the SVG illustration and shared spacing/sizing used by the tutor dashboard. If a booking exists, confirm the next-lesson card matches the booking-list date tile, participant metadata, Marks display, status tooltip, and detail action.
-- Tutor: the first dashboard row shows the same SVG welcome card visual plus teaching setup, and the next visible row shows requests to review plus next lesson before metrics/payout; actions link to `/bookings`, `/availability`, and `/profile`. Verify the review card keeps its empty/loading slot when there are no requests. When a tutor submits the initial profile form, confirm the app redirects to `/dashboard` and the browser Back button does not return to the form. A later login for that tutor must also land on `/dashboard`; a `draft` or `changes_requested` tutor must land on `/profile` so the profile can be completed or corrected. Opening the legacy `/onboarding` URL should land on `/profile`.
+- Tutor: the first dashboard row shows the same SVG welcome card visual plus teaching setup, and the next visible row shows requests to review plus next lesson before metrics/payout; actions link to `/bookings`, `/availability`, and `/profile`. Verify the review card keeps its empty/loading slot when there are no requests, and that the Payout details info icons open their respective unpaid-honorarium and transfer-fee explanations and remain keyboard accessible. When a tutor submits the initial profile form, confirm the app redirects to `/dashboard` and the browser Back button does not return to the form. A later login for that tutor must also land on `/dashboard`; a `draft` or `changes_requested` tutor must land on `/profile` so the profile can be completed or corrected. Opening the legacy `/onboarding` URL should land on `/profile`.
 - Admin: a normal login must land on `/dashboard`; open the admin workspace and verify priority operations/moderation counts and links to `/admin-operations`, `/admin-tutors`, `/admin-achievements`, and `/admin-economy`. In `/admin-operations`, verify category, urgency, and SLA-status filters; open a queue item and confirm its reported reason/source, affected-user count, OQ-04 deadline, time-since-report, escalated badge, and WhatsApp escalation action. Clicking the escalation action must show the confirmation modal; Cancel keeps the admin page in place, while Continue opens the Cogito support conversation at `+62 881-0119-90195` in a new tab. In the Wallet lookup tab, search a partial name and an email, select the intended user from the bounded identity results, and confirm the selected name/email/role, total/held/available Marks, and latest ledger entries load; verify a changed search does not leave the previous user's wallet visible. Confirm the hydrated participant wallet/booking-ledger cards and state-history timeline load, then use **Open override** to reach the existing preview/apply flow. In the override dialog, confirm the booking roster appears as a name/avatar/role multi-select, selected participants are summarized without requiring manual IDs, and Preview/Apply still succeed. In `/admin-economy`, verify the active schedule loads, edits persist after reload, and the preview updates.
 - In the admin dashboard's **Business insights** section, verify the default 30-day view loads KPI cards, booking activity, current booking portfolio, audience growth, session-format mix, and top categories. Switch to 7 and 90 days and confirm the charts reload with continuous WIB date labels; verify zero-data periods show an intentional empty state, the retry state is actionable, and the dashboard remains usable while analytics loads. Confirm the note distinguishes Marks-based platform take from cash revenue and that the existing priority/review queues remain visible below the analytics section.
 - In the Operations → Room approvals tab, verify the Active rooms catalog loads. Use **Add room**, enter a name, location, and positive whole-number capacity, submit, and confirm the new room appears in the list and in the Offline room selector. Confirm blank names/locations and invalid capacity stay in the dialog without an RPC request. Then verify the pending offline room-approval queue loads. Use **Assign** for a requested room. Use **Choose another** (or **Choose room** when the original request conflicted) to open the admin booking detail; confirm the Offline room card shows the booking schedule without a UUID/date-time form, lets the admin select a target room, and calls **Assign room** or **Relocate room**. Confirm **Cancel** opens a confirmation dialog explaining the booking/hold impact, then refreshes the queue after confirmation.
@@ -1470,16 +1503,17 @@ stale seeded state or a hard-coded user ID. Economy inputs are displayed with
 locale grouping separators; the browser check edits them through the visible
 control and verifies the numeric value after saving.
 
-The 2026-08-26 browser regression completed 10 tests across the six E2E specs,
+The 2026-09-04 browser regression completed 13 tests across the four E2E specs,
 including online group invite confirmation, tutor accept/decline, unauthorized
-booking access, the future-booking economy snapshot, and invalid negative IDR
-input. The student auth state is saved under `packages/e2e/.auth/` for the run
-and is ignored by git; this avoids exceeding the production auth sign-in rate
-limit during a multi-role suite. The local run also showed the expected Google
-Meet boot-probe failure for an expired/revoked credential. Before a marketing
-recording, refresh the provider credential and rerun the browser suite; with a
-broken provider the app deliberately keeps an online booking `confirmed` and
-surfaces manual/retry setup attention.
+booking access, the future-booking economy snapshot, invalid negative IDR
+input, and narrow viewport containment. The student auth state is saved under
+`packages/e2e/.auth/` for the run and is ignored by git; this avoids exceeding
+the production auth sign-in rate limit during a multi-role suite. The local
+run also showed the expected Google Meet boot-probe failure for an
+expired/revoked credential. Before a marketing recording, refresh the provider
+credential and rerun the browser suite; with a broken provider the app
+deliberately keeps an online booking `confirmed` and surfaces manual/retry
+setup attention.
 
 ## GHCR / Docker Deploy (CD)
 

@@ -1,11 +1,13 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-const STUDENT_EMAIL = "student.seed@cogitoacademy.id";
-const STUDENT_PASSWORD = "Student123!";
-const TUTOR_EMAIL = "tutor.seed@cogitoacademy.id";
-const TUTOR_PASSWORD = "Tutor123!";
-const ADMIN_EMAIL = "admin@cogitoacademy.id";
-const ADMIN_PASSWORD = "AdminPassword123!";
+import {
+  ADMIN_EMAIL,
+  ADMIN_PASSWORD,
+  STUDENT_EMAIL,
+  STUDENT_PASSWORD,
+  TUTOR_EMAIL,
+  TUTOR_PASSWORD,
+} from "../fixtures/test-accounts";
 
 async function login(page: Page, email: string, password: string) {
   if (email === STUDENT_EMAIL) {
@@ -70,7 +72,7 @@ test("tutor sees IDR honorarium setup without the old Marks cash-out copy", asyn
 
   await page.goto("/profile");
   await expect(
-    page.getByRole("heading", { name: "Tutor Profile", exact: true }).last(),
+    page.getByRole("heading", { name: "Your tutor profile", exact: true }),
   ).toBeVisible();
   await expect(page.getByText("Base honorarium")).toBeVisible();
   await expectNumberFieldValue(
@@ -86,7 +88,7 @@ test("tutor sees IDR honorarium setup without the old Marks cash-out copy", asyn
   await page.goto("/onboarding");
   await page.waitForURL("/profile");
   await expect(
-    page.getByRole("heading", { name: "Tutor Profile", exact: true }).last(),
+    page.getByRole("heading", { name: "Your tutor profile", exact: true }),
   ).toBeVisible();
 });
 
@@ -130,9 +132,7 @@ test("admin can review and update the future-booking Cogito take schedule", asyn
       await login(tutorPage, TUTOR_EMAIL, TUTOR_PASSWORD);
       await tutorPage.goto("/notifications");
       await expect(
-        tutorPage
-          .getByRole("heading", { name: "Notifications", exact: true })
-          .last(),
+        tutorPage.getByRole("heading", { name: /All activity/ }),
       ).toBeVisible();
       await expect(
         tutorPage.getByText("Cogito rate updated", { exact: true }),

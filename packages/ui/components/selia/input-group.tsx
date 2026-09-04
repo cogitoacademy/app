@@ -7,7 +7,7 @@ import { useRender } from "@base-ui/react/use-render";
 
 export const inputGroupVariants = cva(
   [
-    "relative flex flex-wrap transition-all",
+    "relative flex flex-wrap transition-[background-color,border-color,box-shadow]",
     '[&>input,&>[role="combobox"],textarea]:flex-1',
     '[&>input,&>[role="combobox"],textarea]:bg-transparent',
     '[&>input,&>[role="combobox"],textarea]:ring-0',

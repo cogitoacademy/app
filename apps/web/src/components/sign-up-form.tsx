@@ -141,7 +141,7 @@ export default function SignUpForm({
     <div className="w-full flex items-center justify-center p-4 lg:min-h-[calc(100svh-6rem)]">
       <Card className="w-full lg:w-5/12 xl:w-md">
         <CardHeader align="center">
-          <CardTitle>Create your account</CardTitle>
+          <CardTitle level={1}>Create your account</CardTitle>
           <CardDescription>Enter your details to get started</CardDescription>
         </CardHeader>
         <CardBody className="flex flex-col gap-5">
@@ -179,6 +179,8 @@ export default function SignUpForm({
                 src="/google-logo.svg"
                 alt=""
                 aria-hidden="true"
+                width={18}
+                height={18}
                 className="size-4.5 object-contain"
               />
               Sign up with Google
@@ -216,7 +218,7 @@ export default function SignUpForm({
                   <Input
                     id={field.name}
                     name={field.name}
-                    placeholder="Enter your name"
+                    placeholder="Enter your name…"
                     autoComplete="name"
                     aria-required="true"
                     aria-invalid={
@@ -264,7 +266,7 @@ export default function SignUpForm({
                     id={field.name}
                     name={field.name}
                     type="email"
-                    placeholder="Enter your email"
+                    placeholder="Enter your email…"
                     autoComplete="email"
                     aria-required="true"
                     aria-invalid={
@@ -313,7 +315,7 @@ export default function SignUpForm({
                       id={field.name}
                       name={field.name}
                       type={showPassword ? "text" : "password"}
-                      placeholder="Enter your password"
+                      placeholder="Enter your password…"
                       autoComplete="new-password"
                       aria-required="true"
                       aria-invalid={

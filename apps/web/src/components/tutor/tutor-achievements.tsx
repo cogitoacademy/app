@@ -6,7 +6,7 @@ import {
   IconTrophy,
   IconTrash,
 } from "@tabler/icons-react";
-import { useRef } from "react";
+import { useId, useState } from "react";
 
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
@@ -38,13 +38,6 @@ const MAX_EDUCATION_ENTRIES = 2;
 const MAX_COMPETITION_ACHIEVEMENTS = 5;
 const CURRENT_YEAR = new Date().getFullYear();
 const YEAR_FORMAT: Intl.NumberFormatOptions = { useGrouping: false };
-
-let nextDraftKey = 0;
-
-function createDraftKey(prefix: string) {
-  nextDraftKey += 1;
-  return `${prefix}-${nextDraftKey}`;
-}
 
 function getDisplayRows<T>(
   entries: readonly T[],
@@ -265,20 +258,19 @@ export function TutorAchievementsEditor({
   idPrefix = "tutor-achievements",
   showPreview = true,
 }: TutorAchievementsEditorProps) {
-  const educationKeys = useRef<string[]>([]);
-  const competitionKeys = useRef<string[]>([]);
-
-  function getEditorKey(
-    keys: { current: string[] },
-    index: number,
-    prefix: string,
-  ) {
-    const existingKey = keys.current[index];
-    if (existingKey) return existingKey;
-    const key = createDraftKey(prefix);
-    keys.current[index] = key;
-    return key;
-  }
+  const editorId = useId();
+  const [educationKeys, setEducationKeys] = useState(() =>
+    education.map((_, index) => `${editorId}-education-${index}`),
+  );
+  const [competitionKeys, setCompetitionKeys] = useState(() =>
+    competitionAchievements.map(
+      (_, index) => `${editorId}-competition-${index}`,
+    ),
+  );
+  const [nextEducationKey, setNextEducationKey] = useState(education.length);
+  const [nextCompetitionKey, setNextCompetitionKey] = useState(
+    competitionAchievements.length,
+  );
 
   function updateEducation(
     index: number,
@@ -308,14 +300,18 @@ export function TutorAchievementsEditor({
   }
 
   function removeEducation(index: number) {
-    educationKeys.current.splice(index, 1);
+    setEducationKeys((keys) =>
+      keys.filter((_, entryIndex) => entryIndex !== index),
+    );
     onEducationChange(
       education.filter((_, entryIndex) => entryIndex !== index),
     );
   }
 
   function removeCompetition(index: number) {
-    competitionKeys.current.splice(index, 1);
+    setCompetitionKeys((keys) =>
+      keys.filter((_, entryIndex) => entryIndex !== index),
+    );
     onCompetitionAchievementsChange(
       competitionAchievements.filter((_, entryIndex) => entryIndex !== index),
     );
@@ -346,11 +342,7 @@ export function TutorAchievementsEditor({
           <div className="flex flex-col gap-4">
             {education.map((entry, index) => (
               <div
-                key={getEditorKey(
-                  educationKeys,
-                  index,
-                  `${idPrefix}-education`,
-                )}
+                key={educationKeys[index] ?? `${editorId}-education-${index}`}
                 className="relative rounded-lg border border-item-border bg-card p-3"
               >
                 <Button
@@ -429,9 +421,14 @@ export function TutorAchievementsEditor({
             size="sm"
             className="self-start"
             disabled={education.length >= MAX_EDUCATION_ENTRIES}
-            onClick={() =>
-              onEducationChange([...education, createEmptyEducationEntry()])
-            }
+            onClick={() => {
+              setEducationKeys((keys) => [
+                ...keys,
+                `${editorId}-education-${nextEducationKey}`,
+              ]);
+              setNextEducationKey((key) => key + 1);
+              onEducationChange([...education, createEmptyEducationEntry()]);
+            }}
           >
             <IconPlus aria-hidden="true" />
             Add education
@@ -466,11 +463,9 @@ export function TutorAchievementsEditor({
           <div className="flex flex-col gap-4">
             {competitionAchievements.map((entry, index) => (
               <div
-                key={getEditorKey(
-                  competitionKeys,
-                  index,
-                  `${idPrefix}-competition`,
-                )}
+                key={
+                  competitionKeys[index] ?? `${editorId}-competition-${index}`
+                }
                 className="relative rounded-lg border border-item-border bg-card p-3"
               >
                 <Button
@@ -597,12 +592,17 @@ export function TutorAchievementsEditor({
             disabled={
               competitionAchievements.length >= MAX_COMPETITION_ACHIEVEMENTS
             }
-            onClick={() =>
+            onClick={() => {
+              setCompetitionKeys((keys) => [
+                ...keys,
+                `${editorId}-competition-${nextCompetitionKey}`,
+              ]);
+              setNextCompetitionKey((key) => key + 1);
               onCompetitionAchievementsChange([
                 ...competitionAchievements,
                 createEmptyCompetitionAchievement(),
-              ])
-            }
+              ]);
+            }}
           >
             <IconPlus aria-hidden="true" />
             Add achievement

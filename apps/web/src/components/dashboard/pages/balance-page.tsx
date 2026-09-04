@@ -155,6 +155,14 @@ export function BalancePage() {
 
   return (
     <Stack direction="column" spacing="lg">
+      <div>
+        <Heading level={1} size="md">
+          Balance
+        </Heading>
+        <Text className="mt-1 text-muted">
+          Track your Marks, active holds, and top-up options.
+        </Text>
+      </div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <StatCard
           icon={<IconWallet />}
@@ -164,8 +172,11 @@ export function BalancePage() {
               {walletLoading ? "—" : totalBalance}
               <img
                 src="/cogito-mark.png"
-                className="h-[0.75em] w-auto"
                 alt=""
+                aria-hidden="true"
+                width={16}
+                height={16}
+                className="h-[0.75em] w-auto"
               />
             </span>
           }
@@ -179,8 +190,11 @@ export function BalancePage() {
               {walletLoading ? "—" : heldBalance}
               <img
                 src="/cogito-mark.png"
-                className="h-[0.75em] w-auto"
                 alt=""
+                aria-hidden="true"
+                width={16}
+                height={16}
+                className="h-[0.75em] w-auto"
               />
             </span>
           }
@@ -194,8 +208,11 @@ export function BalancePage() {
               {walletLoading ? "—" : availableBalance}
               <img
                 src="/cogito-mark.png"
-                className="h-[0.75em] w-auto"
                 alt=""
+                aria-hidden="true"
+                width={16}
+                height={16}
+                className="h-[0.75em] w-auto"
               />
             </span>
           }
@@ -368,8 +385,11 @@ export function BalancePage() {
                           {pkg.marks}
                           <img
                             src="/cogito-mark.png"
-                            className="h-[0.75em] w-auto translate-y-[-0.05em]"
                             alt=""
+                            aria-hidden="true"
+                            width={16}
+                            height={16}
+                            className="h-[0.75em] w-auto translate-y-[-0.05em]"
                           />
                         </span>
                       </Text>

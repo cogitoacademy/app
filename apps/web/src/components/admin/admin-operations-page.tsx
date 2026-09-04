@@ -35,6 +35,7 @@ import {
   CardDescription,
   CardFooter,
   CardHeader,
+  CardInfoPreview,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import {
@@ -85,6 +86,7 @@ import {
   TableRow,
 } from "@cogito-app/ui/components/selia/table";
 import { EmptyState } from "@/components/empty-state";
+import { InfoPreview } from "@/components/info-preview";
 import { CogitoMarks } from "@/components/cogito-marks";
 import {
   Tabs,
@@ -109,6 +111,7 @@ import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { client, orpc } from "@/utils/orpc";
 import { getUserFacingError } from "@/lib/error-message";
 import { WhatsAppSupportDialog } from "@/components/whatsapp-support-dialog";
+import { useNow } from "@/hooks/use-now";
 
 const OVERRIDE_CATEGORIES = [
   "tutor_no_show",
@@ -141,7 +144,9 @@ export function AdminOperationsPage() {
       className="w-full min-w-0 max-w-full"
     >
       <div>
-        <Heading size="md">Operations</Heading>
+        <Heading level={1} size="md">
+          Operations
+        </Heading>
         <Text className="text-muted">
           Monitor bookings, preview overrides, inspect wallets, and assign
           offline rooms.
@@ -390,7 +395,7 @@ function BookingQueue() {
                         <TableCell className="align-top whitespace-nowrap text-sm">
                           {item.holdAmount} held
                         </TableCell>
-                        <TableCell className="align-top">
+                        <TableCell className="align-top px-3! py-4! sm:px-6!">
                           <div className="flex flex-col items-stretch gap-1.5">
                             <Button
                               size="sm"
@@ -684,11 +689,16 @@ function AdminReviewContextCard({ booking }: { booking: QueueItem }) {
         <IconBox variant="danger-subtle" size="sm">
           <IconAlertTriangle />
         </IconBox>
-        <CardTitle>Admin review context</CardTitle>
-        <CardDescription>
-          Why this booking entered the admin queue and when the response window
-          started.
-        </CardDescription>
+        <CardTitle>
+          Admin review context
+          <CardInfoPreview>
+            <InfoPreview
+              title="Admin review context"
+              description="Why this booking entered the admin queue and when the response window started."
+              label="About admin review context"
+            />
+          </CardInfoPreview>
+        </CardTitle>
       </CardHeader>
       <CardBody className="grid gap-3 sm:grid-cols-2">
         <AdminMetricRow label="Source" value="Admin override" />
@@ -730,10 +740,16 @@ function AdminWalletImpactCard({
         <IconBox variant="warning" size="sm">
           <IconCoins />
         </IconBox>
-        <CardTitle>Wallet impact</CardTitle>
-        <CardDescription>
-          Booking-level Marks reservation and override context.
-        </CardDescription>
+        <CardTitle>
+          Wallet impact
+          <CardInfoPreview>
+            <InfoPreview
+              title="Wallet impact"
+              description="Booking-level Marks reservation and override context."
+              label="About wallet impact"
+            />
+          </CardInfoPreview>
+        </CardTitle>
       </CardHeader>
       <CardBody className="space-y-2">
         <AdminMetricRow
@@ -786,10 +802,16 @@ function AdminStateHistoryCard({
         <IconBox variant="info-subtle" size="sm">
           <IconClock />
         </IconBox>
-        <CardTitle>State history</CardTitle>
-        <CardDescription>
-          Every recorded transition, oldest first.
-        </CardDescription>
+        <CardTitle>
+          State history
+          <CardInfoPreview>
+            <InfoPreview
+              title="State history"
+              description="Every recorded transition, oldest first."
+              label="About state history"
+            />
+          </CardInfoPreview>
+        </CardTitle>
       </CardHeader>
       <CardBody className="px-6 py-2">
         {loading ? (
@@ -2078,6 +2100,7 @@ function SlaStatus({
   item: Pick<QueueItem, "escalated" | "reportedAt" | "slaDeadline">;
   timezone: string;
 }) {
+  const now = useNow();
   if (!item.slaDeadline) {
     return <Text className="text-sm text-muted">Not reported</Text>;
   }
@@ -2094,7 +2117,7 @@ function SlaStatus({
         Due {formatReportedAt(item.slaDeadline, timezone)}
       </Text>
       <Text className="text-sm text-dimmed">
-        {formatTimeSince(item.reportedAt)}
+        {formatTimeSince(item.reportedAt, now)}
       </Text>
       {item.escalated ? (
         <WhatsAppSupportDialog
@@ -2118,9 +2141,9 @@ function formatReportedAt(value: string | Date | null, timezone: string) {
   return value ? formatBookingDate(value, timezone) : "Not reported";
 }
 
-function formatTimeSince(value: string | Date | null) {
+function formatTimeSince(value: string | Date | null, now: number) {
   if (!value) return "No active report";
-  const elapsedMs = Math.max(0, Date.now() - new Date(value).getTime());
+  const elapsedMs = Math.max(0, now - new Date(value).getTime());
   const elapsedMinutes = Math.floor(elapsedMs / 60_000);
   if (elapsedMinutes < 60) return `${elapsedMinutes}m since report`;
   const elapsedHours = Math.floor(elapsedMinutes / 60);

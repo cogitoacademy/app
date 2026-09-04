@@ -40,6 +40,8 @@ export function ProfilePhotoPreview({
           <img
             src={resolvedImageUrl}
             alt={`${label} preview`}
+            width={128}
+            height={128}
             className="size-32 rounded-lg object-cover"
           />
         ) : (

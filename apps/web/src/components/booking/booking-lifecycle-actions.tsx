@@ -13,9 +13,9 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
-  CardDescription,
   CardFooter,
   CardHeader,
+  CardInfoPreview,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import {
@@ -47,10 +47,12 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
 import { EmptyState } from "@/components/empty-state";
+import { InfoPreview } from "@/components/info-preview";
 import { formatBookingDate, formatBookingTimeRange } from "./booking-ui";
 import { SessionNoteEditor } from "./session-note-editor";
 import { sanitizeSessionNoteHtml } from "./session-note-sanitizer";
 import { getUserFacingError } from "@/lib/error-message";
+import { useNow } from "@/hooks/use-now";
 import { orpc } from "@/utils/orpc";
 
 type DialogKind = "report" | "decline-invite" | "withdraw-invite" | null;
@@ -119,6 +121,7 @@ export function BookingLifecycleActions({
   } | null>(null);
   const [note, setNote] = useState("");
   const invitees = pendingInvitees ?? [];
+  const now = useNow();
 
   const isStudent = viewerRole === "student";
   const isCompleted = currentState === "completed";
@@ -131,7 +134,7 @@ export function BookingLifecycleActions({
   const canReportLateness =
     isStudent &&
     ["scheduled", "no_show"].includes(currentState) &&
-    Date.now() >= new Date(scheduledStartAt).getTime() + 15 * 60_000;
+    now >= new Date(scheduledStartAt).getTime() + 15 * 60_000;
   const canRespondToInvite =
     isStudent &&
     bookingType === "group" &&
@@ -298,10 +301,16 @@ export function BookingLifecycleActions({
             <IconBox variant="warning-subtle">
               <IconCalendarEvent />
             </IconBox>
-            <CardTitle>Booking actions</CardTitle>
-            <CardDescription>
-              Manage schedule changes or report an issue with this session.
-            </CardDescription>
+            <CardTitle>
+              Booking actions
+              <CardInfoPreview>
+                <InfoPreview
+                  title="Booking actions"
+                  description="Manage schedule changes or report an issue with this session."
+                  label="About booking actions"
+                />
+              </CardInfoPreview>
+            </CardTitle>
           </CardHeader>
           {hasPendingReschedule ? (
             <CardBody className="space-y-3">
@@ -479,10 +488,16 @@ export function BookingLifecycleActions({
             <IconBox variant="info-subtle">
               <IconNotes />
             </IconBox>
-            <CardTitle>Session notes</CardTitle>
-            <CardDescription>
-              Notes are shared with the student and tutor after completion.
-            </CardDescription>
+            <CardTitle>
+              Session notes
+              <CardInfoPreview>
+                <InfoPreview
+                  title="Session notes"
+                  description="Notes are shared with the student and tutor after completion."
+                  label="About session notes"
+                />
+              </CardInfoPreview>
+            </CardTitle>
           </CardHeader>
           <CardBody className="space-y-4">
             {notesQuery.isPending ? (
@@ -559,8 +574,16 @@ export function BookingLifecycleActions({
             <IconBox variant="warning-subtle">
               <IconAlertTriangle />
             </IconBox>
-            <CardTitle>Support reports</CardTitle>
-            <CardDescription>Reports linked to this booking</CardDescription>
+            <CardTitle>
+              Support reports
+              <CardInfoPreview>
+                <InfoPreview
+                  title="Support reports"
+                  description="Reports linked to this booking"
+                  label="About support reports"
+                />
+              </CardInfoPreview>
+            </CardTitle>
           </CardHeader>
           <CardBody className="space-y-3">
             {bookingTickets.map((ticket) => (

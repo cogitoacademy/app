@@ -12,6 +12,7 @@ import {
   CardDescription,
   CardHeader,
   CardHeaderAction,
+  CardInfoPreview,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
@@ -22,8 +23,8 @@ import {
   IconAlertTriangle,
   IconChartAreaLine,
   IconChartBar,
-  IconChartDonut,
   IconChartHistogram,
+  IconInfoSquareRounded,
   IconRefresh,
   IconTargetArrow,
   IconUserPlus,
@@ -45,6 +46,7 @@ import {
 } from "recharts";
 
 import { orpc } from "@/utils/orpc";
+import { InfoPreview } from "@/components/info-preview";
 
 const PERIOD_OPTIONS: Array<{
   value: DashboardAnalyticsPeriod;
@@ -176,9 +178,6 @@ export function AdminAnalytics() {
     <section aria-labelledby="admin-analytics-heading">
       <div className="mb-4 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <Badge variant="info" pill>
-            <IconChartAreaLine className="size-3.5" /> Business insights
-          </Badge>
           <Heading
             id="admin-analytics-heading"
             level={2}
@@ -289,10 +288,17 @@ function AnalyticsContent({
             <IconBox variant="primary-subtle">
               <IconChartAreaLine />
             </IconBox>
-            <CardTitle>Booking activity</CardTitle>
-            <CardDescription>
-              New demand against completed sessions over the selected period.
-            </CardDescription>
+            <CardTitle>
+              Booking activity
+              <CardInfoPreview>
+                <InfoPreview
+                  icon={<IconInfoSquareRounded />}
+                  title="Booking activity"
+                  description="New demand against completed sessions over the selected period."
+                  label="About booking activity"
+                />
+              </CardInfoPreview>
+            </CardTitle>
             <CardHeaderAction>
               <Badge variant="secondary" pill>
                 WIB
@@ -391,13 +397,7 @@ function AnalyticsContent({
 
         <Card>
           <CardHeader>
-            <IconBox variant="danger-subtle">
-              <IconChartDonut />
-            </IconBox>
             <CardTitle>Current booking portfolio</CardTitle>
-            <CardDescription>
-              Live state mix across all bookings, useful for prioritising work.
-            </CardDescription>
           </CardHeader>
           <CardBody>
             {stateData.length > 0 ? (

@@ -15,12 +15,12 @@ import { Separator } from "@cogito-app/ui/components/selia/separator";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
 import { EmptyState } from "@/components/empty-state";
+import { useNow } from "@/hooks/use-now";
 import { orpc } from "@/utils/orpc";
 
-function formatRelativeTime(date: Date | string) {
+function formatRelativeTime(date: Date | string, now: number) {
   const d = typeof date === "string" ? new Date(date) : date;
-  const now = new Date();
-  const diff = now.getTime() - d.getTime();
+  const diff = now - d.getTime();
   const minutes = Math.floor(diff / 60000);
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
@@ -31,6 +31,7 @@ function formatRelativeTime(date: Date | string) {
 }
 
 export function NotificationBell() {
+  const now = useNow();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -157,7 +158,7 @@ export function NotificationBell() {
         <Separator />
         {listQuery.isLoading ? (
           <div className="px-3 py-4 text-center text-sm text-muted">
-            Loading...
+            Loading…
           </div>
         ) : listQuery.error ? (
           <div className="px-3 py-4 text-center text-sm text-danger">
@@ -190,7 +191,7 @@ export function NotificationBell() {
                       {n.title}
                     </span>
                     <span className="shrink-0 text-sm md:text-base text-dimmed">
-                      {formatRelativeTime(n.createdAt)}
+                      {formatRelativeTime(n.createdAt, now)}
                     </span>
                   </div>
                   <span className="line-clamp-2 text-sm text-muted">

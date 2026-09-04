@@ -13,7 +13,7 @@ import {
   startOfWeek,
 } from "date-fns";
 import { IconCalendarEvent } from "@tabler/icons-react";
-import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useMemo, useState, type MouseEvent } from "react";
 
 import { Button } from "@cogito-app/ui/components/selia/button";
 
@@ -40,7 +40,6 @@ export function CalendarMonthView({
   events: CalendarCompetition[];
   onEventSelect: (event: CalendarCompetition) => void;
 }) {
-  const [isMounted, setIsMounted] = useState(false);
   const [overflow, setOverflow] = useState<{
     date: Date;
     events: CalendarCompetition[];
@@ -51,8 +50,6 @@ export function CalendarMonthView({
     eventHeight: EVENT_HEIGHT,
     measurementKey: currentDate.getTime(),
   });
-
-  useEffect(() => setIsMounted(true), []);
 
   const days = useMemo(() => {
     const monthStart = startOfMonth(currentDate);
@@ -129,9 +126,7 @@ export function CalendarMonthView({
             const laneCount = eventLanes.size
               ? Math.max(...eventLanes.values()) + 1
               : 0;
-            const visibleLaneCount = isMounted
-              ? getVisibleEventCount(laneCount)
-              : Math.min(laneCount, 3);
+            const visibleLaneCount = getVisibleEventCount(laneCount);
 
             return (
               <div
