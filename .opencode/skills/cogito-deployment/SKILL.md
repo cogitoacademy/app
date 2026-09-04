@@ -22,7 +22,11 @@ Code plane (git)          Control plane (operator machine)     Data plane (VPS)
   migrate → deploy → sha-verified health poll). Only merges to main deploy.
 - **Infra/env changes are manual** (operator machine): Terraform for DNS/R2,
   Ansible for everything inside the box. The Age private key NEVER enters CI
-  or the VPS.
+  or the VPS — with one documented exception: `SOPS_AGE_KEY` is deliberately
+  a GitHub Actions secret for the `infra-apply` workflow (INFRA-AUTOMATION
+  wave, 2026-09-02). It is used only on manual dispatch / vault-path PRs,
+  written to a 0600 temp file, and deleted in a `finally` step; it is never
+  used by the normal CI/CD path.
 - **The proxy is Traefik v3.6** (Coolify's bundled proxy), NOT Caddy. Any doc
   saying "Caddy" is stale — fix it.
 

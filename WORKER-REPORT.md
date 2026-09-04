@@ -1,53 +1,58 @@
-# WORKER-REPORT — ops/monitoring-discord (worker-prod)
+# WORKER-REPORT — docs sync (REFACTOR-PR wave)
 
-Branch: `ops/monitoring-discord` (cut from `origin/main` 2a4bfad). Not pushed — lead integrates.
+Branch: `worker/docs` (base `refactor/backend-infra-tidy` @ 70d0d09). Docs-only task; zero code changes.
 
-## What changed
+## Changes (file-by-file)
 
-| File                                       | Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `infra/ansible/uptime-kuma.yml` (new)      | Declares the Uptime Kuma service **via the Coolify API** (control-node driven, same pattern as `coolify-resources.yml`): `POST /api/v1/services` with the built-in one-click template `uptime-kuma`, name `cogito-uptime-kuma`, project `cogito` / env `production`, `urls: [{name: uptime-kuma, url: https://status.cogitoacademy.id}]`, `instant_deploy: true`. Idempotent (create-when-missing, drift-PATCH, no re-deploy on drift), probes the domain, prints the Kuma UI runbook steps (monitors + Discord notification). Reads `DISCORD_WEBHOOK_URL` from the SOPS vault by key name only; prints a loud operator instruction when absent — never invents/echoes a URL. |
-| `infra/ansible/disk-watchdog.yml` (new)    | Installs `infra/disk-watchdog.sh` as `/usr/local/bin/cogito-disk-watchdog.sh` + nightly 03:30 WIB root cron (CRON_TZ Asia/Jakarta), env `/etc/cogito/disk.env` (root 0600, decrypted from the SOPS vault on the control node), logrotate 7 for `/var/log/cogito-disk-gc.log`. Same decrypt pattern as `backup-cron.yml`.                                                                                                                                                                                                                                                                                                                                                      |
-| `infra/disk-watchdog.sh` (new)             | Warn ≥ 85% (Discord "VPS disk at N% — cleanup recommended"); at ≥ 92% runs `docker image prune -f` → `docker image prune -af --filter until=48h` → re-check → CRITICAL Discord if still ≥ 92%. **Never** volumes, active containers' images, postgres data; newest 1–2 `ghcr.io/cogitoacademy/app` images re-tagged `rollback-keep-*` (GHCR remains the authoritative rollback source). `--dry-run` prints commands without executing/posting; `--force-prune` operator tool. Webhook URL fed to curl via stdin config (`-K -`) so it never appears in argv/`ps`.                                                                                                             |
-| `infra/ops.sh`                             | Added `disk` (df -h /, docker system df, top containers by size) and `deploy-retry` (`gh run rerun` for the last `cd-prod.yml` run; fallback: POST `https://cl.cogitoacademy.id/api/v1/deploy?uuid=<live-resolved>&force=false` with the vault `COOLIFY_API_TOKEN` Bearer — never echoed). Usage block extended (2,26p).                                                                                                                                                                                                                                                                                                                                                      |
-| `docs/RUNBOOK.md`                          | New **Monitoring & Alerting** section: setup steps, alert table, disk thresholds + auto-prune behavior, redeploy/retry procedure (re-run failed CD run is safe — snapshot/migrate/deploy idempotent, verified in the 2026-08-31 disk event), operator follow-ups.                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `docs/DEPLOYMENT.md`                       | Pointer to the monitoring section.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `docs/plans/active/MONITORING-ALERTING.md` | Items 1–2 + new item 5 (disk watchdog) marked delivered 2026-09-01; operator console bits listed as pending; status log entry.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `docs/plans/README.md`                     | MONITORING-ALERTING row updated.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `docs/CONTEXT.md`                          | 1-line monitoring state + deployment-wave bullet.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+1. **`docs/plans/active/LOG-CONSOLIDATION-PAYMENT-UX.md` → `docs/plans/completed/LOG-CONSOLIDATION-PAYMENT-UX.md`** (`git mv`)
+   - Status header updated to `**Completed (merged #189, 2026-09-04)**`.
+   - Branch column already read `release/2026-09-03-log-midtrans-booking` (no change needed).
 
-## Verified (acceptance criteria)
+2. **`docs/plans/README.md`**
+   - Removed LOG-CONSOLIDATION-PAYMENT-UX from the Active table.
+   - Added it to the Completed table (branch `release/2026-09-03-log-midtrans-booking`, merged #189, one-line summary).
+   - MIDTRANS-MIGRATION row: branch corrected `wave/midtrans-migration` → `release/2026-09-03-log-midtrans-booking`, status → **Merged #189 (2026-09-04)**.
+   - MONITORING-ALERTING and INFRA-AUTOMATION rows: appended "Remaining items are operator-console bits tracked in RUNBOOK (kept in Active — lead decision)" notes. Not moved.
 
-- `ansible-playbook --syntax-check -i infra/ansible/inventory.ini infra/ansible/uptime-kuma.yml` → **0 warnings/errors**.
-- `ansible-playbook --syntax-check -i infra/ansible/inventory.ini infra/ansible/disk-watchdog.yml` → **0 warnings/errors**.
-- `bash -n infra/ops.sh` + `bash -n infra/disk-watchdog.sh` → clean; `--dry-run` output verified.
-- Inventory group `[cogito_vps]` respected: `disk-watchdog.yml` targets `hosts: cogito_vps`; `uptime-kuma.yml` is control-node (`hosts: localhost`) like `coolify-resources.yml` — **nothing is installed on the VPS host by the Kuma playbook** (scope addition honored).
-- `no_log: true` on every secret-bearing call in both playbooks (vault decrypt, temp write, parse, all `Authorization: Bearer` uri calls, env file write, grep check). Debug output prints key names only, never values.
-- Dry-run mode exists for the disk watchdog (`--dry-run`).
+3. **`docs/CONTEXT.md`**
+   - Plans table: LOG-CONSOLIDATION-PAYMENT-UX row → `docs/plans/completed/`, **Completed (merged #189, 2026-09-04)**.
+   - Execution Order: appended entries 16–20 (#165 CI perf, #179 ops visibility, #189 log consolidation + Midtrans + booking date fix + payment UX, #190 CI dependabot fix, #193 semantic-pr docker type).
+   - Architecture: added "Server layout (2026-09-04, REFACTOR-PR)" note describing `apps/server/src/routes/` plugin-per-area layout (create-server.ts composition root, middlewares, rate-limits, auth/rpc/upload/content/openapi/health-metrics route plugins, webhooks/, seed/) and the typed webhook errors in `packages/api/src/modules/payment/payment.errors.ts` (WebhookSignatureError/WebhookTimestampError/UnknownPaymentStatusError).
 
-## Live API facts (verified read-only, 2026-09-01)
+4. **`docs/plans/active/CI-SANITY.md`** — status log entry 2026-09-04 (docs sync): F10 ruleset discovery (branch protection EXISTS as rulesets main-1/main-2; main-2 requires Lint/Type Check/Build/Test + Coverage + Coverage/label/semantic-pr with strict policy; `lint` context renamed to `semantic-pr` and ruleset updated by the operator), #145 closed as genuinely broken (oRPC version mismatch), #142/#144 merged, #71 closed stale, #193 docker type added, F9 remains optional operator decision.
 
-- Coolify v4.3.14 `routes/api.php` has the full `/api/v1/services` endpoint set (GET/POST/PATCH/…); the pre-existing `cogito-studio` service proves it works.
-- The `uptime-kuma` one-click template **exists** in this build (`templates/compose/uptime-kuma.yaml`): `louislam/uptime-kuma:2`, port 3001, volume `uptime-kuma-data:/app/data`, healthcheck. The plan's "port 3002 / :1" sketch was superseded by the live template — the playbook declares what the template actually provides.
-- `POST /api/v1/services` body verified from `ServicesController.php`: `type` (one-click) XOR `docker_compose_raw`, `urls[].name` must match the compose service name (`uptime-kuma`), `instant_deploy`, `force_domain_override`.
-- Vault has `COOLIFY_API_TOKEN`; **no `DISCORD_WEBHOOK_URL`** — both playbooks print the loud operator instruction (verified the key-name check path).
-- `/health` live shape: `{"status":"ok","checks":{...,"dlq":"ok"},"dlqDepth":0,...}` — the `"dlqDepth":0` keyword monitor is valid.
+5. **`docs/DEPLOYMENT.md`** — line ~171: dropped the redundant "— not Caddy" parenthetical; now "Coolify's bundled proxy (Traefik v3.6, verified 2026-08-28) then provisions HTTPS…". The other Caddy occurrence (line ~285) is the already-corrected "not Caddy" phrasing — left intact.
 
-## Honest-fallback note (per escalation rule)
+6. **`docs/FAILURES.md`**
+   - §1.5b "Webhook failures (Midtrans)": route `/webhooks/payments/midtrans`, body `signature_key` SHA512 verification (401 on bad signature, `WebhookSignatureError`), merchant_id defense-in-depth, idempotency key `midtrans:{transaction_id ?? order_id}:{status}`, timestamp check skipped for midtrans, recovery steps.
+   - §3.4b "Midtrans down": Snap page unreachable → checkout fails; circuit breaker; rollback to Xendit per `docs/MIDTRANS-MIGRATION.md` §6; mode-scoped breaker keys `cogito:cb:midtrans-test`/`-live`.
+   - Existing Xendit content untouched.
 
-The Coolify API **can** express the Kuma _service_ (declared declaratively — no UI paste needed for the resource itself). It **cannot** express Kuma's _monitors_ or the Discord notification (they live in Kuma's own DB). Per the established Traefik-route pattern, the playbook prints the exact Kuma UI steps (monitors + Discord webhook paste) and the probe verifies the domain — documented in the playbook header, RUNBOOK, and the plan. No fake success: the playbook's summary states exactly what is declared vs. what remains a UI step.
+7. **`infra/secrets/prod.env.example`** — commented Midtrans placeholder block after the Xendit block (`MIDTRANS_MODE`, `MIDTRANS_SERVER_KEY`, `MIDTRANS_CLIENT_KEY`, `MIDTRANS_MERCHANT_ID`, optional `MIDTRANS_WEBHOOK_SIGNATURE_KEY` + note that Xendit keys stay as the rollback path). `infra/secrets/prod.env` (encrypted vault) NOT touched.
 
-## Operator follow-ups (never done by the worker)
+8. **`.opencode/skills/cogito-deployment/SKILL.md`** — amended "The Age private key NEVER enters CI or the VPS" with the documented exception: `SOPS_AGE_KEY` is deliberately a GitHub Actions secret for the `infra-apply` workflow (INFRA-AUTOMATION wave, 2026-09-02), used only on manual dispatch / vault-path PRs, written to a 0600 temp file, deleted in a `finally` step, never used by the normal CI/CD path.
 
-1. Add `DISCORD_WEBHOOK_URL` to the SOPS vault (`sops infra/secrets/prod.env`), then re-run both playbooks to refresh `/etc/cogito/disk.env` and confirm the Kuma summary shows the webhook present.
-2. Kuma UI paste: first-run admin at `https://status.cogitoacademy.id` → create the 4 monitors (api /health keyword, app URL, cert expiry ×2, dlqDepth keyword) + Discord notification with the vault URL (exact steps printed by the playbook and in RUNBOOK).
-3. Optional: add `DISCORD_WEBHOOK_URL` as a GitHub secret if the CD should post deploy failures to Discord (noted only, not wired).
+## Verification
 
-## Not touched
+- `grep -rn "wave/midtrans-migration" docs/` → no matches (exit 1).
+- `grep -n "Caddy" docs/DEPLOYMENT.md` → only the corrected "not Caddy" phrasing (line 285).
+- `grep -n "LOG-CONSOLIDATION-PAYMENT-UX" docs/plans/README.md docs/CONTEXT.md` → completed/#189 status in both.
+- FAILURES.md has §1.5b (Midtrans webhook) + §3.4b (Midtrans down).
+- prod.env.example has the Midtrans placeholder block.
+- Skill file has the SOPS_AGE_KEY exception note.
+- `git status` shows only the 8 intended doc files (1 rename + 7 modifications).
 
-`apps/`, `packages/`, `.github/workflows` (CD retry flow documented in RUNBOOK only), `infra/terraform`, `infra/secrets/prod.env` (values), `.github/lint/baseline.txt`.
+## Code-fact verification (no guessing)
 
-## Commits
+All doc claims cross-checked against the code before writing:
+- `apps/server/src/routes/` layout confirmed (create-server.ts, middlewares.ts, rate-limits.ts, auth-routes.ts, rpc-routes.ts, upload-routes.ts, content-routes.ts, openapi-routes.ts, health-metrics.ts, webhooks/, seed/).
+- `WebhookSignatureError`/`WebhookTimestampError`/`UnknownPaymentStatusError` confirmed in `packages/api/src/modules/payment/payment.errors.ts` (lines 90/102/114).
+- Midtrans webhook: `signature_key` SHA512 verification in `midtrans-payment.provider.ts` (`verifySignatureKey`, lines 137–159), merchant_id check (line 352), `providerEventId: body.transaction_id ?? orderId` (line 365), idempotency key shape `paymentWebhookIdempotencyKey` in `apps/server/src/webhooks/payments.ts:18-29`, timestamp check skipped for midtrans (`payments.ts:85`, `timestamp.test.ts:78`).
+- Midtrans breaker name `midtrans-${opts.mode}` (`midtrans-payment.provider.ts:194`) → keys `cogito:cb:midtrans-test`/`-live` per the `cogito:cb` namespace pattern.
+- Env var names confirmed in `packages/env/src/server.ts` (lines 82–89).
+- `SOPS_AGE_KEY` GitHub secret confirmed in `.github/workflows/infra-apply.yml` (lines 177–186, 256: 0600 temp file + `finally` cleanup).
 
-- `0823668` feat(infra): declare Uptime Kuma via Coolify API + install disk watchdog
-- `46a230a` docs(monitoring): RUNBOOK monitoring section, plan status, pointers
+## Notes / could not do
+
+- Nothing blocked. The brief's CI-SANITY facts (rulesets main-1/main-2, #145 oRPC mismatch, #142/#144 merged, #71 stale, #193 docker type) are operator/PR-history facts I could not independently verify from the repo (no ruleset API access, PRs merged on main); they were recorded as given. `git log` confirms #189/#190/#193 merged on main.
+- The DEPLOYMENT.md line-171 fix: the sentence already said "not Caddy"; per the brief's example I removed the redundant parenthetical so the wording is consistent with the "not Caddy" phrasing retained at line 285.

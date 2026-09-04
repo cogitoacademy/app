@@ -167,9 +167,8 @@ app.cogitoacademy.id  -> VPS IP
 ```
 
 Assign the API domain to the API resource and the app domain to the web
-resource. Coolify's bundled proxy (Traefik v3.6, verified 2026-08-28 — not
-Caddy) then provisions HTTPS and routes traffic as follows:
-
+resource. Coolify's bundled proxy (Traefik v3.6, verified 2026-08-28) then
+provisions HTTPS and routes traffic as follows:
 ```text
 api.cogitoacademy.id/*  -> API container :3001
 app.cogitoacademy.id    -> web container :80

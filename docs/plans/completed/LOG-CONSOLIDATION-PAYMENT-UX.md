@@ -1,6 +1,6 @@
 # LOG-CONSOLIDATION-PAYMENT-UX
 
-**Status:** **DONE (2026-09-04)** — all tasks implemented, verified, and merged via PR (log consolidation `67895bb`, payment UX `3a45472`, Midtrans migration, booking date fix). See status log.
+**Status:** **Completed (merged #189, 2026-09-04)** — all tasks implemented, verified, and merged via PR (log consolidation `67895bb`, payment UX `3a45472`, Midtrans migration, booking date fix). See status log.
 
 ## Goal
 
