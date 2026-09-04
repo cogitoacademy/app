@@ -118,4 +118,3 @@ Re-ran the CI coverage command on the integrated tree:
 → 2549 pass / 0 fail; `bun .github/scripts/coverage-comment.ts` → **"Coverage
 gate passed (api lines ≥ 100%, overall lines ≥ 100%, functions ≥ 100%,
 branches ≥ 100%)"**.
-  
