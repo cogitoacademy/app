@@ -2,20 +2,15 @@
 
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import {
-  IconBuilding,
-  IconCalendarClock,
-  IconCheck,
-  IconMapPin,
-} from "@tabler/icons-react";
+import { IconCheck, IconMapPin } from "@tabler/icons-react";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
-  CardDescription,
   CardFooter,
   CardHeader,
+  CardInfoPreview,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import {
@@ -36,10 +31,7 @@ import {
 import { Text } from "@cogito-app/ui/components/selia/text";
 
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
-import {
-  formatBookingDate,
-  formatBookingTimeRange,
-} from "@/components/booking/booking-ui";
+import { InfoPreview } from "@/components/info-preview";
 import { getUserFacingError } from "@/lib/error-message";
 import { client, orpc } from "@/utils/orpc";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
@@ -166,51 +158,31 @@ export function AdminRoomActions({
         }
       >
         <CardHeader>
-          <IconBox variant="info-subtle" size="sm" aria-hidden="true">
-            <IconBuilding />
-          </IconBox>
-          <CardTitle>{embedded ? "Room assignment" : "Offline room"}</CardTitle>
-          <CardDescription>
-            {canRelocate
-              ? "Review the current room or move this booking to another room."
-              : canAssign
-                ? "Choose a room to confirm this offline booking."
-                : "Room assignment is not editable in this booking state."}
-          </CardDescription>
+          <CardTitle>
+            {embedded ? "Room assignment" : "Offline room"}
+            <CardInfoPreview>
+              <InfoPreview
+                title={embedded ? "Room assignment" : "Offline room"}
+                description={
+                  canRelocate
+                    ? "Review the current room or move this booking to another room."
+                    : canAssign
+                      ? "Choose a room to confirm this offline booking."
+                      : "Room assignment is not editable in this booking state."
+                }
+                label="About room assignment"
+              />
+            </CardInfoPreview>
+          </CardTitle>
         </CardHeader>
         <CardBody className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <RoomSummary
-              label={currentRoomBooking ? "Current room" : "Room status"}
-              room={currentRoomBooking?.room}
-              empty={
-                isAwaitingApproval
-                  ? "No room confirmed yet"
-                  : "No room assigned"
-              }
-            />
-            <div className="flex min-w-0 items-start gap-3">
-              <IconBox variant="tertiary" size="sm" aria-hidden="true">
-                <IconCalendarClock />
-              </IconBox>
-              <div className="min-w-0">
-                <Text className="text-sm text-muted">Session window</Text>
-                <Text className="font-medium">
-                  {formatBookingDate(
-                    booking.scheduledStartAt,
-                    booking.timezone,
-                  )}
-                </Text>
-                <Text className="text-sm text-muted">
-                  {formatBookingTimeRange(
-                    booking.scheduledStartAt,
-                    booking.scheduledEndAt,
-                    booking.timezone,
-                  )}
-                </Text>
-              </div>
-            </div>
-          </div>
+          <RoomSummary
+            label={currentRoomBooking ? "Current room" : "Room status"}
+            room={currentRoomBooking?.room}
+            empty={
+              isAwaitingApproval ? "No room confirmed yet" : "No room assigned"
+            }
+          />
 
           {requestedRoomBooking && !currentRoomBooking ? (
             <div className="flex items-start gap-3 rounded-lg border border-warning-border bg-warning/10 p-3">

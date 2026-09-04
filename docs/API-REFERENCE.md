@@ -2,6 +2,14 @@
 
 Last updated: 2026-09-04
 
+## Card title info preview (2026-09-04)
+
+The admin Booking activity explanation now opens from the shared Selia
+`CardInfoPreview` popover trigger beside its card title. Booking-detail cards
+and their admin extensions use the same pattern instead of standalone header
+descriptions. This frontend-only change adds no RPC path and changes no request
+envelope, response shape, schema, or persistence contract.
+
 ## Sidebar logo contrast (2026-09-04)
 
 The authenticated sidebar keeps the branded logo colors in light mode and

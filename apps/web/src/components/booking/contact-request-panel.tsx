@@ -20,8 +20,8 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
-  CardDescription,
   CardHeader,
+  CardInfoPreview,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import {
@@ -48,6 +48,7 @@ import {
   ItemTitle,
 } from "@cogito-app/ui/components/selia/item";
 import { Textarea } from "@cogito-app/ui/components/selia/textarea";
+import { InfoPreview } from "@/components/info-preview";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
@@ -164,11 +165,16 @@ export function ContactRequestPanel({ bookingId }: { bookingId: string }) {
           <IconBox variant="info-subtle">
             <IconLock aria-hidden="true" />
           </IconBox>
-          <CardTitle>Stay in touch</CardTitle>
-          <CardDescription>
-            You can request contact with students from this completed session.
-            Email is only revealed after they explicitly choose to share it.
-          </CardDescription>
+          <CardTitle>
+            Stay in touch
+            <CardInfoPreview>
+              <InfoPreview
+                title="Stay in touch"
+                description="You can request contact with students from this completed session. Email is only revealed after they explicitly choose to share it."
+                label="About contact requests"
+              />
+            </CardInfoPreview>
+          </CardTitle>
         </CardHeader>
         <CardBody className="space-y-3">
           {items.length === 0 ? (

@@ -2,6 +2,18 @@
 
 Last updated: 2026-09-04
 
+The admin dashboard Booking activity card now opens its explanatory copy from a
+compact info icon directly beside the title. Verify the popover opens with
+hover, keyboard focus, click, and touch; remains readable in light and dark
+themes; and does not displace the WIB badge. No environment or operational
+change is required.
+
+Repeat the interaction check on booking-detail cards with explanatory header
+copy: Session overview, Series sessions, Activity, Honorarium/Marks, Booking
+actions, Session notes, Support reports, Stay in touch, Room assignment, Admin
+review context, Wallet impact, and State history. The trigger must sit directly
+beside its title without leaving a blank description row.
+
 The 2026-09-04 sidebar logo contrast polish is frontend-only. It adds no
 environment variables, migrations, jobs, or operational steps.
 

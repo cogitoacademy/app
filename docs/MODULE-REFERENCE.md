@@ -2,6 +2,15 @@
 
 Last updated: 2026-09-04
 
+## Card title info preview (2026-09-04)
+
+The shared Selia card module exposes `CardInfoPreview` as an inline title slot
+for the app's icon-triggered `InfoPreview` popover. Its first use moves the admin
+Booking activity explanation into the title row, and the popover trigger now
+accepts a caller-provided icon. Booking-detail cards and their admin extensions
+use the same composition for explanatory header copy. No service, repository,
+event key, or business rule changed.
+
 ## Sidebar logo contrast (2026-09-04)
 
 The authenticated sidebar applies a dark-mode-only filter to the existing

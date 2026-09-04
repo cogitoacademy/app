@@ -12,6 +12,7 @@ import {
   CardDescription,
   CardHeader,
   CardHeaderAction,
+  CardInfoPreview,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
@@ -23,6 +24,7 @@ import {
   IconChartAreaLine,
   IconChartBar,
   IconChartHistogram,
+  IconInfoSquareRounded,
   IconRefresh,
   IconTargetArrow,
   IconUserPlus,
@@ -44,6 +46,7 @@ import {
 } from "recharts";
 
 import { orpc } from "@/utils/orpc";
+import { InfoPreview } from "@/components/info-preview";
 
 const PERIOD_OPTIONS: Array<{
   value: DashboardAnalyticsPeriod;
@@ -285,10 +288,17 @@ function AnalyticsContent({
             <IconBox variant="primary-subtle">
               <IconChartAreaLine />
             </IconBox>
-            <CardTitle>Booking activity</CardTitle>
-            <CardDescription>
-              New demand against completed sessions over the selected period.
-            </CardDescription>
+            <CardTitle>
+              Booking activity
+              <CardInfoPreview>
+                <InfoPreview
+                  icon={<IconInfoSquareRounded />}
+                  title="Booking activity"
+                  description="New demand against completed sessions over the selected period."
+                  label="About booking activity"
+                />
+              </CardInfoPreview>
+            </CardTitle>
             <CardHeaderAction>
               <Badge variant="secondary" pill>
                 WIB

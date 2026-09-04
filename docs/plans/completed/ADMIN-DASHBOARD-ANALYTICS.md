@@ -23,6 +23,8 @@ turning the operational queue into a misleading analytics sample.
   components and existing OKLCH theme tokens.
 - Lazy-loaded the Recharts-heavy analytics module so the rest of the dashboard
   does not pay the chart bundle cost before the section is needed.
+- Moved the Booking activity explanation into the reusable Selia
+  `CardInfoPreview` popover beside its title, with a contextual info icon.
 
 ## Data semantics
 
