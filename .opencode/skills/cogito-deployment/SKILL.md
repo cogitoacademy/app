@@ -59,10 +59,10 @@ Code plane (git)          Control plane (operator machine)     Data plane (VPS)
    terraform import cloudflare_r2_custom_domain.uploads r2bucket.cogitoacademy.id
    CLOUDFLARE_API_TOKEN=... terraform apply
    ```
-4. **Ansible** (from repo root, in order):
+4. **Ansible** (from repo root, in order — tailscale BEFORE hardening: hardening locks SSH to the tailnet, so joining first prevents an operator lockout; `apply.sh` refuses `harden` without `tailscale-verified`):
    ```bash
-   ansible-playbook -i infra/ansible/inventory.ini infra/ansible/host-hardening.yml --ask-become-pass
    ansible-playbook -i infra/ansible/inventory.ini infra/ansible/tailscale.yml --ask-become-pass -e "ts_auth_key=$(sops -d infra/secrets/prod.env | grep TS_AUTH_KEY | cut -d= -f2-)"
+   ansible-playbook -i infra/ansible/inventory.ini infra/ansible/host-hardening.yml --ask-become-pass
    ansible-playbook -i infra/ansible/inventory.ini infra/ansible/coolify-resources.yml --ask-become-pass
    ansible-playbook -i infra/ansible/inventory.ini infra/ansible/backup-cron.yml --ask-become-pass
    ```
