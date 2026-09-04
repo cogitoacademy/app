@@ -1150,6 +1150,22 @@ describe("AdminBookingService", () => {
       expect(repo.listBookingsByState).not.toHaveBeenCalled();
     });
 
+    test("returns no rows for an out-of-range booking number search", async () => {
+      const repo = mockRepo();
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+      });
+
+      const result = await service.listBookings({ search: "0" });
+
+      expect(result).toEqual({ items: [], nextCursor: null });
+      expect(repo.listBookingsByState).not.toHaveBeenCalled();
+    });
+
     test("flags booking as escalated when overrideMeta.overriddenAt passes OQ-04 SLA", async () => {
       const stale = new Date(Date.now() - 13 * 3600_000).toISOString();
       const fresh = new Date().toISOString();

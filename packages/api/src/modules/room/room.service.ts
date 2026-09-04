@@ -69,13 +69,12 @@ export function createRoomService(
     if (typeof limitOrInput === "number") {
       return repo.findPendingRoomApprovals(db, limitOrInput, offset);
     }
-    if (limitOrInput) {
+    if (limitOrInput)
       return repo.findPendingRoomApprovals(
         db,
         limitOrInput.limit,
         limitOrInput.offset,
       );
-    }
     return repo.findPendingRoomApprovals(db);
   }
 

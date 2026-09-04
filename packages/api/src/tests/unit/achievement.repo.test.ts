@@ -75,6 +75,30 @@ describe("listByUserId", () => {
     expect(limit).toHaveBeenCalledWith(10);
     expect(offset).toHaveBeenCalledWith(20);
   });
+
+  test("applies a non-pending status filter", async () => {
+    const rows = [{ id: "a3", userId: "u1", status: "approved" }];
+    const offset = mock(async () => rows);
+    const limit = mock(() => ({ offset }));
+    const orderBy = mock(() => ({ limit }));
+    const where = mock(() => ({ orderBy }));
+    const from = mock(() => ({ where }));
+    const select = mock(() => ({ from }));
+
+    const result = await repo.listByUserId(
+      { select, from, where, orderBy, limit, offset } as any,
+      "u1",
+      {
+        status: "approved",
+        limit: 10,
+        offset: 0,
+      },
+    );
+
+    expect(result).toEqual(rows);
+    expect(limit).toHaveBeenCalledWith(10);
+    expect(offset).toHaveBeenCalledWith(0);
+  });
 });
 
 describe("achievement counts", () => {

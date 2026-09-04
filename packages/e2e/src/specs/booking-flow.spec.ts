@@ -32,7 +32,7 @@ async function login(page: Page, email = SEED_EMAIL, password = SEED_PASSWORD) {
 async function openBookingPage(page: Page) {
   await page.goto("/tutors");
   await expect(
-    page.getByRole("heading", { name: "Tutors" }).first(),
+    page.getByRole("heading", { name: "Book a Session" }).first(),
   ).toBeVisible();
 
   const seedTutorCard = page
@@ -159,7 +159,9 @@ test("student can log in and see starting balance", async ({ page }) => {
   await login(page);
   await page.goto("/balance");
   await expect(page.getByText("200").first()).toBeVisible();
-  await expect(page.getByText("Ready to spend")).toBeVisible();
+  await expect(
+    page.getByText("Available balance", { exact: true }),
+  ).toBeVisible();
 });
 
 test("student can book a solo session from tutor discovery", async ({
