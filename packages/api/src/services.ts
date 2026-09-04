@@ -242,7 +242,23 @@ function createServices() {
   });
 
   // Core modules
-  const wallet = createWalletModule({ db });
+  // The Xendit config is resolved once and shared: the payment module uses it
+  // to enforce Test Mode restrictions, and the wallet module exposes the mode
+  // to clients (listPackages) so the web app can label Test Mode amount caps.
+  const xenditConfig = resolveXenditConfig({
+    provider: env.PAYMENT_PROVIDER,
+    secretKey: env.XENDIT_SECRET_KEY,
+    webhookToken: env.XENDIT_WEBHOOK_TOKEN,
+    mode: env.XENDIT_MODE,
+    testAllowedEmails: env.XENDIT_TEST_ALLOWED_EMAILS,
+    successRedirectUrl: env.XENDIT_SUCCESS_REDIRECT_URL,
+    failureRedirectUrl: env.XENDIT_FAILURE_REDIRECT_URL,
+    defaultPaymentMethod: env.XENDIT_DEFAULT_PAYMENT_METHOD,
+  });
+  const wallet = createWalletModule({
+    db,
+    xenditMode: xenditConfig?.mode,
+  });
   const content = createContentModule({ wallet: wallet.service });
   const auth = createAuthModule({ db, wallet: wallet.service });
   const notification = createNotificationModule({ db, email: email.service });
@@ -327,16 +343,7 @@ function createServices() {
     db,
     wallet: wallet.service,
     provider: env.PAYMENT_PROVIDER,
-    xenditConfig: resolveXenditConfig({
-      provider: env.PAYMENT_PROVIDER,
-      secretKey: env.XENDIT_SECRET_KEY,
-      webhookToken: env.XENDIT_WEBHOOK_TOKEN,
-      mode: env.XENDIT_MODE,
-      testAllowedEmails: env.XENDIT_TEST_ALLOWED_EMAILS,
-      successRedirectUrl: env.XENDIT_SUCCESS_REDIRECT_URL,
-      failureRedirectUrl: env.XENDIT_FAILURE_REDIRECT_URL,
-      defaultPaymentMethod: env.XENDIT_DEFAULT_PAYMENT_METHOD,
-    }),
+    xenditConfig,
     webhookSecret: env.PAYMENT_WEBHOOK_SECRET,
     notification: notification.service,
     audit: audit.service,
