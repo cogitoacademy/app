@@ -4,6 +4,7 @@ import { mapRoomError } from "./room.errors";
 import type { RoomService } from "./room.service";
 import type {
   CreateRoomInput,
+  ListRoomsInput,
   ListPendingRoomApprovalsInput,
   AssignRoomInput,
   CheckAvailabilityInput,
@@ -15,8 +16,17 @@ export type RoomHandler = ReturnType<typeof createRoomHandler>;
 
 export function createRoomHandler(room: RoomService) {
   return {
-    list: async ({ context: _context }: { context: Context }) => {
-      return withDomainMap(() => room.listActive(), mapRoomError);
+    list: async ({
+      context: _context,
+      input,
+    }: {
+      context: Context;
+      input?: ListRoomsInput;
+    }) => {
+      return withDomainMap(
+        () => (input ? room.listActive(input) : room.listActive()),
+        mapRoomError,
+      );
     },
 
     listPendingApprovals: async ({
@@ -27,7 +37,10 @@ export function createRoomHandler(room: RoomService) {
       input: ListPendingRoomApprovalsInput;
     }) => {
       return withDomainMap(
-        () => room.listPendingApprovals(input.limit),
+        () =>
+          input?.offset === undefined
+            ? room.listPendingApprovals(input?.limit)
+            : room.listPendingApprovals(input.limit, input.offset),
         mapRoomError,
       );
     },

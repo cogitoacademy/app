@@ -18,6 +18,10 @@ import {
   ItemMeta,
   ItemTitle,
 } from "@cogito-app/ui/components/selia/item";
+import { Separator } from "@cogito-app/ui/components/selia/separator";
+import { Text } from "@cogito-app/ui/components/selia/text";
+import { IconChevronRight } from "@tabler/icons-react";
+import { CogitoMarks } from "@/components/cogito-marks";
 import { groupTutorSubjects, type TutorSubject } from "./subject-taxonomy";
 
 const MODALITY_LABELS: Record<string, string> = {
@@ -72,6 +76,21 @@ function getStartingPrice(tutor: TutorSummaryData) {
   return allPrices.length > 0 ? Math.min(...allPrices) : null;
 }
 
+function getTutorSubjectLabels(
+  tutor: TutorSummaryData,
+  includeCategory: boolean,
+) {
+  return groupTutorSubjects(tutor.subjects, tutor.expertise).flatMap((group) =>
+    group.children.map((child) => ({
+      id: child.id,
+      label:
+        includeCategory && group.parent
+          ? `${group.parent.name}: ${child.name}`
+          : child.name,
+    })),
+  );
+}
+
 export function TutorSummary({
   tutor,
   action,
@@ -81,15 +100,7 @@ export function TutorSummary({
 }) {
   const tutorName = tutor.user?.name ?? "Tutor";
   const startingPrice = getStartingPrice(tutor);
-  const subjectLabels = groupTutorSubjects(
-    tutor.subjects,
-    tutor.expertise,
-  ).flatMap((group) =>
-    group.children.map((child) => ({
-      id: child.id,
-      label: group.parent ? `${group.parent.name}: ${child.name}` : child.name,
-    })),
-  );
+  const subjectLabels = getTutorSubjectLabels(tutor, false);
 
   return (
     <Item className="items-center border-0 bg-transparent p-0!" size="lg">
@@ -111,23 +122,67 @@ export function TutorSummary({
             </Badge>
           )}
         </div>
-        <ItemDescription className="line-clamp-2">
+        <ItemDescription className="line-clamp-1">
           {tutor.shortBio ?? "A verified Cogito tutor ready to help you learn."}
         </ItemDescription>
-        <ItemMeta className="flex flex-wrap gap-1.5">
-          {subjectLabels.slice(0, 3).map((subject) => (
-            <Badge key={subject.id} variant="tertiary" size="sm">
-              {subject.label}
+        <ItemMeta className="flex w-fit max-w-full min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden">
+          {subjectLabels[0] ? (
+            <Badge
+              variant="tertiary"
+              size="sm"
+              className="min-w-0 max-w-[12rem] shrink truncate whitespace-nowrap"
+            >
+              {subjectLabels[0].label}
             </Badge>
-          ))}
-          {subjectLabels.length > 3 && (
-            <Badge variant="secondary" size="sm">
+          ) : null}
+          {subjectLabels[1] ? (
+            <Badge
+              variant="tertiary"
+              size="sm"
+              className="hidden min-w-0 max-w-[12rem] shrink truncate whitespace-nowrap lg:inline-flex"
+            >
+              {subjectLabels[1].label}
+            </Badge>
+          ) : null}
+          {subjectLabels[2] ? (
+            <Badge
+              variant="tertiary"
+              size="sm"
+              className="hidden min-w-0 max-w-[12rem] shrink truncate whitespace-nowrap 2xl:inline-flex"
+            >
+              {subjectLabels[2].label}
+            </Badge>
+          ) : null}
+          {subjectLabels.length > 1 ? (
+            <Badge
+              variant="secondary"
+              size="sm"
+              className="shrink-0 whitespace-nowrap lg:hidden"
+            >
+              +{subjectLabels.length - 1}
+            </Badge>
+          ) : null}
+          {subjectLabels.length > 2 ? (
+            <Badge
+              variant="secondary"
+              size="sm"
+              className="hidden shrink-0 whitespace-nowrap lg:inline-flex 2xl:hidden"
+            >
+              +{subjectLabels.length - 2}
+            </Badge>
+          ) : null}
+          {subjectLabels.length > 3 ? (
+            <Badge
+              variant="secondary"
+              size="sm"
+              className="hidden shrink-0 whitespace-nowrap 2xl:inline-flex"
+            >
               +{subjectLabels.length - 3}
             </Badge>
-          )}
+          ) : null}
           {startingPrice !== null && (
             <span
-              className="ml-1 inline-flex items-center gap-1 self-center whitespace-nowrap"
+              className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap"
               aria-label={`From ${startingPrice} Marks`}
             >
               From
@@ -151,6 +206,81 @@ export function TutorSummary({
   );
 }
 
+function MobileTutorCardContent({ tutor }: { tutor: TutorSummaryData }) {
+  const tutorName = tutor.user?.name ?? "Tutor";
+  const startingPrice = getStartingPrice(tutor);
+  const subjectLabels = getTutorSubjectLabels(tutor, false);
+
+  return (
+    <div className="sm:hidden">
+      <div className="flex min-w-0 items-start gap-3">
+        <Avatar size="md" className="size-14! shrink-0 rounded-md!">
+          <AvatarImage
+            src={tutor.user?.image ?? undefined}
+            alt={tutorName}
+            className="rounded-md!"
+          />
+          <AvatarFallback className="rounded-md!">
+            {getInitials(tutorName)}
+          </AvatarFallback>
+        </Avatar>
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            <Text className="min-w-0 truncate font-semibold">{tutorName}</Text>
+            {tutor.modality ? (
+              <Badge
+                variant={MODALITY_VARIANTS[tutor.modality] ?? "secondary"}
+                size="sm"
+                className="shrink-0"
+              >
+                {MODALITY_LABELS[tutor.modality] ?? tutor.modality}
+              </Badge>
+            ) : null}
+          </div>
+          <Text className="mt-1 line-clamp-2 text-sm leading-relaxed text-muted">
+            {tutor.shortBio ??
+              "A verified Cogito tutor ready to help you learn."}
+          </Text>
+        </div>
+      </div>
+
+      {subjectLabels.length > 0 ? (
+        <div className="mt-3 flex min-w-0 items-center gap-1.5">
+          <Badge
+            variant="tertiary"
+            size="sm"
+            className="min-w-0 max-w-full truncate"
+          >
+            {subjectLabels[0]?.label}
+          </Badge>
+          {subjectLabels.length > 1 ? (
+            <Badge
+              variant="secondary"
+              size="sm"
+              className="shrink-0 tabular-nums"
+            >
+              +{subjectLabels.length - 1}
+            </Badge>
+          ) : null}
+        </div>
+      ) : null}
+
+      <Separator className="my-3" />
+      <div className="flex items-center gap-3">
+        <Text className="text-sm text-muted">Starting from</Text>
+        <div className="ml-auto flex items-center gap-1 font-semibold tabular-nums">
+          {startingPrice !== null ? (
+            <CogitoMarks value={startingPrice} size="3" />
+          ) : (
+            <Text className="text-sm text-muted">View pricing</Text>
+          )}
+          <IconChevronRight className="size-4 text-dimmed" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function TutorCard({ tutor, onClick }: TutorCardProps) {
   const tutorName = tutor.user?.name ?? "Tutor";
   const startingPrice = getStartingPrice(tutor);
@@ -161,12 +291,15 @@ export function TutorCard({ tutor, onClick }: TutorCardProps) {
   return (
     <Card
       render={<button type="button" aria-label={accessibleName} />}
-      className="w-full cursor-pointer text-left transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-card motion-reduce:transition-none [&_[data-slot=avatar]]:rounded-md [&_[data-slot=avatar-image]]:rounded-md [&_[data-slot=avatar-fallback]]:rounded-md"
+      className="w-full cursor-pointer text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card [&_[data-slot=avatar]]:rounded-md [&_[data-slot=avatar-image]]:rounded-md [&_[data-slot=avatar-fallback]]:rounded-md"
       aria-label={accessibleName}
       onClick={onClick}
     >
-      <CardBody>
-        <TutorSummary tutor={tutor} />
+      <CardBody className="p-4 sm:p-6">
+        <MobileTutorCardContent tutor={tutor} />
+        <div className="hidden sm:block">
+          <TutorSummary tutor={tutor} />
+        </div>
       </CardBody>
     </Card>
   );

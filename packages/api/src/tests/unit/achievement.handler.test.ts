@@ -25,6 +25,8 @@ function makeDb() {
 function makeAchievementRepo(overrides: Record<string, unknown> = {}) {
   return {
     listByUserId: mock(async () => []),
+    countByUserId: mock(async () => []),
+    countAll: mock(async () => []),
     insert: mock(async () => ({ id: "a1", userId: "u1" })),
     findByIdForUser: mock(async () => ({
       id: "a1",
@@ -82,6 +84,97 @@ describe("AchievementHandler", () => {
       const result = await handler.list({ context: makeContext() });
 
       expect(result).toEqual([{ id: "a1" }]);
+    });
+
+    test("passes pagination input to achievementService.list", async () => {
+      const list = mock(async () => [{ id: "a1" }]);
+      const handler = createAchievementHandler({
+        achievementService: { list } as any,
+      });
+      const input = {
+        category: "competition" as const,
+        status: "pending" as const,
+        limit: 10,
+        offset: 20,
+      };
+
+      await handler.list({ context: makeContext(), input });
+
+      expect(list).toHaveBeenCalledWith("u1", input);
+    });
+  });
+
+  describe("stats", () => {
+    test("returns aggregate student achievement counts", async () => {
+      const repo = makeAchievementRepo({
+        countByUserId: mock(async () => [
+          { status: "pending", count: 2 },
+          { status: "pending_review", count: 1 },
+          { status: "approved", count: 4 },
+          { status: "rejected", count: 1 },
+          { status: "archived", count: 2 },
+        ]),
+      });
+      const service = createAchievementService({
+        achievementRepo: repo as any,
+        auditPort: makeAuditPort() as any,
+        notificationPort: makeNotificationPort() as any,
+        db: makeDb(),
+      });
+
+      await expect(service.stats("u1")).resolves.toEqual({
+        total: 10,
+        approved: 4,
+        pending: 3,
+        rejected: 1,
+        archived: 2,
+      });
+    });
+
+    test("returns aggregate admin achievement counts", async () => {
+      const repo = makeAchievementRepo({
+        countAll: mock(async () => [{ status: "approved", count: 2 }]),
+      });
+      const service = createAchievementService({
+        achievementRepo: repo as any,
+        auditPort: makeAuditPort() as any,
+        notificationPort: makeNotificationPort() as any,
+        db: makeDb(),
+      });
+
+      await expect(service.adminStats()).resolves.toEqual({
+        total: 2,
+        approved: 2,
+        pending: 0,
+        rejected: 0,
+        archived: 0,
+      });
+    });
+  });
+
+  describe("stats handlers", () => {
+    test("delegates student stats to the service", async () => {
+      const stats = mock(async () => ({ total: 1 }));
+      const handler = createAchievementHandler({
+        achievementService: { stats } as any,
+      });
+
+      await expect(handler.stats({ context: makeContext() })).resolves.toEqual({
+        total: 1,
+      });
+      expect(stats).toHaveBeenCalledWith("u1");
+    });
+
+    test("delegates admin stats to the service", async () => {
+      const adminStats = mock(async () => ({ total: 2 }));
+      const handler = createAchievementHandler({
+        achievementService: { adminStats } as any,
+      });
+
+      await expect(
+        handler.adminStats({ context: makeContext() }),
+      ).resolves.toEqual({ total: 2 });
+      expect(adminStats).toHaveBeenCalledWith();
     });
   });
 

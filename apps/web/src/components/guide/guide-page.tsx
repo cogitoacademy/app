@@ -202,7 +202,7 @@ function GuidePageContent({ role, view }: { role?: string; view: GuideView }) {
         className="gap-8"
       >
         <TabsPanel value={view} className="flex flex-col gap-8">
-          <div className="grid min-w-0 gap-8 lg:grid-cols-[16rem_auto_minmax(0,1fr)]">
+          <div className="grid min-w-0 gap-4 lg:grid-cols-[16rem_auto_minmax(0,1fr)]">
             <div className="space-y-5">
               <GuideViewSwitcher allowedViews={allowedViews} />
               <Separator />

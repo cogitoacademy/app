@@ -1,11 +1,11 @@
 # CI Sanity & False-Positive Elimination — Plan
 
-| Field      | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status     | **F1–F8 implemented + merged/local 2026-09-04** (#130, #132–#137); F1 blind-spot fix (Dependabot) merged 2026-09-01; F6 verdict recorded 2026-09-01; PR #152 refreshes the exact oxlint 1.80 baseline, fixes three new React findings, and makes the lint auto-fix push hook-safe; F14 CI test/coverage performance is implemented on `f/ci-test-coverage-performance`; F9 (ACTIONS_BOT_PAT) **regressed in #189 and fixed 2026-09-04 (see Status log)**; F10 (branch protection) remains an operator-console action; F13 (lint-warning triage) documented 2026-08-31 |
-| Created    | 2026-08-31                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| Depends on | #126 merged (ops.sh + APPLY-RUNBOOK + this plan's trigger); main `85841b0`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| Scope      | CI workflow fixes (fail-loud infra-plan, web-deploy verification, auto-rollback, dedupe, staging decision, test/coverage performance) + DLQ age-aware health                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Field      | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status     | **F1–F8 implemented + merged/local 2026-09-04** (#130, #132–#137); F1 blind-spot fix (Dependabot) merged 2026-09-01; F6 verdict recorded 2026-09-01; PR #152 refreshes the exact oxlint 1.80 baseline, fixes three new React findings, and makes the lint auto-fix push hook-safe; F14 CI test/coverage performance is implemented on `f/ci-test-coverage-performance`; F10 (branch protection) remains an operator-console action; F9 (ACTIONS_BOT_PAT) remains optional operator configuration; F13 (lint-warning triage) documented 2026-08-31 |
+| Created    | 2026-08-31                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Depends on | #126 merged (ops.sh + APPLY-RUNBOOK + this plan's trigger); main `85841b0`                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Scope      | CI workflow fixes (fail-loud infra-plan, web-deploy verification, auto-rollback, dedupe, staging decision, test/coverage performance) + DLQ age-aware health                                                                                                                                                                                                                                                                                                                                                                                      |
 
 ## Why
 
@@ -111,28 +111,6 @@ cache dependent.
   legacy React findings remain visible but no longer
   reject every local push, and any non-baselined lint error still fails. The
   gate also removes its temporary GitHub-format output on exit.
-- 2026-09-04 (PR with the wave #189 merge, `fix/ci-dependabot-checkout`):
-  **F9 REGRESSED and fixed.** PR #189 replaced the Lint job's
-  `token: ${{ secrets.ACTIONS_BOT_PAT || github.token }}` input with a bare
-  `secrets.ACTIONS_BOT_PAT`, deleting the 2026-08-27 fallback (`479956f`)
-  and the comment that described the failure mode. Dependabot branches
-  receive **no repository secrets** (F1 blind-spot class), so the input
-  arrived empty and `actions/checkout@v6` failed with `Input required and
-not supplied: token` before any check ran. Live evidence: PRs #142 and
-  #144 went red (run 33831763336 log: `Secret source: Dependabot` →
-  `##[error]Input required and not supplied: token`), auto-merge stopped,
-  and the weekly bun group (#145) additionally failed in Build with
-  `Failed to resolve base ref 'main'` (turbo `--affected` could not resolve
-  its merge base on a dependabot checkout). Fixes in this PR: restored
-  `|| github.token` on the checkout; added an explicit default-branch fetch
-  before `turbo --affected` in the typecheck and build jobs; renamed the
-  Semantic PR workflow job `lint` → `semantic-pr` (the job name is the PR
-  check context and collided with the CI Lint job — every PR showed a
-  duplicate `lint` check); pinned the lint/format auto-fix and check steps
-  to the baseline versions (oxlint@1.80.0, oxfmt@0.65.0) so the auto-fix
-  can never diverge from the gate. **F10 (branch protection) still
-  unverified from a write-collaborator account — operator console check
-  required.**
 - 2026-09-04 (production UI/E2E audit): **F8 browser workflow verified and CI coverage added.**
   The isolated E2E job provisions Postgres 16 and Redis 7, creates the test
   environment, migrates the database, installs Chromium, and runs the complete
@@ -140,19 +118,4 @@ not supplied: token` before any check ran. Live evidence: PRs #142 and
   booking, responsive layout, contact sharing, and economy/role coverage;
   Playwright reports are uploaded on every CI run. The migration task passes
   the isolated `.env.test` through Turbo explicitly. Remaining operator-owned
-  work is F10 branch protection.
-- 2026-09-04 (docs sync, REFACTOR-PR wave): **F10 ruleset discovery —
-  branch protection EXISTS as rulesets.** The operator confirmed two
-  rulesets on `main`: `main-1` and `main-2`. `main-2` requires the status
-  checks Lint, Type Check, Build, Test + Coverage, plus the
-  Coverage/label/semantic-pr checks, with a strict policy (branches must be
-  up to date). The `lint` check context was renamed to `semantic-pr` by the
-  #190 fix, and the operator updated the ruleset to match. **#145 closed as
-  genuinely broken** — the 17-dep group failed with an oRPC version mismatch
-  (not a flake), so it was closed rather than recreated. **#142/#144 merged**
-  (upload-artifact v6→v7, setup-terraform v3.1.2→v4.0.1). **#71 closed
-  stale** (nginx bump on a pre-format base; superseded by the pinned
-  toolchain). **#193 merged** — the Semantic PR workflow gained the `docker`
-  type so Dockerfile-only PRs are labeled correctly. F9 (`ACTIONS_BOT_PAT`)
-  remains an optional operator decision; the `|| github.token` fallback
-  keeps Dependabot green without it.
+  work is F9 (`ACTIONS_BOT_PAT`) and F10 branch protection.

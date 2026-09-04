@@ -2,6 +2,22 @@
 
 Last updated: 2026-09-04
 
+On the student dashboard, verify the balance widget shows available, held, and
+total Marks from the wallet snapshot. **Top up** must open `/balance`. At 35 or
+more total Marks, the Balance page's Knowledge Bank card must show access and
+open `/knowledge-bank`; below the threshold it must offer a top-up path. Confirm
+the Balance page places the widget beside Knowledge Bank Access on desktop and
+stacks them cleanly on narrow screens. On the student dashboard, confirm the
+widget's **Find a tutor** action opens `/tutors`; its dashboard counterpart keeps
+**Top up** and opens `/balance`. Confirm the widget remains contained beside the
+Competition Calendar card on the student dashboard. At 320 px and 390 px wide,
+confirm the Balance page has no page-level horizontal clipping before and after
+creating a QRIS purchase; the QR code must scale within its nested payment card.
+Test with populated Marks history as well: mobile amounts should sit below their
+descriptions, while desktop amounts remain right-aligned on the same row. Each
+date must appear below its transaction reason, and both the amount and resulting
+balance must use the shared Marks icon as a prefix.
+
 The admin dashboard Booking activity card now opens its explanatory copy from a
 compact info icon directly beside the title. Verify the popover opens with
 hover, keyboard focus, click, and touch; remains readable in light and dark
@@ -16,6 +32,21 @@ beside its title without leaving a blank description row.
 
 The 2026-09-04 sidebar logo contrast polish is frontend-only. It adds no
 environment variables, migrations, jobs, or operational steps.
+
+On the authenticated student, tutor, and admin shells, create or seed pending
+booking rows and verify the sidebar shows a compact badge beside **My Bookings**
+or **Bookings**. The number must match the pending rows in the shared **Needs
+action** view, disappear when there are none, and render `99+` when the result
+exceeds the compact display limit. Confirm the link remains keyboard accessible
+and the badge does not widen or overflow the sidebar.
+
+Also verify the primary sidebar order: students see **Dashboard**, **Tutors**,
+**My Bookings**, **Balance**, **Achievements**; tutors see **Dashboard**,
+**Bookings**, **Availability**, **Tutor Profile**; and admins see **Dashboard**,
+**Operations**, **Bookings**, **Tutors**, **Economy**, **Achievements**. The
+shared Resources group and footer account menu should remain available, and the
+**Tutor Profile** wording should remain unchanged. This is presentation-only;
+no environment or operational change is required.
 
 ## Production UI and E2E audit (2026-09-04)
 
@@ -71,6 +102,12 @@ Booking-list smoke check: verify Needs action, Upcoming, Recurring, History, and
 
 Timing-chip check: pending rows with `deadlineAt` show Respond in, switch to warning within three hours and danger within 30 minutes, then say Response overdue without pretending the state is Expired. Confirmed/scheduled rows show Today, Starts in within three hours, Starting soon within 30 minutes, and In progress between start and end. Completed, declined, cancelled, expired, and other terminal rows show no chip. Leave the page open and confirm labels refresh without reloading.
 On `/bookings`, verify the timing chip follows the role-appropriate financial summary (IDR Honorarium for tutors; Earns/Total or You pay for student/admin views) and has a vertical divider on its left. On student and tutor dashboards, verify the shared next-lesson card hides You pay/Earns/Total while retaining the timing chip.
+
+On the student `/tutors` page, open **Filters** at a 320 px CSS viewport and
+verify the filter card and category/specialization popups stay inside the
+viewport. Select multiple categories and confirm the selected indicators and
+the popup's right edge remain visible; the page itself must not gain horizontal
+overflow. Repeat at 390 px.
 
 For manual tutor-invite delivery, copy the visible latest link. After reloading the page, use **Generate & copy link** on a pending invitation history entry; this safely rotates the token instead of persisting plaintext secrets.
 
@@ -155,8 +192,8 @@ After a web deployment, sign in once as each supported role and open `/dashboard
 
 - Student: learning welcome, next lesson, Knowledge Bank/calendar, and tutor recommendations. Confirm the welcome card shows the SVG illustration and shared spacing/sizing used by the tutor dashboard. If a booking exists, confirm the next-lesson card matches the booking-list date tile, participant metadata, Marks display, status tooltip, and detail action.
 - Tutor: the first dashboard row shows the same SVG welcome card visual plus teaching setup, and the next visible row shows requests to review plus next lesson before metrics/payout; actions link to `/bookings`, `/availability`, and `/profile`. Verify the review card keeps its empty/loading slot when there are no requests, and that the Payout details info icons open their respective unpaid-honorarium and transfer-fee explanations and remain keyboard accessible. When a tutor submits the initial profile form, confirm the app redirects to `/dashboard` and the browser Back button does not return to the form. A later login for that tutor must also land on `/dashboard`; a `draft` or `changes_requested` tutor must land on `/profile` so the profile can be completed or corrected. Opening the legacy `/onboarding` URL should land on `/profile`.
-- Admin: a normal login must land on `/dashboard`; open the admin workspace and verify priority operations/moderation counts and links to `/admin-operations`, `/admin-tutors`, `/admin-achievements`, and `/admin-economy`. In `/admin-operations`, verify category, urgency, and SLA-status filters; open a queue item and confirm its reported reason/source, affected-user count, OQ-04 deadline, time-since-report, escalated badge, and WhatsApp escalation action. Clicking the escalation action must show the confirmation modal; Cancel keeps the admin page in place, while Continue opens the Cogito support conversation at `+62 881-0119-90195` in a new tab. In the Wallet lookup tab, search a partial name and an email, select the intended user from the bounded identity results, and confirm the selected name/email/role, total/held/available Marks, and latest ledger entries load; verify a changed search does not leave the previous user's wallet visible. Confirm the hydrated participant wallet/booking-ledger cards and state-history timeline load, then use **Open override** to reach the existing preview/apply flow. In the override dialog, confirm the booking roster appears as a name/avatar/role multi-select, selected participants are summarized without requiring manual IDs, and Preview/Apply still succeed. In `/admin-economy`, verify the active schedule loads, edits persist after reload, and the preview updates.
-- In the admin dashboard's **Business insights** section, verify the default 30-day view loads KPI cards, booking activity, current booking portfolio, audience growth, session-format mix, and top categories. Switch to 7 and 90 days and confirm the charts reload with continuous WIB date labels; verify zero-data periods show an intentional empty state, the retry state is actionable, and the dashboard remains usable while analytics loads. Confirm the note distinguishes Marks-based platform take from cash revenue and that the existing priority/review queues remain visible below the analytics section.
+- Admin: a normal login must land on `/dashboard`; open the admin workspace and verify the compact escalated-operation, tutor-review, and achievement-review counts above Business insights. Use the sidebar to open `/admin-operations`, `/admin-tutors`, `/admin-achievements`, and `/admin-economy`. In `/admin-operations`, verify category, urgency, and SLA-status filters; open a queue item and confirm its reported reason/source, affected-user count, OQ-04 deadline, time-since-report, escalated badge, and WhatsApp escalation action. Clicking the escalation action must show the confirmation modal; Cancel keeps the admin page in place, while Continue opens the Cogito support conversation at `+62 881-0119-90195` in a new tab. In the Wallet lookup tab, search a partial name and an email, select the intended user from the bounded identity results, and confirm the selected name/email/role, total/held/available Marks, and latest ledger entries load; verify a changed search does not leave the previous user's wallet visible. Confirm the hydrated participant wallet/booking-ledger cards and state-history timeline load, then use **Open override** to reach the existing preview/apply flow. In the override dialog, confirm the booking roster appears as a name/avatar/role multi-select, selected participants are summarized without requiring manual IDs, and Preview/Apply still succeed. In `/admin-economy`, verify the active schedule loads, edits persist after reload, and the preview updates.
+- In the admin dashboard's **Business insights** section, verify the default 30-day view loads KPI cards, booking activity, current booking portfolio, audience growth, session-format mix, and top categories. Switch to 7 and 90 days and confirm the charts reload with continuous WIB date labels; verify zero-data periods show an intentional empty state, the retry state is actionable, and the dashboard remains usable while analytics loads. Confirm the note distinguishes Marks-based platform take from cash revenue; the dashboard intentionally keeps only the compact queue counts above analytics, while actionable queues remain on their dedicated admin routes.
 - In the Operations → Room approvals tab, verify the Active rooms catalog loads. Use **Add room**, enter a name, location, and positive whole-number capacity, submit, and confirm the new room appears in the list and in the Offline room selector. Confirm blank names/locations and invalid capacity stay in the dialog without an RPC request. Then verify the pending offline room-approval queue loads. Use **Assign** for a requested room. Use **Choose another** (or **Choose room** when the original request conflicted) to open the admin booking detail; confirm the Offline room card shows the booking schedule without a UUID/date-time form, lets the admin select a target room, and calls **Assign room** or **Relocate room**. Confirm **Cancel** opens a confirmation dialog explaining the booking/hold impact, then refreshes the queue after confirmation.
 - In `/admin-tutors`, open a profile with pending edits and confirm the proposed specialization changes show readable category/specialization labels instead of raw UUIDs. Resize to a narrow viewport and verify specialization badges and other long pending values wrap without horizontal page overflow; use **Edit format** to correct structured education/competition entries, save, reload, and confirm the version-checked update and success toast. The review request/response payloads must remain unchanged.
 
@@ -166,17 +203,17 @@ From any authenticated shell page, press `D` once and verify the UI switches bet
 
 ### Competition Calendar smoke check
 
-As an authenticated user, open `/calendar` and confirm published Sanity competitions render in the month grid. Verify today, outside-month days, multi-day spans, and the `+N more` overflow popup; select an event from either the grid or popup and confirm the responsive details modal shows categories, level, scale, organizer, location, timeline, registration deadline, description, and the available external-link actions. On a short viewport, verify the page heading and calendar toolbar remain in place while only the calendar body scrolls vertically; on a narrow viewport, verify only the month grid scrolls horizontally. Switch to **Agenda**, confirm the 30-day grouped list and rich event cards, use `M`/`A` to switch views, and verify previous/next period plus **Today** navigation. The calendar remains read-only and the browser console should remain free of runtime errors.
+As an authenticated user, open `/calendar` and confirm published Sanity competitions render in the month grid. Verify today, outside-month days, multi-day spans, and the `+N more` overflow popup; select an event from either the grid or popup and confirm the responsive details modal shows categories, level, scale, organizer, location, timeline, registration deadline, description, and the available external-link actions. Navigate to a month with no events and confirm the normal weekday headings, date cells, outside-month cells, and month navigation remain visible instead of an empty-state replacement. On a short viewport, verify the page heading and calendar toolbar remain in place while only the calendar body scrolls vertically; on a narrow viewport, verify only the month grid scrolls horizontally. Switch to **Agenda**, confirm the 30-day grouped list and rich event cards, use `M`/`A` to switch views, and verify previous/next period plus **Today** navigation. The calendar remains read-only and the browser console should remain free of runtime errors.
 
 The route selects the dashboard from the authenticated session role. A tutor or admin must never receive student-only wallet or booking queries from this page.
 
 ### Knowledge Bank smoke check
 
-As an authenticated student, open `/knowledge-bank`. With at least 35 total Marks, confirm published Sanity resource metadata loads, search/category filtering works, and the PDF preview opens through the authenticated `/content/knowledge-bank/:resourceId/file` proxy. Below 35 Marks, confirm the page stays locked and offers the balance/top-up action. Then sign in as a tutor and an admin with no Marks balance and confirm each role sees Knowledge Bank in the sidebar, the route loads resources, and the PDF preview opens without a wallet threshold. Opening the Knowledge Bank as an eligible student, tutor, or admin must not create a Marks deduction.
+As an authenticated student, open `/knowledge-bank`. With at least 35 total Marks, confirm published Sanity resource metadata loads, category slugs render as human-readable labels in the filter dropdown, search/category filtering works, and the PDF preview opens through the authenticated `/content/knowledge-bank/:resourceId/file` proxy. Below 35 Marks, confirm the page stays locked and offers the balance/top-up action. Then sign in as a tutor and an admin with no Marks balance and confirm each role sees Knowledge Bank in the sidebar, the route loads resources, and the PDF preview opens without a wallet threshold. Opening the Knowledge Bank as an eligible student, tutor, or admin must not create a Marks deduction.
 
 ### Empty-state consistency smoke check
 
-With signed-in student, tutor, and admin sessions, exercise empty data and no-match states in the calendar, tutor discovery, Knowledge Bank, bookings, notifications, achievements, balance history, availability preview, booking detail, and admin operations surfaces. Confirm each state has the shared Selia icon/title/description treatment, uses the right density for its context, distinguishes an empty collection from an active filter with no matches, and keeps its action usable when one exists. Check the notification menu, calendar popup, dialog sections, field-level specialization/proof-link states, and table/list sections for blank areas or orphaned headers. Repeat in light and dark themes and at narrow width; there should be no page-level horizontal overflow or duplicate empty copy, while intentional table containers may scroll horizontally when their minimum column widths exceed the viewport. This is frontend-only and must not change request payloads.
+With signed-in student, tutor, and admin sessions, exercise empty data and no-match states in the calendar, tutor discovery, Knowledge Bank, bookings, notifications, achievements, balance history, availability preview, booking detail, and admin operations surfaces. Confirm collection and event-free agenda states have the shared Selia icon/title/description treatment where applicable, while an event-free month keeps its normal calendar grid instead of an empty-state replacement. Confirm each state uses the right density for its context, distinguishes an empty collection from an active filter with no matches, and keeps its action usable when one exists. Check the notification menu, calendar popup, dialog sections, field-level specialization/proof-link states, and table/list sections for blank areas or orphaned headers. Repeat in light and dark themes and at narrow width; there should be no page-level horizontal overflow or duplicate empty copy, while intentional table containers may scroll horizontally when their minimum column widths exceed the viewport. This is frontend-only and must not change request payloads.
 
 For admin operations, confirm the booking monitor keeps body text readable, aligns multi-line cells at the top, and keeps status/category badges on one line. At a narrow mobile viewport, verify the Operations page and monitor card do not exceed the viewport width; horizontal scrolling must be confined to the table contents. Open **View details** and verify navigation to `/admin-operations/bookings/:bookingId`; refresh that URL and confirm participant wallets, booking ledger activity, meeting fallback, report context, state history, and override controls still load. A student or tutor opening the URL must be redirected to `/dashboard`, and a missing booking must render the in-page not-found state with a route back to operations.
 
@@ -400,13 +437,36 @@ In the same drawer, select the booking's current date and start minute. Confirm 
 
 ### Tutor specialization taxonomy smoke check
 
-Open `/profile` as a tutor and verify the selector loads exactly seven active competition categories and 33 specializations from `tutors.listSubjects`. All categories should be visible with keyboard-accessible checkboxes, no manual specialization input, selected-specialization chips, and a 7-specialization limit. The selector should show the current count, disable an eighth selection, and the submit validation should reject any over-limit state. Select specializations from multiple categories, save a draft, and confirm the selections reload with the profile. A submission with no current specialization must be blocked; archived legacy specializations on an existing profile should remain visible as read-only labels. Published tutor discovery should expose current specializations and allow students to filter by category or specialization. On the tutor list page, category, specialization, and modality filter triggers must show their labels rather than raw IDs or values. Confirm category and specialization filters support multiple values, retain overlapping specializations while categories are added, remove specializations that are no longer available after a category is removed, and wait about 300 ms after typing/toggling before `listPublished` runs. Open a tutor drawer with both modalities and verify pricing appears in one table with `Group Size`, `Online (Marks)`, and `Offline (Marks)` columns; populated prices should have the Cogito Marks icon as a prefix, and a size available in only one modality should show an em dash in the other column. On a short viewport, confirm the student tutor drawer's profile body scrolls independently while its header and booking/close footer remain visible; body overscroll may bounce locally, but the fixed regions must not move.
+On the tutor list, search remains visible while category, specialization, and
+modality start inside the closed **Filters** panel. Toggle it with pointer and
+keyboard, apply filters, close it, and confirm the trigger preserves the active
+selection count. The height/fade and chevron transitions should be smooth, with
+no animation under reduced-motion preferences. Closed controls must not receive
+keyboard focus. For multiple selections, the leading label may truncate but the
+`+N more` chip must remain fully visible without a clipped border. **Clear**
+resets these panel filters without clearing search.
+
+Below the `sm` breakpoint, verify each tutor card shows a compact identity row,
+a bio of at most two lines, a short specialization plus optional count, and a
+separated **Starting from** footer using the Marks icon prefix and chevron. The
+whole card must open the tutor drawer. The existing hover shadow remains in use
+without translating the card or adding a pressed-scale effect. At `sm` and above, the existing
+horizontal tutor summary remains in use.
+
+Desktop card specialization chips should use the child specialization names
+without repeating the parent category, size to their content, and truncate
+within the single metadata row when necessary. Confirm the `+N` count and
+`From [Marks icon] #` price block stay visible on the same line.
+
+Open `/profile` as a tutor and verify the selector loads exactly seven active competition categories and 33 specializations from `tutors.listSubjects`. All categories should be visible with keyboard-accessible checkboxes, no manual specialization input, selected-specialization chips, and a 7-specialization limit. The selector should show the current count, disable an eighth selection, and the submit validation should reject any over-limit state. Select specializations from multiple categories, save a draft, and confirm the selections reload with the profile. A submission with no current specialization must be blocked; archived legacy specializations on an existing profile should remain visible as read-only labels. Published tutor discovery should expose current specializations and allow students to filter by category or specialization. On the tutor list page, category, specialization, and modality filter triggers must show their labels rather than raw IDs or values. Confirm category and specialization filters support multiple values, retain overlapping specializations while categories are added, remove specializations that are no longer available after a category is removed, and wait about 300 ms after typing/toggling before `listPublished` runs. Open a tutor drawer with both modalities and verify pricing appears in one table with `Group Size`, `Online (Marks)`, and `Offline (Marks)` columns; populated prices should have the Cogito Marks icon as a prefix, and a size available in only one modality should show an em dash in the other column. Below the `sm` breakpoint, confirm the student tutor profile opens from the bottom and dismisses with a downward swipe; at `sm` and wider, confirm it opens from the right and dismisses rightward. On a short viewport, confirm the profile body scrolls independently while its header and booking/close footer remain visible; body overscroll may bounce locally, but the fixed regions must not move.
 
 ### Tutor achievement and experience formatting smoke check
 
 The tutor editor uses one combined **Achievements & experience** card and one public preview for all three structured subsections. The proof-link fields remain separate for compatibility, but the form recommends putting both achievement and experience proof in one Google Drive folder with the “Anyone with the link can view” setting.
 
-Open `/profile` as a tutor and confirm the Public profile has no duplicate free-text Achievements or Experiences fields. In the combined Achievements & experience section, add two education entries and five competition achievements. Type a comma after one award before entering the next title and confirm the comma remains visible; verify a comma in an experience role, organization, or description also remains visible. Add up to five role/organization/year/description entries, leaving End year blank for an ongoing role. Confirm the sixth row controls are disabled, incomplete rows and an end year before the start year are rejected on **Submit for review**, and every year field displays plain digits without grouping dots. Save a draft, reload, and verify the structured arrays persist. Open a published tutor in discovery and confirm the drawer shows the structured sections; for an old profile with only legacy achievement or experience text, confirm the fallback remains visible. As an admin, open `/admin-tutors` and verify structured experience entries render readably in the review card and pending-change panel. Repeat the same short-viewport check in the admin tutor-review drawer; body overscroll may bounce locally, but the header and review actions must remain fixed. Repeat with an intentionally stale review tab/version and confirm the API returns a conflict without overwriting the newer values.
+Open `/profile` as a tutor and confirm the Public profile has no duplicate free-text Achievements or Experiences fields. In the combined Achievements & experience section, add two education entries and five competition achievements. Type a comma after one award before entering the next title and confirm the comma remains visible; verify a comma in an experience role, organization, or description also remains visible. Add up to five role/organization/year/description entries, leaving End year blank for an ongoing role. Confirm the sixth row controls are disabled, incomplete rows and an end year before the start year are rejected on **Submit for review**, and every year field displays plain digits without grouping dots. Save a draft, reload, and verify the structured arrays persist. Open a published tutor in discovery and confirm the drawer uses the published profile image as a 300px full-width hero, keeps the close control visible over the image, and layers up to three specialization badges over its lower edge. Scroll the drawer and confirm education, achievements, and experiences appear inside one **Achievements & experience** panel; for an old profile with only legacy achievement or experience text, confirm the fallback remains visible. As an admin, open `/admin-tutors` and verify structured experience entries render readably in the review card and pending-change panel. Repeat the same short-viewport check in the admin tutor-review drawer; body overscroll may bounce locally, but the header and review actions must remain fixed. Repeat with an intentionally stale review tab/version and confirm the API returns a conflict without overwriting the newer values.
+
+Open **View details** from both `/achievements` and `/admin-achievements`. Confirm Status retains its semantic badge beneath the field label, while Category, Level, Subjects, Award, Awarded, and Location use the same label/value hierarchy. Below the `sm` breakpoint, confirm the detail opens from the bottom, stays usable within the viewport, and dismisses with a downward swipe. At `sm` and wider, confirm it opens from the right and dismisses with a rightward swipe. Resize across the breakpoint while the drawer is open and confirm its placement and dismissal direction update together. Open both available attachment types and confirm image URLs render in the preview, **Open original** launches the source in a new tab, and a non-image or inaccessible URL shows the preview-unavailable fallback without removing the original link.
 
 ### Tutor profile validation and action smoke check
 
@@ -525,6 +585,14 @@ build that includes the first-submit consent flow; it adds nullable
 `tutor_profile.terms_of_service_accepted_at` and
 `tutor_profile.terms_of_service_version`. Existing rows are not backfilled;
 the first accepted submission records version `2026-09`.
+
+Human-readable booking references require migration
+`0043_cheerful_blockbuster.sql`. Run `bun run db:migrate` before starting an
+API/web build that displays or searches booking numbers. It adds the global
+PostgreSQL-backed `booking.booking_number` sequence, assigns numbers to
+existing bookings, and enforces uniqueness. Numbers are immutable and may have
+gaps after rolled-back inserts; this is expected and is not a migration or data
+integrity failure. No manual backfill or environment variable is required.
 
 The IDR economy and admin rate-control surface require migration
 `0028_economy_config.sql`. Run `bun run db:migrate` before starting the server;

@@ -2,6 +2,7 @@ import { describe, test, expect, mock } from "bun:test";
 import {
   createRoomRepo,
   findActiveRooms,
+  findPendingRoomApprovals,
   insertRoom,
   findRoomById,
   findRoomBookings,
@@ -45,6 +46,58 @@ describe("findActiveRooms", () => {
 
     expect(result).toEqual(rooms);
     expect(conn.select).toHaveBeenCalledTimes(1);
+  });
+
+  test("applies deterministic server pagination when requested", async () => {
+    const rows = [{ id: "r2", name: "Room B", isActive: true }];
+    const offset = mock(async () => rows);
+    const limit = mock(() => ({ offset }));
+    const orderBy = mock(() => ({ limit }));
+    const where = mock(() => ({ orderBy }));
+    const from = mock(() => ({ where }));
+    const select = mock(() => ({ from }));
+
+    const result = await findActiveRooms(
+      { select, from, where, orderBy, limit, offset } as any,
+      { limit: 10, offset: 20 },
+    );
+
+    expect(result).toEqual(rows);
+    expect(limit).toHaveBeenCalledWith(10);
+    expect(offset).toHaveBeenCalledWith(20);
+  });
+});
+
+describe("findPendingRoomApprovals", () => {
+  test("applies limit and offset to the pending approval query", async () => {
+    const rows = [{ bookingId: "b1" }];
+    const offset = mock(async () => rows);
+    const limit = mock(() => ({ offset }));
+    const orderBy = mock(() => ({ limit }));
+    const where = mock(() => ({ orderBy }));
+    const secondLeftJoin = mock(() => ({ where }));
+    const firstLeftJoin = mock(() => ({ leftJoin: secondLeftJoin }));
+    const from = mock(() => ({ leftJoin: firstLeftJoin }));
+    const select = mock(() => ({ from }));
+
+    const result = await findPendingRoomApprovals(
+      {
+        select,
+        from,
+        firstLeftJoin,
+        secondLeftJoin,
+        where,
+        orderBy,
+        limit,
+        offset,
+      } as any,
+      10,
+      20,
+    );
+
+    expect(result).toEqual(rows);
+    expect(limit).toHaveBeenCalledWith(10);
+    expect(offset).toHaveBeenCalledWith(20);
   });
 });
 

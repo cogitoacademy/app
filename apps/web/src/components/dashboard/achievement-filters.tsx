@@ -11,15 +11,12 @@ import {
 
 const CATEGORIES = [
   "All",
-  "MUN",
-  "WSC",
-  "Olympiad",
-  "Debate",
-  "Science",
-  "Arts",
-  "Sports",
-  "Academic",
+  "Competition",
+  "Award",
+  "Certificate",
   "Leadership",
+  "Publication",
+  "Other",
 ] as const;
 
 const STATUSES = ["All", "Pending", "Approved", "Rejected"] as const;

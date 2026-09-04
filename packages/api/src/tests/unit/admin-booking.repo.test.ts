@@ -264,6 +264,16 @@ describe("admin-booking.repo", () => {
 
       expect(conn.where).toHaveBeenCalled();
     });
+
+    test("queries with a booking number filter", async () => {
+      const conn = makeSelectConn([{ id: "b12", bookingNumber: 12 }]) as any;
+
+      await listBookingsByState(conn, [], 2, undefined, {
+        bookingNumber: 12,
+      });
+
+      expect(conn.where).toHaveBeenCalled();
+    });
   });
 
   describe("getStateHistory", () => {

@@ -1096,6 +1096,76 @@ describe("AdminBookingService", () => {
       );
     });
 
+    test("normalizes a #booking number search into a typed repo filter", async () => {
+      const scheduledStartAt = new Date();
+      const repo = mockRepo({
+        listBookingsByState: mock(async () => [
+          {
+            id: "b12",
+            bookingNumber: 12,
+            currentState: "confirmed",
+            scheduledStartAt,
+          },
+        ]),
+      });
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+        meeting: { setManualLink: mock(async () => ({}) as any) },
+      });
+
+      const result = await service.listBookings({ search: "#12", limit: 5 });
+
+      expect(repo.listBookingsByState).toHaveBeenCalledWith(
+        expect.anything(),
+        [],
+        5,
+        undefined,
+        {
+          bookingNumber: 12,
+          category: undefined,
+          urgency: undefined,
+          escalated: undefined,
+        },
+      );
+      expect(result.items[0]?.bookingNumber).toBe(12);
+    });
+
+    test("returns no rows for an invalid booking number search", async () => {
+      const repo = mockRepo();
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+      });
+
+      const result = await service.listBookings({ search: "booking-12" });
+
+      expect(result).toEqual({ items: [], nextCursor: null });
+      expect(repo.listBookingsByState).not.toHaveBeenCalled();
+    });
+
+    test("returns no rows for an out-of-range booking number search", async () => {
+      const repo = mockRepo();
+      const service = createAdminBookingService({
+        db: makeDb(),
+        repo,
+        auditPort: makeAuditPort(),
+        wallet: makeWalletPort() as any,
+        refund: makeRefundPort(),
+      });
+
+      const result = await service.listBookings({ search: "0" });
+
+      expect(result).toEqual({ items: [], nextCursor: null });
+      expect(repo.listBookingsByState).not.toHaveBeenCalled();
+    });
+
     test("flags booking as escalated when overrideMeta.overriddenAt passes OQ-04 SLA", async () => {
       const stale = new Date(Date.now() - 13 * 3600_000).toISOString();
       const fresh = new Date().toISOString();

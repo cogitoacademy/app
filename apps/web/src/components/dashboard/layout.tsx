@@ -114,7 +114,7 @@ export function Layout({
         </nav>
         <div
           className={cn(
-            "flex min-h-0 min-w-0 max-w-full flex-1 flex-col gap-6 overflow-x-hidden *:shrink-0 *:pb-6 max-xl:p-4",
+            "flex min-h-0 min-w-0 max-w-full flex-1 flex-col gap-6 overflow-x-hidden *:shrink-0 max-xl:p-4",
             contentScrollMode === "contained"
               ? "overflow-hidden"
               : "overflow-y-auto",

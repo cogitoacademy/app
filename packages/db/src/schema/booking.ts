@@ -6,6 +6,7 @@ import {
   integer,
   boolean,
   jsonb,
+  serial,
   index,
   uniqueIndex,
   check,
@@ -46,6 +47,7 @@ export const booking = pgTable(
   "booking",
   {
     id: uuidPrimaryKey,
+    bookingNumber: serial("booking_number"),
     type: text("type").notNull(),
     modality: text("modality").notNull(),
     tutorId: text("tutor_id")
@@ -150,6 +152,7 @@ export const booking = pgTable(
     ),
     index("booking_scheduledStartAt_idx").on(table.scheduledStartAt),
     index("booking_tutor_completedAt_idx").on(table.tutorId, table.completedAt),
+    uniqueIndex("booking_bookingNumber_uniq").on(table.bookingNumber),
   ],
 );
 

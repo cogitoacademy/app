@@ -1,6 +1,11 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useState } from "react";
 import { IconCertificate, IconEye, IconInbox } from "@tabler/icons-react";
 import {
@@ -56,6 +61,7 @@ import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
 import { EmptyStateCard } from "@/components/empty-state";
+import { TablePagination } from "@/components/table-pagination";
 import {
   AchievementForm,
   type AchievementCategory,
@@ -72,6 +78,8 @@ type AdminAchievement = Awaited<
 >[number];
 type StatusFilter = "all" | "pending" | "approved" | "rejected";
 
+const MODERATION_PAGE_SIZE = 10;
+
 const STATUS_CONFIG = {
   pending: { label: "Pending review", variant: "warning" },
   pending_review: { label: "Pending review", variant: "warning" },
@@ -83,6 +91,7 @@ const STATUS_CONFIG = {
 export function AchievementModerationPage() {
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("pending");
+  const [page, setPage] = useState(0);
   const [reviewTarget, setReviewTarget] = useState<{
     id: string;
     eventName: string;
@@ -92,10 +101,18 @@ export function AchievementModerationPage() {
     useState<AdminAchievement | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [rejectionNote, setRejectionNote] = useState("");
-  const achievementsQuery = useQuery(
-    orpc.achievement.adminList.queryOptions({
-      input: { limit: 100, offset: 0 },
+  const achievementsQuery = useQuery({
+    ...orpc.achievement.adminList.queryOptions({
+      input: {
+        limit: MODERATION_PAGE_SIZE + 1,
+        offset: page * MODERATION_PAGE_SIZE,
+        ...(statusFilter !== "all" ? { status: statusFilter } : {}),
+      },
     }),
+    placeholderData: keepPreviousData,
+  });
+  const statsQuery = useQuery(
+    orpc.achievement.adminStats.queryOptions({ input: undefined }),
   );
   const review = useMutation(
     orpc.achievement.adminReview.mutationOptions({
@@ -104,6 +121,9 @@ export function AchievementModerationPage() {
         setRejectionNote("");
         void queryClient.invalidateQueries({
           queryKey: orpc.achievement.adminList.key(),
+        });
+        void queryClient.invalidateQueries({
+          queryKey: orpc.achievement.adminStats.key(),
         });
         toastManager.add({
           title:
@@ -151,24 +171,11 @@ export function AchievementModerationPage() {
     );
   }
 
-  const achievements = achievementsQuery.data;
-  const visibleAchievements =
-    statusFilter === "all"
-      ? achievements
-      : achievements.filter((item) =>
-          statusFilter === "pending"
-            ? item.status === "pending" || item.status === "pending_review"
-            : item.status === statusFilter,
-        );
-  const pendingCount = achievements.filter(
-    (item) => item.status === "pending" || item.status === "pending_review",
-  ).length;
-  const approvedCount = achievements.filter(
-    (item) => item.status === "approved",
-  ).length;
-  const rejectedCount = achievements.filter(
-    (item) => item.status === "rejected",
-  ).length;
+  const achievements = achievementsQuery.data ?? [];
+  const visibleAchievements = achievements.slice(0, MODERATION_PAGE_SIZE);
+  const pendingCount = statsQuery.data?.pending ?? 0;
+  const approvedCount = statsQuery.data?.approved ?? 0;
+  const rejectedCount = statsQuery.data?.rejected ?? 0;
 
   function submitReview() {
     if (!reviewTarget) return;
@@ -198,7 +205,10 @@ export function AchievementModerationPage() {
         </div>
         <Select
           value={statusFilter}
-          onValueChange={(value) => setStatusFilter(value as StatusFilter)}
+          onValueChange={(value) => {
+            setStatusFilter(value as StatusFilter);
+            setPage(0);
+          }}
         >
           <SelectTrigger className="w-full sm:w-48">
             <SelectValue placeholder="Filter status" />
@@ -220,7 +230,7 @@ export function AchievementModerationPage() {
         <QueueStat label="Rejected" value={rejectedCount} variant="danger" />
       </div>
 
-      {visibleAchievements.length === 0 ? (
+      {visibleAchievements.length === 0 && page === 0 ? (
         <EmptyStateCard
           icon={<IconInbox />}
           title="No matching submissions"
@@ -231,6 +241,28 @@ export function AchievementModerationPage() {
           }
           tone={statusFilter === "pending" ? "success" : "secondary"}
         />
+      ) : visibleAchievements.length === 0 ? (
+        <Card>
+          <CardBody>
+            <EmptyStateCard
+              icon={<IconInbox />}
+              title="No submissions on this page"
+              description="Go back to the previous page to continue reviewing submissions."
+              tone="secondary"
+              size="compact"
+            />
+            <TablePagination
+              label="submissions"
+              pageSize={MODERATION_PAGE_SIZE}
+              page={page}
+              itemCount={0}
+              hasNext={false}
+              isFetching={achievementsQuery.isFetching}
+              onPrevious={() => setPage((current) => Math.max(0, current - 1))}
+              onNext={() => setPage((current) => current + 1)}
+            />
+          </CardBody>
+        </Card>
       ) : (
         <ModerationTable
           achievements={visibleAchievements}
@@ -245,6 +277,12 @@ export function AchievementModerationPage() {
             setEditAchievement(item);
             setEditOpen(true);
           }}
+          page={page}
+          pageSize={MODERATION_PAGE_SIZE}
+          hasNext={achievements.length > MODERATION_PAGE_SIZE}
+          isFetching={achievementsQuery.isFetching}
+          onPrevious={() => setPage((current) => Math.max(0, current - 1))}
+          onNext={() => setPage((current) => current + 1)}
         />
       )}
 
@@ -348,12 +386,24 @@ function ModerationTable({
   onApprove,
   onReject,
   onEdit,
+  page,
+  pageSize,
+  hasNext,
+  isFetching,
+  onPrevious,
+  onNext,
 }: {
   achievements: readonly AdminAchievement[];
   mutationPending: boolean;
   onApprove: (id: string, eventName: string) => void;
   onReject: (id: string, eventName: string) => void;
   onEdit: (achievement: AdminAchievement) => void;
+  page: number;
+  pageSize: number;
+  hasNext: boolean;
+  isFetching: boolean;
+  onPrevious: () => void;
+  onNext: () => void;
 }) {
   const [selectedAchievement, setSelectedAchievement] =
     useState<AdminAchievement | null>(null);
@@ -446,6 +496,16 @@ function ModerationTable({
               </TableBody>
             </Table>
           </TableContainer>
+          <TablePagination
+            label="submissions"
+            pageSize={pageSize}
+            page={page}
+            itemCount={achievements.length}
+            hasNext={hasNext}
+            isFetching={isFetching}
+            onPrevious={onPrevious}
+            onNext={onNext}
+          />
         </CardBody>
       </Card>
 

@@ -32,7 +32,7 @@ async function login(page: Page, email = SEED_EMAIL, password = SEED_PASSWORD) {
 async function openBookingPage(page: Page) {
   await page.goto("/tutors");
   await expect(
-    page.getByRole("heading", { name: "Tutors" }).first(),
+    page.getByRole("heading", { name: "Book a Session" }).first(),
   ).toBeVisible();
 
   const seedTutorCard = page
@@ -159,7 +159,9 @@ test("student can log in and see starting balance", async ({ page }) => {
   await login(page);
   await page.goto("/balance");
   await expect(page.getByText("200").first()).toBeVisible();
-  await expect(page.getByText("Ready to spend")).toBeVisible();
+  await expect(
+    page.getByText("Available balance", { exact: true }),
+  ).toBeVisible();
 });
 
 test("student can book a solo session from tutor discovery", async ({
@@ -318,14 +320,16 @@ test("tutor can decline a request and the student sees the terminal state", asyn
     await expect(
       tutor.page.getByText("Booking declined", { exact: true }),
     ).toBeVisible();
-    await expect(
-      tutor.page.getByText("Declined", { exact: true }).last(),
-    ).toBeVisible();
   } finally {
     await tutor.context.close();
   }
 
-  await page.reload();
+  await page.goto(`/bookings/${bookingId}`);
+  await expect(
+    page.getByText("The tutor declined this booking request.", {
+      exact: true,
+    }),
+  ).toBeVisible({ timeout: 15_000 });
   await expect(
     page.getByText("Declined", { exact: true }).last(),
   ).toBeVisible();

@@ -17,6 +17,7 @@ import type {
   InsertAchievementParams,
   UpdateAchievementData,
   AdminListInput,
+  AchievementListInput,
 } from "./achievement.repo";
 import type {
   AchievementAuditPort,
@@ -24,6 +25,23 @@ import type {
 } from "./index";
 
 type AchievementRow = typeof achievement.$inferSelect;
+type AchievementStatusCount = { status: string; count: number };
+
+function toAchievementStats(rows: AchievementStatusCount[]) {
+  const total = rows.reduce((sum, row) => sum + Number(row.count), 0);
+  const countFor = (...statuses: string[]) =>
+    rows
+      .filter((row) => statuses.includes(row.status))
+      .reduce((sum, row) => sum + Number(row.count), 0);
+
+  return {
+    total,
+    approved: countFor("approved"),
+    pending: countFor("pending", "pending_review"),
+    rejected: countFor("rejected"),
+    archived: countFor("archived"),
+  };
+}
 
 export interface UpdateAchievementInput {
   id: string;
@@ -118,8 +136,14 @@ export function createAchievementService(deps: {
 }) {
   const { achievementRepo, auditPort, notificationPort, db } = deps;
 
-  async function list(userId: string) {
+  async function list(userId: string, input?: AchievementListInput) {
+    if (input) return achievementRepo.listByUserId(db, userId, input);
     return achievementRepo.listByUserId(db, userId);
+  }
+
+  async function stats(userId: string) {
+    const rows = await achievementRepo.countByUserId(db, userId);
+    return toAchievementStats(rows);
   }
 
   /**
@@ -225,6 +249,11 @@ export function createAchievementService(deps: {
     return achievementRepo.adminList(db, withDefaults);
   }
 
+  async function adminStats() {
+    const rows = await achievementRepo.countAll(db);
+    return toAchievementStats(rows);
+  }
+
   async function adminReview(adminId: string, input: AdminReviewInput) {
     return db.transaction(async (tx) => {
       const existing = await achievementRepo.getById(tx, input.achievementId);
@@ -289,12 +318,14 @@ export function createAchievementService(deps: {
 
   return {
     list,
+    stats,
     listApprovedPublic,
     create,
     update,
     adminUpdate,
     remove,
     adminList,
+    adminStats,
     adminReview,
   };
 }

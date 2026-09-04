@@ -88,6 +88,7 @@ import {
 import { EmptyState } from "@/components/empty-state";
 import { InfoPreview } from "@/components/info-preview";
 import { CogitoMarks } from "@/components/cogito-marks";
+import { TablePagination } from "@/components/table-pagination";
 import {
   Tabs,
   TabsItem,
@@ -136,6 +137,11 @@ type Urgency = "all" | "high" | "medium" | "low";
 type OverrideCategoryFilter = "all" | (typeof OVERRIDE_LIST_CATEGORIES)[number];
 type SlaFilter = "all" | "escalated";
 
+const BOOKING_QUEUE_PAGE_SIZE = 10;
+const LEDGER_PAGE_SIZE = 10;
+const ROOM_PAGE_SIZE = 10;
+const ROOM_APPROVAL_PAGE_SIZE = 10;
+
 export function AdminOperationsPage() {
   return (
     <Stack
@@ -180,12 +186,20 @@ export function AdminOperationsPage() {
 
 function BookingQueue() {
   const queryClient = useQueryClient();
+  const [bookingSearch, setBookingSearch] = useState("");
   const [category, setCategory] = useState<OverrideCategoryFilter>("all");
   const [urgency, setUrgency] = useState<Urgency>("all");
   const [slaFilter, setSlaFilter] = useState<SlaFilter>("all");
+  const [page, setPage] = useState(0);
+  const [pageCursors, setPageCursors] = useState<Array<string | undefined>>([
+    undefined,
+  ]);
   const [selected, setSelected] = useState<QueueItem | null>(null);
+  const cursor = pageCursors[page];
   const queryInput = {
-    limit: 50,
+    limit: BOOKING_QUEUE_PAGE_SIZE,
+    ...(cursor ? { cursor } : {}),
+    ...(bookingSearch.trim() ? { search: bookingSearch.trim() } : {}),
     ...(category !== "all" ? { category } : {}),
     ...(urgency !== "all" ? { urgency } : {}),
     ...(slaFilter === "escalated" ? { escalated: true } : {}),
@@ -194,6 +208,23 @@ function BookingQueue() {
     ...orpc.adminBooking.listBookings.queryOptions({ input: queryInput }),
     placeholderData: keepPreviousData,
   });
+
+  function resetPage() {
+    setPage(0);
+    setPageCursors([undefined]);
+  }
+
+  function nextPage() {
+    const nextCursor = queueQuery.data?.nextCursor;
+    if (!nextCursor) return;
+
+    setPageCursors((current) => {
+      const next = current.slice(0, page + 1);
+      next.push(nextCursor);
+      return next;
+    });
+    setPage((current) => current + 1);
+  }
 
   return (
     <Stack
@@ -204,12 +235,33 @@ function BookingQueue() {
       <Card>
         <CardBody className="flex flex-wrap items-end gap-3">
           <Field className="min-w-56">
+            <FieldLabel htmlFor="booking-number-search">
+              Booking number
+            </FieldLabel>
+            <Input
+              id="booking-number-search"
+              type="search"
+              value={bookingSearch}
+              onChange={(event) => {
+                setBookingSearch(event.target.value);
+                resetPage();
+              }}
+              placeholder="#12 or 12"
+            />
+            <FieldDescription>
+              Search by exact reference number.
+            </FieldDescription>
+          </Field>
+          <Field className="min-w-56">
             <FieldLabel>Override category</FieldLabel>
             <Select
               value={category}
-              onValueChange={(value) =>
-                setCategory(getSelectItemValue(value) as OverrideCategoryFilter)
-              }
+              onValueChange={(value) => {
+                setCategory(
+                  getSelectItemValue(value) as OverrideCategoryFilter,
+                );
+                resetPage();
+              }}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -230,9 +282,10 @@ function BookingQueue() {
             <FieldLabel>Urgency</FieldLabel>
             <Select
               value={urgency}
-              onValueChange={(value) =>
-                setUrgency(getSelectItemValue(value) as Urgency)
-              }
+              onValueChange={(value) => {
+                setUrgency(getSelectItemValue(value) as Urgency);
+                resetPage();
+              }}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -251,9 +304,10 @@ function BookingQueue() {
             <FieldLabel>SLA status</FieldLabel>
             <Select
               value={slaFilter}
-              onValueChange={(value) =>
-                setSlaFilter(getSelectItemValue(value) as SlaFilter)
-              }
+              onValueChange={(value) => {
+                setSlaFilter(getSelectItemValue(value) as SlaFilter);
+                resetPage();
+              }}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -279,7 +333,10 @@ function BookingQueue() {
           onRetry={() => void queueQuery.refetch()}
         />
       ) : (
-        <Card className="w-full min-w-0 max-w-full overflow-hidden">
+        <Card
+          id="admin-booking-queue"
+          className="w-full min-w-0 max-w-full overflow-hidden"
+        >
           <CardHeader>
             <CardTitle>Booking monitor</CardTitle>
             <CardDescription>
@@ -291,140 +348,182 @@ function BookingQueue() {
             className="min-w-0 max-w-full"
           >
             {queueQuery.data.items.length === 0 ? (
-              <EmptyState
-                icon={<IconSearch />}
-                title="No matching bookings"
-                description="Try adjusting the booking state or search filters."
-                tone="secondary"
-                size="compact"
-              />
+              <>
+                <EmptyState
+                  icon={<IconSearch />}
+                  title={
+                    page === 0
+                      ? "No matching bookings"
+                      : "No bookings on this page"
+                  }
+                  description={
+                    page === 0
+                      ? "Try adjusting the booking state or search filters."
+                      : "Go back to the previous page to continue browsing bookings."
+                  }
+                  tone="secondary"
+                  size="compact"
+                />
+                {page > 0 ? (
+                  <TablePagination
+                    targetId="admin-booking-queue"
+                    label="bookings"
+                    pageSize={BOOKING_QUEUE_PAGE_SIZE}
+                    page={page}
+                    itemCount={0}
+                    hasNext={false}
+                    isFetching={queueQuery.isFetching}
+                    onPrevious={() =>
+                      setPage((current) => Math.max(0, current - 1))
+                    }
+                    onNext={nextPage}
+                  />
+                ) : null}
+              </>
             ) : (
-              <TableContainer className="w-[calc(100%+3rem)]! min-w-0 max-w-none">
-                <Table className="min-w-[76rem] text-sm">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-44 whitespace-nowrap">
-                        Booking
-                      </TableHead>
-                      <TableHead className="w-44 whitespace-nowrap">
-                        Schedule
-                      </TableHead>
-                      <TableHead className="w-40 whitespace-nowrap">
-                        Status
-                      </TableHead>
-                      <TableHead className="min-w-56">Override</TableHead>
-                      <TableHead className="w-28 whitespace-nowrap">
-                        Affected
-                      </TableHead>
-                      <TableHead className="w-40 whitespace-nowrap">
-                        SLA
-                      </TableHead>
-                      <TableHead className="w-28 whitespace-nowrap">
-                        Marks
-                      </TableHead>
-                      <TableHead className="w-44" />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {queueQuery.data.items.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell className="align-top">
-                          <Text className="font-mono text-sm">{item.id}</Text>
-                          <Text className="mt-1 text-sm text-muted">
-                            {item.type} · {item.modality}
-                          </Text>
-                        </TableCell>
-                        <TableCell className="align-top text-sm">
-                          {formatBookingDate(
-                            item.scheduledStartAt,
-                            item.timezone,
-                          )}
-                        </TableCell>
-                        <TableCell className="align-top">
-                          <div className="flex flex-col items-start gap-1.5">
-                            <Badge
-                              className="whitespace-nowrap"
-                              variant={getBookingStateVariant(
-                                item.currentState,
-                              )}
-                            >
-                              {getBookingStateLabel(item.currentState)}
-                            </Badge>
-                            {item.escalated ? (
+              <>
+                <TableContainer className="w-[calc(100%+3rem)]! min-w-0 max-w-none">
+                  <Table className="min-w-[76rem] text-sm">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-44 whitespace-nowrap">
+                          Booking
+                        </TableHead>
+                        <TableHead className="w-44 whitespace-nowrap">
+                          Schedule
+                        </TableHead>
+                        <TableHead className="w-40 whitespace-nowrap">
+                          Status
+                        </TableHead>
+                        <TableHead className="min-w-56">Override</TableHead>
+                        <TableHead className="w-28 whitespace-nowrap">
+                          Affected
+                        </TableHead>
+                        <TableHead className="w-40 whitespace-nowrap">
+                          SLA
+                        </TableHead>
+                        <TableHead className="w-28 whitespace-nowrap">
+                          Marks
+                        </TableHead>
+                        <TableHead className="w-44" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {queueQuery.data.items.map((item) => (
+                        <TableRow key={item.id}>
+                          <TableCell className="align-top">
+                            <Text className="font-mono text-sm font-semibold">
+                              #{item.bookingNumber}
+                            </Text>
+                            <Text className="mt-1 text-sm text-muted">
+                              {item.type} · {item.modality}
+                            </Text>
+                          </TableCell>
+                          <TableCell className="align-top text-sm">
+                            {formatBookingDate(
+                              item.scheduledStartAt,
+                              item.timezone,
+                            )}
+                          </TableCell>
+                          <TableCell className="align-top">
+                            <div className="flex flex-col items-start gap-1.5">
                               <Badge
                                 className="whitespace-nowrap"
-                                variant="danger"
+                                variant={getBookingStateVariant(
+                                  item.currentState,
+                                )}
                               >
-                                Escalated
+                                {getBookingStateLabel(item.currentState)}
                               </Badge>
-                            ) : null}
-                          </div>
-                        </TableCell>
-                        <TableCell className="align-top">
-                          {getOverrideCategory(item.overrideMeta) ? (
-                            <Badge
-                              className="whitespace-nowrap"
-                              variant="secondary"
-                            >
-                              {humanize(
-                                getOverrideCategory(item.overrideMeta)!,
-                              )}
-                            </Badge>
-                          ) : (
-                            <Text className="text-sm text-muted">
-                              Standard review
+                              {item.escalated ? (
+                                <Badge
+                                  className="whitespace-nowrap"
+                                  variant="danger"
+                                >
+                                  Escalated
+                                </Badge>
+                              ) : null}
+                            </div>
+                          </TableCell>
+                          <TableCell className="align-top">
+                            {getOverrideCategory(item.overrideMeta) ? (
+                              <Badge
+                                className="whitespace-nowrap"
+                                variant="secondary"
+                              >
+                                {humanize(
+                                  getOverrideCategory(item.overrideMeta)!,
+                                )}
+                              </Badge>
+                            ) : (
+                              <Text className="text-sm text-muted">
+                                Standard review
+                              </Text>
+                            )}
+                            <Text className="mt-1 max-w-56 text-sm leading-relaxed text-muted">
+                              {getOverrideReason(item.overrideMeta) ??
+                                "No reported reason"}
                             </Text>
-                          )}
-                          <Text className="mt-1 max-w-56 text-sm leading-relaxed text-muted">
-                            {getOverrideReason(item.overrideMeta) ??
-                              "No reported reason"}
-                          </Text>
-                          <Text className="text-sm text-dimmed">
-                            Source: admin override
-                          </Text>
-                        </TableCell>
-                        <TableCell className="align-top text-sm">
-                          {getStringArray(
-                            getOverrideMetadata(item.overrideMeta)
-                              ?.affectedParticipants,
-                          ).length || "—"}
-                        </TableCell>
-                        <TableCell className="align-top">
-                          <SlaStatus item={item} timezone={item.timezone} />
-                        </TableCell>
-                        <TableCell className="align-top whitespace-nowrap text-sm">
-                          {item.holdAmount} held
-                        </TableCell>
-                        <TableCell className="align-top px-3! py-4! sm:px-6!">
-                          <div className="flex flex-col items-stretch gap-1.5">
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              render={
-                                <Link
-                                  to="/admin-operations/bookings/$bookingId"
-                                  params={{ bookingId: item.id }}
-                                  aria-label={`View booking ${item.id} details`}
-                                />
-                              }
-                              nativeButton={false}
-                            >
-                              View details
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="plain"
-                              onClick={() => setSelected(item)}
-                            >
-                              Override
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+                            <Text className="text-sm text-dimmed">
+                              Source: admin override
+                            </Text>
+                          </TableCell>
+                          <TableCell className="align-top text-sm">
+                            {getStringArray(
+                              getOverrideMetadata(item.overrideMeta)
+                                ?.affectedParticipants,
+                            ).length || "—"}
+                          </TableCell>
+                          <TableCell className="align-top">
+                            <SlaStatus item={item} timezone={item.timezone} />
+                          </TableCell>
+                          <TableCell className="align-top whitespace-nowrap text-sm">
+                            {item.holdAmount} held
+                          </TableCell>
+                          <TableCell className="align-top px-3! py-4! sm:px-6!">
+                            <div className="flex flex-col items-stretch gap-1.5">
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                render={
+                                  <Link
+                                    to="/admin-operations/bookings/$bookingId"
+                                    params={{ bookingId: item.id }}
+                                    aria-label={`View booking #${item.bookingNumber} details`}
+                                  />
+                                }
+                                nativeButton={false}
+                              >
+                                View details
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="plain"
+                                onClick={() => setSelected(item)}
+                              >
+                                Override
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+                <TablePagination
+                  targetId="admin-booking-queue"
+                  label="bookings"
+                  pageSize={BOOKING_QUEUE_PAGE_SIZE}
+                  page={page}
+                  itemCount={queueQuery.data.items.length}
+                  hasNext={Boolean(queueQuery.data.nextCursor)}
+                  isFetching={queueQuery.isFetching}
+                  onPrevious={() => {
+                    setPage((current) => Math.max(0, current - 1));
+                  }}
+                  onNext={nextPage}
+                />
+              </>
             )}
           </CardBody>
         </Card>
@@ -1247,6 +1346,10 @@ function WalletLookup() {
   const [submittedSearch, setSubmittedSearch] = useState("");
   const [selectedUser, setSelectedUser] =
     useState<AdminUserSearchResult | null>(null);
+  const [ledgerPage, setLedgerPage] = useState(0);
+  const [ledgerCursors, setLedgerCursors] = useState<Array<string | undefined>>(
+    [undefined],
+  );
   const searchQuery = useQuery({
     ...orpc.admin.searchUsers.queryOptions({
       input: { query: submittedSearch || "--", limit: 10 },
@@ -1254,13 +1357,18 @@ function WalletLookup() {
     enabled: submittedSearch.length >= 2,
   });
   const selectedUserId = selectedUser?.id ?? "";
+  const ledgerCursor = ledgerCursors[ledgerPage];
   const walletQuery = useQuery({
     ...orpc.admin.getWallet.queryOptions({ input: { userId: selectedUserId } }),
     enabled: Boolean(selectedUserId),
   });
   const ledgerQuery = useQuery({
     ...orpc.admin.listLedgerEntries.queryOptions({
-      input: { userId: selectedUserId, limit: 50 },
+      input: {
+        userId: selectedUserId,
+        limit: LEDGER_PAGE_SIZE,
+        ...(ledgerCursor ? { cursor: ledgerCursor } : {}),
+      },
     }),
     enabled: Boolean(selectedUserId) && walletQuery.isSuccess,
   });
@@ -1271,6 +1379,24 @@ function WalletLookup() {
     if (nextSearch.length < 2) return;
     setSelectedUser(null);
     setSubmittedSearch(nextSearch);
+  }
+
+  function selectUser(user: AdminUserSearchResult) {
+    setSelectedUser(user);
+    setLedgerPage(0);
+    setLedgerCursors([undefined]);
+  }
+
+  function nextLedgerPage() {
+    const nextCursor = ledgerQuery.data?.nextCursor;
+    if (!nextCursor) return;
+
+    setLedgerCursors((current) => {
+      const next = current.slice(0, ledgerPage + 1);
+      next.push(nextCursor);
+      return next;
+    });
+    setLedgerPage((current) => current + 1);
   }
 
   return (
@@ -1349,7 +1475,7 @@ function WalletLookup() {
                 render={
                   <button
                     type="button"
-                    onClick={() => setSelectedUser(user)}
+                    onClick={() => selectUser(user)}
                     aria-label={"View wallet for " + user.name}
                     aria-pressed={selectedUserId === user.id}
                   />
@@ -1440,42 +1566,80 @@ function WalletLookup() {
           </CardHeader>
           <CardBody>
             {ledgerQuery.data.items.length === 0 ? (
-              <EmptyState
-                icon={<IconCoins />}
-                title="No ledger entries"
-                description="This wallet has no Marks activity yet."
-                tone="secondary"
-                size="compact"
-              />
+              <>
+                <EmptyState
+                  icon={<IconCoins />}
+                  title={
+                    ledgerPage === 0
+                      ? "No ledger entries"
+                      : "No ledger entries on this page"
+                  }
+                  description={
+                    ledgerPage === 0
+                      ? "This wallet has no Marks activity yet."
+                      : "Go back to the previous page to continue browsing wallet activity."
+                  }
+                  tone="secondary"
+                  size="compact"
+                />
+                {ledgerPage > 0 ? (
+                  <TablePagination
+                    label="ledger entries"
+                    pageSize={LEDGER_PAGE_SIZE}
+                    page={ledgerPage}
+                    itemCount={0}
+                    hasNext={false}
+                    isFetching={ledgerQuery.isFetching}
+                    onPrevious={() =>
+                      setLedgerPage((current) => Math.max(0, current - 1))
+                    }
+                    onNext={nextLedgerPage}
+                  />
+                ) : null}
+              </>
             ) : (
-              <TableContainer>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Booking</TableHead>
-                      <TableHead>Date</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {ledgerQuery.data.items.map((entry) => (
-                      <TableRow key={entry.id}>
-                        <TableCell>
-                          <Badge variant="secondary">
-                            {humanize(entry.entryType)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{entry.amount} Marks</TableCell>
-                        <TableCell>{entry.bookingId ?? "—"}</TableCell>
-                        <TableCell>
-                          {formatBookingDate(entry.createdAt)}
-                        </TableCell>
+              <>
+                <TableContainer>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Amount</TableHead>
+                        <TableHead>Booking</TableHead>
+                        <TableHead>Date</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+                    </TableHeader>
+                    <TableBody>
+                      {ledgerQuery.data.items.map((entry) => (
+                        <TableRow key={entry.id}>
+                          <TableCell>
+                            <Badge variant="secondary">
+                              {humanize(entry.entryType)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{entry.amount} Marks</TableCell>
+                          <TableCell>{entry.bookingId ?? "—"}</TableCell>
+                          <TableCell>
+                            {formatBookingDate(entry.createdAt)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+                <TablePagination
+                  label="ledger entries"
+                  pageSize={LEDGER_PAGE_SIZE}
+                  page={ledgerPage}
+                  itemCount={ledgerQuery.data.items.length}
+                  hasNext={Boolean(ledgerQuery.data.nextCursor)}
+                  isFetching={ledgerQuery.isFetching}
+                  onPrevious={() =>
+                    setLedgerPage((current) => Math.max(0, current - 1))
+                  }
+                  onNext={nextLedgerPage}
+                />
+              </>
             )}
           </CardBody>
         </Card>
@@ -1495,11 +1659,18 @@ type PendingRoomApproval = Awaited<
 function RoomOperations() {
   const queryClient = useQueryClient();
   const [createRoomOpen, setCreateRoomOpen] = useState(false);
+  const [pendingPage, setPendingPage] = useState(0);
   const [cancelApproval, setCancelApproval] =
     useState<PendingRoomApproval | null>(null);
-  const pendingQuery = useQuery(
-    orpc.room.listPendingApprovals.queryOptions({ input: { limit: 50 } }),
-  );
+  const pendingQuery = useQuery({
+    ...orpc.room.listPendingApprovals.queryOptions({
+      input: {
+        limit: ROOM_APPROVAL_PAGE_SIZE + 1,
+        offset: pendingPage * ROOM_APPROVAL_PAGE_SIZE,
+      },
+    }),
+    placeholderData: keepPreviousData,
+  });
   const invalidateRoomQueries = () => {
     void Promise.all([
       queryClient.invalidateQueries({
@@ -1550,7 +1721,7 @@ function RoomOperations() {
       <Stack direction="column" spacing="md">
         <RoomCatalog onAddRoom={() => setCreateRoomOpen(true)} />
         <PendingRoomApprovals
-          items={pendingQuery.data ?? []}
+          items={(pendingQuery.data ?? []).slice(0, ROOM_APPROVAL_PAGE_SIZE)}
           isPending={pendingQuery.isPending}
           errorMessage={
             pendingQuery.isError
@@ -1565,6 +1736,14 @@ function RoomOperations() {
           onAssignRequested={assignRequested}
           onCancel={setCancelApproval}
           isActionPending={assign.isPending || cancel.isPending}
+          page={pendingPage}
+          pageSize={ROOM_APPROVAL_PAGE_SIZE}
+          hasNext={(pendingQuery.data?.length ?? 0) > ROOM_APPROVAL_PAGE_SIZE}
+          isFetching={pendingQuery.isFetching}
+          onPrevious={() =>
+            setPendingPage((current) => Math.max(0, current - 1))
+          }
+          onNext={() => setPendingPage((current) => current + 1)}
         />
       </Stack>
       <CreateRoomDialog
@@ -1596,12 +1775,21 @@ function RoomOperations() {
 }
 
 function RoomCatalog({ onAddRoom }: { onAddRoom: () => void }) {
-  const roomsQuery = useQuery(
-    orpc.room.list.queryOptions({ input: undefined }),
-  );
+  const [page, setPage] = useState(0);
+  const roomsQuery = useQuery({
+    ...orpc.room.list.queryOptions({
+      input: {
+        limit: ROOM_PAGE_SIZE + 1,
+        offset: page * ROOM_PAGE_SIZE,
+      },
+    }),
+    placeholderData: keepPreviousData,
+  });
+  const rooms = roomsQuery.data ?? [];
+  const visibleRooms = rooms.slice(0, ROOM_PAGE_SIZE);
 
   return (
-    <Card>
+    <Card id="admin-room-catalog" className="scroll-mt-4">
       <CardHeader className="flex-wrap">
         <div className="min-w-0 flex-1">
           <CardTitle>Active rooms</CardTitle>
@@ -1642,37 +1830,71 @@ function RoomCatalog({ onAddRoom }: { onAddRoom: () => void }) {
               Try again
             </Button>
           </div>
-        ) : roomsQuery.data.length === 0 ? (
-          <EmptyState
-            icon={<IconBuilding />}
-            title="No active rooms"
-            description="Add a room before creating or assigning an offline booking."
-            tone="secondary"
-            size="compact"
-          />
+        ) : visibleRooms.length === 0 ? (
+          <>
+            <EmptyState
+              icon={<IconBuilding />}
+              title={page === 0 ? "No active rooms" : "No rooms on this page"}
+              description={
+                page === 0
+                  ? "Add a room before creating or assigning an offline booking."
+                  : "Go back to the previous page to continue browsing rooms."
+              }
+              tone="secondary"
+              size="compact"
+            />
+            {page > 0 ? (
+              <TablePagination
+                targetId="admin-room-catalog"
+                label="rooms"
+                pageSize={ROOM_PAGE_SIZE}
+                page={page}
+                itemCount={0}
+                hasNext={false}
+                isFetching={roomsQuery.isFetching}
+                onPrevious={() =>
+                  setPage((current) => Math.max(0, current - 1))
+                }
+                onNext={() => setPage((current) => current + 1)}
+              />
+            ) : null}
+          </>
         ) : (
-          <TableContainer className="w-[calc(100%+3rem)]!">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Room</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Capacity</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {roomsQuery.data.map((room) => (
-                  <TableRow key={room.id}>
-                    <TableCell>
-                      <Text className="font-medium">{room.name}</Text>
-                    </TableCell>
-                    <TableCell>{room.location}</TableCell>
-                    <TableCell>{room.capacity} seats</TableCell>
+          <>
+            <TableContainer className="w-[calc(100%+3rem)]!">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Room</TableHead>
+                    <TableHead>Location</TableHead>
+                    <TableHead>Capacity</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                </TableHeader>
+                <TableBody>
+                  {visibleRooms.map((room) => (
+                    <TableRow key={room.id}>
+                      <TableCell>
+                        <Text className="font-medium">{room.name}</Text>
+                      </TableCell>
+                      <TableCell>{room.location}</TableCell>
+                      <TableCell>{room.capacity} seats</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+            <TablePagination
+              targetId="admin-room-catalog"
+              label="rooms"
+              pageSize={ROOM_PAGE_SIZE}
+              page={page}
+              itemCount={visibleRooms.length}
+              hasNext={rooms.length > ROOM_PAGE_SIZE}
+              isFetching={roomsQuery.isFetching}
+              onPrevious={() => setPage((current) => Math.max(0, current - 1))}
+              onNext={() => setPage((current) => current + 1)}
+            />
+          </>
         )}
       </CardBody>
     </Card>
@@ -1849,6 +2071,12 @@ function PendingRoomApprovals({
   onAssignRequested,
   onCancel,
   isActionPending,
+  page,
+  pageSize,
+  hasNext,
+  isFetching,
+  onPrevious,
+  onNext,
 }: {
   items: PendingRoomApproval[];
   isPending: boolean;
@@ -1858,20 +2086,22 @@ function PendingRoomApprovals({
   onAssignRequested: (approval: PendingRoomApproval) => void;
   onCancel: (approval: PendingRoomApproval) => void;
   isActionPending: boolean;
+  page: number;
+  pageSize: number;
+  hasNext: boolean;
+  isFetching: boolean;
+  onPrevious: () => void;
+  onNext: () => void;
 }) {
   return (
-    <Card>
+    <Card id="admin-room-approvals" className="scroll-mt-4">
       <CardHeader className="flex-wrap">
         <div className="min-w-0 flex-1">
           <CardTitle>Pending room approvals</CardTitle>
-          <CardDescription>
-            Offline bookings accepted by a tutor and waiting for an admin room
-            decision.
-          </CardDescription>
         </div>
         <Button
           size="sm"
-          variant="plain"
+          variant="outline"
           onClick={onRefresh}
           disabled={isPending}
         >
@@ -1891,8 +2121,16 @@ function PendingRoomApprovals({
         ) : items.length === 0 ? (
           <EmptyState
             icon={<IconCheck />}
-            title="No pending room approvals"
-            description="Tutor-accepted offline bookings will appear here."
+            title={
+              page === 0
+                ? "No pending room approvals"
+                : "No approvals on this page"
+            }
+            description={
+              page === 0
+                ? "Tutor-accepted offline bookings will appear here."
+                : "Go back to the previous page to continue reviewing approvals."
+            }
             tone="info"
             size="compact"
           />
@@ -1990,6 +2228,19 @@ function PendingRoomApprovals({
             </Table>
           </TableContainer>
         )}
+        {items.length > 0 || page > 0 ? (
+          <TablePagination
+            targetId="admin-room-approvals"
+            label="room approvals"
+            pageSize={pageSize}
+            page={page}
+            itemCount={items.length}
+            hasNext={hasNext}
+            isFetching={isFetching}
+            onPrevious={onPrevious}
+            onNext={onNext}
+          />
+        ) : null}
       </CardBody>
     </Card>
   );

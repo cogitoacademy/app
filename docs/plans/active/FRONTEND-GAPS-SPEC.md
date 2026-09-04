@@ -13,6 +13,23 @@ This document catalogs all PRD-required frontend surfaces that are not yet imple
 
 The backend spec is `docs/plans/completed/PRD-GAPS-SPEC.md` (backend-only). This is the frontend counterpart.
 
+### Student dashboard balance-widget follow-up (2026-09-04)
+
+The student dashboard replaces its Knowledge Bank promo tile with a compact
+Selia wallet widget showing available, held, and total Marks, a top-up action,
+while the Balance page reuses the widget beside its Knowledge Bank access card
+on desktop. Existing wallet data and routes are reused without an API change.
+The Balance-page CTA is labeled **Find a tutor** and links to `/tutors`; the
+student dashboard keeps the widget's **Top up** action.
+
+**Mobile containment follow-up:** the page grid and reusable widget expose
+shrinkable, width-bounded columns; transaction amounts move below their details
+on mobile so populated Marks history cannot widen the page; and the QRIS code
+scales within the nested payment card. This removes page-level horizontal
+clipping at narrow viewport widths without changing wallet or payment contracts.
+Ledger dates occupy a dedicated metadata line below the reason, and amounts plus
+resulting balances reuse the shared icon-prefixed `CogitoMarks` presentation.
+
 ### Booking-detail card header follow-up (2026-09-04)
 
 Booking-detail cards now move explanatory `CardDescription` copy into the
@@ -20,6 +37,26 @@ shared `CardInfoPreview`/`InfoPreview` popover immediately beside each title.
 This covers the shared student/tutor cards, contact and lifecycle cards, room
 assignment, and the admin review-context, wallet-impact, and state-history
 extensions without changing an API or persistence contract.
+
+### Sidebar booking-action badge follow-up (2026-09-04)
+
+The authenticated sidebar now shows a compact, `99+`-capped badge beside the
+shared `/bookings` item when the role-visible `booking.listMine` result contains
+the same pending states shown by the **Needs action** tab. The state tuple is
+shared with the booking card/list presentation, and the existing list query is
+invalidated by booking mutations. This is presentation-only and does not add an
+RPC, schema, persistence, or lifecycle change.
+
+### Sidebar navigation order follow-up (2026-09-04)
+
+The authenticated sidebar keeps its Navigation, Resources, and footer account
+zones while ordering role-specific primary links by workflow: students see
+**Dashboard**, **Tutors**, **My Bookings**, **Balance**, **Achievements**;
+tutors see **Dashboard**, **Bookings**, **Availability**, **Tutor Profile**;
+admins see **Dashboard**, **Operations**, **Bookings**, **Tutors**, **Economy**,
+**Achievements**. Resource links, account-menu behavior, and the existing
+**Tutor Profile** label remain unchanged. This is frontend-only and does not
+change an API, schema, persistence, or lifecycle contract.
 
 ### Tutor profile route follow-up (2026-08-31)
 
@@ -95,7 +132,7 @@ Tutor onboarding captures structured education (up to 2 entries) and one structu
 
 Tutor onboarding now uses the normalized competition category/specialization catalog exposed by `tutors.listSubjects`. The current catalog has seven categories and 33 specializations. Tutors must select at least one current specialization before submitting for review, and the student tutor catalog supports category and specialization filters. Archived legacy specializations remain visible on existing tutor profiles but cannot be newly selected. The legacy expertise field remains a compatibility fallback; future category changes should preserve the pending-review behavior for published profiles.
 
-The onboarding selector stores normalized IDs for persistence and renders all current categories with keyboard-accessible checkboxes. Tutors may select at most 7 active specializations; the selector shows the cap and current count, disables an eighth choice, and the submit/API validation rejects any over-limit payload. Selected specializations appear as chips, while archived profile specializations are shown read-only. The tutor list continues to support selecting multiple categories and specializations; specialization options are the union of the selected categories, the API matches selected values within each facet, and the list query debounces rapid search/filter changes by 300 ms. Product-facing copy uses **specialization**; compatibility API/database names such as `subjectIds`, `subjects`, and `listSubjects` remain unchanged.
+The onboarding selector stores normalized IDs for persistence and renders all current categories with keyboard-accessible checkboxes. Tutors may select at most 7 active specializations; the selector shows the cap and current count, disables an eighth choice, and the submit/API validation rejects any over-limit payload. Selected specializations appear as chips, while archived profile specializations are shown read-only. The tutor list continues to support selecting multiple categories and specializations; specialization options are the union of the selected categories, the API matches selected values within each facet, and the list query debounces rapid search/filter changes by 300 ms. Search stays visible while category, specialization, and modality controls live in a collapsed-by-default filter panel whose trigger shows the active-selection count. The panel uses a reduced-motion-aware height/fade transition and removes closed controls from keyboard navigation. Product-facing copy uses **specialization**; compatibility API/database names such as `subjectIds`, `subjects`, and `listSubjects` remain unchanged.
 
 ### Admin tutor review readability follow-up (2026-08-27)
 
@@ -103,11 +140,27 @@ The admin tutor review card now resolves proposed `subjectIds` through the activ
 
 ### Achievement list table follow-up (2026-09-02)
 
-The student `/achievements` list and admin `/admin-achievements` moderation queue now use compact minimum-width Selia tables instead of card grids. Rows expose core identity/status/date information and a shared detail drawer contains the full metadata, proof/documentation links, moderator notes, and the relevant student or admin actions. The table containers scroll horizontally when the viewport is narrower than the column minimums, without changing any RPC, schema, or persistence contract.
+The student `/achievements` list and admin `/admin-achievements` moderation queue now use compact minimum-width Selia tables instead of card grids. Rows expose core identity/status/date information and a shared responsive detail drawer contains consistently labeled metadata, proof/documentation image previews with original-link fallbacks, moderator notes, and the relevant student or admin actions. It opens as a bottom sheet on mobile and from the right at the `sm` breakpoint and above. The table containers scroll horizontally when the viewport is narrower than the column minimums, without changing any RPC, schema, or persistence contract.
 
 ### Tutor discovery pricing matrix follow-up (2026-08-27)
 
-The student-facing tutor drawer now combines the available Online and Offline Marks maps into one group-size table. Each modality has its own price column, populated values use the shared Cogito Marks icon prefix, and an em dash makes a missing modality/size combination explicit. This is a presentation-only change; the `tutors.listPublished`/`tutors.getProfile` response and pricing contracts are unchanged.
+The student-facing tutor drawer now combines the available Online and Offline Marks maps into one group-size table. Each modality has its own price column, populated values use the shared Cogito Marks icon prefix, and an em dash makes a missing modality/size combination explicit. The profile uses a bottom sheet on mobile and a right-side drawer from the `sm` breakpoint. This is a presentation-only change; the `tutors.listPublished`/`tutors.getProfile` response and pricing contracts are unchanged.
+
+Tutor discovery cards use a dedicated compact mobile composition below `sm`:
+identity and modality lead, the bio gets two lines, specialization labels omit
+the redundant category prefix, and pricing occupies a separated footer with a
+Marks prefix and profile chevron. Desktop keeps the horizontal summary.
+
+### Tutor discovery profile presentation follow-up (2026-09-04)
+
+The student tutor drawer now uses a full-width 300px image hero with
+top-aligned cover cropping, a bottom gradient, close control, and overlaid
+specialization badges. Education, achievements, and experiences render in one
+combined **Achievements & experience** panel, with legacy text fallbacks for
+older profiles. Desktop tutor cards progressively reveal one, two, or three
+natural-width child specialization labels without repeating the parent
+category by breakpoint while keeping the `From [Marks icon] #` price treatment
+on one line. This is presentation-only; discovery contracts remain unchanged.
 
 ### Competition Calendar parity follow-up (2026-08-23)
 
@@ -116,6 +169,15 @@ The authenticated calendar now carries the full read-only interaction model from
 ### Competition Calendar scroll containment follow-up (2026-08-26)
 
 The calendar route now uses a viewport-contained app shell. The page heading and calendar toolbar remain stationary, the calendar card body owns vertical scrolling, and the month grid owns horizontal scrolling on narrow screens. This is presentation-only; the read-only `content.listCompetitions` contract and event interactions are unchanged.
+
+### Competition Calendar empty-month follow-up (2026-09-04)
+
+The month view keeps its normal weekday/date grid visible when the selected
+month has no events, preserving date navigation and the calendar layout. The
+page-level empty state still covers the case where no published competitions
+exist at all, and the agenda view may still show its event-free period message.
+This is presentation-only; the `content.listCompetitions` contract is
+unchanged.
 
 ### Theme shortcut follow-up (2026-08-26)
 
@@ -168,8 +230,9 @@ use `EmptyStateCard`; embedded states use the `default`, `compact`, or `inline`
 densities. Calendar periods, filtered resource/tutor results, booking detail
 sections, notifications, Marks ledgers, specialization/proof-link fields,
 availability previews, and admin tables now have intentional no-data copy
-instead of blank panels or one-off text. Month and agenda views also explain
-when the selected period has no events. No API, schema, or persistence contract
+instead of blank panels or one-off text. The agenda view explains when the
+selected period has no events, while the month view keeps its normal grid
+visible for an event-free month. No API, schema, or persistence contract
 changed.
 
 ### Loading-state follow-up (2026-08-25)
@@ -853,6 +916,27 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 ---
 
 ### Version Notes
+
+- v1.72 (2026-09-04): Constrained the shared select positioner and popup to
+  Base UI's available viewport width so tutor discovery filters remain fully
+  visible at the 320 px CSS minimum. No RPC, schema, persistence, or URL
+  contract changed.
+
+- v1.71 (2026-09-04): Tuned desktop tutor-card specialization metadata to use
+  natural-width child labels without a repeated parent category while keeping
+  breakpoint-aware badge counts and the starting-price block on one line, and
+  restored the prior hover-only card interaction without translating the card
+  or adding a pressed-scale effect. No RPC, schema, or persistence contract changed.
+
+- v1.70 (2026-09-04): Fixed Knowledge Bank category labels in the filter
+  dropdown and resource cards by mapping known Sanity slugs and title-casing
+  unknown hyphenated/underscored slugs; raw category values remain unchanged
+  for filtering. No RPC or persistence contract changed.
+
+- v1.69 (2026-09-04): Updated student tutor discovery presentation with a
+  public-profile-style image hero, combined education/achievement/experience
+  drawer content, and breakpoint-aware single-line desktop specialization
+  metadata. No RPC, schema, or persistence contract changed.
 
 - v1.67 (2026-09-04): Moved the transfer-fee policy copy behind the payout card’s contextual `InfoPreview` trigger, keeping the fee and estimated payout values visible while reducing default card density. No RPC, schema, or persistence contract changed.
 

@@ -1,8 +1,12 @@
+"use client";
+
+import { useQuery } from "@tanstack/react-query";
 import {
   Avatar,
   AvatarFallback,
   AvatarImage,
 } from "@cogito-app/ui/components/selia/avatar";
+import { Badge } from "@cogito-app/ui/components/selia/badge";
 import {
   Menu,
   MenuItem,
@@ -42,28 +46,35 @@ import {
 } from "@tabler/icons-react";
 import { authClient } from "@/lib/auth-client";
 import { WhatsAppSupportDialog } from "@/components/whatsapp-support-dialog";
+import { BOOKING_ACTION_STATES } from "@/components/booking/booking-ui";
+import { orpc } from "@/utils/orpc";
+
+const BOOKING_ACTION_QUERY_INPUT = {
+  limit: 100,
+  states: [...BOOKING_ACTION_STATES],
+};
 
 const studentNavItems = [
   { to: "/dashboard", label: "Dashboard", icon: IconHome },
-  { to: "/balance", label: "Balance", icon: IconCoins },
-  { to: "/bookings", label: "My Bookings", icon: IconCalendarEvent },
-  { to: "/achievements", label: "Achievements", icon: IconCertificate },
   { to: "/tutors", label: "Tutors", icon: IconUserSquare },
+  { to: "/bookings", label: "My Bookings", icon: IconCalendarEvent },
+  { to: "/balance", label: "Balance", icon: IconCoins },
+  { to: "/achievements", label: "Achievements", icon: IconCertificate },
 ] as const;
 
 const tutorNavItems = [
   { to: "/dashboard", label: "Dashboard", icon: IconHome },
-  { to: "/profile", label: "Tutor Profile", icon: IconUser },
-  { to: "/availability", label: "Availability", icon: IconTimelineEventText },
   { to: "/bookings", label: "Bookings", icon: IconCalendarEvent },
+  { to: "/availability", label: "Availability", icon: IconTimelineEventText },
+  { to: "/profile", label: "Tutor Profile", icon: IconUser },
 ] as const;
 
 const adminNavItems = [
   { to: "/admin", label: "Dashboard", icon: IconHome },
-  { to: "/bookings", label: "Bookings", icon: IconCalendarEvent },
   { to: "/admin-operations", label: "Operations", icon: IconShieldCheck },
-  { to: "/admin-economy", label: "Economy", icon: IconAdjustments },
+  { to: "/bookings", label: "Bookings", icon: IconCalendarEvent },
   { to: "/admin-tutors", label: "Tutors", icon: IconUsersGroup },
+  { to: "/admin-economy", label: "Economy", icon: IconAdjustments },
   {
     to: "/admin-achievements",
     label: "Achievements",
@@ -104,6 +115,20 @@ export function AppSidebar({
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
+  const bookingActionQuery = useQuery({
+    ...orpc.booking.listMine.queryOptions({
+      input: BOOKING_ACTION_QUERY_INPUT,
+    }),
+    select: (data) => ({
+      count: data.items.length,
+      hasMore: Boolean(data.nextCursor),
+    }),
+  });
+  const bookingActionCount = bookingActionQuery.data?.count ?? 0;
+  const bookingActionBadge =
+    bookingActionCount > 99 || bookingActionQuery.data?.hasMore
+      ? "99+"
+      : bookingActionCount;
 
   const navigationItems =
     role === "admin"
@@ -176,16 +201,31 @@ export function AppSidebar({
                           to={item.to}
                           className={
                             pathname === item.to
-                              ? "text-cogito-orange! **:text-cogito-orange! **:transition-colors **:duration-150 **:ease-linear"
+                              ? "text-cogito-orange! [&>svg]:text-cogito-orange! **:transition-colors **:duration-150 **:ease-linear"
                               : undefined
                           }
                           preload="intent"
-                          aria-label={item.label}
+                          aria-label={
+                            item.to === "/bookings" && bookingActionCount > 0
+                              ? `${item.label}, ${bookingActionBadge} needs action`
+                              : item.label
+                          }
                         />
                       }
                     >
                       <Icon />
-                      {item.label}
+                      <span className="min-w-0 truncate">{item.label}</span>
+                      {item.to === "/bookings" && bookingActionCount > 0 ? (
+                        <Badge
+                          variant="danger-solid"
+                          size="sm"
+                          pill
+                          aria-label={`${bookingActionBadge} bookings need action`}
+                          className="ml-auto min-w-5 shrink-0 justify-center tabular-nums text-[10px]"
+                        >
+                          {bookingActionBadge}
+                        </Badge>
+                      ) : null}
                     </SidebarItemButton>
                   </SidebarItem>
                 );
@@ -207,7 +247,7 @@ export function AppSidebar({
                           to={item.to}
                           className={
                             pathname === item.to
-                              ? "text-cogito-orange! **:text-cogito-orange! **:transition-colors **:duration-150 **:ease-linear"
+                              ? "text-cogito-orange! [&>svg]:text-cogito-orange! **:transition-colors **:duration-150 **:ease-linear"
                               : undefined
                           }
                           aria-label={item.label}

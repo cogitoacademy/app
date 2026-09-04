@@ -1,21 +1,16 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@cogito-app/ui/components/selia/avatar";
+import { Avatar, AvatarFallback } from "@cogito-app/ui/components/selia/avatar";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Text } from "@cogito-app/ui/components/selia/text";
-import { Separator } from "@cogito-app/ui/components/selia/separator";
 import {
   Drawer,
   DrawerBody,
   DrawerClose,
   DrawerDescription,
   DrawerFooter,
-  DrawerHeader,
   DrawerPopup,
   DrawerTitle,
 } from "@cogito-app/ui/components/selia/drawer";
@@ -30,10 +25,7 @@ import {
   type TutorCompetitionAchievement,
   type TutorEducationEntry,
 } from "./tutor-achievements";
-import {
-  TutorExperiencesDisplay,
-  type TutorExperienceEntry,
-} from "./tutor-experiences";
+import type { TutorExperienceEntry } from "./tutor-experiences";
 
 const MODALITY_LABELS: Record<string, string> = {
   online: "Online",
@@ -117,6 +109,17 @@ function getPricingTableData(
 }
 
 export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 640px)");
+    const updateViewport = () => setIsDesktop(mediaQuery.matches);
+
+    updateViewport();
+    mediaQuery.addEventListener("change", updateViewport);
+    return () => mediaQuery.removeEventListener("change", updateViewport);
+  }, []);
+
   const t = tutor;
   if (!t) return null;
 
@@ -132,135 +135,163 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
     selectedTutor.subjects,
     selectedTutor.expertise,
   );
+  const subjectLabels = subjectGroups.flatMap((group) =>
+    group.children.map((subject) => ({ id: subject.id, label: subject.name })),
+  );
+  const heroSubjects = subjectLabels.slice(0, 3);
+  const hasProfileHighlights = Boolean(
+    selectedTutor.education?.length ||
+    selectedTutor.competitionAchievements?.length ||
+    selectedTutor.experienceEntries?.length ||
+    selectedTutor.achievements?.trim() ||
+    selectedTutor.experiences?.trim() ||
+    selectedTutor.credentialsSummary?.trim(),
+  );
 
   return (
-    <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerPopup direction="right" className="w-full max-w-lg">
-        <DrawerHeader className="flex justify-between">
-          <div className="flex min-w-0 items-center gap-3">
-            <Avatar size="lg">
-              <AvatarImage
-                src={selectedTutor.user?.image ?? undefined}
-                alt={tutorName}
-              />
-              <AvatarFallback>{getInitials(tutorName)}</AvatarFallback>
-            </Avatar>
-            <DrawerTitle className="truncate">{tutorName}</DrawerTitle>
-          </div>
+    <Drawer
+      open={open}
+      onOpenChange={onOpenChange}
+      swipeDirection={isDesktop ? "right" : "down"}
+    >
+      <DrawerPopup
+        direction={isDesktop ? "right" : "bottom"}
+        className={isDesktop ? "w-full max-w-lg" : undefined}
+      >
+        <div className="relative h-[300px] shrink-0 rounded-t-xl overflow-hidden bg-muted">
+          {selectedTutor.user?.image ? (
+            <img
+              src={selectedTutor.user.image}
+              alt={tutorName}
+              className="size-full object-cover object-top"
+            />
+          ) : (
+            <div className="flex size-full items-center justify-center bg-accent">
+              <Avatar size="lg" className="size-24!">
+                <AvatarFallback>{getInitials(tutorName)}</AvatarFallback>
+              </Avatar>
+            </div>
+          )}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent"
+          />
+          {heroSubjects.length > 0 ? (
+            <div className="absolute inset-x-4 bottom-4 z-10 flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden">
+              {heroSubjects.map((subject, index) => (
+                <Badge
+                  key={subject.id}
+                  variant={
+                    (["primary", "tertiary", "secondary"] as const)[index % 3]
+                  }
+                  size="md"
+                  className="shrink-0 max-w-[45%] truncate whitespace-nowrap bg-background/90"
+                >
+                  {subject.label}
+                </Badge>
+              ))}
+              {subjectLabels.length > heroSubjects.length ? (
+                <Badge
+                  variant="secondary"
+                  size="md"
+                  className="shrink-0 bg-background/90 text-foreground"
+                >
+                  +{subjectLabels.length - heroSubjects.length}
+                </Badge>
+              ) : null}
+            </div>
+          ) : null}
           <DrawerClose
-            render={<Button variant="plain" size="sm" aria-label="Close" />}
+            render={
+              <Button
+                variant="outline"
+                size="xs-icon"
+                aria-label="Close"
+                className="absolute top-4 right-4 z-20 bg-background/90 text-foreground shadow-sm hover:bg-background"
+              />
+            }
           >
             <IconX className="size-4" />
           </DrawerClose>
-        </DrawerHeader>
+        </div>
         <DrawerBody>
-          <>
-            {t.modality && (
-              <div className="mb-3">
-                <Badge variant={MODALITY_VARIANTS[t.modality] ?? "secondary"}>
-                  {MODALITY_LABELS[t.modality] ?? t.modality}
-                </Badge>
-              </div>
-            )}
-            {t.shortBio && (
-              <div className="mb-4">
-                <Text>{t.shortBio}</Text>
-              </div>
-            )}
+          <DrawerTitle className="truncate text-2xl">{tutorName}</DrawerTitle>
+          {t.modality && (
+            <div className="mt-3">
+              <Badge variant={MODALITY_VARIANTS[t.modality] ?? "secondary"}>
+                {MODALITY_LABELS[t.modality] ?? t.modality}
+              </Badge>
+            </div>
+          )}
+          {t.shortBio && (
+            <div className="mt-3">
+              <Text className="text-muted">{t.shortBio}</Text>
+            </div>
+          )}
 
-            {subjectGroups.length > 0 && (
-              <div className="mb-4">
-                <Heading size="sm" className="mb-2">
-                  Specializations
-                </Heading>
-                <div className="flex flex-col gap-2">
-                  {subjectGroups.map((group) => (
-                    <div key={group.parent?.id ?? group.children[0]?.id}>
-                      {group.parent && (
-                        <Text className="mb-1 font-medium">
-                          {group.parent.name}
-                        </Text>
-                      )}
-                      <div className="flex flex-wrap gap-1.5">
-                        {group.children.map((subject) => (
-                          <Badge key={subject.id} variant="primary" size="md">
-                            {subject.name}
-                          </Badge>
-                        ))}
-                      </div>
+          {subjectGroups.length > 0 && (
+            <div className="mt-5">
+              <Heading size="sm" className="mb-2">
+                Specializations
+              </Heading>
+              <div className="flex flex-col gap-2">
+                {subjectGroups.map((group) => (
+                  <div key={group.parent?.id ?? group.children[0]?.id}>
+                    {group.parent && (
+                      <Text className="mb-1 font-medium">
+                        {group.parent.name}
+                      </Text>
+                    )}
+                    <div className="flex flex-wrap gap-1.5">
+                      {group.children.map((subject) => (
+                        <Badge key={subject.id} variant="primary" size="md">
+                          {subject.name}
+                        </Badge>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
-            )}
+            </div>
+          )}
 
-            {priceRows.length > 0 && (
-              <div className="mb-4">
-                <Heading size="sm" className="mb-2">
-                  Pricing
-                </Heading>
-                <TutorPricingTable
-                  modalities={priceModalities}
-                  rows={priceRows}
-                  columnLabels={{
-                    online: "Online (Marks)",
-                    offline: "Offline (Marks)",
-                  }}
-                  renderValue={(value) => (
-                    <CogitoMarks size="3" value={value} />
-                  )}
-                />
-              </div>
-            )}
+          {priceRows.length > 0 && (
+            <div className="mt-5">
+              <Heading size="sm" className="mb-2">
+                Pricing
+              </Heading>
+              <TutorPricingTable
+                modalities={priceModalities}
+                rows={priceRows}
+                columnLabels={{
+                  online: "Online",
+                  offline: "Offline",
+                }}
+                renderValue={(value) => <CogitoMarks size="3" value={value} />}
+              />
+            </div>
+          )}
 
-            {selectedTutor.education?.length ||
-            selectedTutor.competitionAchievements?.length ? (
-              <div className="mb-4">
-                <TutorAchievementsDisplay
-                  education={selectedTutor.education}
-                  competitionAchievements={
-                    selectedTutor.competitionAchievements
-                  }
-                  idPrefix="tutor-drawer-achievements"
-                />
-              </div>
-            ) : t.achievements || t.credentialsSummary ? (
-              <>
-                <Separator className="my-4" />
-                <div className="mb-4">
-                  <Heading size="sm" className="mb-2">
-                    Achievements
-                  </Heading>
-                  <Text className="whitespace-pre-line text-muted">
-                    {t.achievements ?? t.credentialsSummary}
-                  </Text>
-                </div>
-              </>
-            ) : null}
-            {selectedTutor.experienceEntries?.length ? (
-              <>
-                <Separator className="my-4" />
-                <div className="mb-4">
-                  <TutorExperiencesDisplay
-                    experienceEntries={selectedTutor.experienceEntries}
-                    idPrefix="tutor-drawer-experiences"
-                  />
-                </div>
-              </>
-            ) : t.experiences ? (
-              <>
-                <Separator className="my-4" />
-                <div className="mb-4">
-                  <Heading size="sm" className="mb-2">
-                    Experiences
-                  </Heading>
-                  <Text className="whitespace-pre-line text-muted">
-                    {t.experiences}
-                  </Text>
-                </div>
-              </>
-            ) : null}
-          </>
+          {hasProfileHighlights ? (
+            <section
+              aria-labelledby="tutor-drawer-highlights-heading"
+              className="mt-5 rounded-xl bg-accent p-4"
+            >
+              <TutorAchievementsDisplay
+                className="flex flex-col gap-5"
+                education={selectedTutor.education}
+                competitionAchievements={selectedTutor.competitionAchievements}
+                experienceEntries={selectedTutor.experienceEntries}
+                legacyAchievementText={
+                  selectedTutor.achievements?.trim()
+                    ? selectedTutor.achievements
+                    : selectedTutor.credentialsSummary
+                }
+                legacyExperienceText={selectedTutor.experiences}
+                idPrefix="tutor-drawer-highlights"
+              />
+            </section>
+          ) : null}
 
           <DrawerDescription className="sr-only">
             Details for {t.user?.name ?? "tutor"} profile
@@ -280,11 +311,6 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
           >
             Book a session
           </Button>
-          <DrawerClose
-            render={<Button variant="secondary" aria-label="Close drawer" />}
-          >
-            Close
-          </DrawerClose>
         </DrawerFooter>
       </DrawerPopup>
     </Drawer>

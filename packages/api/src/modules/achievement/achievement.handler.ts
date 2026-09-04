@@ -7,7 +7,9 @@ import type {
   updateAchievementInput,
   adminUpdateAchievementInput,
   deleteAchievementInput,
+  achievementListInput,
   adminListInput,
+  achievementStatsInput,
   adminReviewInput,
 } from "./achievement.types";
 import type { AchievementService } from "./achievement.service";
@@ -16,7 +18,9 @@ type AchievementInput = z.infer<typeof studentAchievementInput>;
 type UpdateAchievementInput = z.infer<typeof updateAchievementInput>;
 type AdminUpdateAchievementInput = z.infer<typeof adminUpdateAchievementInput>;
 type DeleteAchievementInput = z.infer<typeof deleteAchievementInput>;
+type AchievementListInput = z.infer<typeof achievementListInput>;
 type AdminListInput = z.infer<typeof adminListInput>;
+type AchievementStatsInput = z.infer<typeof achievementStatsInput>;
 type AdminReviewInput = z.infer<typeof adminReviewInput>;
 
 export function createAchievementHandler(deps: {
@@ -24,9 +28,30 @@ export function createAchievementHandler(deps: {
 }) {
   const { achievementService } = deps;
 
-  async function list({ context }: { context: Context }) {
+  async function list({
+    context,
+    input,
+  }: {
+    context: Context;
+    input?: AchievementListInput;
+  }) {
     return withDomainMap(
-      () => achievementService.list(context.session!.user.id),
+      () =>
+        input === undefined
+          ? achievementService.list(context.session!.user.id)
+          : achievementService.list(context.session!.user.id, input),
+      mapAchievementError,
+    );
+  }
+
+  async function stats({
+    context,
+  }: {
+    context: Context;
+    input?: AchievementStatsInput;
+  }) {
+    return withDomainMap(
+      () => achievementService.stats(context.session!.user.id),
       mapAchievementError,
     );
   }
@@ -107,6 +132,13 @@ export function createAchievementHandler(deps: {
     );
   }
 
+  async function adminStats({ context: _context }: { context: Context }) {
+    return withDomainMap(
+      () => achievementService.adminStats(),
+      mapAchievementError,
+    );
+  }
+
   async function adminReview({
     context,
     input,
@@ -122,12 +154,14 @@ export function createAchievementHandler(deps: {
 
   return {
     list,
+    stats,
     listApproved,
     create,
     update,
     adminUpdate,
     remove,
     adminList,
+    adminStats,
     adminReview,
   };
 }

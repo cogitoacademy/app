@@ -80,13 +80,33 @@ export const deleteAchievementInput = z.object({
   version: z.number().int(),
 });
 
+const achievementStatus = z.enum([
+  "draft",
+  "pending",
+  "pending_review",
+  "approved",
+  "rejected",
+  "archived",
+]);
+
+export const achievementListInput = z
+  .object({
+    category: z.enum(ACHIEVEMENT_CATEGORIES).optional(),
+    status: achievementStatus.optional(),
+    limit: z.number().int().min(1).max(100).default(50),
+    offset: z.number().int().min(0).default(0),
+  })
+  .optional();
+
 export const adminListInput = z
   .object({
-    status: z.string().max(255).optional(),
+    status: achievementStatus.optional(),
     limit: z.number().min(1).max(100).default(50),
     offset: z.number().min(0).default(0),
   })
   .optional();
+
+export const achievementStatsInput = z.void();
 
 export const adminReviewInput = z.object({
   achievementId: z.string().max(100),

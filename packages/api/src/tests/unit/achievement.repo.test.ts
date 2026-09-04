@@ -50,6 +50,88 @@ describe("listByUserId", () => {
 
     expect(result).toEqual([]);
   });
+
+  test("applies filters and server pagination", async () => {
+    const rows = [{ id: "a2", userId: "u1" }];
+    const offset = mock(async () => rows);
+    const limit = mock(() => ({ offset }));
+    const orderBy = mock(() => ({ limit }));
+    const where = mock(() => ({ orderBy }));
+    const from = mock(() => ({ where }));
+    const select = mock(() => ({ from }));
+
+    const result = await repo.listByUserId(
+      { select, from, where, orderBy, limit, offset } as any,
+      "u1",
+      {
+        category: "competition",
+        status: "pending",
+        limit: 10,
+        offset: 20,
+      },
+    );
+
+    expect(result).toEqual(rows);
+    expect(limit).toHaveBeenCalledWith(10);
+    expect(offset).toHaveBeenCalledWith(20);
+  });
+
+  test("applies a non-pending status filter", async () => {
+    const rows = [{ id: "a3", userId: "u1", status: "approved" }];
+    const offset = mock(async () => rows);
+    const limit = mock(() => ({ offset }));
+    const orderBy = mock(() => ({ limit }));
+    const where = mock(() => ({ orderBy }));
+    const from = mock(() => ({ where }));
+    const select = mock(() => ({ from }));
+
+    const result = await repo.listByUserId(
+      { select, from, where, orderBy, limit, offset } as any,
+      "u1",
+      {
+        status: "approved",
+        limit: 10,
+        offset: 0,
+      },
+    );
+
+    expect(result).toEqual(rows);
+    expect(limit).toHaveBeenCalledWith(10);
+    expect(offset).toHaveBeenCalledWith(0);
+  });
+});
+
+describe("achievement counts", () => {
+  test("returns grouped user counts", async () => {
+    const rows = [
+      { status: "pending", count: 2 },
+      { status: "approved", count: 1 },
+    ];
+    const groupBy = mock(async () => rows);
+    const where = mock(() => ({ groupBy }));
+    const from = mock(() => ({ where }));
+    const select = mock(() => ({ from }));
+
+    const result = await repo.countByUserId(
+      { select, from, where, groupBy } as any,
+      "u1",
+    );
+
+    expect(result).toEqual(rows);
+    expect(groupBy).toHaveBeenCalledTimes(1);
+  });
+
+  test("returns grouped counts for all achievements", async () => {
+    const rows = [{ status: "rejected", count: 3 }];
+    const groupBy = mock(async () => rows);
+    const from = mock(() => ({ groupBy }));
+    const select = mock(() => ({ from }));
+
+    const result = await repo.countAll({ select, from, groupBy } as any);
+
+    expect(result).toEqual(rows);
+    expect(groupBy).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("insert", () => {
@@ -398,6 +480,8 @@ describe("createAchievementRepo", () => {
     const r = createAchievementRepo();
 
     expect(r).toHaveProperty("listByUserId");
+    expect(r).toHaveProperty("countByUserId");
+    expect(r).toHaveProperty("countAll");
     expect(r).toHaveProperty("insert");
     expect(r).toHaveProperty("findByIdForUser");
     expect(r).toHaveProperty("update");
@@ -408,6 +492,8 @@ describe("createAchievementRepo", () => {
     expect(r).toHaveProperty("getById");
     expect(r).toHaveProperty("updateStatus");
     expect(typeof r.listByUserId).toBe("function");
+    expect(typeof r.countByUserId).toBe("function");
+    expect(typeof r.countAll).toBe("function");
     expect(typeof r.insert).toBe("function");
     expect(typeof r.findByIdForUser).toBe("function");
     expect(typeof r.update).toBe("function");

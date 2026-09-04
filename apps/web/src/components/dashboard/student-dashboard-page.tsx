@@ -17,9 +17,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   IconArrowRight,
-  IconBook2,
   IconCalendarEvent,
-  IconLock,
   IconSchool,
 } from "@tabler/icons-react";
 
@@ -29,6 +27,7 @@ import {
   type BookingCardData,
 } from "@/components/booking/booking-card";
 import { DashboardWelcomeCard } from "@/components/dashboard/dashboard-welcome-card";
+import { BalanceWidget } from "@/components/dashboard/balance-widget";
 import { EmptyState } from "@/components/empty-state";
 import {
   TutorSummary,
@@ -58,8 +57,6 @@ export function StudentDashboardPage({ studentName }: { studentName: string }) {
         new Date(b.scheduledStartAt).getTime(),
     )[0];
   const recommendedTutors = (tutors.data ?? []) as TutorSummaryData[];
-  const knowledgeBankEligible = (wallet.data?.availableBalance ?? 0) >= 35;
-
   return (
     <Stack direction="column" spacing="lg">
       <div className="grid gap-4 lg:grid-cols-2">
@@ -69,7 +66,12 @@ export function StudentDashboardPage({ studentName }: { studentName: string }) {
           hasUpcomingLesson={Boolean(nextBooking)}
         />
         <div className="grid gap-4 sm:grid-cols-2">
-          <KnowledgeBankCard eligible={knowledgeBankEligible} />
+          <BalanceWidget
+            availableBalance={wallet.data?.availableBalance ?? 0}
+            heldBalance={wallet.data?.heldBalance ?? 0}
+            totalBalance={wallet.data?.totalBalance ?? 0}
+            isLoading={wallet.isPending}
+          />
           <CompetitionCalendarCard />
         </div>
       </div>
@@ -86,62 +88,6 @@ export function StudentDashboardPage({ studentName }: { studentName: string }) {
         />
       </div>
     </Stack>
-  );
-}
-
-function KnowledgeBankCard({ eligible }: { eligible: boolean }) {
-  return (
-    <Card className="overflow-hidden">
-      <CardBody className="relative p-5">
-        <ResourceDecoration />
-        <IconBox
-          variant={eligible ? "success-subtle" : "warning-subtle"}
-          className="mb-4"
-        >
-          {eligible ? <IconBook2 /> : <IconLock />}
-        </IconBox>
-        <Heading size="sm">Knowledge Bank</Heading>
-        <Text className="mt-1 text-sm text-muted">
-          {eligible
-            ? "Explore learning materials curated by Cogito."
-            : "Keep 35 available Marks to unlock learning materials."}
-        </Text>
-        <Button
-          variant="plain"
-          size="sm"
-          className="mt-4 -ml-3 mb-0"
-          nativeButton={false}
-          render={
-            eligible ? (
-              <Link to="/knowledge-bank" aria-label="Open Knowledge Bank" />
-            ) : (
-              <Link to="/balance" aria-label="View Marks balance" />
-            )
-          }
-        >
-          {eligible ? "Open Knowledge Bank" : "View balance"} <IconArrowRight />
-        </Button>
-      </CardBody>
-    </Card>
-  );
-}
-
-function ResourceDecoration() {
-  return (
-    <svg
-      viewBox="0 0 120 120"
-      aria-hidden="true"
-      className="pointer-events-none absolute -right-5 -top-5 size-32 text-primary opacity-15"
-    >
-      <circle cx="60" cy="60" r="48" className="fill-current" />
-      <path
-        d="M27 69c18-27 43-38 70-28M35 86c20-18 40-24 64-17"
-        className="fill-none stroke-background"
-        strokeWidth="5"
-        strokeLinecap="round"
-      />
-      <circle cx="83" cy="38" r="8" className="fill-background" />
-    </svg>
   );
 }
 

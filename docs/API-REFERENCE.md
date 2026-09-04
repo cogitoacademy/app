@@ -2,6 +2,37 @@
 
 Last updated: 2026-09-04
 
+## Server-backed table pagination (2026-09-04)
+
+All database-backed web tables now request bounded pages from the API. The
+offset-backed achievement and room procedures accept `limit` and `offset`; the
+admin booking queue and wallet ledger use their existing cursor contracts; and
+the admin tutor tables retain their existing offset contract. Table UIs request
+one sentinel row (`pageSize + 1`) where needed to determine `hasNext`, render
+only the requested page size, keep the current page visible while fetching, and
+reset the page when filters or the selected wallet change. Fixed schedule and
+pricing reference tables are intentionally not paginated because they render a
+small, finite configuration matrix rather than a database collection.
+
+## Tutor discovery filter viewport containment (2026-09-04)
+
+The student `/tutors` filter stack now uses shrinkable, viewport-bounded
+containers, and shared Selia select positioners/popups cap at Base UI's
+`--available-width` boundary so category/specialization options do not get
+clipped at narrow widths. This is a presentation-only fix;
+`tutors.listSubjects` and `tutors.listPublished` keep the same RPC paths,
+request envelope, inputs, outputs, and authentication.
+
+## Student dashboard balance widget (2026-09-04)
+
+The student dashboard now presents the existing `wallet.get` total, held, and
+available values in a compact balance widget. Knowledge Bank access is derived
+from the existing 35-total-Mark rule on the Balance page, which reuses the same
+widget beside its access card on desktop. Existing routes are reused; no RPC
+path, input, response, schema, or persistence contract changed.
+The widget's Balance-page CTA is presentation-only: **Find a tutor** links to
+`/tutors`, while the dashboard variant retains **Top up** to `/balance`.
+
 ## Card title info preview (2026-09-04)
 
 The admin Booking activity explanation now opens from the shared Selia
@@ -10,12 +41,36 @@ and their admin extensions use the same pattern instead of standalone header
 descriptions. This frontend-only change adds no RPC path and changes no request
 envelope, response shape, schema, or persistence contract.
 
+## Competition Calendar empty months (2026-09-04)
+
+The month-view presentation keeps its standard calendar grid when the selected
+month has no returned events, so month navigation and date cells remain usable.
+This is a frontend-only behavior change; `content.listCompetitions` keeps the
+same input, output, authentication, and response envelope.
+
+## Sidebar booking-action badge (2026-09-04)
+
+The authenticated sidebar reuses `booking.listMine` with the existing pending
+booking states to show the role-visible count beside `/bookings`. It caps the
+display at `99+` when another cursor remains. No new RPC path, request input,
+response output, schema, or persistence contract was added.
+
 ## Sidebar logo contrast (2026-09-04)
 
 The authenticated sidebar keeps the branded logo colors in light mode and
 renders the complete logo white in dark mode. This is frontend-only
 presentation behavior; no RPC path, request envelope, response shape, schema,
 or persistence contract changed.
+
+## Sidebar navigation order (2026-09-04)
+
+The authenticated shell reorders existing role-specific sidebar links so the
+primary journey comes first for each role: students see `Dashboard`, `Tutors`,
+`My Bookings`, `Balance`, and `Achievements`; tutors see `Dashboard`, `Bookings`,
+`Availability`, and `Tutor Profile`; admins see `Dashboard`, `Operations`,
+`Bookings`, `Tutors`, `Economy`, and `Achievements`. Resources and the footer
+account menu are unchanged, as are all RPC paths, request envelopes, response
+shapes, authentication rules, schemas, and persistence contracts.
 
 ## Production UI and E2E audit (2026-09-04)
 
@@ -71,15 +126,16 @@ be reopened in read-only mode after acceptance.
 
 ## Tutor profile drawers (2026-08-31)
 
-The student tutor-discovery drawer and admin tutor-review drawer keep their header/action regions outside the scroll container while `Drawer.Content` owns the single vertical scroll region for long profile content. The body may overscroll locally, but that motion is contained and cannot move the fixed regions. This is client-side presentation only; no RPC path, request envelope, response shape, schema, or persistence contract changed.
+The student tutor-discovery drawer opens as a swipe-down bottom sheet below the `sm` breakpoint and a right-side drawer at `sm` and above. It and the admin tutor-review drawer keep their header/action regions outside the scroll container while `Drawer.Content` owns the single vertical scroll region for long profile content. The body may overscroll locally, but that motion is contained and cannot move the fixed regions. This is client-side presentation only; no RPC path, request envelope, response shape, schema, or persistence contract changed.
 
 ## Stable collection transitions (2026-08-28)
 
-Pagination and filter-transition stability is client-side only. The admin tutor
-tables, tutor discovery list, and admin booking queue retain their previous
-successful collection while the next query is loading; pagination scrolls to
-the selected table card by DOM ID. No RPC path, request envelope, response
-shape, cursor/offset contract, or URL search parameter changes.
+The admin tutor tables, tutor discovery list, and admin booking queue retain
+their previous successful collection while the next query is loading;
+pagination scrolls to the selected table card by DOM ID. Achievement and room
+tables use the server-backed contracts documented below, while the admin
+booking queue and wallet ledger use cursor pagination. No URL search parameter
+is added for table pagination.
 
 Booking-list UI note: `/bookings` uses Needs action, Upcoming, Recurring, History, and All tabs. Students and tutors default to Needs action when a response is pending and Upcoming otherwise; admins default to All. URL-backed Recommended, Soonest, and Latest sorting is client-side; Recommended ranks pending, active, then terminal bookings, and History consolidates terminal outcomes. The web list consumes the existing `nextCursor` in batches of 20 through an infinite query and appends with **Load more bookings**; loaded cards remain visible during the next-page request. Tab counts are lower bounds and show `+` while more pages remain. The RPC contract is unchanged.
 
@@ -131,14 +187,14 @@ Sanity is queried only by the API server. The browser receives normalized conten
 - **Auth:** Protected
 - **Input:** None
 - **Output:** `[{ id, title, description, location, categories: [{ id, name, coreCategory }], educationLevels, startDate, endDate, scale, organizer, registrationDeadline, registrationLink, socialMediaLink }]`
-- **Description:** Returns published competition calendar entries with English projections for every authenticated role. The app route is `GET /calendar` in the SPA; the read-only UI presents the data in month and 30-day agenda views and opens a responsive details modal without changing this API contract. The route uses a contained viewport layout so the calendar body handles vertical scrolling and the month grid handles horizontal scrolling.
+- **Description:** Returns published competition calendar entries with English projections for every authenticated role. The app route is `GET /calendar` in the SPA; the read-only UI presents the data in month and 30-day agenda views and opens a responsive details modal without changing this API contract. The route uses a contained viewport layout so the calendar body handles vertical scrolling and the month grid handles horizontal scrolling. The month view keeps the normal grid visible when the selected month has no events; the page-level empty state still applies when no competitions are returned at all.
 
 ### `content.listStudentResources`
 
 - **Auth:** Protected (student, tutor, or admin)
 - **Input:** None
 - **Output:** `{ items: [{ id, title, description, category }], access: { eligible, balance, threshold } }`
-- **Description:** Returns published Knowledge Bank metadata for the authenticated `/knowledge-bank` app route. Students must meet the 35-Mark total-balance threshold (held Marks count toward eligibility); below the threshold, `items` is empty and the access state explains the lock. Tutors and admins are eligible regardless of wallet balance.
+- **Description:** Returns published Knowledge Bank metadata for the authenticated `/knowledge-bank` app route. Students must meet the 35-Mark total-balance threshold (held Marks count toward eligibility); below the threshold, `items` is empty and the access state explains the lock. Tutors and admins are eligible regardless of wallet balance. `category` remains the Sanity slug in the API response; the web UI maps known slugs and title-cases hyphenated or underscored slugs for display while retaining the raw value for filtering.
 
 ### `GET /content/knowledge-bank/:resourceId/file`
 
@@ -615,15 +671,15 @@ The web tutor profile editor groups education, competition achievements, and exp
 
 - **Auth:** Student
 - **Input:** `{ search?, expertise?, categoryId?, subjectId?, categoryIds?, subjectIds?, modality?, limit?, offset? }` (`limit` default 20, max 50)
-- **Output:** `{ items: TutorProfile[] }`; each profile includes `education`, `competitionAchievements`, `subjects: [{ id, slug, name, description?, isSelectable, parent }]`, and computed `pricesByModality.online/offline` Marks maps when the profile has IDR base honoraria
-- **Description:** `categoryId`/`subjectId` remain supported for single-value clients. `categoryIds` and `subjectIds` accept up to 50 unique values and match any selected value within that facet; when both facets are present, the same normalized category/specialization relation must satisfy the selected category and specialization constraints. Search matches normalized specialization names as well as legacy profile text; no matching normalized relation returns an empty `items` array. Structured education and competition achievements are returned in their normalized arrays; older profiles may still rely on `credentialsSummary`. Marks prices are derived from the active economy config; tutor IDR base honoraria are not exposed in this student response. The frontend may render the returned modality maps as one group-size matrix with separate Online and Offline columns, prefixing populated values with the Cogito Marks icon; this does not alter the RPC contract.
+- **Output:** `{ items: TutorProfile[] }`; each profile includes its published `user.image` when available, `education`, `competitionAchievements`, `experienceEntries`, `subjects: [{ id, slug, name, description?, isSelectable, parent }]`, and computed `pricesByModality.online/offline` Marks maps when the profile has IDR base honoraria
+- **Description:** `categoryId`/`subjectId` remain supported for single-value clients. `categoryIds` and `subjectIds` accept up to 50 unique values and match any selected value within that facet; when both facets are present, the same normalized category/specialization relation must satisfy the selected category and specialization constraints. Search matches normalized specialization names as well as legacy profile text; no matching normalized relation returns an empty `items` array. Structured education, competition achievements, and experience entries are returned in their normalized arrays; older profiles may still rely on legacy `achievements`, `experiences`, or `credentialsSummary` text. Marks prices are derived from the active economy config; tutor IDR base honoraria are not exposed in this student response. The frontend may render the returned modality maps as one group-size matrix with separate Online and Offline columns, prefixing populated values with the Cogito Marks icon; tutor cards render natural-width child specialization names without repeating the parent category, keep their desktop metadata on one line, and use a smooth hover-shadow treatment without translate or pressed-scale effects. These are presentation details and do not alter the RPC contract.
 
 ### `tutors.getProfile`
 
 - **Auth:** Student
 - **Input:** `{ tutorId }`
 - **Output:** `{ profile }` with computed `pricesByModality` Marks maps
-- **Description:** Returns the published tutor profile and future availability slots for the booking form, including structured education and competition achievements. Marks prices use the active economy config for new IDR profiles; legacy profiles continue to return their stored Marks map.
+- **Description:** Returns the published tutor profile and future availability slots for the booking form, including the published image plus structured education, competition achievements, and experience entries. Legacy achievement/experience text remains available for older profiles. Marks prices use the active economy config for new IDR profiles; legacy profiles continue to return their stored Marks map.
 
 ---
 
@@ -659,9 +715,16 @@ The web tutor profile editor groups education, competition achievements, and exp
 ### `achievement.list`
 
 - **Auth:** Protected
+- **Input:** `{ category?, status?, limit?, offset? }` (`category` is one of `competition`/`award`/`certificate`/`leadership`/`publication`/`other`; `status` is one of `draft`/`pending`/`pending_review`/`approved`/`rejected`/`archived`; `limit` defaults to 50 and is capped at 100; `offset` defaults to 0)
+- **Output:** `Achievement[]` for the requested page
+- **Description:** Returns the authenticated user's achievements from a bounded database query. A `status` of `pending` includes both `pending` and legacy `pending_review` rows. The student `/achievements` page uses this contract for server-side category/status filtering and offset pagination, while aggregate cards use `achievement.stats`.
+
+### `achievement.stats`
+
+- **Auth:** Protected
 - **Input:** None
-- **Output:** `{ items: Achievement[] }`
-- **Description:** The student `/achievements` page consumes this unchanged list and presents compact label-and-pill summary counts plus a compact horizontally scrollable table; full metadata and pending edit/delete actions are available in a frontend-only detail drawer.
+- **Output:** `{ total, approved, pending, rejected, archived }`
+- **Description:** Returns aggregate status counts for the authenticated user's achievements. `pending` combines `pending` and `pending_review`.
 
 ### `achievement.create`
 
@@ -688,8 +751,15 @@ The web tutor profile editor groups education, competition achievements, and exp
 
 - **Auth:** Admin
 - **Input:** `{ status?, limit?, offset? }` (`limit` default 50)
-- **Output:** `{ items: Achievement[], total, limit, offset }`
-- **Description:** The admin `/admin-achievements` page consumes this unchanged paginated list and presents submissions in a compact horizontally scrollable moderation table; full metadata and approve/reject/correct actions are available in a frontend-only detail drawer, while the mutations remain separate RPC calls.
+- **Output:** `Achievement[]` for the requested page
+- **Description:** Returns a server-paginated moderation page. `status: "pending"` includes both `pending` and `pending_review` rows. The admin `/admin-achievements` page uses a `limit + 1` sentinel to detect the next page; aggregate status cards use `achievement.adminStats`.
+
+### `achievement.adminStats`
+
+- **Auth:** Admin
+- **Input:** None
+- **Output:** `{ total, approved, pending, rejected, archived }`
+- **Description:** Returns aggregate status counts across all achievement submissions. `pending` combines `pending` and `pending_review`.
 
 ### `achievement.adminUpdate`
 
@@ -1041,16 +1111,16 @@ RPC contract.
 ### `room.list`
 
 - **Auth:** Protected
-- **Input:** None
-- **Output:** `{ items: Room[] }` — active rooms
-- **Description:** Lists active rooms for offline scheduling
+- **Input:** Optional `{ limit, offset }` (`limit` 1–100; `offset` ≥ 0)
+- **Output:** `Room[]` — active rooms
+- **Description:** Lists active rooms for offline scheduling. The admin room catalog supplies `limit` and `offset` for server-side pagination; callers that omit the input retain the unbounded selector-compatible list.
 
 ### `room.listPendingApprovals`
 
 - **Auth:** Admin
-- **Input:** `{ limit? }` (1–100, default 50)
+- **Input:** Optional `{ limit, offset }` (`limit` 1–100; `offset` ≥ 0; omitted input defaults to the legacy 50-row query)
 - **Output:** `PendingRoomApproval[]`
-- **Description:** Lists offline bookings in `awaiting_admin_room_approval`, ordered by session start. Each item includes booking timing/participant summary and the optional requested room; bookings whose requested room was unavailable are included with `requestedRoomId: null`.
+- **Description:** Lists offline bookings in `awaiting_admin_room_approval`, ordered by session start, using a bounded database query when pagination input is supplied. Each item includes booking timing/participant summary and the optional requested room; bookings whose requested room was unavailable are included with `requestedRoomId: null`.
 
 ### `room.create`
 
@@ -1149,9 +1219,9 @@ The successful mutation also best-effort updates the existing offline Calendar e
 ### `adminBooking.listBookings`
 
 - **Auth:** Admin
-- **Input:** `{ bookingId?, limit?, cursor?, category?, urgency?, escalated? }` (`category` one of tutor_no_show/medical_emergency/technical_failure/admin_correction/student_no_show/force_cancel/tutor_lateness_pending — `tutor_lateness_pending` lists sessions flagged by the lateness sweep for admin review)
-- **Output:** `{ items: Booking[] & { reportedAt: string | null, slaDeadline: string | null, escalated: boolean }[], nextCursor }`
-- **Description:** Paginated booking list sorted by urgency. Supplying `bookingId` performs the exact admin lookup used by `/admin-operations/bookings/:bookingId`, returning zero or one item so the detail page remains refresh-safe. For override reports, `reportedAt` comes from `overrideMeta.overriddenAt`, `slaDeadline` applies OQ-04 (30 minutes Mon–Sat 09:00–21:00 WIB, otherwise 4 hours), and `escalated` is computed against that business-hours deadline.
+- **Input:** `{ bookingId?, search?, limit?, cursor?, category?, urgency?, escalated? }` (`search` accepts an exact human-readable booking number such as `12` or `#12`; `category` one of tutor_no_show/medical_emergency/technical_failure/admin_correction/student_no_show/force_cancel/tutor_lateness_pending — `tutor_lateness_pending` lists sessions flagged by the lateness sweep for admin review)
+- **Output:** `{ items: (Booking & { bookingNumber: number, reportedAt: string | null, slaDeadline: string | null, escalated: boolean })[], nextCursor }`
+- **Description:** Paginated booking list sorted by urgency. Every booking has an immutable global `bookingNumber` used as the short `#N` reference; the UUID `id` remains the internal route/relationship key. Supplying `search` filters to that exact booking number. Supplying `bookingId` performs the exact admin lookup used by `/admin-operations/bookings/:bookingId`, returning zero or one item so the detail page remains refresh-safe. For override reports, `reportedAt` comes from `overrideMeta.overriddenAt`, `slaDeadline` applies OQ-04 (30 minutes Mon–Sat 09:00–21:00 WIB, otherwise 4 hours), and `escalated` is computed against that business-hours deadline.
 
 ### `adminBooking.getBookingStateHistory`
 

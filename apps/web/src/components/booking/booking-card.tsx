@@ -29,6 +29,7 @@ const LEGACY_TUTOR_PAYOUT_RATE_IDR = 7_000;
 import { cn } from "@cogito-app/ui/lib/utils";
 
 import {
+  BOOKING_ACTION_STATES,
   formatBookingEventTitle,
   formatBookingTimeRange,
   getBookingStateDescription,
@@ -78,13 +79,7 @@ export type BookingCardData = {
 
 export type BookingListItem = BookingCardData;
 
-export const PENDING_BOOKING_STATES = new Set([
-  "awaiting_tutor_review",
-  "reschedule_proposed",
-  "awaiting_reconfirmation",
-  "awaiting_admin_room_approval",
-  "awaiting_participant_confirmation",
-]);
+export const PENDING_BOOKING_STATES = new Set<string>(BOOKING_ACTION_STATES);
 
 export const TERMINAL_BOOKING_STATES = new Set([
   "completed",

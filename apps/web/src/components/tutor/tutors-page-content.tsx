@@ -2,7 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { IconSearch } from "@tabler/icons-react";
+import {
+  IconAdjustmentsHorizontal,
+  IconChevronDown,
+  IconSearch,
+  IconX,
+} from "@tabler/icons-react";
+import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
@@ -75,6 +81,7 @@ export function TutorsPageContent() {
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
   const [subjectIds, setSubjectIds] = useState<string[]>([]);
   const [modality, setModality] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedTutorSnapshot, setSelectedTutorSnapshot] =
     useState<PublishedTutor | null>(null);
@@ -158,6 +165,10 @@ export function TutorsPageContent() {
   );
   const [debouncedTutorListInput, setDebouncedTutorListInput] =
     useState(tutorListInput);
+  const activeFilterCount =
+    (categoryIds.length > 0 ? 1 : 0) +
+    (subjectIds.length > 0 ? 1 : 0) +
+    (modality ? 1 : 0);
   useEffect(() => {
     const timer = window.setTimeout(
       () => setDebouncedTutorListInput(tutorListInput),
@@ -178,6 +189,12 @@ export function TutorsPageContent() {
     setSubjectIds((current) =>
       current.filter((subjectId) => nextSubjectIds.has(subjectId)),
     );
+  }
+
+  function clearDiscoveryFilters() {
+    setCategoryIds([]);
+    setSubjectIds([]);
+    setModality("");
   }
 
   const {
@@ -209,10 +226,14 @@ export function TutorsPageContent() {
   }
 
   return (
-    <Stack direction="column" spacing="lg">
+    <Stack
+      direction="column"
+      spacing="lg"
+      className="w-full min-w-0 max-w-full"
+    >
       <div>
         <Heading level={1} size="md">
-          Tutors
+          Book a Session
         </Heading>
         <Text className="text-muted">
           Find a verified tutor by name, field of competition, and
@@ -220,7 +241,7 @@ export function TutorsPageContent() {
         </Text>
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      <div className="flex w-full min-w-0 max-w-full flex-col gap-3 sm:flex-row sm:items-center">
         <InputGroup className="flex-1">
           <InputGroupAddon>
             <IconSearch className="size-4" />
@@ -231,82 +252,136 @@ export function TutorsPageContent() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </InputGroup>
-        <Select
-          multiple
-          value={selectedCategoryValues}
-          onValueChange={handleCategoryChange}
+        <Button
+          variant={activeFilterCount > 0 ? "secondary" : "outline"}
+          className="w-full shrink-0 sm:w-auto"
+          aria-expanded={filtersOpen}
+          aria-controls="tutor-discovery-filters"
+          onClick={() => setFiltersOpen((open) => !open)}
         >
-          <SelectTrigger className="min-w-0 w-full sm:w-52">
-            <SelectValue
-              className="min-w-0 flex-1 truncate text-left"
-              placeholder="All categories"
-            />
-          </SelectTrigger>
-          <SelectPopup>
-            <SelectList>
-              {categories.map((category) => (
-                <SelectItem
-                  key={category.id}
-                  value={categoryValues.get(category.id)}
-                >
-                  {category.name}
-                </SelectItem>
-              ))}
-            </SelectList>
-          </SelectPopup>
-        </Select>
-        <Select
-          multiple
-          value={selectedSubjectValues}
-          disabled={categoryIds.length === 0}
-          onValueChange={(value) => setSubjectIds(getSelectItemValues(value))}
+          <IconAdjustmentsHorizontal />
+          Filters
+          {activeFilterCount > 0 ? (
+            <Badge
+              variant="primary"
+              size="sm"
+              pill
+              className="size-5 justify-center p-0 tabular-nums"
+            >
+              {activeFilterCount}
+            </Badge>
+          ) : null}
+          <IconChevronDown
+            className={`transition-transform duration-200 ease-out motion-reduce:transition-none ${filtersOpen ? "rotate-180" : ""}`}
+          />
+        </Button>
+      </div>
+
+      <div
+        id="tutor-discovery-filters"
+        aria-hidden={!filtersOpen}
+        className={`relative grid w-full min-w-0 max-w-full transition-[grid-template-rows,opacity,margin] duration-300 ease-out motion-reduce:transition-none ${filtersOpen ? "grid-rows-[1fr] opacity-100" : "-mb-6 grid-rows-[0fr] opacity-0"}`}
+      >
+        <div
+          className="z-0 min-h-0 w-full min-w-0 max-w-full"
+          inert={!filtersOpen}
         >
-          <SelectTrigger className="min-w-0 w-full sm:w-56">
-            <SelectValue
-              className="min-w-0 flex-1 truncate text-left"
-              placeholder={
-                categoryIds.length > 0
-                  ? "All specializations"
-                  : "Choose category first"
-              }
-            />
-          </SelectTrigger>
-          <SelectPopup>
-            <SelectList>
-              {availableSubjects.map((subject) => (
-                <SelectItem
-                  key={subject.id}
-                  value={subjectValues.get(subject.id)}
-                >
-                  {subject.name}
-                </SelectItem>
-              ))}
-            </SelectList>
-          </SelectPopup>
-        </Select>
-        <Select
-          value={modality ? (MODALITY_VALUES.get(modality) ?? null) : null}
-          onValueChange={(value) =>
-            setModality(getSelectItemValue(value) ?? "")
-          }
-        >
-          <SelectTrigger className="min-w-0 w-full sm:w-44">
-            <SelectValue
-              className="min-w-0 flex-1 truncate text-left"
-              placeholder="All"
-            />
-          </SelectTrigger>
-          <SelectPopup>
-            <SelectList>
-              <SelectItem value={{ value: "", label: "All" }}>All</SelectItem>
-              {MODALITY_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectList>
-          </SelectPopup>
-        </Select>
+          <Card className="w-full min-w-0 max-w-full">
+            <CardBody className="grid w-full min-w-0 max-w-full gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_0.75fr_auto] lg:items-center">
+              <Select
+                multiple
+                value={selectedCategoryValues}
+                onValueChange={handleCategoryChange}
+              >
+                <SelectTrigger className="min-w-0 w-full">
+                  <SelectValue
+                    className="min-w-0 flex-1 overflow-visible text-left"
+                    placeholder="All categories"
+                  />
+                </SelectTrigger>
+                <SelectPopup>
+                  <SelectList>
+                    {categories.map((category) => (
+                      <SelectItem
+                        key={category.id}
+                        value={categoryValues.get(category.id)}
+                      >
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectList>
+                </SelectPopup>
+              </Select>
+              <Select
+                multiple
+                value={selectedSubjectValues}
+                disabled={categoryIds.length === 0}
+                onValueChange={(value) =>
+                  setSubjectIds(getSelectItemValues(value))
+                }
+              >
+                <SelectTrigger className="min-w-0 w-full">
+                  <SelectValue
+                    className="min-w-0 flex-1 overflow-visible text-left"
+                    placeholder={
+                      categoryIds.length > 0
+                        ? "All specializations"
+                        : "Choose category first"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectPopup>
+                  <SelectList>
+                    {availableSubjects.map((subject) => (
+                      <SelectItem
+                        key={subject.id}
+                        value={subjectValues.get(subject.id)}
+                      >
+                        {subject.name}
+                      </SelectItem>
+                    ))}
+                  </SelectList>
+                </SelectPopup>
+              </Select>
+              <Select
+                value={
+                  modality ? (MODALITY_VALUES.get(modality) ?? null) : null
+                }
+                onValueChange={(value) =>
+                  setModality(getSelectItemValue(value) ?? "")
+                }
+              >
+                <SelectTrigger className="min-w-0 w-full">
+                  <SelectValue
+                    className="min-w-0 flex-1 truncate text-left"
+                    placeholder="All modalities"
+                  />
+                </SelectTrigger>
+                <SelectPopup>
+                  <SelectList>
+                    <SelectItem value={{ value: "", label: "All" }}>
+                      All modalities
+                    </SelectItem>
+                    {MODALITY_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectList>
+                </SelectPopup>
+              </Select>
+              <Button
+                variant="plain"
+                className="w-full lg:w-auto"
+                disabled={activeFilterCount === 0}
+                onClick={clearDiscoveryFilters}
+              >
+                <IconX />
+                Clear
+              </Button>
+            </CardBody>
+          </Card>
+        </div>
       </div>
 
       {isTaxonomyError && (
@@ -331,18 +406,17 @@ export function TutorsPageContent() {
         </div>
       ) : tutors.length === 0 ? (
         <EmptyStateCard
+          className="z-1"
           icon={<IconSearch />}
           title="No tutors found"
           description="We couldn't find a tutor matching those filters. Try another specialization or reset your search."
-          tone="secondary"
+          tone="danger"
           action={
             <Button
               variant="secondary"
               onClick={() => {
                 setSearch("");
-                setCategoryIds([]);
-                setSubjectIds([]);
-                setModality("");
+                clearDiscoveryFilters();
               }}
             >
               Clear all filters

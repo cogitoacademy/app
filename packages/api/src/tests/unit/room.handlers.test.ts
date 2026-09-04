@@ -27,6 +27,19 @@ describe("roomHandler", () => {
       expect(roomService.listActive).toHaveBeenCalledWith();
       expect(result).toEqual([{ id: "r1" }]);
     });
+
+    test("passes pagination input to room.listActive", async () => {
+      const roomService = makeRoomService();
+      const handler = createRoomHandler(roomService as any);
+      const input = { limit: 10, offset: 20 };
+
+      await handler.list({
+        context: { session: { user: { id: "u1" } } },
+        input,
+      } as any);
+
+      expect(roomService.listActive).toHaveBeenCalledWith(input);
+    });
   });
 
   describe("listPendingApprovals", () => {
@@ -41,6 +54,19 @@ describe("roomHandler", () => {
 
       expect(roomService.listPendingApprovals).toHaveBeenCalledWith(25);
       expect(result).toEqual([{ bookingId: "b1" }]);
+    });
+
+    test("passes an offset page to room.listPendingApprovals", async () => {
+      const roomService = makeRoomService();
+      const handler = createRoomHandler(roomService as any);
+      const input = { limit: 10, offset: 20 };
+
+      await handler.listPendingApprovals({
+        context: { session: { user: { id: "u1" } } },
+        input,
+      } as any);
+
+      expect(roomService.listPendingApprovals).toHaveBeenCalledWith(10, 20);
     });
   });
 

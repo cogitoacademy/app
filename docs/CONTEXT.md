@@ -2,6 +2,73 @@
 
 Last updated: 2026-09-04
 
+## Server-backed table pagination (2026-09-04)
+
+All database-backed tables in the web app now paginate at the API/database
+boundary. Student and admin achievement lists, the active-room catalog, and
+pending-room approvals use deterministic offset pages; the admin booking queue
+and wallet ledger use cursor pages; and Manage Tutors continues to use its
+independent offset pages. The UI requests a bounded page plus one sentinel row
+when it needs to discover `hasNext`, keeps previous rows visible through
+`keepPreviousData`, scrolls the owning card back into view after navigation, and
+resets pagination when filters or the selected wallet change.
+
+Achievement status cards use dedicated `achievement.stats` and
+`achievement.adminStats` aggregates, so counts do not describe only the
+visible page. `pending` aggregates both `pending` and legacy `pending_review`.
+The unpaginated `room.list` compatibility path remains available for the
+booking room selector. The economy schedule preview and tutor pricing matrix
+are finite configuration/reference tables, not database collections, so they
+remain intentionally unpaginated.
+
+## Tutor discovery filter viewport containment (2026-09-04)
+
+The student `/tutors` page bounds its search row and collapsible filter panel
+with shrinkable, full-width containers so responsive controls cannot create a
+wider intrinsic page than the viewport. Shared Selia select positioners and
+popups also cap their width at Base UI's `--available-width` boundary, keeping
+category and specialization options inside the available viewport when
+multiple values are selected. This is frontend-only presentation behavior; no
+RPC, schema, persistence, or operational contract changed.
+
+## Tutor discovery profile presentation (2026-09-04)
+
+The student tutor drawer mirrors the public tutor profile treatment with a
+full-width 300px hero using the published profile image, top-aligned cover
+cropping, a bottom gradient, a close affordance, and specialization badges
+overlaid at the bottom. Education, achievements, and experiences render inside
+one combined **Achievements & experience** panel, while legacy achievement and
+experience text remains a fallback for older profiles. Tutor cards keep their
+desktop metadata on one line with natural-width specialization labels that do
+not repeat the parent category, reveal one, two, or three badges at
+progressively wider breakpoints, and retain a `From [Marks icon] #` price
+label; no RPC, schema, or persistence contract changed.
+
+## Student dashboard balance widget (2026-09-04)
+
+The student dashboard replaces its standalone Knowledge Bank promo card with a
+compact Selia balance widget inspired by the Watermelon quota-card composition.
+It shows available Marks as the primary value, held and total Marks as supporting
+values, and links to the Balance page for top-up. The Balance page reuses the
+same widget beside its Knowledge Bank access card on desktop. Eligibility uses
+the canonical total-balance threshold of 35 Marks. This is presentation-only
+and adds no new data source.
+
+The reusable widget keeps its dashboard **Top up** CTA by default; the Balance
+page configures the same action as **Find a tutor** and routes to `/tutors`,
+which is the next step before creating a booking.
+
+The Balance page and reusable widget explicitly allow their grid/flex children
+to shrink on narrow screens. Held and total values use equal bounded columns,
+and mobile ledger amounts move below their transaction descriptions so Marks
+history cannot impose a desktop-sized intrinsic width on the entire page. The
+QRIS payment code also scales to the nested card's available width instead of
+enforcing a fixed 272-pixel padded box.
+
+Marks history renders the transaction date on its own metadata line below the
+reason. Transaction amounts and resulting balances use the shared `CogitoMarks`
+icon-prefix presentation instead of spelling out Marks as a text suffix.
+
 ## Card title info preview (2026-09-04)
 
 The shared Selia `Card` now provides `CardInfoPreview`, an optional inline slot
@@ -14,6 +81,27 @@ sessions, Activity, Honorarium/Marks, lifecycle, contact, room-assignment, and
 admin-extension cards. This is presentation-only and changes no RPC or
 persisted data contract.
 
+## Competition Calendar empty months (2026-09-04)
+
+The authenticated Competition Calendar keeps the normal month grid visible when
+the selected month has no events. Dates, weekday headings, outside-month cells,
+and month navigation remain available; the month view does not replace the grid
+with an empty state. The page-level empty state is still used when no published
+competitions exist at all, while the agenda view may continue to explain an
+event-free selected period. This is frontend-only and changes no API, schema, or
+persistence contract.
+
+## Sidebar booking-action badge (2026-09-04)
+
+The authenticated sidebar now shows a compact count badge beside the shared
+`/bookings` navigation item when the role-visible booking list contains rows in
+the same pending states used by the **Needs action** tab. The badge uses the
+existing protected `booking.listMine` read with those states, displays `99+`
+when the result exceeds the compact limit, and stays hidden while the count is
+zero or still loading. The state tuple is shared by the sidebar, booking list,
+and booking cards. This is frontend-only; no RPC, schema, persistence, or
+booking lifecycle rule changed.
+
 ## Sidebar logo contrast (2026-09-04)
 
 The authenticated sidebar keeps the branded `/cogito-academy-logo.webp` asset
@@ -21,6 +109,29 @@ in light mode and applies a dark-mode filter so the complete logo renders
 white, including both the wordmark and academy label. This is frontend-only
 presentation behavior with no RPC, schema, persistence, or operational
 contract change.
+
+## Sidebar navigation order (2026-09-04)
+
+The authenticated sidebar keeps its three semantic zones: role-specific primary
+navigation, shared resources, and the account menu in the footer. Student
+navigation follows the main journey (`Dashboard`, `Tutors`, `My Bookings`,
+`Balance`, `Achievements`); tutor navigation prioritizes work actions
+(`Dashboard`, `Bookings`, `Availability`, `Tutor Profile`); and admin navigation
+starts with the action queue (`Dashboard`, `Operations`, `Bookings`, `Tutors`,
+`Economy`, `Achievements`). Resource labels and the **Tutor Profile** wording
+remain unchanged. This is frontend-only presentation behavior with no RPC,
+schema, persistence, or operational contract change.
+
+## Human-readable booking references (2026-09-04)
+
+Every booking now receives an immutable global `bookingNumber` from a
+PostgreSQL sequence. The admin Operations → Booking queue renders this short
+reference as `#N` instead of the long UUID and accepts exact searches in either
+`N` or `#N` form. The UUID remains the internal route and relationship key, so
+existing booking links, audit records, wallet references, and lifecycle logic
+do not change. Sequence values are intentionally allowed to have gaps when a
+booking transaction is rolled back, matching the normal behavior of PR/issue
+number sequences.
 
 ## Production UI and E2E audit (2026-09-04)
 
@@ -279,11 +390,11 @@ safe display identity; meeting attendee email arrays remain server-only.
 
 ## Authenticated editorial content
 
-Competition Calendar and Knowledge Bank content are now delivered inside the authenticated app. Sanity remains the editorial source of truth; content is not duplicated into PostgreSQL. The API uses a server-side Sanity client with the `published` perspective and projects English values from the academy's bilingual competition fields. The app UI is English-only.
+Competition Calendar and Knowledge Bank content are now delivered inside the authenticated app. Sanity remains the editorial source of truth; content is not duplicated into PostgreSQL. The API uses a server-side Sanity client with the `published` perspective and projects English values from the academy's bilingual competition fields. The app UI is English-only. Knowledge Bank category slugs are mapped to known labels or title-cased when rendered, while their raw values remain the filter keys.
 
 - `content.listCompetitions` is protected for every authenticated role and powers `/_app/calendar`.
-- The authenticated calendar keeps the academy's full read-only interaction model: month view with multi-day event spans and overflow popup, 30-day agenda view, keyboard shortcuts (`M`/`A`), period navigation, and a responsive event-details modal. Its colors, controls, and icons use the app's Selia design system; the academy's bilingual copy is not carried into the English-only app. The calendar route uses a contained viewport shell: the page heading and calendar toolbar stay in place while the calendar body owns vertical scrolling, and the month grid owns horizontal scrolling.
-- `content.listStudentResources` powers the authenticated `/knowledge-bank` route for students, tutors, and admins. Students receive resources only after `wallet.knowledgeBankEligible` confirms the existing 35-Mark total-balance threshold (held Marks count); tutors and admins bypass that wallet threshold.
+- The authenticated calendar keeps the academy's full read-only interaction model: month view with multi-day event spans and overflow popup, 30-day agenda view, keyboard shortcuts (`M`/`A`), period navigation, and a responsive event-details modal. Its colors, controls, and icons use the app's Selia design system; the academy's bilingual copy is not carried into the English-only app. The calendar route uses a contained viewport shell: the page heading and calendar toolbar stay in place while the calendar body owns vertical scrolling, and the month grid owns horizontal scrolling. A month with no events still renders the normal calendar grid so users can navigate dates; only the page-level no-competition state and event-free agenda period use empty-state messaging.
+- `content.listStudentResources` powers the authenticated `/knowledge-bank` route for students, tutors, and admins. Students receive resources only after `wallet.knowledgeBankEligible` confirms the existing 35-Mark total-balance threshold (held Marks count); tutors and admins bypass that wallet threshold. Resource category slugs are presented as readable labels in the UI without changing the API values used for filtering.
 - Knowledge Bank list responses never expose Sanity asset URLs. `GET /content/knowledge-bank/:resourceId/file` rechecks the student/tutor/admin role and wallet threshold, with the threshold bypassed for tutors and admins, fetches the published Sanity asset server-side, and streams it with private/no-store cache headers. The proxy is hardened (`apps/server/src/content-proxy.ts`): host allowlist (`cdn.sanity.io` / `*.sanity.io` — anything else is a 502 before any fetch), a 10s `AbortController` timeout, and a 5MB cap enforced on `content-length` and on the streamed body; the route is rate-limited 30/min per IP (`content` kind, `rate-limit-paths.ts`).
 - The academy landing site remains bilingual. Its calendar and Knowledge Bank navigation uses app-login CTAs with an internal redirect target; the old localized URLs remain compatibility redirects rather than public content pages.
 
@@ -554,7 +665,7 @@ when set to false.
 
 ### `auditLog` (audit-log.ts) — CHECK actor_type, before/after state jsonb
 
-### `booking` (booking.ts) — status state machine, deadline_at, hold_amount
+### `booking` (booking.ts) — immutable booking_number, status state machine, deadline_at, hold_amount
 
 ### `bookingParticipant` (booking.ts) — confirmation_state, attendance
 
@@ -625,9 +736,10 @@ The tutor `/profile` editor presents education, competition achievements, and ex
 
 - `listSubjects` (public — the seven active competition categories with 33 selectable specializations)
 - `listPublished`, `getProfile` (student-only; supports single or multi-value `categoryId`/`subjectId` filters via normalized specialization joins; a missing match returns an empty list)
-- Shared Selia controls keep category/specialization IDs and modality values for query inputs while rendering labels; tutor onboarding shows all competition categories with checkboxes, while the tutor list allows multiple categories and specializations, with empty arrays meaning “All”. Search and filter changes debounce `listPublished` by 300 ms so rapid typing or multi-select toggles coalesce into one request.
+- Shared Selia controls keep category/specialization IDs and modality values for query inputs while rendering labels; tutor onboarding shows all competition categories with checkboxes, while the tutor list allows multiple categories and specializations, with empty arrays meaning “All”. Tutor discovery keeps search visible and places category, specialization, and modality controls in a collapsed-by-default filter panel; its trigger retains an active-selection count when the panel is closed. The panel expands with a short height/fade transition, rotates its chevron, remains outside keyboard navigation while closed, and disables motion when reduced motion is requested. Multi-select values truncate only the leading label while keeping the `+N more` chip and its ring visible. Search and filter changes debounce `listPublished` by 300 ms so rapid typing or multi-select toggles coalesce into one request.
+- On mobile, tutor discovery cards use a compact profile composition: a 56-pixel avatar and identity header, two-line bio, short specialization badges, and a separated price footer with the shared Marks prefix plus a chevron. Desktop retains the denser horizontal summary, uses natural-width child specialization labels without a repeated parent category, keeps its metadata on one line, and progressively reveals additional specialization badges at wider breakpoints while preserving the `From [Marks icon] #` price label. The whole card remains the profile trigger with a smooth hover-shadow treatment and no translate or pressed-scale effect.
 - The student-facing tutor drawer renders available pricing maps as one group-size matrix with separate Online and Offline Marks columns, prefixing populated price cells with the Cogito Marks icon. This is presentation-only; the discovery response and pricing contracts remain unchanged.
-- The student-facing tutor drawer keeps its header and booking footer outside the profile body's single vertical scroll container; the body may overscroll locally without moving those fixed regions, so long structured profiles remain reachable on short viewports. This is presentation-only; the discovery response and pricing contracts remain unchanged.
+- The student-facing tutor drawer opens as a swipe-down bottom sheet below the `sm` breakpoint and as a right-side drawer at `sm` and above. It keeps its 300px image hero and booking footer outside the profile body's single vertical scroll container; the body may overscroll locally without moving those fixed regions, so long structured profiles remain reachable on short viewports. Education, achievements, and experiences share one combined profile-highlights panel with legacy text fallbacks. This is presentation-only; the discovery response and pricing contracts remain unchanged.
 
 ### Invite Module (public + protected)
 
@@ -638,7 +750,7 @@ The tutor `/profile` editor presents education, competition achievements, and ex
 - `list`, `create`, `update`, `delete`
 - `adminList`, `adminUpdate`, `adminReview`
 - `listApproved` (public — consumed by the public `cogito-acad` achievement archive and homepage preview)
-- The student `/achievements` list and admin `/admin-achievements` moderation queue use compact, horizontally scrollable Selia tables with minimum column widths; each row opens a shared detail drawer for category, level, description, location, attachments, notes, and available edit/delete or correct/approve/reject actions. The student summary counts use the same compact label-and-pill cards as the admin moderation counts. The table containers are full-bleed within their card bodies, while the page/card wrappers stay constrained to the viewport so only the table content scrolls horizontally. This is presentation-only and does not change the achievement RPC or persistence contract.
+- The student `/achievements` list and admin `/admin-achievements` moderation queue use compact, horizontally scrollable Selia tables with minimum column widths; each row opens a shared detail drawer for category, level, description, location, attachments, notes, and available edit/delete or correct/approve/reject actions. The drawer presents metadata as consistent labeled values while retaining a semantic status badge, opens as a swipe-down bottom sheet below the `sm` breakpoint, and becomes a right-side drawer at `sm` and above. Evidence and public-documentation attachments open in a lightweight image preview with an original-file fallback. The student summary counts use the same compact label-and-pill cards as the admin moderation counts. The table containers are full-bleed within their card bodies, while the page/card wrappers stay constrained to the viewport so only the table content scrolls horizontally. This is presentation-only and does not change the achievement RPC or persistence contract.
 - The public projection is an allowlist: it includes approved + visible records and the owner's display name, but never `userId` or private `evidenceUrl`. Optional activity documentation remains public-safe.
 - Student achievement levels are presented in this order: `International`, `National`, `Province/State`, `City/Regency`, `School`. The student proof field gives Google Drive guidance (upload proof, set General access to “Anyone with the link” + Viewer, then paste the link); students do not provide the public documentation image.
 - The student form uses one clear Location value (for example `Jakarta, Indonesia`, `Geneva, Switzerland`, or `Online`) and a long-answer `Brief Description` field with a ranked-result example. The public documentation image is an admin-only correction field.
@@ -868,7 +980,7 @@ The primary Tutor E2E flow has been manually verified with seeded accounts, incl
 
 Backend is ready for user role management, tutor invite/review, structured tutor achievement editing, achievement moderation and public achievement surfacing, the full booking operations console (queue/override preview/refund), room list/create/assign/relocate, wallet/ledger lookup, tutor payouts, refund corrections, the active economy schedule, and manual meeting-link fallback for eligible online bookings. Admin wallet lookup resolves visible user identity through `admin.searchUsers` (name/email/ID) before reading the selected wallet and ledger. The /admin-economy screen lets admins edit the four Cogito take fields in Rp 5,000 increments with optimistic versioning; updates are audit-logged and apply only to future/new repricing snapshots. The admin tutor review card resolves pending `subjectIds` through the active normalized taxonomy and renders readable category/specialization labels with wrapping values; it also lets admins correct structured education and competition entries through the version-checked `adminTutor.updateTutorAchievements` procedure, with an audit event for each save.
 
-The admin override queue, wallet/ledger view, override preview, room assignment → scheduled transition + notifications, room availability/approval backend (G8–G10, G13–G14), and the read-only all-bookings view at `/bookings` have landed. The admin workspace is now available at `/admin`; its operations queue provides category/urgency/SLA filters, OQ-04 business-hours deadlines, escalation status/channel, and report context. Each queue row links to the admin-only `/admin-operations/bookings/:bookingId` page, where the full participant read model, per-wallet balances, booking-scoped ledger entries, meeting fallback, state history, and override action remain available in a refresh-safe layout. The override form loads the booking roster and presents affected participants as a name/avatar/role multi-select; selected user IDs are serialized automatically for the unchanged preview/apply contract. The queue table uses stable column widths, top-aligned content, readable body text, and non-wrapping status badges. On narrow viewports, the monitor card remains constrained to the content viewport and only the table container scrolls horizontally. The **Room approvals** tab now includes the active-room catalog and Add room dialog backed by `room.create`, while its `room.listPendingApprovals` section remains the cross-booking queue; requested rooms can be assigned inline, while **Choose room** / **Choose another** opens the admin-only booking detail Offline room card for context-aware assignment or relocation. No admin room flow requires typing a booking UUID. F1/F2/F11/F12 are closed. Backend U-item sub-gaps are tracked in `docs/plans/active/PRD-GAPS-PHASE3.md` (all closed; U9 closed by REVIEW-FIXES-4 P2.8). The admin economy UI was browser-verified for role denial, valid future-booking snapshot updates, and invalid negative amounts; no UI access bypass was found.
+The admin override queue, wallet/ledger view, override preview, room assignment → scheduled transition + notifications, room availability/approval backend (G8–G10, G13–G14), and the read-only all-bookings view at `/bookings` have landed. The admin workspace is now available at `/admin`; its operations queue provides category/urgency/SLA filters, exact booking-number search, OQ-04 business-hours deadlines, escalation status/channel, and report context. Queue rows display the immutable human-readable booking reference (`#N`) while retaining the UUID behind the detail link, and each row links to the admin-only `/admin-operations/bookings/:bookingId` page, where the full participant read model, per-wallet balances, booking-scoped ledger entries, meeting fallback, state history, and override action remain available in a refresh-safe layout. The override form loads the booking roster and presents affected participants as a name/avatar/role multi-select; selected user IDs are serialized automatically for the unchanged preview/apply contract. The queue table uses stable column widths, top-aligned content, readable body text, and non-wrapping status badges. On narrow viewports, the monitor card remains constrained to the content viewport and only the table container scrolls horizontally. The **Room approvals** tab now includes the active-room catalog and Add room dialog backed by `room.create`, while its `room.listPendingApprovals` section remains the cross-booking queue; requested rooms can be assigned inline, while **Choose room** / **Choose another** opens the admin-only booking detail Offline room card for context-aware assignment or relocation. No admin room flow requires typing a booking UUID. F1/F2/F11/F12 are closed. Backend U-item sub-gaps are tracked in `docs/plans/active/PRD-GAPS-PHASE3.md` (all closed; U9 closed by REVIEW-FIXES-4 P2.8). The admin economy UI was browser-verified for role denial, valid future-booking snapshot updates, and invalid negative amounts; no UI access bypass was found.
 
 ### Backend Gap Groups
 

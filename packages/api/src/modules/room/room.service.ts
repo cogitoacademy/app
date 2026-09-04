@@ -57,12 +57,25 @@ export function createRoomService(
     }
   }
 
-  async function listActive() {
+  async function listActive(input?: { limit: number; offset: number }) {
+    if (input) return repo.findActiveRooms(db, input);
     return repo.findActiveRooms(db);
   }
 
-  async function listPendingApprovals(limit = 50) {
-    return repo.findPendingRoomApprovals(db, limit);
+  async function listPendingApprovals(
+    limitOrInput?: number | { limit: number; offset: number },
+    offset?: number,
+  ) {
+    if (typeof limitOrInput === "number") {
+      return repo.findPendingRoomApprovals(db, limitOrInput, offset);
+    }
+    if (limitOrInput)
+      return repo.findPendingRoomApprovals(
+        db,
+        limitOrInput.limit,
+        limitOrInput.offset,
+      );
+    return repo.findPendingRoomApprovals(db);
   }
 
   async function createRoom(input: CreateRoomInput) {

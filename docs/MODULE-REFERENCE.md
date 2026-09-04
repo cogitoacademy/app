@@ -2,6 +2,29 @@
 
 Last updated: 2026-09-04
 
+## Server-backed table pagination (2026-09-04)
+
+Data-table pagination is owned by the module that reads the collection. The
+achievement and room repositories apply `limit`/`offset` directly to their
+ordered SQL queries; admin booking and ledger repositories continue to expose
+cursor pages; and admin tutor lists keep their offset pages. Web components
+render a bounded page plus a one-row sentinel where needed, use
+`keepPreviousData` during transitions, and reset pagination after filter or
+selection changes. Aggregate achievement counts come from dedicated stats
+queries rather than counting the current page. Fixed pricing/economy matrices
+are finite configuration previews and are not collection tables.
+
+## Student dashboard balance widget (2026-09-04)
+
+The student dashboard balance widget is a frontend projection of the existing
+wallet snapshot: available balance is primary, with held and total balances as
+context. Its Knowledge Bank shortcut follows the wallet module's canonical
+35-total-Mark eligibility rule on the Balance page, where the access card sits
+beside the widget on desktop. No service, repository, event key, or business
+beside the widget on desktop. The widget exposes a route/label-configurable CTA
+so Balance uses **Find a tutor** and the dashboard uses **Top up**. No service,
+repository, event key, or business rule changed.
+
 ## Card title info preview (2026-09-04)
 
 The shared Selia card module exposes `CardInfoPreview` as an inline title slot
@@ -17,6 +40,16 @@ The authenticated sidebar applies a dark-mode-only filter to the existing
 Cogito Academy logo so the full wordmark renders white. This is client-side
 presentation behavior and adds no service, repository, event-key, or business
 rule.
+
+## Sidebar navigation order (2026-09-04)
+
+`apps/web/src/components/dashboard/app-sidebar.tsx` keeps the shared resource
+group and account footer while ordering primary links by role-specific workflow:
+students use `Dashboard`, `Tutors`, `My Bookings`, `Balance`, and `Achievements`;
+tutors use `Dashboard`, `Bookings`, `Availability`, and `Tutor Profile`; admins
+use `Dashboard`, `Operations`, `Bookings`, `Tutors`, `Economy`, and
+`Achievements`. This is frontend presentation only; services, repositories,
+event keys, and business rules are unchanged.
 
 ## Production UI and E2E audit (2026-09-04)
 
@@ -81,6 +114,13 @@ The shared booking list uses Needs action, Upcoming, Recurring, History, and All
 
 `BookingListCard` derives one contextual time chip from server facts: pending states read `deadlineAt`, confirmed/scheduled states read the scheduled window, and terminal states render none. A module-level external clock store updates all mounted cards from one 30-second interval rather than allocating one timer per row.
 The reusable card exposes `showFinancialInfo`; booking lists keep it enabled and place the time chip after it, while dashboard next-lesson cards disable it.
+
+The authenticated sidebar reuses `booking.listMine` with the shared
+`BOOKING_ACTION_STATES` tuple and shows a compact `99+`-capped badge beside
+`/bookings` when role-visible pending rows exist. The tuple is shared with the
+booking list/card presentation so the badge and **Needs action** tab remain
+aligned. This is frontend presentation only; the booking service, repository,
+event keys, and lifecycle rules are unchanged.
 
 Tutor invitations use the shared email provider: create sends once, **Generate & copy link** only rotates the token, and the separate **Send again** procedure rotates then explicitly delivers through Resend. Delivery failure does not roll back the valid invite.
 
@@ -168,7 +208,7 @@ Editorial content integration is also read-only: Sanity remains the source of tr
 - `listStudentResources()` — returns resource metadata without asset URLs
 - `getStudentResourceFile(resourceId)` — resolves the published asset URL and file metadata for the already-authorized proxy
 
-The calendar frontend consumes `listCompetitions()` as a read-only projection. It mirrors the academy's month/agenda interaction model (multi-day spans, overflow popup, 30-day agenda, and event-details modal) while using Cogito App Selia components, design tokens, and Tabler icons. Its authenticated route is viewport-contained: the calendar card body owns vertical scrolling, while the month grid owns horizontal scrolling so the page shell and calendar toolbar do not scroll with the grid. The Knowledge Bank frontend is available at the authenticated `/knowledge-bank` route.
+The calendar frontend consumes `listCompetitions()` as a read-only projection. It mirrors the academy's month/agenda interaction model (multi-day spans, overflow popup, 30-day agenda, and event-details modal) while using Cogito App Selia components, design tokens, and Tabler icons. Its authenticated route is viewport-contained: the calendar card body owns vertical scrolling, while the month grid owns horizontal scrolling so the page shell and calendar toolbar do not scroll with the grid. The month view always keeps the standard grid visible, including for an event-free selected month; the page-level empty state remains reserved for a response with no competitions at all. The Knowledge Bank frontend is available at the authenticated `/knowledge-bank` route and renders resource category slugs as mapped or title-cased labels while keeping raw slugs for filtering.
 
 **Business Rules:**
 
@@ -189,17 +229,19 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - `achievement.errors.ts` — `AchievementNotFoundError`, `AchievementNotOwnedError`, `AchievementNotEditableError`, `OptimisticLockError`
 - `achievement.repo.ts` — CRUD with optimistic locking (`updateWithVersion`, `updateByIdWithVersion`, `deleteWithVersion`)
 - `achievement.service.ts` — Ownership checks, admin correction/review workflow, audit and optimistic lock handling
-- `achievement.handler.ts` — `list`, `listApproved`, `create`, `update`, `remove`, `adminList`, `adminUpdate`, `adminReview`
-- `achievement.router.ts` — Protected routes for student ops, admin routes for correction/review, public `listApproved` route
+- `achievement.handler.ts` — `list`, `stats`, `listApproved`, `create`, `update`, `remove`, `adminList`, `adminStats`, `adminUpdate`, `adminReview`
+- `achievement.router.ts` — Protected list/stats routes, admin list/stats/correction/review routes, public `listApproved` route
 
 **Service Methods:**
 
-- `list(userId)` — Returns achievements for a user
+- `list(userId, input?)` — Returns a server-paginated user page with optional category/status filters; `pending` includes `pending_review`
+- `stats(userId)` — Returns total/approved/pending/rejected/archived counts, with pending statuses combined
 - `listApprovedPublic()` — Returns the allowlisted approved + visible achievement projection with the owner's display name for the public `cogito-acad` homepage and archive (F16)
 - `create(userId, input)` — Creates achievement in `pending` status
 - `update(userId, input)` — Updates with optimistic lock check (`input.version` + `input.data`)
 - `remove(userId, id, expectedVersion)` — Deletes with optimistic lock check
-- `adminList(input)` — Paginated list with optional status filter
+- `adminList(input)` — Server-paginated list with optional status filter; `pending` includes `pending_review`
+- `adminStats()` — Returns aggregate moderation counts without a page limit
 - `adminUpdate(adminId, input)` — Corrects a `pending`/`pending_review` submission with optimistic locking, before/after audit content, and no status change; admins can also set or clear `documentationUrl`
 - `adminReview(id, status, adminNote?)` — Moderation action. **F12:** transition table — `pending`/`pending_review` → `approved`/`rejected`/`archived`; `approved`/`rejected` → `archived`; `archived` → `approved`/`rejected` (restore). Other transitions throw `AchievementNotEditableError`. Reads and updates inside one transaction using the current status/version as a compare-and-swap; a lost race throws `OptimisticLockError` before notification/audit side effects. Notifies the owner and writes an `achievement_{status}` audit record after success
 
@@ -216,10 +258,11 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - The student achievement form uses shared Selia portal controls for Category, Level, and Awarding Date; those popups must remain above the modal dialog layer.
 - Optimistic locking prevents lost updates (`version` field)
 - Admin correction is allowed only for `pending`/`pending_review`, can update every submission field plus public documentation, writes an audit snapshot, and does not change status; admin review changes status to `approved` or `rejected`
+- Student and admin list pages use database pagination; the UI may request one extra row as a `hasNext` sentinel, but never loads the complete achievement collection into the browser.
 
 **Web presentation:**
 
-- The student `/achievements` list and admin `/admin-achievements` queue use compact minimum-width Selia tables with status/date/identity columns and a **View details** entry point. A shared detail drawer holds the full submission metadata, attachments, moderator notes, and the relevant pending edit/delete or correct/approve/reject actions. Student summary counts use the same compact label-and-pill card treatment as the admin queue counts. Page/card wrappers remain constrained to the viewport, so only the table content scrolls horizontally. These layouts do not change service behavior, RPC inputs/outputs, or stored data.
+- The student `/achievements` list and admin `/admin-achievements` queue use compact minimum-width Selia tables with status/date/identity columns and a **View details** entry point. A shared detail drawer holds the full submission metadata as consistent label/value fields with a semantic badge reserved for status, plus attachments, moderator notes, and the relevant pending edit/delete or correct/approve/reject actions. It renders as a bottom sheet with downward dismissal on mobile and switches to a right-side drawer from the `sm` breakpoint. Evidence and public-documentation links open in a simple image dialog; unsupported image URLs retain an **Open original** escape hatch. Student summary counts use the same compact label-and-pill card treatment as the admin queue counts. Page/card wrappers remain constrained to the viewport, so only the table content scrolls horizontally. These layouts do not change service behavior, RPC inputs/outputs, or stored data.
 
 ---
 
@@ -303,11 +346,11 @@ payment package codes stable.
 
 ## Admin-Booking Module
 
-**Purpose:** Admin operations console for bookings — filtered override queue with urgency/SLA projection, a dedicated admin-only booking detail/history page, hydrated participant wallet/ledger inspection, before/after override preview, state history, and admin refunds. Queue rows navigate to `/admin-operations/bookings/:bookingId`; the page resolves its own queue item with the exact `bookingId` filter instead of relying on modal state. The override form reads the booking roster through protected `booking.get` and uses a name/avatar/role multi-select for affected participants; only selected user IDs are serialized into the existing override input.
+**Purpose:** Admin operations console for bookings — filtered override queue with urgency/SLA projection, a dedicated admin-only booking detail/history page, hydrated participant wallet/ledger inspection, before/after override preview, state history, and admin refunds. Each booking has an immutable global human-readable `bookingNumber`; the queue displays it as `#N` and supports exact `N`/`#N` lookup while keeping the UUID as the internal route/relationship key. Queue rows navigate to `/admin-operations/bookings/:bookingId`; the page resolves its own queue item with the exact `bookingId` filter instead of relying on modal state. The override form reads the booking roster through protected `booking.get` and uses a name/avatar/role multi-select for affected participants; only selected user IDs are serialized into the existing override input.
 
 **Files:**
 
-- `admin-booking.types.ts` — Zod schemas for override/list/state-history/admin-refund inputs
+- `admin-booking.types.ts` — Zod schemas for override/list (including booking-number search)/state-history/admin-refund inputs
 - `admin-booking.errors.ts` — `BookingNotFoundError`
 - `admin-booking.repo.ts` — booking lookup, override state application, state history
 - `admin-booking.service.ts` — `applyOverride`, `previewOverride`, `listBookings`, `getBookingStateHistory`, `adminRefund`, `setMeetingLink`, `cancelSeriesSession`; exports `OVERRIDE_CATEGORIES` and `MARKS_ACTIONS`
@@ -316,7 +359,7 @@ payment package codes stable.
 
 **Service Methods:**
 
-- `listBookings(opts)` — Paginated booking list sorted by urgency, filterable by category/urgency/escalated; an exact `bookingId` lookup returns zero or one item for the admin detail route. Each item projects `reportedAt`, the OQ-04 business-hours `slaDeadline`, and `escalated` from `overrideMeta.overriddenAt`. `escalated=true` walks bounded keyset windows (at most `MAX_ESCALATED_WINDOWS = 5` fetches of `MAX_PAGE_LIMIT` rows) until the page fills with escalated rows — it never returns an empty page with a non-null `nextCursor`, so the admin queue cannot infinite-loop on a sparse escalated set
+- `listBookings(opts)` — Paginated booking list sorted by urgency, filterable by exact human-readable booking number, category/urgency/escalated; an exact `bookingId` lookup returns zero or one item for the admin detail route. Each item includes the immutable `bookingNumber` reference and projects `reportedAt`, the OQ-04 business-hours `slaDeadline`, and `escalated` from `overrideMeta.overriddenAt`. `escalated=true` walks bounded keyset windows (at most `MAX_ESCALATED_WINDOWS = 5` fetches of `MAX_PAGE_LIMIT` rows) until the page fills with escalated rows — it never returns an empty page with a non-null `nextCursor`, so the admin queue cannot infinite-loop on a sparse escalated set
 - `applyOverride(adminId, input)` — Force state transition by `category` (tutor_no_show/medical_emergency/technical_failure/admin_correction/student_no_show/force_cancel); optionally adjusts held Marks (`marksAction`); records audit log + state history
 - `previewOverride(input)` — Returns the projected booking state and per-participant wallet impact without persisting anything. **F24:** every `affectedParticipants` id must be a participant of the booking — unknown ids throw `OVERRIDE_PARTICIPANT_NOT_IN_BOOKING` instead of being silently filtered (a money action would otherwise skip a user's holds)
 - `getBookingStateHistory(bookingId)` — Returns full state transition history for a booking
@@ -826,8 +869,8 @@ workflow does not change the RPC contracts.
 
 **Service Methods:**
 
-- `listActive()` — Returns active rooms
-- `listPendingApprovals(limit?)` — Returns offline bookings in `AWAITING_ADMIN_ROOM_APPROVAL`, including bookings with no requested room row after a requested-room conflict
+- `listActive(input?)` — Returns active rooms; `{ limit, offset }` applies deterministic server pagination, while omitted input preserves the full selector-compatible list
+- `listPendingApprovals(input?)` — Returns a server-paginated page of offline bookings in `AWAITING_ADMIN_ROOM_APPROVAL`, including bookings with no requested room row after a requested-room conflict
 - `createRoom({ name, location, capacity })` — Creates a room
 - `assignRoom(bookingId, roomId, startAt, endAt)` — Confirms a room for a booking with conflict check; transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED`, then best-effort creates/refreshes its non-Meet Calendar event after commit, and notifies tutor + confirmed students (#46, G14). **F22 state guard:** the booking must be `AWAITING_ADMIN_ROOM_APPROVAL` (or `RESCHEDULE_PROPOSED`, the H3 pre-assignment carve-out) — any other state throws `ROOM_BOOKING_STATE` before the roomBooking row is inserted (no orphan CONFIRMED rows)
 - `checkAvailability(roomId, startAt, endAt)` — Returns whether the room is free for the slot
@@ -843,6 +886,7 @@ workflow does not change the RPC contracts.
 - Room bookings have status `requested`/`confirmed`/`relocated`/`cancelled`
 - Room conflict-check/write paths take a transaction-scoped advisory lock keyed by `roomId`. Both normal and `FOR UPDATE` repository checks use strict half-open overlap (`existing.start < requested.end AND existing.end > requested.start`). Migration `0038_room_booking_overlap_guard.sql` adds the matching database backstop: a partial GiST exclusion constraint rejects overlapping `[startAt,endAt)` ranges for `confirmed` rows in the same room while allowing adjacent sessions.
 - The admin pending-approval queue is sourced from offline bookings in `awaiting_admin_room_approval`; the requested room is optional because room creation can report a conflict and let the booking continue to admin review
+- Room catalog and pending-approval tables use ordered `limit`/`offset` queries and a one-row sentinel in the web UI; room selectors intentionally use the unpaginated compatibility path.
 - G14 (assign → scheduled + notifications) fixed in #46
 - Offline booking-level reschedules keep the room assignment aligned with the booking schedule; conflict/missing results remain in the admin room-approval queue rather than reserving a room at a stale time
 - Remaining gap G13: `checkAvailability` is not yet integrated into booking creation — tracked U14 in `docs/plans/active/PRD-GAPS-PHASE3.md`
@@ -1015,8 +1059,11 @@ The web tutor profile editor groups education, competition achievements, and exp
 - `getProfile(userId)` — Returns full tutor profile and future availability
 - IDR profiles receive `pricesByModality` Marks maps computed from the active economy config; legacy profiles keep their stored Marks map and no student discovery response exposes the tutor's IDR base honorarium
 - Frontend filter selects normalize displayed objects back to primitive category/specialization ID arrays or modality values before calling `listPublished`; empty arrays represent the corresponding “All” option, specialization options are the union of the selected categories, and the query is debounced by 300 ms.
-- The student tutor drawer combines the available modality maps into one group-size pricing matrix with separate Online and Offline Marks columns, prefixing populated values with the Cogito Marks icon; missing modality/size combinations are display-only em dashes and do not change the response contract.
+- The student discovery search row and collapsible filter panel use shrinkable, viewport-bounded containers; shared Selia select positioners and popups cap at Base UI's `--available-width` boundary so multi-select options remain inside narrow viewports. This is presentation-only and does not change discovery inputs or outputs.
+- The student tutor drawer combines the available modality maps into one group-size pricing matrix with separate Online and Offline Marks columns, prefixing populated values with the Cogito Marks icon; missing modality/size combinations are display-only em dashes and do not change the response contract. The profile opens as a bottom sheet with downward dismissal on mobile and switches to a right-side drawer from the `sm` breakpoint.
 - Published tutor projections include the structured education and competition achievement arrays. The student drawer renders each first line in a semibold hierarchy, separates achievement bullets with breathing room, and joins multiple awards with commas.
+- Published tutor projections also include `user.image` and structured `experienceEntries`; the student drawer presents education, achievements, and experiences in one combined profile-highlights panel and falls back to legacy achievement/experience text when structured arrays are absent.
+- Tutor discovery cards use natural-width child specialization labels without repeating the parent category, keep desktop metadata on one line, reveal additional specialization badges at wider breakpoints, and retain the `From [Marks icon] #` starting-price treatment. This is presentation-only and does not change discovery filters or response fields.
 - Long student and admin tutor profiles scroll inside the drawer content area while header/action regions stay outside that scroll area; local body overscroll is contained and cannot move the fixed regions. This is presentation-only and does not change the discovery or review contracts.
 
 **Dependencies:** `DiscoveryRepo`, `PricingPort`
