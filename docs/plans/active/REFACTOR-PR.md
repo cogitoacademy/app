@@ -1,11 +1,11 @@
 # Backend + Infra Tidy — Plan
 
-| Field      | Value |
-| ---------- | ----- |
+| Field      | Value                                                                                                                                                            |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Status     | **Active (2026-09-04)** — one behavior-preserving refactor PR: server route split, typed webhook errors, booking service split, package/infra READMEs, docs sync |
-| Created    | 2026-09-04 |
-| Branch     | `refactor/backend-infra-tidy` |
-| Depends on | #190 (CI dependabot fix) + #193 (semantic-pr docker type) merged; main `908bad1` |
+| Created    | 2026-09-04                                                                                                                                                       |
+| Branch     | `refactor/backend-infra-tidy`                                                                                                                                    |
+| Depends on | #190 (CI dependabot fix) + #193 (semantic-pr docker type) merged; main `908bad1`                                                                                 |
 
 ## Why
 
@@ -80,9 +80,9 @@ build, test+coverage, semantic-pr, label).
 
 ## Risks
 
-| Risk | Mitigation |
-| ---- | ---------- |
-| 100% coverage gate trips | test:coverage locally before push; tests split with sources |
+| Risk                             | Mitigation                                                      |
+| -------------------------------- | --------------------------------------------------------------- |
+| 100% coverage gate trips         | test:coverage locally before push; tests split with sources     |
 | Bun 1.3.14 segfault import order | comment + dynamic imports move verbatim; boot-simulated locally |
-| booking split behavioral drift | mechanical extraction only; existing suite is the contract |
-| ops shell dedupe breaks | `bash -n` + dry-run; lib extraction only, no logic changes |
+| booking split behavioral drift   | mechanical extraction only; existing suite is the contract      |
+| ops shell dedupe breaks          | `bash -n` + dry-run; lib extraction only, no logic changes      |

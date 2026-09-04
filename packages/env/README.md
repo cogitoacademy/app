@@ -4,13 +4,13 @@ Environment-schema validation for every runtime, built on `@t3-oss/env-core` + Z
 
 ## Entrypoints
 
-| Import | What it validates |
-| ------ | ----------------- |
-| `@cogito-app/env/server` | Server env schema (loaded from `.env` via `dotenv/config`) |
-| `@cogito-app/env/web` | Client env: `VITE_SERVER_URL` (absolute URL or same-origin relative path) |
-| `@cogito-app/env/admin` | Admin-email helpers: `DEFAULT_PRODUCTION_ADMIN_EMAIL`, `parseConfiguredAdminEmails`, `isConfiguredAdminEmail` |
-| `@cogito-app/env/node-env` | `isProductionLike()` + `PRODUCTION_LIKE_ENVS` (`production`, `staging`) |
-| `@cogito-app/env/origins` | `getAuthTrustedOrigins()` — auth trusted-origin derivation from `CORS_ORIGIN` + NODE_ENV (excludes private-network hosts, adds dev ports) |
+| Import                     | What it validates                                                                                                                         |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `@cogito-app/env/server`   | Server env schema (loaded from `.env` via `dotenv/config`)                                                                                |
+| `@cogito-app/env/web`      | Client env: `VITE_SERVER_URL` (absolute URL or same-origin relative path)                                                                 |
+| `@cogito-app/env/admin`    | Admin-email helpers: `DEFAULT_PRODUCTION_ADMIN_EMAIL`, `parseConfiguredAdminEmails`, `isConfiguredAdminEmail`                             |
+| `@cogito-app/env/node-env` | `isProductionLike()` + `PRODUCTION_LIKE_ENVS` (`production`, `staging`)                                                                   |
+| `@cogito-app/env/origins`  | `getAuthTrustedOrigins()` — auth trusted-origin derivation from `CORS_ORIGIN` + NODE_ENV (excludes private-network hosts, adds dev ports) |
 
 ## The `server` schema (`serverEnvSchema`)
 

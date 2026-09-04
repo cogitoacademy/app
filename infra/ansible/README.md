@@ -35,10 +35,10 @@ Run in this order (the same order `infra/apply.sh all` enforces):
 
 ## Other playbooks
 
-| Playbook | What it does |
-| -------- | ------------ |
+| Playbook                                   | What it does                                                                                                                                       |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`disk-watchdog.yml`](./disk-watchdog.yml) | Installs the nightly disk watchdog (`/usr/local/bin/cogito-disk-watchdog.sh` from `../disk-watchdog.sh`, env at `/etc/cogito/disk.env`, 03:30 WIB) |
-| [`uptime-kuma.yml`](./uptime-kuma.yml) | Declares the Uptime Kuma monitoring service via the Coolify API (`status.cogitoacademy.id`), control-node driven |
+| [`uptime-kuma.yml`](./uptime-kuma.yml)     | Declares the Uptime Kuma monitoring service via the Coolify API (`status.cogitoacademy.id`), control-node driven                                   |
 
 ## Tasks
 

@@ -4,14 +4,14 @@ Drizzle ORM schema and migrations for Cogito, driven by the `postgres` (postgres
 
 ## Schema (`src/schema/`, 18 files — 32 tables)
 
-| File | Tables |
-| ---- | ------ |
-| `auth.ts` | `user`, `session`, `account`, `verification` (Better Auth) |
-| `booking.ts` | `booking`, `bookingParticipant`, `bookingStateHistory`, `bookingRescheduleProposal`, `bookingSession`, `sessionNote`, `room`, `roomBooking`, `meetingEvent` |
-| `notification.ts` | `notification`, `notificationDispatch` |
-| `payment-record.ts` | `paymentRecord`, `refundRecord` |
-| `tutor-subject.ts` | `subjectCategory`, `tutorProfileSubject` |
-| `wallet.ts` | `wallet`, `ledgerEntry` |
+| File                 | Tables                                                                                                                                                                                     |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `auth.ts`            | `user`, `session`, `account`, `verification` (Better Auth)                                                                                                                                 |
+| `booking.ts`         | `booking`, `bookingParticipant`, `bookingStateHistory`, `bookingRescheduleProposal`, `bookingSession`, `sessionNote`, `room`, `roomBooking`, `meetingEvent`                                |
+| `notification.ts`    | `notification`, `notificationDispatch`                                                                                                                                                     |
+| `payment-record.ts`  | `paymentRecord`, `refundRecord`                                                                                                                                                            |
+| `tutor-subject.ts`   | `subjectCategory`, `tutorProfileSubject`                                                                                                                                                   |
+| `wallet.ts`          | `wallet`, `ledgerEntry`                                                                                                                                                                    |
 | plus one table each: | `achievement`, `availability-slot`, `contact-request`, `economy-config`, `mark-package`, `student-profile`, `support-ticket`, `tutor-invite`, `tutor-payout`, `tutor-profile`, `audit-log` |
 
 `src/schema/index.ts` re-exports the full schema (used by Better Auth's Drizzle adapter via `@cogito-app/db/schema`).
@@ -28,12 +28,12 @@ The driver is `postgres` (postgres.js) with `drizzle-orm/postgres-js`; the clien
 
 ## Scripts
 
-| Script | Purpose |
-| ------ | ------- |
-| `db:migrate` | Apply migrations (`drizzle-kit migrate`) |
-| `db:generate` | Generate a new migration from schema changes |
-| `db:push` | Push schema without migrations (dev) |
-| `db:studio` | Drizzle Studio UI |
+| Script                             | Purpose                                                   |
+| ---------------------------------- | --------------------------------------------------------- |
+| `db:migrate`                       | Apply migrations (`drizzle-kit migrate`)                  |
+| `db:generate`                      | Generate a new migration from schema changes              |
+| `db:push`                          | Push schema without migrations (dev)                      |
+| `db:studio`                        | Drizzle Studio UI                                         |
 | `db:start` / `db:stop` / `db:down` | Local Postgres via docker compose (test DB via `db:test`) |
 
 Export surface: `@cogito-app/db` (client + helpers) and `@cogito-app/db/schema`.
