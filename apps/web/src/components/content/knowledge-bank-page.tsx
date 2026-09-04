@@ -40,6 +40,7 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 import { EmptyStateCard } from "@/components/empty-state";
 import { serverUrl } from "@/lib/server-url";
 import { orpc } from "@/utils/orpc";
+import { getCategoryLabel } from "./knowledge-bank-utils";
 
 type Resource = {
   id: string;
@@ -47,16 +48,6 @@ type Resource = {
   description: string | null;
   category: string;
 };
-
-const categoryLabels: Record<string, string> = {
-  academic: "Academic",
-  competition: "Competition",
-  general: "General",
-};
-
-function getCategoryLabel(category: string) {
-  return categoryLabels[category] ?? category;
-}
 
 function resourceFileUrl(resourceId: string) {
   return `${serverUrl}/content/knowledge-bank/${encodeURIComponent(resourceId)}/file`;
