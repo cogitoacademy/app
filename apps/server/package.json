@@ -24,7 +24,7 @@
     "dotenv": "catalog:",
     "drizzle-orm": "catalog:",
     "elysia": "catalog:",
-    "evlog": "^2.25.0",
+    "evlog": "^2.28.0",
     "zod": "catalog:"
   },
   "devDependencies": {
