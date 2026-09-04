@@ -324,7 +324,12 @@ test("tutor can decline a request and the student sees the terminal state", asyn
     await tutor.context.close();
   }
 
-  await page.reload();
+  await page.goto(`/bookings/${bookingId}`);
+  await expect(
+    page.getByText("The tutor declined this booking request.", {
+      exact: true,
+    }),
+  ).toBeVisible({ timeout: 15_000 });
   await expect(
     page.getByText("Declined", { exact: true }).last(),
   ).toBeVisible();
