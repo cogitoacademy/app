@@ -13,15 +13,15 @@ Xendit path stays fully wired for rollback.
 
 ## 1. What changed (summary)
 
-| Area | Xendit (unchanged, rollback path) | Midtrans (new) |
-| --- | --- | --- |
-| Intent API | `POST /v3/payment_requests` (2024-11-11) | `POST /snap/v1/transactions` |
-| Checkout | QRIS dynamic QR / e-wallet redirect | Snap `redirect_url` (hosted payment page) |
-| Webhook auth | `x-callback-token` header | `signature_key` **inside the body** — `SHA512(order_id + status_code + gross_amount + signatureKey)` |
-| Webhook URL | `https://api.cogitoacademy.id/webhooks/payments/xendit` | `https://api.cogitoacademy.id/webhooks/payments/midtrans` |
-| Test mode | Xendit Test Mode + simulation endpoint | Midtrans **Sandbox** (no simulation endpoint; use sandbox test cards on the Snap page) |
-| Status mapping | `SUCCEEDED`/`ACCEPTING_PAYMENTS`/… | `capture`→PAID, `settlement`→SETTLED, `pending`→PENDING, `deny/cancel/failure`→FAILED, `expire`→EXPIRED, `refund/partial_refund`→REFUNDED |
-| order_id | provider reference (`xendit:user:code[:uuid]`) | **payment UUID** (Snap `order_id` max 50 chars, `[A-Za-z0-9._~-]`; the provider reference contains colons and can exceed 50 chars) |
+| Area           | Xendit (unchanged, rollback path)                       | Midtrans (new)                                                                                                                            |
+| -------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Intent API     | `POST /v3/payment_requests` (2024-11-11)                | `POST /snap/v1/transactions`                                                                                                              |
+| Checkout       | QRIS dynamic QR / e-wallet redirect                     | Snap `redirect_url` (hosted payment page)                                                                                                 |
+| Webhook auth   | `x-callback-token` header                               | `signature_key` **inside the body** — `SHA512(order_id + status_code + gross_amount + signatureKey)`                                      |
+| Webhook URL    | `https://api.cogitoacademy.id/webhooks/payments/xendit` | `https://api.cogitoacademy.id/webhooks/payments/midtrans`                                                                                 |
+| Test mode      | Xendit Test Mode + simulation endpoint                  | Midtrans **Sandbox** (no simulation endpoint; use sandbox test cards on the Snap page)                                                    |
+| Status mapping | `SUCCEEDED`/`ACCEPTING_PAYMENTS`/…                      | `capture`→PAID, `settlement`→SETTLED, `pending`→PENDING, `deny/cancel/failure`→FAILED, `expire`→EXPIRED, `refund/partial_refund`→REFUNDED |
+| order_id       | provider reference (`xendit:user:code[:uuid]`)          | **payment UUID** (Snap `order_id` max 50 chars, `[A-Za-z0-9._~-]`; the provider reference contains colons and can exceed 50 chars)        |
 
 The `PaymentProvider` port contract is unchanged: `createIntent` still returns
 `{ checkoutUrl, paymentRequestId? }`, `confirmFromWebhook`/`getPurchase`/
@@ -75,7 +75,7 @@ no API contract change).
    does not pass per-request redirect URLs to Snap.
 6. **Signature key:** Midtrans has **no separate webhook signature key** — the
    notification `signature_key` is `SHA512(order_id + status_code +
-   gross_amount + ServerKey)`. The app verifies with
+gross_amount + ServerKey)`. The app verifies with
    `MIDTRANS_WEBHOOK_SIGNATURE_KEY` when set, otherwise the Server Key. You
    only need `MIDTRANS_WEBHOOK_SIGNATURE_KEY` if you want to rotate the
    verification secret independently of the Server Key (not required). As
@@ -90,14 +90,14 @@ Add the following keys to the SOPS-encrypted environment (both the sandbox
 values and, later, the production values — keep them as separate named
 entries so rollback is a flip, not a re-encrypt):
 
-| Key | Example (sandbox) | Required |
-| --- | --- | --- |
-| `PAYMENT_PROVIDER` | `midtrans` | yes (when cut over) |
-| `MIDTRANS_MODE` | `test` | yes |
-| `MIDTRANS_SERVER_KEY` | `SB-Mid-server-…` | yes |
-| `MIDTRANS_CLIENT_KEY` | `SB-Mid-client-…` | yes |
-| `MIDTRANS_MERCHANT_ID` | `G…` | yes |
-| `MIDTRANS_WEBHOOK_SIGNATURE_KEY` | (optional) | no |
+| Key                              | Example (sandbox) | Required            |
+| -------------------------------- | ----------------- | ------------------- |
+| `PAYMENT_PROVIDER`               | `midtrans`        | yes (when cut over) |
+| `MIDTRANS_MODE`                  | `test`            | yes                 |
+| `MIDTRANS_SERVER_KEY`            | `SB-Mid-server-…` | yes                 |
+| `MIDTRANS_CLIENT_KEY`            | `SB-Mid-client-…` | yes                 |
+| `MIDTRANS_MERCHANT_ID`           | `G…`              | yes                 |
+| `MIDTRANS_WEBHOOK_SIGNATURE_KEY` | (optional)        | no                  |
 
 The env schema fails boot when `PAYMENT_PROVIDER=midtrans` is missing any of
 the required `MIDTRANS_*` values — a half-swapped config cannot silently run

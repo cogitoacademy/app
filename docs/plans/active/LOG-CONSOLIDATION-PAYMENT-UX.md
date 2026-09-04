@@ -21,11 +21,11 @@ Two operator-visible fixes from the 2026-09-03 deployment review:
 
 `apps/server/src/routes.ts` emits three separate lines per request:
 
-| Line | Source | Has | Missing |
-| --- | --- | --- | --- |
-| `{method, path, status, environment}` | evlog Elysia plugin (`.use(evlog())`, line 163) | method/path/status | correlatable requestId (uuid, different format) |
-| `{action:"request_complete", requestId, durationMs}` | `.onAfterHandle` (line 170) | `req_…` requestId | method/path/status |
-| `{action:"rpc_error", error:{code,message}}` | `logRpcError` (line 105) | code/message | requestId, path, userId |
+| Line                                                 | Source                                          | Has                | Missing                                         |
+| ---------------------------------------------------- | ----------------------------------------------- | ------------------ | ----------------------------------------------- |
+| `{method, path, status, environment}`                | evlog Elysia plugin (`.use(evlog())`, line 163) | method/path/status | correlatable requestId (uuid, different format) |
+| `{action:"request_complete", requestId, durationMs}` | `.onAfterHandle` (line 170)                     | `req_…` requestId  | method/path/status                              |
+| `{action:"rpc_error", error:{code,message}}`         | `logRpcError` (line 105)                        | code/message       | requestId, path, userId                         |
 
 The `rpc_error` line cannot be joined to its request, so a `CONFLICT`/warn
 cannot be traced to the user or endpoint. The user's desired shape: one line
@@ -72,12 +72,12 @@ with path, statusCode, description, requestId, requestClient (userId).
 
 ## Stale docs found (2026-09-03)
 
-| Doc | Stale content | Reality |
-| --- | --- | --- |
-| `docs/plans/README.md` → INFRA-AUTOMATION row | "Wave 2 … awaiting operator: SOPS_AGE_KEY secret + runner-prep.sh" | **Wave 1 + Wave 2 LIVE (2026-09-02)** — infra-apply green end-to-end (run 33613824234) |
-| `docs/plans/README.md` → LINT-DEPRECATION-HYGIENE row | "oxlint pin stays 1.78/0.63" | **1.80.0** — `package.json` pins 1.80.0; `.github/lint/check-baseline.sh`/`.ts` use `oxlint@1.80.0`; CI-SANITY F13 documents 1.80.0/0.65.0 |
-| `docs/CONTEXT.md` plans table | WAVE-6-REVIEW-FIXES / PRD-GAPS-PHASE3 / CONTACT-SHARING rows link `docs/plans/active/` | Files live in `docs/plans/completed/` |
-| `docs/plans/active/DEPLOYMENT-PLAN.md` | "Remaining: Uptime Kuma + Discord … operator console bits pending" | MONITORING-ALERTING **DONE (2026-09-02)** — Kuma wired (4 monitors + Discord + status page) |
+| Doc                                                   | Stale content                                                                          | Reality                                                                                                                                    |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `docs/plans/README.md` → INFRA-AUTOMATION row         | "Wave 2 … awaiting operator: SOPS_AGE_KEY secret + runner-prep.sh"                     | **Wave 1 + Wave 2 LIVE (2026-09-02)** — infra-apply green end-to-end (run 33613824234)                                                     |
+| `docs/plans/README.md` → LINT-DEPRECATION-HYGIENE row | "oxlint pin stays 1.78/0.63"                                                           | **1.80.0** — `package.json` pins 1.80.0; `.github/lint/check-baseline.sh`/`.ts` use `oxlint@1.80.0`; CI-SANITY F13 documents 1.80.0/0.65.0 |
+| `docs/CONTEXT.md` plans table                         | WAVE-6-REVIEW-FIXES / PRD-GAPS-PHASE3 / CONTACT-SHARING rows link `docs/plans/active/` | Files live in `docs/plans/completed/`                                                                                                      |
+| `docs/plans/active/DEPLOYMENT-PLAN.md`                | "Remaining: Uptime Kuma + Discord … operator console bits pending"                     | MONITORING-ALERTING **DONE (2026-09-02)** — Kuma wired (4 monitors + Discord + status page)                                                |
 
 ## Verification
 
@@ -118,3 +118,4 @@ Re-ran the CI coverage command on the integrated tree:
 → 2549 pass / 0 fail; `bun .github/scripts/coverage-comment.ts` → **"Coverage
 gate passed (api lines ≥ 100%, overall lines ≥ 100%, functions ≥ 100%,
 branches ≥ 100%)"**.
+  
