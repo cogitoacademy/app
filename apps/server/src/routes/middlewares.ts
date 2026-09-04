@@ -8,6 +8,14 @@ import { cors } from "@elysiajs/cors";
 import { evlog } from "evlog/elysia";
 import type { Elysia } from "elysia";
 
+/**
+ * The Elysia app type after the evlog plugin is applied — carries the
+ * `derive: { log }` augmentation so route plugins can use `context.log`
+ * (the documented request-scoped accessor) with full typing. Route plugins
+ * should accept and return this type.
+ */
+export type EvlogApp = ReturnType<typeof evlog>;
+
 export const MAX_BODY_BYTES = 1024 * 1024;
 
 export const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;

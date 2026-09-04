@@ -8,11 +8,10 @@ import { OpenAPIGenerator } from "@orpc/openapi";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import { identifyUser as identifyUserFromSession } from "evlog/better-auth";
-import { useLogger } from "evlog/elysia";
 import { enrichOpenAPISpec, openApiTags, scalarHtml } from "../openapi";
 import { logRpcError } from "./rpc-routes";
 import { requestUserId } from "./middlewares";
-import type { Elysia } from "elysia";
+import type { EvlogApp } from "./middlewares";
 
 const openAPIGenerator = new OpenAPIGenerator({
   schemaConverters: [new ZodToJsonSchemaConverter()],
@@ -40,7 +39,7 @@ const apiHandler = new OpenAPIHandler(appRouter, {
  * /openapi.json + /api-reference — the OpenAPI spec and Scalar UI, both
  * gated by the same session check (spec is auth-gated outside production).
  */
-export function registerOpenApiRoutes(app: Elysia) {
+export function registerOpenApiRoutes(app: EvlogApp) {
   return app
     .get("/openapi.json", async ({ request }) => {
       const session = await auth.api.getSession({
@@ -71,7 +70,7 @@ export function registerOpenApiRoutes(app: Elysia) {
         const ctx = await createContext({ context });
         if (ctx.session) {
           requestUserId.set(context.request, ctx.session.user.id);
-          identifyUserFromSession(useLogger(), ctx.session, {
+          identifyUserFromSession(context.log, ctx.session, {
             maskEmail: true,
           });
         }

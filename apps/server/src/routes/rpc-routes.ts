@@ -6,13 +6,12 @@ import { RPCHandler } from "@orpc/server/fetch";
 import { log as appLog } from "@cogito-app/api/lib/logger";
 import { generateRequestId } from "@cogito-app/api/lib/request-id";
 import { identifyUser as identifyUserFromSession } from "evlog/better-auth";
-import { useLogger } from "evlog/elysia";
 import {
   MAX_BODY_BYTES,
   bodyLimitResponse,
   requestUserId,
 } from "./middlewares";
-import type { Elysia } from "elysia";
+import type { EvlogApp } from "./middlewares";
 
 export function logRpcError(
   error: unknown,
@@ -64,7 +63,7 @@ const rpcHandler = new RPCHandler(appRouter, {
  * /rpc* — the oRPC handler behind the bounded-body guard, with session
  * context and per-user identification for the consolidated log line.
  */
-export function registerRpcRoutes(app: Elysia) {
+export function registerRpcRoutes(app: EvlogApp) {
   return app.all(
     "/rpc*",
     async (context) => {
@@ -85,7 +84,7 @@ export function registerRpcRoutes(app: Elysia) {
       const ctx = await createContext({ context });
       if (ctx.session) {
         requestUserId.set(context.request, ctx.session.user.id);
-        identifyUserFromSession(useLogger(), ctx.session, {
+        identifyUserFromSession(context.log, ctx.session, {
           maskEmail: true,
         });
       }
