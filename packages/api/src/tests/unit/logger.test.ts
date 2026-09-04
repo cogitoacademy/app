@@ -85,10 +85,18 @@ describe("Logger", () => {
       requestId: "req-123",
       userId: "user-456",
       durationMs: 150,
+      method: "GET",
+      path: "/health",
+      status: 200,
+      environment: "production",
     });
     expect(captured).toHaveLength(1);
     expect(captured[0].entry.requestId).toBe("req-123");
     expect(captured[0].entry.userId).toBe("user-456");
     expect(captured[0].entry.durationMs).toBe(150);
+    expect(captured[0].entry.method).toBe("GET");
+    expect(captured[0].entry.path).toBe("/health");
+    expect(captured[0].entry.status).toBe(200);
+    expect(captured[0].entry.environment).toBe("production");
   });
 });

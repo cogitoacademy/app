@@ -6,6 +6,10 @@ export interface LogEntry {
   userId?: string;
   action?: string;
   durationMs?: number;
+  method?: string;
+  path?: string;
+  status?: number;
+  environment?: string;
   error?: { message: string; code?: string; stack?: string };
   [key: string]: unknown;
 }
