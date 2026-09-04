@@ -110,6 +110,16 @@ describe("Admin override queue (G8)", () => {
       ids.completed,
     ]);
     expect(order.length).toBe(4);
+
+    const target = result.items.find((item) => item.id === ids.scheduledSoon)!;
+    const numberSearch = await services.adminBooking.listBookings({
+      search: `#${target.bookingNumber}`,
+      limit: 20,
+    });
+    expect(numberSearch.items.map((item) => item.id)).toEqual([
+      ids.scheduledSoon,
+    ]);
+    expect(numberSearch.items[0]?.bookingNumber).toBe(target.bookingNumber);
   });
 
   test("escalated flag is true after the OQ-04 SLA deadline", async () => {

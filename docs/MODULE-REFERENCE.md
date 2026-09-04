@@ -331,11 +331,11 @@ payment package codes stable.
 
 ## Admin-Booking Module
 
-**Purpose:** Admin operations console for bookings — filtered override queue with urgency/SLA projection, a dedicated admin-only booking detail/history page, hydrated participant wallet/ledger inspection, before/after override preview, state history, and admin refunds. Queue rows navigate to `/admin-operations/bookings/:bookingId`; the page resolves its own queue item with the exact `bookingId` filter instead of relying on modal state. The override form reads the booking roster through protected `booking.get` and uses a name/avatar/role multi-select for affected participants; only selected user IDs are serialized into the existing override input.
+**Purpose:** Admin operations console for bookings — filtered override queue with urgency/SLA projection, a dedicated admin-only booking detail/history page, hydrated participant wallet/ledger inspection, before/after override preview, state history, and admin refunds. Each booking has an immutable global human-readable `bookingNumber`; the queue displays it as `#N` and supports exact `N`/`#N` lookup while keeping the UUID as the internal route/relationship key. Queue rows navigate to `/admin-operations/bookings/:bookingId`; the page resolves its own queue item with the exact `bookingId` filter instead of relying on modal state. The override form reads the booking roster through protected `booking.get` and uses a name/avatar/role multi-select for affected participants; only selected user IDs are serialized into the existing override input.
 
 **Files:**
 
-- `admin-booking.types.ts` — Zod schemas for override/list/state-history/admin-refund inputs
+- `admin-booking.types.ts` — Zod schemas for override/list (including booking-number search)/state-history/admin-refund inputs
 - `admin-booking.errors.ts` — `BookingNotFoundError`
 - `admin-booking.repo.ts` — booking lookup, override state application, state history
 - `admin-booking.service.ts` — `applyOverride`, `previewOverride`, `listBookings`, `getBookingStateHistory`, `adminRefund`, `setMeetingLink`, `cancelSeriesSession`; exports `OVERRIDE_CATEGORIES` and `MARKS_ACTIONS`
@@ -344,7 +344,7 @@ payment package codes stable.
 
 **Service Methods:**
 
-- `listBookings(opts)` — Paginated booking list sorted by urgency, filterable by category/urgency/escalated; an exact `bookingId` lookup returns zero or one item for the admin detail route. Each item projects `reportedAt`, the OQ-04 business-hours `slaDeadline`, and `escalated` from `overrideMeta.overriddenAt`. `escalated=true` walks bounded keyset windows (at most `MAX_ESCALATED_WINDOWS = 5` fetches of `MAX_PAGE_LIMIT` rows) until the page fills with escalated rows — it never returns an empty page with a non-null `nextCursor`, so the admin queue cannot infinite-loop on a sparse escalated set
+- `listBookings(opts)` — Paginated booking list sorted by urgency, filterable by exact human-readable booking number, category/urgency/escalated; an exact `bookingId` lookup returns zero or one item for the admin detail route. Each item includes the immutable `bookingNumber` reference and projects `reportedAt`, the OQ-04 business-hours `slaDeadline`, and `escalated` from `overrideMeta.overriddenAt`. `escalated=true` walks bounded keyset windows (at most `MAX_ESCALATED_WINDOWS = 5` fetches of `MAX_PAGE_LIMIT` rows) until the page fills with escalated rows — it never returns an empty page with a non-null `nextCursor`, so the admin queue cannot infinite-loop on a sparse escalated set
 - `applyOverride(adminId, input)` — Force state transition by `category` (tutor_no_show/medical_emergency/technical_failure/admin_correction/student_no_show/force_cancel); optionally adjusts held Marks (`marksAction`); records audit log + state history
 - `previewOverride(input)` — Returns the projected booking state and per-participant wallet impact without persisting anything. **F24:** every `affectedParticipants` id must be a participant of the booking — unknown ids throw `OVERRIDE_PARTICIPANT_NOT_IN_BOOKING` instead of being silently filtered (a money action would otherwise skip a user's holds)
 - `getBookingStateHistory(bookingId)` — Returns full state transition history for a booking

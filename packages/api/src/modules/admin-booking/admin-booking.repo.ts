@@ -59,6 +59,8 @@ const URGENCY_RANK_EXPR = sql`CASE ${booking.currentState}
 END`;
 
 export interface ListOverridesQueryOptions {
+  /** Matches the human-readable booking reference number. */
+  bookingNumber?: number;
   /** Matches booking.override_meta.category. */
   category?: string;
   urgency?: UrgencyLevel;
@@ -101,6 +103,9 @@ export async function listBookingsByState(
   const conditions = [];
   if (states.length > 0) {
     conditions.push(inArray(booking.currentState, states));
+  }
+  if (opts?.bookingNumber !== undefined) {
+    conditions.push(eq(booking.bookingNumber, opts.bookingNumber));
   }
   if (cursor) {
     // Composite cursor: "<rank>~<scheduledStartAt ISO>~<id>". Falls back to a

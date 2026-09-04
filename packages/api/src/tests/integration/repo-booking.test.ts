@@ -64,6 +64,8 @@ describe("booking repo (real DB)", () => {
     const found = await repo.findBookingById(db, b.id);
     expect(found).not.toBeNull();
     expect(found!.id).toBe(b.id);
+    expect(found!.bookingNumber).toBe(b.bookingNumber);
+    expect(found!.bookingNumber).toBeGreaterThan(0);
     expect(found!.type).toBe("solo");
     expect(found!.modality).toBe("online");
     expect(found!.tutorId).toBe(tutorId);

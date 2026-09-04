@@ -16,6 +16,8 @@
 
 ## Completed (merged to main)
 
+| [BOOKING-NUMBERS.md](completed/BOOKING-NUMBERS.md) | working tree | **Completed locally 2026-09-04** — immutable `#N` booking references, admin queue display, and exact search |
+
 | Plan                                                                                               | Branch                                        | Merged                                                                                                                               |
 | -------------------------------------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | [ADMIN-DASHBOARD-ANALYTICS.md](completed/ADMIN-DASHBOARD-ANALYTICS.md)                             | main (local)                                  | Completed locally 2026-08-31 — admin-only aggregate analytics endpoint and Selia/Recharts business dashboard                         |

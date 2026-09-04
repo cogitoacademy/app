@@ -1,11 +1,22 @@
 import { describe, test, expect } from "bun:test";
-import { applyOverrideInput } from "../../modules/admin-booking/admin-booking.types";
+import {
+  applyOverrideInput,
+  listOverridesInput,
+} from "../../modules/admin-booking/admin-booking.types";
 import {
   OVERRIDE_CATEGORIES,
   MARKS_ACTIONS,
 } from "../../modules/admin-booking/admin-booking.service";
 
 describe("AdminBookingHandler", () => {
+  describe("list bookings schema", () => {
+    test("accepts a human-readable booking number search", () => {
+      const result = listOverridesInput.safeParse({ search: "#12" });
+
+      expect(result.success).toBe(true);
+    });
+  });
+
   describe("applyOverride schema", () => {
     test("rejects invalid category via Zod enum", () => {
       const result = applyOverrideInput.safeParse({

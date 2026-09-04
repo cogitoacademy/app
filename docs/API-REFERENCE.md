@@ -1183,9 +1183,9 @@ The successful mutation also best-effort updates the existing offline Calendar e
 ### `adminBooking.listBookings`
 
 - **Auth:** Admin
-- **Input:** `{ bookingId?, limit?, cursor?, category?, urgency?, escalated? }` (`category` one of tutor_no_show/medical_emergency/technical_failure/admin_correction/student_no_show/force_cancel/tutor_lateness_pending — `tutor_lateness_pending` lists sessions flagged by the lateness sweep for admin review)
-- **Output:** `{ items: Booking[] & { reportedAt: string | null, slaDeadline: string | null, escalated: boolean }[], nextCursor }`
-- **Description:** Paginated booking list sorted by urgency. Supplying `bookingId` performs the exact admin lookup used by `/admin-operations/bookings/:bookingId`, returning zero or one item so the detail page remains refresh-safe. For override reports, `reportedAt` comes from `overrideMeta.overriddenAt`, `slaDeadline` applies OQ-04 (30 minutes Mon–Sat 09:00–21:00 WIB, otherwise 4 hours), and `escalated` is computed against that business-hours deadline.
+- **Input:** `{ bookingId?, search?, limit?, cursor?, category?, urgency?, escalated? }` (`search` accepts an exact human-readable booking number such as `12` or `#12`; `category` one of tutor_no_show/medical_emergency/technical_failure/admin_correction/student_no_show/force_cancel/tutor_lateness_pending — `tutor_lateness_pending` lists sessions flagged by the lateness sweep for admin review)
+- **Output:** `{ items: (Booking & { bookingNumber: number, reportedAt: string | null, slaDeadline: string | null, escalated: boolean })[], nextCursor }`
+- **Description:** Paginated booking list sorted by urgency. Every booking has an immutable global `bookingNumber` used as the short `#N` reference; the UUID `id` remains the internal route/relationship key. Supplying `search` filters to that exact booking number. Supplying `bookingId` performs the exact admin lookup used by `/admin-operations/bookings/:bookingId`, returning zero or one item so the detail page remains refresh-safe. For override reports, `reportedAt` comes from `overrideMeta.overriddenAt`, `slaDeadline` applies OQ-04 (30 minutes Mon–Sat 09:00–21:00 WIB, otherwise 4 hours), and `escalated` is computed against that business-hours deadline.
 
 ### `adminBooking.getBookingStateHistory`
 

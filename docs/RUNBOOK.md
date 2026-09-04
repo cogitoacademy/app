@@ -575,6 +575,14 @@ build that includes the first-submit consent flow; it adds nullable
 `tutor_profile.terms_of_service_version`. Existing rows are not backfilled;
 the first accepted submission records version `2026-09`.
 
+Human-readable booking references require migration
+`0043_cheerful_blockbuster.sql`. Run `bun run db:migrate` before starting an
+API/web build that displays or searches booking numbers. It adds the global
+PostgreSQL-backed `booking.booking_number` sequence, assigns numbers to
+existing bookings, and enforces uniqueness. Numbers are immutable and may have
+gaps after rolled-back inserts; this is expected and is not a migration or data
+integrity failure. No manual backfill or environment variable is required.
+
 The IDR economy and admin rate-control surface require migration
 `0028_economy_config.sql`. Run `bun run db:migrate` before starting the server;
 it adds `tutor_profile.base_rates_idr`, creates the singleton

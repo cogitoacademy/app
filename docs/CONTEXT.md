@@ -80,6 +80,17 @@ starts with the action queue (`Dashboard`, `Operations`, `Bookings`, `Tutors`,
 remain unchanged. This is frontend-only presentation behavior with no RPC,
 schema, persistence, or operational contract change.
 
+## Human-readable booking references (2026-09-04)
+
+Every booking now receives an immutable global `bookingNumber` from a
+PostgreSQL sequence. The admin Operations → Booking queue renders this short
+reference as `#N` instead of the long UUID and accepts exact searches in either
+`N` or `#N` form. The UUID remains the internal route and relationship key, so
+existing booking links, audit records, wallet references, and lifecycle logic
+do not change. Sequence values are intentionally allowed to have gaps when a
+booking transaction is rolled back, matching the normal behavior of PR/issue
+number sequences.
+
 ## Production UI and E2E audit (2026-09-04)
 
 The authenticated web shell now exposes a semantic skip link, an accessible
@@ -585,7 +596,7 @@ when set to false.
 
 ### `auditLog` (audit-log.ts) — CHECK actor_type, before/after state jsonb
 
-### `booking` (booking.ts) — status state machine, deadline_at, hold_amount
+### `booking` (booking.ts) — immutable booking_number, status state machine, deadline_at, hold_amount
 
 ### `bookingParticipant` (booking.ts) — confirmation_state, attendance
 
@@ -895,7 +906,7 @@ The primary Tutor E2E flow has been manually verified with seeded accounts, incl
 
 Backend is ready for user role management, tutor invite/review, structured tutor achievement editing, achievement moderation and public achievement surfacing, the full booking operations console (queue/override preview/refund), room list/create/assign/relocate, wallet/ledger lookup, tutor payouts, refund corrections, the active economy schedule, and manual meeting-link fallback for eligible online bookings. Admin wallet lookup resolves visible user identity through `admin.searchUsers` (name/email/ID) before reading the selected wallet and ledger. The /admin-economy screen lets admins edit the four Cogito take fields in Rp 5,000 increments with optimistic versioning; updates are audit-logged and apply only to future/new repricing snapshots. The admin tutor review card resolves pending `subjectIds` through the active normalized taxonomy and renders readable category/specialization labels with wrapping values; it also lets admins correct structured education and competition entries through the version-checked `adminTutor.updateTutorAchievements` procedure, with an audit event for each save.
 
-The admin override queue, wallet/ledger view, override preview, room assignment → scheduled transition + notifications, room availability/approval backend (G8–G10, G13–G14), and the read-only all-bookings view at `/bookings` have landed. The admin workspace is now available at `/admin`; its operations queue provides category/urgency/SLA filters, OQ-04 business-hours deadlines, escalation status/channel, and report context. Each queue row links to the admin-only `/admin-operations/bookings/:bookingId` page, where the full participant read model, per-wallet balances, booking-scoped ledger entries, meeting fallback, state history, and override action remain available in a refresh-safe layout. The override form loads the booking roster and presents affected participants as a name/avatar/role multi-select; selected user IDs are serialized automatically for the unchanged preview/apply contract. The queue table uses stable column widths, top-aligned content, readable body text, and non-wrapping status badges. On narrow viewports, the monitor card remains constrained to the content viewport and only the table container scrolls horizontally. The **Room approvals** tab now includes the active-room catalog and Add room dialog backed by `room.create`, while its `room.listPendingApprovals` section remains the cross-booking queue; requested rooms can be assigned inline, while **Choose room** / **Choose another** opens the admin-only booking detail Offline room card for context-aware assignment or relocation. No admin room flow requires typing a booking UUID. F1/F2/F11/F12 are closed. Backend U-item sub-gaps are tracked in `docs/plans/active/PRD-GAPS-PHASE3.md` (all closed; U9 closed by REVIEW-FIXES-4 P2.8). The admin economy UI was browser-verified for role denial, valid future-booking snapshot updates, and invalid negative amounts; no UI access bypass was found.
+The admin override queue, wallet/ledger view, override preview, room assignment → scheduled transition + notifications, room availability/approval backend (G8–G10, G13–G14), and the read-only all-bookings view at `/bookings` have landed. The admin workspace is now available at `/admin`; its operations queue provides category/urgency/SLA filters, exact booking-number search, OQ-04 business-hours deadlines, escalation status/channel, and report context. Queue rows display the immutable human-readable booking reference (`#N`) while retaining the UUID behind the detail link, and each row links to the admin-only `/admin-operations/bookings/:bookingId` page, where the full participant read model, per-wallet balances, booking-scoped ledger entries, meeting fallback, state history, and override action remain available in a refresh-safe layout. The override form loads the booking roster and presents affected participants as a name/avatar/role multi-select; selected user IDs are serialized automatically for the unchanged preview/apply contract. The queue table uses stable column widths, top-aligned content, readable body text, and non-wrapping status badges. On narrow viewports, the monitor card remains constrained to the content viewport and only the table container scrolls horizontally. The **Room approvals** tab now includes the active-room catalog and Add room dialog backed by `room.create`, while its `room.listPendingApprovals` section remains the cross-booking queue; requested rooms can be assigned inline, while **Choose room** / **Choose another** opens the admin-only booking detail Offline room card for context-aware assignment or relocation. No admin room flow requires typing a booking UUID. F1/F2/F11/F12 are closed. Backend U-item sub-gaps are tracked in `docs/plans/active/PRD-GAPS-PHASE3.md` (all closed; U9 closed by REVIEW-FIXES-4 P2.8). The admin economy UI was browser-verified for role denial, valid future-booking snapshot updates, and invalid negative amounts; no UI access bypass was found.
 
 ### Backend Gap Groups
 

@@ -180,12 +180,14 @@ export function AdminOperationsPage() {
 
 function BookingQueue() {
   const queryClient = useQueryClient();
+  const [bookingSearch, setBookingSearch] = useState("");
   const [category, setCategory] = useState<OverrideCategoryFilter>("all");
   const [urgency, setUrgency] = useState<Urgency>("all");
   const [slaFilter, setSlaFilter] = useState<SlaFilter>("all");
   const [selected, setSelected] = useState<QueueItem | null>(null);
   const queryInput = {
     limit: 50,
+    ...(bookingSearch.trim() ? { search: bookingSearch.trim() } : {}),
     ...(category !== "all" ? { category } : {}),
     ...(urgency !== "all" ? { urgency } : {}),
     ...(slaFilter === "escalated" ? { escalated: true } : {}),
@@ -203,6 +205,21 @@ function BookingQueue() {
     >
       <Card>
         <CardBody className="flex flex-wrap items-end gap-3">
+          <Field className="min-w-56">
+            <FieldLabel htmlFor="booking-number-search">
+              Booking number
+            </FieldLabel>
+            <Input
+              id="booking-number-search"
+              type="search"
+              value={bookingSearch}
+              onChange={(event) => setBookingSearch(event.target.value)}
+              placeholder="#12 or 12"
+            />
+            <FieldDescription>
+              Search by exact reference number.
+            </FieldDescription>
+          </Field>
           <Field className="min-w-56">
             <FieldLabel>Override category</FieldLabel>
             <Select
@@ -329,7 +346,9 @@ function BookingQueue() {
                     {queueQuery.data.items.map((item) => (
                       <TableRow key={item.id}>
                         <TableCell className="align-top">
-                          <Text className="font-mono text-sm">{item.id}</Text>
+                          <Text className="font-mono text-sm font-semibold">
+                            #{item.bookingNumber}
+                          </Text>
                           <Text className="mt-1 text-sm text-muted">
                             {item.type} · {item.modality}
                           </Text>
@@ -404,7 +423,7 @@ function BookingQueue() {
                                 <Link
                                   to="/admin-operations/bookings/$bookingId"
                                   params={{ bookingId: item.id }}
-                                  aria-label={`View booking ${item.id} details`}
+                                  aria-label={`View booking #${item.bookingNumber} details`}
                                 />
                               }
                               nativeButton={false}

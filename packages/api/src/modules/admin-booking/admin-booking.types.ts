@@ -18,6 +18,7 @@ export const applyOverrideInput = z.object({
 
 export const listOverridesInput = z.object({
   bookingId: z.string().max(100).optional(),
+  search: z.string().trim().max(50).optional(),
   limit: z.number().min(1).max(100).optional(),
   cursor: z.string().max(100).optional(),
   category: z.enum(OVERRIDE_LIST_CATEGORIES).optional(),

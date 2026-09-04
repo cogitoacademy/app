@@ -135,6 +135,30 @@ function toOverrideQueueItem<T extends { overrideMeta: unknown }>(
   };
 }
 
+/**
+ * Parses the admin search field. The UI accepts both `12` and `#12`, while
+ * the database filter remains a typed integer comparison.
+ */
+function parseBookingNumberSearch(
+  search: string | undefined,
+): number | null | undefined {
+  const value = search?.trim();
+  if (!value) return undefined;
+
+  const digits = value.replace(/^#\s*/, "");
+  if (!/^\d+$/.test(digits)) return null;
+
+  const bookingNumber = Number(digits);
+  if (
+    !Number.isSafeInteger(bookingNumber) ||
+    bookingNumber < 1 ||
+    bookingNumber > 2_147_483_647
+  ) {
+    return null;
+  }
+  return bookingNumber;
+}
+
 /** Composite keyset cursor: rank, scheduledStartAt, id. */
 function toOverrideCursor(row: {
   id: string;
@@ -501,11 +525,12 @@ export function createAdminBookingService(deps: {
    * out, or the window budget is exhausted — a single 100-row fetch could
    * otherwise return an empty page while more escalated rows sit behind it.
    *
-   * @param opts - list options (bookingId, limit, cursor)
+   * @param opts - list options (bookingId, search, limit, cursor, filters)
    * @returns the booking items and a nextCursor when more pages exist
    */
   async function listBookings(opts?: {
     bookingId?: string;
+    search?: string;
     limit?: number;
     cursor?: string;
     category?: OverrideListCategory;
@@ -519,17 +544,23 @@ export function createAdminBookingService(deps: {
         nextCursor: null,
       };
     }
+    const bookingNumber = parseBookingNumberSearch(opts?.search);
+    if (bookingNumber === null) {
+      return { items: [], nextCursor: null };
+    }
     const limit = Math.min(opts?.limit ?? DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT);
     // The database can filter category and urgency, but the OQ-04 deadline is
     // a business-hours calculation. Fetch a wider window for SLA filtering and
     // apply the authoritative deadline after projection.
     const repoLimit = opts?.escalated === true ? MAX_PAGE_LIMIT : limit;
     const filters = {
+      ...(bookingNumber !== undefined ? { bookingNumber } : {}),
       category: opts?.category,
       urgency: opts?.urgency,
       escalated: opts?.escalated,
     };
     const hasFilters =
+      bookingNumber !== undefined ||
       filters.category !== undefined ||
       filters.urgency !== undefined ||
       filters.escalated !== undefined;
