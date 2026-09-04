@@ -4,6 +4,9 @@ import {
   PackageNotFoundError,
   PackageAlreadyPurchasedError,
   PaymentProviderError,
+  WebhookSignatureError,
+  WebhookTimestampError,
+  UnknownPaymentStatusError,
   mapPaymentError,
 } from "../../modules/payment/payment.errors";
 
@@ -68,6 +71,36 @@ describe("payment.errors", () => {
       expect(err.message).toBe(
         "Payment simulation error: 403 REQUEST_FORBIDDEN_ERROR - Use a Test Mode API key",
       );
+    });
+  });
+  describe("WebhookSignatureError", () => {
+    it("should have correct properties", () => {
+      const err = new WebhookSignatureError();
+      expect(err).toBeInstanceOf(DomainError);
+      expect(err.code).toBe("WEBHOOK_SIGNATURE_INVALID");
+      expect(err.domain).toBe("payment");
+      expect(err.message).toBe("Invalid webhook signature");
+      expect(err.name).toBe("WebhookSignatureError");
+    });
+  });
+  describe("WebhookTimestampError", () => {
+    it("should have correct properties", () => {
+      const err = new WebhookTimestampError("Webhook timestamp header is required");
+      expect(err).toBeInstanceOf(DomainError);
+      expect(err.code).toBe("WEBHOOK_TIMESTAMP_INVALID");
+      expect(err.domain).toBe("payment");
+      expect(err.message).toBe("Webhook timestamp header is required");
+      expect(err.name).toBe("WebhookTimestampError");
+    });
+  });
+  describe("UnknownPaymentStatusError", () => {
+    it("should have correct properties", () => {
+      const err = new UnknownPaymentStatusError("BOGUS");
+      expect(err).toBeInstanceOf(DomainError);
+      expect(err.code).toBe("UNKNOWN_PAYMENT_STATUS");
+      expect(err.domain).toBe("payment");
+      expect(err.message).toBe("Unknown payment status: BOGUS");
+      expect(err.name).toBe("UnknownPaymentStatusError");
     });
   });
   describe("mapPaymentError", () => {

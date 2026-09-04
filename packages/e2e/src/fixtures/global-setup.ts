@@ -29,13 +29,13 @@ async function globalSetup() {
     SEED_STUDENT_PASSWORD: process.env.SEED_STUDENT_PASSWORD ?? "Student123!",
   };
 
-  execSync("bun run src/reset-seed-student.ts", {
+  execSync("bun run src/seed/reset-seed-student.ts", {
     cwd: serverDir,
     env: testSeedEnv,
     stdio: "inherit",
   });
   console.log("Seeding database for E2E tests...");
-  execSync("bun run src/seed.ts", {
+  execSync("bun run src/seed/seed.ts", {
     cwd: serverDir,
     env: testSeedEnv,
     stdio: "inherit",
