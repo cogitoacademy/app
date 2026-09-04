@@ -85,7 +85,9 @@ describe("payment.errors", () => {
   });
   describe("WebhookTimestampError", () => {
     it("should have correct properties", () => {
-      const err = new WebhookTimestampError("Webhook timestamp header is required");
+      const err = new WebhookTimestampError(
+        "Webhook timestamp header is required",
+      );
       expect(err).toBeInstanceOf(DomainError);
       expect(err.code).toBe("WEBHOOK_TIMESTAMP_INVALID");
       expect(err.domain).toBe("payment");
