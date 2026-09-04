@@ -1260,9 +1260,7 @@ describe("BookingService", () => {
 
       await expect(
         service.cancel("student1", "nonexistent", "test reason"),
-      ).rejects.toThrow(
-        BookingNotFoundError,
-      );
+      ).rejects.toThrow(BookingNotFoundError);
     });
 
     test("throws BookingNotOwnedError when user has no access", async () => {
@@ -1277,9 +1275,7 @@ describe("BookingService", () => {
 
       await expect(
         service.cancel("student1", "b1", "test reason"),
-      ).rejects.toThrow(
-        BookingNotOwnedError,
-      );
+      ).rejects.toThrow(BookingNotOwnedError);
     });
 
     test("throws BookingStateTransitionError when booking is already terminal", async () => {
@@ -1294,9 +1290,7 @@ describe("BookingService", () => {
 
       await expect(
         service.cancel("student1", "b1", "test reason"),
-      ).rejects.toThrow(
-        BookingStateTransitionError,
-      );
+      ).rejects.toThrow(BookingStateTransitionError);
     });
 
     test("rejects student cancellation once the session has started", async () => {
@@ -1314,9 +1308,7 @@ describe("BookingService", () => {
 
       await expect(
         service.cancel("student1", "b1", "test reason"),
-      ).rejects.toThrow(
-        BookingCancellationDeadlinePassedError,
-      );
+      ).rejects.toThrow(BookingCancellationDeadlinePassedError);
       expect(wallet.deduct).not.toHaveBeenCalled();
       expect(wallet.release).not.toHaveBeenCalled();
       expect(repo.updateBookingVersioned).not.toHaveBeenCalled();
@@ -1479,9 +1471,7 @@ describe("BookingService", () => {
 
       await expect(
         service.cancel("student1", "b1", "test reason"),
-      ).rejects.toThrow(
-        BookingSeriesNoOptOutError,
-      );
+      ).rejects.toThrow(BookingSeriesNoOptOutError);
     });
 
     test("allows cancelling a group series still awaiting participant confirmation (M3)", async () => {
@@ -1939,9 +1929,7 @@ describe("BookingService", () => {
 
       await expect(
         service.tutorDecline("b1", "tutor1", "test reason"),
-      ).rejects.toThrow(
-        BookingNotFoundError,
-      );
+      ).rejects.toThrow(BookingNotFoundError);
     });
 
     test("throws BookingNotOwnedError when tutor does not own the booking", async () => {
@@ -1955,9 +1943,7 @@ describe("BookingService", () => {
 
       await expect(
         service.tutorDecline("b1", "tutor1", "test reason"),
-      ).rejects.toThrow(
-        BookingNotOwnedError,
-      );
+      ).rejects.toThrow(BookingNotOwnedError);
     });
 
     test("declines booking and releases holds", async () => {
@@ -7212,9 +7198,7 @@ describe("BookingService additional coverage paths", () => {
       },
     });
 
-      await expect(
-        service.cancel("tutor1", "b1", "test reason"),
-      ).rejects.toThrow(
+    await expect(service.cancel("tutor1", "b1", "test reason")).rejects.toThrow(
       BookingNotOwnedError,
     );
   });
@@ -7251,9 +7235,7 @@ describe("BookingService additional coverage paths", () => {
 
     await expect(
       service.tutorDecline("b1", "tutor1", "test reason"),
-    ).rejects.toThrow(
-      BookingNotAwaitingReviewError,
-    );
+    ).rejects.toThrow(BookingNotAwaitingReviewError);
   });
 
   test("rejects completing a series whose parent is not scheduled", async () => {
