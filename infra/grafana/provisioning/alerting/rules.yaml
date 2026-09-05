@@ -1,0 +1,190 @@
+# rules.yaml — Grafana-managed alert rules (source of truth in git).
+#
+# File-provisioned (the alert-rules API 500s on this Grafana build for
+# API-created groups; files load cleanly — verified live 2026-09-05).
+# Notification routing: the default policy receiver is `Discord-ops`
+# (created via API; holds the vault webhook URL, never in git), so rules
+# below need no per-rule receiver. Folder `Cogito` is created once via API.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: cogito-1m
+    folder: Cogito
+    interval: 1m
+    rules:
+      - uid: dlq-fresh
+        title: DLQFresh
+        condition: C
+        for: 5m
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: "dlq_fresh_depth > 0"
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: A
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: $B
+              refId: C
+              type: threshold
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+        annotations:
+          summary: "Fresh DLQ failure landed (24h window)"
+        labels:
+          severity: critical
+        noDataState: OK
+        execErrState: Error
+
+      - uid: disk-warn
+        title: DiskWarn
+        condition: C
+        for: 10m
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: '100 * (1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) > 85'
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: A
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: $B
+              refId: C
+              type: threshold
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+        annotations:
+          summary: "VPS disk >= 85% (watchdog warn line)"
+        labels:
+          severity: warning
+        noDataState: OK
+        execErrState: Error
+
+      - uid: disk-crit
+        title: DiskCrit
+        condition: C
+        for: 5m
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: '100 * (1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) > 92'
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: A
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: $B
+              refId: C
+              type: threshold
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+        annotations:
+          summary: "VPS disk >= 92% (watchdog auto-prunes)"
+        labels:
+          severity: critical
+        noDataState: OK
+        execErrState: Error
+
+      - uid: api-errors
+        title: ApiErrors
+        condition: C
+        for: 5m
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: 'sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) > 0.01'
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: A
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: $B
+              refId: C
+              type: threshold
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+        annotations:
+          summary: "API 5xx ratio above 1% (deploy canary)"
+        labels:
+          severity: warning
+        noDataState: OK
+        execErrState: Error

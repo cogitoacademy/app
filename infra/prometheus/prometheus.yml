@@ -34,15 +34,17 @@ scrape_configs:
       type: Bearer
       credentials_file: /etc/prometheus/metrics_token
 
-  # Host metrics. Hostnames are the Compose service names inside the
-  # `cogito-alloy` bundle (same Coolify Docker network); if Coolify
-  # isolates service networks, point these at the tailnet IPs instead.
+  # Host metrics over the shared `cogito-obs` Docker network (one-time
+  # `docker network create`, declared external in every obs compose): the
+  # alloy-bundle service names resolve there. Each Coolify service otherwise
+  # gets its OWN isolated network (verified live 2026-09-05). Loopback
+  # publishes remain for tunnels/debugging.
   - job_name: node-exporter
     static_configs:
       - targets:
-          - cogito-node-exporter:9100
+          - node-exporter:9100
 
   - job_name: cadvisor
     static_configs:
       - targets:
-          - cogito-cadvisor:8080
+          - cadvisor:8080

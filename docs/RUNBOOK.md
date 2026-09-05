@@ -898,6 +898,63 @@ emergency restore against the actual object list first.
 | Kuma: dlqDepth > 0                                         | Kuma keyword monitor | A **fresh** DLQ failure landed in the last 24h                    | `./ops.sh dlq` to see what failed                             |
 | Discord: "VPS disk at N%"                                  | disk watchdog        | Disk ≥ 85%                                                        | `./ops.sh disk`; plan cleanup                                 |
 | Discord: "CRITICAL: VPS disk still at N% after auto-prune" | disk watchdog        | Disk ≥ 92% **after** the prune ladder                             | Operator action required — see below                          |
+| Grafana: DLQFresh / DiskWarn / DiskCrit / ApiErrors         | Grafana alert rules  | Same signals as above, evaluated from Prometheus (1m)             | Same responses; Grafana is the second pair of eyes             |
+
+### Observability stack (LIVE 2026-09-05 — Loki + Prometheus + tailnet Grafana)
+
+Declared by [`infra/ansible/observability.yml`](../infra/ansible/observability.yml)
+(Coolify services `cogito-loki` / `cogito-prometheus` / `cogito-grafana` /
+`cogito-alloy`, all tailnet-only, no public domains). Retention: Loki 30d,
+Prometheus 15d. 2G swap live on the VPS (2026-09-05) with per-service memory
+limits in the composes.
+
+- **Logs without SSH:** Grafana → Explore → Loki datasource →
+  `{service="cogito-api"} |= "<traceId>"` (resource names are the
+  suffix-stripped Coolify names: `cogito-api`, `cogito-web`, `cogito-prod-db`,
+  …). Or `./infra/ops.sh trace <traceId>` for the Explore URL.
+- **Grafana access (tailnet-only):** `ssh -L 3000:127.0.0.1:3000
+  ubuntu@<tailnet-ip>`, then `http://localhost:3000` (admin user `admin`;
+  password in the SOPS vault as `GRAFANA_ADMIN_PASSWORD`). Provisioned:
+  datasources (Loki default + Prometheus), 4 dashboards (App RED, Logs &
+  Traces, Infra, Delivery), alert rules (DLQFresh/DiskWarn/DiskCrit/ApiErrors
+  → `Discord-ops` contact point).
+- **Prometheus targets** (all UP 2026-09-05): `cogito-api` (Bearer
+  `metrics_token`), `node-exporter`, `cadvisor`.
+- **Networking lesson (recorded so nobody re-learns it):** each Coolify
+  service gets its OWN Docker network — bare service names do NOT resolve
+  across services. All obs traffic rides the shared `cogito-obs` Docker
+  network (one-time `docker network create cogito-obs`); human access rides
+  VPS-loopback publishes (`127.0.0.1:3000/3100/9090/9100/8081`) + SSH
+  tunnels. Nothing obs-related is public.
+- **Gotchas fixed during apply:** Coolify API requires base64
+  `docker_compose_raw`; Alloy component is `loki.source.docker` (not
+  `docker_logs`); Loki 3.x needs `delete_request_store: filesystem` with
+  retention; `reject_old_samples_max_age` raised to 720h (first connect
+  backfills container history); Prometheus container user can't read a 0600
+  token file (0644); cAdvisor moved to loopback `:8081` (host `:8080` is
+  held by an old docker-proxy).
+
+### Drizzle Studio ownership (LIVE 2026-09-05 — `cogito-studio`)
+
+Coolify service `cogito-studio` (app `drizzle-gateway`,
+`ghcr.io/drizzle-team/gateway`, volume `drizzle-gateway-data`). It was
+`unhealthy` for 11 days (wedged vendor healthcheck + dead sslip.io domain);
+revived 2026-09-05 by service restart + loopback publish
+(`127.0.0.1:4983`, PATCHed compose) — status `healthy`, UI serves 200.
+
+- **Access:** `ssh -L 4983:127.0.0.1:4983 ubuntu@<tailnet-ip>`, then
+  `http://localhost:4983`. No public domain by design (DB GUI).
+- **Credentials:** managed in the Coolify service env (UI → cogito-studio →
+  Environment, `SERVICE_PASSWORD_DRIZZLE`); never in our vault (Coolify-owned
+  secret, like the Coolify API token pattern).
+- **Operate:** restart via Coolify UI or `POST
+  /api/v1/services/tzhidx0p18mvbbpuaeahcxwy/restart` (Bearer
+  `COOLIFY_API_TOKEN`); health via Coolify status or the UI port check.
+  The vendor `healthcheck.js` (5s timeout) is flaky — treat Coolify status +
+  UI 200 as truth, not the container health flag alone.
+- **Guardrails:** read anytime; writes only in maintenance windows, never
+  during a deploy. `./infra/ops.sh studio` (tunnel + local Studio) remains
+  the alternative path.
 
 ### Disk thresholds & auto-prune
 
