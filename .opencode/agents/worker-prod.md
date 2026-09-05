@@ -1,7 +1,8 @@
 ---
 description: Production worker — production/infra/reliability work using the production-reliability skill only
 mode: primary
-model: ollama-cloud/deepseek-v4-flash
+model: opencode-go/muse-spark-1.3-contributor
+variant: xhigh
 permission:
   edit: allow
   read: allow

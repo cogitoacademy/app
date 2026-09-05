@@ -1,7 +1,8 @@
 ---
 description: Feature worker — deterministic implementation using the feature-workflow skill only
 mode: primary
-model: ollama-cloud/deepseek-v4-flash
+model: opencode-go/muse-spark-1.3-contributor
+variant: xhigh
 permission:
   edit: allow
   read: allow
