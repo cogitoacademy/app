@@ -1,11 +1,11 @@
 # Deferred Operations Tasks
 
-| Field      | Value                                                                                                                                                        |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Status     | Active — §0/§1 resolved; §4.3/§4.4 secret-scanning + branch protection remain (operator console); §2 + §3 deliberately deferred (recorded for future agents) |
-| Created    | 2026-07-29                                                                                                                                                   |
-| Depends on | #18 + #19 merged to main                                                                                                                                     |
-| Scope      | Ops + code gaps                                                                                                                                              |
+| Field      | Value                                                                                                                                                      |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status     | Active — §0/§1/§2 resolved; §4.3/§4.4 secret-scanning + branch protection remain (operator console); §3 deliberately deferred (recorded for future agents) |
+| Created    | 2026-07-29                                                                                                                                                 |
+| Depends on | #18 + #19 merged to main                                                                                                                                   |
+| Scope      | Ops + code gaps                                                                                                                                            |
 
 Tasks deferred from production-readiness (#18) and infrastructure (#19) that could not be completed without a live production environment or were identified as gaps during the post-merge audit.
 
@@ -83,16 +83,14 @@ Create `docker-compose.test.yml` for test-specific PostgreSQL.
 
 ---
 
-## 2. Redis Session Caching (from PRODUCTION-READINESS-PLAN 2.2)
+## 2. Redis Session Caching (from PRODUCTION-READINESS-PLAN 2.2) ✅
 
-> **Deferred by explicit user decision (2026-09-01) — for future agents to
-> resolve when perf justifies it.** Not implemented; correctness does not
-> depend on it (cookieCache + DB adapter works, Redis is mandatory for
-> idempotency/rate-limit/circuit-breaker/BullMQ already).
-
-Better Auth currently uses cookieCache + DB adapter. When picked up: implement
-Redis-backed session storage with DB fallback, behind a fresh plan in
-`docs/plans/active/`.
+**Done (2026-09-05, observability-stability wave Task 5/R1 — supersedes the
+2026-09-01 deferral).** Better Auth uses Redis secondary storage
+(`packages/auth/src/secondary-storage.ts`, key prefix `better-auth:`) over
+the shared Redis client with `storeSessionInDatabase: true`: reads come from
+Redis with database fallback, revokes clear both stores, Redis failures
+degrade (warn, never 500). Cookie cache untouched.
 
 ---
 

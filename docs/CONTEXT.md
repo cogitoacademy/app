@@ -898,7 +898,7 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 | `docs/plans/active/FRONTEND-GAPS-SPEC.md`                         | `f/f9-session-notes` (follow-up); `f/competition-taxonomy` (PR pending)             | Active — F1 admin workspace, hydrated participant wallet/ledger detail, and OQ-04 SLA projection are complete; F9 session notes editor/rendering is complete; F18 proposer-side pending-invite withdrawal is complete; F12 room approval queue and active-room catalog are implemented; booking detail meeting/activity UX refined 2026-08-22 and compact contextual info previews added 2026-08-26; competition taxonomy follow-up implemented 2026-08-25; empty-state consistency follow-up documented 2026-08-25; tutor discovery pricing matrix consolidated 2026-08-27; booking overflow polish added 2026-08-28; canonical tutor profile-image workflow consolidated 2026-08-31 |
 | `docs/plans/completed/TUTOR-TERMS-ONBOARDING.md`                  | working tree                                                                        | **Completed (2026-09-02)** — bilingual Tutor Terms of Service modal and server-enforced, first-submit-only consent persistence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `docs/plans/completed/ECONOMY-RATE-CONTROL.md`                    | main                                                                                | Completed 2026-08-22 — admin-managed Cogito take schedule, IDR tutor honoraria, immutable booking snapshots, and all-role economy E2E                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `docs/plans/active/DEFERRED-OPS-TASKS.md`                         | main (post-merge)                                                                   | Active — code gaps 1.1–1.8 done (1.4 now 0 bare selects); §2 Redis session caching deferred; §3/§4 ops pending (provisioning/CD secrets partially done via the deployment wave)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `docs/plans/active/DEFERRED-OPS-TASKS.md`                         | main (post-merge)                                                                   | Active — code gaps 1.1–1.8 done (1.4 now 0 bare selects); §2 Redis session caching done (R1, 2026-09-05); §3/§4 ops pending (provisioning/CD secrets partially done via the deployment wave)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `docs/plans/active/DEPLOYMENT-PLAN.md`                            | main (merged #115–#118)                                                             | **APPLIED 2026-08-31** — Terraform 7 resources in state (no drift), Tailscale + hardening done, Coolify resources declared (47 env vars), backup cron installed, webhook route live (401 auth-required). Remaining: Uptime Kuma + Discord, drills, Xendit go-live                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `docs/plans/active/DEPLOYMENT-WAVE-2.md`                          | main (merged #121–#122)                                                             | **APPLIED 2026-08-31** — Terraform imports + Ansible apply completed via `infra/apply.sh` (live-API fixes #136/#137); vault refreshed; deploy-webhook route live                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `docs/plans/completed/DEPLOYMENT-DISPATCH.md`                     | main (merged #115–#118)                                                             | **Executed 2026-08-27** — PR A (#115), PR B (#116), W1 (#118), W2 (#117) all merged; retained as historical dispatch                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
@@ -930,7 +930,7 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 1. Consolidation (merged #16) → main
 2. Foundation Hardening (merged #17) → main
 3. Production Readiness + Infrastructure (merged #18 + #19) → main
-4. Deferred Ops Tasks (code gaps 1.1–1.8) → merged to main; §2 Redis session caching deferred
+4. Deferred Ops Tasks (code gaps 1.1–1.8) → merged to main; §2 Redis session caching done (R1 secondary storage, 2026-09-05)
 5. PRD Gaps Backend (G1–G20) → merged to main (#35, #36, #39–#43)
 6. Backend Hardening Phase 2 (BACKEND-HARDENING-PHASE2.md, PRs 1–6) → merged to main (#46)
 7. Backend Review Hardening (BACKEND-REVIEW-HARDENING.md) → merged to main (#48)
@@ -941,7 +941,7 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 12. Backend Finalization (BACKEND-PROD-FINALIZATION.md — PRD v1.7 alignment + audit findings F1–F25/S1–S14) → **merged #106 (2026-08-26)**
 13. Post-Finalization Re-Audit (REAUDIT-FINDINGS.md — N1 reconfirm loop, N2 suspended restore, W1 env drift, env prod guards) → **merged #107 (2026-08-26)**
 14. Deployment Wave (DEPLOYMENT-PLAN.md + DEPLOYMENT-DISPATCH.md — infra scaffold #115, DLQ health #116, nightly backups #117, CD pipeline #118) → **merged 2026-08-27; APPLIED 2026-08-31 (Terraform + Ansible via infra/apply.sh)**
-15. Production Ops (DEFERRED-OPS-TASKS §2 Redis session caching, §3 manual verification, §4 production ops) → requires live env + Coolify
+15. Production Ops (DEFERRED-OPS-TASKS §3 manual verification, §4 production ops) → requires live env + Coolify
 16. CI Performance (CI-SANITY F14 — cache restores, Turbo `--affected` for PR typecheck/build, web build moved to the Build job, single coverage suite) → **merged #165 (2026-09-02)**
 17. Ops Visibility (OPS-VISIBILITY-WAVE — FAILURES.md, circuit breakers in `/health`, DLQ retention, ops.sh `cb`, pre-migrate snapshot pruning, vault-triggered infra-apply, Kuma wiring docs, CD `COOLIFY_API_BASE_URL` fix) → **merged #179 (2026-09-03)**
 18. Log Consolidation + Midtrans + Booking Date Fix + Payment UX (LOG-CONSOLIDATION-PAYMENT-UX — one `request_complete` log line, `rpc_error` correlation, purchase error toast + Test Mode labels, Midtrans Snap provider behind the `PaymentProvider` port, timezone-derived session start) → **merged #189 (2026-09-04)**
@@ -949,7 +949,7 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 20. Semantic PR Docker Type (CI-SANITY follow-up — `docker` type added to the Semantic PR workflow) → **merged #193 (2026-09-04)**
 ```
 
-Production Readiness (#18) and Infrastructure (#19) merged to main. Deferred ops code gaps (1.1–1.8) are merged; Redis session caching remains deferred. PRD gaps backend (G1–G20) landed on main, and **BACKEND-HARDENING-PHASE2 (PRs 1–6) merged to main via #46** — security hardening, group-booking money correctness, late-cancel penalty, email outbox, R2 uploads, group-series, deadline repricing, payment notifications, meeting event lifecycle, SLA escalation. **BACKEND-REVIEW-HARDENING merged to main via #48** — the 2026-08-15 review fixes (money correctness, security, reliability, Redis mandatory). **REVIEW-FIXES-2 merged via #50–#57** (wave-2 findings), **REVIEW-FIXES-3 merged via #59–#65** (wave-3 findings), **REVIEW-FIXES-4 merged via #68–#70, #75–#76** (wave-4: docs/sdd reconciliation, money-correctness bugs C1–C3/H1–H6/M1–M9/L1–L5, Xendit provider rewrite for the 2024-11-11 API, fail-loud Resend/Google Meet/R2 guards, G2 email verification). Next: remaining frontend-gap work and production ops.
+Production Readiness (#18) and Infrastructure (#19) merged to main. Deferred ops code gaps (1.1–1.8) are merged; Redis session caching landed as R1 secondary storage (2026-09-05). PRD gaps backend (G1–G20) landed on main, and **BACKEND-HARDENING-PHASE2 (PRs 1–6) merged to main via #46** — security hardening, group-booking money correctness, late-cancel penalty, email outbox, R2 uploads, group-series, deadline repricing, payment notifications, meeting event lifecycle, SLA escalation. **BACKEND-REVIEW-HARDENING merged to main via #48** — the 2026-08-15 review fixes (money correctness, security, reliability, Redis mandatory). **REVIEW-FIXES-2 merged via #50–#57** (wave-2 findings), **REVIEW-FIXES-3 merged via #59–#65** (wave-3 findings), **REVIEW-FIXES-4 merged via #68–#70, #75–#76** (wave-4: docs/sdd reconciliation, money-correctness bugs C1–C3/H1–H6/M1–M9/L1–L5, Xendit provider rewrite for the 2024-11-11 API, fail-loud Resend/Google Meet/R2 guards, G2 email verification). Next: remaining frontend-gap work and production ops.
 
 ## Role E2E Readiness Snapshot (2026-09-04)
 
@@ -1044,9 +1044,9 @@ The following bugs from the production-readiness plan are **fixed** (see complet
 
 - Map oRPC/Zod input-validation issues to field-specific, non-technical messages across every form. Raw transport errors such as `Input validation failed` must never be shown directly to users. The solo-booking form currently provides a readable fallback, but a shared mapper remains to be implemented.
 
-**Remaining deferred items** are tracked in `docs/plans/active/DEFERRED-OPS-TASKS.md`:
-
-- Redis session caching (2.2) — not yet implemented
+**Remaining deferred items** are tracked in `docs/plans/active/DEFERRED-OPS-TASKS.md`
+(§2 Redis session caching is done — R1 secondary storage, 2026-09-05; §3/§4
+still pending).
 
 **Fixed by PR #28 (`improvement/foundation-critical-fixes`):**
 
@@ -1196,14 +1196,18 @@ Status: verified at git HEAD `ec8b16c` (post-#46 merge). B3/B4/B6/B8/B9 are **Fi
 
 Redis keys follow the pattern `cogito:{namespace}:{key}`. **Redis is mandatory** (`REDIS_URL` is required in the env schema since #48); all stateful services use Redis for persistence. The in-memory implementations remain only as defensive fallback code when a configured Redis call fails at runtime.
 
-| Namespace     | Key Pattern                | Used By          | TTL / Eviction               |
-| ------------- | -------------------------- | ---------------- | ---------------------------- |
-| `cogito:idem` | `{prefix}:{parts}`         | IdempotencyStore | 24h TTL (Redis EX)           |
-| `cogito:rl`   | `{keyPrefix}:{identifier}` | rateLimit        | Window TTL (Redis EXPIRE)    |
-| `cogito:cb`   | `{name}`                   | CircuitBreaker   | 2× resetTimeout (Redis HSET) |
-| `cogito:sess` | Better Auth managed        | Session store    | 7 days (Better Auth config)  |
+| Namespace       | Key Pattern                            | Used By                       | TTL / Eviction               |
+| --------------- | -------------------------------------- | ----------------------------- | ---------------------------- |
+| `cogito:idem`   | `{prefix}:{parts}`                     | IdempotencyStore              | 24h TTL (Redis EX)           |
+| `cogito:rl`     | `{keyPrefix}:{identifier}`             | rateLimit                     | Window TTL (Redis EXPIRE)    |
+| `cogito:cb`     | `{name}`                               | CircuitBreaker                | 2× resetTimeout (Redis HSET) |
+| `better-auth:*` | `{token}` / `active-sessions-{userId}` | Better Auth secondary storage | Session TTL (Redis EX, 7d)   |
 
-> `cogito:sess` is **reserved/unused** — Redis session caching is not implemented (Better Auth uses cookieCache + DB adapter; DEFERRED-OPS-TASKS §2).
+> Session cache (R1, 2026-09-05): Better Auth reads sessions from Redis
+> (`packages/auth/src/secondary-storage.ts`, `better-auth:` prefix — its own
+> convention, not the `cogito:` namespace) with `storeSessionInDatabase: true`,
+> so the database row remains the fallback and revoke clears both stores.
+> Redis failures degrade (warn, never 500). `cogito:sess` stays reserved/unused.
 > | `cogito-jobs` | BullMQ managed | Scheduler | Per-job repeat interval |
 
 ### In-Memory Fallback (defensive only)
