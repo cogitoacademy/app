@@ -898,7 +898,7 @@ emergency restore against the actual object list first.
 | Kuma: dlqDepth > 0                                         | Kuma keyword monitor | A **fresh** DLQ failure landed in the last 24h                    | `./ops.sh dlq` to see what failed                             |
 | Discord: "VPS disk at N%"                                  | disk watchdog        | Disk ≥ 85%                                                        | `./ops.sh disk`; plan cleanup                                 |
 | Discord: "CRITICAL: VPS disk still at N% after auto-prune" | disk watchdog        | Disk ≥ 92% **after** the prune ladder                             | Operator action required — see below                          |
-| Grafana: DLQFresh / DiskWarn / DiskCrit / ApiErrors         | Grafana alert rules  | Same signals as above, evaluated from Prometheus (1m)             | Same responses; Grafana is the second pair of eyes             |
+| Grafana: DLQFresh / DiskWarn / DiskCrit / ApiErrors        | Grafana alert rules  | Same signals as above, evaluated from Prometheus (1m)             | Same responses; Grafana is the second pair of eyes            |
 
 ### Observability stack (LIVE 2026-09-05 — Loki + Prometheus + tailnet Grafana)
 
@@ -913,7 +913,7 @@ limits in the composes.
   suffix-stripped Coolify names: `cogito-api`, `cogito-web`, `cogito-prod-db`,
   …). Or `./infra/ops.sh trace <traceId>` for the Explore URL.
 - **Grafana access (tailnet-only):** `ssh -L 3000:127.0.0.1:3000
-  ubuntu@<tailnet-ip>`, then `http://localhost:3000` (admin user `admin`;
+ubuntu@<tailnet-ip>`, then `http://localhost:3000` (admin user `admin`;
   password in the SOPS vault as `GRAFANA_ADMIN_PASSWORD`). Provisioned:
   datasources (Loki default + Prometheus), 4 dashboards (App RED, Logs &
   Traces, Infra, Delivery), alert rules (DLQFresh/DiskWarn/DiskCrit/ApiErrors
@@ -948,7 +948,7 @@ revived 2026-09-05 by service restart + loopback publish
   Environment, `SERVICE_PASSWORD_DRIZZLE`); never in our vault (Coolify-owned
   secret, like the Coolify API token pattern).
 - **Operate:** restart via Coolify UI or `POST
-  /api/v1/services/tzhidx0p18mvbbpuaeahcxwy/restart` (Bearer
+/api/v1/services/tzhidx0p18mvbbpuaeahcxwy/restart` (Bearer
   `COOLIFY_API_TOKEN`); health via Coolify status or the UI port check.
   The vendor `healthcheck.js` (5s timeout) is flaky — treat Coolify status +
   UI 200 as truth, not the container health flag alone.
