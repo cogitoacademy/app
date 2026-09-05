@@ -555,3 +555,269 @@
           Discord alerting:
           {{ 'webhook present in the vault — wire the Grafana contact point per the steps above' if discord_webhook_present else 'MISSING — operator must add DISCORD_WEBHOOK_URL to the SOPS vault (see the loud instruction above)' }}.
           Provisioned files + verification: see the steps above.
+
+# -----------------------------------------------------------------------------
+# Play 2 — converge the VPS host state (replaces the old manual scp/chmod
+# steps; added 2026-09-05 after the first live apply exposed them as
+# imperative drift: bind-mounted dirs, token perms, missing shared network).
+# Safe to re-run: every write is content-compared (copy checksums) or
+# guarded. /etc/cogito itself is owned by backup-cron.yml (0700) and is NOT
+# touched here; the observability subtree is root-owned (Ansible become
+# writes as root, Docker bind-mounts read as root), so no host user needs
+# traverse and the old manual `chmod 755 /etc/cogito` is retired for good.
+# -----------------------------------------------------------------------------
+- name: Converge observability host files and network
+  hosts: cogito_vps
+  become: true
+  gather_facts: false
+
+  vars:
+    obs_root: /etc/cogito/observability
+    obs_src: "{{ playbook_dir }}/.."
+    vault_path: "{{ playbook_dir }}/../secrets/prod.env"
+
+  tasks:
+    - name: Check mode — structure validated, host flow skipped
+      ansible.builtin.debug:
+        msg: >-
+          Running with --check: the VPS host flow is skipped (no SSH writes
+          in check mode). Run without --check to converge.
+      when: ansible_check_mode
+
+    - name: End the play in check mode
+      ansible.builtin.meta: end_play
+      when: ansible_check_mode
+
+    - name: Ensure the shared cogito-obs Docker network exists
+      ansible.builtin.command: docker network inspect cogito-obs
+      register: obs_net_inspect
+      changed_when: false
+      failed_when: false
+
+    - name: Create the shared cogito-obs Docker network when missing
+      ansible.builtin.command: docker network create cogito-obs
+      when: obs_net_inspect.rc != 0
+
+    - name: Ensure the observability config directories exist (root-owned)
+      ansible.builtin.file:
+        path: "{{ obs_root }}/{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      loop:
+        - loki
+        - prometheus
+        - alloy
+        - grafana/provisioning
+
+    - name: Sync the provisioned config files (checksummed, idempotent)
+      ansible.builtin.copy:
+        src: "{{ obs_src }}/{{ item.src }}"
+        dest: "{{ obs_root }}/{{ item.dest }}"
+        owner: root
+        group: root
+        mode: "0644"
+      loop:
+        - { src: "loki/loki-config.yml", dest: "loki/loki-config.yml" }
+        - { src: "prometheus/prometheus.yml", dest: "prometheus/prometheus.yml" }
+        - { src: "alloy/config.alloy", dest: "alloy/config.alloy" }
+
+    - name: Sync the Grafana provisioning tree (dashboards, datasources, alerts)
+      ansible.builtin.copy:
+        src: "{{ obs_src }}/grafana/provisioning/"
+        dest: "{{ obs_root }}/grafana/provisioning/"
+        owner: root
+        group: root
+        mode: preserve
+      register: grafana_tree
+
+    - name: Normalize Grafana provisioning permissions (dirs 0755, files 0644)
+      ansible.builtin.command: chmod -R a+rX {{ obs_root }}/grafana/provisioning
+      changed_when: false
+
+    - name: Read METRICS_TOKEN from the vault on the control node
+      ansible.builtin.shell: >-
+        sops -d {{ vault_path }} |
+        grep -E '^METRICS_TOKEN='
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      no_log: true
+      register: metrics_token_plaintext
+      environment:
+        PATH: "{{ lookup('env', 'PATH') }}:/opt/homebrew/bin:/usr/local/bin"
+        SOPS_AGE_KEY_FILE: "{{ lookup('env', 'SOPS_AGE_KEY_FILE') | default(lookup('env', 'HOME') + '/.config/sops/age/keys.txt', true) }}"
+      failed_when: metrics_token_plaintext.stdout | length == 0
+
+    - name: Write the Prometheus metrics-token file (0644 — Prometheus runs as nobody)
+      ansible.builtin.copy:
+        dest: "{{ obs_root }}/prometheus/metrics_token"
+        content: "{{ metrics_token_plaintext.stdout | regex_replace('^METRICS_TOKEN=', '') }}\n"
+        owner: root
+        group: root
+        mode: "0644"
+      no_log: true
+
+    - name: Read GRAFANA_ADMIN_PASSWORD from the vault on the control node
+      ansible.builtin.shell: >-
+        sops -d {{ vault_path }} |
+        grep -E '^GRAFANA_ADMIN_PASSWORD='
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      no_log: true
+      register: grafana_pw_plaintext
+      environment:
+        PATH: "{{ lookup('env', 'PATH') }}:/opt/homebrew/bin:/usr/local/bin"
+        SOPS_AGE_KEY_FILE: "{{ lookup('env', 'SOPS_AGE_KEY_FILE') | default(lookup('env', 'HOME') + '/.config/sops/age/keys.txt', true) }}"
+      failed_when: false
+
+    - name: Resolve the Grafana container name
+      ansible.builtin.shell: >-
+        docker ps --format '{{.Names}}' | grep -E '^grafana-' | head -1
+      register: grafana_container
+      changed_when: false
+      failed_when: grafana_container.stdout | length == 0
+
+    - name: Set the Grafana admin password (idempotent outcome, same value)
+      ansible.builtin.command: >-
+        docker exec {{ grafana_container.stdout }}
+        grafana cli admin reset-admin-password
+        {{ grafana_pw_plaintext.stdout | regex_replace('^GRAFANA_ADMIN_PASSWORD=', '') | quote }}
+      no_log: true
+      changed_when: false
+      failed_when: false
+      when: grafana_pw_plaintext.stdout | length > 0
+
+# -----------------------------------------------------------------------------
+# Play 3 — wire Grafana alerting over its API (replaces the manual contact
+# point + policy clicks; alert RULES stay file-provisioned in
+# infra/grafana/provisioning/alerting/ and ride Play 2's tree sync).
+# Prerequisite: ssh -L 3000:127.0.0.1:3000 tunnel (fails LOUDLY otherwise).
+# -----------------------------------------------------------------------------
+- name: Wire the Grafana Discord contact point and default policy
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    grafana_api_url: "http://localhost:3000/api"
+
+  tasks:
+    - name: Check mode — structure validated, API flow skipped
+      ansible.builtin.debug:
+        msg: >-
+          Running with --check: the Grafana API flow is skipped. Run
+          without --check (with the :3000 tunnel up) to converge.
+      when: ansible_check_mode
+
+    - name: End the play in check mode
+      ansible.builtin.meta: end_play
+      when: ansible_check_mode
+
+    - name: Require the :3000 Grafana tunnel (fail loudly, not silently)
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 3000
+        timeout: 10
+      register: grafana_tunnel
+      ignore_errors: true
+
+    - name: Abort with the tunnel command when Grafana is unreachable
+      ansible.builtin.fail:
+        msg: >-
+          Grafana is not reachable at localhost:3000 — open the tunnel first:
+          ssh -i ~/.ssh/cogito_vps -f -N -L 3000:127.0.0.1:3000
+          ubuntu@<tailnet-ip>. Then re-run this playbook.
+      when: grafana_tunnel is failed
+
+    - name: Read the Grafana + Discord secrets from the vault
+      ansible.builtin.shell: >-
+        sops -d {{ playbook_dir }}/../secrets/prod.env |
+        grep -E '^(GRAFANA_ADMIN_PASSWORD|DISCORD_WEBHOOK_URL)='
+      changed_when: false
+      no_log: true
+      register: grafana_secrets
+      environment:
+        PATH: "{{ lookup('env', 'PATH') }}:/opt/homebrew/bin:/usr/local/bin"
+        SOPS_AGE_KEY_FILE: "{{ lookup('env', 'SOPS_AGE_KEY_FILE') | default(lookup('env', 'HOME') + '/.config/sops/age/keys.txt', true) }}"
+
+    - name: Parse the Grafana secrets into facts (never echoed)
+      ansible.builtin.set_fact:
+        grafana_admin_password: "{{ (grafana_secrets.stdout_lines | select('match', '^GRAFANA_ADMIN_PASSWORD=') | first | default('')) | regex_replace('^GRAFANA_ADMIN_PASSWORD=', '') }}"
+        discord_webhook_url: "{{ (grafana_secrets.stdout_lines | select('match', '^DISCORD_WEBHOOK_URL=') | first | default('')) | regex_replace('^DISCORD_WEBHOOK_URL=', '') }}"
+      no_log: true
+
+    - name: Require both Grafana secrets in the vault
+      ansible.builtin.assert:
+        that:
+          - grafana_admin_password | length > 0
+          - discord_webhook_url | length > 0
+        fail_msg: >-
+          GRAFANA_ADMIN_PASSWORD and DISCORD_WEBHOOK_URL must both be in
+          {{ playbook_dir }}/../secrets/prod.env (sops). Nothing was changed.
+
+    - name: Ensure the Cogito alert folder exists
+      ansible.builtin.uri:
+        url: "{{ grafana_api_url }}/folders"
+        method: POST
+        user: admin
+        password: "{{ grafana_admin_password }}"
+        force_basic_auth: true
+        body: { title: "Cogito" }
+        body_format: json
+        status_code: [200, 409, 412]
+      no_log: true
+
+    - name: Read the existing contact points
+      ansible.builtin.uri:
+        url: "{{ grafana_api_url }}/v1/provisioning/contact-points"
+        method: GET
+        user: admin
+        password: "{{ grafana_admin_password }}"
+        force_basic_auth: true
+        status_code: 200
+      register: grafana_contacts
+      no_log: true
+
+    - name: Create the Discord-ops contact point when missing (rotation stays a UI action)
+      ansible.builtin.uri:
+        url: "{{ grafana_api_url }}/v1/provisioning/contact-points"
+        method: POST
+        user: admin
+        password: "{{ grafana_admin_password }}"
+        force_basic_auth: true
+        body:
+          name: "Discord-ops"
+          type: "discord"
+          settings:
+            url: "{{ discord_webhook_url }}"
+        body_format: json
+        status_code: [200, 202]
+      no_log: true
+      when: grafana_contacts.json | selectattr('name', 'equalto', 'Discord-ops') | list | length == 0
+
+    - name: Read the notification policy
+      ansible.builtin.uri:
+        url: "{{ grafana_api_url }}/v1/provisioning/policies"
+        method: GET
+        user: admin
+        password: "{{ grafana_admin_password }}"
+        force_basic_auth: true
+        status_code: 200
+      register: grafana_policy
+      no_log: true
+
+    - name: Set Discord-ops as the default receiver when it is not
+      ansible.builtin.uri:
+        url: "{{ grafana_api_url }}/v1/provisioning/policies"
+        method: PUT
+        user: admin
+        password: "{{ grafana_admin_password }}"
+        force_basic_auth: true
+        body: "{{ grafana_policy.json | combine({'receiver': 'Discord-ops'}) }}"
+        body_format: json
+        status_code: [200, 202]
+      no_log: true
+      when: grafana_policy.json.receiver | default('') != 'Discord-ops'
