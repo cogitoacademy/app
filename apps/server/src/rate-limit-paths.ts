@@ -33,6 +33,14 @@ const AUTH_PATH_PREFIXES = [
   "/api/auth/change-email",
 ];
 
+const READ_ONLY_BOOKING_PATHS = new Set([
+  "/rpc/booking/get",
+  "/rpc/booking/getRescheduleAvailability",
+  "/rpc/booking/getSessionNotes",
+  "/rpc/booking/listMine",
+  "/rpc/booking/listSessions",
+]);
+
 export function matchAuthPath(path: string): boolean {
   const urlPath = path.split("?")[0] ?? path;
   return AUTH_PATH_PREFIXES.some(
@@ -45,6 +53,12 @@ export function matchRateLimitPath(path: string): RateLimitKind | null {
 
   if (urlPath === "/rpc/payment/createPurchase") return "payment";
   if (urlPath.startsWith("/rpc/invite/verify")) return "invite";
+  // Booking detail/list reads are protected by their procedures but must not
+  // consume the 30/minute mutation bucket. A normal booking page refreshes
+  // these queries several times while invalidating caches after an action;
+  // counting them by shared IP can make the reschedule dialog return 429 even
+  // though the user has made only a handful of booking changes.
+  if (READ_ONLY_BOOKING_PATHS.has(urlPath)) return null;
   if (urlPath.startsWith("/rpc/booking/")) return "booking";
   if (
     urlPath === "/rpc/auth/students/search" ||

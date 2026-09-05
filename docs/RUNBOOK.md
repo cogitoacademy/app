@@ -48,14 +48,15 @@ shared Resources group and footer account menu should remain available, and the
 **Tutor Profile** wording should remain unchanged. This is presentation-only;
 no environment or operational change is required.
 
-## Production UI and E2E audit (2026-09-04)
+## Production UI and E2E audit (2026-09-04; reschedule follow-up 2026-09-05)
 
-The full browser workflow passed **13/13 tests across four specs**. It covers
-the seeded student solo and group booking flows, tutor acceptance/decline,
-cross-student access denial, contact privacy, all-role economy checks, and
-booking layout containment at 170px and 390px. The layout check is safe to run
-after state-changing tests because it accepts either booking rows or the
-empty-state collection view.
+The full browser workflow now contains **14 tests across four specs**. The
+booking spec passes 7/7 locally, covering the seeded student solo and group
+booking flows, tutor acceptance/decline, accepted-online reschedule, and
+cancellation. The other specs cover cross-student access denial, contact
+privacy, all-role economy checks, and booking layout containment at 170px and
+390px. The layout check is safe to run after state-changing tests because it
+accepts either booking rows or the empty-state collection view.
 
 The root `bun run check-types` gate also type-checks `packages/e2e` with the
 browser DOM library enabled, so layout assertions cannot drift outside the
@@ -1214,7 +1215,7 @@ Concurrent modification conflict. The `version` field didn't match. Retry the op
 
 ### Role-boundary errors
 
-- `FORBIDDEN: Student access required` is expected when tutor/admin sessions call tutor-discovery or student booking mutations. Use protected `booking.listMine`/`booking.get` for the shared booking read surface, `tutorActions.*` for tutor fulfillment, and `adminTutor.*`/`adminBooking.*` for admin review.
+- `FORBIDDEN: Student access required` is expected when tutor/admin sessions call tutor-discovery or student booking mutations. Use protected `booking.listMine`/`booking.get` for the shared booking read surface, `tutorActions.*` for tutor fulfillment, and `adminTutor.*`/`adminBooking.*` for admin review. The protected booking detail/list/session/availability reads are outside the 30/minute mutation limiter; a `Too Many Requests` response on one of these reads indicates a limiter regression.
 
 ### Redis Connection Errors
 
@@ -1575,10 +1576,11 @@ stale seeded state or a hard-coded user ID. Economy inputs are displayed with
 locale grouping separators; the browser check edits them through the visible
 control and verifies the numeric value after saving.
 
-The 2026-09-04 browser regression completed 13 tests across the four E2E specs,
-including online group invite confirmation, tutor accept/decline, unauthorized
-booking access, the future-booking economy snapshot, invalid negative IDR
-input, and narrow viewport containment. The student auth state is saved under
+The 2026-09-05 browser regression exercised 14 tests across the four E2E specs,
+including online group invite confirmation, accepted-online reschedule and
+cancellation, tutor accept/decline, unauthorized booking access, the
+future-booking economy snapshot, invalid negative IDR input, and narrow
+viewport containment. The student auth state is saved under
 `packages/e2e/.auth/` for the run and is ignored by git; this avoids exceeding
 the production auth sign-in rate limit during a multi-role suite. The local
 run also showed the expected Google Meet boot-probe failure for an

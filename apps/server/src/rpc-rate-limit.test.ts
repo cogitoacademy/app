@@ -16,9 +16,21 @@ describe("matchRateLimitPath maps real slash-key RPC URLs", () => {
     expect(matchRateLimitPath("/rpc/invite/verify")).toBe("invite");
   });
 
-  test("booking procedures match /rpc/booking/*", () => {
-    expect(matchRateLimitPath("/rpc/booking/listMine")).toBe("booking");
-    expect(matchRateLimitPath("/rpc/booking/create")).toBe("booking");
+  test("booking mutations match /rpc/booking/*", () => {
+    expect(matchRateLimitPath("/rpc/booking/createSolo")).toBe("booking");
+    expect(matchRateLimitPath("/rpc/booking/cancel")).toBe("booking");
+  });
+
+  test("booking detail/list reads are not in the mutation bucket", () => {
+    for (const path of [
+      "/rpc/booking/get",
+      "/rpc/booking/getRescheduleAvailability",
+      "/rpc/booking/getSessionNotes",
+      "/rpc/booking/listMine",
+      "/rpc/booking/listSessions",
+    ]) {
+      expect(matchRateLimitPath(path)).toBeNull();
+    }
   });
 
   test("student search matches the actual slash-key RPC path", () => {

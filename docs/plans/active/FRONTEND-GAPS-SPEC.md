@@ -1067,5 +1067,8 @@ time refresh handling, bounded mobile tab overflow, stable tutor-card semantics,
 image dimensions, reduced-motion transitions, and production-only suppression
 of development tools. The isolated Playwright workflow now covers booking,
 responsive layout at 390px and 170px, contact sharing, and economy/role access;
-the complete local run is 13/13 passing. No API, schema, persistence, or
-business-rule contract changed.
+the complete local suite now contains 14 tests, with the booking flow passing
+7/7 including reschedule and cancellation. The booking read RPC contract is
+unchanged; protected detail/list/session/availability reads are excluded from
+the booking mutation rate-limit bucket so normal refreshes cannot block a
+reschedule action.

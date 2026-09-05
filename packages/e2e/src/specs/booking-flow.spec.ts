@@ -295,7 +295,7 @@ test("accepted online reschedule keeps the booking scheduled until cancellation"
 }) => {
   const bookingId = await createSoloBooking(
     page,
-    0,
+    4,
     "Verify the online reschedule and cancellation lifecycle.",
   );
   const tutor = await openTutorBooking(browser, bookingId);
@@ -315,8 +315,11 @@ test("accepted online reschedule keeps the booking scheduled until cancellation"
     const availableTimes = rescheduleDialog.getByRole("button", {
       name: /WIB/,
     });
-    await expect(availableTimes.first()).toBeVisible();
-    await availableTimes.last().click();
+    // Slot 0 is used by the earlier solo flow; slot 1 is used by the group
+    // flow. Use slot 2 as the proposal target, then cancel this booking before
+    // the later decline flow reuses that slot.
+    await expect(availableTimes.nth(2)).toBeVisible({ timeout: 15_000 });
+    await availableTimes.nth(2).click();
     await rescheduleDialog
       .getByLabel("Reason", { exact: true })
       .fill("Move this session to the final available test slot.");

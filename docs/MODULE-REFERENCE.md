@@ -503,7 +503,7 @@ The create-booking module keeps all submit state in the parent form while presen
 - `booking.repo.ts` — data access for bookings, participants, sessions, notes, reschedules, payouts
 - `booking.service.ts` — service methods below; consumer ports for wallet, pricing, audit, notification, meeting
 - `booking.handler.ts` — `createBookingHandler` (student/proposer) and `createTutorActionsHandler` (tutor)
-- `booking.router.ts` — Student-owned booking mutations use `studentProcedure` (the four **create** procedures use `verifiedStudentProcedure`, which additionally requires `emailVerified: true` — PRD paid actions); shared booking/detail/session reads stay protected; `booking.proposeReschedule` is the student-proposer route, while `tutorActions.*` (including `proposeReschedule`) uses `tutorProcedure`
+- `booking.router.ts` — Student-owned booking mutations use `studentProcedure` (the four **create** procedures use `verifiedStudentProcedure`, which additionally requires `emailVerified: true` — PRD paid actions); shared booking/detail/session reads stay protected and outside the 30/minute booking mutation limiter; `booking.proposeReschedule` is the student-proposer route, while `tutorActions.*` (including `proposeReschedule`) uses `tutorProcedure`
 
 **Service Methods:**
 
