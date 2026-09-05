@@ -1,7 +1,12 @@
 import { timingSafeEqual } from "crypto";
 import { getRedisClient } from "@cogito-app/api/lib/redis";
-import { healthCheck, healthStatus } from "@cogito-app/api/lib/db-health";
-import { getMetrics } from "@cogito-app/api/lib/metrics";
+import {
+  checkCircuitBreakers,
+  checkDlqHealth,
+  healthCheck,
+  healthStatus,
+} from "@cogito-app/api/lib/db-health";
+import { renderExposition } from "@cogito-app/api/lib/metrics";
 import { env } from "@cogito-app/env/server";
 import type { Elysia } from "elysia";
 
@@ -25,7 +30,7 @@ export function registerHealthMetricsRoutes(app: Elysia) {
         { status },
       );
     })
-    .get("/metrics", ({ request }) => {
+    .get("/metrics", async ({ request }) => {
       if (!env.METRICS_TOKEN) return new Response("Not Found", { status: 404 });
       const authHeader = request.headers.get("authorization") ?? "";
       const expected = `Bearer ${env.METRICS_TOKEN}`;
@@ -38,7 +43,17 @@ export function registerHealthMetricsRoutes(app: Elysia) {
       ) {
         return new Response("Unauthorized", { status: 401 });
       }
-      return Response.json(getMetrics());
+      // P1: Prometheus text exposition (version 0.0.4). Counter/histogram
+      // series come from the in-process `recordRequest` telemetry; the gauges
+      // are read from the shared Redis (fresh DLQ depth, -1 when unknown, and
+      // per-breaker states). Bearer gating above is unchanged.
+      const redis = getRedisClient();
+      const dlqDepth = await checkDlqHealth(redis);
+      const breakers = await checkCircuitBreakers(redis);
+      return new Response(renderExposition({ dlqDepth, breakers }), {
+        status: 200,
+        headers: { "Content-Type": "text/plain; version=0.0.4" },
+      });
     })
     .get("/", () => "OK");
 }

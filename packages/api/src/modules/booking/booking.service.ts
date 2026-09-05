@@ -19,7 +19,6 @@ import {
   MAX_PAGE_LIMIT,
   GROUP_SERIES_DISCLAIMER,
   TUTOR_PAYOUT_RATE_IDR,
-  SESSION_DURATION_MS,
 } from "../../shared/constants";
 import type { GroupSize, Modality } from "../pricing/pricing.service";
 import type { DbType } from "../../lib/db";
@@ -63,6 +62,11 @@ import {
   type BookingState,
 } from "./booking-state.types";
 import { canTransition, TRANSITIONS } from "./booking-transitions";
+import {
+  assertNoIntraSeriesOverlap,
+  assertSessionFitsAvailability,
+  normalizeSession,
+} from "./booking-session-guards";
 import type { BookingRepo } from "./booking.repo";
 import { encodeBookingCursor } from "./booking.repo";
 import type {
@@ -568,13 +572,6 @@ export function createBookingService(deps: {
     return { title, description: descriptionLines.join("\n") };
   }
 
-  function normalizeSession(startAt: Date) {
-    return {
-      scheduledStartAt: startAt,
-      scheduledEndAt: new Date(startAt.getTime() + SESSION_DURATION_MS),
-    };
-  }
-
   type EconomicSnapshot = {
     perStudent: number;
     markValueIdr?: number;
@@ -656,43 +653,6 @@ export function createBookingService(deps: {
         : current;
 
     return pricing.computeEconomics(modality, baseRateIdr, groupSize, config);
-  }
-
-  function assertSessionFitsAvailability(
-    slot: { startDate: Date; endDate: Date; modality: string },
-    session: { scheduledStartAt: Date; scheduledEndAt: Date },
-    modality: "online" | "offline",
-  ) {
-    const supportsModality =
-      slot.modality === "both" || slot.modality === modality;
-    if (
-      !supportsModality ||
-      session.scheduledStartAt < slot.startDate ||
-      session.scheduledEndAt > slot.endDate
-    ) {
-      throw new BookingNotEditableError(
-        "The 90-minute session must fit inside the tutor availability window",
-      );
-    }
-  }
-
-  function assertNoIntraSeriesOverlap(
-    sessions: { scheduledStartAt: Date; scheduledEndAt: Date }[],
-  ): void {
-    const sorted = [...sessions].toSorted(
-      (a, b) => a.scheduledStartAt.getTime() - b.scheduledStartAt.getTime(),
-    );
-    for (let i = 1; i < sorted.length; i++) {
-      const prev = sorted[i - 1]!;
-      const curr = sorted[i]!;
-      if (curr.scheduledStartAt.getTime() < prev.scheduledEndAt.getTime()) {
-        throw new BookingConflictError(
-          "series",
-          prev.scheduledEndAt.toISOString(),
-          curr.scheduledStartAt.toISOString(),
-        );
-      }
-    }
   }
 
   /**

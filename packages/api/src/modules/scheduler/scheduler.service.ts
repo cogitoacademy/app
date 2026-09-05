@@ -1,5 +1,7 @@
 import { Queue, Worker, type Job } from "bullmq";
 import { log } from "../../lib/logger";
+import { generateRequestId } from "../../lib/request-id";
+import { runWithTrace, type TraceCtx } from "../../lib/trace";
 
 const QUEUE_NAME = "cogito-jobs";
 // N2: bound the completed/failed job records BullMQ keeps in Redis. Without
@@ -61,10 +63,19 @@ export function createSchedulerService(
   const dlqWorker = new Worker(
     DLQ_QUEUE_NAME,
     async (job: Job) => {
+      // T1: the DLQ payload nests the original job data under `data`
+      // (see the failed-handler copy above); surface the original trace.
+      const dlqOuter = (job.data ?? {}) as {
+        traceId?: string;
+        userId?: string;
+        data?: { traceId?: string; userId?: string };
+      };
       log({
         level: "error",
         action: "scheduler_dlq_job",
         message: `Job ${job.name} moved to DLQ after attempts exhausted`,
+        traceId: dlqOuter.data?.traceId ?? dlqOuter.traceId,
+        userId: dlqOuter.data?.userId ?? dlqOuter.userId,
         job: { id: job.id, name: job.name, data: job.data },
       });
 
@@ -108,83 +119,118 @@ export function createSchedulerService(
   const worker = new Worker(
     QUEUE_NAME,
     async (job: Job) => {
-      log({
-        level: "info",
-        action: "scheduler_job_start",
-        message: `Processing job ${job.name}`,
-        job: { id: job.id, name: job.name, data: job.data },
-      });
+      // T1: run every job inside the stamped trace scope (or a fresh id for
+      // system ticks) so downstream services correlate via getTrace(), and
+      // log traceId/userId on start/complete/fail for Loki correlation.
+      const stamped = (job.data ?? {}) as {
+        traceId?: string;
+        userId?: string;
+      };
+      const ctx: TraceCtx = {
+        traceId: stamped.traceId ?? generateRequestId(),
+        userId: stamped.userId,
+      };
+      return runWithTrace(ctx, async () => {
+        log({
+          level: "info",
+          action: "scheduler_job_start",
+          message: `Processing job ${job.name}`,
+          traceId: ctx.traceId,
+          userId: ctx.userId,
+          job: { id: job.id, name: job.name, data: job.data },
+        });
 
-      switch (job.name) {
-        case "expire-bookings":
-          const expireResult = await handlers.onExpireBookings();
-          log({
-            level: expireResult.failed > 0 ? "warn" : "info",
-            action: "expire_bookings_complete",
-            message: `Expired ${expireResult.expired} bookings, ${expireResult.failed} failed`,
-            ...expireResult,
-          });
-          return expireResult;
-        case "release-expired-holds":
-          const releaseResult = await handlers.onReleaseHolds();
-          log({
-            level: "info",
-            action: "release_expired_holds_complete",
-            message: `Released ${releaseResult.released} holds`,
-          });
-          return releaseResult;
-        case "check-tutor-lateness":
-          const latenessResult = await handlers.onCheckTutorLateness();
-          log({
-            level: latenessResult.failed > 0 ? "warn" : "info",
-            action: "check_tutor_lateness_complete",
-            message: `Flagged ${latenessResult.flagged} bookings for tutor lateness review, ${latenessResult.failed} failed`,
-            ...latenessResult,
-          });
-          return latenessResult;
-        case "send-notification-email":
-          const sendResult = await handlers.onSendNotificationEmail();
-          log({
-            level: "info",
-            action: "send_notification_email_complete",
-            message: `Dispatched ${sendResult.sent} emails, ${sendResult.failed} failed`,
-            ...sendResult,
-          });
-          return sendResult;
-        case "retry-failed-meetings":
-          const meetingResult = await handlers.onRetryFailedMeetings();
-          log({
-            level: meetingResult.failed > 0 ? "warn" : "info",
-            action: "retry_failed_meetings_complete",
-            message: `Scheduled ${meetingResult.succeeded} bookings after meeting retry, ${meetingResult.failed} still failing`,
-            ...meetingResult,
-          });
-          return meetingResult;
-        case "escalate-support-tickets":
-          const escalateResult = await handlers.onEscalateSupportTickets();
-          log({
-            level: "info",
-            action: "escalate_support_tickets_complete",
-            message: `Escalated ${escalateResult.escalated} support tickets past SLA`,
-            ...escalateResult,
-          });
-          return escalateResult;
-        default:
-          log({
-            level: "warn",
-            action: "scheduler_unknown_job",
-            message: `Unknown job: ${job.name}`,
-          });
-      }
+        switch (job.name) {
+          case "expire-bookings":
+            const expireResult = await handlers.onExpireBookings();
+            log({
+              level: expireResult.failed > 0 ? "warn" : "info",
+              action: "expire_bookings_complete",
+              message: `Expired ${expireResult.expired} bookings, ${expireResult.failed} failed`,
+              traceId: ctx.traceId,
+              userId: ctx.userId,
+              ...expireResult,
+            });
+            return expireResult;
+          case "release-expired-holds":
+            const releaseResult = await handlers.onReleaseHolds();
+            log({
+              level: "info",
+              action: "release_expired_holds_complete",
+              message: `Released ${releaseResult.released} holds`,
+              traceId: ctx.traceId,
+              userId: ctx.userId,
+            });
+            return releaseResult;
+          case "check-tutor-lateness":
+            const latenessResult = await handlers.onCheckTutorLateness();
+            log({
+              level: latenessResult.failed > 0 ? "warn" : "info",
+              action: "check_tutor_lateness_complete",
+              message: `Flagged ${latenessResult.flagged} bookings for tutor lateness review, ${latenessResult.failed} failed`,
+              traceId: ctx.traceId,
+              userId: ctx.userId,
+              ...latenessResult,
+            });
+            return latenessResult;
+          case "send-notification-email":
+            const sendResult = await handlers.onSendNotificationEmail();
+            log({
+              level: "info",
+              action: "send_notification_email_complete",
+              message: `Dispatched ${sendResult.sent} emails, ${sendResult.failed} failed`,
+              traceId: ctx.traceId,
+              userId: ctx.userId,
+              ...sendResult,
+            });
+            return sendResult;
+          case "retry-failed-meetings":
+            const meetingResult = await handlers.onRetryFailedMeetings();
+            log({
+              level: meetingResult.failed > 0 ? "warn" : "info",
+              action: "retry_failed_meetings_complete",
+              message: `Scheduled ${meetingResult.succeeded} bookings after meeting retry, ${meetingResult.failed} still failing`,
+              traceId: ctx.traceId,
+              userId: ctx.userId,
+              ...meetingResult,
+            });
+            return meetingResult;
+          case "escalate-support-tickets":
+            const escalateResult = await handlers.onEscalateSupportTickets();
+            log({
+              level: "info",
+              action: "escalate_support_tickets_complete",
+              message: `Escalated ${escalateResult.escalated} support tickets past SLA`,
+              traceId: ctx.traceId,
+              userId: ctx.userId,
+              ...escalateResult,
+            });
+            return escalateResult;
+          default:
+            log({
+              level: "warn",
+              action: "scheduler_unknown_job",
+              message: `Unknown job: ${job.name}`,
+              traceId: ctx.traceId,
+              userId: ctx.userId,
+            });
+        }
+      });
     },
     { connection },
   );
 
   worker.on("failed", (job, err) => {
+    const failedStamped = (job?.data ?? {}) as {
+      traceId?: string;
+      userId?: string;
+    };
     log({
       level: "error",
       action: "scheduler_job_failed",
       message: `Job ${job?.name ?? "unknown"} failed`,
+      traceId: failedStamped.traceId,
+      userId: failedStamped.userId,
       error: { message: err.message, stack: err.stack },
     });
 
@@ -211,10 +257,16 @@ export function createSchedulerService(
   });
 
   worker.on("completed", (job) => {
+    const completedStamped = (job?.data ?? {}) as {
+      traceId?: string;
+      userId?: string;
+    };
     log({
       level: "info",
       action: "scheduler_job_completed",
       message: `Job ${job.name} completed`,
+      traceId: completedStamped.traceId,
+      userId: completedStamped.userId,
     });
   });
 

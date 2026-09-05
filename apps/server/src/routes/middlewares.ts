@@ -2,6 +2,11 @@ import { SECURITY_HEADERS } from "@cogito-app/api/lib/security-headers";
 import { recordRequest } from "@cogito-app/api/lib/metrics";
 import { log as appLog } from "@cogito-app/api/lib/logger";
 import { generateRequestId } from "@cogito-app/api/lib/request-id";
+import {
+  enterTrace,
+  getTrace,
+  parseTraceparent,
+} from "@cogito-app/api/lib/trace";
 import { isAllowedFrontendOrigin } from "@cogito-app/env/origins";
 import { env } from "@cogito-app/env/server";
 import { cors } from "@elysiajs/cors";
@@ -67,16 +72,30 @@ export function registerRequestLogging(app: Elysia) {
       .derive(({ request }) => {
         const requestId =
           request.headers.get("x-request-id") || generateRequestId();
+        // T1: seed the trace scope per request — incoming W3C `traceparent`
+        // wins, then `x-request-id`, then a generated `req_*` id (which also
+        // becomes the traceId so every request is correlatable in Loki).
+        const traceparent = request.headers.get("traceparent");
+        const parsed = traceparent ? parseTraceparent(traceparent) : null;
+        const traceId =
+          parsed?.traceId || request.headers.get("x-request-id") || requestId;
+        enterTrace({ traceId });
         const startTime = performance.now();
-        return { requestId, startTime };
+        return { requestId, startTime, traceId };
       })
-      .onAfterHandle(({ requestId, startTime, request, set }) => {
+      .onAfterHandle(({ requestId, traceId, startTime, request, set }) => {
         const durationMs = performance.now() - startTime;
         const path = new URL(request.url).pathname;
-        recordRequest(path, durationMs);
+        recordRequest(
+          path,
+          durationMs,
+          request.method,
+          typeof set.status === "number" ? set.status : 200,
+        );
         appLog({
           level: "info",
           requestId,
+          traceId: getTrace()?.traceId ?? traceId,
           action: "request_complete",
           durationMs,
           method: request.method,
@@ -84,7 +103,7 @@ export function registerRequestLogging(app: Elysia) {
           // Elysia's set.status may be a StatusText string literal; only the
           // numeric form (which defaults to 200) belongs in the log line.
           status: typeof set.status === "number" ? set.status : 200,
-          userId: requestUserId.get(request),
+          userId: requestUserId.get(request) ?? getTrace()?.userId,
         });
       })
       .onError(({ requestId, request, error }) => {
@@ -92,9 +111,11 @@ export function registerRequestLogging(app: Elysia) {
         appLog({
           level: "error",
           requestId,
+          traceId: getTrace()?.traceId,
           action: "request_error",
           method: request.method,
           path,
+          userId: requestUserId.get(request) ?? getTrace()?.userId,
           error: {
             message: String(error),
             stack: error instanceof Error ? error.stack : undefined,
@@ -114,7 +135,12 @@ export function registerCors(app: Elysia) {
           env.NODE_ENV,
         ),
       methods: ["GET", "POST", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization"],
+      allowedHeaders: [
+        "Content-Type",
+        "Authorization",
+        "traceparent",
+        "x-request-id",
+      ],
       credentials: true,
     }),
   );

@@ -265,6 +265,21 @@ Production CD verifies this endpoint's `version` against the target commit after
   deployed image sha (`GIT_SHA`, `"dev"` when unset) and the CD pipeline
   polls until it matches the merged commit.
 
+### `GET /metrics`
+
+- **Auth:** Bearer `METRICS_TOKEN` (`Authorization: Bearer <token>`).
+  Missing/incorrect token → `401 Unauthorized`; unset `METRICS_TOKEN` → `404`.
+- **Output:** Prometheus text exposition (`Content-Type: text/plain; version=0.0.4`)
+- **Description:** Scraped by Prometheus every 15s (Bearer from the vault).
+  Emits `http_requests_total{path,method,status,instance}` (counter),
+  `http_request_duration_ms_bucket/sum/count{path,method,status,instance,le}`
+  (histogram, ms buckets `5…10000` + `+Inf`), `dlq_fresh_depth{instance}`
+  (gauge — fresh DLQ failures within the freshness window, `-1` when unknown),
+  and `breaker_state{name,instance}` (gauge — `0`=closed, `1`=half-open,
+  `2`=open per Redis-backed circuit breaker). Every series carries
+  `instance="single"`: the endpoint reports this process only; aggregating
+  across replicas is an explicit multi-replica follow-up, not solved here.
+
 ---
 
 ## Auth (`auth.*`)

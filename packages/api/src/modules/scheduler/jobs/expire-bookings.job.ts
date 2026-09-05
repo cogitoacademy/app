@@ -1,4 +1,5 @@
 import type { Queue } from "bullmq";
+import { traceJobData } from "../../../lib/trace";
 import { JOB_RETENTION } from "../scheduler.service";
 
 const JOB_NAME = "expire-bookings";
@@ -10,7 +11,7 @@ export async function scheduleBookingExpiryCheck(queue: Queue): Promise<void> {
     { every: REPEAT_INTERVAL_MS },
     {
       name: JOB_NAME,
-      data: {},
+      data: traceJobData(),
       opts: {
         attempts: 3,
         backoff: { type: "exponential", delay: 1000 },

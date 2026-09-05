@@ -720,6 +720,7 @@ chat directory.
 - `write` throws — used for critical notifications
 - `writeBestEffort` swallows errors — used for non-critical notifications
 - Email dispatch is outbox-based: rows are queued inside the DB transaction and sent by the scheduler job; no email I/O inside open transactions (#46)
+- The active `traceId` (see `packages/api/src/lib/trace.ts`) is persisted on notification `metadata` at write time, so dispatch rows correlate via their parent notification
 
 ---
 
@@ -930,6 +931,7 @@ workflow does not change the RPC contracts.
 
 - Expiry job every 5 min; hold-release every 10 min; lateness every 5 min; email every 60 s; SLA escalation every 15 min
 - Jobs use retry with exponential backoff (3 attempts); the failed-event handler compares `attemptsMade` with the job's configured `opts.attempts`, and only after that budget is exhausted copies the job to `cogito-jobs-dlq`. Intermediate failures remain eligible for BullMQ retry. The DLQ worker logs the entry and keeps a bounded Redis list (`cogito:dlq`, max 100 entries) for inspection (M4)
+- Every repeatable payload carries the scheduling scope's `{ traceId, userId }` (`traceJobData()`; `{}` when scheduled outside a request); the worker re-enters that scope via `runWithTrace` (minting a fresh `req_*` id for unstamped system ticks) and logs both on start/complete/fail
 - Circuit breaker state persisted in Redis (when available)
 
 ---

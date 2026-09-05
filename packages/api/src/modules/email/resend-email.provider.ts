@@ -10,6 +10,7 @@ export function createResendEmailProvider(
   redis?: RedisClient,
 ): EmailPort {
   const resendBreaker = new CircuitBreaker({
+    name: "resend",
     failureThreshold: 3,
     resetTimeoutMs: 120_000,
     halfOpenMaxAttempts: 1,

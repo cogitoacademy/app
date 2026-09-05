@@ -12,6 +12,11 @@ import { env } from "@cogito-app/env/server";
 
 import * as schema from "@cogito-app/db/schema";
 
+import {
+  createSecondaryStorage,
+  type SecondaryStorageRedis,
+} from "./secondary-storage";
+
 export type CogitoUser = {
   id: string;
   name: string;
@@ -61,6 +66,44 @@ export function setVerificationEmailSender(sender: VerificationEmailSender) {
   verificationEmailSender = sender;
 }
 
+// R1: the shared Redis client for Better Auth secondary storage. Set once
+// from the server composition root at boot via
+// setAuthSecondaryStorageRedis(getRedisClient()). This package cannot import
+// the client (or its type) from @cogito-app/api — api depends on auth, so
+// that import would be circular; the SecondaryStorageRedis structural
+// interface in ./secondary-storage.ts keeps the dependency one-way.
+let secondaryStorageRedis: SecondaryStorageRedis | null = null;
+
+export function setAuthSecondaryStorageRedis(
+  redis: SecondaryStorageRedis,
+): void {
+  secondaryStorageRedis = redis;
+}
+
+// No Redis wired (tests using the singleton, or boot before wiring):
+// behave exactly like today — DB-only sessions. Reads miss so better-auth
+// falls through to the database row (storeSessionInDatabase below).
+const nullSecondaryStorageRedis: SecondaryStorageRedis = {
+  get: async () => null,
+  set: async () => "OK",
+  del: async () => 0,
+};
+
+// The auth singleton is constructed at import time, before the composition
+// root can pass the shared client — so the wired storage resolves the
+// client lazily per operation. Boot wiring takes effect for every request
+// after setAuthSecondaryStorageRedis runs.
+const lazySecondaryStorageRedis: SecondaryStorageRedis = {
+  get: (key) => (secondaryStorageRedis ?? nullSecondaryStorageRedis).get(key),
+  set: (key, value, ...args) =>
+    (secondaryStorageRedis ?? nullSecondaryStorageRedis).set(
+      key,
+      value,
+      ...args,
+    ),
+  del: (key) => (secondaryStorageRedis ?? nullSecondaryStorageRedis).del(key),
+};
+
 // C6 (foundation-hardening): passwords must contain at least one uppercase
 // letter, one lowercase letter, and one digit (min length 8 enforced by
 // better-auth's minPasswordLength). Validated at sign-up via the createUser
@@ -95,12 +138,29 @@ export function resolveGoogleSocialProviders(input: {
   };
 }
 
-export function createAuth() {
+export function createAuth(options?: {
+  secondaryStorageRedis?: SecondaryStorageRedis;
+}) {
   return betterAuth({
     database: drizzleAdapter(db, {
       provider: "pg",
       schema: schema,
     }),
+    // R1: Redis secondary storage over the shared client (explicit client in
+    // tests, boot-wired lazy client for the singleton). Reads come from
+    // Redis; storeSessionInDatabase keeps the database row as the fallback
+    // and revoke path, so both stores are written on login and cleared on
+    // revoke.
+    secondaryStorage: createSecondaryStorage(
+      options?.secondaryStorageRedis ?? lazySecondaryStorageRedis,
+    ),
+    // Verification values (email OTPs, password-reset tokens) route to
+    // secondary storage too once it is configured — keep the database copy
+    // as the fallback/consume path so a cold cache or missing Redis entry
+    // never breaks verification or reset flows.
+    verification: {
+      storeInDatabase: true,
+    },
     trustedOrigins: getAuthTrustedOrigins(env.CORS_ORIGIN, env.NODE_ENV),
     user: {
       additionalFields: {
@@ -114,6 +174,9 @@ export function createAuth() {
     },
     session: {
       expiresIn: 60 * 60 * 24 * 7,
+      // R1: keep the database row alongside the Redis entry — reads fall
+      // back to it on a cache miss/Redis outage, and revokes clear it.
+      storeSessionInDatabase: true,
       cookieCache: {
         enabled: true,
         maxAge: env.SESSION_COOKIE_CACHE_MAX_AGE,

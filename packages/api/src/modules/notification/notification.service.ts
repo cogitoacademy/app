@@ -8,6 +8,7 @@ import {
   MAX_PAGE_LIMIT,
 } from "../../shared/constants";
 import { log } from "../../lib/logger";
+import { getTrace } from "../../lib/trace";
 
 interface NotificationEmailPort {
   send(message: {
@@ -138,6 +139,16 @@ export function createNotificationService(
       if (existing) return;
     }
 
+    // T1: persist the active traceId on the notification metadata so the
+    // dispatch rows (joined via notificationId) and Loki logs correlate.
+    const trace = getTrace();
+    const metadata = { ...params.metadata };
+    if (
+      trace?.traceId &&
+      (metadata as Record<string, unknown>).traceId === undefined
+    ) {
+      (metadata as Record<string, unknown>).traceId = trace.traceId;
+    }
     const inserted = await repo.insertNotification(conn, {
       userId: params.userId,
       bookingId: params.bookingId ?? null,
@@ -146,7 +157,7 @@ export function createNotificationService(
       body: params.body,
       severity: params.severity ?? NOTIFICATION_SEVERITY.INFO,
       eventKey: params.eventKey,
-      metadata: params.metadata ?? {},
+      metadata,
     });
 
     if (
