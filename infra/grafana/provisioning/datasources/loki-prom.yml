@@ -1,10 +1,11 @@
 # loki-prom.yml — Grafana provisioned datasources (source of truth in git).
 #
 # Declared by infra/ansible/observability.yml (mounted read-only into
-# `cogito-grafana` at /etc/grafana/provisioning/datasources/). URLs are the
-# Coolify-network service names; if Coolify isolates service networks, point
-# them at the tailnet addresses instead. Grafana itself is tailnet-only —
-# no public domain, no anonymous auth (see the compose in the playbook).
+# `cogito-grafana` at /etc/grafana/provisioning/datasources/). URLs use the
+# shared `cogito-obs` Docker network service names (each Coolify service
+# otherwise gets its OWN isolated network — verified live 2026-09-05).
+# Grafana itself is tailnet-only — no public domain, no anonymous auth
+# (see the compose in the playbook).
 apiVersion: 1
 
 datasources:
@@ -12,7 +13,7 @@ datasources:
     uid: loki
     type: loki
     access: proxy
-    url: http://cogito-loki:3100
+    url: http://loki:3100
     isDefault: true
     editable: false
     jsonData:
@@ -23,7 +24,7 @@ datasources:
     uid: prometheus
     type: prometheus
     access: proxy
-    url: http://cogito-prometheus:9090
+    url: http://prometheus:9090
     editable: false
     jsonData:
       timeInterval: 15s

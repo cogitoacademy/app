@@ -35,7 +35,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{service=\"cogito-app-server\"} |= \"$traceId\"",
+          "expr": "{service=\"cogito-api\"} |= \"$traceId\"",
           "maxLines": 200
         }
       ]
@@ -49,7 +49,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{service=\"cogito-app-server\"} |= \"$userId\"",
+          "expr": "{service=\"cogito-api\"} |= \"$userId\"",
           "maxLines": 200
         }
       ]
@@ -63,7 +63,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{service=\"cogito-app-server\"} |= \"rpc_error\" or \"request_error\"",
+          "expr": "{service=\"cogito-api\"} |= \"rpc_error\" or \"request_error\"",
           "maxLines": 100
         }
       ]

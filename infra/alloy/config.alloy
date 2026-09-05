@@ -3,8 +3,8 @@
 // Declared by infra/ansible/observability.yml (inside the `cogito-alloy`
 // bundle alongside node_exporter + cAdvisor). Ships container logs to Loki.
 //
-// A3 HARD REQUIREMENT: Docker API discovery ONLY via
-// `loki.source.docker_logs` (host = the Docker socket, mounted read-only).
+// A3 HARD REQUIREMENT: Docker API discovery ONLY
+// (`discovery.docker` + `loki.source.docker`, socket mounted read-only).
 // NEVER file globs under /var/lib/docker (brittle across Docker storage
 // drivers and Coolify upgrades). No `local.file_match` / `loki.source.file`
 // component may be added to this file.
@@ -20,12 +20,15 @@ discovery.docker "cogito" {
 discovery.relabel "cogito" {
   targets = discovery.docker.cogito.targets
 
-  // Container name (e.g. /cogito-api-xyz) -> `service` label, leading slash
-  // stripped. Keeps the LogQL entry point `{service="cogito-app-server"}`
-  // stable across Coolify redeploys (which suffix container names).
+  // Container name (e.g. /cogito-api-104816659080) -> `service` label:
+  // leading slash stripped AND the numeric Coolify redeploy suffix
+  // dropped, so `{service="cogito-app-server"}` stays stable across
+  // deploys (verified live: suffixes are `-<digits>`; non-numeric tails
+  // like uptime-kuma's hash keep their full name, still searchable).
   rule {
     source_labels = ["__meta_docker_container_name"]
-    regex         = "/(.*)"
+    regex         = "/(.*?)(-[0-9]+)?$"
+    replacement   = "$1"
     target_label  = "service"
   }
 
@@ -34,23 +37,30 @@ discovery.relabel "cogito" {
     regex         = "/(.*)"
     target_label  = "container"
   }
+
+  rule {
+    source_labels = ["__address__"]
+    regex         = "(.*)"
+    replacement   = "docker"
+    target_label  = "job"
+  }
 }
 
-loki.source.docker_logs "default" {
+loki.source.docker "default" {
   host    = "unix:///var/run/docker.sock"
   targets = discovery.relabel.cogito.output
-
-  labels = {
-    job = "docker",
-  }
 
   forward_to = [loki.write.cogito.receiver]
 }
 
 loki.write "cogito" {
   endpoint {
-    // Same Coolify Docker network as `cogito-loki`. If Coolify isolates
-    // service networks, point this at the Loki tailnet address instead.
-    url = "http://cogito-loki:3100/loki/api/v1/push"
+    // Shared `cogito-obs` Docker network (one-time `docker network create`,
+    // declared external in every obs compose): `loki` is the Compose
+    // service-name alias on that network. Each Coolify service otherwise
+    // gets its OWN isolated network, so bare service names do NOT resolve
+    // without the shared net (verified live 2026-09-05). Loopback-published
+    // :3100 remains for tunnels/debugging; nothing is public.
+    url = "http://loki:3100/loki/api/v1/push"
   }
 }

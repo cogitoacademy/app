@@ -43,6 +43,12 @@ limits_config:
   retention_stream:
     - selector: '{service=~".+"}'
       period: 720h
+  # Accept backfill as old as the retention window (verified live: Alloy
+  # ships container history back to 2026-08-25 on first connect; the 7d
+  # default `reject_old_samples_max_age` 400s whole batches for one old
+  # entry). Matches the 30d retention above.
+  reject_old_samples: true
+  reject_old_samples_max_age: 720h
 
 compactor:
   working_directory: /loki/compactor
@@ -50,3 +56,6 @@ compactor:
   retention_enabled: true
   retention_delete_delay: 2h
   retention_delete_worker_count: 150
+  # Required by Loki 3.x whenever retention is enabled (verified live:
+  # boot refuses without it). Filesystem store matches object_store above.
+  delete_request_store: filesystem
