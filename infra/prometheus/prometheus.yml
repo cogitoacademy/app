@@ -1,0 +1,48 @@
+# prometheus.yml — Prometheus scrape config (source of truth in git).
+#
+# Declared by infra/ansible/observability.yml (Coolify service
+# `cogito-prometheus`). Retention is a CLI flag, not a file setting:
+#   --storage.tsdb.retention.time=15d   (PROM_RETENTION_DAYS=15)
+# Lean fallback (tight VPS): scrape_interval 30s + retention 7d (see
+# docs/RUNBOOK.md → Monitoring & Alerting → Observability stack).
+#
+# SECRET DISCIPLINE: the API /metrics Bearer token lives in the SOPS vault as
+# METRICS_TOKEN (never in git). The operator provisions it on the VPS as the
+# file /etc/prometheus/metrics_token INSIDE the prometheus container (a
+# read-only bind mount of /etc/cogito/observability/prometheus/metrics_token,
+# root 0600 on the host — see the compose in observability.yml). This file
+# references that container path via `credentials_file`, never the value. If
+# the file is missing, the cogito-api scrape 401s (alerts as a DOWN target;
+# the API itself is unaffected).
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # The app exposition (Task 3): Prometheus text 0.0.4 at GET /metrics,
+  # Bearer-gated. Counters http_requests_total{path,method,status}, the
+  # http_request_duration_ms_* histogram, dlq_fresh_depth and
+  # breaker_state{name} gauges. Per-process semantics: instance="single".
+  - job_name: cogito-api
+    metrics_path: /metrics
+    scheme: https
+    static_configs:
+      - targets:
+          - api.cogitoacademy.id:443
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/metrics_token
+
+  # Host metrics. Hostnames are the Compose service names inside the
+  # `cogito-alloy` bundle (same Coolify Docker network); if Coolify
+  # isolates service networks, point these at the tailnet IPs instead.
+  - job_name: node-exporter
+    static_configs:
+      - targets:
+          - cogito-node-exporter:9100
+
+  - job_name: cadvisor
+    static_configs:
+      - targets:
+          - cogito-cadvisor:8080

@@ -1,0 +1,72 @@
+{
+  "uid": "cogito-logs-traces",
+  "title": "Logs & Traces",
+  "description": "Trace a request across API, jobs, dispatch and webhooks by traceId (Task 1 fields). Search carries userId, never email.",
+  "tags": ["cogito", "logs", "traces"],
+  "timezone": "Asia/Jakarta",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "traceId",
+        "label": "traceId",
+        "type": "textbox",
+        "current": { "text": "", "value": "" },
+        "query": ""
+      },
+      {
+        "name": "userId",
+        "label": "userId",
+        "type": "textbox",
+        "current": { "text": "", "value": "" },
+        "query": ""
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request trail (traceId)",
+      "type": "logs",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service=\"cogito-app-server\"} |= \"$traceId\"",
+          "maxLines": 200
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "User trail (userId)",
+      "type": "logs",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 12 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service=\"cogito-app-server\"} |= \"$userId\"",
+          "maxLines": 200
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "rpc_error / request_error",
+      "type": "logs",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service=\"cogito-app-server\"} |= \"rpc_error\" or \"request_error\"",
+          "maxLines": 100
+        }
+      ]
+    }
+  ]
+}
