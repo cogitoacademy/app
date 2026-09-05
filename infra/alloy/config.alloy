@@ -1,0 +1,56 @@
+// config.alloy — Grafana Alloy log shipper (source of truth in git).
+//
+// Declared by infra/ansible/observability.yml (inside the `cogito-alloy`
+// bundle alongside node_exporter + cAdvisor). Ships container logs to Loki.
+//
+// A3 HARD REQUIREMENT: Docker API discovery ONLY via
+// `loki.source.docker_logs` (host = the Docker socket, mounted read-only).
+// NEVER file globs under /var/lib/docker (brittle across Docker storage
+// drivers and Coolify upgrades). No `local.file_match` / `loki.source.file`
+// component may be added to this file.
+//
+// Log privacy: labels carry the container/service name + traceId/userId
+// from the log line. Emitters never log email; this shipper adds no PII.
+
+discovery.docker "cogito" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "15s"
+}
+
+discovery.relabel "cogito" {
+  targets = discovery.docker.cogito.targets
+
+  // Container name (e.g. /cogito-api-xyz) -> `service` label, leading slash
+  // stripped. Keeps the LogQL entry point `{service="cogito-app-server"}`
+  // stable across Coolify redeploys (which suffix container names).
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "service"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+}
+
+loki.source.docker_logs "default" {
+  host    = "unix:///var/run/docker.sock"
+  targets = discovery.relabel.cogito.output
+
+  labels = {
+    job = "docker",
+  }
+
+  forward_to = [loki.write.cogito.receiver]
+}
+
+loki.write "cogito" {
+  endpoint {
+    // Same Coolify Docker network as `cogito-loki`. If Coolify isolates
+    // service networks, point this at the Loki tailnet address instead.
+    url = "http://cogito-loki:3100/loki/api/v1/push"
+  }
+}

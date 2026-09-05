@@ -4,7 +4,7 @@ import {
   UnsupportedContentTypeError,
 } from "./upload.errors";
 import {
-  ALLOWED_CONTENT_TYPES,
+  ALLOWED_IMAGE_TYPES,
   MAX_UPLOAD_BYTES,
   type CreateUploadUrlInput,
 } from "./upload.types";
@@ -18,7 +18,7 @@ export function sanitizeFilename(filename: string): string {
 
 export function createUploadService(deps: { storage: StoragePort }) {
   async function createUploadUrl(userId: string, input: CreateUploadUrlInput) {
-    if (!ALLOWED_CONTENT_TYPES.includes(input.contentType)) {
+    if (!ALLOWED_IMAGE_TYPES.includes(input.contentType)) {
       throw new UnsupportedContentTypeError(input.contentType);
     }
     if (

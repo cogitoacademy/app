@@ -15,7 +15,7 @@
 - **Deploy trigger: Option A — expose ONLY the Coolify deploy-webhook path publicly** (decided 2026-08-27). The CI pipeline (GitHub Actions, cloud-hosted) cannot reach a tailnet-only Coolify. Instead of opening the whole Coolify UI, add a DNS record + Traefik route for `cl.cogitoacademy.id/api/v1/deploy/*` only. The URL contains a per-resource UUID that acts as the bearer secret; nothing else on the domain is exposed, and the Coolify UI itself stays tailnet-only. This is Coolify's standard deployment model. (Rejected Option B: SSH-from-Actions deploy key — more moving parts, no public surface; kept as documented fallback.)
 - **Tailscale ACL is declarative**: committed `infra/tailscale/acl.hujson`, pasted into the admin console, versioned in git. Default allow-all is NOT safe for a server node.
 - **Reverse proxy / LB**: Coolify's bundled proxy (Traefik v3.6 — verified live on the VPS as `coolify-proxy|traefik:v3.6`) terminates TLS and routes `api.*` → :3001, `app.*` → :80. No extra proxy on a single VPS. LB deferred (scale lever, documented).
-- **Monitoring: Uptime Kuma + Telegram alerts only.** No Prometheus/Grafana (overkill for 3.7GB RAM; 2.27GB available, verified 2026-08-28). Log tracing via Coolify json-file 10m×3 + structured JSON logs.
+- **Monitoring: Uptime Kuma + Discord alerts, extended 2026-09-05 by the PLG stack** (Loki 30d + Prometheus 15d + tailnet Grafana, declared in `infra/ansible/observability.yml`, operator apply pending). Log tracing via traceId in Loki; Coolify json-file 10m×3 remains the backstop.
 - **Prod first. No staging** in this wave (staging deferred until prod is proven).
 - **Postgres/Redis: keep the existing running containers**, bring them under Ansible-declared Coolify config; add volumes + nightly backup cron. Never recreate (data).
 - **Division of labor**: Terraform = host shell + Cloudflare DNS + R2 (rare runs). Ansible = everything inside the box via the Coolify API (apps, env, domains, webhooks, cron, Uptime Kuma, hardening) — runs on every change, fully declarative. GitHub Actions = build/test/push/migrate/deploy/health/rollback.
@@ -206,24 +206,13 @@ VPS (OVH 2vCPU/3.7GB/38GB, Ubuntu; ufw: 80/443 public, 22+8000+6001+6002 tailnet
 
 ---
 
-## Phase 4 — Monitoring + security + docs
+## Phase 4 — Monitoring + security + docs (closed 2026-09-05; details below, drills stay in Phase 5)
 
-### Task 4.1: Uptime Kuma (Ansible-declared Coolify service)
-
-- [ ] Deploy `louislam/uptime-kuma:1` (port 3002 host), domain `status.cogitoacademy.id` (DNS record from Terraform), volume, Telegram notifications → both operators.
-- [ ] Monitors: `api./health` (60s), `app.` (60s), HTTPS cert expiry.
-- [ ] Log rotation 10m×3 verified on all resources (Coolify json-file).
-
-### Task 4.2: Security pass (verify on the live box)
-
-- [ ] ufw/fail2ban/sshd verified; Coolify UI tailnet-only; GHCR tokens rotated; GitHub secret scanning on; SOPS private key off-repo.
-- [ ] Resource-access map (OVH, Cloudflare, Google, GitHub, Resend, Xendit, Sanity, Tailscale) with owner + rotation path → RUNBOOK.
-
-### Task 4.3: Docs (AGENTS.md rule 11)
-
-- [ ] `docs/DEPLOYMENT.md` updated: new pipeline, Tailscale control plane, Ansible layout, drills.
-- [ ] `docs/RUNBOOK.md`: incident sections (crash, DB failure, disk, cert, dependency, rollback, restore) + component inventory (every container/port/DNS/env/cron with owner).
-- [ ] `docs/CONTEXT.md` + `docs/plans/README.md`: topology + live state + this plan row.
+- [x] Uptime Kuma: live since 2026-09-01 as `cogito-uptime-kuma` (`louislam/uptime-kuma:2`, port 3001) at `status.cogitoacademy.id`; wired 2026-09-02 (4 monitors + `COGITO ALERT` Discord + `cogito` status page — see `docs/KUMA-RUNBOOK.md`). Discord, not Telegram, per operator decision.
+- [x] Log rotation 10m×3 verified live on all containers 2026-09-05 (`docker inspect`).
+- [x] Security posture: ufw/fail2ban/sshd + tailnet-only Coolify applied 2026-08-31; SOPS key off-repo (Age key in GitHub secrets is the documented INFRA-AUTOMATION exception). Remaining console bits (secret scanning, GHCR rotation, resource-access map) stay operator-owned — tracked in RUNBOOK, not here.
+- [x] Docs: DEPLOYMENT/RUNBOOK/CONTEXT carry the pipeline, incident tables (FAILURES.md), and live topology.
+- [x] Observability extended 2026-09-05 (OBSERVABILITY-STABILITY-WAVE): Loki+Prometheus+Grafana declared (operator apply pending), traceId end-to-end, exposition `/metrics`.
 
 ---
 
@@ -244,12 +233,12 @@ VPS (OVH 2vCPU/3.7GB/38GB, Ubuntu; ufw: 80/443 public, 22+8000+6001+6002 tailnet
 - Phase 1: ufw/tailnet lock-down verified; Coolify UI unreachable publicly; app `/health` ok. **DONE — applied 2026-08-31 (Tailscale joined+verified, hardened; ACL pasted, confirmed 2026-09-01).**
 - Phase 2: `/health` + sha ok with full env; production-domain Xendit Test Mode UAT → Live Mode E2E; Meet probe ok; R2 round-trip ok. **Env wiring confirmed complete by the operator (2026-09-01: payments/Meet/R2/Sanity all live; `/health` sha-verified). Live Mode E2E (real transaction) remains the Xendit go-live step.**
 - Phase 3: nightly backup runs + restores (drill); CD migrate→deploy→rollback drill green. **Scripts merged (#117/#118) + active live (cron installed; CD green); restore/rollback drills remain (Phase 5, next operator session).**
-- Phase 4: Uptime Kuma live + Telegram alert (kill-container drill); security checklist; docs current. **Pending.**
+- Phase 4: Uptime Kuma live + Discord alert (kill-container drill); security checklist; docs current. **DONE 2026-09-02 (wiring) + 2026-09-05 (rotation verified, PLG declared). Remaining console bits are operator-owned (RUNBOOK).**
 - Every PR: CI green (`gh pr checks --watch`). **Held for the wave's 4 PRs (#115–#118).**
 
 ## Risks
 
-- **RAM (3.7GB)**: skip Prometheus (locked); monitor `free -m` after each phase; if <500MB free, defer Uptime Kuma to a tiny external host (documented fallback).
+- **RAM (3.8GB, 1.7G available, 0 swap — verified 2026-09-05)**: Prometheus lock lifted by the observability wave (PLG declared, 2G swap + memory limits ride the same playbook); if available < 500MB, drop Prometheus first, never Loki (documented order).
 - **GitHub Actions quota**: repo public; if it binds, self-hosted runner on the VPS (documented in #102).
 - **Xendit go-live**: production can stay on Test Mode during UAT, restricted by `XENDIT_TEST_ALLOWED_EMAILS`; switch to Live Mode only after sandbox E2E and then run one real small transaction.
 - **Gmail refresh token expiry**: documented re-auth (RUNBOOK).

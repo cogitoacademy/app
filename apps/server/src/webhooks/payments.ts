@@ -2,6 +2,7 @@ import { Elysia, type Context as ElysiaContext } from "elysia";
 import { services } from "@cogito-app/api";
 import { webhookIdempotency } from "@cogito-app/api/lib/idempotency";
 import { log } from "@cogito-app/api/lib/logger";
+import { getTrace } from "@cogito-app/api/lib/trace";
 import { getClientIp, readBodyWithLimit } from "@cogito-app/api/lib/request-id";
 import { isProductionLike } from "@cogito-app/env/node-env";
 import { env } from "@cogito-app/env/server";
@@ -133,10 +134,16 @@ export function paymentsWebhook(app: Elysia) {
         return { error: "Forbidden" };
       }
 
+      // T1: the request middleware seeded the trace scope from
+      // `traceparent`/`x-request-id`; persist it on the idempotency record
+      // and carry it in every webhook log line for Loki correlation.
+      const webhookTrace = getTrace();
       log({
         level: "info",
         action: "webhook_received",
         provider,
+        traceId: webhookTrace?.traceId,
+        userId: webhookTrace?.userId,
         contentLength: request.headers.get("content-length"),
         hasSignature: !!signature,
       });
@@ -158,6 +165,7 @@ export function paymentsWebhook(app: Elysia) {
             level: "error",
             action: "webhook_missing_reference",
             provider,
+            traceId: webhookTrace?.traceId,
             error: {
               message:
                 "Webhook event has neither a provider event id nor a provider reference",
@@ -192,7 +200,13 @@ export function paymentsWebhook(app: Elysia) {
             failureReason: payload.failureReason,
           });
 
-          await webhookIdempotency.markProcessed(idempotencyKey, { ok: true });
+          // T1: round-trip the traceId on the idempotency record so a replay
+          // or inspection can correlate the delivery back to the request.
+          await webhookIdempotency.markProcessed(idempotencyKey, {
+            ok: true,
+            ...(webhookTrace?.traceId ? { traceId: webhookTrace.traceId } : {}),
+            ...(webhookTrace?.userId ? { userId: webhookTrace.userId } : {}),
+          });
 
           set.status = 200;
           return { ok: true };
@@ -204,6 +218,9 @@ export function paymentsWebhook(app: Elysia) {
             await webhookIdempotency.markProcessed(idempotencyKey, {
               ok: false,
               permanent: true,
+              ...(webhookTrace?.traceId
+                ? { traceId: webhookTrace.traceId }
+                : {}),
             });
           } else {
             await webhookIdempotency.release(idempotencyKey);
@@ -218,6 +235,7 @@ export function paymentsWebhook(app: Elysia) {
             level: "error",
             action: "webhook_signature_failed",
             provider,
+            traceId: webhookTrace?.traceId,
             error: { message },
           });
           set.status = 401;
@@ -229,6 +247,7 @@ export function paymentsWebhook(app: Elysia) {
             level: "warn",
             action: "webhook_timestamp_rejected",
             provider,
+            traceId: webhookTrace?.traceId,
             error: { message },
           });
           set.status = 408;
@@ -243,6 +262,7 @@ export function paymentsWebhook(app: Elysia) {
             level: "error",
             action: "webhook_dead_letter",
             provider,
+            traceId: webhookTrace?.traceId,
             error: { message },
           });
           set.status = permanentWebhookStatus(error);
@@ -253,6 +273,7 @@ export function paymentsWebhook(app: Elysia) {
           level: "error",
           action: "webhook_processing_error",
           provider,
+          traceId: webhookTrace?.traceId,
           error: { message },
         });
         set.status = 500;

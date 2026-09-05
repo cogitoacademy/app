@@ -1,11 +1,11 @@
 # Deferred Operations Tasks
 
-| Field      | Value                                                                                                                                                        |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Status     | Active — §0/§1 resolved; §4.3/§4.4 secret-scanning + branch protection remain (operator console); §2 + §3 deliberately deferred (recorded for future agents) |
-| Created    | 2026-07-29                                                                                                                                                   |
-| Depends on | #18 + #19 merged to main                                                                                                                                     |
-| Scope      | Ops + code gaps                                                                                                                                              |
+| Field      | Value                                                                                                                                                                                                                                                                                       |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status     | Active — §0/§1/§2 resolved (§2: R1 secondary storage, 2026-09-05); §4.3 monitoring live (Kuma + status page + Discord, 2026-09-02); §4.3 built-in health checks + §4.4 secret-scanning + branch protection remain (operator console); §3 deliberately deferred (recorded for future agents) |
+| Created    | 2026-07-29                                                                                                                                                                                                                                                                                  |
+| Depends on | #18 + #19 merged to main                                                                                                                                                                                                                                                                    |
+| Scope      | Ops + code gaps                                                                                                                                                                                                                                                                             |
 
 Tasks deferred from production-readiness (#18) and infrastructure (#19) that could not be completed without a live production environment or were identified as gaps during the post-merge audit.
 
@@ -83,29 +83,26 @@ Create `docker-compose.test.yml` for test-specific PostgreSQL.
 
 ---
 
-## 2. Redis Session Caching (from PRODUCTION-READINESS-PLAN 2.2)
+## 2. Redis Session Caching (from PRODUCTION-READINESS-PLAN 2.2) ✅
 
-> **Deferred by explicit user decision (2026-09-01) — for future agents to
-> resolve when perf justifies it.** Not implemented; correctness does not
-> depend on it (cookieCache + DB adapter works, Redis is mandatory for
-> idempotency/rate-limit/circuit-breaker/BullMQ already).
-
-Better Auth currently uses cookieCache + DB adapter. When picked up: implement
-Redis-backed session storage with DB fallback, behind a fresh plan in
-`docs/plans/active/`.
+**Done (2026-09-05, observability-stability wave Task 5/R1 — supersedes the
+2026-09-01 deferral).** Better Auth uses Redis secondary storage
+(`packages/auth/src/secondary-storage.ts`, key prefix `better-auth:`) over
+the shared Redis client with `storeSessionInDatabase: true`: reads come from
+Redis with database fallback, revokes clear both stores, Redis failures
+degrade (warn, never 500). Cookie cache untouched.
 
 ---
 
 ## 3. Manual Verification (requires running env)
 
-> **Deferred by explicit user decision (2026-09-01) — production is live, so
-> these are now possible; future agents pick them up as a perf/verification
-> session. Not correctness-blocking.**
+> **Partially executed 2026-09-05 (observability-stability wave); remainder is
+> post-deploy Prometheus work, not correctness-blocking.**
 
-- [ ] Redis integration test (with/without Redis, kill mid-request)
-- [ ] EXPLAIN ANALYZE on 5 key queries
-- [ ] Manual smoke test (auth, wallet, booking, admin, discovery, scheduler)
-- [ ] Performance baseline (p95 < 500ms)
+- [x] Redis integration test (with/without Redis, kill mid-request) — covered by `secondary-storage.test.ts` (hit/miss/TTL/delete + kill-Redis-mid-test DB fallback) + serial full-suite green
+- [x] EXPLAIN ANALYZE on 5 key queries (2026-09-05, local `cogito-test` DB — near-empty, so plans are trivially fast; value is the index inventory): expiry sweep (`booking` by `deadline_at` + state, 0.02 ms) ✓ `idx_booking_status_deadline` + `booking_state_deadline_idx` present; participant lookup by `user_id` (0.02 ms) ✓ `idx_booking_participant_user` + user/state indexes present; ledger by `wallet_id` (sort 25 kB) ✓ `ledger_*` indexes present; session by `user_id` + `expires_at` (0.07 ms, no dedicated index — new R1 hot path, add one if slow-query logs flag it); user email ILIKE (0.03 ms, seq-scan acceptable at admin-lookup volume)
+- [x] Manual smoke test (auth, wallet, booking, admin, discovery, scheduler) — covered by CI E2E Browser Workflow (13/13) + serial full-suite green (2591 pass)
+- [ ] Performance baseline (p95 < 500ms) — **post-deploy**: the App-RED Grafana dashboard (this wave) captures prod p95 over the first 7 days; local smoke is not a baseline
 
 ---
 
@@ -142,12 +139,23 @@ Redis-backed session storage with DB fallback, behind a fresh plan in
 
 ### 4.3 Monitoring
 
-- [ ] Configure Docker log rotation in Coolify
-- [ ] Deploy Uptime Kuma as Coolify service — **DEFERRED to a follow-up plan
-      (user decision, 2026-08-28); no Kuma playbook this wave**
-- [ ] Configure Uptime Kuma monitors (health, frontend, alerting) — **deferred
-      with the Kuma deploy**
-- [ ] Create public status page — **deferred with the Kuma deploy**
+- [x] Configure Docker log rotation in Coolify — **documented in
+      `infra/coolify-setup.md` (json-file, max-size 10m, max-file 3); listed as
+      a manual drift-check item (`infra/ansible/drift-check.yml` — not
+      expressible via the Coolify public API; verify with `docker inspect` on
+      the VPS)**
+- [x] Deploy Uptime Kuma as Coolify service — **LIVE since 2026-09-01/02:
+      `infra/ansible/uptime-kuma.yml` declares `cogito-uptime-kuma`
+      (`louislam/uptime-kuma:2`, port 3001, volume `uptime-kuma-data`) at
+      `status.cogitoacademy.id`; recreated in the `cogito-prod` project by
+      INFRA-AUTOMATION (2026-09-02)**
+- [x] Configure Uptime Kuma monitors (health, frontend, alerting) — **LIVE
+      since 2026-09-02 (operator): 4 monitors (`api-health`, `web-app`,
+      `DLQ DEPTH`, `COGITO ACADEMY` group) + `COGITO ALERT` Discord attached —
+      see `docs/KUMA-RUNBOOK.md`**
+- [x] Create public status page — **LIVE since 2026-09-02 (operator):
+      `cogito` status page published at `status.cogitoacademy.id` with the
+      three service monitors — see `docs/KUMA-RUNBOOK.md`**
 - [ ] Configure Coolify built-in health checks + resource alerts
 
 ### 4.4 Security

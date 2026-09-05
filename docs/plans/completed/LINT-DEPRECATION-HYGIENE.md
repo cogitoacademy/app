@@ -125,10 +125,10 @@ Decision (user principle: _correct & secure, no premature churn_), per category:
 - `no-await-in-loop` (53): **intentional** — sequential money/DB writes; do NOT parallelize (money correctness). Add a category-wide comment in CI lint step docs, or demote in CI via `--config` if it can be scoped to tests; otherwise leave as warnings and document in CI-SANITY.
 - `consistent-function-scoping` (35): triage only where the scoped function touches closures incorrectly; otherwise documented as style. No churn.
 - `no-underscore-dangle` (13): leave (convention for `_`-prefixed internals).
-- `prefer-add-event-listener` (11): fix `apps/web/public/tweaks-bar.js` mechanically (`el.onX = fn` → `addEventListener`). Low-risk, do it.
+- `prefer-add-event-listener` (11): **OBSOLETE 2026-09-05** — `apps/web/public/tweaks-bar.js` was deleted in #152 (550-line removal; the 11 warnings lived in that file). Repo-wide `bunx oxlint@1.80.0` reports zero `prefer-add-event-listener` warnings, so there is nothing left to fix and the file must not be resurrected for lint purposes. The DEV-only `/tweaks-bar.js` script mount in `guide-page.tsx` is a harmless dangling reference (a missing dev script 404s without breaking the page) and stays untouched — frontend-owner nit.
 - `no-useless-constructor` (4), `no-shadow` (2), singletons (1 each): fix opportunistically in the same PR as tasks above.
 
-- [ ] **Step 1:** Fix `tweaks-bar.js` addEventListener (11 warnings) + the 4 useless constructors + 2 shadows in the same worker PR as Task 2/3.
+- [ ] **Step 1:** Fix the 4 useless constructors + 2 shadows in the same worker PR as Task 2/3. (`tweaks-bar.js` addEventListener is obsolete — file deleted in #152, verified zero `prefer-add-event-listener` warnings repo-wide 2026-09-05.)
 - [ ] **Step 2:** Document the _intentional_ warning classes in `docs/plans/active/CI-SANITY.md` (F-list) so they never read as unsurfaced errors.
 - [ ] **Step 3:** Commit + docs.
 
@@ -172,3 +172,7 @@ Merge order: W1 → W2 → W3 → lead re-bump (each gated by CI green; the pin 
 - `Date.now`-in-render fixes can change timer behavior if the shared 30s clock pattern isn't reused correctly — verify countdown copy still ticks.
 - Re-bump may surface NEW 1.80 rules not in today's inventory — triage them at Task 4 time (fix if trivial, else document + keep pin partial).
 - Ansible group rename touches inventory + playbooks + group_vars in one atomic change (no partial states).
+
+## Close-out (2026-09-05, observability-stability wave)
+
+Task 5 (`tweaks-bar.js` addEventListener) is **obsolete**: the file was deleted in #152 and repo-wide `prefer-add-event-listener` count is 0. Tasks 1–2 descoped (user decision), 3/4/6 done, 7 done via wave docs-sync. **Plan CLOSED** — no open lint work remains.

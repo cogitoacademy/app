@@ -5,6 +5,7 @@ import { onError, ORPCError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
 import { log as appLog } from "@cogito-app/api/lib/logger";
 import { generateRequestId } from "@cogito-app/api/lib/request-id";
+import { getTrace } from "@cogito-app/api/lib/trace";
 import { identifyUser as identifyUserFromSession } from "evlog/better-auth";
 import {
   MAX_BODY_BYTES,
@@ -28,7 +29,14 @@ export function logRpcError(
     typeof headerRequestId === "string" ? headerRequestId : generateRequestId();
   const path = options?.request.url.pathname ?? "/rpc";
   const method = options?.request.method ?? "POST";
-  const common = { requestId, path, method };
+  const trace = getTrace();
+  const common = {
+    requestId,
+    ...(trace?.traceId ? { traceId: trace.traceId } : {}),
+    ...(trace?.userId ? { userId: trace.userId } : {}),
+    path,
+    method,
+  };
   if (error instanceof ORPCError) {
     appLog({
       level: "warn",
@@ -84,6 +92,10 @@ export function registerRpcRoutes(app: EvlogApp) {
       const ctx = await createContext({ context });
       if (ctx.session) {
         requestUserId.set(context.request, ctx.session.user.id);
+        // T1: attach the authenticated user to the seeded trace scope so
+        // downstream services see both traceId and userId via getTrace().
+        const trace = getTrace();
+        if (trace && !trace.userId) trace.userId = ctx.session.user.id;
         identifyUserFromSession(context.log, ctx.session, {
           maskEmail: true,
         });

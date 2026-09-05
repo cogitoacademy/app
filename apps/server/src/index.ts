@@ -4,6 +4,7 @@ import { env } from "@cogito-app/env/server";
 import { isProductionLike } from "@cogito-app/env/node-env";
 import {
   setAuthEmailSender,
+  setAuthSecondaryStorageRedis,
   setVerificationEmailSender,
 } from "@cogito-app/auth";
 import { buildResetPasswordEmail } from "@cogito-app/auth/reset-password-email";
@@ -78,6 +79,13 @@ const app = createServer();
 const port = env.PORT;
 
 const { services } = await import("@cogito-app/api/services");
+
+// R1: Redis-backed Better Auth sessions (DB-backed). Reads come from Redis
+// with database fallback; revokes clear both stores. The adapter degrades
+// (warn, no throw) when Redis is unreachable, so logins never 500.
+const { getRedisClient: getSharedRedisClient } =
+  await import("@cogito-app/api/lib/redis");
+setAuthSecondaryStorageRedis(getSharedRedisClient());
 
 // Xendit Test/Live is selected by the API key, while XENDIT_MODE records the
 // intended deployment mode and drives the production UAT allowlist. Midtrans

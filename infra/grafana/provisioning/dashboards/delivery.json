@@ -1,0 +1,60 @@
+{
+  "uid": "cogito-delivery",
+  "title": "Delivery",
+  "description": "Deploys, backups, DLQ and circuit breakers — did the release land and is anything stuck?",
+  "tags": ["cogito", "delivery"],
+  "timezone": "Asia/Jakarta",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": { "from": "now-24h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "How to read this board",
+      "type": "text",
+      "gridPos": { "h": 5, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "markdown",
+        "content": "Deploys: verify `/health.version == GIT_SHA` after each CD run (see RUNBOOK redeploy procedure). Backups: nightly 02:00 WIB `pg_dump -Fc` → R2 `cogito-backups`, log `/var/log/cogito-backup.log`. DLQ: age-aware `dlq_fresh_depth` (24h window) — a fresh failure trips the Kuma `dlqDepth` keyword monitor. Breakers: `breaker_state{name}` 0 = closed (healthy), 1 = open."
+      }
+    },
+    {
+      "id": 2,
+      "title": "DLQ fresh depth",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "dlq_fresh_depth",
+          "legendFormat": "fresh failures"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Circuit breaker state",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+      "targets": [
+        { "refId": "A", "expr": "breaker_state", "legendFormat": "{{name}}" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "API error rate (deploy canary)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 13 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * sum(rate(http_requests_total{status=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m]))",
+          "legendFormat": "5xx % (spike after a deploy = roll back)"
+        }
+      ]
+    }
+  ]
+}

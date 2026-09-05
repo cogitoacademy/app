@@ -21,6 +21,10 @@
 #     already exclude images in use by running containers; the explicit
 #     cogitoacademy/app keep-list below is belt-and-braces for the CD
 #     rollback path (migrate-and-deploy.sh rolls back to v<PREV_GIT_SHA>).
+#   - Every run appends one heartbeat line
+#     (`heartbeat disk_pct=X verdict=ok|warn|pruned`) to the log so
+#     log-shipping (and the operator) can tell "watchdog alive" apart
+#     from "watchdog silent because the disk is fine".
 #   - Every action is logged to /var/log/cogito-disk-gc.log (rotated, 7 kept).
 #
 # Rationale: Coolify's built-in docker_cleanup (threshold 80, daily) failed
@@ -130,7 +134,9 @@ fi
 usage="$(usage_pct)"
 log "check: disk at ${usage}% (warn >= ${WARN_THRESHOLD}, prune >= ${PRUNE_THRESHOLD})"
 
+verdict="ok"
 if [[ "$usage" -ge "$PRUNE_THRESHOLD" ]] || [[ "$FORCE_PRUNE" -eq 1 ]]; then
+  verdict="pruned"
   prune_ladder
   usage="$(usage_pct)"
   if [[ "$usage" -ge "$PRUNE_THRESHOLD" ]]; then
@@ -139,7 +145,12 @@ if [[ "$usage" -ge "$PRUNE_THRESHOLD" ]] || [[ "$FORCE_PRUNE" -eq 1 ]]; then
     discord "VPS disk recovered to ${usage}% after auto-prune"
   fi
 elif [[ "$usage" -ge "$WARN_THRESHOLD" ]]; then
+  verdict="warn"
   discord "VPS disk at ${usage}% — cleanup recommended"
 fi
+
+# Heartbeat: one grep-able line per run for Loki/log-shipping and the
+# operator's "is the watchdog alive?" check (M3).
+log "heartbeat disk_pct=${usage} verdict=${verdict}"
 
 exit 0

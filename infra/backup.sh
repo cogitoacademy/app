@@ -29,6 +29,15 @@
 #   PRE_MIGRATE_KEEP      Keep only the newest N CD pre-migrate snapshots
 #                         (default: 7). Pruned by the nightly cron alongside
 #                         the daily dumps.
+#   DISCORD_WEBHOOK_URL   Optional Discord webhook URL for the failure
+#                         self-check: dump/upload/verify failures post a
+#                         CRITICAL alert (bearer secret — never echoed).
+#                         When unset, failures are loud on stderr + exit 1.
+#
+# Failure self-check: any failing step (dump, upload, verify, prune) posts a
+# Discord CRITICAL alert naming the step, so a silent cron failure cannot go
+# unnoticed. Preflight problems (missing env, unresolvable DB host, empty
+# dump) abort loudly before any snapshot/upload via fail() below.
 #
 # Usage:
 #   infra/backup.sh            # run the backup
@@ -54,11 +63,43 @@ if [[ "${1:-}" == "--dry-run" ]]; then
   DRY_RUN=1
 fi
 
+# --- Failure self-check ------------------------------------------------------
+# STEP names the phase for the Discord alert. The ERR trap catches failing
+# commands (dump/upload/verify/prune); fail() covers the explicit preflight
+# exits, which `exit` would otherwise take past the trap silently.
+STEP="preflight"
+discord_alert() {
+  local content="$1"
+  if [[ -z "${DISCORD_WEBHOOK_URL:-}" ]]; then
+    return 0
+  fi
+  # The URL is fed to curl via a stdin config file (-K -), never argv, so it
+  # cannot appear in `ps` output.
+  printf 'url = "%s"\n' "${DISCORD_WEBHOOK_URL}" | \
+    curl --fail --silent --show-error --max-time 15 -K - \
+    -H "Content-Type: application/json" \
+    -d "{\"content\": $(printf '%s' "$content" | python3 -c 'import json,sys;print(json.dumps(sys.stdin.read()))')}" \
+    >/dev/null 2>&1 \
+    || echo "WARN: Discord alert post failed (curl rc=$?)" >&2
+}
+backup_failed() {
+  local rc=$?
+  trap - ERR
+  echo "ERROR: nightly backup FAILED during ${STEP} (rc=${rc})" >&2
+  discord_alert "CRITICAL: nightly backup FAILED during ${STEP} (rc=${rc}) — operator action required (check cron output / R2 bucket)"
+  exit "${rc}"
+}
+trap 'backup_failed' ERR
+fail() {
+  echo "ERROR: $*" >&2
+  discord_alert "CRITICAL: nightly backup FAILED during ${STEP}: $*"
+  exit 1
+}
+
 # --- Required environment ---------------------------------------------------
 for var in DATABASE_URL R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY; do
   if [[ -z "${!var:-}" ]]; then
-    echo "ERROR: $var is not set" >&2
-    exit 1
+    fail "$var is not set"
   fi
 done
 
@@ -77,8 +118,8 @@ R2_KEY="backups/${TODAY}.sql.gz"
 
 # --- Fail loud if the CLI tools are missing ---------------------------------
 if [[ "${DRY_RUN}" -eq 0 ]]; then
-  command -v pg_dump >/dev/null 2>&1 || { echo "ERROR: pg_dump not found (install postgresql-client)" >&2; exit 1; }
-  command -v aws >/dev/null 2>&1 || { echo "ERROR: aws CLI not found (install awscli v2)" >&2; exit 1; }
+  command -v pg_dump >/dev/null 2>&1 || fail "pg_dump not found (install postgresql-client)"
+  command -v aws >/dev/null 2>&1 || fail "aws CLI not found (install awscli v2)"
 fi
 
 # --- 0. Resolve the DB host (Coolify-private hostname -> container IP) ------
@@ -93,8 +134,7 @@ if ! (command -v getent >/dev/null 2>&1 && getent hosts "$db_host" >/dev/null 2>
     DATABASE_URL="$(printf '%s' "$DATABASE_URL" | sed "s#@${db_host}:#@${db_ip}:#")"
     echo "==> resolved private DB host ${db_host} -> ${db_ip}"
   else
-    echo "ERROR: cannot resolve DB host '${db_host}' (getent + docker inspect both failed)" >&2
-    exit 1
+    fail "cannot resolve DB host '${db_host}' (getent + docker inspect both failed)"
   fi
 fi
 
@@ -136,22 +176,24 @@ if [[ "${DRY_RUN}" -eq 1 ]]; then
 fi
 
 echo "==> Dumping database and compressing (${TODAY})"
+STEP="dump"
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "${WORK_DIR}"' EXIT
 cd "${WORK_DIR}"
 eval "${dump_cmd}"
 
 if [[ ! -s "${LOCAL_FILE}" ]]; then
-  echo "ERROR: backup file is empty; aborting before any upload" >&2
-  exit 1
+  fail "backup file is empty; aborting before any upload"
 fi
 ls -lh "${LOCAL_FILE}"
 
 echo "==> Uploading to s3://${R2_BACKUP_BUCKET}/${R2_KEY}"
+STEP="upload"
 eval "${upload_cmd}"
 eval "${verify_cmd}" >/dev/null
 
 echo "==> Pruning backups older than ${RETENTION_DAYS} days"
+STEP="prune"
 # s3 ls line format: "2026-08-27 02:00:00     123456 backups/2026-08-26.sql.gz"
 now_epoch="$(date +%s)"
 pruned=0

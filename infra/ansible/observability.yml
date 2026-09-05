@@ -1,0 +1,504 @@
+# observability.yml — declare the tailnet-only PLG observability stack via
+# the Coolify API, idempotently (same control-node pattern as uptime-kuma.yml).
+#
+# WHAT THIS PLAYBOOK DECLARES (drift-check source of truth):
+#   1. Coolify *services* in the `cogito` project / `production` environment
+#      (the same project the app resources live in):
+#        - `cogito-loki`        (grafana/loki, volume `loki-data`)
+#        - `cogito-prometheus`  (prom/prometheus, volume `prometheus-data`)
+#        - `cogito-grafana`     (grafana/grafana, volume `grafana-data`,
+#          TAILNET-ONLY — no public domain, ever; see below)
+#        - `cogito-alloy`       (bundle: Alloy log shipper + node_exporter +
+#          cAdvisor; stateless, no volumes)
+#      Each service is created from `docker_compose_raw` (custom images — the
+#      one-click `type` template key is only for Kuma-style services; `type`
+#      and `docker_compose_raw` are mutually exclusive). If a service already
+#      exists, the playbook compares the declared name against the live state
+#      and PATCHes drift. Deploys are NOT re-triggered on drift (only on
+#      first creation, via instant_deploy).
+#   2. Drift: re-runs change nothing once every service matches.
+#
+# TAILNET-ONLY (hard requirement): no observability service gets a public
+# domain (`urls: []`). Grafana in particular must never have a public log UI.
+# The operator reaches Grafana over the tailnet (http://<tailnet-ip>:3000)
+# or an SSH tunnel. The `urls: []` declaration is drift-checked: if anyone
+# attaches a public domain in the UI, the next run PATCHes it back to [].
+#
+# PROVISIONED FILES (source of truth in git, placed on the VPS once by the
+# operator — the playbook prints the exact commands, it never SSHs itself):
+#   infra/prometheus/prometheus.yml                  -> /etc/cogito/observability/prometheus/prometheus.yml
+#   infra/loki/loki-config.yml                       -> /etc/cogito/observability/loki/loki-config.yml
+#   infra/alloy/config.alloy                         -> /etc/cogito/observability/alloy/config.alloy
+#   infra/grafana/provisioning/**                    -> /etc/cogito/observability/grafana/provisioning/
+#   vault METRICS_TOKEN (file, never the value)      -> /etc/cogito/observability/prometheus/metrics_token (0600)
+# The compose blocks below bind-mount exactly these host paths (the same
+# /etc/cogito/... convention as the disk-watchdog env file).
+#
+# RETENTION (vars — the single place ops tunes them):
+#   LOKI_RETENTION_DAYS=30  (mirrored in infra/loki/loki-config.yml:
+#     limits_config.retention_period 720h + compactor retention_enabled —
+#     keep the file in sync when changing the var)
+#   PROM_RETENTION_DAYS=15  (rendered into the prometheus compose as
+#     --storage.tsdb.retention.time={{ PROM_RETENTION_DAYS }}d)
+# Lean fallback for a tight VPS (documented in RUNBOOK, not applied here):
+# scrape_interval 30s + Prometheus retention 7d.
+#
+# SCRAPE: api /metrics (Bearer from the vault token file, 15s interval,
+# 10s timeout), node_exporter :9100, cAdvisor :8080. Internal hostnames are
+# the Compose service names on the shared Coolify Docker network; if Coolify
+# isolates service networks, point them at the tailnet IPs (comment in each
+# provisioned file).
+#
+# A3: Alloy ships logs via `loki.source.docker_logs` (Docker API discovery
+# over the read-only socket mount) — NEVER file globs under
+# /var/lib/docker. (cAdvisor's read-only /var/lib/docker mount is its
+# documented metadata requirement, not log shipping; logs stay API-only.)
+#
+# WHY CONTROL-NODE DRIVEN: identical to uptime-kuma.yml — the Coolify API
+# (:8000) is reachable only from the tailnet/tunnel, and the SOPS Age key
+# lives on the operator machine. This playbook runs entirely on the control
+# node (hosts: localhost) and never SSH-installs anything onto the VPS.
+#
+# COOLIFY API SURFACE (same verified v4.3.14 surface as uptime-kuma.yml):
+#   - GET  /api/v1/services            -> list (name, uuid, ...)
+#   - GET  /api/v1/services/{uuid}    -> detail
+#   - POST /api/v1/services           -> create (docker_compose_raw path for
+#        custom images; mutually exclusive with the one-click `type` key)
+#   - PATCH /api/v1/services/{uuid}   -> update (name, description,
+#        docker_compose_raw, urls, ...)
+# IMAGE TAGS were pinned at authoring time; the operator confirms they
+# resolve on first apply and records digests then (no live apply from here).
+#
+# SECRETS: METRICS_TOKEN + DISCORD_WEBHOOK_URL are read from the SOPS vault
+# by NAME only (presence-asserted, never echoed, no_log on every
+# secret-bearing call). The Grafana admin password is set by the operator in
+# the Coolify UI (service env GF_SECURITY_ADMIN_PASSWORD) — never in git.
+# Grafana alerting to Discord (contact point with the vault webhook URL) is a
+# Grafana-UI step like the Kuma monitors — the Coolify API cannot express it;
+# the playbook prints the steps.
+#
+# RUN (from the repository root; sops + python3 on the control node, tunnel up):
+#   ssh -i ~/.ssh/cogito_vps -f -N -L 8000:127.0.0.1:8000 ubuntu@<tailnet-ip>
+#   ansible-playbook --syntax-check -i infra/ansible/inventory.ini \
+#     infra/ansible/observability.yml
+#   ansible-playbook -i infra/ansible/inventory.ini \
+#     infra/ansible/observability.yml --check   # structure only (uri makes no
+#                                               # requests in check mode)
+#   ansible-playbook -i infra/ansible/inventory.ini \
+#     infra/ansible/observability.yml           # idempotent apply
+#
+# IDEMPOTENCE: every write is conditional on a prior GET, so re-runs change
+# nothing once the services match the declaration.
+---
+- name: Declare the tailnet-only observability stack (control-node driven)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    # Coolify API endpoint via the SSH tunnel (same as uptime-kuma.yml).
+    coolify_api_url: "http://localhost:8000/api/v1"
+    # SOPS-encrypted vault, resolved relative to the playbook.
+    vault_path: "{{ playbook_dir }}/../secrets/prod.env"
+    project_name: "cogito-prod"
+    environment_name: "production"
+    server_ip: "15.235.186.159"
+
+    # --- Retention (single ops tuning point; see header) ---
+    loki_retention_days: 30
+    prom_retention_days: 15
+
+    # Pinned image tags at authoring time (operator confirms on apply).
+    loki_image: "grafana/loki:3.4.0"
+    prometheus_image: "prom/prometheus:v3.2.1"
+    grafana_image: "grafana/grafana:11.5.2"
+    alloy_image: "grafana/alloy:v1.7.4"
+    node_exporter_image: "prom/node-exporter:v1.9.0"
+    cadvisor_image: "gcr.io/cadvisor/cadvisor:v0.52.1"
+
+    # --- Declared services (drift-check source of truth) ---
+    observability_services:
+      - name: "cogito-loki"
+        description: "Cogito Loki log store (30d retention, tailnet-only). Declared by infra/ansible/observability.yml."
+        urls: []
+        docker_compose_raw: |
+          services:
+            loki:
+              image: "grafana/loki:3.4.0"
+              command: "-config.file=/etc/loki/loki-config.yml"
+              volumes:
+                - "loki-data:/loki"
+                - "/etc/cogito/observability/loki/loki-config.yml:/etc/loki/loki-config.yml:ro"
+              mem_limit: 300m
+              restart: unless-stopped
+          volumes:
+            loki-data:
+              name: loki-data
+      - name: "cogito-prometheus"
+        description: "Cogito Prometheus metrics store (15d retention, tailnet-only). Declared by infra/ansible/observability.yml."
+        urls: []
+        docker_compose_raw: |
+          services:
+            prometheus:
+              image: "prom/prometheus:v3.2.1"
+              command:
+                - "--config.file=/etc/prometheus/prometheus.yml"
+                - "--storage.tsdb.path=/prometheus"
+                - "--storage.tsdb.retention.time=15d"
+                - "--web.enable-lifecycle"
+              volumes:
+                - "prometheus-data:/prometheus"
+                - "/etc/cogito/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro"
+                - "/etc/cogito/observability/prometheus/metrics_token:/etc/prometheus/metrics_token:ro"
+              mem_limit: 256m
+              restart: unless-stopped
+          volumes:
+            prometheus-data:
+              name: prometheus-data
+      - name: "cogito-grafana"
+        description: "Cogito Grafana (TAILNET-ONLY, no public domain). Declared by infra/ansible/observability.yml."
+        urls: []
+        docker_compose_raw: |
+          services:
+            grafana:
+              image: "grafana/grafana:11.5.2"
+              environment:
+                GF_SECURITY_ADMIN_USER: admin
+                GF_USERS_ALLOW_SIGN_UP: "false"
+                GF_AUTH_ANONYMOUS_ENABLED: "false"
+                GF_SERVER_HTTP_PORT: "3000"
+                GF_PATHS_PROVISIONING: /etc/grafana/provisioning
+              volumes:
+                - "grafana-data:/var/lib/grafana"
+                - "/etc/cogito/observability/grafana/provisioning:/etc/grafana/provisioning:ro"
+              mem_limit: 256m
+              restart: unless-stopped
+          volumes:
+            grafana-data:
+              name: grafana-data
+      - name: "cogito-alloy"
+        description: "Cogito Alloy log shipper + node_exporter + cAdvisor (Docker API discovery only, tailnet-only). Declared by infra/ansible/observability.yml."
+        urls: []
+        docker_compose_raw: |
+          services:
+            alloy:
+              image: "grafana/alloy:v1.7.4"
+              command: "run /etc/alloy/config.alloy"
+              volumes:
+                - "/etc/cogito/observability/alloy/config.alloy:/etc/alloy/config.alloy:ro"
+                - "/var/run/docker.sock:/var/run/docker.sock:ro"
+              mem_limit: 128m
+              restart: unless-stopped
+            node-exporter:
+              image: "prom/node-exporter:v1.9.0"
+              container_name: cogito-node-exporter
+              command:
+                - "--path.rootfs=/host"
+              volumes:
+                - "/:/host:ro,rslave"
+                - "/proc:/host/proc:ro"
+                - "/sys:/host/sys:ro"
+              mem_limit: 64m
+              pid: host
+              restart: unless-stopped
+            cadvisor:
+              image: "gcr.io/cadvisor/cadvisor:v0.52.1"
+              container_name: cogito-cadvisor
+              volumes:
+                - "/:/rootfs:ro"
+                - "/var/run:/var/run:ro"
+                - "/sys:/sys:ro"
+                - "/var/lib/docker/:/var/lib/docker:ro"
+                - "/dev/disk/:/dev/disk:ro"
+              mem_limit: 128m
+              privileged: true
+              restart: unless-stopped
+
+  tasks:
+    # Check mode: the `uri` module performs no requests in check mode, so the
+    # API flow cannot run. `--check` validates structure and ends cleanly.
+    - name: Check mode — structure validated, API flow skipped
+      ansible.builtin.debug:
+        msg: >-
+          Running with --check: the Coolify API flow is skipped (uri performs
+          no requests in check mode). This run validated the playbook
+          structure only. Run without --check to apply.
+      when: ansible_check_mode
+
+    - name: End the play in check mode
+      ansible.builtin.meta: end_play
+      when: ansible_check_mode
+
+    # --- 0. Vault: decrypt + parse on the control node (never on the VPS) ---
+    - name: Decrypt the SOPS vault on the control node
+      ansible.builtin.command: sops -d {{ vault_path }}
+      changed_when: false
+      no_log: true
+      register: vault_plaintext
+      environment:
+        PATH: "{{ lookup('env', 'PATH') }}:/opt/homebrew/bin:/usr/local/bin"
+        SOPS_AGE_KEY_FILE: "{{ lookup('env', 'SOPS_AGE_KEY_FILE') | default(lookup('env', 'HOME') + '/.config/sops/age/keys.txt', true) }}"
+
+    - name: Create a temp file for the decrypted vault
+      ansible.builtin.tempfile:
+        state: file
+        suffix: .env
+      register: vault_tmpfile
+
+    - name: Write the decrypted vault to the temp file
+      ansible.builtin.copy:
+        dest: "{{ vault_tmpfile.path }}"
+        content: "{{ vault_plaintext.stdout }}"
+      no_log: true
+
+    - name: Parse the vault into a JSON fact
+      ansible.builtin.command: >-
+        python3 -c "import json,sys;
+        print(json.dumps({l.split('=',1)[0].strip(): l.split('=',1)[1].strip().strip(chr(34)).strip(chr(39))
+        for l in open(sys.argv[1])
+        if l.strip() and not l.strip().startswith('#') and '=' in l}))"
+        {{ vault_tmpfile.path }}
+      changed_when: false
+      no_log: true
+      register: vault_json
+
+    - name: Remove the temp vault file
+      ansible.builtin.file:
+        path: "{{ vault_tmpfile.path }}"
+        state: absent
+
+    - name: Load the vault as a fact
+      ansible.builtin.set_fact:
+        vault_env: "{{ vault_json.stdout | from_json }}"
+
+    - name: Require COOLIFY_API_TOKEN in the vault
+      ansible.builtin.assert:
+        that:
+          - vault_env.COOLIFY_API_TOKEN is defined
+          - vault_env.COOLIFY_API_TOKEN | length > 0
+        fail_msg: >-
+          COOLIFY_API_TOKEN is missing from {{ vault_path }} — create a Coolify
+          API token (Coolify UI → Keys & Tokens → API tokens, `deploy`
+          permission) and add it to the SOPS vault.
+
+    # --- 0b. Vault keys consumed by NAME only (values never echoed) ---
+    - name: Check whether METRICS_TOKEN is in the vault
+      ansible.builtin.set_fact:
+        metrics_token_present: "{{ vault_env.METRICS_TOKEN is defined and vault_env.METRICS_TOKEN | length > 0 }}"
+
+    - name: OPERATOR ACTION REQUIRED — add METRICS_TOKEN to the vault
+      ansible.builtin.debug:
+        msg: |-
+          !!! METRICS_TOKEN is NOT in the SOPS vault ({{ vault_path }}).
+          Prometheus scrapes the API /metrics with this Bearer token (via the
+          token file provisioned below). Without it the cogito-api target
+          stays DOWN (401) — the API itself is unaffected.
+            1. Generate: openssl rand -hex 32
+            2. Add BOTH to the vault + the API env (same value):
+                 sops infra/secrets/prod.env
+                 # add: METRICS_TOKEN=<hex>
+               (coolify-resources.yml already applies METRICS_TOKEN to
+               cogito-api from the vault.)
+            3. Re-run this playbook, then provision the token file per the
+               config-placement steps below.
+          This playbook never invents or echoes the token.
+      when: not metrics_token_present
+
+    - name: Check whether DISCORD_WEBHOOK_URL is in the vault
+      ansible.builtin.set_fact:
+        discord_webhook_present: "{{ vault_env.DISCORD_WEBHOOK_URL is defined and vault_env.DISCORD_WEBHOOK_URL | length > 0 }}"
+
+    - name: OPERATOR ACTION REQUIRED — add DISCORD_WEBHOOK_URL to the vault
+      ansible.builtin.debug:
+        msg: |-
+          !!! DISCORD_WEBHOOK_URL is NOT in the SOPS vault ({{ vault_path }}).
+          The stack can be declared without it, but NO Discord alerts will
+          fire until the operator adds it (same steps as the Kuma playbook):
+                  sops infra/secrets/prod.env
+                  # add: DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+          then wires it as the Grafana Discord contact point per the runbook
+          steps below. This playbook never invents or echoes the URL.
+      when: not discord_webhook_present
+
+    # --- 1. Project + environment + server lookup (create if missing) ---
+    - name: List Coolify projects
+      ansible.builtin.uri:
+        url: "{{ coolify_api_url }}/projects"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ vault_env.COOLIFY_API_TOKEN }}"
+        status_code: 200
+      register: projects
+      no_log: true
+
+    - name: Find the project by name
+      ansible.builtin.set_fact:
+        project_found: "{{ projects.json | selectattr('name', 'equalto', project_name) | list }}"
+
+    - name: Create the project if missing
+      ansible.builtin.uri:
+        url: "{{ coolify_api_url }}/projects"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ vault_env.COOLIFY_API_TOKEN }}"
+        body:
+          name: "{{ project_name }}"
+        body_format: json
+        status_code: 201
+      register: project_created
+      no_log: true
+      when: project_found | length == 0
+
+    - name: Resolve the project UUID
+      ansible.builtin.set_fact:
+        project_uuid: "{{ project_found[0].uuid if project_found | length > 0 else project_created.json.uuid }}"
+
+    - name: List environments in the project
+      ansible.builtin.uri:
+        url: "{{ coolify_api_url }}/projects/{{ project_uuid }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ vault_env.COOLIFY_API_TOKEN }}"
+        status_code: 200
+      register: project_detail
+      no_log: true
+
+    - name: Find the production environment
+      ansible.builtin.set_fact:
+        env_found: "{{ project_detail.json.environments | default([]) | selectattr('name', 'equalto', environment_name) | list }}"
+
+    - name: Create the production environment if missing
+      ansible.builtin.uri:
+        url: "{{ coolify_api_url }}/projects/{{ project_uuid }}/environments"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ vault_env.COOLIFY_API_TOKEN }}"
+        body:
+          name: "{{ environment_name }}"
+        body_format: json
+        status_code: 201
+      register: env_created
+      no_log: true
+      when: env_found | length == 0
+
+    - name: Resolve the environment UUID
+      ansible.builtin.set_fact:
+        environment_uuid: "{{ env_found[0].uuid if env_found | length > 0 else env_created.json.uuid }}"
+
+    - name: List Coolify servers
+      ansible.builtin.uri:
+        url: "{{ coolify_api_url }}/servers"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ vault_env.COOLIFY_API_TOKEN }}"
+        status_code: 200
+      register: servers
+      no_log: true
+
+    - name: Resolve the VPS server UUID
+      ansible.builtin.set_fact:
+        # The Coolify host server is registered as "localhost" with
+        # ip=host.docker.internal (verified live 2026-08-31) — match the
+        # Coolify-host server; fall back to an IP match for multi-server setups.
+        server_uuid: "{{ (servers.json | selectattr('is_coolify_host', 'equalto', true) | first).uuid if (servers.json | selectattr('is_coolify_host', 'equalto', true) | list | length) > 0 else (servers.json | selectattr('ip', 'equalto', server_ip) | first).uuid }}"
+
+    # --- 2. The four services: create when missing, PATCH drift ------------
+    - name: List Coolify services
+      ansible.builtin.uri:
+        url: "{{ coolify_api_url }}/services"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ vault_env.COOLIFY_API_TOKEN }}"
+        status_code: 200
+      register: services_live
+      no_log: true
+
+    - name: Declare each observability service (create when missing, PATCH drift)
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/observability-service.yml"
+      loop: "{{ observability_services }}"
+      loop_control:
+        loop_var: obs_spec
+
+    # --- 3. Config placement (operator machine step, printed exactly) ------
+    - name: Print the config-placement steps (provisioned files -> VPS)
+      ansible.builtin.debug:
+        msg: |-
+          The compose blocks above bind-mount host paths under
+          /etc/cogito/observability/. Place the provisioned files ONCE from
+          the operator machine (repo root; the secret travels via pipe, never
+          argv, never echoed):
+
+            ssh ubuntu@<tailnet-ip> 'sudo mkdir -p /etc/cogito/observability/{loki,prometheus,alloy,grafana/provisioning} && sudo chown -R ubuntu:ubuntu /etc/cogito/observability'
+            scp infra/loki/loki-config.yml ubuntu@<tailnet-ip>:/etc/cogito/observability/loki/loki-config.yml
+            scp infra/prometheus/prometheus.yml ubuntu@<tailnet-ip>:/etc/cogito/observability/prometheus/prometheus.yml
+            scp infra/alloy/config.alloy ubuntu@<tailnet-ip>:/etc/cogito/observability/alloy/config.alloy
+            scp -r infra/grafana/provisioning/. ubuntu@<tailnet-ip>:/etc/cogito/observability/grafana/provisioning/
+            sops -d infra/secrets/prod.env | grep '^METRICS_TOKEN=' | cut -d= -f2- | ssh ubuntu@<tailnet-ip> 'cat > /etc/cogito/observability/prometheus/metrics_token && chmod 600 /etc/cogito/observability/prometheus/metrics_token'
+
+          Then restart the two config consumers from the Coolify UI
+          (cogito-prometheus, cogito-alloy) or redeploy those services.
+          Retention: Loki 30d (loki-config.yml, keep in sync with
+          loki_retention_days=30), Prometheus 15d (--storage.tsdb.
+          retention.time=15d, from prom_retention_days=15).
+
+    # --- 4. Verify (report-only commands for the operator) -----------------
+    - name: Print the verification steps (operator, after apply)
+      ansible.builtin.debug:
+        msg: |-
+          Verify WITHOUT exposing anything publicly (all tailnet/tunnel):
+
+            1. Grafana login (tailnet-only, port 3000 — admin password was set
+               in the Coolify UI as GF_SECURITY_ADMIN_PASSWORD):
+                 ssh -i ~/.ssh/cogito_vps -f -N -L 3000:127.0.0.1:3000 ubuntu@<tailnet-ip>
+                 open http://localhost:3000  # datasources Loki + Prometheus pre-provisioned
+            2. LogQL trace search (no SSH log-grepping):
+                 {service="cogito-app-server"} |= "traceId"
+                 # or: ./infra/ops.sh trace <traceId>  (prints the Explore URL)
+                 Logs carry userId, never email.
+            3. Prometheus targets UP (tunnel 9090 the same way):
+                 open http://localhost:9090/targets  # cogito-api, node-exporter, cadvisor all UP
+            4. Retention flags:
+                 Loki: 30d (config retention_period 720h); Prometheus: 15d
+                 (--storage.tsdb.retention.time=15d in the service command).
+            5. Discord test alert: Grafana Alerting -> contact point (Discord
+               webhook from the vault) -> Test. Kuma + watchdog alerting is
+               unchanged.
+
+    # --- 5. Grafana alerting (Grafana UI, not API-expressible) -------------
+    - name: Print the Grafana alerting setup steps (Grafana UI, not API-expressible)
+      ansible.builtin.debug:
+        msg: |-
+          Grafana contact points and alert rules live in Grafana's own
+          database — the Coolify API cannot express them (same situation as
+          the Kuma monitors). After first login, open the tailnet Grafana and
+          create:
+
+            1. Contact point: Alerting -> Contact points -> New (Discord),
+               paste the DISCORD_WEBHOOK_URL from the SOPS vault (key
+               DISCORD_WEBHOOK_URL; the operator adds it — see the vault
+               instruction above). Set it as the default receiver.
+            2. Alert rules (Cogito folder, evaluate every 1m):
+               - DLQFresh: expr `dlq_fresh_depth > 0` for 5m (a FRESH DLQ
+                 failure landed in the last 24h — same signal as the Kuma
+                 dlqDepth keyword monitor).
+               - DiskWarn: expr disk % >= 85 for 10m (mirrors the watchdog
+                 warn line); DiskCrit: >= 92 for 5m (mirrors auto-prune).
+               - ApiErrors: expr 5xx % > 1 for 5m (deploy canary — see the
+                 Delivery dashboard).
+            3. Dashboards are pre-provisioned (App RED, Logs & Traces, Infra,
+               Delivery under the Cogito folder). Do not edit them in the UI
+               (allowUiUpdates: false) — iterate in
+               infra/grafana/provisioning/dashboards/ instead.
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg: >-
+          Declared services cogito-loki / cogito-prometheus / cogito-grafana /
+          cogito-alloy in project={{ project_name }} env={{ environment_name }}
+          server={{ server_uuid }}. Retention Loki {{ loki_retention_days }}d /
+          Prometheus {{ prom_retention_days }}d. Grafana is tailnet-only (no
+          public domain — drift-checked back to []). Secrets: METRICS_TOKEN
+          {{ 'present in the vault — provision the token file per the steps above' if metrics_token_present else 'MISSING — see the loud instruction above' }};
+          Discord alerting:
+          {{ 'webhook present in the vault — wire the Grafana contact point per the steps above' if discord_webhook_present else 'MISSING — operator must add DISCORD_WEBHOOK_URL to the SOPS vault (see the loud instruction above)' }}.
+          Provisioned files + verification: see the steps above.

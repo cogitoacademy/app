@@ -129,3 +129,16 @@ cache dependent.
   mutation limiter. The full booking flow previously exhausted that shared IP
   bucket before the reschedule dialog and returned 429; the path matcher now
   has regression coverage and the local booking flow passes 7/7.
+- 2026-09-05 (observability-stability wave, Task 1 Step 6 — C1 CI-truth verify,
+  read-only): classic branch protection API
+  (`repos/cogitoacademy/app/branches/main/protection`) returns 404 — rulesets
+  are in use instead. Ruleset `main-1` (active) blocks deletion +
+  non-fast-forward on `refs/heads/main`; ruleset `main-2` (active, updated
+  2026-09-04) requires status checks `Lint`, `Type Check`, `Build`,
+  `Test + Coverage`, `label`, **`semantic-pr`** (post-#190 rename confirmed)
+  with `strict_required_status_checks_policy: true` (branches must be up to
+  date). No console change needed — nothing renamed to match.
+  `ACTIONS_BOT_PAT` keep-or-drop decision: **undecided** (no signal either
+  way; still operator-owned with F9/F10).
+
+- 2026-09-05 (observability-stability wave close-out): **plan CLOSED.** All findings implemented or recorded operator-owned (F9 PAT + F10 rulesets verified, no console change needed). Remaining PAT keep-or-drop decision stays operator-owned and is tracked in RUNBOOK/DEPLOYMENT operator checklists, not in an active plan.

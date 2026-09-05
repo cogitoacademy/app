@@ -47,6 +47,7 @@ export function createGoogleMeetingProvider(
   redis?: RedisClient,
 ): MeetingPort {
   const googleMeetBreaker = new CircuitBreaker({
+    name: "google-meet",
     failureThreshold: 5,
     resetTimeoutMs: 60_000,
     halfOpenMaxAttempts: 1,

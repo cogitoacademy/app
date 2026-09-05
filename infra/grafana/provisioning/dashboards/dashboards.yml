@@ -1,0 +1,19 @@
+# dashboards.yml — Grafana dashboard file provider (source of truth in git).
+#
+# Declared by infra/ansible/observability.yml (mounted read-only into
+# `cogito-grafana` at /etc/grafana/provisioning/dashboards/). The four JSON
+# files beside this one are the provisioned dashboards: App RED, Logs &
+# Traces, Infra, Delivery. UI edits are disabled (allowUiUpdates: false) so
+# the files stay the source of truth; iterate in git, not in the UI.
+apiVersion: 1
+
+providers:
+  - name: cogito
+    orgId: 1
+    folder: Cogito
+    type: file
+    disableDeletion: true
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /etc/grafana/provisioning/dashboards
