@@ -22,11 +22,15 @@
 #   ./ops.sh deploy-retry     # re-run the last CD deploy (gh run rerun, or
 #                             # POST the Coolify deploy webhook with Bearer)
 #   ./ops.sh tunnel 5433      # forward a port (default 5433→5432 local)
+#   ./ops.sh trace <traceId>  # Grafana Explore URL for a trace (tailnet-only,
+#                             # no log-grepping; e.g. ./ops.sh trace req_abc)
 #
 # Env (optional overrides):
 #   OPS_VPS       VPS host (default: 15.235.186.159)
 #   OPS_SSH_KEY   SSH private key (default: ~/.ssh/cogito_vps)
 #   OPS_SSH_USER  SSH user (default: ubuntu)
+#   GRAFANA_URL   Tailnet Grafana base URL for `trace`
+#                 (default: http://100.124.43.19:3000)
 set -euo pipefail
 
 OPS_VPS="${OPS_VPS:-100.124.43.19}"
@@ -208,8 +212,25 @@ tunnel() {
   ssh -i "$OPS_SSH_KEY" -o ConnectTimeout=8 "$OPS_SSH_USER@$OPS_VPS" -N -L "$port:localhost:5432"
 }
 
+trace() {
+  # Print the tailnet Grafana Explore URL for a traceId — no SSH
+  # log-grepping. Grafana is tailnet-only (no public log UI); open the URL
+  # over the tailnet, or via `ssh -L 3000:127.0.0.1:3000 ...` first.
+  local trace_id="${1:-}"
+  if [[ -z "$trace_id" ]]; then
+    echo "Usage: $0 trace <traceId>  (e.g. $0 trace req_abc123)" >&2
+    return 1
+  fi
+  local grafana="${GRAFANA_URL:-http://100.124.43.19:3000}"
+  local query left
+  query="{service=\"cogito-app-server\"} |= \"$trace_id\""
+  left="$(TRACE_QUERY="$query" python3 -c 'import json,os,urllib.parse; print(urllib.parse.quote(json.dumps({"datasource":"Loki","queries":[{"expr":os.environ["TRACE_QUERY"],"refId":"A"}]}), safe=""))')"
+  echo "Grafana Explore (tailnet-only): $grafana/explore?orgId=1&left=$left"
+  echo "LogQL: $query"
+}
+
 usage() {
-  sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 case "${1:-}" in
@@ -226,6 +247,7 @@ case "${1:-}" in
   deploy-retry) deploy_retry ;;
   studio) shift; studio "${1:-}" ;;
   tunnel) shift; tunnel "${1:-}" ;;
+  trace) shift; trace "${1:-}" ;;
   help|-h|--help) usage ;;
   *) echo "Unknown command: ${1:-}"; usage; exit 1 ;;
 esac

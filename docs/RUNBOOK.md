@@ -940,12 +940,55 @@ operator's `docker image prune -f` reclaimed the space (99% → 36%, verified
 
 The VPS has 3.8G RAM, **no swap**, and **no container memory limits**
 (verified 2026-09-02: all containers `Memory: 0`). Recommended hardening
-(deferred — operator decision):
+(deferred — operator decision; do NOT apply from a worker — operator
+console/VPS steps, see the checklist in the wave report):
 
 - Add 2G swap: `sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
-&& sudo mkswap /swapfile && sudo swapon /swapfile` (+ fstab entry).
-- Set Coolify per-resource memory limits: API 512M, Redis 256M, Postgres
-  512M, Kuma 256M (Coolify UI → resource → Advanced → Memory limit).
+&& sudo mkswap /swapfile && sudo swapon /swapfile` (+ fstab entry:
+  `echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab`, then verify
+  with `free -m`).
+- Set Coolify per-resource memory limits (Coolify UI → resource → Advanced
+  → Memory limit):
+  - Existing: API 512M, Redis 256M, Postgres 512M, Kuma 256M.
+  - Observability stack (declared by `infra/ansible/observability.yml`;
+    limits are also in each service's compose `mem_limit`, the API-service
+    limit below is the UI step): Loki 300M, Prometheus 256M, Grafana 256M,
+    Alloy 128M, node_exporter 64M, cAdvisor 128M.
+
+### Observability stack (PLG, tailnet-only — declared, not yet applied)
+
+Loki + Prometheus + Grafana + Alloy (+ node_exporter + cAdvisor) are
+declared by [`infra/ansible/observability.yml`](../infra/ansible/observability.yml)
+(2026-09-05, control-node driven like `uptime-kuma.yml`, idempotent). The
+playbook is syntax-checked only — the operator applies it (tunnel up) per
+the printed steps; nothing here was applied from a worker.
+
+- **Tailnet-only (hard requirement):** no observability service has a public
+  domain (`urls: []`, drift-checked). Grafana is reached over the tailnet
+  (`http://<tailnet-ip>:3000`) or an SSH tunnel — there is deliberately no
+  public log UI.
+- **Provisioned files** (source of truth in git; the operator places them
+  once under `/etc/cogito/observability/` per the playbook's printed
+  commands): `infra/prometheus/prometheus.yml` (scrapes api `/metrics` with
+  the vault `METRICS_TOKEN` via a token file, 15s interval; node_exporter +
+  cAdvisor), `infra/loki/loki-config.yml` (30d retention), `infra/alloy/config.alloy`
+  (`loki.source.docker_logs` over the Docker socket — never file globs under
+  `/var/lib/docker`), Grafana datasources + 4 dashboards (App RED, Logs &
+  Traces with traceId/userId search, Infra with the 85%/92% disk lines,
+  Delivery with deploys/backups/DLQ/breakers).
+- **Retention vars** (single tuning point in the playbook):
+  `LOKI_RETENTION_DAYS=30`, `PROM_RETENTION_DAYS=15`. **Lean fallback** for a
+  tight VPS (documented, not applied): scrape_interval `30s` in
+  `prometheus.yml` + `--storage.tsdb.retention.time=7d` in the prometheus
+  compose (halve both vars first so the declaration stays truthful).
+- **Trace lookup without SSH:** `./infra/ops.sh trace <traceId>` prints the
+  tailnet Grafana Explore URL (LogQL `{service="cogito-app-server"} |=
+"<traceId>"`). Logs carry `userId`, never email.
+- **Grafana → Discord** (Grafana UI step, like the Kuma monitors — the
+  Coolify API cannot express it): Alerting → Contact points → Discord with
+  the vault `DISCORD_WEBHOOK_URL`; suggested rules DLQFresh
+  (`dlq_fresh_depth > 0`), DiskWarn/DiskCrit (85%/92%), ApiErrors (5xx %
+  canary) — see the playbook's printed steps.
 
 ### Redeploy / retry procedure (the 'CD red but box recovered' case)
 
