@@ -27,7 +27,9 @@
       project_uuid: "{{ project_uuid }}"
       environment_name: "{{ environment_name }}"
       server_uuid: "{{ server_uuid }}"
-      docker_compose_raw: "{{ obs_spec.docker_compose_raw }}"
+      # This Coolify build requires docker_compose_raw base64-encoded
+      # (verified live: raw YAML 422s with "should be base64 encoded").
+      docker_compose_raw: "{{ obs_spec.docker_compose_raw | b64encode }}"
       urls: "{{ obs_spec.urls }}"
       instant_deploy: true
     body_format: json
@@ -66,7 +68,7 @@
     body:
       name: "{{ obs_spec.name }}"
       description: "{{ obs_spec.description }}"
-      docker_compose_raw: "{{ obs_spec.docker_compose_raw }}"
+      docker_compose_raw: "{{ obs_spec.docker_compose_raw | b64encode }}"
       urls: "{{ obs_spec.urls }}"
     body_format: json
     status_code: 200
