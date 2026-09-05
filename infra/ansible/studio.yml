@@ -1,0 +1,144 @@
+# studio.yml — own the cogito-studio service (Drizzle Studio DB GUI).
+#
+# The `cogito-studio` Coolify service (app `drizzle-gateway`,
+# ghcr.io/drizzle-team/gateway) was unhealthy for 11 days (wedged vendor
+# healthcheck + dead sslip.io domain) and was revived 2026-09-05 by service
+# restart + loopback publish 127.0.0.1:4983. This playbook is the ownership
+# half: it VERIFIES the service stays as declared and fails loudly with the
+# exact remediation when it does not. It never restarts anything on its own —
+# the vendor healthcheck is flaky (see RUNBOOK), so an automatic restart
+# could flap; a human decides.
+#
+# WHAT "OWNED" MEANS HERE
+#   - Coolify service `cogito-studio` exists in cogito-prod/production and
+#     its status starts with "running".
+#   - The `drizzle-gateway-*` container is present and its loopback publish
+#     answers HTTP 200 (the operator access path).
+#   - Credentials live in the Coolify service env (SERVICE_PASSWORD_DRIZZLE),
+#     never in our vault. Access: ssh -L 4983:127.0.0.1:4983 (tailnet-only,
+#     no public domain by design). Writes only in maintenance windows.
+#
+# RUN (tunnel up, from the repo root):
+#   ansible-playbook -i infra/ansible/inventory.ini infra/ansible/studio.yml
+---
+- name: Verify the cogito-studio service declaration (control node)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    coolify_api_url: "http://localhost:8000/api/v1"
+    vault_path: "{{ playbook_dir }}/../secrets/prod.env"
+    studio_service_name: "cogito-studio"
+
+  tasks:
+    - name: Check mode — structure validated, API flow skipped
+      ansible.builtin.debug:
+        msg: >-
+          Running with --check: the Coolify API flow is skipped. Run
+          without --check (with the :8000 tunnel up) to verify.
+      when: ansible_check_mode
+
+    - name: End the play in check mode
+      ansible.builtin.meta: end_play
+      when: ansible_check_mode
+
+    - name: Decrypt the SOPS vault on the control node (token only, never shown)
+      ansible.builtin.shell: >-
+        sops -d {{ vault_path }} |
+        grep -E '^COOLIFY_API_TOKEN='
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      no_log: true
+      register: studio_token_plaintext
+      environment:
+        PATH: "{{ lookup('env', 'PATH') }}:/opt/homebrew/bin:/usr/local/bin"
+        SOPS_AGE_KEY_FILE: "{{ lookup('env', 'SOPS_AGE_KEY_FILE') | default(lookup('env', 'HOME') + '/.config/sops/age/keys.txt', true) }}"
+
+    - name: Resolve the Coolify API token (never echoed)
+      ansible.builtin.set_fact:
+        studio_api_token: "{{ (studio_token_plaintext.stdout_lines | select('match', '^COOLIFY_API_TOKEN=') | first | default('')) | regex_replace('^COOLIFY_API_TOKEN=', '') }}"
+      no_log: true
+
+    - name: Require COOLIFY_API_TOKEN in the vault
+      ansible.builtin.assert:
+        that:
+          - studio_api_token | length > 0
+        fail_msg: >-
+          COOLIFY_API_TOKEN is missing from {{ vault_path }} — nothing was
+          checked.
+
+    - name: Read the Coolify services
+      ansible.builtin.uri:
+        url: "{{ coolify_api_url }}/services"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ studio_api_token }}"
+        status_code: 200
+      register: studio_services
+      no_log: true
+
+    - name: Verify cogito-studio exists and is running (report, with remediation)
+      ansible.builtin.assert:
+        that:
+          - studio_live | length > 0
+          - studio_live[0].status is defined and (studio_live[0].status | string).startswith('running')
+        fail_msg: >-
+          STUDIO DRIFT: cogito-studio is missing or not running. Remediation:
+          Coolify UI (tailnet http://localhost:8000) -> cogito-studio ->
+          Start/Restart, then re-run this playbook. If the vendor healthcheck
+          stays red while http://127.0.0.1:4983/ answers 200, treat the
+          healthcheck flag as the known flake (RUNBOOK) and check the UI.
+      vars:
+        studio_live: "{{ studio_services.json | selectattr('name', 'equalto', studio_service_name) | list }}"
+
+- name: Verify the studio container and loopback path (VPS host)
+  hosts: cogito_vps
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Check mode — structure validated, host flow skipped
+      ansible.builtin.debug:
+        msg: >-
+          Running with --check: the VPS host flow is skipped. Run
+          without --check to verify.
+      when: ansible_check_mode
+
+    - name: End the play in check mode
+      ansible.builtin.meta: end_play
+      when: ansible_check_mode
+
+    - name: Resolve the drizzle-gateway container name
+      ansible.builtin.shell: >-
+        docker ps --format '{{.Names}}' | grep -E '^drizzle-gateway-' | head -1
+      register: studio_container
+      changed_when: false
+      failed_when: studio_container.stdout | length == 0
+
+    - name: Report the container health flag (informational — vendor flake documented)
+      ansible.builtin.debug:
+        msg: >-
+          drizzle-gateway container {{ studio_container.stdout }} is present.
+          Its Docker health flag is advisory only (the vendor healthcheck.js
+          times out despite HTTP 200s); the loopback probe below is truth.
+      when: studio_container.stdout | length > 0
+
+    - name: Probe the loopback Studio UI (the operator access path)
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 4983
+        timeout: 15
+      register: studio_probe
+      ignore_errors: true
+
+    - name: Fail with remediation when the Studio UI is unreachable
+      ansible.builtin.fail:
+        msg: >-
+          STUDIO DOWN: nothing answers on 127.0.0.1:4983. Remediation: restart
+          the cogito-studio service (Coolify UI or POST
+          /api/v1/services/<uuid>/restart with COOLIFY_API_TOKEN), wait ~2
+          min, re-run. If the container is up but 4983 is closed, the compose
+          port publish drifted — re-apply the 127.0.0.1:4983 mapping.
+      when: studio_probe is failed

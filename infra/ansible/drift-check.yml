@@ -90,6 +90,15 @@
         port: "80"
         domain: app.cogitoacademy.id
         health_check: /
+    # Declared Coolify *services* (observability + studio). Existence only —
+    # health is Kuma's/Coolify's job, so a deploy-flap can never false-positive
+    # here. Keep in sync with infra/ansible/observability.yml + studio.yml.
+    declared_services:
+      - cogito-loki
+      - cogito-prometheus
+      - cogito-grafana
+      - cogito-alloy
+      - cogito-studio
     # Env var NAMES the API application must have (values are secrets and
     # are never compared). Keep in sync with infra/.env.prod.example.
     declared_api_env_names:
@@ -281,6 +290,25 @@
           {{ (env_resp.json[item.type + ('s' if item.type != 'redis' else '')] | default([])) | selectattr('name', 'equalto', item.name) | first | default(none) }}
       when: >-
         _live is not none and _live.image is defined and _live.image != item.image
+
+    - name: Fetch the live Coolify services
+      ansible.builtin.uri:
+        url: "{{ coolify_api_base }}/services"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ coolify_api_token }}"
+        return_content: true
+        status_code: [200]
+      register: services_resp
+
+    - name: Check every declared service exists in Coolify
+      ansible.builtin.set_fact:
+        drift_findings: >-
+          {{ drift_findings | default([]) +
+             ['service ' + item + ' not found among live Coolify services'] }}
+      loop: "{{ declared_services }}"
+      when: >-
+        (services_resp.json | default([])) | selectattr('name', 'equalto', item) | list | length == 0
 
     - name: Fetch the API application env vars
       ansible.builtin.uri:
