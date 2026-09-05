@@ -11,6 +11,11 @@ mock.module("@cogito-app/api/lib/db-health", () => ({
     timestamp: new Date().toISOString(),
   }),
   healthStatus: (status: string) => (status === "ok" ? 200 : 503),
+  // Complete surface: health-metrics.ts named-imports these for /metrics
+  // (P1). A partial mock breaks ESM linking for every importer in the
+  // shared bun:test process with "Export named X not found".
+  checkDlqHealth: async () => 0,
+  checkCircuitBreakers: async () => ({}),
 }));
 
 const { createServer } = await import("./routes/create-server");
