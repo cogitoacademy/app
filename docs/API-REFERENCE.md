@@ -1322,10 +1322,10 @@ The successful mutation also best-effort updates the existing offline Calendar e
 ### `upload.createUploadUrl`
 
 - **Auth:** Protected (F19 — intentionally NOT student-only: any authenticated role may mint a bounded upload URL; the tutor proof-file path needs it)
-- **Input:** `{ filename, contentType, contentLength }` (`contentType` one of `image/png`/`image/jpeg`/`image/webp`/`image/gif`/`application/pdf`; `filename` max 255 chars, no `..`/leading `/`; `contentLength` is an integer from 1 byte through 5 MB)
+- **Input:** `{ filename, contentType, contentLength }` (`contentType` one of `image/png`/`image/jpeg`/`image/webp`/`image/gif` — photo flows are image-only, `application/pdf` is rejected; `filename` max 255 chars, no `..`/leading `/`; `contentLength` is an integer from 1 byte through 5 MB)
 - **Output:** `{ uploadUrl, key, publicUrl, contentType, maxBytes, method, fields }` (`maxBytes` 5 MB; `method: "PUT"` for R2 and `"POST"` for local mode; `fields` is `{}` for both current backends)
-- **Errors:** `INVALID_CONTENT_TYPE` (400), `INVALID_FILENAME` (400)
-- **Description:** Returns a Cloudflare R2 presigned PUT URL whose key, content type, and declared content length are signed, or a local URL (dev, authenticated `POST /uploads/*`) for uploading a file. Browser clients using R2 require bucket CORS for the frontend origin. Uploaded objects are referenced by `key`/`publicUrl` (e.g. private achievement `evidenceUrl`, public `documentationUrl`, or user avatar). Local files are served via `GET /uploads/*` when `R2_PUBLIC_URL` is unset
+- **Errors:** `INVALID_CONTENT_TYPE` (400), `INVALID_FILENAME` (400); local-mode `POST /uploads/*` returns 415 when the body bytes are not a recognized image (magic-byte sniff) and 413 when over the size limit
+- **Description:** Returns a Cloudflare R2 presigned PUT URL whose key, content type, and declared content length are signed, or a local URL (dev, authenticated `POST /uploads/*`) for uploading a file. Browser clients using R2 require bucket CORS for the frontend origin. Uploaded objects are referenced by `key`/`publicUrl` (e.g. private achievement `evidenceUrl`, public `documentationUrl`, or user avatar). Local files are served via `GET /uploads/*` when `R2_PUBLIC_URL` is unset. The nightly `infra/r2-upload-audit.sh` HEADs bucket objects and alerts on ContentType vs key-class mismatches
 
 ## Tutor payout profile fields (2026-08-28)
 

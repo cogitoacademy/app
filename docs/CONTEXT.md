@@ -832,7 +832,7 @@ After submission, the tutor or booking proposer can propose a replacement time f
 
 ### Upload Module (protected)
 
-- `createUploadUrl` — validates content-type allowlist, filename, and 1-byte–5 MB content length, then returns a presigned PUT upload for Cloudflare R2 or an authenticated local `/uploads/*` raw-body POST URL (dev); `GET /uploads/*` serves local files when `R2_PUBLIC_URL` is unset. R2 signs the content type and exact declared length, and browser uploads require bucket CORS. The student profile photo picker crops the selected image to a square in the browser before uploading.
+- `createUploadUrl` — validates the image-only content-type allowlist (`ALLOWED_IMAGE_TYPES`; `application/pdf` is rejected on photo flows, `ALLOWED_DOCUMENT_TYPES` stays unreferenced until a flow needs it), filename, and 1-byte–5 MB content length, then returns a presigned PUT upload for Cloudflare R2 or an authenticated local `/uploads/*` raw-body POST URL (dev); `GET /uploads/*` serves local files when `R2_PUBLIC_URL` is unset. The local POST magic-byte-sniffs the body (`sniffImageKind`) and returns 415 for non-image bytes. R2 signs the content type and exact declared length, and browser uploads require bucket CORS (verified app-origin-only 2026-09-05); the nightly `infra/r2-upload-audit.sh` alerts on ContentType vs key-class mismatches. The student profile photo picker crops the selected image to a square in the browser before uploading.
 
 ### Scheduler Module (internal)
 

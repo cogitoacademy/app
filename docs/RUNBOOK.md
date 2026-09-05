@@ -1476,6 +1476,14 @@ The production env schema requires all four `R2_*` vars together **and** `R2_PUB
 
 5. Verify an upload → the returned key resolves under `R2_PUBLIC_URL`.
 
+> U3 CORS verified 2026-09-05 (read-only — Terraform has no CORS resource,
+> so bucket CORS is console-managed like the R2 custom domain; no console
+> change made): the policy above allows only `https://app.cogitoacademy.id`
+> plus the two local dev origins, methods `GET`/`PUT`/`HEAD`, and the
+> `Content-Type` header the presigned PUT signs. The nightly
+> `infra/r2-upload-audit.sh` (list + HEAD, read-only) posts to Discord when
+> an object's ContentType does not match its key's extension class.
+
 ## Deploy Secrets (CD webhooks)
 
 The CD workflow (`cd-prod.yml`) triggers Coolify deploys via webhook. (`cd-staging.yml` was **deleted on 2026-08-31** — locked decision: prod-first, no staging exists; see below.) Since P4 (C3) the trigger **fails loudly** (`curl --fail --max-time 30`, no `|| true`) — if the webhook secret is missing or the request fails, the build goes red instead of silently doing nothing. Since the CD-pipeline hardening (2026-08-27) `cd-prod.yml` also **guards the secrets explicitly**: an unset `COOLIFY_PROD_SERVER_WEBHOOK` / `COOLIFY_PROD_WEBHOOK` prints a clear message ("... is unset — configure the Coolify resource webhook and add it as a GitHub secret") and exits 1 before any curl runs, so the failure mode is a readable message, not a bare `curl exit 6`.

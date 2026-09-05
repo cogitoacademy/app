@@ -1081,13 +1081,15 @@ The web tutor profile editor groups education, competition achievements, and exp
 
 **Files:**
 
-- `upload.types.ts` — `createUploadUrlInput` (filename sanitized + bounded, `contentType` allowlist: png/jpeg/webp/gif/pdf, `contentLength` bounded to `MAX_UPLOAD_BYTES`); `MAX_UPLOAD_BYTES` = 5 MB
+- `upload.types.ts` — `createUploadUrlInput` (filename sanitized + bounded, `contentType` allowlist: `ALLOWED_IMAGE_TYPES` png/jpeg/webp/gif — photo flows are image-only; `ALLOWED_DOCUMENT_TYPES` (pdf) is exported but unreferenced until a flow needs it, `contentLength` bounded to `MAX_UPLOAD_BYTES`); `MAX_UPLOAD_BYTES` = 5 MB
 - `upload.errors.ts` — `InvalidContentTypeError`, `InvalidFilenameError`
 - `upload.service.ts` — `createUploadUrl`, `resolvePublicUrl`
 - `upload.handler.ts` — `createUploadUrl`
 - `upload.router.ts` — `protectedProcedure`, path `/upload/create-url`
 - `index.ts` — `createUploadModule({ storage })`
 - Storage abstraction: `packages/api/src/lib/storage.ts` — `StoragePort` (`put`, `getSignedUploadUrl`), `createR2Storage` (`@aws-sdk/client-s3` + presigner), `createLocalStorage` (writes `UPLOAD_DIR`), `createStorage(envLike)` factory
+- Magic-byte sniff: `packages/api/src/lib/request-id.ts` — `sniffImageKind(bytes)` (PNG/JPEG/WebP/GIF signatures, null otherwise) + `readBodyBytesWithLimit(request, limit)`; the local `POST /uploads/*` route (`apps/server/src/routes/upload-routes.ts`) rejects non-image bytes with 415 before writing
+- Nightly audit: `infra/r2-upload-audit.sh` — lists the upload bucket, HEADs each object's ContentType, compares it against the key's extension class (image exts → `image/*`, `.pdf` → `application/pdf`), posts mismatches to Discord, exits 1 on mismatch (read-only: list + HEAD, never writes)
 
 **Service Methods:**
 
@@ -1097,8 +1099,9 @@ The web tutor profile editor groups education, competition achievements, and exp
 **Business Rules:**
 
 - When all `R2_*` vars are set → R2 presigned PUT uploads; otherwise local storage served via `GET /uploads/*` (with path-traversal guard) when `R2_PUBLIC_URL` is unset
-- Content types restricted to the allowlist; declared content length is 1 byte–5 MB and is signed for R2; filenames sanitized (no `..`, no leading `/`)
-- Browser R2 uploads require bucket CORS allowing the app origin, `PUT`, and the request's `Content-Type` header
+- Content types restricted to the image allowlist (PDF rejected on photo flows at both the input schema and the service); declared content length is 1 byte–5 MB and is signed for R2; filenames sanitized (no `..`, no leading `/`)
+- Local `POST /uploads/*` magic-byte-sniffs the body before writing: any recognized image kind is accepted regardless of key extension (PNG bytes under a `.jpg` key are fine); non-image bytes (HTML/PDF polyglots) get 415
+- Browser R2 uploads require bucket CORS allowing the app origin, `PUT`, and the request's `Content-Type` header. U3 CORS verified 2026-09-05 (read-only: RUNBOOK CORS JSON + Terraform): the bucket allows `https://app.cogitoacademy.id` plus local dev origins (`http://localhost:3000`, `http://127.0.0.1:3000`), methods `GET`/`PUT`/`HEAD`, headers `Content-Type` — app-origin-only; there is no Terraform CORS resource (console-managed like the R2 custom domain); no console change was made
 
 ---
 
