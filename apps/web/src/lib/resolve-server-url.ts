@@ -3,7 +3,7 @@ export function resolveServerUrl(
   browserHostname: string | undefined,
   isDevelopment: boolean,
 ) {
-  // Same-origin relative path (e.g. "/rpc" in production behind Caddy):
+  // Same-origin relative path (e.g. "/rpc" in production behind Traefik):
   // the API lives on the same origin as the web app, so return the origin.
   // Consumers append their own path prefixes (orpc.ts adds "/rpc",
   // auth-client.ts uses the better-auth "/api/auth" basePath).

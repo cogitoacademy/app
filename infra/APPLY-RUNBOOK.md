@@ -105,7 +105,7 @@ terraform apply tfplan
 ```
 
 **What it creates:** `cogito-infra-state`, `cogito-backups`,
-`cogito-bucket` (R2), the `api./app./status./coolify.` DNS records, and the
+`cogito-bucket` (R2), the `api./app./status./cl.` DNS records, and the
 `r2bucket.cogitoacademy.id` custom domain. **Data impact: none** — R2
 buckets/DNS are metadata only.
 
