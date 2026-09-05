@@ -92,11 +92,13 @@
     # 'EMAIL_FROM=Cogito <send@...>' is a syntax error, so the cron env
     # never loaded R2_ACCOUNT_ID and the nightly backup NEVER ran. Filter
     # to exactly the keys backup.sh reads (also stops leaking the whole
-    # vault onto the VPS in plaintext).
+    # vault onto the VPS in plaintext). DISCORD_WEBHOOK_URL powers the
+    # failure self-check (2026-09-05); without it failures stay loud on
+    # stderr + exit 1 but post no Discord alert.
     - name: Decrypt prod env on the control node (SOPS; age key stays local)
       ansible.builtin.shell: >-
         sops -d {{ backup_env_src }} |
-        grep -E '^(DATABASE_URL|R2_ACCOUNT_ID|R2_ACCESS_KEY_ID|R2_SECRET_ACCESS_KEY|R2_BACKUP_BUCKET|RETENTION_DAYS)='
+        grep -E '^(DATABASE_URL|R2_ACCOUNT_ID|R2_ACCESS_KEY_ID|R2_SECRET_ACCESS_KEY|R2_BACKUP_BUCKET|RETENTION_DAYS|DISCORD_WEBHOOK_URL)='
       delegate_to: localhost
       become: false
       changed_when: false

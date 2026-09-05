@@ -254,6 +254,16 @@ RUNBOOK; CD `COOLIFY_API_BASE_URL` rollback-path fix (unbound-variable
 crash during the 2026-09-02 disk-full incident). Plan moved to
 `docs/plans/completed/`.
 
+**Error tracking / tracing (2026-09-05, observability-stability wave):**
+Sentry is **dormant** — `SENTRY_DSN`/`SENTRY_ENVIRONMENT` are plumbed
+through the vault example, Coolify resources, and drift-check, but no SDK
+consumes them and no code sends events; errors go to structured logs plus
+Discord (Kuma, watchdog, backup self-check, R2 audit). OpenTelemetry is
+**deferred** (O1): the W3C-compatible `traceId` propagation through
+request logs, BullMQ jobs, and dispatch/webhook records plus the PLG stack
+covers current correlation needs with no new dependency; adding the OTel
+SDK remains a future option, not a gap.
+
 ## Stable collection transitions (2026-08-28)
 
 The admin tutor Invitations and Tutor Profiles tables use TanStack Query's

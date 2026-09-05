@@ -707,6 +707,20 @@ Every night at **02:00 WIB** (`Asia/Jakarta`) a cron job on the VPS runs
    under `s3://cogito-backups/backups/YYYY-MM-DD.sql.gz`.
 3. Prunes R2 objects older than `RETENTION_DAYS` (default **30 days**).
 
+**Failure self-check (2026-09-05):** any failing step (dump, upload,
+verify, prune) posts a Discord `CRITICAL: nightly backup FAILED during
+<step>` alert naming the step, and preflight problems (missing env,
+unresolvable DB host, missing CLI tools, empty dump) abort loudly before
+any snapshot or upload. Without `DISCORD_WEBHOOK_URL` the failure is loud
+on stderr + exit 1.
+
+**RPO (accepted 2026-09-05):** **24h** — the nightly dump plus the CD
+pre-migrate snapshots (`pre-migrate-<sha>.sql.gz`, newest 7 kept) are the
+recovery points (see `docs/FAILURES.md` DR-2/DR-3). Continuous WAL
+archiving (point-in-time recovery) is the documented future path, not
+implemented: it would ship WAL segments to `cogito-backups/wal/` alongside
+the nightly base dumps.
+
 The cron job, the `pg_dump` package, the decrypted credential file
 (`/etc/cogito/backup.env`, root-only `0600`, decrypted from the SOPS vault on
 the control node — the age key never reaches the VPS) and log rotation
@@ -721,10 +735,12 @@ ansible-playbook -i infra/ansible/inventory.ini \
 **AWS CLI note (verified 2026-08-31):** Ubuntu noble dropped the `awscli` apt
 package, so the playbook detects the existing AWS CLI v2 at
 `/opt/cogito-actions-tools/bin/aws` (installed for the CD runner) instead of
-apt-installing it. The vault `DATABASE_URL` must be **host-reachable** — it
-uses the container IP `10.0.1.8:5432` (the app keeps the private hostname
-`noxeaeuxfreq0axa9unpew5r`; the cron runs on the VPS host, outside the Docker
-network).
+apt-installing it. **DB-host resolution (dynamic since 2026-09-05):** the
+vault keeps the Coolify-private hostname (e.g. `noxeaeuxfreq0axa9unpew5r`);
+`infra/backup.sh` rewrites it to the container IP on the `coolify` network
+at runtime (`getent` → `docker inspect`) and aborts loudly pre-snapshot when
+the host is unresolvable — the operator never hand-maintains a container IP
+(the old `10.0.1.8:5432` note below is one resolved value, not config).
 
 (Or, during an apply window, `./infra/apply.sh backup-cron` — same playbook
 with the DATABASE_URL reachability gate built in; see
@@ -735,10 +751,12 @@ the single-tenant VPS is already root-managed, and the script needs the full
 `DATABASE_URL` plus the R2 token either way, so a dedicated `backup` user
 would duplicate credentials without adding isolation.
 
-> **Before first run:** `DATABASE_URL` in the SOPS vault must resolve from the
-> VPS **host** (e.g. `127.0.0.1:<published-port>` or the container IP) —
-> Coolify's bundled PostgreSQL hostname `postgres-prod` is only reachable
-> inside its private Docker network. `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID` and
+> **Before first run:** `DATABASE_URL` in the SOPS vault keeps the
+> Coolify-private hostname (e.g. `postgres-prod` or the app's private-network
+> hostname — reachable only inside the Docker network). The backup script
+> resolves it to the container IP at runtime and aborts loudly when it
+> cannot, so no hand-maintained IP is needed.
+> `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID` and
 > `R2_SECRET_ACCESS_KEY` come from the same vault; the token needs Object
 > Read & Write on the bucket.
 
@@ -884,7 +902,10 @@ emergency restore against the actual object list first.
 ### Disk thresholds & auto-prune
 
 The watchdog (`/usr/local/bin/cogito-disk-watchdog.sh`, cron 03:30 WIB,
-log `/var/log/cogito-disk-gc.log`, rotated 7):
+log `/var/log/cogito-disk-gc.log`, rotated 7) appends one heartbeat line
+per run — `heartbeat disk_pct=N verdict=ok|warn|pruned` (2026-09-05, M3) —
+so log-shipping and the operator can tell "watchdog alive" apart from
+"watchdog silent because the disk is fine":
 
 - **≥ 85%**: posts `VPS disk at N% — cleanup recommended` to Discord.
 - **≥ 92%**: runs the prune ladder, then re-checks:
@@ -1610,7 +1631,7 @@ The production pipeline (`cd-prod.yml`) builds and pushes images on a GitHub-hos
    passes it through to `drizzle-kit`.
 3. **Deploy:** POST the configured Coolify server webhook. The workflow and script are restored to their last known successful `bb1ccb9a` implementation. Do not pull application images from the self-hosted VPS runner: the 2026-09-02 attempt filled the host disk and crashed the runner with `No space left on device`.
 4. **Health (sha-verified):** poll `https://api.cogitoacademy.id/health` until `version == GIT_SHA` (bounded 20×15s ≈ 5 min).
-5. **Auto-rollback (best-effort, restored `bb1ccb9a` behavior):** on poll timeout the script attempts its original Coolify application lookup/PATCH/redeploy sequence, then always prints the manual rollback hint and exits 1. This path requires application write permission and may be skipped or fail with the current deploy-only token; it is retained only because the CI/CD files were explicitly restored to the last successful state. Database snapshots are never restored automatically.
+5. **Auto-rollback (best-effort, restored `bb1ccb9a` behavior):** on poll timeout the script attempts its original Coolify application lookup/PATCH/redeploy sequence, then always prints the manual rollback hint and exits 1. This path requires application write permission and may be skipped or fail with the current deploy-only token; it is retained only because the CI/CD files were explicitly restored to the last successful state. Database snapshots are never restored automatically. **Rollback-perm truth (recorded 2026-09-05, operator to verify):** until a token-perm check proves otherwise, rollback is **manual-only** — Coolify UI → previous release (code) plus a reviewed snapshot restore (DB, DR-1/DR-2).
 6. **Web verification (F3 2026-08-31):** a separate step POSTs the web deploy webhook (`COOLIFY_PROD_WEBHOOK`) and immediately runs `scripts/migrate-and-deploy.sh --poll-web`, which polls `HEALTH_URL_WEB` (default `https://app.cogitoacademy.id`) for plain **HTTP 200** (bounded 20×15s). The web image is static nginx with no version marker, so HTTP 200 is the verification signal; a poll timeout fails the job with a manual web-rollback hint (the web resource is not auto-rolled back — it would need a `COOLIFY_WEB_APP_UUID` secret that does not exist).
 
 Runner triage:
