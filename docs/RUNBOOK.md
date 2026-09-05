@@ -48,14 +48,15 @@ shared Resources group and footer account menu should remain available, and the
 **Tutor Profile** wording should remain unchanged. This is presentation-only;
 no environment or operational change is required.
 
-## Production UI and E2E audit (2026-09-04)
+## Production UI and E2E audit (2026-09-04; reschedule follow-up 2026-09-05)
 
-The full browser workflow passed **13/13 tests across four specs**. It covers
-the seeded student solo and group booking flows, tutor acceptance/decline,
-cross-student access denial, contact privacy, all-role economy checks, and
-booking layout containment at 170px and 390px. The layout check is safe to run
-after state-changing tests because it accepts either booking rows or the
-empty-state collection view.
+The full browser workflow now contains **14 tests across four specs**. The
+booking spec passes 7/7 locally, covering the seeded student solo and group
+booking flows, tutor acceptance/decline, accepted-online reschedule, and
+cancellation. The other specs cover cross-student access denial, contact
+privacy, all-role economy checks, and booking layout containment at 170px and
+390px. The layout check is safe to run after state-changing tests because it
+accepts either booking rows or the empty-state collection view.
 
 The root `bun run check-types` gate also type-checks `packages/e2e` with the
 browser DOM library enabled, so layout assertions cannot drift outside the
@@ -63,6 +64,10 @@ repository's normal typecheck coverage. CI retains both the HTML report and
 failure screenshots/traces for diagnosis.
 The migration step explicitly passes `ENV_FILE=../../apps/server/.env.test`
 through the Turbo `db:migrate` task, keeping the browser database isolated.
+Chromium installation runs with `packages/e2e` as its working directory so the
+CLI resolves the locked `@playwright/test` version and installs the exact
+headless-shell revision expected by the browser suite. If CI reports a missing
+Playwright executable, verify this working directory before changing test code.
 
 The authenticated shell has a skip link, accessible sidebar state, semantic
 tutor-card buttons, explicit page headings, and production-only devtools
@@ -314,7 +319,7 @@ Verify the role-aware default tab: students and tutors open on Needs action when
 
 ### Booking detail smoke check
 
-Open an online booking detail as each role and verify the shared overview shows date/time first, then `Format & access` with the meeting CTA or pending/retry status, followed by participant rows with saved profile images (or initials), names, roles, and confirmation states. On desktop participants may use two columns; on narrow screens they stack without hiding names. When available, `Booking actions` appears above the role-appropriate financial or operational card in the sticky desktop rail and before Activity on narrow screens; session notes/support reports remain in the main flow. Tutors must see the IDR Honorarium card only; students see the Cogito Marks card; admins see the wallet-impact card and admin review context, plus their admin-only room, wallet/ledger, state-history, and override controls. Every student Marks amount has the Cogito mark prefix. The Activity card should read newest-first as a vertical timeline with a transition-specific icon, one destination-state badge, actor type, timestamp in the booking timezone, and any transition reason; the previous state is shown as muted context when available. After a tutor accepts an online booking, the link is generated immediately; a successful provider call moves the booking to `scheduled`. In Google Calendar, verify solo uses `Cogito - MUN | [Tutor] x [Student]` (or the selected competition label) and group/group-series appends `& Friends`. The description must list Tutor, Student, `Session Topic: [category] - [specialization]`, Session Notes with pasted links preserved, and a clickable `/bookings/{bookingId}` link. If provider creation fails, the booking remains `confirmed`, the detail overview says it is retrying, and the `retry-failed-meetings` scheduler retries every 5 minutes. If no link is available, the assigned tutor can use **Add meeting link** and an admin can use **Add/Replace link** in operations; verify the shared Selia dialog accepts a trusted `http`/`https` URL and that the student read becomes ready without a reload. Repeat after multiple failed provider rows to confirm the newest meeting-attempt row is updated. For an offline booking, assign a room and verify it becomes `scheduled` even if Calendar is unavailable. With Calendar configured, verify exactly one event is created with the same title/description/attendees, the assigned room name and location, and no conference data or Meet URL. Relocate and reschedule it and verify location/time update in place; cancel or expire the booking and verify the event is deleted. Repeat the assignment sync and confirm no duplicate event appears.
+Open an online booking detail as each role and verify the shared overview shows date/time first, then `Format & access` with the meeting CTA or pending/retry status, followed by participant rows with saved profile images (or initials), names, roles, and confirmation states. On desktop participants may use two columns; on narrow screens they stack without hiding names. When available, `Booking actions` appears above the role-appropriate financial or operational card in the sticky desktop rail and before Activity on narrow screens; session notes/support reports remain in the main flow. Tutors must see the IDR Honorarium card only; students see the Cogito Marks card; admins see the wallet-impact card and admin review context, plus their admin-only room, wallet/ledger, state-history, and override controls. Every student Marks amount has the Cogito mark prefix. The Activity card should read newest-first as a vertical timeline with a transition-specific icon, one destination-state badge, actor type, timestamp in the booking timezone, and any transition reason; the previous state is shown as muted context when available. After a tutor accepts an online booking, the link is generated immediately; a successful provider call moves the booking to `scheduled`. In Google Calendar, verify solo uses `Cogito - MUN | [Tutor] x [Student]` (or the selected competition label) and group/group-series appends `& Friends`. The description must list Tutor, Student, `Session Topic: [category] - [specialization]`, Session Notes with pasted links preserved, and a clickable `/bookings/{bookingId}` link. Accept an online reschedule and verify the same event moves to the new slot on both organizer and attendee calendars, and its Meet conference remains available. If provider creation fails, the booking remains `confirmed`, the detail overview says it is retrying, and the `retry-failed-meetings` scheduler retries every 5 minutes. If no link is available, the assigned tutor can use **Add meeting link** and an admin can use **Add/Replace link** in operations; verify the shared Selia dialog accepts a trusted `http`/`https` URL and that the student read becomes ready without a reload. Repeat after multiple failed provider rows to confirm the newest meeting-attempt row is updated. For an offline booking, assign a room and verify it becomes `scheduled` even if Calendar is unavailable. With Calendar configured, verify exactly one event is created with the same title/description/attendees, the assigned room name and location, and no conference data or Meet URL. Relocate and reschedule it and verify location/time update in place; cancel or expire the booking and verify the event is deleted. Repeat the assignment sync and confirm no duplicate event appears.
 
 The overview row must show one `Date & time` field with the date and session hours merged beside `Format & access` in a two-column desktop grid; on narrow screens the two fields stack without horizontal overflow. The online `Format & access` section now shows only the compact info trigger; activate it with mouse, keyboard, and touch to verify the Selia popover exposes the pending/failed explanation plus retry or manual setup status, or the `Open meeting room` action when a URL is available. Available links must not render a `Ready` badge or standalone meeting CTA. Offline bookings without an assigned room should expose the same trigger beside `Offline`; tutors with an eligible `Complete session` action should find its completion-timing explanation beside the button. Confirm the Participants heading uses the matching Selia `IconBox`, and on desktop all eligible booking actions, including propose and complete, sit at the bottom of the right header column beneath the state badge. Also confirm Activity follows the left-column content with only the normal section gap even when the Actions/Marks rail is taller; on narrow layouts the order remains overview → actions/financial content → Activity.
 
@@ -1210,7 +1215,7 @@ Concurrent modification conflict. The `version` field didn't match. Retry the op
 
 ### Role-boundary errors
 
-- `FORBIDDEN: Student access required` is expected when tutor/admin sessions call tutor-discovery or student booking mutations. Use protected `booking.listMine`/`booking.get` for the shared booking read surface, `tutorActions.*` for tutor fulfillment, and `adminTutor.*`/`adminBooking.*` for admin review.
+- `FORBIDDEN: Student access required` is expected when tutor/admin sessions call tutor-discovery or student booking mutations. Use protected `booking.listMine`/`booking.get` for the shared booking read surface, `tutorActions.*` for tutor fulfillment, and `adminTutor.*`/`adminBooking.*` for admin review. The protected booking detail/list/session/availability reads are outside the 30/minute mutation limiter; a `Too Many Requests` response on one of these reads indicates a limiter regression.
 
 ### Redis Connection Errors
 
@@ -1571,10 +1576,11 @@ stale seeded state or a hard-coded user ID. Economy inputs are displayed with
 locale grouping separators; the browser check edits them through the visible
 control and verifies the numeric value after saving.
 
-The 2026-09-04 browser regression completed 13 tests across the four E2E specs,
-including online group invite confirmation, tutor accept/decline, unauthorized
-booking access, the future-booking economy snapshot, invalid negative IDR
-input, and narrow viewport containment. The student auth state is saved under
+The 2026-09-05 browser regression exercised 14 tests across the four E2E specs,
+including online group invite confirmation, accepted-online reschedule and
+cancellation, tutor accept/decline, unauthorized booking access, the
+future-booking economy snapshot, invalid negative IDR input, and narrow
+viewport containment. The student auth state is saved under
 `packages/e2e/.auth/` for the run and is ignored by git; this avoids exceeding
 the production auth sign-in rate limit during a multi-role suite. The local
 run also showed the expected Google Meet boot-probe failure for an

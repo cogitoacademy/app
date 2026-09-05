@@ -143,13 +143,20 @@ responsive booking tabs keep overflow inside their own scroller down to the
 tested 170px viewport. Time-sensitive labels share a visibility-aware
 30-second clock hook, and the achievement dismissal state is SSR-safe.
 
-The complete browser workflow passed **13/13 tests across four specs** on
-2026-09-04. The suite resets and seeds deterministic users, reuses one
-authenticated student storage state to respect the auth rate limit, covers
-solo/offline-group/online-group booking transitions, tutor decline, access
-denial, contact privacy, economy roles, and 170px/390px layout containment.
+The complete browser workflow now covers **14 tests across four specs**. The
+2026-09-05 booking-flow run passed 7/7, including solo/offline-group/online-
+group booking transitions, accepted-online reschedule, cancellation, and
+tutor decline. The suite resets and seeds deterministic users, reuses one
+authenticated student storage state to respect the auth rate limit, and covers
+access denial, contact privacy, economy roles, and 170px/390px layout
+containment.
 The responsive layout assertions are order-independent and accept either a
 real booking row or an empty collection state.
+
+On 2026-09-05, the CI browser setup was tightened to install Chromium from
+`packages/e2e`, where the locked Playwright dependency is resolved. This keeps
+the installed headless-shell revision aligned with the browser tests instead
+of allowing a repository-root transient CLI to select a different revision.
 
 Production payment checkout defaults to Xendit QRIS. The provider sends
 QRIS-specific channel properties (`qr_string_type=DYNAMIC`, 48-hour expiry),
@@ -630,7 +637,7 @@ Routers access handlers via `context.services.{module}.{method}`. Other modules 
 - **Redis:** Shared instance for sessions, idempotency, rate limiting, circuit breaker state, BullMQ persistence (after production readiness)
 - **Scheduler:** BullMQ with Redis persistence for booking expiry, hold release, email dispatch
 - **Email:** Resend (production) / stub (development) via EmailService
-- **Meeting/Calendar:** Online bookings use Google Meet (production) / manual link fallback via CircuitBreaker. When an offline booking receives a room and becomes `scheduled`, the provider creates a normal Google Calendar event without conference data or a Meet URL. Offline events carry the assigned room name/location and the same attendees, title, description, schedule, and booking deep link as online events. Assignment/relocation sync runs best-effort after the room transaction commits; repeat syncs reuse the live provider row. Reschedules update the event, and terminal booking paths delete it through the shared lifecycle hooks. Booking creation selects one active tutor competition specialization and snapshots its category/specialization metadata in `booking.session_topic`. Calendar titles use `Cogito - {Competition} | {Tutor} x {Student}` for solo bookings and append `& Friends` for groups; MUN/WSC use their standard abbreviations. Descriptions list tutor/students, `Session Topic: {category} - {specialization}`, Session Notes (including reference links), and `/bookings/{bookingId}`. `learning_goal` remains the Session Notes compatibility carrier; file uploads are deferred. OAuth refresh-token and service-account setup is documented in [`docs/GOOGLE-MEET-SETUP.md`](GOOGLE-MEET-SETUP.md).
+- **Meeting/Calendar:** Online bookings use Google Meet (production) / manual link fallback via CircuitBreaker. When an offline booking receives a room and becomes `scheduled`, the provider creates a normal Google Calendar event without conference data or a Meet URL. Offline events carry the assigned room name/location and the same attendees, title, description, schedule, and booking deep link as online events. Assignment/relocation sync runs best-effort after the room transaction commits; repeat syncs reuse the live provider row. Accepted online reschedules update the event in place with attendee updates enabled and conference-data support retained, so guest calendars receive the new slot without losing the Meet conference. Reschedules update the event, and terminal booking paths delete it through the shared lifecycle hooks. Booking creation selects one active tutor competition specialization and snapshots its category/specialization metadata in `booking.session_topic`. Calendar titles use `Cogito - {Competition} | {Tutor} x {Student}` for solo bookings and append `& Friends` for groups; MUN/WSC use their standard abbreviations. Descriptions list tutor/students, `Session Topic: {category} - {specialization}`, Session Notes (including reference links), and `/bookings/{bookingId}`. `learning_goal` remains the Session Notes compatibility carrier; file uploads are deferred. OAuth refresh-token and service-account setup is documented in [`docs/GOOGLE-MEET-SETUP.md`](GOOGLE-MEET-SETUP.md).
 - **Deployment:** Coolify on the OVH VPS; production API and web images are pulled from GHCR
 - **Database TLS:** Controlled by `DB_SSL_ENABLED`; Coolify's bundled PostgreSQL is non-TLS, while external managed databases may require it
 
@@ -948,7 +955,21 @@ Student profile UX is organized as a responsive account-identity card plus separ
 
 Economy role coverage is ready: students see computed Marks prices and cannot open admin economy settings; tutors see IDR honorarium setup without Marks cash-out language; admins can update the active Cogito take schedule and see it persist after reload. Economy take changes do not create tutor notifications because tutors do not need the platform take schedule.
 
-The 2026-09-04 browser rerun passed all 13 tests across the four `packages/e2e` specs. E2E setup resolves the seed student by email before cleanup and resets test economy defaults, while the admin economy form accepts locale-formatted IDR values without exposing a Selia field-context error. The pass covers the online group invite -> participant confirmation -> tutor acceptance path, tutor decline with a required reason, cross-student booking access denial, the admin future-booking economy snapshot path, rejection of a negative IDR amount, and booking-list containment at 170px and 390px. The layout spec is order-independent: it checks either the seeded booking rows or the empty collection state. The query client does not retry deterministic `BAD_REQUEST`/`FORBIDDEN`/`NOT_FOUND`/`UNAUTHORIZED` responses, so access and validation errors surface promptly instead of leaving the detail skeleton in a retry loop.
+The 2026-09-05 browser regression covers all 14 tests across the four
+`packages/e2e` specs. The booking spec passes 7/7, including the online group
+invite -> participant confirmation -> tutor acceptance path, the accepted-
+online reschedule -> student acceptance -> cancellation path, and tutor
+decline with a required reason. E2E setup resolves the seed student by email
+before cleanup and resets test economy defaults, while the admin economy form
+accepts locale-formatted IDR values without exposing a Selia field-context
+error. The remaining specs cover cross-student booking access denial, the
+admin future-booking economy snapshot path, rejection of a negative IDR amount,
+and booking-list containment at 170px and 390px. The layout spec is
+order-independent: it checks either the seeded booking rows or the empty
+collection state. The query client does not retry deterministic
+`BAD_REQUEST`/`FORBIDDEN`/`NOT_FOUND`/`UNAUTHORIZED` responses, so access and
+validation errors surface promptly instead of leaving the detail skeleton in a
+retry loop.
 
 Booking detail uses a task-detail layout shared by student, tutor, and admin views: a compact identity-and-status header, role-appropriate primary actions directly below the status badge, a primary content flow for overview, series sessions, notes/reports, and activity, plus a sticky metadata rail for contextual actions and role-appropriate financial information. The overview keeps participant names and profile images visible without a separate low-priority rail card. Admin operations composes the same page through explicit header, main-content, sidebar, and activity slots, preserving room assignment, review context, participant wallet/ledger inspection, wallet impact, state history, and override controls without giving admins student/tutor lifecycle actions. All existing lifecycle actions and data remain available without changing the booking API.
 
@@ -1101,7 +1122,9 @@ Status: verified at git HEAD `ec8b16c` (post-#46 merge). B3/B4/B6/B8/B9 are **Fi
 - ✅ `TRUST_PROXY` handling — `getClientIp` uses `x-forwarded-for` first hop only when trusted
 - ✅ Seed script production guard (`SEED_ALLOWED_IN_PROD` + `SEED_ADMIN_PASSWORD` min 12 chars)
 - ✅ Webhook idempotency atomic — `IdempotencyStore.claim` keyed on verified payload event id
-- ✅ Invite (10/min) + booking creation (30/min) rate limits
+- ✅ Invite (10/min) + booking mutation (30/min) rate limits; protected
+  booking detail/list/availability reads stay outside that mutation bucket so
+  normal page refreshes cannot block a reschedule action
 - ✅ M3 (prod-fixes): support ticket creation (5/min), achievement submission (30/min), upload URL creation (30/min) rate limits; email-OTP / forget-password / change-email auth paths throttled
 - ✅ `PAYMENT_PROVIDER=xendit` requires Xendit credentials (no silent stub fallback)
 - ✅ Xendit mode is explicit (`XENDIT_MODE=test|live`); production/staging Test Mode requires `XENDIT_TEST_ALLOWED_EMAILS` so sandbox purchases are limited to UAT accounts

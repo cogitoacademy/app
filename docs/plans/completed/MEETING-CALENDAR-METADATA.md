@@ -1,6 +1,6 @@
 # Google Calendar Event Metadata
 
-Status: Completed (2026-08-29; offline lifecycle extension 2026-09-03)
+Status: Completed (2026-08-29; offline lifecycle extension 2026-09-03; online reschedule sync fix 2026-09-05)
 
 ## Outcome
 
@@ -41,6 +41,13 @@ schedule as online events, adds the assigned room name/location, and omits
 conference data. Room relocation and accepted rescheduling update the same
 event; terminal booking paths delete it. Creation is idempotent against the
 live local provider row, and all provider writes remain best-effort.
+
+## Online reschedule sync fix (2026-09-05)
+
+Provider updates now request attendee notifications and conference-data
+support on both OAuth and service-account paths. An accepted online
+reschedule therefore propagates the new slot to guest calendars while keeping
+the existing Google Meet conference attached to the event.
 
 ## Verification
 

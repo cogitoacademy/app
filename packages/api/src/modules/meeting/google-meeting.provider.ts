@@ -388,7 +388,7 @@ export function createGoogleMeetingProvider(
           const calendarId = encodeURIComponent(config.calendarId);
           const encodedEventId = encodeURIComponent(row.externalEventId!);
           await fetchJson<GoogleCalendarEvent>(
-            `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodedEventId}`,
+            `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodedEventId}?sendUpdates=all&conferenceDataVersion=1`,
             {
               method: "PUT",
               headers: {
@@ -429,6 +429,8 @@ export function createGoogleMeetingProvider(
               calendar!.events.update({
                 calendarId: config.calendarId,
                 eventId: row.externalEventId!,
+                sendUpdates: "all",
+                conferenceDataVersion: 1,
                 requestBody: {
                   ...current,
                   ...(changes.startAt

@@ -289,6 +289,83 @@ test("group invitee can accept and tutor can accept the full online booking", as
   await expectAcceptedBooking(page);
 });
 
+test("accepted online reschedule keeps the booking scheduled until cancellation", async ({
+  page,
+  browser,
+}) => {
+  const bookingId = await createSoloBooking(
+    page,
+    4,
+    "Verify the online reschedule and cancellation lifecycle.",
+  );
+  const tutor = await openTutorBooking(browser, bookingId);
+  try {
+    await tutorAcceptsBooking(tutor.page, bookingId);
+
+    await tutor.page
+      .getByRole("button", { name: "Propose new time", exact: true })
+      .click();
+    const rescheduleDialog = tutor.page.getByRole("dialog").last();
+    await expect(
+      rescheduleDialog.getByRole("heading", {
+        name: "Propose a new time",
+        exact: true,
+      }),
+    ).toBeVisible();
+    const availableTimes = rescheduleDialog.getByRole("button", {
+      name: /WIB/,
+    });
+    // Slot 0 is used by the earlier solo flow; slot 1 is used by the group
+    // flow. Use slot 2 as the proposal target, then cancel this booking before
+    // the later decline flow reuses that slot.
+    await expect(availableTimes.nth(2)).toBeVisible({ timeout: 15_000 });
+    await availableTimes.nth(2).click();
+    await rescheduleDialog
+      .getByLabel("Reason", { exact: true })
+      .fill("Move this session to the final available test slot.");
+    await rescheduleDialog
+      .getByRole("button", { name: "Send proposal", exact: true })
+      .click();
+    await expect(
+      tutor.page.getByText("New time proposed", { exact: true }),
+    ).toBeVisible();
+  } finally {
+    await tutor.context.close();
+  }
+
+  await page.goto(`/bookings/${bookingId}`);
+  await page
+    .getByRole("button", { name: "Accept new time", exact: true })
+    .click();
+  await expect(
+    page.getByText("New schedule accepted", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Scheduled", { exact: true }).first(),
+  ).toBeVisible();
+
+  await page
+    .getByRole("button", { name: "Cancel booking", exact: true })
+    .first()
+    .click();
+  const cancelDialog = page.getByRole("dialog").last();
+  await expect(
+    cancelDialog.getByText("Cancel this booking?", { exact: true }),
+  ).toBeVisible();
+  await cancelDialog
+    .getByLabel("Reason", { exact: true })
+    .fill("Clean up the completed reschedule E2E scenario.");
+  await cancelDialog
+    .getByRole("button", { name: "Cancel booking", exact: true })
+    .click();
+  await expect(
+    page.getByText("Booking cancelled", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Cancelled", { exact: true }).last(),
+  ).toBeVisible();
+});
+
 test("tutor can decline a request and the student sees the terminal state", async ({
   page,
   browser,

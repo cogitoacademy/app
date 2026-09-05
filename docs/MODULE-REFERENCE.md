@@ -59,6 +59,11 @@ was added or changed. The CI browser job uses the existing module boundaries
 and deterministic seed data to verify the user-visible booking, privacy, and
 economy workflows.
 
+The 2026-09-05 E2E workflow correction resolves and installs Chromium from the
+`packages/e2e` workspace so the browser revision matches its locked
+Playwright dependency. This changes CI setup only; module boundaries, event
+keys, services, repositories, and business rules remain unchanged.
+
 The 2026-09-02 Lefthook lint-gate alignment changes repository tooling only;
 services, modules, event keys, and business rules are unchanged.
 
@@ -498,7 +503,7 @@ The create-booking module keeps all submit state in the parent form while presen
 - `booking.repo.ts` — data access for bookings, participants, sessions, notes, reschedules, payouts
 - `booking.service.ts` — service methods below; consumer ports for wallet, pricing, audit, notification, meeting
 - `booking.handler.ts` — `createBookingHandler` (student/proposer) and `createTutorActionsHandler` (tutor)
-- `booking.router.ts` — Student-owned booking mutations use `studentProcedure` (the four **create** procedures use `verifiedStudentProcedure`, which additionally requires `emailVerified: true` — PRD paid actions); shared booking/detail/session reads stay protected; `booking.proposeReschedule` is the student-proposer route, while `tutorActions.*` (including `proposeReschedule`) uses `tutorProcedure`
+- `booking.router.ts` — Student-owned booking mutations use `studentProcedure` (the four **create** procedures use `verifiedStudentProcedure`, which additionally requires `emailVerified: true` — PRD paid actions); shared booking/detail/session reads stay protected and outside the 30/minute booking mutation limiter; `booking.proposeReschedule` is the student-proposer route, while `tutorActions.*` (including `proposeReschedule`) uses `tutorProcedure`
 
 **Service Methods:**
 
@@ -660,7 +665,7 @@ chat directory.
 **Service Methods:**
 
 - `createEvent(bookingId, scheduledStartAt?, scheduledEndAt?, attendees?, conn?, details?)` — Creates a Google Calendar event with optional title/description/location metadata. `details.createConference` defaults to true for the unchanged online Meet flow; offline scheduling passes false, producing no conference data or Meet URL. Repeated offline creation reuses the live provider row.
-- `updateEvent(bookingId, changes)` — Best-effort updates provider-side start/end and/or physical location while preserving the rest of the event resource, including any existing online conference (OQ-05, #46)
+- `updateEvent(bookingId, changes)` — Best-effort updates provider-side start/end and/or physical location while preserving the rest of the event resource. Updates use `sendUpdates=all` so attendee calendars receive accepted reschedules, and `conferenceDataVersion=1` so the existing online Meet conference survives the full-resource update (OQ-05, #46).
 - `cancelEvent(bookingId)` — Idempotently cancels the Google event on terminal online or offline booking states (cancel/late-cancel/decline/expire; best-effort via circuit breaker) (#46)
 - `probe()` — Boot-time connectivity probe (P4.2/X3): `calendarList.get` with a 10s timeout, logs loudly on failure (wired into the server bootstrap so a broken Google Meet swap is visible at boot, not only at the first booking; the server keeps manual fallback available)
 - Falls back to manual link URL format when circuit breaker is open

@@ -80,6 +80,11 @@ persistence contract. Browser coverage continues to use the existing slash
 RPC paths and the `{"json": <input>}` request envelope, with responses shaped as
 `{"json": <data>, "meta": [...]}`.
 
+The 2026-09-05 CI browser-install correction is tooling-only: Chromium is
+installed from `packages/e2e` so its revision matches the locked Playwright
+package. No endpoint, RPC path, input, output, or authentication contract
+changes.
+
 The 2026-09-02 local pre-push lint-gate alignment changes developer tooling
 only. It does not change any RPC path, request envelope, response shape,
 authentication rule, or API behavior.
@@ -921,7 +926,7 @@ RPC contract.
 - **Auth:** Protected; required tutor or active student voter
 - **Input:** `{ bookingId, proposalId? }`
 - **Output:** `{ booking }`
-- **Description:** Records one acceptance on the active, unexpired proposal. Partial acceptance does not change the schedule; before unanimous tutor + active-student acceptance applies the proposed 90-minute time, the server serializes the booking/tutor decision and rechecks tutor overlap plus series-session ownership/state/sibling overlap. A stale, expired, or newly conflicting target is rejected without changing the schedule. Successful acceptance restores the booking state that was active before the proposal. For an offline booking-level proposal, the active room assignment is moved with the booking when available; a room conflict or missing assignment returns the booking to `awaiting_admin_room_approval`.
+- **Description:** Records one acceptance on the active, unexpired proposal. Partial acceptance does not change the schedule; before unanimous tutor + active-student acceptance applies the proposed 90-minute time, the server serializes the booking/tutor decision and rechecks tutor overlap plus series-session ownership/state/sibling overlap. A stale, expired, or newly conflicting target is rejected without changing the schedule. Successful acceptance restores the booking state that was active before the proposal and best-effort updates its Google Calendar event in place; online updates notify all attendees and preserve conference data. For an offline booking-level proposal, the active room assignment is moved with the booking when available; a room conflict or missing assignment returns the booking to `awaiting_admin_room_approval`.
 
 ### `booking.getRescheduleAvailability`
 
@@ -930,6 +935,7 @@ RPC contract.
 - **Input:** `{ bookingId }`
 - **Output:** `AvailabilitySlot[]`
 - **Description:** Returns active tutor availability for the booking-scoped reschedule picker. Access is checked against the booking rather than tutor discovery visibility.
+- **Rate limit:** This protected read is intentionally excluded from the booking mutation limiter; repeated picker refreshes do not consume the 30/minute booking-action budget.
 - **Reschedule invariant:** `/rpc/booking/proposeReschedule` and `/rpc/tutorActions/proposeReschedule` reject a proposed start in the same minute as the active booking/target-session start or the pending proposal for that same target with `BOOKING_NOT_EDITABLE`. Proposal replacement is serialized, and only one pending proposal may exist per booking.
 
 ### `booking.rejectReschedule`
