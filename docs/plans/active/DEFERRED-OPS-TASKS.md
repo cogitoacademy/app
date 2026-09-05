@@ -1,11 +1,11 @@
 # Deferred Operations Tasks
 
-| Field      | Value                                                                                                                                                        |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Field      | Value                                                                                                                                                                                                                                                  |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Status     | Active — §0/§1 resolved; §4.3 monitoring live (Kuma + status page + Discord, 2026-09-02); §4.3 built-in health checks + §4.4 secret-scanning + branch protection remain (operator console); §2 + §3 deliberately deferred (recorded for future agents) |
-| Created    | 2026-07-29                                                                                                                                                   |
-| Depends on | #18 + #19 merged to main                                                                                                                                     |
-| Scope      | Ops + code gaps                                                                                                                                              |
+| Created    | 2026-07-29                                                                                                                                                                                                                                             |
+| Depends on | #18 + #19 merged to main                                                                                                                                                                                                                               |
+| Scope      | Ops + code gaps                                                                                                                                                                                                                                        |
 
 Tasks deferred from production-readiness (#18) and infrastructure (#19) that could not be completed without a live production environment or were identified as gaps during the post-merge audit.
 
