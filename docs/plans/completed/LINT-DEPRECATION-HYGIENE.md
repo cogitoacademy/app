@@ -172,3 +172,7 @@ Merge order: W1 → W2 → W3 → lead re-bump (each gated by CI green; the pin 
 - `Date.now`-in-render fixes can change timer behavior if the shared 30s clock pattern isn't reused correctly — verify countdown copy still ticks.
 - Re-bump may surface NEW 1.80 rules not in today's inventory — triage them at Task 4 time (fix if trivial, else document + keep pin partial).
 - Ansible group rename touches inventory + playbooks + group_vars in one atomic change (no partial states).
+
+## Close-out (2026-09-05, observability-stability wave)
+
+Task 5 (`tweaks-bar.js` addEventListener) is **obsolete**: the file was deleted in #152 and repo-wide `prefer-add-event-listener` count is 0. Tasks 1–2 descoped (user decision), 3/4/6 done, 7 done via wave docs-sync. **Plan CLOSED** — no open lint work remains.

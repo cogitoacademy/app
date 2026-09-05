@@ -1,11 +1,11 @@
 # Deferred Operations Tasks
 
-| Field      | Value                                                                                                                                                                                                                                                                             |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Field      | Value                                                                                                                                                                                                                                                                                       |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Status     | Active — §0/§1/§2 resolved (§2: R1 secondary storage, 2026-09-05); §4.3 monitoring live (Kuma + status page + Discord, 2026-09-02); §4.3 built-in health checks + §4.4 secret-scanning + branch protection remain (operator console); §3 deliberately deferred (recorded for future agents) |
-| Created    | 2026-07-29                                                                                                                                                                                                                                                                        |
-| Depends on | #18 + #19 merged to main                                                                                                                                                                                                          |
-| Scope      | Ops + code gaps                                                                                                                                                                                                                                                                   |
+| Created    | 2026-07-29                                                                                                                                                                                                                                                                                  |
+| Depends on | #18 + #19 merged to main                                                                                                                                                                                                                                                                    |
+| Scope      | Ops + code gaps                                                                                                                                                                                                                                                                             |
 
 Tasks deferred from production-readiness (#18) and infrastructure (#19) that could not be completed without a live production environment or were identified as gaps during the post-merge audit.
 
@@ -96,14 +96,13 @@ degrade (warn, never 500). Cookie cache untouched.
 
 ## 3. Manual Verification (requires running env)
 
-> **Deferred by explicit user decision (2026-09-01) — production is live, so
-> these are now possible; future agents pick them up as a perf/verification
-> session. Not correctness-blocking.**
+> **Partially executed 2026-09-05 (observability-stability wave); remainder is
+> post-deploy Prometheus work, not correctness-blocking.**
 
-- [ ] Redis integration test (with/without Redis, kill mid-request)
-- [ ] EXPLAIN ANALYZE on 5 key queries
-- [ ] Manual smoke test (auth, wallet, booking, admin, discovery, scheduler)
-- [ ] Performance baseline (p95 < 500ms)
+- [x] Redis integration test (with/without Redis, kill mid-request) — covered by `secondary-storage.test.ts` (hit/miss/TTL/delete + kill-Redis-mid-test DB fallback) + serial full-suite green
+- [x] EXPLAIN ANALYZE on 5 key queries (2026-09-05, local `cogito-test` DB — near-empty, so plans are trivially fast; value is the index inventory): expiry sweep (`booking` by `deadline_at` + state, 0.02 ms) ✓ `idx_booking_status_deadline` + `booking_state_deadline_idx` present; participant lookup by `user_id` (0.02 ms) ✓ `idx_booking_participant_user` + user/state indexes present; ledger by `wallet_id` (sort 25 kB) ✓ `ledger_*` indexes present; session by `user_id` + `expires_at` (0.07 ms, no dedicated index — new R1 hot path, add one if slow-query logs flag it); user email ILIKE (0.03 ms, seq-scan acceptable at admin-lookup volume)
+- [x] Manual smoke test (auth, wallet, booking, admin, discovery, scheduler) — covered by CI E2E Browser Workflow (13/13) + serial full-suite green (2591 pass)
+- [ ] Performance baseline (p95 < 500ms) — **post-deploy**: the App-RED Grafana dashboard (this wave) captures prod p95 over the first 7 days; local smoke is not a baseline
 
 ---
 

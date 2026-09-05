@@ -1,5 +1,7 @@
 # Observability + Stability Wave — Implementation Plan
 
+> **Status (lead close-out, 2026-09-05): wave COMPLETE pending merge.** Tasks 1–3, 5–6, 8-code, M1 done and verified (serial full-suite 2591 pass, 100% lines); Task 4 declarative done, live apply + swap + Grafana wiring are operator-owned (checklist in worker report + RUNBOOK); Task 7 operator-only items (dlq-clear, cert monitors, token perms, gateway decision) are operator-owned. 7 plans closed; `active/` holds only DEFERRED-OPS-TASKS, DEPLOYMENT-PLAN (both honest-active), and this plan (moves to `completed/` on merge).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Ship traceable logs, a tailnet-only PLG monitoring stack, Redis-backed sessions, upload hardening, and zero stuck-active plans — with no behavior change except the listed hardening.

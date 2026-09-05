@@ -86,3 +86,7 @@ build, test+coverage, semantic-pr, label).
 | Bun 1.3.14 segfault import order | comment + dynamic imports move verbatim; boot-simulated locally |
 | booking split behavioral drift   | mechanical extraction only; existing suite is the contract      |
 | ops shell dedupe breaks          | `bash -n` + dry-run; lib extraction only, no logic changes      |
+
+## Close-out (2026-09-05, observability-stability wave)
+
+Shipped: server route split, typed webhook errors, package/infra READMEs, docs sync. `booking.service.ts` split landed as a bounded mechanical extraction (`booking-session-guards.ts`: `normalizeSession`, `assertSessionFitsAvailability`, `assertNoIntraSeriesOverlap` — bodies identical, suite-as-contract green); the withdraw/reprice-helper split was rejected as not move-only (captured ports need signature threading) and is explicitly deferred, not forgotten. **Plan CLOSED.**

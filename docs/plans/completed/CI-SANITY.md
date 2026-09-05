@@ -140,3 +140,5 @@ cache dependent.
   date). No console change needed — nothing renamed to match.
   `ACTIONS_BOT_PAT` keep-or-drop decision: **undecided** (no signal either
   way; still operator-owned with F9/F10).
+
+- 2026-09-05 (observability-stability wave close-out): **plan CLOSED.** All findings implemented or recorded operator-owned (F9 PAT + F10 rulesets verified, no console change needed). Remaining PAT keep-or-drop decision stays operator-owned and is tracked in RUNBOOK/DEPLOYMENT operator checklists, not in an active plan.
