@@ -44,7 +44,9 @@ describe("webhook traceId persistence (T1)", () => {
     const realClaim = webhookIdempotency.claim;
     const realMarkProcessed = webhookIdempotency.markProcessed;
     webhookIdempotency.claim = mock(async (_key: string) => true);
-    const markProcessedMock = mock(async (_key: string, _result: unknown) => {});
+    const markProcessedMock = mock(
+      async (_key: string, _result: unknown) => {},
+    );
     webhookIdempotency.markProcessed = markProcessedMock;
     try {
       const res = await runWithTrace(
@@ -82,7 +84,9 @@ describe("webhook traceId persistence (T1)", () => {
     const realClaim = webhookIdempotency.claim;
     const realMarkProcessed = webhookIdempotency.markProcessed;
     webhookIdempotency.claim = mock(async (_key: string) => true);
-    const markProcessedMock = mock(async (_key: string, _result: unknown) => {});
+    const markProcessedMock = mock(
+      async (_key: string, _result: unknown) => {},
+    );
     webhookIdempotency.markProcessed = markProcessedMock;
     try {
       const res = await postWebhook();

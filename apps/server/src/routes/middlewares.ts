@@ -86,7 +86,12 @@ export function registerRequestLogging(app: Elysia) {
       .onAfterHandle(({ requestId, traceId, startTime, request, set }) => {
         const durationMs = performance.now() - startTime;
         const path = new URL(request.url).pathname;
-        recordRequest(path, durationMs);
+        recordRequest(
+          path,
+          durationMs,
+          request.method,
+          typeof set.status === "number" ? set.status : 200,
+        );
         appLog({
           level: "info",
           requestId,
