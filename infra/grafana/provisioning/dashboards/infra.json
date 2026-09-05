@@ -1,0 +1,80 @@
+{
+  "uid": "cogito-infra",
+  "title": "Infra",
+  "description": "Host + container health. Disk warn (85%) / critical (92%) lines match the disk watchdog thresholds.",
+  "tags": ["cogito", "infra"],
+  "timezone": "Asia/Jakarta",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Disk usage % (warn 85 / prune 92)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": 0, "color": "green" },
+              { "value": 85, "color": "orange" },
+              { "value": 92, "color": "red" }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * (1 - node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"})",
+          "legendFormat": "rootfs %"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Memory usage %",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)",
+          "legendFormat": "mem %"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "CPU usage %",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * (1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])))",
+          "legendFormat": "cpu %"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Container memory (top)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(8, container_memory_working_set_bytes{name=~\"cogito.+\"})",
+          "legendFormat": "{{name}}"
+        }
+      ]
+    }
+  ]
+}

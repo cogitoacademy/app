@@ -1,0 +1,82 @@
+# observability-service.yml — declare one observability Coolify service
+# (included from observability.yml, looped over `observability_services`).
+# Same drift discipline as tasks/database.yml: never recreate — create ONLY
+# when the name is missing (with instant_deploy so Coolify starts it), PATCH
+# drift on an existing service, re-runs are no-ops.
+#
+# Expected loop var `obs_spec`:
+#   name: Coolify service name (e.g. cogito-loki)
+#   description: human description for the create call
+#   docker_compose_raw: full compose YAML string for the service
+#   urls: list of {name, url} — EMPTY for tailnet-only services (no public
+#     domain; Grafana is the hard case: no public log UI, ever)
+---
+- name: Find the service by name ({{ obs_spec.name }})
+  ansible.builtin.set_fact:
+    obs_found: "{{ services_live.json | selectattr('name', 'equalto', obs_spec.name) | list }}"
+
+- name: Create the service {{ obs_spec.name }} (starts it via instant_deploy)
+  ansible.builtin.uri:
+    url: "{{ coolify_api_url }}/services"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ vault_env.COOLIFY_API_TOKEN }}"
+    body:
+      name: "{{ obs_spec.name }}"
+      description: "{{ obs_spec.description }}"
+      project_uuid: "{{ project_uuid }}"
+      environment_name: "{{ environment_name }}"
+      server_uuid: "{{ server_uuid }}"
+      docker_compose_raw: "{{ obs_spec.docker_compose_raw }}"
+      urls: "{{ obs_spec.urls }}"
+      instant_deploy: true
+    body_format: json
+    status_code: 201
+  register: obs_created
+  no_log: true
+  when: obs_found | length == 0
+
+- name: Resolve the {{ obs_spec.name }} service UUID
+  ansible.builtin.set_fact:
+    obs_uuid: "{{ obs_found[0].uuid if obs_found | length > 0 else obs_created.json.uuid }}"
+
+- name: Fetch the {{ obs_spec.name }} service detail (drift comparison)
+  ansible.builtin.uri:
+    url: "{{ coolify_api_url }}/services/{{ obs_uuid }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ vault_env.COOLIFY_API_TOKEN }}"
+    status_code: 200
+  register: obs_detail
+  no_log: true
+
+- name: Build the drift comparison for {{ obs_spec.name }}
+  ansible.builtin.set_fact:
+    obs_drift: >-
+      {%- set ns = namespace(parts=[]) -%}
+      {%- if obs_detail.json.name is defined and obs_detail.json.name != obs_spec.name -%}{%- set ns.parts = ns.parts + ['name: ' ~ obs_detail.json.name ~ ' != ' ~ obs_spec.name] -%}{%- endif -%}
+      {{- ns.parts | join('; ') -}}
+
+- name: PATCH drifted fields on {{ obs_spec.name }}
+  ansible.builtin.uri:
+    url: "{{ coolify_api_url }}/services/{{ obs_uuid }}"
+    method: PATCH
+    headers:
+      Authorization: "Bearer {{ vault_env.COOLIFY_API_TOKEN }}"
+    body:
+      name: "{{ obs_spec.name }}"
+      description: "{{ obs_spec.description }}"
+      docker_compose_raw: "{{ obs_spec.docker_compose_raw }}"
+      urls: "{{ obs_spec.urls }}"
+    body_format: json
+    status_code: 200
+  no_log: true
+  when: obs_drift | length > 0
+
+- name: Report the {{ obs_spec.name }} service state
+  ansible.builtin.debug:
+    msg: >-
+      Service {{ obs_spec.name }} (uuid={{ obs_uuid }}):
+      {% if obs_found | length == 0 %}created (Coolify is starting it now).
+      {% elif obs_drift | length > 0 %}drift patched: {{ obs_drift }}.
+      {% else %}no drift — matches the declaration.{% endif %}

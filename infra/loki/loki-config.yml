@@ -1,0 +1,52 @@
+# loki-config.yml — Loki single-binary config (source of truth in git).
+#
+# Declared by infra/ansible/observability.yml (Coolify service `cogito-loki`,
+# volume `loki-data`). Retention: 30 days — keep the two retention settings
+# below in sync with the playbook var LOKI_RETENTION_DAYS=30.
+# Lean fallback (tight VPS): 7d (limits_config.retention_period: 168h, see
+# docs/RUNBOOK.md → Monitoring & Alerting → Observability stack).
+#
+# Log privacy: emitters carry `userId`, never email (plan constraint — the
+# observability stack only stores what the app emits; it adds no PII).
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+
+common:
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    instance_addr: 127.0.0.1
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2024-04-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+# 30-day retention (720h). The compactor enforces it; the per-tenant limit
+# keeps a misbehaving stream from evading it.
+limits_config:
+  retention_period: 720h
+  retention_stream:
+    - selector: '{service=~".+"}'
+      period: 720h
+
+compactor:
+  working_directory: /loki/compactor
+  compaction_interval: 10m
+  retention_enabled: true
+  retention_delete_delay: 2h
+  retention_delete_worker_count: 150
