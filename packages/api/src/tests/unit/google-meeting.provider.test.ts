@@ -683,6 +683,8 @@ describe("createGoogleMeetingProvider updateEvent/cancelEvent (OQ-05)", () => {
     const call = mockCalendarEventsUpdate.mock.calls.at(-1)?.[0];
     expect(call?.eventId).toBe("evt_123");
     expect(call?.calendarId).toBe("primary");
+    expect(call?.sendUpdates).toBe("all");
+    expect(call?.conferenceDataVersion).toBe(1);
     expect(call?.requestBody?.summary).toBe(
       "Solo session with Tutor & Student",
     );
@@ -739,6 +741,48 @@ describe("createGoogleMeetingProvider updateEvent/cancelEvent (OQ-05)", () => {
       typeof mock
     >;
     expect(setMock).toHaveBeenCalledWith({ status: "cancelled" });
+  });
+
+  test("accepted reschedule updates the same online event; only cancellation deletes it", async () => {
+    const db = makeSelectDb(liveRow);
+    mockCalendarEventsGet.mockImplementationOnce(async () => ({
+      data: {
+        id: liveRow.externalEventId,
+        status: "confirmed",
+        hangoutLink: liveRow.meetingUrl,
+        conferenceData: {
+          entryPoints: [{ entryPointType: "video", uri: liveRow.meetingUrl }],
+        },
+      },
+    }));
+    const provider = createGoogleMeetingProvider(config, db);
+    const startAt = new Date("2030-03-01T08:00:00Z");
+    const endAt = new Date("2030-03-01T09:30:00Z");
+
+    await provider.updateEvent("b1", { startAt, endAt });
+
+    expect(mockCalendarEventsUpdate).toHaveBeenCalledTimes(1);
+    expect(mockCalendarEventsUpdate.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        eventId: liveRow.externalEventId,
+        sendUpdates: "all",
+        conferenceDataVersion: 1,
+        requestBody: expect.objectContaining({
+          status: "confirmed",
+          hangoutLink: liveRow.meetingUrl,
+          start: { dateTime: startAt.toISOString() },
+          end: { dateTime: endAt.toISOString() },
+        }),
+      }),
+    );
+    expect(mockCalendarEventsDelete).not.toHaveBeenCalled();
+
+    await provider.cancelEvent("b1");
+
+    expect(mockCalendarEventsDelete).toHaveBeenCalledTimes(1);
+    expect(mockCalendarEventsDelete.mock.calls[0]?.[0]?.eventId).toBe(
+      liveRow.externalEventId,
+    );
   });
 
   test("cancelEvent is a no-op without a live provider event", async () => {
@@ -1225,6 +1269,7 @@ describe("createGoogleMeetingProvider OAuth flows", () => {
 
   test("updateEvent moves a live provider event via the OAuth API", async () => {
     const methods: string[] = [];
+    const updateUrls: string[] = [];
     globalThis.fetch = mock(async (input: unknown, init?: RequestInit) => {
       const url = String(input);
       if (url === "https://oauth2.googleapis.com/token") {
@@ -1235,6 +1280,7 @@ describe("createGoogleMeetingProvider OAuth flows", () => {
         if (init?.method === "GET") {
           return tokenResponse({ id: "evt_oauth1" });
         }
+        updateUrls.push(url);
         return tokenResponse({ id: "evt_oauth1", status: "confirmed" });
       }
       throw new Error(`Unexpected fetch URL: ${url}`);
@@ -1274,6 +1320,10 @@ describe("createGoogleMeetingProvider OAuth flows", () => {
     });
 
     expect(methods).toEqual(["GET", "PUT"]);
+    expect(updateUrls).toHaveLength(1);
+    const updateUrl = new URL(updateUrls[0]!);
+    expect(updateUrl.searchParams.get("sendUpdates")).toBe("all");
+    expect(updateUrl.searchParams.get("conferenceDataVersion")).toBe("1");
   });
 
   test("cancelEvent deletes a live provider event via the OAuth API and marks the row cancelled", async () => {

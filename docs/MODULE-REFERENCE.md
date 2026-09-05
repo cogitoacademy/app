@@ -660,7 +660,7 @@ chat directory.
 **Service Methods:**
 
 - `createEvent(bookingId, scheduledStartAt?, scheduledEndAt?, attendees?, conn?, details?)` — Creates a Google Calendar event with optional title/description/location metadata. `details.createConference` defaults to true for the unchanged online Meet flow; offline scheduling passes false, producing no conference data or Meet URL. Repeated offline creation reuses the live provider row.
-- `updateEvent(bookingId, changes)` — Best-effort updates provider-side start/end and/or physical location while preserving the rest of the event resource, including any existing online conference (OQ-05, #46)
+- `updateEvent(bookingId, changes)` — Best-effort updates provider-side start/end and/or physical location while preserving the rest of the event resource. Updates use `sendUpdates=all` so attendee calendars receive accepted reschedules, and `conferenceDataVersion=1` so the existing online Meet conference survives the full-resource update (OQ-05, #46).
 - `cancelEvent(bookingId)` — Idempotently cancels the Google event on terminal online or offline booking states (cancel/late-cancel/decline/expire; best-effort via circuit breaker) (#46)
 - `probe()` — Boot-time connectivity probe (P4.2/X3): `calendarList.get` with a 10s timeout, logs loudly on failure (wired into the server bootstrap so a broken Google Meet swap is visible at boot, not only at the first booking; the server keeps manual fallback available)
 - Falls back to manual link URL format when circuit breaker is open

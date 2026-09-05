@@ -921,7 +921,7 @@ RPC contract.
 - **Auth:** Protected; required tutor or active student voter
 - **Input:** `{ bookingId, proposalId? }`
 - **Output:** `{ booking }`
-- **Description:** Records one acceptance on the active, unexpired proposal. Partial acceptance does not change the schedule; before unanimous tutor + active-student acceptance applies the proposed 90-minute time, the server serializes the booking/tutor decision and rechecks tutor overlap plus series-session ownership/state/sibling overlap. A stale, expired, or newly conflicting target is rejected without changing the schedule. Successful acceptance restores the booking state that was active before the proposal. For an offline booking-level proposal, the active room assignment is moved with the booking when available; a room conflict or missing assignment returns the booking to `awaiting_admin_room_approval`.
+- **Description:** Records one acceptance on the active, unexpired proposal. Partial acceptance does not change the schedule; before unanimous tutor + active-student acceptance applies the proposed 90-minute time, the server serializes the booking/tutor decision and rechecks tutor overlap plus series-session ownership/state/sibling overlap. A stale, expired, or newly conflicting target is rejected without changing the schedule. Successful acceptance restores the booking state that was active before the proposal and best-effort updates its Google Calendar event in place; online updates notify all attendees and preserve conference data. For an offline booking-level proposal, the active room assignment is moved with the booking when available; a room conflict or missing assignment returns the booking to `awaiting_admin_room_approval`.
 
 ### `booking.getRescheduleAvailability`
 
