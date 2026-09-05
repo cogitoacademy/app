@@ -5,6 +5,7 @@ import {
   isValidUploadKey,
   openApiAccessDenied,
   readBodyWithLimit,
+  sniffImageKind,
 } from "../../lib/request-id";
 
 describe("generateRequestId", () => {
@@ -134,6 +135,41 @@ describe("readBodyWithLimit", () => {
       body: "",
       tooLarge: true,
     });
+  });
+});
+
+describe("sniffImageKind", () => {
+  const png = new Uint8Array([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00,
+  ]);
+  const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
+  const gif = new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61]);
+  const webp = new Uint8Array([
+    0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50,
+  ]);
+  const html = new TextEncoder().encode("<!doctype html><html>");
+
+  test("detects PNG, JPEG, GIF, and WebP signatures", () => {
+    expect(sniffImageKind(png)).toBe("png");
+    expect(sniffImageKind(jpeg)).toBe("jpeg");
+    expect(sniffImageKind(gif)).toBe("gif");
+    expect(
+      sniffImageKind(new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x37, 0x61])),
+    ).toBe("gif");
+    expect(sniffImageKind(webp)).toBe("webp");
+  });
+
+  test("PNG bytes are image bytes even when declared as jpeg (lenient)", () => {
+    expect(sniffImageKind(png)).not.toBeNull();
+  });
+
+  test("rejects HTML polyglot bytes as non-image", () => {
+    expect(sniffImageKind(html)).toBeNull();
+  });
+
+  test("rejects empty and truncated input", () => {
+    expect(sniffImageKind(new Uint8Array([]))).toBeNull();
+    expect(sniffImageKind(new Uint8Array([0xff]))).toBeNull();
   });
 });
 

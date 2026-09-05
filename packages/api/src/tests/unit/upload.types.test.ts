@@ -1,19 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  ALLOWED_DOCUMENT_TYPES,
+  ALLOWED_IMAGE_TYPES,
   createUploadUrlInput,
   MAX_UPLOAD_BYTES,
 } from "../../modules/upload/upload.types";
 
 describe("createUploadUrlInput", () => {
-  test("accepts allowed content types", () => {
-    for (const contentType of [
-      "image/png",
-      "image/jpeg",
-      "image/webp",
-      "image/gif",
-      "application/pdf",
-    ]) {
+  test("accepts allowed image content types (photo flows)", () => {
+    for (const contentType of ALLOWED_IMAGE_TYPES) {
       const result = createUploadUrlInput.safeParse({
         filename: "photo.png",
         contentType,
@@ -21,6 +17,20 @@ describe("createUploadUrlInput", () => {
       });
       expect(result.success).toBe(true);
     }
+  });
+
+  test("photo flow rejects application/pdf", () => {
+    expect(
+      createUploadUrlInput.safeParse({
+        filename: "a.pdf",
+        contentType: "application/pdf",
+        contentLength: 10,
+      }).success,
+    ).toBe(false);
+  });
+
+  test("keeps application/pdf in the unreferenced document allowlist", () => {
+    expect(ALLOWED_DOCUMENT_TYPES).toContain("application/pdf");
   });
 
   test("rejects disallowed content types", () => {

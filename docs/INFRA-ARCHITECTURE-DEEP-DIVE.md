@@ -92,7 +92,7 @@ internet but _invisible_ on it.
 Coolify runs its own Docker network. On it:
 
 - **Traefik** (Coolify's bundled proxy) terminates TLS for all four domains and
-  routes by hostname. It also enforces the `coolify.` host restriction: only
+  routes by hostname. It also enforces the `cl.` host restriction: only
   `/api/v1/deploy/*` is proxied to the Coolify backend — the per-resource UUID
   in the URL is the bearer secret (Option A, locked decision).
 - **App Postgres 16** (`postgres-prod:5432`) and **Redis 7** (`redis-prod:6379`)

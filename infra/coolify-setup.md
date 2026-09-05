@@ -51,12 +51,12 @@ Docker/GHCR deployment when GitHub Actions has no quota, see
    - BETTER_AUTH_SECRET=...
    - BETTER_AUTH_URL=https://api.cogitoacademy.id
    - CORS_ORIGIN=https://app.cogitoacademy.id
-   - TRUST_PROXY=true (required — Caddy terminates TLS and forwards
+   - TRUST_PROXY=true (required — Traefik terminates TLS and forwards
      x-forwarded-for; without it rate limiting and the webhook IP
-     allowlist see Caddy's IP instead of the client's)
+     allowlist see Traefik's IP instead of the client's)
    - ... (all vars from .env.prod)
 7. Health check: GET /health
-8. Domain: api.cogitoacademy.id (Coolify auto-configures Caddy + HTTPS)
+8. Domain: api.cogitoacademy.id (Coolify auto-configures Traefik + HTTPS)
    - All API paths (`/rpc`, `/api`, `/health`, `/webhooks`) route to this
      service. The payment webhook endpoint
      (`POST /webhooks/payments/:provider`) must be reachable from the
@@ -82,9 +82,9 @@ Docker/GHCR deployment when GitHub Actions has no quota, see
 > CORS is allowed via `CORS_ORIGIN`). Do not set `VITE_SERVER_URL` in the
 > Coolify web service env — it has no effect on the built image.
 
-## Step 6: Configure Caddy Routing
+## Step 6: Configure Traefik Routing
 
-Coolify automatically configures Caddy reverse proxy:
+Coolify automatically configures Traefik reverse proxy:
 
 - api.cogitoacademy.id/* → cogito-api:3001
 - app.cogitoacademy.id → cogito-web:80

@@ -83,6 +83,17 @@ describe("upload service createUploadUrl", () => {
     ).rejects.toThrow(UnsupportedContentTypeError);
   });
 
+  test("throws UnsupportedContentTypeError for application/pdf (photo flows are image-only)", async () => {
+    const service = createUploadService({ storage: makeStorage() });
+    await expect(
+      service.createUploadUrl("user-1", {
+        filename: "a.pdf",
+        contentType: "application/pdf",
+        contentLength: 10,
+      }),
+    ).rejects.toThrow(UnsupportedContentTypeError);
+  });
+
   test("throws InvalidFilenameError for traversal or absolute filenames", async () => {
     const service = createUploadService({ storage: makeStorage() });
     await expect(
@@ -118,8 +129,8 @@ describe("upload service createUploadUrl", () => {
     });
     const service = createUploadService({ storage });
     const res = await service.createUploadUrl("user-1", {
-      filename: "report.pdf",
-      contentType: "application/pdf",
+      filename: "photo.png",
+      contentType: "image/png",
       contentLength: 2048,
     });
 

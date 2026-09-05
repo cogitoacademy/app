@@ -3,7 +3,8 @@ import { auth } from "@cogito-app/auth";
 import { MAX_UPLOAD_BYTES } from "@cogito-app/api/modules/upload/upload.types";
 import {
   isValidUploadKey,
-  readBodyWithLimit,
+  readBodyBytesWithLimit,
+  sniffImageKind,
 } from "@cogito-app/api/lib/request-id";
 import type { Elysia } from "elysia";
 
@@ -54,7 +55,7 @@ export function registerUploadRoutes(app: Elysia) {
           set.status = 403;
           return { error: "Forbidden" };
         }
-        const { body, tooLarge } = await readBodyWithLimit(
+        const { bytes, tooLarge } = await readBodyBytesWithLimit(
           request,
           MAX_UPLOAD_BYTES,
         );
@@ -62,8 +63,15 @@ export function registerUploadRoutes(app: Elysia) {
           set.status = 413;
           return { error: "Request body too large" };
         }
+        // Magic-byte sniff (U2): the body must be a recognized image. Exact
+        // kind vs key extension is lenient (PNG bytes under a .jpg key are
+        // fine); non-image bytes (HTML/PDF polyglots) are rejected with 415.
+        if (sniffImageKind(bytes) === null) {
+          set.status = 415;
+          return { error: "Unsupported media type" };
+        }
         const filePath = `${env.UPLOAD_DIR}/${key}`;
-        await Bun.write(filePath, body);
+        await Bun.write(filePath, bytes);
         return { ok: true, key };
       },
       { parse: "none" },

@@ -5,7 +5,7 @@ const absoluteOrSameOriginRelativeUrl = z
   .string()
   .min(1)
   .refine((value) => {
-    // Same-origin relative paths (e.g. "/rpc" in production behind Caddy)
+    // Same-origin relative paths (e.g. "/rpc" in production behind Traefik)
     // are valid and resolved against window.location.origin at runtime.
     if (value.startsWith("/")) return true;
     try {

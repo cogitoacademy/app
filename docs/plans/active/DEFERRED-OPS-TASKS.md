@@ -1,11 +1,11 @@
 # Deferred Operations Tasks
 
-| Field      | Value                                                                                                                                                        |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Status     | Active — §0/§1 resolved; §4.3/§4.4 secret-scanning + branch protection remain (operator console); §2 + §3 deliberately deferred (recorded for future agents) |
-| Created    | 2026-07-29                                                                                                                                                   |
-| Depends on | #18 + #19 merged to main                                                                                                                                     |
-| Scope      | Ops + code gaps                                                                                                                                              |
+| Field      | Value                                                                                                                                                                                                                                                  |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Status     | Active — §0/§1 resolved; §4.3 monitoring live (Kuma + status page + Discord, 2026-09-02); §4.3 built-in health checks + §4.4 secret-scanning + branch protection remain (operator console); §2 + §3 deliberately deferred (recorded for future agents) |
+| Created    | 2026-07-29                                                                                                                                                                                                                                             |
+| Depends on | #18 + #19 merged to main                                                                                                                                                                                                                               |
+| Scope      | Ops + code gaps                                                                                                                                                                                                                                        |
 
 Tasks deferred from production-readiness (#18) and infrastructure (#19) that could not be completed without a live production environment or were identified as gaps during the post-merge audit.
 
@@ -142,12 +142,23 @@ Redis-backed session storage with DB fallback, behind a fresh plan in
 
 ### 4.3 Monitoring
 
-- [ ] Configure Docker log rotation in Coolify
-- [ ] Deploy Uptime Kuma as Coolify service — **DEFERRED to a follow-up plan
-      (user decision, 2026-08-28); no Kuma playbook this wave**
-- [ ] Configure Uptime Kuma monitors (health, frontend, alerting) — **deferred
-      with the Kuma deploy**
-- [ ] Create public status page — **deferred with the Kuma deploy**
+- [x] Configure Docker log rotation in Coolify — **documented in
+      `infra/coolify-setup.md` (json-file, max-size 10m, max-file 3); listed as
+      a manual drift-check item (`infra/ansible/drift-check.yml` — not
+      expressible via the Coolify public API; verify with `docker inspect` on
+      the VPS)**
+- [x] Deploy Uptime Kuma as Coolify service — **LIVE since 2026-09-01/02:
+      `infra/ansible/uptime-kuma.yml` declares `cogito-uptime-kuma`
+      (`louislam/uptime-kuma:2`, port 3001, volume `uptime-kuma-data`) at
+      `status.cogitoacademy.id`; recreated in the `cogito-prod` project by
+      INFRA-AUTOMATION (2026-09-02)**
+- [x] Configure Uptime Kuma monitors (health, frontend, alerting) — **LIVE
+      since 2026-09-02 (operator): 4 monitors (`api-health`, `web-app`,
+      `DLQ DEPTH`, `COGITO ACADEMY` group) + `COGITO ALERT` Discord attached —
+      see `docs/KUMA-RUNBOOK.md`**
+- [x] Create public status page — **LIVE since 2026-09-02 (operator):
+      `cogito` status page published at `status.cogitoacademy.id` with the
+      three service monitors — see `docs/KUMA-RUNBOOK.md`**
 - [ ] Configure Coolify built-in health checks + resource alerts
 
 ### 4.4 Security
