@@ -333,6 +333,11 @@ jobs:
         env:
           ENV_FILE: ../../apps/server/.env.test
       - name: Install Chromium
+        # Resolve the CLI from the E2E workspace so the browser revision
+        # matches its locked @playwright/test dependency. Running bunx from
+        # the repository root can resolve a transient CLI and leave the
+        # headless-shell revision expected by the tests uninstalled.
+        working-directory: packages/e2e
         run: bunx playwright install --with-deps chromium
       - name: Run browser workflow
         run: bun run test:e2e

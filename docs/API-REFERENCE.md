@@ -80,6 +80,11 @@ persistence contract. Browser coverage continues to use the existing slash
 RPC paths and the `{"json": <input>}` request envelope, with responses shaped as
 `{"json": <data>, "meta": [...]}`.
 
+The 2026-09-05 CI browser-install correction is tooling-only: Chromium is
+installed from `packages/e2e` so its revision matches the locked Playwright
+package. No endpoint, RPC path, input, output, or authentication contract
+changes.
+
 The 2026-09-02 local pre-push lint-gate alignment changes developer tooling
 only. It does not change any RPC path, request envelope, response shape,
 authentication rule, or API behavior.

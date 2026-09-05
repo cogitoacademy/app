@@ -63,6 +63,10 @@ repository's normal typecheck coverage. CI retains both the HTML report and
 failure screenshots/traces for diagnosis.
 The migration step explicitly passes `ENV_FILE=../../apps/server/.env.test`
 through the Turbo `db:migrate` task, keeping the browser database isolated.
+Chromium installation runs with `packages/e2e` as its working directory so the
+CLI resolves the locked `@playwright/test` version and installs the exact
+headless-shell revision expected by the browser suite. If CI reports a missing
+Playwright executable, verify this working directory before changing test code.
 
 The authenticated shell has a skip link, accessible sidebar state, semantic
 tutor-card buttons, explicit page headings, and production-only devtools

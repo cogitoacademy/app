@@ -119,3 +119,7 @@ cache dependent.
   Playwright reports are uploaded on every CI run. The migration task passes
   the isolated `.env.test` through Turbo explicitly. Remaining operator-owned
   work is F9 (`ACTIONS_BOT_PAT`) and F10 branch protection.
+- 2026-09-05: the Chromium install step now runs from `packages/e2e`, ensuring
+  `bunx` resolves the locked Playwright CLI and installs the headless-shell
+  revision expected by the browser suite. This closes the CI false-negative
+  where every E2E test failed before launch because the executable was absent.

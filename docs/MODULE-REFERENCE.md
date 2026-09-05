@@ -59,6 +59,11 @@ was added or changed. The CI browser job uses the existing module boundaries
 and deterministic seed data to verify the user-visible booking, privacy, and
 economy workflows.
 
+The 2026-09-05 E2E workflow correction resolves and installs Chromium from the
+`packages/e2e` workspace so the browser revision matches its locked
+Playwright dependency. This changes CI setup only; module boundaries, event
+keys, services, repositories, and business rules remain unchanged.
+
 The 2026-09-02 Lefthook lint-gate alignment changes repository tooling only;
 services, modules, event keys, and business rules are unchanged.
 

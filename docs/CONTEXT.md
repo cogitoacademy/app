@@ -151,6 +151,11 @@ denial, contact privacy, economy roles, and 170px/390px layout containment.
 The responsive layout assertions are order-independent and accept either a
 real booking row or an empty collection state.
 
+On 2026-09-05, the CI browser setup was tightened to install Chromium from
+`packages/e2e`, where the locked Playwright dependency is resolved. This keeps
+the installed headless-shell revision aligned with the browser tests instead
+of allowing a repository-root transient CLI to select a different revision.
+
 Production payment checkout defaults to Xendit QRIS. The provider sends
 QRIS-specific channel properties (`qr_string_type=DYNAMIC`, 48-hour expiry),
 and the Balance page renders the returned QR payload instead of treating it as
