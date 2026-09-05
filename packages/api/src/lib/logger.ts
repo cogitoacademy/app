@@ -3,6 +3,7 @@ export interface LogEntry {
   level: "info" | "warn" | "error" | "debug";
   service: string;
   requestId?: string;
+  traceId?: string;
   userId?: string;
   action?: string;
   durationMs?: number;
@@ -21,11 +22,18 @@ export function initStructuredLogger(service: string) {
 }
 
 export function log(entry: Partial<LogEntry>): void {
+  // T1 + zero-email invariant: logs carry userId/traceId, never email. Any
+  // `email` key passed by a caller (the index signature permits it) is
+  // dropped before serialization.
+  const { email: _droppedEmail, ...rest } = entry as Partial<LogEntry> & {
+    email?: unknown;
+  };
+  void _droppedEmail;
   const fullEntry: LogEntry = {
     timestamp: new Date().toISOString(),
     level: entry.level ?? "info",
     service: serviceName,
-    ...entry,
+    ...rest,
   };
 
   const serialized = JSON.stringify(fullEntry);

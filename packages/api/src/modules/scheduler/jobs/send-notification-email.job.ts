@@ -1,13 +1,15 @@
 import type { Queue } from "bullmq";
+import { traceJobData } from "../../../lib/trace";
 import { JOB_RETENTION } from "../scheduler.service";
 
 const JOB_NAME = "send-notification-email";
 const REPEAT_INTERVAL_MS = 60_000;
 
 /**
- * Registers the repeatable email-outbox consumer job. The job carries no data:
- * the worker calls the notification service's `dispatchQueuedEmails` consumer,
- * which picks up queued dispatch rows from the database.
+ * Registers the repeatable email-outbox consumer job. The job carries only the
+ * trace stamp (`traceJobData`): the worker calls the notification service's
+ * `dispatchQueuedEmails` consumer, which picks up queued dispatch rows from
+ * the database.
  */
 export async function scheduleSendNotificationEmail(
   queue: Queue,
@@ -17,7 +19,7 @@ export async function scheduleSendNotificationEmail(
     { every: REPEAT_INTERVAL_MS },
     {
       name: JOB_NAME,
-      data: {},
+      data: traceJobData(),
       opts: {
         attempts: 3,
         backoff: { type: "exponential", delay: 1000 },

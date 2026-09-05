@@ -1,6 +1,18 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-09-04
+Last updated: 2026-09-05
+
+## Request tracing with W3C traceparent (2026-09-05)
+
+Every request carries a `traceId` end to end via `AsyncLocalStorage`
+(`packages/api/src/lib/trace.ts`: `runWithTrace`, `getTrace`,
+`parseTraceparent`, `emitTraceparent`). The server middleware seeds the scope
+per request (incoming `traceparent` wins, then `x-request-id`, then a
+generated `req_*` id) and the RPC layer attaches the authenticated userId, so
+`request_complete`/`request_error`/`rpc_error` lines, all six BullMQ scheduler
+payloads (`traceJobData`), notification metadata, and webhook idempotency
+records correlate in Loki. Structured logs carry `userId`/`traceId` and never
+email (enforced by the logger allowlist, which drops any `email` key).
 
 ## Server-backed table pagination (2026-09-04)
 
