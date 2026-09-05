@@ -62,14 +62,14 @@ verify last). `host-hardening.yml` and `tailscale.yml` are **excluded** from
 auto-apply (lockout risk / one-time semantics) — they remain manual phases
 of `./infra/apply.sh`.
 
-| You touched                                                                      | What happens on merge                                                 | Manual fallback                                                        |
-| -------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `infra/terraform/**` (DNS/R2)                                                    | `terraform plan -detailed-exitcode` → apply only on real drift        | `./infra/apply.sh tf-plan` → review → `tf-apply`                       |
-| `coolify-resources.yml` / env shape                                              | re-applied + API restart (seconds of downtime)                        | `./infra/apply.sh resources`                                           |
-| `backup-cron.yml` / `disk-watchdog.yml` / `disk-watchdog.sh` / `uptime-kuma.yml` | that playbook runs on the runner                                      | run it directly from the operator machine (tunnel up)                  |
-| `observability.yml` / provisioned configs / dashboards / alert rules             | services re-declared on the runner; **host files + Grafana wiring need the operator-machine run below** (the runner cannot open your tunnels) | full run from the operator machine (see §3c) |
-| `studio.yml`                                                                     | verification only (report, never restarts) — safe anywhere            | run it directly (tunnel up)                                            |
-| after any manual Coolify-UI fiddling                                             | — (push a no-op commit or `workflow_dispatch` infra-apply to re-sync) | `ansible-playbook ... drift-check.yml ...` (read-only; exit 1 = drift) |
+| You touched                                                                      | What happens on merge                                                                                                                         | Manual fallback                                                        |
+| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `infra/terraform/**` (DNS/R2)                                                    | `terraform plan -detailed-exitcode` → apply only on real drift                                                                                | `./infra/apply.sh tf-plan` → review → `tf-apply`                       |
+| `coolify-resources.yml` / env shape                                              | re-applied + API restart (seconds of downtime)                                                                                                | `./infra/apply.sh resources`                                           |
+| `backup-cron.yml` / `disk-watchdog.yml` / `disk-watchdog.sh` / `uptime-kuma.yml` | that playbook runs on the runner                                                                                                              | run it directly from the operator machine (tunnel up)                  |
+| `observability.yml` / provisioned configs / dashboards / alert rules             | services re-declared on the runner; **host files + Grafana wiring need the operator-machine run below** (the runner cannot open your tunnels) | full run from the operator machine (see §3c)                           |
+| `studio.yml`                                                                     | verification only (report, never restarts) — safe anywhere                                                                                    | run it directly (tunnel up)                                            |
+| after any manual Coolify-UI fiddling                                             | — (push a no-op commit or `workflow_dispatch` infra-apply to re-sync)                                                                         | `ansible-playbook ... drift-check.yml ...` (read-only; exit 1 = drift) |
 
 Break-glass (runner down, key rotation, DR): run `./infra/apply.sh` from the
 operator machine as before — §0 prerequisites still apply.
@@ -89,8 +89,8 @@ ansible-playbook -i infra/ansible/inventory.ini infra/ansible/studio.yml
 ```
 
 Re-runs are no-ops when converged (copy checksums, guarded API writes).
-Grafana alert *rules* ride the host file sync (file-provisioned); the contact
-*point* rides Play 3 (rotation stays a UI action). Studio never restarts
+Grafana alert _rules_ ride the host file sync (file-provisioned); the contact
+_point_ rides Play 3 (rotation stays a UI action). Studio never restarts
 automatically — `studio.yml` reports; you decide.
 
 Tailnet-only access recap: Grafana `http://localhost:3000` (tunnel),

@@ -620,7 +620,10 @@
         mode: "0644"
       loop:
         - { src: "loki/loki-config.yml", dest: "loki/loki-config.yml" }
-        - { src: "prometheus/prometheus.yml", dest: "prometheus/prometheus.yml" }
+        - {
+            src: "prometheus/prometheus.yml",
+            dest: "prometheus/prometheus.yml",
+          }
         - { src: "alloy/config.alloy", dest: "alloy/config.alloy" }
 
     - name: Sync the Grafana provisioning tree (dashboards, datasources, alerts)
