@@ -43,18 +43,53 @@ function seriesKey(path: string, method: string, status: number): string {
   return JSON.stringify([method, status, path]);
 }
 
+const KB_PREFIX = "/content/knowledge-bank/";
+const UPLOADS_PREFIX = "/uploads/";
+
+/**
+ * Collapses high-cardinality dynamic path segments to `:id` placeholders so
+ * per-ID URLs cannot mint one Prometheus series per ID against MAX_PATHS.
+ *
+ * - `/content/knowledge-bank/<resourceId>/file` (and any other
+ *   `/content/knowledge-bank/<id>[/...]` shape) → first segment becomes `:id`,
+ *   the static suffix (`file`, …) is preserved.
+ * - `/uploads/<...>` → every segment after `/uploads/` becomes `:id`
+ *   (depth is preserved, cardinality is not).
+ * - Everything else (`/rpc/*`, `/health`, `/metrics`, …) is returned
+ *   byte-identical. Already-normalized (`:id`) input is stable.
+ */
+export function normalizeMetricsPath(path: string): string {
+  if (path.startsWith(KB_PREFIX)) {
+    const rest = path.slice(KB_PREFIX.length);
+    if (!rest) return path;
+    const segments = rest.split("/");
+    segments[0] = ":id";
+    return `${KB_PREFIX}${segments.join("/")}`;
+  }
+  if (path === "/uploads" || path === "/uploads/") return path;
+  if (path.startsWith(UPLOADS_PREFIX)) {
+    const rest = path.slice(UPLOADS_PREFIX.length);
+    return `${UPLOADS_PREFIX}${rest
+      .split("/")
+      .map(() => ":id")
+      .join("/")}`;
+  }
+  return path;
+}
+
 export function recordRequest(
   path: string,
   durationMs: number,
   method = "UNKNOWN",
   status = 0,
 ) {
+  const normalizedPath = normalizeMetricsPath(path);
   const now = Date.now();
-  const key = seriesKey(path, method, status);
+  const key = seriesKey(normalizedPath, method, status);
   if (series.has(key) || series.size < MAX_PATHS) {
     lastAccess.set(key, now);
     const entry = series.get(key) ?? {
-      path,
+      path: normalizedPath,
       method,
       status,
       count: 0,

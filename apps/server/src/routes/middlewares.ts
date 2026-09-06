@@ -1,5 +1,8 @@
 import { SECURITY_HEADERS } from "@cogito-app/api/lib/security-headers";
-import { recordRequest } from "@cogito-app/api/lib/metrics";
+import {
+  normalizeMetricsPath,
+  recordRequest,
+} from "@cogito-app/api/lib/metrics";
 import { log as appLog } from "@cogito-app/api/lib/logger";
 import { generateRequestId } from "@cogito-app/api/lib/request-id";
 import {
@@ -87,7 +90,7 @@ export function registerRequestLogging(app: Elysia) {
         const durationMs = performance.now() - startTime;
         const path = new URL(request.url).pathname;
         recordRequest(
-          path,
+          normalizeMetricsPath(path),
           durationMs,
           request.method,
           typeof set.status === "number" ? set.status : 200,
@@ -106,8 +109,19 @@ export function registerRequestLogging(app: Elysia) {
           userId: requestUserId.get(request) ?? getTrace()?.userId,
         });
       })
-      .onError(({ requestId, request, error }) => {
+      .onError(({ requestId, startTime, request, set, error }) => {
         const path = new URL(request.url).pathname;
+        // Thrown-500 responses bypass onAfterHandle, so record here too —
+        // otherwise http_requests_total{status=5xx} stays blind to real 5xx
+        // and the ApiErrors alert never fires. An unhandled error is a 500
+        // unless the handler already set a numeric status (same derivation
+        // shape as onAfterHandle, whose 200 default is unchanged).
+        recordRequest(
+          normalizeMetricsPath(path),
+          typeof startTime === "number" ? performance.now() - startTime : 0,
+          request.method,
+          typeof set?.status === "number" ? set.status : 500,
+        );
         appLog({
           level: "error",
           requestId,
