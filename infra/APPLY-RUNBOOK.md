@@ -169,13 +169,13 @@ curl -s https://api.cogitoacademy.id/health
 
 ## 4. Verification after each step
 
-| Step           | Verify                                                                                                  |
-| -------------- | ------------------------------------------------------------------------------------------------------- |
-| Tailscale join | `tailscale status` on the VPS shows `cogito-vps`; SSH via tailnet IP works                              |
-| Host hardening | public SSH refused; tailnet SSH works; `ufw status` shows 80/443 public, 22+8000/6001/6002 tailnet-only |
-| Coolify sync   | `/health` returns `version == <deployed sha>`; `dlqDepth: 0`; env in Coolify UI matches the vault       |
-| Observability  | `ansible-playbook ... drift-check.yml ...` exits 0 (covers PLG/studio: existence, `urls == []`, image pins); Prometheus targets UP (tunnel 9090); LogQL `{service="cogito-app-server"} |= "traceId"` returns rows; `./infra/ops.sh trace <traceId>` prints the tailnet Explore URL |
-| Backup cron    | `infra/ops.sh dlq` / `ls /var/log/cogito-backup.log`; an R2 object appears                              |
+| Step           | Verify                                                                                                                                                                                 |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tailscale join | `tailscale status` on the VPS shows `cogito-vps`; SSH via tailnet IP works                                                                                                             |
+| Host hardening | public SSH refused; tailnet SSH works; `ufw status` shows 80/443 public, 22+8000/6001/6002 tailnet-only                                                                                |
+| Coolify sync   | `/health` returns `version == <deployed sha>`; `dlqDepth: 0`; env in Coolify UI matches the vault                                                                                      |
+| Observability  | `ansible-playbook ... drift-check.yml ...` exits 0 (covers PLG/studio: existence, `urls == []`, image pins); Prometheus targets UP (tunnel 9090); LogQL `{service="cogito-app-server"} | = "traceId"`returns rows;`./infra/ops.sh trace <traceId>` prints the tailnet Explore URL |
+| Backup cron    | `infra/ops.sh dlq` / `ls /var/log/cogito-backup.log`; an R2 object appears                                                                                                             |
 
 ## 5. Rollback
 

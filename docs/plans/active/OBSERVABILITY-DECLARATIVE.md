@@ -34,12 +34,12 @@ two live-verified inputs — prefer them over this plan where they conflict:
   `infra/ansible/drift-check.yml`, and `docs/INFRA-PLAYBOOK.md` §3c + §3 table
   rows (operator-machine run; "the runner cannot open your tunnels").
 
-| Task | Verdict | Covering commit + file, or remaining delta |
-|---|---|---|
-| 1 — pipeline wiring (`apply.sh` + `infra-apply.yml`) | **MERGE** | INFRA-PLAYBOOK §3-table step SUPERSEDED by `1b669846` (`docs/INFRA-PLAYBOOK.md` §3c + table rows, live-verified wording). `apply.sh` subcommands/markers/`all`-order, `infra-apply.yml` detect/filters/steps, `infra/ansible/README.md` apply order, `infra/APPLY-RUNBOOK.md` — still needed: zero `observability` mentions in all four files at base (verified 2026-09-06). Open question: §3c prescribes operator-machine runs — confirm whether `infra-apply.yml` wiring should still proceed (esp. Play 3's `:3000` gate on the self-hosted runner) before implementing. |
-| 2 — `observability-config.yml` (new file, SSH placement) | **MERGE** | Placement mechanism SUPERSEDED by `1b669846` Play 2 in `infra/ansible/observability.yml` (single-file, `root:root`, 0644 token, + network/admin-password extras) — do NOT create a second competing playbook. Remaining delta: replace the stale imperative `scp` debug block (base `observability.yml:480-489`, retained verbatim on `f/obs-declarative`) with a Play-2 pointer; fix stale `0600` header comment (`observability.yml:33`) and `infra/prometheus/prometheus.yml:12-13` (`root 0600`) → live `0644`; fix stale `ubuntu:ubuntu` ownership note → live `root:root`. |
-| 3 — `tasks/observability-service.yml` full-declaration drift | **KEEP** | Untouched by `1b669846` (not in its file set). Gap live at base: `obs_drift` compares `name` only (`tasks/observability-service.yml:55-60`); PATCH body already sends the full declaration (`:68-72`). Implement as written. |
-| 4 — `drift-check-observability.yml` (new) + docs sync | **MERGE** | Existence gate SUPERSEDED by `1b669846` (`infra/ansible/drift-check.yml` `declared_services`, 5 services). Remaining delta: `urls == []` tailnet-only invariant + image pins + retention flags (recommend extending `drift-check.yml` per the branch-A direction, drop the new-file preference); docs: `INFRA-PLAYBOOK.md` §3c done, `docs/CONTEXT.md` already APPLIED (Step 4 wording stale — rewrite, do not regress), `docs/RUNBOOK.md` command refresh + `infra/APPLY-RUNBOOK.md` §3/§4 rows + `docs/plans/README.md` index row still needed. |
+| Task                                                         | Verdict   | Covering commit + file, or remaining delta                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------------------------------------ | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 — pipeline wiring (`apply.sh` + `infra-apply.yml`)         | **MERGE** | INFRA-PLAYBOOK §3-table step SUPERSEDED by `1b669846` (`docs/INFRA-PLAYBOOK.md` §3c + table rows, live-verified wording). `apply.sh` subcommands/markers/`all`-order, `infra-apply.yml` detect/filters/steps, `infra/ansible/README.md` apply order, `infra/APPLY-RUNBOOK.md` — still needed: zero `observability` mentions in all four files at base (verified 2026-09-06). Open question: §3c prescribes operator-machine runs — confirm whether `infra-apply.yml` wiring should still proceed (esp. Play 3's `:3000` gate on the self-hosted runner) before implementing.     |
+| 2 — `observability-config.yml` (new file, SSH placement)     | **MERGE** | Placement mechanism SUPERSEDED by `1b669846` Play 2 in `infra/ansible/observability.yml` (single-file, `root:root`, 0644 token, + network/admin-password extras) — do NOT create a second competing playbook. Remaining delta: replace the stale imperative `scp` debug block (base `observability.yml:480-489`, retained verbatim on `f/obs-declarative`) with a Play-2 pointer; fix stale `0600` header comment (`observability.yml:33`) and `infra/prometheus/prometheus.yml:12-13` (`root 0600`) → live `0644`; fix stale `ubuntu:ubuntu` ownership note → live `root:root`. |
+| 3 — `tasks/observability-service.yml` full-declaration drift | **KEEP**  | Untouched by `1b669846` (not in its file set). Gap live at base: `obs_drift` compares `name` only (`tasks/observability-service.yml:55-60`); PATCH body already sends the full declaration (`:68-72`). Implement as written.                                                                                                                                                                                                                                                                                                                                                     |
+| 4 — `drift-check-observability.yml` (new) + docs sync        | **MERGE** | Existence gate SUPERSEDED by `1b669846` (`infra/ansible/drift-check.yml` `declared_services`, 5 services). Remaining delta: `urls == []` tailnet-only invariant + image pins + retention flags (recommend extending `drift-check.yml` per the branch-A direction, drop the new-file preference); docs: `INFRA-PLAYBOOK.md` §3c done, `docs/CONTEXT.md` already APPLIED (Step 4 wording stale — rewrite, do not regress), `docs/RUNBOOK.md` command refresh + `infra/APPLY-RUNBOOK.md` §3/§4 rows + `docs/plans/README.md` index row still needed.                                |
 
 Implementers: execute the KEEP/MERGE deltas above; treat SUPERSEDED steps as
 do-not-implement (they would duplicate or regress live-verified state).
@@ -92,16 +92,16 @@ re-litigate):
 
 ## File Structure
 
-| File | Responsibility |
-|---|---|
-| `infra/ansible/observability.yml` | Declares the 4 Coolify services via API (existing — Task 1 wires it, Task 3 fixes its drift include). No file placement after Task 2 (prints a pointer to the config playbook instead). |
-| `infra/ansible/observability-config.yml` **(new)** | Places provisioned files on the VPS via SSH+become: `loki-config.yml`, `prometheus.yml`, `config.alloy`, `grafana/provisioning/**`, `metrics_token` (0600 from vault). Idempotent, modeled on `backup-cron.yml`. |
-| `infra/ansible/tasks/observability-service.yml` | Per-service create-if-missing + PATCH drift (existing — Task 3 fixes `obs_drift` to compare `docker_compose_raw` + `urls` + `description`, not just `name`). |
-| `infra/ansible/drift-check.yml` **or** `infra/ansible/drift-check-observability.yml` **(new, preferred)** | Read-only GET verification for the 4 PLG services (names + `urls == []` + image tags + retention flags). Fails on drift, safe to re-run. |
-| `infra/apply.sh` | Adds `observability` + `observability-config` subcommands, markers, and `all`-order slots (existing — Task 1 extends). |
-| `.github/workflows/infra-apply.yml` | Adds `observability` + `observability-config` paths-filter outputs and apply steps (existing — Task 1 extends). |
-| `infra/ansible/README.md`, `docs/INFRA-PLAYBOOK.md`, `infra/APPLY-RUNBOOK.md` | Operator docs: apply order, scenario→command table, credential/verify steps (existing — Task 1 + Task 4 update). |
-| `docs/CONTEXT.md`, `docs/RUNBOOK.md`, `docs/plans/README.md` | Live-state + ops detail + plan index (existing — Task 4 syncs). |
+| File                                                                                                      | Responsibility                                                                                                                                                                                                   |
+| --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `infra/ansible/observability.yml`                                                                         | Declares the 4 Coolify services via API (existing — Task 1 wires it, Task 3 fixes its drift include). No file placement after Task 2 (prints a pointer to the config playbook instead).                          |
+| `infra/ansible/observability-config.yml` **(new)**                                                        | Places provisioned files on the VPS via SSH+become: `loki-config.yml`, `prometheus.yml`, `config.alloy`, `grafana/provisioning/**`, `metrics_token` (0600 from vault). Idempotent, modeled on `backup-cron.yml`. |
+| `infra/ansible/tasks/observability-service.yml`                                                           | Per-service create-if-missing + PATCH drift (existing — Task 3 fixes `obs_drift` to compare `docker_compose_raw` + `urls` + `description`, not just `name`).                                                     |
+| `infra/ansible/drift-check.yml` **or** `infra/ansible/drift-check-observability.yml` **(new, preferred)** | Read-only GET verification for the 4 PLG services (names + `urls == []` + image tags + retention flags). Fails on drift, safe to re-run.                                                                         |
+| `infra/apply.sh`                                                                                          | Adds `observability` + `observability-config` subcommands, markers, and `all`-order slots (existing — Task 1 extends).                                                                                           |
+| `.github/workflows/infra-apply.yml`                                                                       | Adds `observability` + `observability-config` paths-filter outputs and apply steps (existing — Task 1 extends).                                                                                                  |
+| `infra/ansible/README.md`, `docs/INFRA-PLAYBOOK.md`, `infra/APPLY-RUNBOOK.md`                             | Operator docs: apply order, scenario→command table, credential/verify steps (existing — Task 1 + Task 4 update).                                                                                                 |
+| `docs/CONTEXT.md`, `docs/RUNBOOK.md`, `docs/plans/README.md`                                              | Live-state + ops detail + plan index (existing — Task 4 syncs).                                                                                                                                                  |
 
 ---
 
@@ -116,12 +116,14 @@ re-litigate):
 > (esp. Play 3's `:3000` gate on the self-hosted runner) before Step 5.
 
 **Files:**
+
 - Modify: `infra/apply.sh`
 - Modify: `.github/workflows/infra-apply.yml`
 - Modify: `infra/ansible/README.md`
 - Modify: `docs/INFRA-PLAYBOOK.md`
 
 **Interfaces:**
+
 - Consumes: existing `infra/ansible/observability.yml` vars (`coolify_api_url`, `vault_path`, `project_name: cogito-prod`, `environment_name: production`) and existing `phase_resources` / `uptime-kuma` apply-step patterns.
 - Produces: `./infra/apply.sh observability` + `./infra/apply.sh observability-config` subcommands with markers `observability-declared` / `observability-configured`; `infra-apply.yml` outputs `observability`, `observability-config` consumed by Task 2 and Task 4.
 
@@ -218,26 +220,26 @@ Expected: `help` lists `observability` + `observability-config`; `--dry-run all`
 In `.github/workflows/infra-apply.yml` `detect` job outputs (lines 60-67), add:
 
 ```yaml
-      observability: ${{ steps.filter.outputs.observability }}
-      observability-config: ${{ steps.filter.outputs.observability-config }}
+observability: ${{ steps.filter.outputs.observability }}
+observability-config: ${{ steps.filter.outputs.observability-config }}
 ```
 
 In the `filters:` block (lines 75-95), add:
 
 ```yaml
-            observability:
-              - 'infra/ansible/observability.yml'
-              - 'infra/ansible/tasks/observability-service.yml'
-              - 'infra/prometheus/**'
-              - 'infra/loki/**'
-              - 'infra/alloy/**'
-              - 'infra/grafana/**'
-            observability-config:
-              - 'infra/ansible/observability-config.yml'
-              - 'infra/prometheus/**'
-              - 'infra/loki/**'
-              - 'infra/alloy/**'
-              - 'infra/grafana/**'
+observability:
+  - "infra/ansible/observability.yml"
+  - "infra/ansible/tasks/observability-service.yml"
+  - "infra/prometheus/**"
+  - "infra/loki/**"
+  - "infra/alloy/**"
+  - "infra/grafana/**"
+observability-config:
+  - "infra/ansible/observability-config.yml"
+  - "infra/prometheus/**"
+  - "infra/loki/**"
+  - "infra/alloy/**"
+  - "infra/grafana/**"
 ```
 
 Extend the `any:` list (lines 89-95) with the same seven paths plus `infra/ansible/observability-config.yml`.
@@ -245,15 +247,15 @@ Extend the `any:` list (lines 89-95) with the same seven paths plus `infra/ansib
 After the `Apply — uptime-kuma` step (lines 241-245), insert before `Post-apply verification`:
 
 ```yaml
-      - name: Apply — observability (Coolify API declares)
-        if: github.event_name == 'workflow_dispatch' || needs.detect.outputs.observability == 'true' || needs.detect.outputs.vault == 'true'
-        run: |
-          ansible-playbook -i infra/ansible/inventory.ini infra/ansible/observability.yml \
-            -e coolify_api_url="http://127.0.0.1:8000/api/v1"
+- name: Apply — observability (Coolify API declares)
+  if: github.event_name == 'workflow_dispatch' || needs.detect.outputs.observability == 'true' || needs.detect.outputs.vault == 'true'
+  run: |
+    ansible-playbook -i infra/ansible/inventory.ini infra/ansible/observability.yml \
+      -e coolify_api_url="http://127.0.0.1:8000/api/v1"
 
-      - name: Apply — observability-config (local connection — the runner IS the host)
-        if: github.event_name == 'workflow_dispatch' || needs.detect.outputs.observability-config == 'true' || needs.detect.outputs.observability == 'true' || needs.detect.outputs.vault == 'true'
-        run: ansible-playbook -i infra/ansible/inventory.ini infra/ansible/observability-config.yml --connection=local
+- name: Apply — observability-config (local connection — the runner IS the host)
+  if: github.event_name == 'workflow_dispatch' || needs.detect.outputs.observability-config == 'true' || needs.detect.outputs.observability == 'true' || needs.detect.outputs.vault == 'true'
+  run: ansible-playbook -i infra/ansible/inventory.ini infra/ansible/observability-config.yml --connection=local
 ```
 
 Note: `observability.yml` is `hosts: localhost` control-node driven (same as `uptime-kuma.yml`), so it takes `-e coolify_api_url` loopback override. `observability-config.yml` is `hosts: cogito_vps` (Task 2), so on the runner it uses `--connection=local` exactly like `backup-cron.yml` / `disk-watchdog.yml`.
@@ -269,8 +271,8 @@ In the `## Apply order` numbered list (currently ends at 5. `drift-check.yml`), 
    SSH tunnel `ssh -L 8000:127.0.0.1:8000` like `coolify-resources.yml`.
 5. **`observability-config.yml`** — place provisioned files on the VPS
    (`/etc/cogito/observability/{loki,prometheus,alloy,grafana/provisioning}`
-   + `metrics_token` 0600 from the vault). SSH+become (`hosts: cogito_vps`).
-   Then redeploy `cogito-prometheus` + `cogito-alloy` in Coolify UI.
+   - `metrics_token` 0600 from the vault). SSH+become (`hosts: cogito_vps`).
+     Then redeploy `cogito-prometheus` + `cogito-alloy` in Coolify UI.
 6. **`backup-cron.yml`** — (existing text unchanged)
 7. **`drift-check.yml`** — (existing text unchanged, plus PLG coverage in Task 4)
 ```
@@ -323,10 +325,12 @@ git commit -m "feat(infra): wire observability into apply.sh and infra-apply pip
 > resolved with the operator.
 
 **Files:**
+
 - Create: `infra/ansible/observability-config.yml`
 - Modify: `infra/ansible/observability.yml` (replace the printed `scp` block with a pointer to the new playbook)
 
 **Interfaces:**
+
 - Consumes: git source-of-truth `infra/loki/loki-config.yml`, `infra/prometheus/prometheus.yml`, `infra/alloy/config.alloy`, `infra/grafana/provisioning/**`; vault keys `METRICS_TOKEN` (file 0600) — same `sops -d` + tempfile + python3-parse idiom as `observability.yml:232-272` and `backup-cron.yml:1-48`.
 - Produces: `/etc/cogito/observability/{loki/loki-config.yml,prometheus/prometheus.yml,alloy/config.alloy,grafana/provisioning/**}` (0644 / dirs 0755, `ubuntu:ubuntu` so Coolify bind-mounts read cleanly — see current manual `chown` in the printed step) + `/etc/cogito/observability/prometheus/metrics_token` (0600, `root:root`); handler-equivalent note to redeploy `cogito-prometheus` + `cogito-alloy` (Coolify UI redeploy — API redeploy is out of scope, print the reminder like today).
 
@@ -367,52 +371,52 @@ Create the file with this exact header and play opening (modeled on `backup-cron
 Append these tasks to the play (uses `ansible.builtin.copy` directory mode exactly like the manual `mkdir -p ... && chown -R ubuntu:ubuntu` step it replaces):
 
 ```yaml
-  tasks:
-    - name: Create the observability config tree
-      ansible.builtin.file:
-        path: "{{ obs_root }}/{{ item }}"
-        state: directory
-        owner: ubuntu
-        group: ubuntu
-        mode: "0755"
-      loop:
-        - loki
-        - prometheus
-        - alloy
-        - grafana/provisioning
+tasks:
+  - name: Create the observability config tree
+    ansible.builtin.file:
+      path: "{{ obs_root }}/{{ item }}"
+      state: directory
+      owner: ubuntu
+      group: ubuntu
+      mode: "0755"
+    loop:
+      - loki
+      - prometheus
+      - alloy
+      - grafana/provisioning
 
-    - name: Place loki-config.yml
-      ansible.builtin.copy:
-        src: "{{ playbook_dir }}/../loki/loki-config.yml"
-        dest: "{{ obs_root }}/loki/loki-config.yml"
-        owner: ubuntu
-        group: ubuntu
-        mode: "0644"
+  - name: Place loki-config.yml
+    ansible.builtin.copy:
+      src: "{{ playbook_dir }}/../loki/loki-config.yml"
+      dest: "{{ obs_root }}/loki/loki-config.yml"
+      owner: ubuntu
+      group: ubuntu
+      mode: "0644"
 
-    - name: Place prometheus.yml
-      ansible.builtin.copy:
-        src: "{{ playbook_dir }}/../prometheus/prometheus.yml"
-        dest: "{{ obs_root }}/prometheus/prometheus.yml"
-        owner: ubuntu
-        group: ubuntu
-        mode: "0644"
+  - name: Place prometheus.yml
+    ansible.builtin.copy:
+      src: "{{ playbook_dir }}/../prometheus/prometheus.yml"
+      dest: "{{ obs_root }}/prometheus/prometheus.yml"
+      owner: ubuntu
+      group: ubuntu
+      mode: "0644"
 
-    - name: Place alloy config
-      ansible.builtin.copy:
-        src: "{{ playbook_dir }}/../alloy/config.alloy"
-        dest: "{{ obs_root }}/alloy/config.alloy"
-        owner: ubuntu
-        group: ubuntu
-        mode: "0644"
+  - name: Place alloy config
+    ansible.builtin.copy:
+      src: "{{ playbook_dir }}/../alloy/config.alloy"
+      dest: "{{ obs_root }}/alloy/config.alloy"
+      owner: ubuntu
+      group: ubuntu
+      mode: "0644"
 
-    - name: Place Grafana provisioning tree
-      ansible.builtin.copy:
-        src: "{{ playbook_dir }}/../grafana/provisioning/"
-        dest: "{{ obs_root }}/grafana/provisioning/"
-        owner: ubuntu
-        group: ubuntu
-        mode: "0644"
-        directory_mode: "0755"
+  - name: Place Grafana provisioning tree
+    ansible.builtin.copy:
+      src: "{{ playbook_dir }}/../grafana/provisioning/"
+      dest: "{{ obs_root }}/grafana/provisioning/"
+      owner: ubuntu
+      group: ubuntu
+      mode: "0644"
+      directory_mode: "0755"
 ```
 
 `copy` with identical content reports `ok` (no change) — re-runs are no-ops, satisfying the idempotence requirement without any `changed_when` hacks.
@@ -422,40 +426,40 @@ Append these tasks to the play (uses `ansible.builtin.copy` directory mode exact
 Append after the copy tasks (same delegate pattern `backup-cron.yml` uses: decrypt with `sops -d` on the control node via `delegate_to: localhost`, then write the single value with `copy content:` + `no_log: true`):
 
 ```yaml
-    - name: Decrypt the SOPS vault on the control node
-      ansible.builtin.command: sops -d {{ vault_path_local }}
-      changed_when: false
-      no_log: true
-      register: vault_plaintext
-      delegate_to: localhost
-      become: false
-      environment:
-        PATH: "{{ lookup('env', 'PATH') }}:/opt/homebrew/bin:/usr/local/bin"
-        SOPS_AGE_KEY_FILE: "{{ lookup('env', 'SOPS_AGE_KEY_FILE') | default(lookup('env', 'HOME') + '/.config/sops/age/keys.txt', true) }}"
+- name: Decrypt the SOPS vault on the control node
+  ansible.builtin.command: sops -d {{ vault_path_local }}
+  changed_when: false
+  no_log: true
+  register: vault_plaintext
+  delegate_to: localhost
+  become: false
+  environment:
+    PATH: "{{ lookup('env', 'PATH') }}:/opt/homebrew/bin:/usr/local/bin"
+    SOPS_AGE_KEY_FILE: "{{ lookup('env', 'SOPS_AGE_KEY_FILE') | default(lookup('env', 'HOME') + '/.config/sops/age/keys.txt', true) }}"
 
-    - name: Extract METRICS_TOKEN (fail loud when missing)
-      ansible.builtin.set_fact:
-        metrics_token_value: "{{ (vault_plaintext.stdout_lines | select('match', '^METRICS_TOKEN=') | list | first | default('')) | regex_replace('^METRICS_TOKEN=', '') }}"
-      no_log: true
+- name: Extract METRICS_TOKEN (fail loud when missing)
+  ansible.builtin.set_fact:
+    metrics_token_value: "{{ (vault_plaintext.stdout_lines | select('match', '^METRICS_TOKEN=') | list | first | default('')) | regex_replace('^METRICS_TOKEN=', '') }}"
+  no_log: true
 
-    - name: Require METRICS_TOKEN in the vault
-      ansible.builtin.assert:
-        that:
-          - metrics_token_value | length > 0
-        fail_msg: >-
-          METRICS_TOKEN is missing from the SOPS vault — generate with
-          `openssl rand -hex 32`, add via `sops infra/secrets/prod.env`,
-          apply METRICS_TOKEN to cogito-api (coolify-resources.yml), then
-          re-run this playbook.
+- name: Require METRICS_TOKEN in the vault
+  ansible.builtin.assert:
+    that:
+      - metrics_token_value | length > 0
+    fail_msg: >-
+      METRICS_TOKEN is missing from the SOPS vault — generate with
+      `openssl rand -hex 32`, add via `sops infra/secrets/prod.env`,
+      apply METRICS_TOKEN to cogito-api (coolify-resources.yml), then
+      re-run this playbook.
 
-    - name: Place the Prometheus metrics token file (0600, root-only)
-      ansible.builtin.copy:
-        dest: "{{ obs_root }}/prometheus/metrics_token"
-        content: "{{ metrics_token_value }}"
-        owner: root
-        group: root
-        mode: "0600"
-      no_log: true
+- name: Place the Prometheus metrics token file (0600, root-only)
+  ansible.builtin.copy:
+    dest: "{{ obs_root }}/prometheus/metrics_token"
+    content: "{{ metrics_token_value }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
 ```
 
 Why `delegate_to: localhost` + `become: false`: the Age key lives on the operator machine, never on the VPS — identical constraint to `backup-cron.yml:6-8`. The value travels inside the Ansible SSH session and lands 0600, never in argv, never in logs.
@@ -465,18 +469,18 @@ Why `delegate_to: localhost` + `become: false`: the Age key lives on the operato
 Append as the final task:
 
 ```yaml
-    - name: Print the config-consumer redeploy reminder
-      ansible.builtin.debug:
-        msg: |-
-          Provisioned files placed under {{ obs_root }}.
-          Redeploy the two config consumers in the Coolify UI
-          (cogito-prometheus, cogito-alloy) or redeploy those services.
-          Retention: Loki 30d (loki-config.yml, keep in sync with
-          loki_retention_days=30 in observability.yml), Prometheus 15d
-          (--storage.tsdb.retention.time=15d, from prom_retention_days=15).
-          Verify over the tailnet: Prometheus targets UP
-          (tunnel 9090), LogQL {service="cogito-app-server"} |= "traceId",
-          or ./infra/ops.sh trace <traceId>.
+- name: Print the config-consumer redeploy reminder
+  ansible.builtin.debug:
+    msg: |-
+      Provisioned files placed under {{ obs_root }}.
+      Redeploy the two config consumers in the Coolify UI
+      (cogito-prometheus, cogito-alloy) or redeploy those services.
+      Retention: Loki 30d (loki-config.yml, keep in sync with
+      loki_retention_days=30 in observability.yml), Prometheus 15d
+      (--storage.tsdb.retention.time=15d, from prom_retention_days=15).
+      Verify over the tailnet: Prometheus targets UP
+      (tunnel 9090), LogQL {service="cogito-app-server"} |= "traceId",
+      or ./infra/ops.sh trace <traceId>.
 ```
 
 - [x] **Step 5: Replace the imperative `scp` block in `observability.yml` with a pointer** (implemented 2026-09-06 — retargeted to a Play-2 pointer per Q2; stale `0600` header → `0644 root:root` per Q4; retention/redeploy notes kept)
@@ -520,16 +524,18 @@ git commit -m "feat(infra): declarative PLG config placement via observability-c
 
 > **Reconciliation verdict: KEEP** (2026-09-06). Untouched by `1b669846`
 > (file not in its set; verified via `git diff --numstat
-> origin/main..origin/f/obs-declarative`). Name-only `obs_drift` still live
+origin/main..origin/f/obs-declarative`). Name-only `obs_drift` still live
 > at base (`tasks/observability-service.yml:55-60`); PATCH body already full
 > (`:68-72`). The `drift-check.yml` existence gate from `1b669846` is a
 > different layer (read-only verify) and does not substitute this
 > declare-time PATCH trigger. Implement as written.
 
 **Files:**
+
 - Modify: `infra/ansible/tasks/observability-service.yml`
 
 **Interfaces:**
+
 - Consumes: loop var `obs_spec` (`name`, `description`, `docker_compose_raw`, `urls`) and registered `obs_detail.json` from `GET /api/v1/services/{uuid}` — same fields the PATCH body already sends.
 - Produces: `obs_drift` string that is non-empty whenever `name`, `description`, `docker_compose_raw`, or `urls` diverge, so the existing `when: obs_drift | length > 0` PATCH actually fires.
 
@@ -556,11 +562,11 @@ Design notes (do not simplify away): `docker_compose_raw` is compared as trimmed
 Confirm `tasks/observability-service.yml` lines 60-74 PATCH body still contains all four keys:
 
 ```yaml
-    body:
-      name: "{{ obs_spec.name }}"
-      description: "{{ obs_spec.description }}"
-      docker_compose_raw: "{{ obs_spec.docker_compose_raw }}"
-      urls: "{{ obs_spec.urls }}"
+body:
+  name: "{{ obs_spec.name }}"
+  description: "{{ obs_spec.description }}"
+  docker_compose_raw: "{{ obs_spec.docker_compose_raw }}"
+  urls: "{{ obs_spec.urls }}"
 ```
 
 If any key is missing, add it. No other edit in this step.
@@ -599,6 +605,7 @@ git commit -m "fix(infra): compare full PLG declaration in observability drift c
 > no-regression alignment check instead of writing "operator apply pending".
 
 **Files:**
+
 - Create: `infra/ansible/drift-check-observability.yml`
 - Modify: `docs/CONTEXT.md` (Deployment wave state → PLG bullet)
 - Modify: `docs/RUNBOOK.md` (Monitoring & Alerting → Observability stack section)
@@ -606,6 +613,7 @@ git commit -m "fix(infra): compare full PLG declaration in observability drift c
 - Modify: `infra/APPLY-RUNBOOK.md` (§3 add observability steps, §4 verify row)
 
 **Interfaces:**
+
 - Consumes: Task 1 markers + Task 2 paths + Task 3 drift semantics; existing `drift-check.yml` idiom (GET-only, `drift_check_dry_run`, exit 1 = drift).
 - Produces: `ansible-playbook ... drift-check-observability.yml` exit 0 = no drift / 1 = drift; docs stating PLG is pipeline-managed, tailnet-only, with operator verify commands.
 
@@ -738,12 +746,16 @@ After the `backup-cron` step-5 block (§3, ends ~line 150 `# verify`), insert th
 
 ```markdown
 # 4b. Observability services (Coolify API declare — tailnet-only, no public domain)
+
 ansible-playbook -i infra/ansible/inventory.ini infra/ansible/observability.yml \
-  --ask-become-pass
+--ask-become-pass
+
 # 4c. Observability config (SSH+become file placement — replaces the old scp steps)
+
 ansible-playbook -i infra/ansible/inventory.ini infra/ansible/observability-config.yml \
-  --ask-become-pass
-#    → redeploy cogito-prometheus + cogito-alloy in Coolify UI (config consumers)
+--ask-become-pass
+
+# → redeploy cogito-prometheus + cogito-alloy in Coolify UI (config consumers)
 ```
 
 In the §4 verification table, add one row:

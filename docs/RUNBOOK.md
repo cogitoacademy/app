@@ -915,10 +915,10 @@ limits in the composes.
   `studio.yml`, `drift-check.yml`, or `infra/{prometheus,loki,alloy,grafana}/**`
   auto-apply via `infra-apply.yml` (runner loopback, `workflow_dispatch`
   break-glass). Drift gate: `ansible-playbook -i
-  infra/ansible/inventory.ini infra/ansible/drift-check.yml -e
-  coolify_api_base=http://localhost:8000/api/v1 -e
-  coolify_api_token="$(sops -d infra/secrets/prod.env | grep
-  COOLIFY_API_TOKEN | cut -d= -f2-)"` (tunnel up; exit 0 = no drift —
+infra/ansible/inventory.ini infra/ansible/drift-check.yml -e
+coolify_api_base=http://localhost:8000/api/v1 -e
+coolify_api_token="$(sops -d infra/secrets/prod.env | grep
+COOLIFY_API_TOKEN | cut -d= -f2-)"` (tunnel up; exit 0 = no drift —
   covers existence + tailnet-only `urls == []` + image pins for all 5
   PLG/studio services).
 
