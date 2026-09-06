@@ -10,7 +10,7 @@
 # METRICS_TOKEN (never in git). The operator provisions it on the VPS as the
 # file /etc/prometheus/metrics_token INSIDE the prometheus container (a
 # read-only bind mount of /etc/cogito/observability/prometheus/metrics_token,
-# root 0600 on the host — see the compose in observability.yml). This file
+# 0644 root:root on the host — see the compose in observability.yml). This file
 # references that container path via `credentials_file`, never the value. If
 # the file is missing, the cogito-api scrape 401s (alerts as a DOWN target;
 # the API itself is unaffected).

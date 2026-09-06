@@ -908,6 +908,20 @@ Declared by [`infra/ansible/observability.yml`](../infra/ansible/observability.y
 Prometheus 15d. 2G swap live on the VPS (2026-09-05) with per-service memory
 limits in the composes.
 
+- **Declarative pipeline (2026-09-06):** `./infra/apply.sh observability`
+  (Play 1 Coolify API declares + Play 2 host files/network + Play 3 Grafana
+  Discord wiring; needs the `:8000` + `:3000` tunnels up). Merges touching
+  `infra/ansible/observability.yml`, `tasks/observability-service.yml`,
+  `studio.yml`, `drift-check.yml`, or `infra/{prometheus,loki,alloy,grafana}/**`
+  auto-apply via `infra-apply.yml` (runner loopback, `workflow_dispatch`
+  break-glass). Drift gate: `ansible-playbook -i
+infra/ansible/inventory.ini infra/ansible/drift-check.yml -e
+coolify_api_base=http://localhost:8000/api/v1 -e
+coolify_api_token="$(sops -d infra/secrets/prod.env | grep
+COOLIFY_API_TOKEN | cut -d= -f2-)"` (tunnel up; exit 0 = no drift —
+  covers existence + tailnet-only `urls == []` + image pins for all 5
+  PLG/studio services).
+
 - **Logs without SSH:** Grafana → Explore → Loki datasource →
   `{service="cogito-api"} |= "<traceId>"` (resource names are the
   suffix-stripped Coolify names: `cogito-api`, `cogito-web`, `cogito-prod-db`,

@@ -29,6 +29,8 @@ Subcommands (`./infra/apply.sh help` for the full list):
 | `tailscale-verify` | §3 step 2 (SSH proof)           | creates the `tailscale-verified` marker         |
 | `harden`           | §3 step 3 (host hardening)      | **refuses** without `tailscale-verified`        |
 | `resources`        | §3 step 4 (Coolify sync)        | reminds to paste the Traefik config on a 404    |
+| `observability`    | §3 step 4b (PLG declare + host  | needs the `:8000` + `:3000` tunnels up          |
+|                    | files + Grafana wiring)         |                                                 |
 | `backup-cron`      | §3 step 5 (backup cron)         | DATABASE_URL reachability check + y/N           |
 | `verify`           | §4 checks                       | asserts `version` on `/health`, 302 on `cl.`    |
 | `status`           | —                               | shows markers / credential presence             |
@@ -142,6 +144,16 @@ ansible-playbook -i infra/ansible/inventory.ini infra/ansible/coolify-resources.
 #      probe flip from 404 → 401/405 (route is live: probe returns 401 =
 #      auth-required form, CD sends Authorization: Bearer)
 
+# 4b. Observability services (Coolify API declares + host files + Grafana
+#     wiring — tailnet-only, no public domain). Needs BOTH tunnels (the
+#     Coolify API and Grafana publish on loopback only):
+ssh -i ~/.ssh/cogito_vps -f -N -L 3000:127.0.0.1:3000 ubuntu@100.124.43.19
+ansible-playbook -i infra/ansible/inventory.ini infra/ansible/observability.yml \
+  --ask-become-pass
+#    → redeploy cogito-prometheus + cogito-alloy in Coolify UI when
+#      provisioned files changed (config consumers)
+#    → or: ./infra/apply.sh observability (same playbook, marker-tracked)
+
 # 5. Backup cron (needs DATABASE_URL resolvable from the VPS host — the
 #    vault uses the container IP 10.0.1.8:5432; the app keeps the private
 #    hostname). AWS CLI v2 is detected at /opt/cogito-actions-tools/bin/aws
@@ -157,12 +169,13 @@ curl -s https://api.cogitoacademy.id/health
 
 ## 4. Verification after each step
 
-| Step           | Verify                                                                                                  |
-| -------------- | ------------------------------------------------------------------------------------------------------- |
-| Tailscale join | `tailscale status` on the VPS shows `cogito-vps`; SSH via tailnet IP works                              |
-| Host hardening | public SSH refused; tailnet SSH works; `ufw status` shows 80/443 public, 22+8000/6001/6002 tailnet-only |
-| Coolify sync   | `/health` returns `version == <deployed sha>`; `dlqDepth: 0`; env in Coolify UI matches the vault       |
-| Backup cron    | `infra/ops.sh dlq` / `ls /var/log/cogito-backup.log`; an R2 object appears                              |
+| Step           | Verify                                                                                                                                                                                 |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tailscale join | `tailscale status` on the VPS shows `cogito-vps`; SSH via tailnet IP works                                                                                                             |
+| Host hardening | public SSH refused; tailnet SSH works; `ufw status` shows 80/443 public, 22+8000/6001/6002 tailnet-only                                                                                |
+| Coolify sync   | `/health` returns `version == <deployed sha>`; `dlqDepth: 0`; env in Coolify UI matches the vault                                                                                      |
+| Observability  | `ansible-playbook ... drift-check.yml ...` exits 0 (covers PLG/studio: existence, `urls == []`, image pins); Prometheus targets UP (tunnel 9090); LogQL `{service="cogito-app-server"} | = "traceId"`returns rows;`./infra/ops.sh trace <traceId>` prints the tailnet Explore URL |
+| Backup cron    | `infra/ops.sh dlq` / `ls /var/log/cogito-backup.log`; an R2 object appears                                                                                                             |
 
 ## 5. Rollback
 

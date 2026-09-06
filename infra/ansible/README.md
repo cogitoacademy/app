@@ -25,13 +25,24 @@ Run in this order (the same order `infra/apply.sh all` enforces):
    (`cl.cogitoacademy.id`) — paste it into Coolify UI → **Servers →
    cogito-vps → Proxy → Custom Configuration**, then re-run to flip the
    probe from 404 → 401/405.
-4. **`backup-cron.yml`** — install the nightly backup cron
+4. **`observability.yml`** — declare the tailnet-only PLG services via the
+   Coolify API (`cogito-loki` / `cogito-prometheus` / `cogito-grafana` /
+   `cogito-alloy`, all `urls: []`) + converge `/etc/cogito/observability/`
+   host files (Play 2) + wire the Grafana Discord contact point (Play 3).
+   Needs the SSH tunnels `ssh -L 8000:127.0.0.1:8000` (Coolify API, like
+   `coolify-resources.yml`) and `ssh -L 3000:127.0.0.1:3000` (Grafana API)
+   because both publish on loopback only. Then redeploy
+   `cogito-prometheus` + `cogito-alloy` in Coolify UI when provisioned
+   files changed.
+5. **`backup-cron.yml`** — install the nightly backup cron
    (`/usr/local/bin/cogito-backup.sh` from `../backup.sh`, env at
    `/etc/cogito/backup.env`, 02:00 WIB). `DATABASE_URL` in the vault must
    resolve from the VPS host.
-5. **`drift-check.yml`** — read-only verification half of
-   `coolify-resources.yml`: diffs live Coolify API state against the
-   declared state and **fails on drift**. Safe to re-run anytime.
+6. **`drift-check.yml`** — read-only verification half of
+   `coolify-resources.yml` **plus** the PLG/studio services (existence,
+   tailnet-only `urls == []`, image pins): diffs live Coolify API state
+   against the declared state and **fails on drift**. Safe to re-run
+   anytime.
 
 ## Other playbooks
 

@@ -25,6 +25,10 @@
 #   5. API application env var NAMES (values are secrets — never compared).
 #   6. Deploy-webhook URLs: the per-resource UUID in the declared URL must
 #      equal the live resource UUID (the UUID is the bearer secret).
+#   7. Declared Coolify *services* (observability + studio): each exists,
+#      stays tailnet-only (`urls == []` — attaching ANY public domain is
+#      drift), and its `docker_compose_raw` still contains the declared
+#      image pin. Service-detail GETs; read-only like everything else here.
 #
 # Manual checks (the Coolify API cannot express these — verify by hand)
 # ---------------------------------------------------------------------
@@ -38,6 +42,12 @@
 #     401 = route present but the `Authorization: Bearer` token is missing.
 #   - Docker log rotation (json-file, max-size 10m, max-file 3) — not in the
 #     public API; verify with `docker inspect` on the VPS.
+#   - Retention flags (Loki 30d in loki-config.yml, Prometheus 15d
+#     --storage.tsdb.retention.time in the compose) — the service-detail
+#     endpoint does not expose them as fields; verify by hand: Loki
+#     `limits_config.retention_period` is 720h in the provisioned file,
+#     Prometheus `command` still carries `retention.time=15d` in the
+#     cogito-prometheus compose (Coolify UI or the provisioned git files).
 #   - Auto-deploy toggle per resource — verify in the Coolify UI.
 #   - Coolify bundled proxy version (Traefik v3.6, verified 2026-08-28) —
 #     check the proxy container image tag in the Coolify UI.
@@ -90,6 +100,30 @@
         port: "80"
         domain: app.cogitoacademy.id
         health_check: /
+    # Declared Coolify *services* (observability + studio). Existence only —
+    # health is Kuma's/Coolify's job, so a deploy-flap can never false-positive
+    # here. Keep in sync with infra/ansible/observability.yml + studio.yml.
+    declared_services:
+      - cogito-loki
+      - cogito-prometheus
+      - cogito-grafana
+      - cogito-alloy
+      - cogito-studio
+    # Declared image pins per service (name -> image substring expected in
+    # docker_compose_raw). Keep in sync with infra/ansible/observability.yml
+    # (loki_image / prometheus_image / grafana_image / alloy_image) and
+    # infra/ansible/studio.yml (ghcr.io/drizzle-team/gateway, untagged there).
+    declared_service_images:
+      - name: cogito-loki
+        image: "grafana/loki:3.4.0"
+      - name: cogito-prometheus
+        image: "prom/prometheus:v3.2.1"
+      - name: cogito-grafana
+        image: "grafana/grafana:11.5.2"
+      - name: cogito-alloy
+        image: "grafana/alloy:v1.7.4"
+      - name: cogito-studio
+        image: "ghcr.io/drizzle-team/gateway"
     # Env var NAMES the API application must have (values are secrets and
     # are never compared). Keep in sync with infra/.env.prod.example.
     declared_api_env_names:
@@ -281,6 +315,53 @@
           {{ (env_resp.json[item.type + ('s' if item.type != 'redis' else '')] | default([])) | selectattr('name', 'equalto', item.name) | first | default(none) }}
       when: >-
         _live is not none and _live.image is defined and _live.image != item.image
+
+    - name: Fetch the live Coolify services
+      ansible.builtin.uri:
+        url: "{{ coolify_api_base }}/services"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ coolify_api_token }}"
+        return_content: true
+        status_code: [200]
+      register: services_resp
+
+    - name: Check every declared service exists in Coolify
+      ansible.builtin.set_fact:
+        drift_findings: >-
+          {{ drift_findings | default([]) +
+             ['service ' + item + ' not found among live Coolify services'] }}
+      loop: "{{ declared_services }}"
+      when: >-
+        (services_resp.json | default([])) | selectattr('name', 'equalto', item) | list | length == 0
+
+    - name: Fetch each declared service detail (tailnet + image checks)
+      ansible.builtin.uri:
+        url: "{{ coolify_api_base }}/services/{{ (services_resp.json | selectattr('name', 'equalto', item.name) | first).uuid }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ coolify_api_token }}"
+        return_content: true
+        status_code: [200]
+      loop: "{{ declared_service_images }}"
+      register: service_details
+      when: services_resp.json | selectattr('name', 'equalto', item.name) | list | length > 0
+
+    - name: "Fail on public urls (tailnet-only invariant — every service stays urls: [])"
+      ansible.builtin.set_fact:
+        drift_findings: >-
+          {{ drift_findings | default([]) +
+             ['service ' + item.item.name + ' has public urls (must be tailnet-only, urls: [])'] }}
+      loop: "{{ service_details.results | default([]) }}"
+      when: item.json is defined and (item.json.urls | default([]) | length) > 0
+
+    - name: Fail on service image drift (declared pin missing from the live compose)
+      ansible.builtin.set_fact:
+        drift_findings: >-
+          {{ drift_findings | default([]) +
+             ['service ' + item.item.name + ' compose does not contain declared image ' + item.item.image] }}
+      loop: "{{ service_details.results | default([]) }}"
+      when: item.json is defined and item.json.docker_compose_raw is defined and item.item.image not in (item.json.docker_compose_raw | default('') | string)
 
     - name: Fetch the API application env vars
       ansible.builtin.uri:
