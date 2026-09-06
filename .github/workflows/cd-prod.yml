@@ -3,13 +3,56 @@ name: Deploy Production
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Why are you forcing a production deploy? (run-log only)"
+        required: false
+        default: "manual re-deploy"
 
 concurrency:
   group: production-deploy
   cancel-in-progress: false
 
 jobs:
+  detect:
+    name: Detect app-code changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v6
+      # dorny diffs the push against its predecessor ("what changed in this
+      # merge"). App code + deploy scripts: anything that can change runtime
+      # behavior. Infra-only merges are owned by infra-apply.yml (services,
+      # env, cron via the Coolify API + API restarts); docs-only merges change
+      # nothing at runtime — both skip the image build + redeploy below, so a
+      # docs commit no longer restarts the production API containers.
+      # packages/db/** counts as code: migration-only changes still need the
+      # snapshot → migrate → deploy sequence.
+      - uses: dorny/paths-filter@v3.0.2
+        id: filter
+        with:
+          filters: |
+            code:
+              - 'apps/**'
+              - 'packages/**'
+              - 'scripts/**'
+              - 'bun.lock'
+              - 'package.json'
+              - 'turbo.json'
+              - 'tsconfig.json'
+              - 'bts.jsonc'
+              - 'bunfig.toml'
+              - '.github/workflows/cd-prod.yml'
   build-and-push:
+    needs: detect
+    # Skip image builds (and the redeploy below) when the merge carries no
+    # runtime change. Manual dispatches always build + deploy (escape hatch).
+    if: needs.detect.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # Required so the GITHUB_TOKEN can push images to GHCR. Without this the
@@ -54,7 +97,10 @@ jobs:
 
   deploy:
     name: Backup, migrate, deploy, and verify (API + web)
-    needs: build-and-push
+    needs: [detect, build-and-push]
+    # Explicit gate (not inherited from needs): a skipped build must not
+    # cascade into a deploy. Same condition as build-and-push above.
+    if: needs.detect.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
     # The production database is intentionally private to Coolify's Docker
     # network. This runner lives on the production VPS; cloud-hosted runners
     # cannot resolve or reach the database hostname.
