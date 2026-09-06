@@ -489,7 +489,8 @@
           (The old manual scp/sops-pipe steps are superseded by Play 2 —
           same paths, same files, 0644 on metrics_token.)
 
-          Then the two config consumers (cogito-prometheus, cogito-alloy)
+          Then the three config consumers (cogito-prometheus, cogito-alloy,
+          cogito-grafana)
           restart automatically via the 'restart config consumers' handler
           when a placement task reports changed (POST
           /api/v1/services/<uuid>/restart, Coolify v4.3.14 restart_only
@@ -666,6 +667,7 @@
         group: root
         mode: preserve
       register: grafana_tree
+      notify: restart config consumers
 
     - name: Normalize Grafana provisioning permissions (dirs 0755, files 0644)
       ansible.builtin.command: chmod -R a+rX {{ obs_root }}/grafana/provisioning
@@ -765,6 +767,21 @@
         status_code: [200, 201, 202]
       no_log: true
       listen: restart config consumers
+
+    - name: Restart cogito-grafana on provisioning change
+      ansible.builtin.uri:
+        url: "{{ coolify_api_url }}/services/{{ (obs_restart_services.json | selectattr('name', 'equalto', 'cogito-grafana') | first).uuid }}/restart"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ coolify_api_token }}"
+        status_code: [200, 201, 202]
+      no_log: true
+      listen: restart config consumers
+      # Grafana file-provisioned alert rules + datasources load at startup
+      # only (dashboards hot-reload), so a provisioning-tree change without a
+      # restart silently never applies — worse than the ~60s restart gap, which
+      # the 5m/10m alert `for` windows absorb without false-firing while Kuma
+      # keeps covering api/app independently. Change-triggered only.
 
 # -----------------------------------------------------------------------------
 # Play 3 — wire Grafana alerting over its API (replaces the manual contact
