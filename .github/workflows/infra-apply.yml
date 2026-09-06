@@ -36,6 +36,10 @@ on:
     paths:
       - "infra/terraform/**"
       - "infra/ansible/**"
+      - "infra/prometheus/**"
+      - "infra/loki/**"
+      - "infra/alloy/**"
+      - "infra/grafana/**"
       - "infra/disk-watchdog.sh"
       - "infra/secrets/**"
       - ".github/workflows/infra-apply.yml"

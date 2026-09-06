@@ -355,7 +355,7 @@
             3. Re-run this playbook, then provision the token file per the
                config-placement steps below.
           This playbook never invents or echoes the token.
-      when: not metrics_token_present
+      when: not metrics_token_present | bool
 
     - name: Check whether DISCORD_WEBHOOK_URL is in the vault
       ansible.builtin.set_fact:
@@ -371,7 +371,7 @@
                   # add: DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
           then wires it as the Grafana Discord contact point per the runbook
           steps below. This playbook never invents or echoes the URL.
-      when: not discord_webhook_present
+      when: not discord_webhook_present | bool
 
     # --- 1. Project + environment + server lookup (create if missing) ---
     - name: List Coolify projects
@@ -552,9 +552,9 @@
           server={{ server_uuid }}. Retention Loki {{ loki_retention_days }}d /
           Prometheus {{ prom_retention_days }}d. Grafana is tailnet-only (no
           public domain — drift-checked back to []). Secrets: METRICS_TOKEN
-          {{ 'present in the vault — provision the token file per the steps above' if metrics_token_present else 'MISSING — see the loud instruction above' }};
+          {{ 'present in the vault — provision the token file per the steps above' if metrics_token_present | bool else 'MISSING — see the loud instruction above' }};
           Discord alerting:
-          {{ 'webhook present in the vault — wire the Grafana contact point per the steps above' if discord_webhook_present else 'MISSING — operator must add DISCORD_WEBHOOK_URL to the SOPS vault (see the loud instruction above)' }}.
+          {{ 'webhook present in the vault — wire the Grafana contact point per the steps above' if discord_webhook_present | bool else 'MISSING — operator must add DISCORD_WEBHOOK_URL to the SOPS vault (see the loud instruction above)' }}.
           Provisioned files + verification: see the steps above.
 
 # -----------------------------------------------------------------------------
@@ -679,7 +679,7 @@
 
     - name: Resolve the Grafana container name
       ansible.builtin.shell: >-
-        docker ps --format '{{.Names}}' | grep -E '^grafana-' | head -1
+        docker ps --format '{{ '{{.Names}}' }}' | grep -E '^grafana-' | head -1
       register: grafana_container
       changed_when: false
       failed_when: grafana_container.stdout | length == 0
