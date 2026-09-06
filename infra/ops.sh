@@ -30,10 +30,10 @@
 #   OPS_SSH_KEY   SSH private key (default: ~/.ssh/cogito_vps)
 #   OPS_SSH_USER  SSH user (default: ubuntu)
 #   GRAFANA_URL   Tailnet Grafana base URL for `trace`
-#                 (default: http://100.124.43.19:3000)
+#                 (default: http://cogito-vps.tail674634.ts.net:3000)
 set -euo pipefail
 
-OPS_VPS="${OPS_VPS:-100.124.43.19}"
+OPS_VPS="${OPS_VPS:-cogito-vps.tail674634.ts.net}"
 OPS_SSH_KEY="${OPS_SSH_KEY:-$HOME/.ssh/cogito_vps}"
 OPS_SSH_USER="${OPS_SSH_USER:-ubuntu}"
 SSH=(ssh -i "$OPS_SSH_KEY" -o ConnectTimeout=8 -o BatchMode=yes "$OPS_SSH_USER@$OPS_VPS")
@@ -221,7 +221,7 @@ trace() {
     echo "Usage: $0 trace <traceId>  (e.g. $0 trace req_abc123)" >&2
     return 1
   fi
-  local grafana="${GRAFANA_URL:-http://100.124.43.19:3000}"
+  local grafana="${GRAFANA_URL:-http://cogito-vps.tail674634.ts.net:3000}"
   local query left
   query="{service=\"cogito-api\"} |= \"$trace_id\""
   left="$(TRACE_QUERY="$query" python3 -c 'import json,os,urllib.parse; print(urllib.parse.quote(json.dumps({"datasource":"Loki","queries":[{"expr":os.environ["TRACE_QUERY"],"refId":"A"}]}), safe=""))')"

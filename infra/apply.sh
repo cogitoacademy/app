@@ -349,7 +349,7 @@ phase_observability() {
   run_exec "ansible-playbook -i infra/ansible/inventory.ini infra/ansible/observability.yml --ask-become-pass" \
     ansible-playbook -i infra/ansible/inventory.ini infra/ansible/observability.yml --ask-become-pass
   say "  single phase: Play 1 declares the services, Play 2 converges /etc/cogito/observability/, Play 3 wires the Grafana Discord contact point."
-  say "  then: redeploy cogito-prometheus + cogito-alloy in Coolify UI when provisioned files changed, verify Prometheus targets UP over the tailnet."
+  say "  config changes self-restart cogito-prometheus + cogito-alloy via the playbook handler (change-triggered only); first-ever apply: confirm the restart took (Prometheus targets UP over the tailnet)."
   marker_set observability-declared
 }
 

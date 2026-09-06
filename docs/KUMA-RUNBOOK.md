@@ -83,6 +83,20 @@ applied: notification #1 attached to every monitor in the Kuma UI.
 3. **Test** the monitor — a Discord post must arrive.
 4. Optional: add it to the `cogito` status page.
 
+### `api-cert` / `app-cert` (certificate monitors — recommended follow-up)
+
+1. Kuma UI → **Add New Monitor** → Monitor Type **HTTP(s) - Certificate Info** →
+   Friendly Name `api-cert` → URL `https://api.cogitoacademy.id` → Heartbeat
+   Interval 60s → Heartbeat Retry 2 (same deploy-restart tolerance as the
+   other HTTPS monitors).
+2. Repeat for `app-cert` with URL `https://app.cogitoacademy.id` (same
+   interval and retries).
+3. **Attach the `COGITO ALERT` notification** to each new monitor
+   (monitor edit → Notifications → select `COGITO ALERT`).
+4. **Test** each monitor — a Discord post must arrive.
+5. **Status Pages → `cogito`** → add `api-cert` and `app-cert` → publish —
+   both cert monitors join the dashboard served at `status.cogitoacademy.id`.
+
 ## Read-only verification (from the VPS)
 
 ```bash
