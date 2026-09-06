@@ -114,7 +114,13 @@
     grafana_image: "grafana/grafana:11.5.2"
     alloy_image: "grafana/alloy:v1.7.4"
     node_exporter_image: "prom/node-exporter:v1.9.0"
-    cadvisor_image: "gcr.io/cadvisor/cadvisor:v0.52.1"
+    # cAdvisor: >=v0.54 required for Docker 29 containerd image store
+    # (upstream fix #3709; v0.52.1 drops every container with
+    # "failed to identify the read-write layer ID"). Canonical registry is
+    # now ghcr.io (gcr.io is stale at v0.55.1); v0.60.5 measured 51/51 named
+    # series on Docker 29 with the same mounts below. Operator confirms the
+    # digest on first apply.
+    cadvisor_image: "ghcr.io/google/cadvisor:v0.60.5"
 
     # --- Declared services (drift-check source of truth) ---
     observability_services:
@@ -243,7 +249,7 @@
               pid: host
               restart: unless-stopped
             cadvisor:
-              image: "gcr.io/cadvisor/cadvisor:v0.52.1"
+              image: "ghcr.io/google/cadvisor:v0.60.5"
               container_name: cogito-cadvisor
               # Host 8080 is held by an old docker-proxy (Coolify-era,
               # verified live) — cAdvisor keeps container :8080, published

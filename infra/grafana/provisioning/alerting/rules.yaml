@@ -156,7 +156,7 @@ groups:
               to: 0
             datasourceUid: prometheus
             model:
-              expr: 'sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) > 0.01'
+              expr: '(sum(rate(http_requests_total{status=~"5.."}[5m])) or vector(0)) / sum(rate(http_requests_total[5m])) > 0.01'
               refId: A
           - refId: B
             relativeTimeRange:

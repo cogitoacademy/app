@@ -65,6 +65,7 @@
     {
       "id": 4,
       "title": "Container memory (top)",
+      "description": "Empty until host cAdvisor fix lands (sibling worker obs-host owns it): cAdvisor v0.52.1 exposes only id/instance/job labels, no name/container_label_* (verified 2026-09-06). Query #212 label fix is correct; data resumes automatically.",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
