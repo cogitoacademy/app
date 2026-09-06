@@ -170,7 +170,7 @@
             3. Re-runs this playbook, then pastes the URL into the Kuma UI
                (Notifications → Discord) per the runbook steps below.
           This playbook never invents or echoes the URL.
-      when: not discord_webhook_present
+      when: not discord_webhook_present | bool
 
     # --- 1. Project + environment + server lookup (create if missing) ---
     - name: List Coolify projects
@@ -406,5 +406,5 @@
           Declared service {{ kuma_service_name }} (uuid={{ kuma_uuid }}) in
           project={{ project_name }} env={{ environment_name }} server={{ server_uuid }}.
           Domain {{ kuma_domain }}. Discord alerting:
-          {{ 'webhook present in the vault — paste it into the Kuma UI per the steps above' if discord_webhook_present else 'MISSING — operator must add DISCORD_WEBHOOK_URL to the SOPS vault (see the loud instruction above)' }}.
+          {{ 'webhook present in the vault — paste it into the Kuma UI per the steps above' if discord_webhook_present | bool else 'MISSING — operator must add DISCORD_WEBHOOK_URL to the SOPS vault (see the loud instruction above)' }}.
           Monitors are configured in the Kuma UI (runbook steps above).

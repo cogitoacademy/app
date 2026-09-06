@@ -345,6 +345,7 @@
         status_code: [200]
       loop: "{{ declared_service_images }}"
       register: service_details
+      no_log: true
       when: services_resp.json | selectattr('name', 'equalto', item.name) | list | length > 0
 
     - name: "Fail on public urls (tailnet-only invariant — every service stays urls: [])"
@@ -423,12 +424,12 @@
           DRIFT DETECTED: {{ drift_findings | length }} finding(s) — see the
           drift_findings list above. Re-apply coolify-resources.yml or fix the
           Coolify UI, then re-run this check.
-      when: drift_findings | default([]) | length > 0 and not drift_check_dry_run
+      when: drift_findings | default([]) | length > 0 and not drift_check_dry_run | bool
 
     - name: Drift summary (dry run)
       ansible.builtin.debug:
         msg: "DRY RUN: {{ drift_findings | default([]) | length }} drift finding(s) would fail the check"
-      when: drift_findings | default([]) | length > 0 and drift_check_dry_run
+      when: drift_findings | default([]) | length > 0 and drift_check_dry_run | bool
 
     - name: No drift
       ansible.builtin.debug:

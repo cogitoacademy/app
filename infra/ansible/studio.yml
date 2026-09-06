@@ -112,7 +112,7 @@
 
     - name: Resolve the drizzle-gateway container name
       ansible.builtin.shell: >-
-        docker ps --format '{{.Names}}' | grep -E '^drizzle-gateway-' | head -1
+        docker ps --format '{{ '{{.Names}}' }}' | grep -E '^drizzle-gateway-' | head -1
       register: studio_container
       changed_when: false
       failed_when: studio_container.stdout | length == 0
