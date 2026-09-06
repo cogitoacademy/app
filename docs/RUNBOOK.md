@@ -936,15 +936,15 @@ ubuntu@cogito-vps.tail674634.ts.net`, then `http://localhost:3000` (admin user `
   password in the SOPS vault as `GRAFANA_ADMIN_PASSWORD`). The direct tailnet URL
   `http://cogito-vps.tail674634.ts.net:3000` also resolves via MagicDNS with no
   tunnel; `./infra/ops.sh trace` defaults `GRAFANA_URL` to it. Provisioned:
-   datasources (Loki default + Prometheus), 4 dashboards (App RED, Logs &
-   Traces, Infra, Delivery), alert rules (DLQFresh/DiskWarn/DiskCrit/ApiErrors
-   → `Discord-ops` contact point).
+  datasources (Loki default + Prometheus), 4 dashboards (App RED, Logs &
+  Traces, Infra, Delivery), alert rules (DLQFresh/DiskWarn/DiskCrit/ApiErrors
+  → `Discord-ops` contact point).
 - **Grafana password rotation (2026-09-06 pattern):** `GRAFANA_ADMIN_PASSWORD`
   is SOPS-encrypted in `infra/secrets/prod.env` (never plaintext). Rotate by
   setting a fresh value in the vault, then applying live without needing the
   old password: `CID=$(sudo -n docker ps --format '{{.Names}}' | grep -E
-  '^grafana-' | head -1); sudo -n docker exec "$CID" grafana cli admin
-  reset-admin-password '<new>'` on the VPS; verify the new password returns
+'^grafana-' | head -1); sudo -n docker exec "$CID" grafana cli admin
+reset-admin-password '<new>'` on the VPS; verify the new password returns
   200 on `/api/org` and the old returns 401. Then update the Coolify UI env
   `GF_SECURITY_ADMIN_PASSWORD` on `cogito-grafana` to the same value so a
   future fresh volume boots with the rotated password. File-provisioned alert
@@ -953,7 +953,7 @@ ubuntu@cogito-vps.tail674634.ts.net`, then `http://localhost:3000` (admin user `
 - **Zero-safe PromQL pattern (2026-09-06):** a ratio whose numerator is empty
   when healthy (e.g. zero 5xx) renders No Data, not 0. Wrap the fallible side:
   `(sum(rate(http_requests_total{status=~"5.."}[5m])) or vector(0)) /
-  sum(rate(http_requests_total[5m]))`, and `breaker_state or on() vector(0)`
+sum(rate(http_requests_total[5m]))`, and `breaker_state or on() vector(0)`
   (per-breaker series preserved) or `max(breaker_state) or vector(0)` (stat).
 - **Tailscale HTTPS (optional):** enabling HTTPS in the Tailscale admin console
   (DNS → Enable HTTPS) gives the same `cogito-vps.tail674634.ts.net` name a
@@ -973,12 +973,12 @@ ubuntu@cogito-vps.tail674634.ts.net`, then `http://localhost:3000` (admin user `
   `docker_logs`); Loki 3.x needs `delete_request_store: filesystem` with
   retention; `reject_old_samples_max_age` raised to 720h (first connect
   backfills container history); Prometheus container user can't read a 0600
-   token file (0644); cAdvisor moved to loopback `:8081` (host `:8080` is
-   held by an old docker-proxy).
+  token file (0644); cAdvisor moved to loopback `:8081` (host `:8080` is
+  held by an old docker-proxy).
 - **cAdvisor containerd blind spot (2026-09-06):** cAdvisor `≤v0.53` cannot
   register Docker containers when the daemon uses the containerd image store
   (Docker 29 default; `docker info` shows `driver-type:
-  io.containerd.snapshotter.v1`, `/var/lib/docker/image/` has no
+io.containerd.snapshotter.v1`, `/var/lib/docker/image/` has no
   `overlayfs/` subtree). Symptom: target UP but every
   `container_memory_working_set_bytes` series carries only
   `__name__,id,instance,job` (no `name`/`container_label_*`), and the
