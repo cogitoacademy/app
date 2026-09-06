@@ -15,6 +15,8 @@
 #   ./ops.sh dlq-clear        # clear the DLQ ledger (DEL cogito:dlq)
 #   ./ops.sh cb               # circuit breaker states (cogito:cb:*)
 #   ./ops.sh studio           # Drizzle Studio GUI via SSH tunnel
+#   ./ops.sh grafana          # Grafana dashboards via SSH tunnel (tailnet MagicDNS)
+#   ./ops.sh prometheus       # Prometheus targets UI via SSH tunnel
 #   ./ops.sh logs [lines]     # tail the API container logs
 #   ./ops.sh backup           # run the nightly backup script manually
 #   ./ops.sh disk             # disk usage at a glance (df, docker system df,
@@ -212,6 +214,22 @@ tunnel() {
   ssh -i "$OPS_SSH_KEY" -o ConnectTimeout=8 "$OPS_SSH_USER@$OPS_VPS" -N -L "$port:localhost:5432"
 }
 
+obs_tunnel() {
+  # Open a tailnet dashboard in one command: foreground SSH tunnel + the URL.
+  # Grafana/Prometheus publish on VPS loopback only; MagicDNS ($OPS_VPS)
+  # resolves over the tailnet so no raw IP is needed. Ctrl+C stops the tunnel.
+  local name="${1:?usage: obs_tunnel <grafana|prometheus>}"
+  local local_port remote_port
+  case "$name" in
+    grafana) local_port=3000; remote_port=3000 ;;
+    prometheus) local_port=9090; remote_port=9090 ;;
+    *) echo "Unknown dashboard: $name (grafana|prometheus)" >&2; return 1 ;;
+  esac
+  echo "Opening $name: tunnel localhost:$local_port → $OPS_VPS:127.0.0.1:$remote_port (Ctrl+C to stop)"
+  echo "Then open: http://localhost:$local_port"
+  ssh -i "$OPS_SSH_KEY" -o ConnectTimeout=8 "$OPS_SSH_USER@$OPS_VPS" -N -L "$local_port:127.0.0.1:$remote_port"
+}
+
 trace() {
   # Print the tailnet Grafana Explore URL for a traceId — no SSH
   # log-grepping. Grafana is tailnet-only (no public log UI); open the URL
@@ -230,7 +248,7 @@ trace() {
 }
 
 usage() {
-  sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 case "${1:-}" in
@@ -246,6 +264,8 @@ case "${1:-}" in
   disk) disk ;;
   deploy-retry) deploy_retry ;;
   studio) shift; studio "${1:-}" ;;
+  grafana) obs_tunnel grafana ;;
+  prometheus) obs_tunnel prometheus ;;
   tunnel) shift; tunnel "${1:-}" ;;
   trace) shift; trace "${1:-}" ;;
   help|-h|--help) usage ;;

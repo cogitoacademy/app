@@ -914,7 +914,11 @@ limits in the composes.
   `infra/ansible/observability.yml`, `tasks/observability-service.yml`,
   `studio.yml`, `drift-check.yml`, or `infra/{prometheus,loki,alloy,grafana}/**`
   auto-apply via `infra-apply.yml` (runner loopback, `workflow_dispatch`
-  break-glass). Drift gate: `ansible-playbook -i
+  break-glass). Config-file changes self-restart `cogito-prometheus`,
+  `cogito-alloy`, and `cogito-grafana` via the playbook handler
+  (change-triggered only — alert rules load at Grafana startup, so the
+  restart is required, not optional; the ~60s gap fits inside the 5m/10m
+  alert `for` windows while Kuma covers api/app). Drift gate: `ansible-playbook -i
 infra/ansible/inventory.ini infra/ansible/drift-check.yml -e
 coolify_api_base=http://localhost:8000/api/v1 -e
 coolify_api_token="$(sops -d infra/secrets/prod.env | grep
@@ -926,7 +930,8 @@ COOLIFY_API_TOKEN | cut -d= -f2-)"` (tunnel up; exit 0 = no drift —
   `{service="cogito-api"} |= "<traceId>"` (resource names are the
   suffix-stripped Coolify names: `cogito-api`, `cogito-web`, `cogito-prod-db`,
   …). Or `./infra/ops.sh trace <traceId>` for the Explore URL.
-- **Grafana access (tailnet-only):** `ssh -L 3000:127.0.0.1:3000
+- **Grafana access (tailnet-only):** `./infra/ops.sh grafana` (tunnel + URL
+  in one command), or manually `ssh -L 3000:127.0.0.1:3000
 ubuntu@cogito-vps.tail674634.ts.net`, then `http://localhost:3000` (admin user `admin`;
   password in the SOPS vault as `GRAFANA_ADMIN_PASSWORD`). The direct tailnet URL
   `http://cogito-vps.tail674634.ts.net:3000` also resolves via MagicDNS with no
@@ -940,6 +945,7 @@ ubuntu@cogito-vps.tail674634.ts.net`, then `http://localhost:3000` (admin user `
   already encrypted by WireGuard.
 - **Prometheus targets** (all UP 2026-09-05): `cogito-api` (Bearer
   `metrics_token`), `node-exporter`, `cadvisor`.
+  Shortcut: `./infra/ops.sh prometheus`.
 - **Networking lesson (recorded so nobody re-learns it):** each Coolify
   service gets its OWN Docker network — bare service names do NOT resolve
   across services. All obs traffic rides the shared `cogito-obs` Docker
