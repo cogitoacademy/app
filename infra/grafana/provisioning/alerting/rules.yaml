@@ -42,7 +42,7 @@ groups:
               to: 0
             datasourceUid: __expr__
             model:
-              expression: $B
+              expression: B
               refId: C
               type: threshold
               conditions:
@@ -86,7 +86,7 @@ groups:
               to: 0
             datasourceUid: __expr__
             model:
-              expression: $B
+              expression: B
               refId: C
               type: threshold
               conditions:
@@ -130,7 +130,7 @@ groups:
               to: 0
             datasourceUid: __expr__
             model:
-              expression: $B
+              expression: B
               refId: C
               type: threshold
               conditions:
@@ -174,7 +174,7 @@ groups:
               to: 0
             datasourceUid: __expr__
             model:
-              expression: $B
+              expression: B
               refId: C
               type: threshold
               conditions:
