@@ -927,9 +927,9 @@ COOLIFY_API_TOKEN | cut -d= -f2-)"` (tunnel up; exit 0 = no drift —
   PLG/studio services).
 
 - **Logs without SSH:** Grafana → Explore → Loki datasource →
-  `{service="cogito-api"} |= "<traceId>"` (resource names are the
-  suffix-stripped Coolify names: `cogito-api`, `cogito-web`, `cogito-prod-db`,
-  …). Or `./infra/ops.sh trace <traceId>` for the Explore URL.
+  `{service="cogito-api"} |= "<traceId>"` (the stable Coolify resource names:
+  `cogito-api`, `cogito-web`, `cogito-prod-db`, … — relabeled from the
+  `coolify_resourceName` container label, never the random container name). Or `./infra/ops.sh trace <traceId>` for the Explore URL.
 - **Grafana access (tailnet-only):** `./infra/ops.sh grafana` (tunnel + URL
   in one command), or manually `ssh -L 3000:127.0.0.1:3000
 ubuntu@cogito-vps.tail674634.ts.net`, then `http://localhost:3000` (admin user `admin`;
