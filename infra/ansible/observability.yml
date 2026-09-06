@@ -851,7 +851,18 @@
           GRAFANA_ADMIN_PASSWORD and DISCORD_WEBHOOK_URL must both be in
           {{ playbook_dir }}/../secrets/prod.env (sops). Nothing was changed.
 
-    - name: Ensure the Cogito alert folder exists
+    - name: Read the existing Grafana folders
+      ansible.builtin.uri:
+        url: "{{ grafana_api_url }}/folders"
+        method: GET
+        user: admin
+        password: "{{ grafana_admin_password }}"
+        force_basic_auth: true
+        status_code: 200
+      register: grafana_folders
+      no_log: true
+
+    - name: Ensure the Cogito alert folder exists (create when missing only)
       ansible.builtin.uri:
         url: "{{ grafana_api_url }}/folders"
         method: POST
@@ -862,6 +873,11 @@
         body_format: json
         status_code: [200, 409, 412]
       no_log: true
+      when: grafana_folders.json | selectattr('title', 'equalto', 'Cogito') | list | length == 0
+      # Grafana's POST /api/folders permits duplicate titles (409 is only for
+      # UID conflicts, and no UID is sent) — an unconditional POST minted one
+      # spare "Cogito" folder per apply run. Same create-when-missing idiom as
+      # the Discord-ops contact below.
 
     - name: Read the existing contact points
       ansible.builtin.uri:
