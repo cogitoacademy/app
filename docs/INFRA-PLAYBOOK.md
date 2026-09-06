@@ -38,9 +38,10 @@ runner is down or the workflow did not trigger, use the manual fallback.
 
 ## 2. Deploy code (merge to main)
 
-**Nothing to run.** CD does: build → GHCR → pre-migrate R2 snapshot →
+**Nothing to run — for app-code merges.** CD does: build → GHCR → pre-migrate R2 snapshot →
 `db:migrate` → Coolify deploy → sha-verified `/health` poll (webhook POST +
-HTTP-200 poll for web). Watch it:
+HTTP-200 poll for web). Infra-only merges skip CD (infra-apply owns them) and
+docs-only merges skip everything, so neither restarts production containers. Watch it:
 
 ```bash
 gh run watch $(gh run list --workflow cd-prod.yml --limit 1 --json databaseId --jq '.[0].databaseId')

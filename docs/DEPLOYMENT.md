@@ -323,7 +323,13 @@ message and exits 1 (readable failure instead of a bare `curl exit 6`).
    was deleted 2026-08-31 — pushing to `staging` triggers no CD; see RUNBOOK →
    "Deploy Secrets" → "Staging CD removed".)
 3. `cd-prod.yml` builds and pushes the server and web images on a GitHub-hosted
-   runner. Its dependent `deploy` job runs only on the VPS runner labelled
+   runner — **only when the merge carries a runtime change** (`apps/**`,
+   `packages/**` incl. `db` migrations, `scripts/**`, lockfiles, or the
+   workflow itself; detected via paths-filter). Infra-only merges are owned
+   by `infra-apply.yml` and docs-only merges change nothing at runtime, so
+   both skip the build + redeploy (previously every merge restarted the
+   production API containers). `workflow_dispatch` remains the manual
+   re-deploy escape hatch. Its dependent `deploy` job runs only on the VPS runner labelled
    `production`.
 4. Production receives both `latest` and immutable `v<full-commit-sha>` tags.
    (No staging tags exist — the staging CD pipeline was removed 2026-08-31.)
