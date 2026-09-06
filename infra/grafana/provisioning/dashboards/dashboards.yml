@@ -11,6 +11,14 @@ providers:
   - name: cogito
     orgId: 1
     folder: Cogito
+    # Pinned to the folder UID that holds the file-provisioned alert-rule
+    # group (verified live 2026-09-06: rules live in afxfpsyn1jldse, boards
+    # were in efxc1qs6nad4wd — same title, different objects). File alert
+    # provisioning accepts only `folder` (title), so the dashboards move to
+    # the rules, never vice versa; on next poll the 4 boards join the rule
+    # group in one Cogito folder and the leftover empty is deleted once in
+    # the UI. Title stays as the human label.
+    folderUid: afxfpsyn1jldse
     type: file
     disableDeletion: true
     updateIntervalSeconds: 30

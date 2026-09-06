@@ -71,8 +71,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "topk(8, container_memory_working_set_bytes{container_label_coolify_resourceName=~\".+\"})",
-          "legendFormat": "{{name}}"
+          "expr": "topk(8, container_memory_working_set_bytes{container_label_coolify_resourceName=~\".+\"} or container_memory_working_set_bytes{container_label_coolify_resourceName=\"\",name=~\"cogito.+\"})",
+          "legendFormat": "{{container_label_coolify_resourceName}} {{name}}"
         }
       ]
     }

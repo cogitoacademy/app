@@ -9,9 +9,18 @@ pre-commit:
       run: bunx oxfmt --write {staged_files}
     sops-plaintext-guard:
       glob: "infra/secrets/prod.env"
-      # Accept both sops formats: YAML ("sops:" block) and dotenv/flat
-      # ("sops_age__...=" prefixed keys). Plaintext has neither.
-      run: grep -qE "^(sops:|sops_)" {staged_files} || (echo "❌ Refusing to commit PLAINTEXT infra/secrets/prod.env — encrypt it first (sops -e -i) or use 'sops infra/secrets/prod.env' for edits" && exit 1)
+      # Per-key check against .sops.yaml encrypted_regex: any listed key
+      # whose value is not ENC[...] ciphertext fails the commit. (A
+      # file-level marker check passed the plaintext GRAFANA_ADMIN_PASSWORD
+      # on 2026-09-06 — and the key itself was missing from encrypted_regex,
+      # so sops would not even have encrypted it. Both fixed. Non-listed
+      # keys are intentionally plaintext config.)
+      run: >
+        python3 -c 'import re,sys;
+        enc=re.search(r"encrypted_regex:\s*\"([^\"]+)\"",open(".sops.yaml").read()).group(1);
+        bad=[l.split("=",1)[0] for l in open(sys.argv[1]) if re.match(r"^[A-Za-z_][A-Za-z0-9_]*=",l) and re.match(enc,l.split("=",1)[0]) and l.split("=",1)[1].strip() != "" and not l.split("=",1)[1].startswith("ENC[")];
+        print("sops-plaintext-guard: " + ("OK" if not bad else "PLAINTEXT: "+" ".join(bad)));
+        sys.exit(1 if bad else 0)' {staged_files}
 
 pre-push:
   parallel: true
