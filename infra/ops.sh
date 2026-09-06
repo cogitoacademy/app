@@ -223,7 +223,7 @@ trace() {
   fi
   local grafana="${GRAFANA_URL:-http://100.124.43.19:3000}"
   local query left
-  query="{service=\"cogito-app-server\"} |= \"$trace_id\""
+  query="{service=\"cogito-api\"} |= \"$trace_id\""
   left="$(TRACE_QUERY="$query" python3 -c 'import json,os,urllib.parse; print(urllib.parse.quote(json.dumps({"datasource":"Loki","queries":[{"expr":os.environ["TRACE_QUERY"],"refId":"A"}]}), safe=""))')"
   echo "Grafana Explore (tailnet-only): $grafana/explore?orgId=1&left=$left"
   echo "LogQL: $query"
