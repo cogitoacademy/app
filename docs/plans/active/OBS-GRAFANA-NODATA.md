@@ -66,7 +66,9 @@ ssh -i ~/.ssh/cogito_vps -f -N -L 8000:127.0.0.1:8000 ubuntu@<tailnet-ip>
 # 3. Coolify UI: set GF_SECURITY_ADMIN_PASSWORD on cogito-grafana to the
 #    rotated vault value (keeps fresh volumes consistent with live)
 
-# 4. Restart cogito-grafana once (file-provisioned alert rules load at startup only)
+# 4. Restart cogito-grafana: NOT a separate step — Play 2's tree-sync handler
+#    restarts it automatically during apply (file-provisioned alert rules load
+#    at startup, dashboards hot-reload).
 ```
 
 Verify (expect 2–3 min after redeploy):

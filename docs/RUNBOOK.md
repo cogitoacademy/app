@@ -948,8 +948,9 @@ reset-admin-password '<new>'` on the VPS; verify the new password returns
   200 on `/api/org` and the old returns 401. Then update the Coolify UI env
   `GF_SECURITY_ADMIN_PASSWORD` on `cogito-grafana` to the same value so a
   future fresh volume boots with the rotated password. File-provisioned alert
-  rules load at Grafana startup only — restart Grafana after changing
-  `provisioning/alerting/`.
+  rules load at Grafana startup only — `./infra/apply.sh observability` syncs
+  the tree and auto-restarts Grafana via the Play 2 handler, so there is no
+  separate restart step (dashboards hot-reload regardless).
 - **Zero-safe PromQL pattern (2026-09-06):** a ratio whose numerator is empty
   when healthy (e.g. zero 5xx) renders No Data, not 0. Wrap the fallible side:
   `(sum(rate(http_requests_total{status=~"5.."}[5m])) or vector(0)) /
