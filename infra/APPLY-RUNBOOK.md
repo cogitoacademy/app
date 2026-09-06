@@ -136,7 +136,7 @@ ansible-playbook -i infra/ansible/inventory.ini infra/ansible/host-hardening.yml
 #    FIRST: open the SSH tunnel — the Coolify container publishes :8000 on
 #    127.0.0.1 only (verified 2026-08-31), so the playbook (which defaults
 #    to http://localhost:8000/api/v1) needs it:
-ssh -i ~/.ssh/cogito_vps -f -N -L 8000:127.0.0.1:8000 ubuntu@100.124.43.19
+ssh -i ~/.ssh/cogito_vps -f -N -L 8000:127.0.0.1:8000 ubuntu@cogito-vps.tail674634.ts.net
 ansible-playbook -i infra/ansible/inventory.ini infra/ansible/coolify-resources.yml \
   --ask-become-pass
 #    → prints the Traefik dynamic config; paste into Coolify UI → Servers →
@@ -147,11 +147,12 @@ ansible-playbook -i infra/ansible/inventory.ini infra/ansible/coolify-resources.
 # 4b. Observability services (Coolify API declares + host files + Grafana
 #     wiring — tailnet-only, no public domain). Needs BOTH tunnels (the
 #     Coolify API and Grafana publish on loopback only):
-ssh -i ~/.ssh/cogito_vps -f -N -L 3000:127.0.0.1:3000 ubuntu@100.124.43.19
+ssh -i ~/.ssh/cogito_vps -f -N -L 3000:127.0.0.1:3000 ubuntu@cogito-vps.tail674634.ts.net
 ansible-playbook -i infra/ansible/inventory.ini infra/ansible/observability.yml \
   --ask-become-pass
-#    → redeploy cogito-prometheus + cogito-alloy in Coolify UI when
-#      provisioned files changed (config consumers)
+#    → cogito-prometheus + cogito-alloy restart automatically via the
+#      'restart config consumers' handler when provisioned files changed
+#      (first-ever apply: confirm Prometheus targets UP)
 #    → or: ./infra/apply.sh observability (same playbook, marker-tracked)
 
 # 5. Backup cron (needs DATABASE_URL resolvable from the VPS host — the

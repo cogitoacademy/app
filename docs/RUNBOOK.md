@@ -141,7 +141,7 @@ SSH tunnel rather than exposing port `8000`.
 must tunnel before running `coolify-resources.yml` / `drift-check.yml`:
 
 ```bash
-ssh -i ~/.ssh/cogito_vps -f -N -L 8000:127.0.0.1:8000 ubuntu@100.124.43.19
+ssh -i ~/.ssh/cogito_vps -f -N -L 8000:127.0.0.1:8000 ubuntu@cogito-vps.tail674634.ts.net
 ```
 
 The playbooks default to `http://localhost:8000/api/v1` (the tunnel). The
@@ -927,11 +927,17 @@ COOLIFY_API_TOKEN | cut -d= -f2-)"` (tunnel up; exit 0 = no drift —
   suffix-stripped Coolify names: `cogito-api`, `cogito-web`, `cogito-prod-db`,
   …). Or `./infra/ops.sh trace <traceId>` for the Explore URL.
 - **Grafana access (tailnet-only):** `ssh -L 3000:127.0.0.1:3000
-ubuntu@<tailnet-ip>`, then `http://localhost:3000` (admin user `admin`;
-  password in the SOPS vault as `GRAFANA_ADMIN_PASSWORD`). Provisioned:
+ubuntu@cogito-vps.tail674634.ts.net`, then `http://localhost:3000` (admin user `admin`;
+  password in the SOPS vault as `GRAFANA_ADMIN_PASSWORD`). The direct tailnet URL
+  `http://cogito-vps.tail674634.ts.net:3000` also resolves via MagicDNS with no
+  tunnel; `./infra/ops.sh trace` defaults `GRAFANA_URL` to it. Provisioned:
   datasources (Loki default + Prometheus), 4 dashboards (App RED, Logs &
   Traces, Infra, Delivery), alert rules (DLQFresh/DiskWarn/DiskCrit/ApiErrors
   → `Discord-ops` contact point).
+- **Tailscale HTTPS (optional):** enabling HTTPS in the Tailscale admin console
+  (DNS → Enable HTTPS) gives the same `cogito-vps.tail674634.ts.net` name a
+  trusted certificate; until then use plain `http` over the tailnet, which is
+  already encrypted by WireGuard.
 - **Prometheus targets** (all UP 2026-09-05): `cogito-api` (Bearer
   `metrics_token`), `node-exporter`, `cadvisor`.
 - **Networking lesson (recorded so nobody re-learns it):** each Coolify
@@ -956,7 +962,7 @@ Coolify service `cogito-studio` (app `drizzle-gateway`,
 revived 2026-09-05 by service restart + loopback publish
 (`127.0.0.1:4983`, PATCHed compose) — status `healthy`, UI serves 200.
 
-- **Access:** `ssh -L 4983:127.0.0.1:4983 ubuntu@<tailnet-ip>`, then
+- **Access:** `ssh -L 4983:127.0.0.1:4983 ubuntu@cogito-vps.tail674634.ts.net`, then
   `http://localhost:4983`. No public domain by design (DB GUI).
 - **Credentials:** managed in the Coolify service env (UI → cogito-studio →
   Environment, `SERVICE_PASSWORD_DRIZZLE`); never in our vault (Coolify-owned
@@ -1057,7 +1063,7 @@ the printed steps; nothing here was applied from a worker.
 
 - **Tailnet-only (hard requirement):** no observability service has a public
   domain (`urls: []`, drift-checked). Grafana is reached over the tailnet
-  (`http://<tailnet-ip>:3000`) or an SSH tunnel — there is deliberately no
+  (`http://cogito-vps.tail674634.ts.net:3000`) or an SSH tunnel — there is deliberately no
   public log UI.
 - **Provisioned files** (source of truth in git; the operator places them
   once under `/etc/cogito/observability/` per the playbook's printed

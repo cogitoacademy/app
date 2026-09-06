@@ -13,7 +13,7 @@ production has NOT changed until you apply (§1).
 ```bash
 cd ~/cogito/app && git pull                      # work from latest main
 export SOPS_AGE_KEY_FILE="$HOME/.config/sops/age/keys.txt"   # vault decrypt
-ssh -i ~/.ssh/cogito_vps -f -N -L 8000:127.0.0.1:8000 ubuntu@100.124.43.19
+ssh -i ~/.ssh/cogito_vps -f -N -L 8000:127.0.0.1:8000 ubuntu@cogito-vps.tail674634.ts.net
 #   ↑ the Coolify API is loopback-only; this tunnel makes it localhost:8000.
 #     "Address already in use" = a tunnel already runs; that's fine.
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8000/api/v1/health  # expect 200
@@ -81,8 +81,8 @@ The playbook is three plays: (1) Coolify service declarations (localhost API),
 API via tunnel). Run all three from the operator machine:
 
 ```bash
-ssh -i ~/.ssh/cogito_vps -f -N -L 8000:127.0.0.1:8000 ubuntu@<tailnet-ip>
-ssh -i ~/.ssh/cogito_vps -f -N -L 3000:127.0.0.1:3000 ubuntu@<tailnet-ip>
+ssh -i ~/.ssh/cogito_vps -f -N -L 8000:127.0.0.1:8000 ubuntu@cogito-vps.tail674634.ts.net
+ssh -i ~/.ssh/cogito_vps -f -N -L 3000:127.0.0.1:3000 ubuntu@cogito-vps.tail674634.ts.net
 export SOPS_AGE_KEY_FILE="$HOME/.config/sops/age/keys.txt"
 ansible-playbook -i infra/ansible/inventory.ini infra/ansible/observability.yml
 ansible-playbook -i infra/ansible/inventory.ini infra/ansible/studio.yml
@@ -159,7 +159,7 @@ unchanged (code-only rollback).
 ```bash
 ./ops.sh backup                 # current state first
 # restore target: newest cogito-backups dump (nightly) or pre-migrate-<sha> snapshot
-ssh ubuntu@100.124.43.19   # then: aws s3 cp s3://cogito-backups/... (creds in /etc/cogito/backup.env)
+ssh ubuntu@cogito-vps.tail674634.ts.net   # then: aws s3 cp s3://cogito-backups/... (creds in /etc/cogito/backup.env)
 # restore into scratch → verify counts → maintenance window → restore into prod
 ```
 

@@ -489,8 +489,15 @@
           (The old manual scp/sops-pipe steps are superseded by Play 2 —
           same paths, same files, 0644 on metrics_token.)
 
-          Then restart the two config consumers from the Coolify UI
-          (cogito-prometheus, cogito-alloy) or redeploy those services.
+          Then the two config consumers (cogito-prometheus, cogito-alloy)
+          restart automatically via the 'restart config consumers' handler
+          when a placement task reports changed (POST
+          /api/v1/services/<uuid>/restart, Coolify v4.3.14 restart_only
+          semantics — same pattern as tasks/env.yml for applications,
+          documented for services at studio.yml:141; UUIDs resolved by name
+          via GET /services like drift-check.yml; token-bearing calls
+          no_log). First-ever apply: still confirm the restart took
+          (Prometheus targets UP).
           Retention: Loki 30d (loki-config.yml, keep in sync with
           loki_retention_days=30), Prometheus 15d (--storage.tsdb.
           retention.time=15d, from prom_retention_days=15).
@@ -576,6 +583,10 @@
     obs_root: /etc/cogito/observability
     obs_src: "{{ playbook_dir }}/.."
     vault_path: "{{ playbook_dir }}/../secrets/prod.env"
+    # Coolify API from the VPS host perspective (Coolify publishes :8000 on
+    # VPS loopback only; Play 1 reaches it via the operator tunnel, Play 2
+    # and its restart handler reach it directly as 127.0.0.1).
+    coolify_api_url: "http://127.0.0.1:8000/api/v1"
 
   tasks:
     - name: Check mode — structure validated, host flow skipped
@@ -612,6 +623,25 @@
         - alloy
         - grafana/provisioning
 
+    - name: Read COOLIFY_API_TOKEN from the vault on the control node (restart handler auth)
+      ansible.builtin.shell: >-
+        sops -d {{ vault_path }} |
+        grep -E '^COOLIFY_API_TOKEN='
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      no_log: true
+      register: coolify_token_plaintext
+      environment:
+        PATH: "{{ lookup('env', 'PATH') }}:/opt/homebrew/bin:/usr/local/bin"
+        SOPS_AGE_KEY_FILE: "{{ lookup('env', 'SOPS_AGE_KEY_FILE') | default(lookup('env', 'HOME') + '/.config/sops/age/keys.txt', true) }}"
+      failed_when: coolify_token_plaintext.stdout | length == 0
+
+    - name: Store the Coolify API token as a fact (never echoed)
+      ansible.builtin.set_fact:
+        coolify_api_token: "{{ coolify_token_plaintext.stdout | regex_replace('^COOLIFY_API_TOKEN=', '') }}"
+      no_log: true
+
     - name: Sync the provisioned config files (checksummed, idempotent)
       ansible.builtin.copy:
         src: "{{ obs_src }}/{{ item.src }}"
@@ -626,6 +656,7 @@
             dest: "prometheus/prometheus.yml",
           }
         - { src: "alloy/config.alloy", dest: "alloy/config.alloy" }
+      notify: restart config consumers
 
     - name: Sync the Grafana provisioning tree (dashboards, datasources, alerts)
       ansible.builtin.copy:
@@ -662,6 +693,7 @@
         group: root
         mode: "0644"
       no_log: true
+      notify: restart config consumers
 
     - name: Read GRAFANA_ADMIN_PASSWORD from the vault on the control node
       ansible.builtin.shell: >-
@@ -693,6 +725,46 @@
       changed_when: false
       failed_when: false
       when: grafana_pw_plaintext.stdout | length > 0
+
+  handlers:
+    # Self-redeploying config (2026-09-06): replaces the old "redeploy
+    # cogito-prometheus + cogito-alloy in the Coolify UI" step. Fires ONLY
+    # when a placement task above reports changed (native notify semantics).
+    # POST /api/v1/services/<uuid>/restart is Coolify v4.3.14 restart_only
+    # semantics — same proven pattern as tasks/env.yml for applications,
+    # documented for services at studio.yml:141. UUIDs resolved by name via
+    # GET /services (same pattern as drift-check.yml); token-bearing calls
+    # are no_log. First-ever apply: still confirm the restart took
+    # (Prometheus targets UP).
+    - name: restart config consumers
+      ansible.builtin.uri:
+        url: "{{ coolify_api_url }}/services"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ coolify_api_token }}"
+        status_code: 200
+      register: obs_restart_services
+      no_log: true
+
+    - name: Restart cogito-prometheus on config change
+      ansible.builtin.uri:
+        url: "{{ coolify_api_url }}/services/{{ (obs_restart_services.json | selectattr('name', 'equalto', 'cogito-prometheus') | first).uuid }}/restart"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ coolify_api_token }}"
+        status_code: [200, 201, 202]
+      no_log: true
+      listen: restart config consumers
+
+    - name: Restart cogito-alloy on config change
+      ansible.builtin.uri:
+        url: "{{ coolify_api_url }}/services/{{ (obs_restart_services.json | selectattr('name', 'equalto', 'cogito-alloy') | first).uuid }}/restart"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ coolify_api_token }}"
+        status_code: [200, 201, 202]
+      no_log: true
+      listen: restart config consumers
 
 # -----------------------------------------------------------------------------
 # Play 3 — wire Grafana alerting over its API (replaces the manual contact
