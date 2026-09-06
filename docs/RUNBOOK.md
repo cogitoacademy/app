@@ -1074,7 +1074,7 @@ the printed steps; nothing here was applied from a worker.
   `prometheus.yml` + `--storage.tsdb.retention.time=7d` in the prometheus
   compose (halve both vars first so the declaration stays truthful).
 - **Trace lookup without SSH:** `./infra/ops.sh trace <traceId>` prints the
-  tailnet Grafana Explore URL (LogQL `{service="cogito-app-server"} |=
+  tailnet Grafana Explore URL (LogQL `{service="cogito-api"} |=
 "<traceId>"`). Logs carry `userId`, never email.
 - **Grafana → Discord** (Grafana UI step, like the Kuma monitors — the
   Coolify API cannot express it): Alerting → Contact points → Discord with

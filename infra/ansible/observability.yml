@@ -506,7 +506,7 @@
                  ssh -i ~/.ssh/cogito_vps -f -N -L 3000:127.0.0.1:3000 ubuntu@<tailnet-ip>
                  open http://localhost:3000  # datasources Loki + Prometheus pre-provisioned
             2. LogQL trace search (no SSH log-grepping):
-                 {service="cogito-app-server"} |= "traceId"
+                 {service="cogito-api"} |= "traceId"
                  # or: ./infra/ops.sh trace <traceId>  (prints the Explore URL)
                  Logs carry userId, never email.
             3. Prometheus targets UP (tunnel 9090 the same way):

@@ -22,7 +22,7 @@ discovery.relabel "cogito" {
 
   // Container name (e.g. /cogito-api-104816659080) -> `service` label:
   // leading slash stripped AND the numeric Coolify redeploy suffix
-  // dropped, so `{service="cogito-app-server"}` stays stable across
+  // dropped, so `{service="cogito-api"}` stays stable across
   // deploys (verified live: suffixes are `-<digits>`; non-numeric tails
   // like uptime-kuma's hash keep their full name, still searchable).
   rule {
