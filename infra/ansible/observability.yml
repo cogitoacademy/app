@@ -30,7 +30,7 @@
 #   infra/loki/loki-config.yml                       -> /etc/cogito/observability/loki/loki-config.yml
 #   infra/alloy/config.alloy                         -> /etc/cogito/observability/alloy/config.alloy
 #   infra/grafana/provisioning/**                    -> /etc/cogito/observability/grafana/provisioning/
-#   vault METRICS_TOKEN (file, never the value)      -> /etc/cogito/observability/prometheus/metrics_token (0600)
+#   vault METRICS_TOKEN (file, never the value)      -> /etc/cogito/observability/prometheus/metrics_token (0644 root:root)
 # The compose blocks below bind-mount exactly these host paths (the same
 # /etc/cogito/... convention as the disk-watchdog env file).
 #
@@ -477,16 +477,17 @@
       ansible.builtin.debug:
         msg: |-
           The compose blocks above bind-mount host paths under
-          /etc/cogito/observability/. Place the provisioned files ONCE from
-          the operator machine (repo root; the secret travels via pipe, never
-          argv, never echoed):
+          /etc/cogito/observability/. Place them declaratively with Play 2
+          of this playbook (converges the dirs, checksummed file sync of
+          loki-config.yml / prometheus.yml / config.alloy plus the Grafana
+          provisioning tree, vault METRICS_TOKEN -> 0644 root:root token
+          file, shared cogito-obs network, Grafana admin password):
 
-            ssh ubuntu@<tailnet-ip> 'sudo mkdir -p /etc/cogito/observability/{loki,prometheus,alloy,grafana/provisioning} && sudo chown -R ubuntu:ubuntu /etc/cogito/observability'
-            scp infra/loki/loki-config.yml ubuntu@<tailnet-ip>:/etc/cogito/observability/loki/loki-config.yml
-            scp infra/prometheus/prometheus.yml ubuntu@<tailnet-ip>:/etc/cogito/observability/prometheus/prometheus.yml
-            scp infra/alloy/config.alloy ubuntu@<tailnet-ip>:/etc/cogito/observability/alloy/config.alloy
-            scp -r infra/grafana/provisioning/. ubuntu@<tailnet-ip>:/etc/cogito/observability/grafana/provisioning/
-            sops -d infra/secrets/prod.env | grep '^METRICS_TOKEN=' | cut -d= -f2- | ssh ubuntu@<tailnet-ip> 'cat > /etc/cogito/observability/prometheus/metrics_token && chmod 600 /etc/cogito/observability/prometheus/metrics_token'
+            ansible-playbook -i infra/ansible/inventory.ini infra/ansible/observability.yml --ask-become-pass
+            # or: ./infra/apply.sh observability
+
+          (The old manual scp/sops-pipe steps are superseded by Play 2 —
+          same paths, same files, 0644 on metrics_token.)
 
           Then restart the two config consumers from the Coolify UI
           (cogito-prometheus, cogito-alloy) or redeploy those services.

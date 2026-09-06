@@ -57,6 +57,9 @@
     obs_drift: >-
       {%- set ns = namespace(parts=[]) -%}
       {%- if obs_detail.json.name is defined and obs_detail.json.name != obs_spec.name -%}{%- set ns.parts = ns.parts + ['name: ' ~ obs_detail.json.name ~ ' != ' ~ obs_spec.name] -%}{%- endif -%}
+      {%- if obs_detail.json.description is defined and obs_detail.json.description != obs_spec.description -%}{%- set ns.parts = ns.parts + ['description drift'] -%}{%- endif -%}
+      {%- if obs_detail.json.docker_compose_raw is defined and (obs_detail.json.docker_compose_raw | string | trim) != (obs_spec.docker_compose_raw | string | trim) -%}{%- set ns.parts = ns.parts + ['docker_compose_raw drift'] -%}{%- endif -%}
+      {%- if obs_detail.json.urls is defined and (obs_detail.json.urls | default([]) | length) != (obs_spec.urls | default([]) | length) -%}{%- set ns.parts = ns.parts + ['urls drift: live has ' ~ (obs_detail.json.urls | default([]) | length | string) ~ ' url(s), declared ' ~ (obs_spec.urls | default([]) | length | string)] -%}{%- endif -%}
       {{- ns.parts | join('; ') -}}
 
 - name: PATCH drifted fields on {{ obs_spec.name }}

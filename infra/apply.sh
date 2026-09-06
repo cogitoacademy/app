@@ -19,6 +19,8 @@
 #                   verified marker after the operator confirms exit 0
 #   harden          host-hardening.yml — REFUSES without tailscale-verified
 #   resources       coolify-resources.yml (+ Traefik paste reminder)
+#   observability   observability.yml (declare PLG services via Coolify API +
+#                   converge /etc/cogito/observability/ via Play 2, tailnet-only)
 #   backup-cron     backup-cron.yml (DATABASE_URL reachability check + y/N)
 #   verify          /health (version field) + cl. 302 + :8000 lock-down print
 #   status          current marker / credential presence at a glance
@@ -28,7 +30,7 @@
 #
 # Markers live in infra/.apply-state/ (gitignored; runbook-verifiable):
 #   tf-imported, tailscale-joined, tailscale-verified, hardened,
-#   resources-synced, backup-cron-installed, tf-applied
+#   resources-synced, observability-declared, backup-cron-installed, tf-applied
 # tf-plan completion is the plan file itself: infra/terraform/tfplan.
 #
 # --dry-run prints every command the run would execute (secret values
@@ -339,6 +341,18 @@ phase_resources() {
   marker_set resources-synced
 }
 
+phase_observability() {
+  say ""
+  say "=== observability: declare Loki/Prometheus/Grafana/Alloy via Coolify API + converge host files (tailnet-only) ==="
+  require_sops
+  require_tool ansible-playbook " Install ansible-core (e.g. brew install ansible)."
+  run_exec "ansible-playbook -i infra/ansible/inventory.ini infra/ansible/observability.yml --ask-become-pass" \
+    ansible-playbook -i infra/ansible/inventory.ini infra/ansible/observability.yml --ask-become-pass
+  say "  single phase: Play 1 declares the services, Play 2 converges /etc/cogito/observability/, Play 3 wires the Grafana Discord contact point."
+  say "  then: redeploy cogito-prometheus + cogito-alloy in Coolify UI when provisioned files changed, verify Prometheus targets UP over the tailnet."
+  marker_set observability-declared
+}
+
 phase_backup_cron() {
   say ""
   say "=== backup-cron: nightly PostgreSQL backup to R2 ==="
@@ -408,7 +422,7 @@ phase_status() {
                              || say "  credentials: SOPS Age key MISSING at $AGE_KEY_FILE"
   say "  tfplan: $([[ -f "$PLAN_FILE" ]] && echo present || echo absent)"
   local m
-  for m in tf-imported tailscale-joined tailscale-verified hardened resources-synced backup-cron-installed tf-applied; do
+  for m in tf-imported tailscale-joined tailscale-verified hardened resources-synced observability-declared backup-cron-installed tf-applied; do
     marker_done "$m" && say "  [x] $m" || say "  [ ] $m"
   done
 }
@@ -453,6 +467,11 @@ phase_resources_if_pending() {
   pause_before "resources (coolify-resources.yml)"
   phase_resources
 }
+phase_observability_if_pending() {
+  if marker_done observability-declared; then say "  skip observability — marker $STATE_DIR/observability-declared present (re-run infra/apply.sh observability to re-sync)"; return 0; fi
+  pause_before "observability (observability.yml — declares + host files + Grafana wiring)"
+  phase_observability
+}
 phase_backup_cron_if_pending() {
   if marker_done backup-cron-installed; then say "  skip backup-cron — marker $STATE_DIR/backup-cron-installed present"; return 0; fi
   pause_before "backup-cron (DATABASE_URL reachability check)"
@@ -472,6 +491,7 @@ cmd_all() {
   phase_tailscale_verify_if_pending
   phase_harden_if_pending
   phase_resources_if_pending
+  phase_observability_if_pending
   phase_backup_cron_if_pending
 
   if [[ "$DRY" == 1 ]]; then
@@ -491,7 +511,7 @@ cmd_all() {
 # --------------------------------------------------------------------------
 
 usage() {
-  sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 main() {
@@ -517,6 +537,7 @@ main() {
     tailscale-verify ) phase_tailscale_verify ;;
     harden ) phase_harden ;;
     resources ) phase_resources ;;
+    observability ) phase_observability ;;
     backup-cron ) phase_backup_cron ;;
     verify ) phase_verify ;;
     status ) phase_status ;;

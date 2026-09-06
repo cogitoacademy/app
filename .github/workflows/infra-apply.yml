@@ -63,6 +63,7 @@ jobs:
       backup-cron: ${{ steps.filter.outputs.backup-cron }}
       disk-watchdog: ${{ steps.filter.outputs.disk-watchdog }}
       uptime-kuma: ${{ steps.filter.outputs.uptime-kuma }}
+      observability: ${{ steps.filter.outputs.observability }}
       vault: ${{ steps.filter.outputs.vault }}
       any: ${{ steps.filter.outputs.any }}
     steps:
@@ -84,6 +85,15 @@ jobs:
               - 'infra/disk-watchdog.sh'
             uptime-kuma:
               - 'infra/ansible/uptime-kuma.yml'
+            observability:
+              - 'infra/ansible/observability.yml'
+              - 'infra/ansible/tasks/observability-service.yml'
+              - 'infra/ansible/studio.yml'
+              - 'infra/ansible/drift-check.yml'
+              - 'infra/prometheus/**'
+              - 'infra/loki/**'
+              - 'infra/alloy/**'
+              - 'infra/grafana/**'
             vault:
               - 'infra/secrets/**'
             any:
@@ -92,6 +102,14 @@ jobs:
               - 'infra/ansible/disk-watchdog.yml'
               - 'infra/disk-watchdog.sh'
               - 'infra/ansible/uptime-kuma.yml'
+              - 'infra/ansible/observability.yml'
+              - 'infra/ansible/tasks/observability-service.yml'
+              - 'infra/ansible/studio.yml'
+              - 'infra/ansible/drift-check.yml'
+              - 'infra/prometheus/**'
+              - 'infra/loki/**'
+              - 'infra/alloy/**'
+              - 'infra/grafana/**'
               - 'infra/secrets/**'
 
   terraform:
@@ -200,6 +218,8 @@ jobs:
           export SOPS_AGE_KEY_FILE="${{ env.SOPS_AGE_KEY_FILE }}"
           TOKEN="$(sops -d infra/secrets/prod.env | grep '^COOLIFY_API_TOKEN=' | cut -d= -f2-)"
           set +e
+          # Covers resources + the 5 PLG/studio services (existence,
+          # tailnet-only urls == [], image pins — see drift-check.yml).
           ansible-playbook -i infra/ansible/inventory.ini infra/ansible/drift-check.yml \
             -e coolify_api_base="http://127.0.0.1:8000/api/v1" \
             -e coolify_api_token="$TOKEN" \
@@ -243,6 +263,18 @@ jobs:
         run: |
           ansible-playbook -i infra/ansible/inventory.ini infra/ansible/uptime-kuma.yml \
             -e coolify_api_url="http://127.0.0.1:8000/api/v1"
+
+      # observability.yml is three plays: Play 1 (localhost Coolify API
+      # declares) takes the loopback -e override like uptime-kuma; Play 2
+      # (hosts: cogito_vps host files) takes --connection=local like
+      # backup-cron (the runner IS the host); Play 3 (localhost Grafana API)
+      # reaches 127.0.0.1:3000 on the runner directly — no tunnel needed in
+      # the box. Break-glass: workflow_dispatch always runs this step.
+      - name: Apply — observability (declares + host files + Grafana wiring)
+        if: github.event_name == 'workflow_dispatch' || needs.detect.outputs.observability == 'true' || needs.detect.outputs.vault == 'true'
+        run: |
+          ansible-playbook -i infra/ansible/inventory.ini infra/ansible/observability.yml \
+            -e coolify_api_url="http://127.0.0.1:8000/api/v1" --connection=local
 
       - name: Post-apply verification
         run: |
