@@ -1,5 +1,7 @@
 # Observability Declarative Implementation Plan
 
+> **Status: Completed (merged #202 2026-09-06; follow-ups #203 threshold refs, #204 trace label, #205 apply-pipeline repair, #206 metrics canary + self-restart + MagicDNS).**
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make the tailnet-only PLG stack (Loki + Prometheus + Grafana + Alloy) fully declarative through the existing Ansible pipeline — no manual `scp`/`ssh` config placement, no unwired playbook, no silent drift.
