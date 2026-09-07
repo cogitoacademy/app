@@ -979,7 +979,7 @@ sum(rate(http_requests_total[5m]))`, and `breaker_state or on() vector(0)`
   within the A3 constraint). Watch post-apply: cAdvisor RSS <200m, swap
   trending down, `alloy` target UP.
 - **KeepLast alert semantics (2026-09-07):** all 12 rules use
-  `noDataState: KeepLast` — a firing alert now *survives* scrape gaps and
+  `noDataState: KeepLast` — a firing alert now _survives_ scrape gaps and
   Prometheus restarts (the CpuCrit NoData-resolution incident must never
   recur); only real data resolves. Side effect: an alert firing when its
   datasource dies stays firing — check `/targets` first when an alert won't

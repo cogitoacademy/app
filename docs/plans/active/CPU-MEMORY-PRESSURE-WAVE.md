@@ -1,10 +1,10 @@
 # CPU/Memory Pressure Wave
 
-| Field   | Value                                                                                 |
-| ------- | ------------------------------------------------------------------------------------- |
-| Status  | **Active** (created 2026-09-07)                                                       |
-| Branch  | `w/cpu-memory-pressure-wave` (merges `w/cpu-pressure-platform`, `w/cpu-pressure-alerts`) |
-| Workers | 2 (platform + alerts; lead owns docs tail)                                            |
+| Field   | Value                                                                                                                      |
+| ------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Status  | **Active** (created 2026-09-07)                                                                                            |
+| Branch  | `w/cpu-memory-pressure-wave` (merges `w/cpu-pressure-platform`, `w/cpu-pressure-alerts`)                                   |
+| Workers | 2 (platform + alerts; lead owns docs tail)                                                                                 |
 | Entry   | Operator commands live in [INFRA-PLAYBOOK.md](../../INFRA-PLAYBOOK.md); detail behind it in [RUNBOOK.md](../../RUNBOOK.md) |
 
 Grill-round decisions (user-locked 2026-09-07): KeepLast on **all 12** rules;
@@ -24,14 +24,14 @@ below 30d headroom, drop Prometheus first below 500MB available).
 
 ## 2. Tasks
 
-| ID | Task | Lands in |
-| -- | ---- | -------- |
-| P1 | cAdvisor 128m → 256m + `--disable_metrics=disk,diskIO` (disk panels use node-exporter — verified, no `container_fs_*` refs) | `observability.yml` |
-| P2 | Delete Alloy wget probe; add Prometheus `alloy:12345` self-scrape (liveness via TargetDown + telemetry; closes prior O7) | `observability.yml`, `prometheus.yml` |
-| P3 | Ship `/var/log/cogito-backup.log` to Loki as `{service="cogito-backup",job="backup"}` (single-file `:ro` mount) | `observability.yml`, `config.alloy` |
-| O1 | `noDataState: KeepLast` on all 12 rules + stale-comment reconciliation | `rules.yaml` |
-| O2 | Saturation P5 swap panel; P9 `(UNVERIFIED)` note until live check | `saturation.json`, `infra.json` |
-| D1 | RUNBOOK incident + KeepLast notes; CONTEXT plan row + order #22; this file | `docs/` (lead) |
+| ID  | Task                                                                                                                        | Lands in                              |
+| --- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| P1  | cAdvisor 128m → 256m + `--disable_metrics=disk,diskIO` (disk panels use node-exporter — verified, no `container_fs_*` refs) | `observability.yml`                   |
+| P2  | Delete Alloy wget probe; add Prometheus `alloy:12345` self-scrape (liveness via TargetDown + telemetry; closes prior O7)    | `observability.yml`, `prometheus.yml` |
+| P3  | Ship `/var/log/cogito-backup.log` to Loki as `{service="cogito-backup",job="backup"}` (single-file `:ro` mount)             | `observability.yml`, `config.alloy`   |
+| O1  | `noDataState: KeepLast` on all 12 rules + stale-comment reconciliation                                                      | `rules.yaml`                          |
+| O2  | Saturation P5 swap panel; P9 `(UNVERIFIED)` note until live check                                                           | `saturation.json`, `infra.json`       |
+| D1  | RUNBOOK incident + KeepLast notes; CONTEXT plan row + order #22; this file                                                  | `docs/` (lead)                        |
 
 ## 3. Operator apply + verify (post-merge, in order)
 
@@ -46,7 +46,7 @@ below 30d headroom, drop Prometheus first below 500MB available).
    no healthcheck; cAdvisor RSS <200m; swap trending down over 24h.
 4. Enforcement (in-wave): Coolify UI api 512m / web 256m (177MB observed →
    safe) + `docker inspect` paste; `docker network connect --alias cogito-api
-   cogito-obs <api-container>`; Kuma `/metrics` canary with Bearer token;
+cogito-obs <api-container>`; Kuma `/metrics` canary with Bearer token;
    enable secret scanning + push protection.
 5. 24h later: paste `docker stats` + `free -m` for the pressure-released check;
    P9 verdict via `container_start_time_seconds` (delete panel + rule if NoData).
