@@ -1,7 +1,7 @@
 {
   "uid": "cogito-delivery",
   "title": "Delivery",
-  "description": "Deploys, backups, DLQ and circuit breakers — did the release land and is anything stuck?",
+  "description": "Deploys, backups, DLQ and circuit breakers — did the release land and is anything stuck? Home folder: Cogito.",
   "tags": ["cogito", "delivery"],
   "timezone": "Asia/Jakarta",
   "schemaVersion": 39,

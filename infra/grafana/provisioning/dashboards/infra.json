@@ -1,7 +1,7 @@
 {
   "uid": "cogito-infra",
   "title": "Infra",
-  "description": "Host + container health. Disk warn (85%) / critical (92%) lines match the disk watchdog thresholds.",
+  "description": "Host + container health. Disk warn (85%) / critical (92%) lines match the disk watchdog thresholds. Home folder: Cogito.",
   "tags": ["cogito", "infra"],
   "timezone": "Asia/Jakarta",
   "schemaVersion": 39,
