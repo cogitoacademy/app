@@ -248,7 +248,9 @@
           services:
             alloy:
               image: "grafana/alloy:v1.7.4"
-              command: "run /etc/alloy/config.alloy"
+              # 12345 stays unpublished to host/internet (container networks only);
+              # this replaces the loopback default so the Prometheus self-scrape connects.
+              command: "run --server.http.listen-addr=0.0.0.0:12345 /etc/alloy/config.alloy"
               networks:
                 - default
                 - obs
@@ -660,6 +662,19 @@
     - name: Create the shared cogito-obs Docker network when missing
       ansible.builtin.command: docker network create cogito-obs
       when: obs_net_inspect.rc != 0
+
+    # Re-runs are no-ops (connect runs only when cogito-obs is absent);
+    # CD redeploys recreate the container so this task re-attaches on the next apply.
+    - name: Attach the API container to cogito-obs with the cogito-api alias when absent
+      ansible.builtin.shell: |
+        set -eu
+        api_id=$(docker ps -q --filter ancestor=ghcr.io/cogitoacademy/app/server:latest | head -1)
+        if [ -z "$api_id" ]; then echo "no-api-container"; exit 0; fi
+        if docker inspect "$api_id" --format '{{ '{{json .NetworkSettings.Networks}}' }}' | grep -q 'cogito-obs'; then echo "already-attached"; exit 0; fi
+        docker network connect --alias cogito-api cogito-obs "$api_id"
+        echo "attached $api_id"
+      register: api_obs_attach
+      changed_when: "'attached ' in api_obs_attach.stdout"
 
     - name: Ensure the observability config directories exist (root-owned)
       ansible.builtin.file:
