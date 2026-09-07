@@ -2,7 +2,7 @@
 
 | Field   | Value                                                                                                                      |
 | ------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Status  | **Active** (created 2026-09-07)                                                                                            |
+| Status  | **Completed (merged #228, 2026-09-07)** — 2 workers (platform/alerts), zero file overlap, CI green, squash-merged; operator live-verify carries forward (§3)
 | Branch  | `w/cpu-memory-pressure-wave` (merges `w/cpu-pressure-platform`, `w/cpu-pressure-alerts`)                                   |
 | Workers | 2 (platform + alerts; lead owns docs tail)                                                                                 |
 | Entry   | Operator commands live in [INFRA-PLAYBOOK.md](../../INFRA-PLAYBOOK.md); detail behind it in [RUNBOOK.md](../../RUNBOOK.md) |
