@@ -1,6 +1,10 @@
 # Cogito Runbook
 
-Last updated: 2026-09-04
+Last updated: 2026-09-07
+
+> **Start here for ops:** [INFRA-PLAYBOOK.md](./INFRA-PLAYBOOK.md) is the entry
+> point (scenario → command table). This document holds the detailed
+> procedures behind it.
 
 On the student dashboard, verify the balance widget shows available, held, and
 total Marks from the wallet snapshot. **Top up** must open `/balance`. At 35 or
