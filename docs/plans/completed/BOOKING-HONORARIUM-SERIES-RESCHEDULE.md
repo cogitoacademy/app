@@ -1,6 +1,6 @@
 # Booking Honorarium Total + Per-Session Series Reschedule (Frontend)
 
-Status: In review (integration branch `fix/booking-honorarium-series-reschedule`)
+Status: Completed (merged #230, 2026-09-07)
 Date: 2026-09-07
 Wave: lead + 2 workers (herdr isolated worktrees)
 
