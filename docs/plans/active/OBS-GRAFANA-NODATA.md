@@ -56,7 +56,9 @@ our exact mounts, on the canonical `ghcr.io` registry. Rejected: explicit
 docker pull ghcr.io/google/cadvisor:v0.60.5
 # record digest: docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/google/cadvisor:v0.60.5
 
-# 1. Tunnel + apply (Play 1 PATCHes cogito-alloy compose drift)
+# 1. Tunnel + apply (Play 1 PATCHes cogito-alloy compose drift — enforced
+#    since the drift-detection repair: GET never returns docker_compose_raw,
+#    so absence now means enforce-declared-state instead of silent no-drift)
 ssh -i ~/.ssh/cogito_vps -f -N -L 8000:127.0.0.1:8000 ubuntu@<tailnet-ip>
 ./infra/apply.sh observability   # or: ansible-playbook -i infra/ansible/inventory.ini infra/ansible/observability.yml --ask-become-pass
 
