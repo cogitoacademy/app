@@ -66,7 +66,9 @@ ssh -i ~/.ssh/cogito_vps -f -N -L 8000:127.0.0.1:8000 ubuntu@<tailnet-ip>
 # 3. Coolify UI: set GF_SECURITY_ADMIN_PASSWORD on cogito-grafana to the
 #    rotated vault value (keeps fresh volumes consistent with live)
 
-# 4. Restart cogito-grafana once (file-provisioned alert rules load at startup only)
+# 4. Restart cogito-grafana: NOT a separate step — Play 2's tree-sync handler
+#    restarts it automatically during apply (pipeline or manual); file-provisioned
+#    alert rules load at startup, dashboards hot-reload.
 ```
 
 Verify (expect 2–3 min after redeploy):
@@ -83,7 +85,35 @@ Rollback: `git revert` the image bump, re-apply + redeploy (or set the image
 back in the Coolify UI and redeploy). Same blast radius: stateless cadvisor
 container only (~1–2 min container-metrics gap; host/API/log metrics unaffected).
 
-## 5. Close-out
+## 5. Provisioning re-home behavior (learned 2026-09-07 — #216/#217)
+
+Grafana file provisioning only re-saves dashboards whose FILE CONTENT
+changed; a provider `folderUid` re-pin alone moves nothing (verified live:
+#216 re-pin left App RED/Delivery/Infra stranded in the duplicate folder
+while Logs & Traces, already in the true folder, stayed). Moving boards
+between folders therefore needs a content touch per file (#217: dashboard
+`description` noting the home folder). Rule of thumb: any future folder
+change must ride with a content change, then apply, then confirm each board
+via `/api/search`, then delete the empty duplicate via
+`DELETE /api/folders/<uid>` (verify empty first). Play 3 stays
+create-when-missing so it never recreates a deleted duplicate while one
+`Cogito` folder exists.
+
+## 6. SSH/tailnet flakiness notes (2026-09-07)
+
+Mid-session the tailnet path started dropping large packets: new SSH
+handshakes stalled at `expecting SSH2_MSG_KEX_ECDH_REPLY` (post-quantum
+`sntrup761x25519` KEX messages) and idle tunnels died, while small packets
+(tailscale ping, banners) passed. Workaround for all manual SSH/scp/tunnel
+commands: `-oKexAlgorithms=curve25519-sha256 -o HostKeyAlgorithms=ssh-ed25519
+-o Ciphers=aes128-ctr -o MACs=hmac-sha2-256`. Ansible Play 2 was bypassed
+once because of this (its multiplexed bursts hit sshd throttling
+`Connection closed by port 22`); the manual equivalent (copy tree files,
+0644, restart consumers via the same Coolify endpoints) was performed
+instead — the next normal apply converges to a no-op. Never `pkill -f` a
+tunnel pattern that matches your own command line; kill by PID.
+
+## 7. Close-out
 
 When §4 verifies green: move this file to `docs/plans/completed/`, fold the
 resolved digest next to `cadvisor_image`, and note the Infra panel rendering
