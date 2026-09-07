@@ -45,6 +45,14 @@ scrape_configs:
           - node-exporter:9100
 
   - job_name: cadvisor
+    # cAdvisor v0.60.5 renders 10MB+ expositions on this host (per-overlay
+    # du across dozens of layers; measured 16.5MB in a truncated 20s fetch
+    # 2026-09-07). The global 10s timeout can never complete that, so this
+    # job scrapes slow, not often — capacity panels tolerate 60s freshness.
+    # If scrape_duration_seconds stays near the timeout, trim at the source
+    # with --disable_metrics=disk,diskIO (disk panels use node-exporter).
+    scrape_interval: 60s
+    scrape_timeout: 50s
     static_configs:
       - targets:
           - cadvisor:8080
