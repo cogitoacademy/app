@@ -54,7 +54,8 @@ groups:
           summary: "Fresh DLQ failure landed (24h window)"
         labels:
           severity: critical
-        noDataState: OK
+        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
+        noDataState: KeepLast
         execErrState: Error
 
       - uid: disk-warn
@@ -98,7 +99,8 @@ groups:
           summary: "VPS disk >= 85% (watchdog warn line)"
         labels:
           severity: warning
-        noDataState: OK
+        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
+        noDataState: KeepLast
         execErrState: Error
 
       - uid: disk-crit
@@ -142,7 +144,8 @@ groups:
           summary: "VPS disk >= 92% (watchdog auto-prunes)"
         labels:
           severity: critical
-        noDataState: OK
+        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
+        noDataState: KeepLast
         execErrState: Error
 
       - uid: api-errors
@@ -186,7 +189,8 @@ groups:
           summary: "API 5xx ratio above 1% (deploy canary)"
         labels:
           severity: warning
-        noDataState: OK
+        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
+        noDataState: KeepLast
         execErrState: Error
 
       # Catches a silently-failing scrape (2026-09-07: the cadvisor target
@@ -234,7 +238,8 @@ groups:
           summary: "Prometheus scrape target down (up == 0 for 5m)"
         labels:
           severity: warning
-        noDataState: OK
+        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
+        noDataState: KeepLast
         execErrState: Error
 
       # --- Added 2026-09-07 (obs saturation pass) — 7 new rules, existing 5
@@ -288,7 +293,8 @@ groups:
           severity: warning
         # NoData=OK: node-exporter down is covered by TargetDown; CPU warn must
         # not fire on a monitoring gap.
-        noDataState: OK
+        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
+        noDataState: KeepLast
         execErrState: Error
 
       - uid: cpu-crit
@@ -333,7 +339,8 @@ groups:
         labels:
           severity: critical
         # NoData=OK: same rationale as CpuHigh.
-        noDataState: OK
+        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
+        noDataState: KeepLast
         execErrState: Error
 
       - uid: mem-high
@@ -378,7 +385,8 @@ groups:
         labels:
           severity: warning
         # NoData=OK: node-exporter down is covered by TargetDown.
-        noDataState: OK
+        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
+        noDataState: KeepLast
         execErrState: Error
 
       - uid: mem-crit
@@ -423,7 +431,8 @@ groups:
         labels:
           severity: critical
         # NoData=OK: same rationale as MemHigh.
-        noDataState: OK
+        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
+        noDataState: KeepLast
         execErrState: Error
 
       - uid: disk-forecast
@@ -470,7 +479,8 @@ groups:
         # NoData=OK: a fresh Prometheus (retention gap) has <6h of samples and
         # yields NoData rather than a forecast; DiskWarn/DiskCrit cover the
         # absolute thresholds independently.
-        noDataState: OK
+        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
+        noDataState: KeepLast
         execErrState: Error
 
       # Kube-style container restarts do NOT exist in cAdvisor — this watches
@@ -522,7 +532,8 @@ groups:
           severity: warning
         # NoData=OK: covers both the healthy case (no restarts = empty vector)
         # and the unverified-series case (see comment above).
-        noDataState: OK
+        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
+        noDataState: KeepLast
         execErrState: Error
 
       # Fires when ZERO nightly-backup success lines land in Loki over the
@@ -577,5 +588,6 @@ groups:
           severity: warning
         # NoData=OK with the caveat above: NoData here most likely means the
         # backup log never reaches Loki, which is itself the gap to close.
-        noDataState: OK
+        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
+        noDataState: KeepLast
         execErrState: Error

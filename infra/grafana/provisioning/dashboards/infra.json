@@ -153,7 +153,7 @@
     {
       "id": 9,
       "title": "Container restarts (start-time changes, 1h)",
-      "description": "Counts of container_start_time_seconds changes per Coolify resource over 1h — a restart signal (kube-style restart counters do NOT exist in cAdvisor). UNVERIFIED live: if this panel stays NoData, confirm the series in Prometheus and remove the panel + ContainerRestartBurst alert.",
+      "description": "Counts of container_start_time_seconds changes per Coolify resource over 1h — a restart signal (kube-style restart counters do NOT exist in cAdvisor). UNVERIFIED live: if this panel stays NoData, confirm the series in Prometheus and remove the panel + ContainerRestartBurst alert. (UNVERIFIED — delete if NoData post-apply)",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 32 },
