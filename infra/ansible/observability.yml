@@ -590,6 +590,11 @@
     obs_root: /etc/cogito/observability
     obs_src: "{{ playbook_dir }}/.."
     vault_path: "{{ playbook_dir }}/../secrets/prod.env"
+    # Declared cAdvisor image — keep in sync with Play 1 `cadvisor_image`
+    # (Play vars don't cross plays; duplication with this comment beats a
+    # fragile hostvars lookup). Compared against the RUNNING container image;
+    # mismatch triggers a scoped redeploy below.
+    cadvisor_image: "ghcr.io/google/cadvisor:v0.60.5"
     # Coolify API from the VPS host perspective (Coolify publishes :8000 on
     # VPS loopback only; Play 1 reaches it via the operator tunnel, Play 2
     # and its restart handler reach it directly as 127.0.0.1).
@@ -702,6 +707,59 @@
         mode: "0644"
       no_log: true
       notify: restart config consumers
+
+    # Image-drift redeploy (2026-09-07): a compose PATCH or restart never
+    # pulls a new image, so image bumps (e.g. cAdvisor v0.52.1 → v0.60.5 sat
+    # in git a day while Coolify ran the old container) need an explicit
+    # redeploy. `latest: true` on the restart endpoint pulls the pinned
+    # images before recreating (Coolify v4 restart-service-by-uuid; default
+    # false = reuse existing containers). Scoped to cogito-alloy ONLY:
+    # stateless (no volumes), ~1–2 min container-metrics gap while it
+    # recreates; node/API/log metrics unaffected. Stateful services
+    # (loki/prometheus/grafana) are deliberately excluded — image changes
+    # there stay a conscious UI decision. Fires only on real mismatch, so
+    # steady-state applies are untouched.
+    - name: Resolve the running cAdvisor image (redeploy only on drift)
+      ansible.builtin.shell: >-
+        docker inspect $(docker ps --format '{{ '{{.Names}}' }}' | grep -E '^cadvisor-' | head -1)
+        --format '{{ '{{.Config.Image}}' }}'
+      register: cadvisor_running_image
+      changed_when: false
+      failed_when: false
+
+    - name: List Coolify services (resolve cogito-alloy UUID for image redeploy)
+      ansible.builtin.uri:
+        url: "{{ coolify_api_url }}/services"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ coolify_api_token }}"
+        status_code: 200
+      register: obs_image_services
+      no_log: true
+      when: (cadvisor_running_image.stdout | default('') | trim) != cadvisor_image
+
+    - name: Redeploy cogito-alloy when the running cAdvisor image differs from the pin
+      ansible.builtin.uri:
+        url: "{{ coolify_api_url }}/services/{{ (obs_image_services.json | selectattr('name', 'equalto', 'cogito-alloy') | first).uuid }}/restart"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ coolify_api_token }}"
+        body: { latest: true }
+        body_format: json
+        status_code: [200, 201, 202]
+      no_log: true
+      when: (cadvisor_running_image.stdout | default('') | trim) != cadvisor_image
+
+    - name: Wait for the redeployed cAdvisor image to match the pin
+      ansible.builtin.shell: >-
+        docker inspect $(docker ps --format '{{ '{{.Names}}' }}' | grep -E '^cadvisor-' | head -1)
+        --format '{{ '{{.Config.Image}}' }}' | grep -Fx "{{ cadvisor_image }}" && echo MATCHED
+      register: cadvisor_redeployed
+      until: cadvisor_redeployed.stdout is search('MATCHED')
+      retries: 18
+      delay: 10
+      changed_when: false
+      when: (cadvisor_running_image.stdout | default('') | trim) != cadvisor_image
 
     - name: Read GRAFANA_ADMIN_PASSWORD from the vault on the control node
       ansible.builtin.shell: >-
