@@ -956,7 +956,7 @@ reset-admin-password '<new>'` on the VPS; verify the new password returns
   when healthy (e.g. zero 5xx) renders No Data, not 0. Wrap the fallible side:
   `(sum(rate(http_requests_total{status=~"5.."}[5m])) or vector(0)) /
 sum(rate(http_requests_total[5m]))`, and `breaker_state or on() vector(0)`
-   (per-breaker series preserved) or `max(breaker_state) or vector(0)` (stat).
+  (per-breaker series preserved) or `max(breaker_state) or vector(0)` (stat).
 - **Slow-scrape tuning (2026-09-07):** cAdvisor renders 10MB+ expositions
   here, so its job uses `scrape_interval: 60s` / `scrape_timeout: 50s`
   (capacity panels tolerate the freshness). Watch
