@@ -11,14 +11,18 @@ providers:
   - name: cogito
     orgId: 1
     folder: Cogito
-    # Pinned to the folder UID that holds the file-provisioned alert-rule
-    # group (verified live 2026-09-06: rules live in afxfpsyn1jldse, boards
-    # were in efxc1qs6nad4wd — same title, different objects). File alert
-    # provisioning accepts only `folder` (title), so the dashboards move to
-    # the rules, never vice versa; on next poll the 4 boards join the rule
-    # group in one Cogito folder and the leftover empty is deleted once in
-    # the UI. Title stays as the human label.
-    folderUid: afxfpsyn1jldse
+    # Pinned to the ORIGINAL API-created folder UID (efxc1qs6nad4wd, id=1,
+    # created 2026-09-05 by Play 3) — this is where the file-provisioned
+    # alert rules actually live (proven live 2026-09-07 via alert-state logs:
+    # __alert_rule_namespace_uid__=efxc1qs6nad4wd). An earlier pin used
+    # afxfpsyn1jldse (auto-created duplicate titled Cogito, 2026-09-06),
+    # which split 3 boards away from the rules and stranded Logs & Traces —
+    # see docs/plans/active/OBS-GRAFANA-NODATA.md §6. With only one Cogito
+    # folder left after the spare is deleted, title lookups stay unambiguous;
+    # Play 3 is create-when-missing so it never recreates the duplicate.
+    # After apply, delete the empty afxfpsyn1jldse folder once via
+    # DELETE /api/folders/afxfpsyn1jldse (verify empty first).
+    folderUid: efxc1qs6nad4wd
     type: file
     disableDeletion: true
     updateIntervalSeconds: 30
