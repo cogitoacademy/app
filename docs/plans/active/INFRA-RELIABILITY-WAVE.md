@@ -3,7 +3,7 @@
 | Field    | Value                                                                                 |
 | -------- | ------------------------------------------------------------------------------------- |
 | Status   | **Active** (created 2026-09-07)                                                       |
-| Branch   | `w/infra-reliability-docs`                                                            |
+| Branch   | `w/infra-reliability-wave` (merges `w/infra-reliability-prod`, `-obs`, `-docs`) |
 | Workers  | 3 (docs worker = this branch; prod/obs workers touch no docs)                         |
 | Entry    | Operator commands live in [INFRA-PLAYBOOK.md](../../INFRA-PLAYBOOK.md); detail behind it in [RUNBOOK.md](../../RUNBOOK.md) |
 
@@ -33,24 +33,28 @@ risks in one place.
 
 ## 2. Concern-to-task table
 
-> Source: lead brief ID ranges (P1–P15 platform, O1–O7 observability, D1–D9
-> docs, V1–V7 verification). The full brief text was not present in this
-> worktree (UNVERIFIED — lead to confirm wording); the mapping below ties each
-> range to its concrete task in this wave.
+> IDs match the lead dispatch briefs: P = prod worker (`w/infra-reliability-prod`),
+> O = obs worker (`w/infra-reliability-obs`), D = docs worker
+> (`w/infra-reliability-docs`), V = operator verify (Phase 6 of the wave plan).
 
-| Concerns  | Task (this wave)                                                                                          | Where it lands                                                                 |
-| --------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| P1–P5     | Coolify facts sync: DB names `cogito-prod-db`/`cogito-prod-redis`, project `cogito-prod`, Kuma `cogito-uptime-kuma` (`louislam/uptime-kuma:2`), `is_auto_deploy_enabled: false`, tailnet-only Coolify | `infra/coolify-setup.md` (§§ Prerequisites, 2–5, 8–9)                          |
-| P6–P9     | Staging removal: delete Step 7 + staging Kuma monitor (staging removed per CI-SANITY F7); delete `infra/.env.staging.example` (no live refs) | `infra/coolify-setup.md`, deleted `infra/.env.staging.example`                 |
-| P10–P12   | Ansible inventory → MagicDNS `cogito-vps.tail674634.ts.net` (match `ops.sh` default)                        | `infra/ansible/inventory.ini`                                                  |
-| P13–P15   | Origin-bypass groundwork + SOPS_AGE_KEY posture (§5 risks recorded, no secret changes)                      | This file §5; `infra-apply.yml` header comment fix                             |
-| O1–O4     | DEPLOYMENT-PLAN Phase 4 status: PLG APPLIED live 2026-09-05                                                 | `docs/plans/active/DEPLOYMENT-PLAN.md` (Phase 4)                               |
-| O5–O7     | Deep-dive gap table: R2-created, vault-encrypted, coolify-resources-applied → DONE with dates                | `docs/INFRA-ARCHITECTURE-DEEP-DIVE.md` (§7)                                    |
-| D1–D4     | Ghost-row removal: `active/OBSERVABILITY-DECLARATIVE.md` never existed as active; keep Completed row        | `docs/plans/README.md`                                                         |
-| D5–D7     | Phase 1 Task 1.2 status: coolify-resources applied 08-31, 47 vars                                           | `docs/plans/active/DEPLOYMENT-PLAN.md` (Task 1.2)                              |
-| D8–D9     | RUNBOOK header date + INFRA-PLAYBOOK entry pointer (minimal diff)                                            | `docs/RUNBOOK.md`                                                              |
-| V1–V4     | Verification: zero `active/OBSERVABILITY-DECLARATIVE.md`-as-active refs, zero live staging-example refs, sane headings/links | Greps + `git diff --stat` (see WORKER-REPORT.md)                               |
-| V5–V7     | Restore-drill checklist staged for NEXT session (not executed)                                               | This file §6                                                                   |
+| ID    | Task                                                                 | Lands in |
+| ----- | -------------------------------------------------------------------- | -------- |
+| P1    | Studio = gateway path (`ssh -L 4983`, preflight, trap cleanup)       | `infra/ops.sh` |
+| P2    | `cl.` verify = 404 on `/` + 401/405 on deploy probe (was 302)        | `infra/apply.sh` |
+| P3    | Resource bounds (api 512m / web 256m intent), Loki/Grafana/Alloy healthchecks, scrape 30s | `coolify-resources.yml`, `observability.yml`, `prometheus.yml` |
+| P4    | `.sops.yaml` regex covers all 53 `app_env_keys` + ops keys (0 missing) | `.sops.yaml` |
+| P5    | Drift truth: DB names, 53 env names, webhook fill-or-skip            | `drift-check.yml` |
+| P6    | `app_info{version}` gauge in `/metrics` + unit test                  | `metrics.ts`, `metrics-exposition.test.ts` |
+| P7–P10 | Web-version note, dual-scrape design, port hygiene, prune/rotation policy | `WORKER-REPORT.md` + Coolify comment (prod worktree) |
+| P11–P15 | Scanning/risk record, origin-bypass sketch, DB-URL/ACL/runner notes | `host-hardening.yml` comments + `WORKER-REPORT.md` (+ §5 below) |
+| O1    | App RED v2: per-path top-10 rate / 5xx% / p95, 4xx-vs-5xx            | `app-red.json` (panels 5–8) |
+| O2    | Infra v2: per-mode CPU, swap, disk forecast, container CPU/restarts  | `infra.json` (panels 5–9) |
+| O3    | Delivery v2: `app_info` stat (NoData-safe), backup heartbeat (Loki)  | `delivery.json` (panels 5–6) |
+| O4    | NEW Saturation board: burn rates + retention-vs-disk math (no cuts)  | `saturation.json` |
+| O5    | 7 new alerts (CPU/mem/disk-forecast/restarts/backup-stale), Discord-ops | `rules.yaml` (5 → 12 rules) |
+| O6–O7 | Kuma cert click-path + Alloy/log-shipping caveats                    | `WORKER-REPORT.md` (obs worktree) |
+| D1–D9 | Ghost-row removal, DEPLOYMENT-PLAN phases, DEEP-DIVE §7, coolify-setup rewrite, infra-apply header, MagicDNS inventory, staging-example deletion, RUNBOOK date | `*.md`, `inventory.ini` (docs worktree) |
+| V1–V7 | Operator live verify: health sha, boards UP, studio connects, Kuma certs, UI password, mem-bounds, internal-scrape attach (restore drill → next session §6) | Operator session (not in git) |
 
 ## 3. Scope
 

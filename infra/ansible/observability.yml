@@ -41,13 +41,16 @@
 #   PROM_RETENTION_DAYS=15  (rendered into the prometheus compose as
 #     --storage.tsdb.retention.time={{ PROM_RETENTION_DAYS }}d)
 # Lean fallback for a tight VPS (documented in RUNBOOK, not applied here):
-# scrape_interval 30s + Prometheus retention 7d.
+# Prometheus retention 7d + cAdvisor --disable_metrics=disk,diskIO.
 #
-# SCRAPE: api /metrics (Bearer from the vault token file, 15s interval,
-# 10s timeout), node_exporter :9100, cAdvisor :8080. Internal hostnames are
-# the Compose service names on the shared Coolify Docker network; if Coolify
-# isolates service networks, point them at the tailnet IPs (comment in each
-# provisioned file).
+# SCRAPE: api /metrics dual-scraped (Bearer from the vault token file, 30s
+# interval, 10s timeout): public api.cogitoacademy.id:443 (the edge path
+# users feel: Cloudflare -> Traefik -> API/TLS) + internal cogito-api:3001
+# over the shared cogito-obs network (the app itself; the service name
+# resolves there — each Coolify service otherwise gets its OWN isolated
+# network, verified live 2026-09-05). One DOWN + one UP localizes app vs
+# edge instead of one ambiguous DOWN. node_exporter :9100, cAdvisor :8080
+# (60s/50s slow-scrape).
 #
 # A3: Alloy ships logs via `loki.source.docker_logs` (Docker API discovery
 # over the read-only socket mount) — NEVER file globs under
