@@ -17,6 +17,33 @@
       - "8000" # dashboard
       - "6001" # realtime
       - "6002" # realtime
+    # ORIGIN-BYPASS GROUNDWORK (not enforced — commented sketch only).
+    # Today 80/443 are open to the world (task "UFW allow public web" below):
+    # Cloudflare proxies the app, but the origin IP (15.235.186.159) is
+    # discoverable (DNS history, direct hits), so an attacker can bypass
+    # Cloudflare WAF/rate-limits by talking to the origin directly. The
+    # target state is: 80/443 reachable ONLY from Cloudflare egress, PLUS
+    # Authenticated Origin Pull so the origin only answers Cloudflare-held
+    # client certs. Do NOT flip this without the operator console steps in
+    # the reliability report (order matters: allow CF ranges BEFORE removing
+    # the public allow, or the site goes dark; ranges rotate — refresh them
+    # on a schedule, not once).
+    # Sketch (replace the "UFW allow public web" task when approved):
+    #   - name: UFW allow web from Cloudflare egress only
+    #     community.general.ufw:
+    #       rule: allow
+    #       port: "{{ item[1] }}"
+    #       proto: tcp
+    #       from_ip: "{{ item[0] }}"
+    #     loop: "{{ cloudflare_ipv4_ranges | product([80, 443]) | list }}"
+    #     # ranges fetched live, never pasted: curl -s https://www.cloudflare.com/ips-v4
+    #     # (+ ips-v6 with `from_ip` v6 entries; requires `ufw allow ... ` per range)
+    # Authenticated Origin Pull (Cloudflare dashboard SSL/TLS -> Origin
+    # Server -> ON, plus a Traefik TLS option presenting the Cloudflare
+    # origin CA for client-cert verification on the edge router) is the
+    # second half — origin rejects non-Cloudflare TLS even from an allowed
+    # IP. Traefik is Coolify-managed, so its client-cert stanza is a UI
+    # custom-config change with its own verify step, not part of this file.
 
   tasks:
     - name: Install base packages
