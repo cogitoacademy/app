@@ -1,11 +1,11 @@
 # Infra Reliability Wave
 
-| Field   | Value                                                                                                                      |
-| ------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Status  | **Active** (created 2026-09-07)                                                                                            |
-| Branch  | `w/infra-reliability-wave` (merges `w/infra-reliability-prod`, `-obs`, `-docs`)                                            |
-| Workers | 3 (docs worker = this branch; prod/obs workers touch no docs)                                                              |
-| Entry   | Operator commands live in [INFRA-PLAYBOOK.md](../../INFRA-PLAYBOOK.md); detail behind it in [RUNBOOK.md](../../RUNBOOK.md) |
+| Field   | Value                                                                                                                                                                                |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Status  | **Completed (merged #226, 2026-09-07)** — 3 workers (prod/obs/docs), zero file overlap, CI green, squash-merged; operator live-verify + restore drill carry to next session (see §6) |
+| Branch  | `w/infra-reliability-wave` (merges `w/infra-reliability-prod`, `-obs`, `-docs`)                                                                                                      |
+| Workers | 3 (docs worker = this branch; prod/obs workers touch no docs)                                                                                                                        |
+| Entry   | Operator commands live in [INFRA-PLAYBOOK.md](../../INFRA-PLAYBOOK.md); detail behind it in [RUNBOOK.md](../../RUNBOOK.md)                                                           |
 
 Docs follow code — no stale page left. This wave syncs every stale doc to the
 applied 2026-08-31 → 2026-09-05 reality and records the wave plan plus accepted
