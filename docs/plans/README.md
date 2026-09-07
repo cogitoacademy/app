@@ -12,6 +12,7 @@
 | [OBSERVABILITY-DECLARATIVE.md](completed/OBSERVABILITY-DECLARATIVE.md) | `f/obs-declarative-wave` + `f/obs-wave2` | #202, #206 | **Completed 2026-09-06** — PLG declarative via pipeline (services + Play-2 files + drift gates + auto-apply); follow-ups #203/#204/#205 landed alongside |
 
 | [INFRA-RELIABILITY-WAVE.md](completed/INFRA-RELIABILITY-WAVE.md) | w/infra-reliability-wave (merged prod/obs/docs) | #226 | **Completed 2026-09-07** — studio gateway, verify truth, resource bounds, sops regex, drift truth, app_info gauge, 4 board updates + saturation board, 7 new alerts, docs sync |
+| [CPU-MEMORY-PRESSURE-WAVE.md](completed/CPU-MEMORY-PRESSURE-WAVE.md) | w/cpu-memory-pressure-wave (merged platform/alerts) | #228 | **Completed 2026-09-07** — swap-thrash relief (cAdvisor 256m + disk trim, Alloy self-scrape, backup-log shipping), KeepLast on all 12 rules, swap panel |
 
 | [BOOKING-NUMBERS.md](completed/BOOKING-NUMBERS.md) | working tree | **Completed locally 2026-09-04** — immutable `#N` booking references, admin queue display, and exact search |
 
