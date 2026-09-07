@@ -396,8 +396,10 @@ export function BookingDetailPage({
       isBookingProposer: booking.proposerId === viewerId,
       currentState: booking.currentState,
     });
+  const isSeriesBooking = booking.type === "series";
+  const showHeaderReschedule = canProposeReschedule && !isSeriesBooking;
   const hasHeaderActions = Boolean(extensions?.headerActions);
-  const rescheduleAction = canProposeReschedule ? (
+  const rescheduleAction = showHeaderReschedule ? (
     <BookingRescheduleAction
       bookingId={bookingId}
       tutorId={booking.tutorId}
@@ -440,7 +442,6 @@ export function BookingDetailPage({
   };
 
   const meetingUrl = booking.meetingUrl;
-  const isSeriesBooking = booking.type === "series";
   const seriesSessions = sessionsQuery.data ?? undefined;
   const totalHonorariumIdr = getTotalHonorariumIdr(booking, seriesSessions);
   const seriesSessionCount = getSeriesSessionCount(booking, seriesSessions);
@@ -540,7 +541,7 @@ export function BookingDetailPage({
             </Badge>
             {canReview ||
             canCancel ||
-            canProposeReschedule ||
+            showHeaderReschedule ||
             canComplete ||
             hasHeaderActions ? (
               <div
@@ -852,6 +853,8 @@ export function BookingDetailPage({
                     const completed =
                       session.currentState === "completed" ||
                       session.currentState === "cancelled";
+                    const canRescheduleSession =
+                      canProposeReschedule && !completed;
                     return (
                       <div
                         key={session.id}
@@ -872,24 +875,44 @@ export function BookingDetailPage({
                             )}
                           </Text>
                         </div>
-                        {completed ? (
-                          <Badge variant="tertiary" pill>
-                            {session.currentState}
-                          </Badge>
-                        ) : isTutor &&
-                          session.currentState === "scheduled" &&
-                          sessionEnded ? (
-                          <Button
-                            size="sm"
-                            onClick={() => completeSessionById(session.id)}
-                            progress={complete.isPending}
-                            disabled={tutorActionPending}
-                          >
-                            Complete session
-                          </Button>
-                        ) : (
-                          <Badge pill>{session.currentState}</Badge>
-                        )}
+                        <div className="flex flex-wrap items-center gap-2">
+                          {canRescheduleSession ? (
+                            <BookingRescheduleAction
+                              bookingId={bookingId}
+                              tutorId={booking.tutorId}
+                              viewerRole={viewerRole}
+                              modality={booking.modality}
+                              currentStartAt={booking.scheduledStartAt}
+                              sessionId={session.id}
+                              sessionStartAt={session.scheduledStartAt}
+                              pendingStartAt={
+                                activeRescheduleProposal?.sessionId ===
+                                session.id
+                                  ? activeRescheduleProposal?.proposedStartAt
+                                  : undefined
+                              }
+                              onBookingChanged={refreshBookingQueries}
+                            />
+                          ) : null}
+                          {completed ? (
+                            <Badge variant="tertiary" pill>
+                              {session.currentState}
+                            </Badge>
+                          ) : isTutor &&
+                            session.currentState === "scheduled" &&
+                            sessionEnded ? (
+                            <Button
+                              size="sm"
+                              onClick={() => completeSessionById(session.id)}
+                              progress={complete.isPending}
+                              disabled={tutorActionPending}
+                            >
+                              Complete session
+                            </Button>
+                          ) : (
+                            <Badge pill>{session.currentState}</Badge>
+                          )}
+                        </div>
                       </div>
                     );
                   })
