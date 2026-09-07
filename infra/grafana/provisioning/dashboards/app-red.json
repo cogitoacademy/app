@@ -68,6 +68,71 @@
           "legendFormat": "{{name}}"
         }
       ]
+    },
+    {
+      "id": 5,
+      "title": "Request rate by path (top 10)",
+      "description": "Per-path req/s from http_requests_total{path} (path values are cardinality-capped server-side; see metrics.ts MAX_PATHS).",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(10, sum by (path) (rate(http_requests_total[5m])))",
+          "legendFormat": "{{path}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "5xx % by path (top 10)",
+      "description": "Per-path error share. Zero-safe idiom matches panel 2 (or vector(0)); paths with no traffic drop out instead of dividing by zero.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * (sum by (path) (rate(http_requests_total{status=~\"5..\"}[5m])) or vector(0)) / sum by (path) (rate(http_requests_total[5m]))",
+          "legendFormat": "{{path}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "p95 by path (top 10)",
+      "description": "Per-path p95 from http_request_duration_ms_bucket{path,le}. Slowest paths surface first via topk.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(10, histogram_quantile(0.95, sum by (path, le) (rate(http_request_duration_ms_bucket[5m]))))",
+          "legendFormat": "{{path}}"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "4xx vs 5xx split",
+      "description": "Client errors (4xx, usually caller/load shape) separated from server errors (5xx, usually us). A 5xx spike after a deploy = roll back.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(http_requests_total{status=~\"4..\"}[5m])) or vector(0)",
+          "legendFormat": "4xx req/s"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) or vector(0)",
+          "legendFormat": "5xx req/s"
+        }
+      ]
     }
   ]
 }

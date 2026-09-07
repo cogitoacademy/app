@@ -77,6 +77,93 @@
           "legendFormat": "{{container_label_coolify_resourceName}} {{name}}"
         }
       ]
+    },
+    {
+      "id": 5,
+      "title": "CPU by mode",
+      "description": "Per-mode CPU share (user/system/iowait/steal/irq…). A climbing steal % = noisy VPS neighbour; climbing iowait = disk-bound.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * avg by (mode) (rate(node_cpu_seconds_total[5m]))",
+          "legendFormat": "{{mode}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Swap used + memory available",
+      "description": "Swap in use (bytes; sustained growth = memory pressure the MemHigh/MemCrit alerts may miss early) against MemAvailable headroom.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "fieldConfig": { "defaults": { "unit": "bytes" } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "node_memory_SwapTotal_bytes - node_memory_SwapFree_bytes",
+          "legendFormat": "swap used"
+        },
+        {
+          "refId": "B",
+          "expr": "node_memory_MemAvailable_bytes",
+          "legendFormat": "mem available"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Disk-full forecast (24h predict_linear)",
+      "description": "Linear extrapolation of rootfs free bytes from the last 6h. Crossing zero = full within 24h; pairs with the DiskForecast alert. Saw-tooth from logrotate/prunes is normal — act on the trend, not one dip.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "fieldConfig": { "defaults": { "unit": "bytes" } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "predict_linear(node_filesystem_avail_bytes{mountpoint=\"/\"}[6h], 24*3600)",
+          "legendFormat": "avail forecast (24h)"
+        },
+        {
+          "refId": "B",
+          "expr": "node_filesystem_avail_bytes{mountpoint=\"/\"}",
+          "legendFormat": "avail now"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Container CPU (top)",
+      "description": "Per-resource CPU rate reusing the panel-4 Coolify label filter (container_label_coolify_resourceName). cAdvisor scrapes every 60s — 60s freshness is normal.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(8, sum by (container_label_coolify_resourceName) (rate(container_cpu_usage_seconds_total{container_label_coolify_resourceName=~\".+\"}[5m])))",
+          "legendFormat": "{{container_label_coolify_resourceName}}"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Container restarts (start-time changes, 1h)",
+      "description": "Counts of container_start_time_seconds changes per Coolify resource over 1h — a restart signal (kube-style restart counters do NOT exist in cAdvisor). UNVERIFIED live: if this panel stays NoData, confirm the series in Prometheus and remove the panel + ContainerRestartBurst alert.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 32 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (container_label_coolify_resourceName) (changes(container_start_time_seconds{container_label_coolify_resourceName=~\".+\"}[1h]))",
+          "legendFormat": "{{container_label_coolify_resourceName}}"
+        }
+      ]
     }
   ]
 }
