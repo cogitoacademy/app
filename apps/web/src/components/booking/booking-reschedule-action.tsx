@@ -54,6 +54,40 @@ import {
 
 const RESCHEDULE_TIMEZONE = "Asia/Jakarta";
 
+type RescheduleStartAt = Date | string | null | undefined;
+
+export function buildProposeRescheduleInput({
+  bookingId,
+  sessionId,
+  availabilitySlotId,
+  proposedStartAt,
+  reason,
+}: {
+  bookingId: string;
+  sessionId?: string;
+  availabilitySlotId?: string;
+  proposedStartAt: Date;
+  reason: string;
+}) {
+  return {
+    bookingId,
+    sessionId,
+    availabilitySlotId,
+    proposedStartAt,
+    reason,
+  };
+}
+
+export function resolveRescheduleCurrentStart({
+  currentStartAt,
+  sessionStartAt,
+}: {
+  currentStartAt: RescheduleStartAt;
+  sessionStartAt?: RescheduleStartAt;
+}) {
+  return sessionStartAt ?? currentStartAt;
+}
+
 export function canProposeBookingReschedule({
   viewerRole,
   isBookingProposer,
@@ -80,6 +114,8 @@ export function BookingRescheduleAction({
   viewerRole,
   modality,
   currentStartAt,
+  sessionId,
+  sessionStartAt,
   pendingStartAt,
   onBookingChanged,
 }: {
@@ -88,6 +124,8 @@ export function BookingRescheduleAction({
   viewerRole: string;
   modality: string;
   currentStartAt?: Date | string | null;
+  sessionId?: string;
+  sessionStartAt?: Date | string | null;
   pendingStartAt?: Date | string | null;
   onBookingChanged: () => void;
 }) {
@@ -149,8 +187,12 @@ export function BookingRescheduleAction({
   const validTime =
     isValidMinuteTime(newTime) &&
     (!usingAvailability || isTimeWithinRange(newTime, minTime, maxTime));
-  const matchesCurrentSchedule = isSameScheduleMinute(
+  const effectiveCurrentStartAt = resolveRescheduleCurrentStart({
     currentStartAt,
+    sessionStartAt,
+  });
+  const matchesCurrentSchedule = isSameScheduleMinute(
+    effectiveCurrentStartAt,
     newDate,
     newTime,
   );
@@ -224,10 +266,10 @@ export function BookingRescheduleAction({
                       setMode(next);
                       setNewDate("");
                       setNewTime(
-                        next === "custom" && currentStartAt
+                        next === "custom" && effectiveCurrentStartAt
                           ? snapTimeToQuarter(
                               formatTimeValue(
-                                currentStartAt,
+                                effectiveCurrentStartAt,
                                 RESCHEDULE_TIMEZONE,
                               ),
                             )
@@ -391,7 +433,7 @@ export function BookingRescheduleAction({
             {newDate && validTime ? (
               <div className="rounded-lg border border-item-border bg-item p-3 text-sm">
                 <span className="text-muted">Current: </span>
-                {formatSchedule(currentStartAt)}
+                {formatSchedule(effectiveCurrentStartAt)}
                 <span className="mx-2 text-dimmed">→</span>
                 <span className="text-muted">Proposed: </span>
                 {formatProposedSchedule(newDate, newTime)}
@@ -418,19 +460,22 @@ export function BookingRescheduleAction({
             </Button>
             <Button
               onClick={() =>
-                propose.mutate({
-                  bookingId,
-                  proposedStartAt: toSessionStart(
-                    newDate,
-                    newTime,
-                    RESCHEDULE_TIMEZONE,
-                  ),
-                  availabilitySlotId:
-                    usingAvailability && selectedSlotId
-                      ? selectedSlotId
-                      : undefined,
-                  reason: reason.trim(),
-                })
+                propose.mutate(
+                  buildProposeRescheduleInput({
+                    bookingId,
+                    sessionId,
+                    proposedStartAt: toSessionStart(
+                      newDate,
+                      newTime,
+                      RESCHEDULE_TIMEZONE,
+                    ),
+                    availabilitySlotId:
+                      usingAvailability && selectedSlotId
+                        ? selectedSlotId
+                        : undefined,
+                    reason: reason.trim(),
+                  }),
+                )
               }
               progress={propose.isPending}
               disabled={
