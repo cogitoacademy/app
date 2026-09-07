@@ -14,7 +14,7 @@
 #   ./ops.sh dlq              # show the DLQ entries (what failed)
 #   ./ops.sh dlq-clear        # clear the DLQ ledger (DEL cogito:dlq)
 #   ./ops.sh cb               # circuit breaker states (cogito:cb:*)
-#   ./ops.sh studio           # Drizzle Studio GUI via SSH tunnel
+#   ./ops.sh studio           # Owned cogito-studio gateway UI via SSH tunnel (local 4983)
 #   ./ops.sh grafana          # Grafana dashboards via SSH tunnel (tailnet MagicDNS)
 #   ./ops.sh prometheus       # Prometheus targets UI via SSH tunnel
 #   ./ops.sh logs [lines]     # tail the API container logs
@@ -190,22 +190,35 @@ deploy_retry() {
 }
 
 studio() {
-  local port="${1:-5433}"
-  local dbc pass
-  dbc="$(db_container)"
-  # Resolve the postgres password on the VPS (never shown locally)
-  pass="$("${SSH[@]}" "sudo -n docker exec $dbc env 2>/dev/null | grep '^POSTGRES_PASSWORD=' | cut -d= -f2-")"
-  [[ -n "$pass" ]] || { echo "ERROR: could not resolve POSTGRES_PASSWORD on the VPS" >&2; exit 1; }
-  echo "=== Starting Drizzle Studio via SSH tunnel ==="
-  echo "Tunneling: localhost:$port → VPS → $dbc:5432"
-  # 1. start the tunnel in the background
-  ssh -i "$OPS_SSH_KEY" -o ConnectTimeout=8 -o BatchMode=yes -N -L "$port:localhost:5432" "$OPS_SSH_USER@$OPS_VPS" &
+  # Owned cogito-studio service (see infra/ansible/studio.yml): the
+  # drizzle-gateway container serves the Studio UI on VPS 127.0.0.1:4983
+  # (tailnet-only, no public domain by design). Access is a straight TCP
+  # forward onto that gateway — there is deliberately NO direct-DB
+  # drizzle-kit path here (it bypassed the owned service and needed the DB
+  # password on the operator machine).
+  local ssh_cmd="ssh -i $OPS_SSH_KEY -o ConnectTimeout=8 -o BatchMode=yes -N -L 4983:127.0.0.1:4983 $OPS_SSH_USER@$OPS_VPS"
+  echo "=== Owned cogito-studio via SSH tunnel ==="
+  echo "SSH: $ssh_cmd"
+  echo "Forward: localhost:4983 -> VPS 127.0.0.1:4983 (cogito-studio gateway)"
+  # shellcheck disable=SC2086
+  ssh -i "$OPS_SSH_KEY" -o ConnectTimeout=8 -o BatchMode=yes -N -L "4983:127.0.0.1:4983" "$OPS_SSH_USER@$OPS_VPS" &
   local tunnel_pid=$!
   trap 'kill $tunnel_pid 2>/dev/null' EXIT
-  sleep 2
-  # 2. run drizzle studio pointing at the tunnel
-  echo "Open http://localhost:4983 in your browser once studio starts."
-  DATABASE_URL="postgresql://postgres:$pass@localhost:$port/cogito" bun run db:studio
+  # Preflight: wait for the local gateway port before pointing the browser.
+  local i
+  for i in $(seq 1 15); do
+    if python3 -c "import socket; s=socket.socket(); s.settimeout(1); s.connect(('127.0.0.1',4983)); s.close()" 2>/dev/null; then
+      echo "Studio is up: open http://localhost:4983 in your browser (Ctrl+C stops the tunnel)."
+      wait $tunnel_pid
+      return 0
+    fi
+    sleep 1
+  done
+  echo "ERROR: nothing answers on localhost:4983 after 15s — the tunnel is up but VPS 127.0.0.1:4983 is not." >&2
+  echo "HINT: the owned gateway is down or its port publish drifted (see infra/ansible/studio.yml):" >&2
+  echo "  1. Coolify UI (via the :8000 tunnel) -> cogito-studio -> Start/Restart, wait ~2 min, retry: ./infra/ops.sh studio" >&2
+  echo "  2. Or verify declaratively: ansible-playbook -i infra/ansible/inventory.ini infra/ansible/studio.yml" >&2
+  return 1
 }
 
 tunnel() {

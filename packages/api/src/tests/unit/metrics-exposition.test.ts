@@ -84,4 +84,20 @@ describe("metrics exposition", () => {
     const out = renderExposition();
     expect(out).toContain('path="/weird\\"path"');
   });
+
+  test("app_info carries the deploy SHA, falling back to dev", () => {
+    const previous = process.env.GIT_SHA;
+    try {
+      delete process.env.GIT_SHA;
+      const fallback = renderExposition();
+      expect(fallback).toContain("# HELP app_info");
+      expect(fallback).toContain("# TYPE app_info gauge");
+      expect(fallback).toContain('app_info{version="dev"} 1');
+      process.env.GIT_SHA = "abc123def";
+      expect(renderExposition()).toContain('app_info{version="abc123def"} 1');
+    } finally {
+      if (previous === undefined) delete process.env.GIT_SHA;
+      else process.env.GIT_SHA = previous;
+    }
+  });
 });
