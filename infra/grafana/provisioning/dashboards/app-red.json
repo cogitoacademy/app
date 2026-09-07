@@ -1,7 +1,7 @@
 {
   "uid": "cogito-app-red",
   "title": "App RED",
-  "description": "Cogito API rate / errors / duration from the /metrics exposition (Task 3).",
+  "description": "Cogito API rate / errors / duration from the /metrics exposition (Task 3). Home folder: Cogito.",
   "tags": ["cogito", "api"],
   "timezone": "Asia/Jakarta",
   "schemaVersion": 39,
