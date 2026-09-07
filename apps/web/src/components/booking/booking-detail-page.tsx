@@ -95,6 +95,10 @@ import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { client, orpc } from "@/utils/orpc";
 
 const LEGACY_TUTOR_PAYOUT_RATE_IDR = 7_000;
+import {
+  getSeriesSessionCount,
+  getTotalHonorariumIdr,
+} from "./booking-pricing";
 import { ContactRequestPanel } from "./contact-request-panel";
 import { ManualMeetingLinkDialog } from "./manual-meeting-link-dialog";
 
@@ -392,8 +396,10 @@ export function BookingDetailPage({
       isBookingProposer: booking.proposerId === viewerId,
       currentState: booking.currentState,
     });
+  const isSeriesBooking = booking.type === "series";
+  const showHeaderReschedule = canProposeReschedule && !isSeriesBooking;
   const hasHeaderActions = Boolean(extensions?.headerActions);
-  const rescheduleAction = canProposeReschedule ? (
+  const rescheduleAction = showHeaderReschedule ? (
     <BookingRescheduleAction
       bookingId={bookingId}
       tutorId={booking.tutorId}
@@ -436,6 +442,12 @@ export function BookingDetailPage({
   };
 
   const meetingUrl = booking.meetingUrl;
+  const seriesSessions = sessionsQuery.data ?? undefined;
+  const totalHonorariumIdr = getTotalHonorariumIdr(booking, seriesSessions);
+  const seriesSessionCount = getSeriesSessionCount(booking, seriesSessions);
+  const perSessionHonorariumIdr =
+    booking.priceSnapshot?.tutorHonorariumIdr ??
+    (booking.priceSnapshot?.tutorShare ?? 0) * LEGACY_TUTOR_PAYOUT_RATE_IDR;
 
   function requestCancellation() {
     setConfirmationDialog({ action: "cancel" });
@@ -529,7 +541,7 @@ export function BookingDetailPage({
             </Badge>
             {canReview ||
             canCancel ||
-            canProposeReschedule ||
+            showHeaderReschedule ||
             canComplete ||
             hasHeaderActions ? (
               <div
@@ -841,6 +853,8 @@ export function BookingDetailPage({
                     const completed =
                       session.currentState === "completed" ||
                       session.currentState === "cancelled";
+                    const canRescheduleSession =
+                      canProposeReschedule && !completed;
                     return (
                       <div
                         key={session.id}
@@ -861,24 +875,44 @@ export function BookingDetailPage({
                             )}
                           </Text>
                         </div>
-                        {completed ? (
-                          <Badge variant="tertiary" pill>
-                            {session.currentState}
-                          </Badge>
-                        ) : isTutor &&
-                          session.currentState === "scheduled" &&
-                          sessionEnded ? (
-                          <Button
-                            size="sm"
-                            onClick={() => completeSessionById(session.id)}
-                            progress={complete.isPending}
-                            disabled={tutorActionPending}
-                          >
-                            Complete session
-                          </Button>
-                        ) : (
-                          <Badge pill>{session.currentState}</Badge>
-                        )}
+                        <div className="flex flex-wrap items-center gap-2">
+                          {canRescheduleSession ? (
+                            <BookingRescheduleAction
+                              bookingId={bookingId}
+                              tutorId={booking.tutorId}
+                              viewerRole={viewerRole}
+                              modality={booking.modality}
+                              currentStartAt={booking.scheduledStartAt}
+                              sessionId={session.id}
+                              sessionStartAt={session.scheduledStartAt}
+                              pendingStartAt={
+                                activeRescheduleProposal?.sessionId ===
+                                session.id
+                                  ? activeRescheduleProposal?.proposedStartAt
+                                  : undefined
+                              }
+                              onBookingChanged={refreshBookingQueries}
+                            />
+                          ) : null}
+                          {completed ? (
+                            <Badge variant="tertiary" pill>
+                              {session.currentState}
+                            </Badge>
+                          ) : isTutor &&
+                            session.currentState === "scheduled" &&
+                            sessionEnded ? (
+                            <Button
+                              size="sm"
+                              onClick={() => completeSessionById(session.id)}
+                              progress={complete.isPending}
+                              disabled={tutorActionPending}
+                            >
+                              Complete session
+                            </Button>
+                          ) : (
+                            <Badge pill>{session.currentState}</Badge>
+                          )}
+                        </div>
                       </div>
                     );
                   })
@@ -978,10 +1012,22 @@ export function BookingDetailPage({
               </CardHeader>
               <CardBody className="space-y-4">
                 {isTutor ? (
-                  <SummaryRow
-                    label="Session honorarium"
-                    value={`Rp${(booking.priceSnapshot?.tutorHonorariumIdr ?? (booking.priceSnapshot?.tutorShare ?? 0) * LEGACY_TUTOR_PAYOUT_RATE_IDR).toLocaleString("id-ID")}`}
-                  />
+                  isSeriesBooking ? (
+                    <Stack direction="column" spacing="sm">
+                      <SummaryRow
+                        label={`Total honorarium (${seriesSessionCount} sessions)`}
+                        value={`Rp${totalHonorariumIdr.toLocaleString("id-ID")}`}
+                      />
+                      <Text className="text-sm text-muted">
+                        {`Rp${perSessionHonorariumIdr.toLocaleString("id-ID")} per session`}
+                      </Text>
+                    </Stack>
+                  ) : (
+                    <SummaryRow
+                      label="Session honorarium"
+                      value={`Rp${perSessionHonorariumIdr.toLocaleString("id-ID")}`}
+                    />
+                  )
                 ) : (
                   <>
                     <SummaryRow
