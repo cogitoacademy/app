@@ -255,18 +255,14 @@
               volumes:
                 - "/etc/cogito/observability/alloy/config.alloy:/etc/alloy/config.alloy:ro"
                 - "/var/run/docker.sock:/var/run/docker.sock:ro"
+                - "/var/log/cogito-backup.log:/var/log/cogito-backup.log:ro"
               mem_limit: 128m
-              # Alloy is the one bundle member NOTHING scrapes (node-exporter
-              # and cAdvisor surface as DOWN targets in Prometheus when they
-              # die, so container healthchecks there would add no new signal
-              # — deliberately omitted). /-/healthy listens on the default
-              # 127.0.0.1:12345 inside the container; no published port needed.
-              healthcheck:
-                test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:12345/-/healthy || exit 1"]
-                interval: 30s
-                timeout: 10s
-                retries: 3
-                start_period: 60s
+              # NO healthcheck stanza here (deliberate): the grafana/alloy
+              # image ships neither wget nor curl, so the previous wget-based
+              # probe always failed (false unhealthy flag). sh-only probes
+              # are unreliable; Alloy liveness is covered from the outside by
+              # the Prometheus `alloy` self-scrape job (alloy:12345 /metrics;
+              # TargetDown up==0 alerts) plus component telemetry.
               restart: unless-stopped
             node-exporter:
               image: "prom/node-exporter:v1.9.0"
@@ -291,6 +287,12 @@
               # Host 8080 is held by an old docker-proxy (Coolify-era,
               # verified live) — cAdvisor keeps container :8080, published
               # on loopback :8081. Prometheus scrapes the service name.
+              # Memory relief 2026-09-07: 128m cgroup OOM-killed cAdvisor on
+              # Docker 29 + containerd store (10MB+ expositions); 256m headroom
+              # plus --disable_metrics=disk,diskIO trims the exposition at the
+              # source (disk panels already use node-exporter).
+              command:
+                - "--disable_metrics=disk,diskIO"
               ports:
                 - "127.0.0.1:8081:8080"
               networks:
@@ -302,7 +304,7 @@
                 - "/sys:/sys:ro"
                 - "/var/lib/docker/:/var/lib/docker:ro"
                 - "/dev/disk/:/dev/disk:ro"
-              mem_limit: 128m
+              mem_limit: 256m
               privileged: true
               restart: unless-stopped
           networks:
