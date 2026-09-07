@@ -4,14 +4,16 @@
 # when the name is missing (with instant_deploy so Coolify starts it), PATCH
 # drift on an existing service, re-runs are no-ops.
 #
-# COMPOSE-DRIFT CAVEAT (2026-09-07): GET /api/v1/services/{uuid} does NOT
-# return `docker_compose_raw` (nor `urls`) on this Coolify build, so a
-# present-but-different compose is undetectable — and an absent field must
-# NOT be read as "no drift" (that misread left the cAdvisor v0.60.5 bump in
-# git for a day while Coolify kept running v0.52.1). When the field is
-# absent we therefore enforce the declared state (PATCH). Cost: updated_at
-# churn on every apply; no redeploy/restart is triggered by PATCH alone, so
-# image changes still need an explicit redeploy afterwards.
+# COMPOSE-DRIFT SELF-ROLL (2026-09-07): GET /api/v1/services/{uuid} does
+# NOT return `docker_compose_raw` (nor `urls`) on this Coolify build, so a
+# present-but-different compose is undetectable via GET — and an absent
+# field must NOT be read as "no drift" (that misread left the cAdvisor
+# v0.60.5 bump in git for a day while Coolify kept running v0.52.1). When
+# the field is absent we therefore enforce the declared state (PATCH).
+# Cost: updated_at churn on every apply. The PATCH itself never redeploys,
+# so Play 2 hash-gates the restart: it compares sha256 of this declared
+# compose string against a stored host hash and restarts ONLY the drifted
+# service on real change — steady-state applies restart nothing.
 #
 # Expected loop var `obs_spec`:
 #   name: Coolify service name (e.g. cogito-loki)
