@@ -1,7 +1,7 @@
 {
   "uid": "cogito-logs-traces",
   "title": "Logs & Traces",
-  "description": "Trace a request across API, jobs, dispatch and webhooks by traceId (Task 1 fields). Search carries userId, never email.",
+  "description": "Trace a request across API, jobs, dispatch and webhooks by traceId (Task 1 fields). Search carries userId, never email. Home folder: Cogito — one folder holds boards and alert rules.",
   "tags": ["cogito", "logs", "traces"],
   "timezone": "Asia/Jakarta",
   "schemaVersion": 39,
