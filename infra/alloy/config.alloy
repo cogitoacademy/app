@@ -78,3 +78,16 @@ loki.write "cogito" {
     url = "http://loki:3100/loki/api/v1/push"
   }
 }
+
+// Backup log ship (2026-09-07): tails the host-mounted single file
+// /var/log/cogito-backup.log (read-only bind-mount declared in the
+// cogito-alloy compose in observability.yml). A3-compliant: this path is
+// outside /var/lib/docker (no Docker storage-driver globs); Docker-API
+// discovery above is untouched.
+loki.source.file "backup" {
+  targets = [
+    { __path__ = "/var/log/cogito-backup.log", service = "cogito-backup", job = "backup" },
+  ]
+
+  forward_to = [loki.write.cogito.receiver]
+}
