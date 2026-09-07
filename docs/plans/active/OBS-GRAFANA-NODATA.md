@@ -1,11 +1,11 @@
 # Grafana No-Data + cAdvisor Blind Spot
 
-| Field   | Value                                                                                                                                      |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Field   | Value                                                                                                                                                                                                                |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Status  | Active — dashboards/alerts, rotation, folder unification, and pipeline repairs all merged + applied; single Cogito folder verified live; REMAINS: one UI Redeploy of cogito-alloy, then container-label verification |
-| Created | 2026-09-06                                                                                     |
-| Branch  | `fix/obs-grafana-no-data` (merged #214) + follow-ups #216/#217/#218/#219/#221 (merged)          |
-| Workers | `obs-panels` (dashboards/alerts, `agent/obs-panels-fix` 453625d8) · `obs-host` (diagnosis + image bump, `agent/obs-cadvisor-fix` f4c5efd2) |
+| Created | 2026-09-06                                                                                                                                                                                                           |
+| Branch  | `fix/obs-grafana-no-data` (merged #214) + follow-ups #216/#217/#218/#219/#221 (merged)                                                                                                                               |
+| Workers | `obs-panels` (dashboards/alerts, `agent/obs-panels-fix` 453625d8) · `obs-host` (diagnosis + image bump, `agent/obs-cadvisor-fix` f4c5efd2)                                                                           |
 
 ## 1. Symptom (live, 2026-09-06)
 
