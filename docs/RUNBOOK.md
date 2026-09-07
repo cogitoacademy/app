@@ -974,7 +974,7 @@ sum(rate(http_requests_total[5m]))`, and `breaker_state or on() vector(0)`
   `CONSTRAINT_MEMCG` proof) → bumped to 256m **and** trimmed at the source
   with `--disable_metrics=disk,diskIO`. Alloy's `unhealthy` flag was a missing
   `wget` in-image (Alloy ships fine) — probe removed, liveness now comes from
-  the Prometheus `alloy:12345` self-scrape job (Alloy runs with `--server.http.listen-addr=0.0.0.0:12345`, container networks only, unpublished). The API `cogito-obs` alias-attach is a Play 2 task (idempotent, re-attaches after redeploys on next apply). Host backup log tails to Loki
+  the Prometheus `alloy:12345` self-scrape job (Alloy runs with `--server.http.listen-addr=0.0.0.0:12345`, container networks only, unpublished). Compose drift self-rolls: Play 2 compares sha256 of each declared compose against a host hash file and restarts ONLY the drifted service (first apply restarts once to record hashes; steady-state applies restart nothing). The API `cogito-obs` alias-attach is a Play 2 task (idempotent, re-attaches after redeploys on next apply). Host backup log tails to Loki
   as `{service="cogito-backup",job="backup"}` (single-file read-only mount;
   within the A3 constraint). Watch post-apply: cAdvisor RSS <200m, swap
   trending down, `alloy` target UP.
