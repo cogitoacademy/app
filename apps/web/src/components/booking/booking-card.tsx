@@ -23,10 +23,8 @@ import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Separator } from "@cogito-app/ui/components/selia/separator";
 import { Text } from "@cogito-app/ui/components/selia/text";
 
-// Legacy snapshots predate tutorHonorariumIdr; keep their tutor-facing value
-// in IDR while new snapshots use the authoritative stored amount.
-const LEGACY_TUTOR_PAYOUT_RATE_IDR = 7_000;
 import { cn } from "@cogito-app/ui/lib/utils";
+import { getTotalHonorariumIdr } from "./booking-pricing";
 
 import {
   BOOKING_ACTION_STATES,
@@ -536,9 +534,7 @@ function BookingFinancialInfo({
       : total;
 
   if (viewerRole === "tutor") {
-    const honorariumIdr =
-      booking.priceSnapshot?.tutorHonorariumIdr ??
-      tutorShare * LEGACY_TUTOR_PAYOUT_RATE_IDR;
+    const honorariumIdr = getTotalHonorariumIdr(booking);
     return (
       <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-medium">
         <span className="text-muted">Honorarium</span>

@@ -95,6 +95,10 @@ import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { client, orpc } from "@/utils/orpc";
 
 const LEGACY_TUTOR_PAYOUT_RATE_IDR = 7_000;
+import {
+  getSeriesSessionCount,
+  getTotalHonorariumIdr,
+} from "./booking-pricing";
 import { ContactRequestPanel } from "./contact-request-panel";
 import { ManualMeetingLinkDialog } from "./manual-meeting-link-dialog";
 
@@ -436,6 +440,13 @@ export function BookingDetailPage({
   };
 
   const meetingUrl = booking.meetingUrl;
+  const isSeriesBooking = booking.type === "series";
+  const seriesSessions = sessionsQuery.data ?? undefined;
+  const totalHonorariumIdr = getTotalHonorariumIdr(booking, seriesSessions);
+  const seriesSessionCount = getSeriesSessionCount(booking, seriesSessions);
+  const perSessionHonorariumIdr =
+    booking.priceSnapshot?.tutorHonorariumIdr ??
+    (booking.priceSnapshot?.tutorShare ?? 0) * LEGACY_TUTOR_PAYOUT_RATE_IDR;
 
   function requestCancellation() {
     setConfirmationDialog({ action: "cancel" });
@@ -978,10 +989,22 @@ export function BookingDetailPage({
               </CardHeader>
               <CardBody className="space-y-4">
                 {isTutor ? (
-                  <SummaryRow
-                    label="Session honorarium"
-                    value={`Rp${(booking.priceSnapshot?.tutorHonorariumIdr ?? (booking.priceSnapshot?.tutorShare ?? 0) * LEGACY_TUTOR_PAYOUT_RATE_IDR).toLocaleString("id-ID")}`}
-                  />
+                  isSeriesBooking ? (
+                    <Stack direction="column" spacing="sm">
+                      <SummaryRow
+                        label={`Total honorarium (${seriesSessionCount} sessions)`}
+                        value={`Rp${totalHonorariumIdr.toLocaleString("id-ID")}`}
+                      />
+                      <Text className="text-sm text-muted">
+                        {`Rp${perSessionHonorariumIdr.toLocaleString("id-ID")} per session`}
+                      </Text>
+                    </Stack>
+                  ) : (
+                    <SummaryRow
+                      label="Session honorarium"
+                      value={`Rp${perSessionHonorariumIdr.toLocaleString("id-ID")}`}
+                    />
+                  )
                 ) : (
                   <>
                     <SummaryRow
