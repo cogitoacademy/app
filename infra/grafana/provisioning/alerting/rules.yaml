@@ -236,3 +236,346 @@ groups:
           severity: warning
         noDataState: OK
         execErrState: Error
+
+      # --- Added 2026-09-07 (obs saturation pass) — 7 new rules, existing 5
+      # untouched. Routing: default policy receiver Discord-ops (user decision:
+      # no new contact points), so no per-rule receiver. for-windows absorb the
+      # ~60s Grafana-restart/cAdvisor-60s-scrape gaps: warn rules 10m, crit 5m
+      # (matching the existing disk warn/crit pattern), slow-burn rules 30m.
+      # NoData=OK on every rule (a silently-missing series must not page; the
+      # TargetDown rule + Kuma cover dead scrapers independently) — each rule
+      # carries a comment on what its NoData means.
+      - uid: cpu-high
+        title: CpuHigh
+        condition: C
+        for: 10m
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: '100 * (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m]))) > 80'
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: A
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: B
+              refId: C
+              type: threshold
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+        annotations:
+          summary: "VPS CPU above 80% for 10m (sustained load — check Infra CPU-by-mode for steal/iowait)"
+        labels:
+          severity: warning
+        # NoData=OK: node-exporter down is covered by TargetDown; CPU warn must
+        # not fire on a monitoring gap.
+        noDataState: OK
+        execErrState: Error
+
+      - uid: cpu-crit
+        title: CpuCrit
+        condition: C
+        for: 5m
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: '100 * (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m]))) > 90'
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: A
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: B
+              refId: C
+              type: threshold
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+        annotations:
+          summary: "VPS CPU above 90% for 5m (saturation — shed load or scale before latency collapses)"
+        labels:
+          severity: critical
+        # NoData=OK: same rationale as CpuHigh.
+        noDataState: OK
+        execErrState: Error
+
+      - uid: mem-high
+        title: MemHigh
+        condition: C
+        for: 10m
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: '100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 85'
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: A
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: B
+              refId: C
+              type: threshold
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+        annotations:
+          summary: "VPS memory above 85% for 10m (check Saturation mem-drain + Infra swap panels for leak vs growth)"
+        labels:
+          severity: warning
+        # NoData=OK: node-exporter down is covered by TargetDown.
+        noDataState: OK
+        execErrState: Error
+
+      - uid: mem-crit
+        title: MemCrit
+        condition: C
+        for: 5m
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: '100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 90'
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: A
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: B
+              refId: C
+              type: threshold
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+        annotations:
+          summary: "VPS memory above 90% for 5m (OOM risk — act before the kernel chooses victims)"
+        labels:
+          severity: critical
+        # NoData=OK: same rationale as MemHigh.
+        noDataState: OK
+        execErrState: Error
+
+      - uid: disk-forecast
+        title: DiskForecast
+        condition: C
+        for: 30m
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: 'predict_linear(node_filesystem_avail_bytes{mountpoint="/"}[6h], 24*3600) < 0'
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: A
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: B
+              refId: C
+              type: threshold
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+        annotations:
+          summary: "Rootfs trending to full within 24h (6h linear fit — pairs with Infra panel 7; check Saturation burn-rate before acting)"
+        labels:
+          severity: warning
+        # NoData=OK: a fresh Prometheus (retention gap) has <6h of samples and
+        # yields NoData rather than a forecast; DiskWarn/DiskCrit cover the
+        # absolute thresholds independently.
+        noDataState: OK
+        execErrState: Error
+
+      # Kube-style container restarts do NOT exist in cAdvisor — this watches
+      # start-time changes instead. Series container_start_time_seconds is
+      # standard cAdvisor but UNVERIFIED live on this host (the 10MB+
+      # exposition may get metric groups trimmed — see prometheus.yml). If this
+      # rule sits in NoData, verify the series in Prometheus and delete rule +
+      # Infra panel 9.
+      - uid: container-restart-burst
+        title: ContainerRestartBurst
+        condition: C
+        for: 10m
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: 'sum by (container_label_coolify_resourceName) (changes(container_start_time_seconds{container_label_coolify_resourceName=~".+"}[15m])) > 2'
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: A
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: B
+              refId: C
+              type: threshold
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+        annotations:
+          summary: "Container restarting in a burst (>2 start-time changes in 15m for one Coolify resource — crashloop or redeploy flap)"
+        labels:
+          severity: warning
+        # NoData=OK: covers both the healthy case (no restarts = empty vector)
+        # and the unverified-series case (see comment above).
+        noDataState: OK
+        execErrState: Error
+
+      # Fires when ZERO nightly-backup success lines land in Loki over the
+      # trailing 25h (daily 02:00 WIB cron + 1h margin + 30m for). Success line
+      # (infra/backup.sh): `==> Done: uploaded backups/YYYY-MM-DD.sql.gz, …`.
+      # KNOWN LIMIT: generic {service} substring — Alloy labels are only
+      # service/container/job, and the host log /var/log/cogito-backup.log is
+      # NOT shipped by Alloy today (Docker-API discovery only), so until log
+      # shipping for it exists this rule sees NoData → OK and CANNOT fire.
+      # Operator: pin the Delivery panel 6 query first; until then the nightly
+      # check is `infra/ops.sh dlq` / `ls /var/log/cogito-backup.log`.
+      - uid: backup-stale
+        title: BackupStale
+        condition: C
+        for: 30m
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 1800
+              to: 0
+            datasourceUid: loki
+            model:
+              expr: 'count_over_time({service=~".+"} |= "==> Done: uploaded" [25h]) < 1'
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: A
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: B
+              refId: C
+              type: threshold
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+        annotations:
+          summary: "No nightly-backup success heartbeat in Loki for 25h (verify R2 object + /var/log/cogito-backup.log on the VPS — see comment)"
+        labels:
+          severity: warning
+        # NoData=OK with the caveat above: NoData here most likely means the
+        # backup log never reaches Loki, which is itself the gap to close.
+        noDataState: OK
+        execErrState: Error
