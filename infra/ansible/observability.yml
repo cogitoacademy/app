@@ -14,9 +14,12 @@
 #      one-click `type` template key is only for Kuma-style services; `type`
 #      and `docker_compose_raw` are mutually exclusive). If a service already
 #      exists, the playbook compares the declared name against the live state
-#      and PATCHes drift. Deploys are NOT re-triggered on drift (only on
-#      first creation, via instant_deploy).
-#   2. Drift: re-runs change nothing once every service matches.
+#      and PATCHes drift. A PATCH alone never redeploys, so compose drift
+#      self-rolls via Play 2's hash gate: sha256 of the declared compose
+#      string is compared against a stored host hash and ONLY the drifted
+#      service restarts on real change (first creation still deploys via
+#      instant_deploy; steady-state applies restart nothing).
+#   2. Drift: re-runs restart nothing once every stored compose hash matches.
 #
 # TAILNET-ONLY (hard requirement): no observability service gets a public
 # domain (`urls: []`). Grafana in particular must never have a public log UI.
@@ -90,8 +93,9 @@
 #   ansible-playbook -i infra/ansible/inventory.ini \
 #     infra/ansible/observability.yml           # idempotent apply
 #
-# IDEMPOTENCE: every write is conditional on a prior GET, so re-runs change
-# nothing once the services match the declaration.
+# IDEMPOTENCE: every write is conditional on a prior GET, and restarts are
+# hash-gated (Play 2), so steady-state re-runs restart nothing once the
+# stored compose hashes match the declaration.
 ---
 - name: Declare the tailnet-only observability stack (control-node driven)
   hosts: localhost
@@ -519,6 +523,14 @@
       loop_control:
         loop_var: obs_spec
 
+    # Hash-gate source for Play 2: sha256 of each DECLARED compose string,
+    # recorded as a localhost fact (play vars do not cross plays; hostvars
+    # lookup in Play 2 reads this back). Log-visible on purpose — the
+    # compose strings carry no secrets (token paths only, never values).
+    - name: Record declared compose hashes for Play 2 hash-gated restarts
+      ansible.builtin.set_fact:
+        obs_compose_hashes: "{{ dict(observability_services | map(attribute='name') | list | zip(observability_services | map(attribute='docker_compose_raw') | map('hash', 'sha256') | list)) }}"
+
     # --- 3. Config placement (operator machine step, printed exactly) ------
     - name: Print the config-placement steps (provisioned files -> VPS)
       ansible.builtin.debug:
@@ -536,16 +548,20 @@
           (The old manual scp/sops-pipe steps are superseded by Play 2 —
           same paths, same files, 0644 on metrics_token.)
 
-          Then the three config consumers (cogito-prometheus, cogito-alloy,
-          cogito-grafana)
-          restart automatically via the 'restart config consumers' handler
-          when a placement task reports changed (POST
-          /api/v1/services/<uuid>/restart, Coolify v4.3.14 restart_only
-          semantics — same pattern as tasks/env.yml for applications,
-          documented for services at studio.yml:141; UUIDs resolved by name
-          via GET /services like drift-check.yml; token-bearing calls
-          no_log). First-ever apply: still confirm the restart took
-          (Prometheus targets UP).
+           Then the three config consumers (cogito-prometheus, cogito-alloy,
+           cogito-grafana)
+           restart automatically via the 'restart config consumers' handler
+           when a placement task reports changed (POST
+           /api/v1/services/<uuid>/restart, Coolify v4.3.14 restart_only
+           semantics — same pattern as tasks/env.yml for applications,
+           documented for services at studio.yml:141; UUIDs resolved by name
+           via GET /services like drift-check.yml; token-bearing calls
+           no_log). Compose drift self-rolls the same way on real change
+           only (Play 2 hash gate — PATCHed services whose stored compose
+           hash changed restart via their per-service topic; steady-state
+           applies restart nothing). First-ever apply: still confirm the
+           restart took
+           (Prometheus targets UP).
           Retention: Loki 30d (loki-config.yml, keep in sync with
           loki_retention_days=30), Prometheus 15d (--storage.tsdb.
           retention.time=15d, from prom_retention_days=15).
@@ -688,6 +704,49 @@
         - prometheus
         - alloy
         - grafana/provisioning
+
+    # Compose-drift self-roll (hash-gated restart): a Coolify PATCH of
+    # docker_compose_raw never redeploys by itself, and GET does not return
+    # the field for comparison (see tasks/observability-service.yml), so the
+    # declared compose hash per service (recorded by Play 1 in the
+    # obs_compose_hashes localhost fact) is compared against a stored host
+    # file <obs_root>/.compose-sha-<service> (0644 root:root, one code path
+    # for all services via the loop below — never four hardcoded copies). A
+    # changed hash — or an absent file, which counts as changed exactly once
+    # on first-ever apply — updates the file and notifies ONLY that
+    # service's restart topic; steady-state applies change nothing and
+    # restart nothing. Loki/Prometheus/Grafana are stateful (volumes) —
+    # restarts are safe but change-triggered only, never every apply. Alloy
+    # is stateless. The ~60s restart gap is absorbed by the Grafana alert
+    # for-windows (5m/10m) plus KeepLast NoData semantics. These tasks carry
+    # no secrets (sha256 hex only) and stay log-visible for auditability.
+    # Check mode never reaches here (end_play above skips the host flow).
+    - name: Resolve the declared compose hashes recorded by Play 1
+      ansible.builtin.set_fact:
+        obs_declared_hashes: "{{ hostvars['localhost']['obs_compose_hashes'] | default({}) }}"
+
+    - name: Read the stored compose hash for each observability service
+      ansible.builtin.slurp:
+        src: "{{ obs_root }}/.compose-sha-{{ item.key }}"
+      loop: "{{ obs_declared_hashes | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      register: obs_stored_hashes
+      changed_when: false
+      failed_when: false
+
+    - name: Store the declared compose hash when drifted (restarts only that service)
+      ansible.builtin.copy:
+        dest: "{{ obs_root }}/.compose-sha-{{ item.item.key }}"
+        content: "{{ item.item.value }}\n"
+        owner: root
+        group: root
+        mode: "0644"
+      loop: "{{ obs_stored_hashes.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item.key }}"
+      when: item.failed | default(false) or (item.content | default('') | b64decode | trim) != item.item.value
+      notify: "restart {{ item.item.key }}"
 
     - name: Read COOLIFY_API_TOKEN from the vault on the control node (restart handler auth)
       ansible.builtin.shell: >-
@@ -854,8 +913,12 @@
     # semantics — same proven pattern as tasks/env.yml for applications,
     # documented for services at studio.yml:141. UUIDs resolved by name via
     # GET /services (same pattern as drift-check.yml); token-bearing calls
-    # are no_log. First-ever apply: still confirm the restart took
-    # (Prometheus targets UP).
+    # are no_log. Compose drift feeds the same restarts hash-gated: the
+    # .compose-sha-* tasks above notify per-service topics
+    # (restart cogito-<svc>), each of which also runs the UUID-resolving GET
+    # first (listen order) and restarts ONLY that service — never all four,
+    # never on steady-state applies. First-ever apply: still confirm the
+    # restart took (Prometheus targets UP).
     - name: restart config consumers
       ansible.builtin.uri:
         url: "{{ coolify_api_url }}/services"
@@ -865,6 +928,24 @@
         status_code: 200
       register: obs_restart_services
       no_log: true
+      listen:
+        - restart cogito-loki
+        - restart cogito-prometheus
+        - restart cogito-grafana
+        - restart cogito-alloy
+
+    - name: Restart cogito-loki on compose drift
+      ansible.builtin.uri:
+        url: "{{ coolify_api_url }}/services/{{ (obs_restart_services.json | selectattr('name', 'equalto', 'cogito-loki') | first).uuid }}/restart"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ coolify_api_token }}"
+        status_code: [200, 201, 202]
+      no_log: true
+      listen: restart cogito-loki
+      # Loki is stateful (loki-data volume) — restart replays the WAL
+      # (readiness start_period 120s covers cold start). Change-triggered
+      # only via the compose-hash gate above.
 
     - name: Restart cogito-prometheus on config change
       ansible.builtin.uri:
@@ -874,7 +955,9 @@
           Authorization: "Bearer {{ coolify_api_token }}"
         status_code: [200, 201, 202]
       no_log: true
-      listen: restart config consumers
+      listen:
+        - restart config consumers
+        - restart cogito-prometheus
 
     - name: Restart cogito-alloy on config change
       ansible.builtin.uri:
@@ -884,7 +967,9 @@
           Authorization: "Bearer {{ coolify_api_token }}"
         status_code: [200, 201, 202]
       no_log: true
-      listen: restart config consumers
+      listen:
+        - restart config consumers
+        - restart cogito-alloy
 
     - name: Restart cogito-grafana on provisioning change
       ansible.builtin.uri:
@@ -894,7 +979,9 @@
           Authorization: "Bearer {{ coolify_api_token }}"
         status_code: [200, 201, 202]
       no_log: true
-      listen: restart config consumers
+      listen:
+        - restart config consumers
+        - restart cogito-grafana
       # Grafana file-provisioned alert rules + datasources load at startup
       # only (dashboards hot-reload), so a provisioning-tree change without a
       # restart silently never applies — worse than the ~60s restart gap, which
