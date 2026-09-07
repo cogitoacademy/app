@@ -59,6 +59,38 @@
           "legendFormat": "5xx % (spike after a deploy = roll back)"
         }
       ]
+    },
+    {
+      "id": 5,
+      "title": "App version (app_info)",
+      "description": "Change-marker: consumes the prod worker's app_info{version} gauge (DEPENDENCY — not yet in the /metrics exposition; grep packages/api/src/lib/metrics.ts for app_info). Shows the NoData-safe text below until the API exposes it; compare against the deployed GIT_SHA after each CD run.",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 21 },
+      "fieldConfig": {
+        "defaults": { "noValue": "no app_info yet — prod worker dependency" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "app_info",
+          "legendFormat": "{{version}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Backup heartbeat (Loki)",
+      "description": "Nightly-backup success lines. Generic {service} substring search on purpose — Alloy labels are only service/container/job (see config.alloy), so no backup-specific label exists to filter on. OPERATOR: pin this panel to the exact service label + line once the heartbeat reaches Loki. Success line today (host file /var/log/cogito-backup.log, infra/backup.sh): `==> Done: uploaded backups/YYYY-MM-DD.sql.gz, pruned …`. That host file is NOT shipped by Alloy today (Docker-API discovery only), so expect NoData until log shipping for it exists — until then verify with `infra/ops.sh dlq` / `ls /var/log/cogito-backup.log` per APPLY-RUNBOOK.md.",
+      "type": "logs",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 21 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service=~\".+\"} |= \"==> Done: uploaded\""
+        }
+      ]
     }
   ]
 }

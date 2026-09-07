@@ -4,7 +4,8 @@
 # `cogito-prometheus`). Retention is a CLI flag, not a file setting:
 #   --storage.tsdb.retention.time=15d   (PROM_RETENTION_DAYS=15)
 # Lean fallback (tight VPS): scrape_interval 30s + retention 7d (see
-# docs/RUNBOOK.md → Monitoring & Alerting → Observability stack).
+# docs/RUNBOOK.md → Monitoring & Alerting → Observability stack) — 30s is
+# now the default; the fallback tightens retention only.
 #
 # SECRET DISCIPLINE: the API /metrics Bearer token lives in the SOPS vault as
 # METRICS_TOKEN (never in git). The operator provisions it on the VPS as the
@@ -12,10 +13,10 @@
 # read-only bind mount of /etc/cogito/observability/prometheus/metrics_token,
 # 0644 root:root on the host — see the compose in observability.yml). This file
 # references that container path via `credentials_file`, never the value. If
-# the file is missing, the cogito-api scrape 401s (alerts as a DOWN target;
+# the file is missing, the cogito-api scrapes 401 (alerts as DOWN targets;
 # the API itself is unaffected).
 global:
-  scrape_interval: 15s
+  scrape_interval: 30s
   scrape_timeout: 10s
   evaluation_interval: 15s
 
@@ -30,6 +31,29 @@ scrape_configs:
     static_configs:
       - targets:
           - api.cogitoacademy.id:443
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/metrics_token
+
+  # Internal API scrape over the shared `cogito-obs` network (dual-scrape:
+  # this job PLUS the public job above are both live at once).
+  # WHY TWO JOBS: the public job validates the full edge path users feel
+  # (Cloudflare -> Traefik -> API, TLS, Bearer) while this job validates the
+  # app itself independent of the edge — when one goes DOWN and the other
+  # stays UP, the alert tells you whether the failure is the app or the
+  # edge, instead of one ambiguous DOWN. The internal path also avoids
+  # hairpinning the VPS's own public IP and keeps working through a
+  # Cloudflare/proxy incident.
+  # WIRING (operator one-time step): the cogito-api container must join
+  # cogito-obs with the `cogito-api` alias (e.g. `docker network connect
+  # --alias cogito-api cogito-obs <api-container>`; re-apply after every
+  # redeploy until Coolify declares it). Until then this target is DOWN by
+  # design — the public job above stays the alerting truth meanwhile.
+  - job_name: cogito-api-internal
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - cogito-api:3001
     authorization:
       type: Bearer
       credentials_file: /etc/prometheus/metrics_token

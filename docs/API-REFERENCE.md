@@ -276,7 +276,9 @@ Production CD verifies this endpoint's `version` against the target commit after
   (histogram, ms buckets `5…10000` + `+Inf`), `dlq_fresh_depth{instance}`
   (gauge — fresh DLQ failures within the freshness window, `-1` when unknown),
   and `breaker_state{name,instance}` (gauge — `0`=closed, `1`=half-open,
-  `2`=open per Redis-backed circuit breaker). Every series carries
+  `2`=open per Redis-backed circuit breaker), and `app_info{version,instance}`
+  (gauge — always `1`, `version` is the deployed `GIT_SHA` or `"dev"`).
+  Every series carries
   `instance="single"`: the endpoint reports this process only; aggregating
   across replicas is an explicit multi-replica follow-up, not solved here.
 

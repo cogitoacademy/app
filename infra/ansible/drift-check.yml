@@ -82,12 +82,12 @@
     declared_project: cogito-prod
     declared_environment: production
     declared_resources:
-      - name: postgres-prod
+      - name: cogito-prod-db
         type: postgresql
         image: postgres:16-alpine
-      - name: redis-prod
+      - name: cogito-prod-redis
         type: redis
-        image: redis:7
+        image: redis:7.2
       - name: cogito-api
         type: application
         image: ghcr.io/cogitoacademy/app/server:latest
@@ -125,7 +125,9 @@
       - name: cogito-studio
         image: "ghcr.io/drizzle-team/gateway"
     # Env var NAMES the API application must have (values are secrets and
-    # are never compared). Keep in sync with infra/.env.prod.example.
+    # are never compared). Keep in sync with the `app_env_keys` list in
+    # infra/ansible/coolify-resources.yml (every key applied there must be
+    # asserted here).
     declared_api_env_names:
       - NODE_ENV
       - PORT
@@ -147,8 +149,15 @@
       - XENDIT_SUCCESS_REDIRECT_URL
       - XENDIT_FAILURE_REDIRECT_URL
       - XENDIT_DEFAULT_PAYMENT_METHOD
+      - MIDTRANS_MODE
+      - MIDTRANS_SERVER_KEY
+      - MIDTRANS_CLIENT_KEY
+      - MIDTRANS_MERCHANT_ID
+      - MIDTRANS_WEBHOOK_SIGNATURE_KEY
       - RESEND_API_KEY
       - EMAIL_FROM
+      - GOOGLE_CLIENT_ID
+      - GOOGLE_CLIENT_SECRET
       - GOOGLE_CLIENT_EMAIL
       - GOOGLE_PRIVATE_KEY
       - GOOGLE_CALENDAR_ID
@@ -164,6 +173,10 @@
       - R2_SECRET_ACCESS_KEY
       - R2_BUCKET
       - R2_PUBLIC_URL
+      - SANITY_PROJECT_ID
+      - SANITY_DATASET
+      - SANITY_API_VERSION
+      - SANITY_API_TOKEN
       - SEED_ALLOWED_IN_PROD
       - ADMIN_EMAILS
       - METRICS_TOKEN
@@ -171,12 +184,19 @@
       - SENTRY_ENVIRONMENT
     # Deploy webhooks: URL per resource. The per-resource UUID in the URL is
     # the bearer secret; the check verifies it matches the live resource UUID.
-    # Keep the placeholder `<...>` until the operator fills the real UUIDs.
+    # Fill-or-skip: the UUIDs live in Coolify UI -> resource -> deploy webhook
+    # URL (or GET /api/v1/applications). Paste the real UUID and set skip:
+    # false. While the UUID is unknown, keep skip: true — the compare task
+    # skips the item silently. A placeholder must never fail the check and
+    # must never warn on every run (no permanent warn); flipping skip: false
+    # with a placeholder still in the URL fails loudly (guard task below).
     declared_webhooks:
       - name: cogito-api
         url: "https://cl.cogitoacademy.id/api/v1/deploy?uuid=<prod-api-resource-uuid>&force=false"
+        skip: true
       - name: cogito-web
         url: "https://cl.cogitoacademy.id/api/v1/deploy?uuid=<prod-web-resource-uuid>&force=false"
+        skip: true
 
   tasks:
     - name: Require a Coolify API token
@@ -389,6 +409,20 @@
         api_envs_resp is defined and api_envs_resp.json is defined and
         item not in (api_envs_resp.json | map(attribute='key') | list)
 
+    - name: Fail on webhook items marked live but still holding a placeholder
+      ansible.builtin.fail:
+        msg: >-
+          webhook {{ item.name }}: skip is false but the URL still holds a
+          placeholder (<...>) — paste the real resource UUID, or set skip:
+          true while it is unknown.
+      loop: "{{ declared_webhooks }}"
+      # A real Coolify resource UUID is 8+ hex/dash chars; placeholder
+      # fragments (e.g. the `d-a` inside `<prod-api-resource-uuid>`) never
+      # reach that length, so this tells them apart.
+      when: >-
+        not (item.skip | default(false) | bool) and
+        (((item.url | regex_search('uuid=([0-9a-fA-F-]{8,})', '\\1')) or ['']) | first) | length == 0
+
     - name: Compare deploy-webhook UUIDs with the live resource UUIDs
       ansible.builtin.set_fact:
         drift_findings: >-
@@ -396,22 +430,13 @@
              ['webhook ' + item.name + ': declared URL UUID ' + _declared_uuid + ' != live resource UUID ' + _live_uuid] }}
       loop: "{{ declared_webhooks }}"
       vars:
-        _declared_uuid: "{{ ((item.url | regex_search('uuid=([0-9a-fA-F-]+)', '\\1')) or ['']) | first }}"
+        _declared_uuid: "{{ ((item.url | regex_search('uuid=([0-9a-fA-F-]{8,})', '\\1')) or ['']) | first }}"
         _live_uuid: >-
           {{ ((env_resp.json.applications | default([])) | selectattr('name', 'equalto', item.name) | first | default(none)).uuid | default('') }}
       when: >-
+        not (item.skip | default(false) | bool) and
         _declared_uuid | length > 0 and _live_uuid | length > 0 and
         _declared_uuid != _live_uuid
-
-    - name: Warn about webhook URLs that still contain placeholders
-      ansible.builtin.debug:
-        msg: >-
-          webhook {{ item.name }}: declared URL still contains a placeholder
-          (<...>) — operator must fill the real resource UUID before this
-          check can verify it
-      loop: "{{ declared_webhooks }}"
-      when: >-
-        (((item.url | regex_search('uuid=([0-9a-fA-F-]+)', '\\1')) or ['']) | first) | length == 0
 
     - name: Report drift findings
       ansible.builtin.debug:

@@ -1,0 +1,84 @@
+{
+  "uid": "cogito-saturation",
+  "title": "Saturation",
+  "description": "Burn-rates and retention-vs-disk headroom for the single VPS. Text guidance only — NO retention values are changed by this board. Home folder: Cogito — one folder holds boards and alert rules.",
+  "tags": ["cogito", "capacity"],
+  "timezone": "Asia/Jakarta",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": { "from": "now-7d", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Retention vs disk — the math (read before touching anything)",
+      "type": "text",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "markdown",
+        "content": "Facts (verified in git): Loki retention 30d (`loki_retention_days: 30` → `retention_period 720h`, infra/ansible/observability.yml) · Prometheus retention 15d (`--storage.tsdb.retention.time=15d`, infra/prometheus/prometheus.yml) · single VPS disk 38GB.\n\nHow to read this board: panels 2–4 show the *burn rate* (bytes/s filling disk, bytes/s draining memory, CPU saturation + load). Headroom math = (free bytes today) ÷ (burn bytes/day) = days until full. Compare that number against the retention horizons above: if disk fills faster than 30d of Loki + 15d of Prometheus + Docker overlays + backup temp space, the host dies before retention ever matters.\n\nIf the math says we are short: options are (a) grow the disk, (b) cut cardinality at the source (cAdvisor `--disable_metrics=disk,diskIO`, fewer log lines), or (c) shorten a retention window. Option (c) needs OPERATOR APPROVAL on evidence — retention is a durability/compliance promise, not a tuning knob; this board's job is to produce the evidence (screenshot the burn panels), not to make the cut. No retention value is changed by any panel or alert here."
+      }
+    },
+    {
+      "id": 2,
+      "title": "Disk burn rate (bytes/s filling)",
+      "description": "Negative deriv of rootfs free bytes over 6h, so positive = filling. Multiply by 86400 for bytes/day headroom math. Saw-tooth from logrotate/nightly-prune is normal — act on the sustained baseline, not spikes.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 10 },
+      "fieldConfig": { "defaults": { "unit": "Bps" } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "-deriv(node_filesystem_avail_bytes{mountpoint=\"/\"}[6h])",
+          "legendFormat": "disk fill B/s (rootfs)"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Memory burn rate (bytes/s draining)",
+      "description": "Negative deriv of MemAvailable over 6h, so positive = draining. Sustained drain + growing swap (Infra board panel 6) = leak or growth to size before it OOMs.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 10 },
+      "fieldConfig": { "defaults": { "unit": "Bps" } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "-deriv(node_memory_MemAvailable_bytes[6h])",
+          "legendFormat": "mem drain B/s"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "CPU saturation + load",
+      "description": "CPU % (non-idle) against load averages. Load persistently above core count with low CPU % = uninterruptible (iowait) pressure — check Infra panel 5 (CPU by mode).",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 18 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * (1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])))",
+          "legendFormat": "cpu %"
+        },
+        {
+          "refId": "B",
+          "expr": "node_load1",
+          "legendFormat": "load1"
+        },
+        {
+          "refId": "C",
+          "expr": "node_load5",
+          "legendFormat": "load5"
+        },
+        {
+          "refId": "D",
+          "expr": "count(node_cpu_seconds_total{mode=\"idle\"})",
+          "legendFormat": "cores"
+        }
+      ]
+    }
+  ]
+}

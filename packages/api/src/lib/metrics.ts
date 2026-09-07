@@ -164,10 +164,23 @@ function requestLabels(entry: Series): string {
  * (Redis-backed circuit-breaker states) are supplied by the route, which
  * reads them from the shared Redis. Either gauge section is omitted when its
  * input is absent so a bare `renderExposition()` still emits valid output.
+ * `app_info{version}` (deploy SHA from `GIT_SHA`, `"dev"` fallback) is
+ * always emitted so Prometheus can answer "which version is running".
  */
 export function renderExposition(input: ExpositionInput = {}): string {
   maybeCleanup(Date.now());
   const lines: string[] = [];
+
+  // Deploy traceability: the running build SHA, so /metrics agrees with
+  // /health `version` on which artifact is live (same source —
+  // process.env.GIT_SHA baked by the Dockerfile, "dev" when unset). Read at
+  // call time so tests can stub the env.
+  const gitSha = process.env.GIT_SHA?.trim() || "dev";
+  lines.push(
+    "# HELP app_info Application build info (version carries the deploy SHA).",
+  );
+  lines.push("# TYPE app_info gauge");
+  lines.push(`app_info{version="${escapeLabelValue(gitSha)}"} 1`);
 
   lines.push(
     "# HELP http_requests_total Total HTTP requests by path, method and status.",

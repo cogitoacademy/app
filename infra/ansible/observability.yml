@@ -41,13 +41,16 @@
 #   PROM_RETENTION_DAYS=15  (rendered into the prometheus compose as
 #     --storage.tsdb.retention.time={{ PROM_RETENTION_DAYS }}d)
 # Lean fallback for a tight VPS (documented in RUNBOOK, not applied here):
-# scrape_interval 30s + Prometheus retention 7d.
+# Prometheus retention 7d + cAdvisor --disable_metrics=disk,diskIO.
 #
-# SCRAPE: api /metrics (Bearer from the vault token file, 15s interval,
-# 10s timeout), node_exporter :9100, cAdvisor :8080. Internal hostnames are
-# the Compose service names on the shared Coolify Docker network; if Coolify
-# isolates service networks, point them at the tailnet IPs (comment in each
-# provisioned file).
+# SCRAPE: api /metrics dual-scraped (Bearer from the vault token file, 30s
+# interval, 10s timeout): public api.cogitoacademy.id:443 (the edge path
+# users feel: Cloudflare -> Traefik -> API/TLS) + internal cogito-api:3001
+# over the shared cogito-obs network (the app itself; the service name
+# resolves there — each Coolify service otherwise gets its OWN isolated
+# network, verified live 2026-09-05). One DOWN + one UP localizes app vs
+# edge instead of one ambiguous DOWN. node_exporter :9100, cAdvisor :8080
+# (60s/50s slow-scrape).
 #
 # A3: Alloy ships logs via `loki.source.docker_logs` (Docker API discovery
 # over the read-only socket mount) — NEVER file globs under
@@ -146,6 +149,15 @@
                 - "loki-data:/loki"
                 - "/etc/cogito/observability/loki/loki-config.yml:/etc/loki/loki-config.yml:ro"
               mem_limit: 300m
+              # Readiness is the /ready endpoint (503 while replaying the WAL
+              # on cold start, hence the long start_period on this small VPS).
+              # The grafana/loki image is alpine-based so busybox wget exists.
+              healthcheck:
+                test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
+                start_period: 120s
               restart: unless-stopped
           volumes:
             loki-data:
@@ -176,6 +188,12 @@
                 - "/etc/cogito/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro"
                 - "/etc/cogito/observability/prometheus/metrics_token:/etc/prometheus/metrics_token:ro"
               mem_limit: 256m
+              # NO healthcheck stanza here (deliberate): the prom/prometheus
+              # image is scratch-based — no shell, wget or curl — so no
+              # in-container probe exists. Prometheus up-ness is already
+              # covered from the outside: the :9090 tunnel probe (see the
+              # verification steps below) plus every Grafana panel going
+              # no-data if it stops. Revisit only if the image gains tooling.
               restart: unless-stopped
           volumes:
             prometheus-data:
@@ -207,6 +225,14 @@
                 - "grafana-data:/var/lib/grafana"
                 - "/etc/cogito/observability/grafana/provisioning:/etc/grafana/provisioning:ro"
               mem_limit: 256m
+              # /api/health is unauthenticated and returns 200 only once the
+              # server is serving (plugin/provisioning load happens first).
+              healthcheck:
+                test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
+                start_period: 60s
               restart: unless-stopped
           volumes:
             grafana-data:
@@ -230,6 +256,17 @@
                 - "/etc/cogito/observability/alloy/config.alloy:/etc/alloy/config.alloy:ro"
                 - "/var/run/docker.sock:/var/run/docker.sock:ro"
               mem_limit: 128m
+              # Alloy is the one bundle member NOTHING scrapes (node-exporter
+              # and cAdvisor surface as DOWN targets in Prometheus when they
+              # die, so container healthchecks there would add no new signal
+              # — deliberately omitted). /-/healthy listens on the default
+              # 127.0.0.1:12345 inside the container; no published port needed.
+              healthcheck:
+                test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:12345/-/healthy || exit 1"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
+                start_period: 60s
               restart: unless-stopped
             node-exporter:
               image: "prom/node-exporter:v1.9.0"

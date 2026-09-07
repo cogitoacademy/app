@@ -117,12 +117,37 @@
         type: "redis"
         image: "redis:7.2"
 
+    # --- Resource bounds + log rotation (declared intent, enforced by hand) ---
+    # The failure mode being bounded is OOM-kill blast radius on a small
+    # shared VPS: a runaway app container must not starve Postgres / Redis /
+    # Loki / Prometheus. mem_limit below is the declared ceiling per app.
+    # ENFORCEMENT IS MANUAL until the applications-API field mapping is
+    # confirmed: this playbook's create/PATCH bodies (tasks/application.yml)
+    # do NOT send a memory field yet — no live API inspection was possible in
+    # this pass, and sending an unknown PATCH field risks a 422 on apply.
+    # Operator step (Coolify UI -> cogito-api / cogito-web -> resource or
+    # custom-Docker options, exact tab varies by Coolify version): set Memory
+    # to the mem_limit below, then confirm on the VPS with
+    # `docker inspect <container> --format '{{.HostConfig.Memory}}'`
+    # (expect 536870912 for the API, 268435456 for the web).
+    # No `cpus` pin (deliberate): on one shared host a CPU limit throttles
+    # latency without preventing any outage class, while memory is the true
+    # scarce vector (OOM-kill). Revisit with cAdvisor throttle/steal data if
+    # noisy-neighbour CPU contention is ever observed.
+    # Docker log rotation is NOT API-expressible (see drift-check.yml manual
+    # checks): set once per app container on the VPS so a chatty app cannot
+    # fill the disk —
+    #   docker update --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 <container>
+    # (re-apply after every redeploy until Coolify exposes it; verify with
+    # `docker inspect <container> --format '{{.HostConfig.LogConfig}}'`).
+    # Do NOT change images/ports/domains/health paths below.
     applications:
       - name: "cogito-api"
         image_name: "ghcr.io/cogitoacademy/app/server"
         image_tag: "latest"
         ports_exposes: "3001"
         domains: "https://api.cogitoacademy.id"
+        mem_limit: "512m"
         health_check_enabled: true
         health_check_path: "/health"
         health_check_port: "3001"
@@ -137,6 +162,7 @@
         image_tag: "latest"
         ports_exposes: "80"
         domains: "https://app.cogitoacademy.id"
+        mem_limit: "256m"
         health_check_enabled: true
         health_check_path: "/"
         health_check_port: "80"

@@ -22,7 +22,8 @@
 #   observability   observability.yml (declare PLG services via Coolify API +
 #                   converge /etc/cogito/observability/ via Play 2, tailnet-only)
 #   backup-cron     backup-cron.yml (DATABASE_URL reachability check + y/N)
-#   verify          /health (version field) + cl. 302 + :8000 lock-down print
+#   verify          /health (version field) + cl. 404 on / + 401/405 on the
+#                   deploy-webhook probe + :8000 lock-down print
 #   status          current marker / credential presence at a glance
 #   all             phases in runbook order, pausing between phases, skipping
 #                   phases whose markers show completion, aborting on failure
@@ -386,7 +387,8 @@ phase_verify() {
   local body
   if [[ "$DRY" == 1 ]]; then
     say "  would run: curl -fsS --max-time 10 https://api.cogitoacademy.id/health   (assert \"version\" field present)"
-    say "  would run: curl -sI --max-time 10 https://cl.cogitoacademy.id            (expect HTTP 302)"
+    say "  would run: curl -sI --max-time 10 https://cl.cogitoacademy.id/           (expect HTTP 404 — no router matches /)"
+    say "  would run: curl -s -o /dev/null -w '%{http_code}' --max-time 10 'https://cl.cogitoacademy.id/api/v1/deploy?uuid=probe&force=false'   (expect HTTP 401 or 405 — route live, GET never deploys)"
     say "  would print: public :8000 lock-down check for the operator to run (below)"
     return 0
   fi
@@ -397,14 +399,26 @@ phase_verify() {
     die "health payload has no \"version\" field — expected it; got: $body"
   fi
   say "  health OK — $(grep -o '"version":"[^"]*"' <<<"$body" | head -1)"
-  say "  -> curl -sI --max-time 10 https://cl.cogitoacademy.id  (expect 302)"
-  local headers
-  headers="$(curl -sI --max-time 10 https://cl.cogitoacademy.id)" \
-    || die "https://cl.cogitoacademy.id did not answer (expected HTTP 302 redirect)."
-  if ! grep -qi '^HTTP/.* 302' <<<"$headers"; then
-    die "expected HTTP 302 from https://cl.cogitoacademy.id — got: $(printf '%s' "$headers" | head -1)"
+  # The Traefik spec (coolify-resources.yml header) routes ONLY
+  # /api/v1/deploy/* on cl.cogitoacademy.id — bare / matches no router (404),
+  # and the deploy path answers 401 (auth required) or 405 (GET not allowed).
+  # A GET never triggers a deploy; the per-resource UUID in the real webhook
+  # URL is the bearer secret.
+  say "  -> curl -sI --max-time 10 https://cl.cogitoacademy.id/  (expect 404)"
+  local headers probe_code
+  headers="$(curl -sI --max-time 10 https://cl.cogitoacademy.id/)" \
+    || die "https://cl.cogitoacademy.id/ did not answer (expected HTTP 404 — no router matches /)."
+  if ! grep -qi '^HTTP/.* 404' <<<"$headers"; then
+    die "expected HTTP 404 from https://cl.cogitoacademy.id/ — got: $(printf '%s' "$headers" | head -1)"
   fi
-  say "  cl. redirect OK (302)."
+  say "  cl. / OK (404 — no stray router)."
+  say "  -> GET 'https://cl.cogitoacademy.id/api/v1/deploy?uuid=probe&force=false'  (expect 401 or 405)"
+  probe_code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 'https://cl.cogitoacademy.id/api/v1/deploy?uuid=probe&force=false')" \
+    || die "the deploy-webhook probe did not answer (is the Traefik route pasted? see the resources phase reminder)."
+  if [[ "$probe_code" != "401" && "$probe_code" != "405" ]]; then
+    die "expected HTTP 401 or 405 from the deploy-webhook probe — got: $probe_code (404 = Traefik route missing: paste the dynamic config, then re-run)."
+  fi
+  say "  cl. deploy-webhook route OK ($probe_code)."
   say ""
   say "  === public :8000 lock-down check (operate this yourself) ==="
   say "  The Coolify dashboard binds localhost/tailnet-only after hardening. From a NON-tailnet"
