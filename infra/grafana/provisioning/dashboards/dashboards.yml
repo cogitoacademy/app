@@ -11,18 +11,21 @@ providers:
   - name: cogito
     orgId: 1
     folder: Cogito
-    # Pinned to the ORIGINAL API-created folder UID (efxc1qs6nad4wd, id=1,
-    # created 2026-09-05 by Play 3) — this is where the file-provisioned
-    # alert rules actually live (proven live 2026-09-07 via alert-state logs:
-    # __alert_rule_namespace_uid__=efxc1qs6nad4wd). An earlier pin used
-    # afxfpsyn1jldse (auto-created duplicate titled Cogito, 2026-09-06),
-    # which split 3 boards away from the rules and stranded Logs & Traces —
-    # see docs/plans/active/OBS-GRAFANA-NODATA.md §6. With only one Cogito
-    # folder left after the spare is deleted, title lookups stay unambiguous;
-    # Play 3 is create-when-missing so it never recreates the duplicate.
-    # After apply, delete the empty afxfpsyn1jldse folder once via
-    # DELETE /api/folders/afxfpsyn1jldse (verify empty first).
-    folderUid: efxc1qs6nad4wd
+    # Pinned to afxfpsyn1jldse — the folder UID where the file-provisioned
+    # alert rules actually live (proven live 2026-09-07 via the alert-rules
+    # provisioning API: all 4 rules carry folderUID afxfpsyn1jldse). An
+    # earlier change (#216) pinned efxc1qs6nad4wd based on a misread of
+    # alert-state log labels (those were stale persisted states failing to
+    # save with sqlite 'database is locked', not the rules' home) — that pin
+    # is hereby reverted. File alert provisioning accepts only `folder`
+    # (title), so boards (UID-pinned here) move to the rules, never vice
+    # versa. Provisioning only re-saves files whose CONTENT changed, so every
+    # folder move must ride with a content touch in each board JSON
+    # (see #217). After apply, confirm all 4 boards + 4 rules share this
+    # folder, then delete the empty duplicate efxc1qs6nad4wd once via
+    # DELETE /api/folders (verify empty first). Play 3 is create-when-missing
+    # so it never recreates the duplicate while one Cogito folder exists.
+    folderUid: afxfpsyn1jldse
     type: file
     disableDeletion: true
     updateIntervalSeconds: 30
