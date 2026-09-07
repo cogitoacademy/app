@@ -2,7 +2,7 @@
 
 | Field   | Value                                                                                                                      |
 | ------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Status  | **Active** (created 2026-09-07)                                                                                            |
+| Status  | **Completed (merged #226, 2026-09-07)** — 3 workers (prod/obs/docs), zero file overlap, CI green, squash-merged; operator live-verify + restore drill carry to next session (see §6) |
 | Branch  | `w/infra-reliability-wave` (merges `w/infra-reliability-prod`, `-obs`, `-docs`)                                            |
 | Workers | 3 (docs worker = this branch; prod/obs workers touch no docs)                                                              |
 | Entry   | Operator commands live in [INFRA-PLAYBOOK.md](../../INFRA-PLAYBOOK.md); detail behind it in [RUNBOOK.md](../../RUNBOOK.md) |
