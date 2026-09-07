@@ -1,11 +1,11 @@
 # CPU/Memory Pressure Wave
 
-| Field   | Value                                                                                                                      |
-| ------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Status  | **Completed (merged #228, 2026-09-07)** — 2 workers (platform/alerts), zero file overlap, CI green, squash-merged; operator live-verify carries forward (§3)
-| Branch  | `w/cpu-memory-pressure-wave` (merges `w/cpu-pressure-platform`, `w/cpu-pressure-alerts`)                                   |
-| Workers | 2 (platform + alerts; lead owns docs tail)                                                                                 |
-| Entry   | Operator commands live in [INFRA-PLAYBOOK.md](../../INFRA-PLAYBOOK.md); detail behind it in [RUNBOOK.md](../../RUNBOOK.md) |
+| Field   | Value                                                                                                                                                        |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Status  | **Completed (merged #228, 2026-09-07)** — 2 workers (platform/alerts), zero file overlap, CI green, squash-merged; operator live-verify carries forward (§3) |
+| Branch  | `w/cpu-memory-pressure-wave` (merges `w/cpu-pressure-platform`, `w/cpu-pressure-alerts`)                                                                     |
+| Workers | 2 (platform + alerts; lead owns docs tail)                                                                                                                   |
+| Entry   | Operator commands live in [INFRA-PLAYBOOK.md](../../INFRA-PLAYBOOK.md); detail behind it in [RUNBOOK.md](../../RUNBOOK.md)                                   |
 
 Grill-round decisions (user-locked 2026-09-07): KeepLast on **all 12** rules;
 mem-limit + network-attach enforcement runs in-wave (operator clicks, lead
