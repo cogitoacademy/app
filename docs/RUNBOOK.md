@@ -968,6 +968,22 @@ sum(rate(http_requests_total[5m]))`, and `breaker_state or on() vector(0)`
   trim at the source with `--disable_metrics=disk,diskIO` (disk panels
   already use node-exporter). The `TargetDown` alert (`up == 0`, warning)
   covers silently-failing scrapes.
+- **Memory-pressure incident (2026-09-07):** load 2.75 on 2 cores with
+  `wa` up to 84% + ~690MB swap in/out = swap-thrash, not app burn (API sat at
+  0.5% CPU / 177MB). cAdvisor OOM-cycled on its 128m cgroup (dmesg
+  `CONSTRAINT_MEMCG` proof) → bumped to 256m **and** trimmed at the source
+  with `--disable_metrics=disk,diskIO`. Alloy's `unhealthy` flag was a missing
+  `wget` in-image (Alloy ships fine) — probe removed, liveness now comes from
+  the Prometheus `alloy:12345` self-scrape job. Host backup log tails to Loki
+  as `{service="cogito-backup",job="backup"}` (single-file read-only mount;
+  within the A3 constraint). Watch post-apply: cAdvisor RSS <200m, swap
+  trending down, `alloy` target UP.
+- **KeepLast alert semantics (2026-09-07):** all 12 rules use
+  `noDataState: KeepLast` — a firing alert now _survives_ scrape gaps and
+  Prometheus restarts (the CpuCrit NoData-resolution incident must never
+  recur); only real data resolves. Side effect: an alert firing when its
+  datasource dies stays firing — check `/targets` first when an alert won't
+  clear.
 - **Tailscale HTTPS (optional):** enabling HTTPS in the Tailscale admin console
   (DNS → Enable HTTPS) gives the same `cogito-vps.tail674634.ts.net` name a
   trusted certificate; until then use plain `http` over the tailnet, which is

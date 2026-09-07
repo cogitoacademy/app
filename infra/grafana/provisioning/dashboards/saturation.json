@@ -79,6 +79,22 @@
           "legendFormat": "cores"
         }
       ]
+    },
+    {
+      "id": 5,
+      "title": "Swap used + growth",
+      "description": "Swap in use (bytes; sustained growth = memory pressure the MemHigh/MemCrit alerts may miss early).",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 26 },
+      "fieldConfig": { "defaults": { "unit": "bytes" } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "node_memory_SwapTotal_bytes - node_memory_SwapFree_bytes",
+          "legendFormat": "swap used"
+        }
+      ]
     }
   ]
 }

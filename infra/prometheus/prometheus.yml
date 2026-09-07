@@ -80,3 +80,14 @@ scrape_configs:
     static_configs:
       - targets:
           - cadvisor:8080
+
+  # Alloy self-scrape over the shared `cogito-obs` network (same service-name
+  # pattern as node-exporter/cadvisor above; no auth). Alloy Flow serves its
+  # UI + telemetry on 127.0.0.1:12345 by default. Covers Alloy liveness
+  # (TargetDown up==0 alerts when Alloy dies) + component telemetry. Replaces
+  # the removed in-container wget healthcheck (the alloy image has no wget).
+  - job_name: alloy
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - alloy:12345

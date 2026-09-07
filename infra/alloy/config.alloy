@@ -9,6 +9,12 @@
 // drivers and Coolify upgrades). No `local.file_match` / `loki.source.file`
 // component may be added to this file.
 //
+// EXCEPTION (2026-09-07, operator-approved): ONE `loki.source.file`
+// tailing the single host file /var/log/cogito-backup.log (read-only
+// bind-mount) — outside /var/lib/docker, so the storage-driver brittleness
+// rationale does not apply. No other file source may be added without a new
+// approval.
+//
 // Log privacy: labels carry the container/service name + traceId/userId
 // from the log line. Emitters never log email; this shipper adds no PII.
 
@@ -77,4 +83,17 @@ loki.write "cogito" {
     // :3100 remains for tunnels/debugging; nothing is public.
     url = "http://loki:3100/loki/api/v1/push"
   }
+}
+
+// Backup log ship (2026-09-07): tails the host-mounted single file
+// /var/log/cogito-backup.log (read-only bind-mount declared in the
+// cogito-alloy compose in observability.yml). A3-compliant: this path is
+// outside /var/lib/docker (no Docker storage-driver globs); Docker-API
+// discovery above is untouched.
+loki.source.file "backup" {
+  targets = [
+    { __path__ = "/var/log/cogito-backup.log", service = "cogito-backup", job = "backup" },
+  ]
+
+  forward_to = [loki.write.cogito.receiver]
 }

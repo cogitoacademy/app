@@ -54,7 +54,8 @@ groups:
           summary: "Fresh DLQ failure landed (24h window)"
         labels:
           severity: critical
-        noDataState: OK
+        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
+        noDataState: KeepLast
         execErrState: Error
 
       - uid: disk-warn
@@ -98,7 +99,8 @@ groups:
           summary: "VPS disk >= 85% (watchdog warn line)"
         labels:
           severity: warning
-        noDataState: OK
+        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
+        noDataState: KeepLast
         execErrState: Error
 
       - uid: disk-crit
@@ -142,7 +144,8 @@ groups:
           summary: "VPS disk >= 92% (watchdog auto-prunes)"
         labels:
           severity: critical
-        noDataState: OK
+        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
+        noDataState: KeepLast
         execErrState: Error
 
       - uid: api-errors
@@ -186,12 +189,14 @@ groups:
           summary: "API 5xx ratio above 1% (deploy canary)"
         labels:
           severity: warning
-        noDataState: OK
+        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
+        noDataState: KeepLast
         execErrState: Error
 
       # Catches a silently-failing scrape (2026-09-07: the cadvisor target
       # went down and nothing fired — no rule watched `up`). Vanished
-      # targets (series absent, not 0) still evaluate to NoData → OK; Kuma
+      # targets (series absent, not 0) evaluate to NoData → KeepLast (hold last
+      # state, never silent-OK); Kuma
       # and the watchdog cover host/API independently.
       - uid: target-down
         title: TargetDown
@@ -234,7 +239,8 @@ groups:
           summary: "Prometheus scrape target down (up == 0 for 5m)"
         labels:
           severity: warning
-        noDataState: OK
+        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
+        noDataState: KeepLast
         execErrState: Error
 
       # --- Added 2026-09-07 (obs saturation pass) — 7 new rules, existing 5
@@ -242,9 +248,10 @@ groups:
       # no new contact points), so no per-rule receiver. for-windows absorb the
       # ~60s Grafana-restart/cAdvisor-60s-scrape gaps: warn rules 10m, crit 5m
       # (matching the existing disk warn/crit pattern), slow-burn rules 30m.
-      # NoData=OK on every rule (a silently-missing series must not page; the
-      # TargetDown rule + Kuma cover dead scrapers independently) — each rule
-      # carries a comment on what its NoData means.
+      # KeepLast on every rule (2026-09-07 incident: CpuCrit resolved on NoData
+      # after a Prometheus restart — firing alerts now survive gaps; only real
+      # data resolves. TargetDown + Kuma cover dead scrapers independently) —
+      # each rule carries a comment on what its NoData means.
       - uid: cpu-high
         title: CpuHigh
         condition: C
@@ -286,9 +293,10 @@ groups:
           summary: "VPS CPU above 80% for 10m (sustained load — check Infra CPU-by-mode for steal/iowait)"
         labels:
           severity: warning
-        # NoData=OK: node-exporter down is covered by TargetDown; CPU warn must
-        # not fire on a monitoring gap.
-        noDataState: OK
+        # KeepLast: a gap holds the last state instead of resolving;
+        # node-exporter death still surfaces via TargetDown.
+        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
+        noDataState: KeepLast
         execErrState: Error
 
       - uid: cpu-crit
@@ -332,8 +340,9 @@ groups:
           summary: "VPS CPU above 90% for 5m (saturation — shed load or scale before latency collapses)"
         labels:
           severity: critical
-        # NoData=OK: same rationale as CpuHigh.
-        noDataState: OK
+        # KeepLast: same rationale as CpuHigh.
+        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
+        noDataState: KeepLast
         execErrState: Error
 
       - uid: mem-high
@@ -377,8 +386,9 @@ groups:
           summary: "VPS memory above 85% for 10m (check Saturation mem-drain + Infra swap panels for leak vs growth)"
         labels:
           severity: warning
-        # NoData=OK: node-exporter down is covered by TargetDown.
-        noDataState: OK
+        # KeepLast: gap holds last state; node-exporter death surfaces via TargetDown.
+        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
+        noDataState: KeepLast
         execErrState: Error
 
       - uid: mem-crit
@@ -422,8 +432,9 @@ groups:
           summary: "VPS memory above 90% for 5m (OOM risk — act before the kernel chooses victims)"
         labels:
           severity: critical
-        # NoData=OK: same rationale as MemHigh.
-        noDataState: OK
+        # KeepLast: same rationale as MemHigh.
+        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
+        noDataState: KeepLast
         execErrState: Error
 
       - uid: disk-forecast
@@ -467,10 +478,11 @@ groups:
           summary: "Rootfs trending to full within 24h (6h linear fit — pairs with Infra panel 7; check Saturation burn-rate before acting)"
         labels:
           severity: warning
-        # NoData=OK: a fresh Prometheus (retention gap) has <6h of samples and
-        # yields NoData rather than a forecast; DiskWarn/DiskCrit cover the
-        # absolute thresholds independently.
-        noDataState: OK
+        # KeepLast: a fresh Prometheus (retention gap) has <6h of samples and
+        # yields NoData rather than a forecast — holds Normal until samples
+        # exist; DiskWarn/DiskCrit cover the absolute thresholds independently.
+        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
+        noDataState: KeepLast
         execErrState: Error
 
       # Kube-style container restarts do NOT exist in cAdvisor — this watches
@@ -520,20 +532,19 @@ groups:
           summary: "Container restarting in a burst (>2 start-time changes in 15m for one Coolify resource — crashloop or redeploy flap)"
         labels:
           severity: warning
-        # NoData=OK: covers both the healthy case (no restarts = empty vector)
-        # and the unverified-series case (see comment above).
-        noDataState: OK
+        # KeepLast: holds last state through gaps; the healthy case (no restarts =
+        # empty vector) still needs the P9 series verification (see comment above).
+        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
+        noDataState: KeepLast
         execErrState: Error
 
       # Fires when ZERO nightly-backup success lines land in Loki over the
       # trailing 25h (daily 02:00 WIB cron + 1h margin + 30m for). Success line
       # (infra/backup.sh): `==> Done: uploaded backups/YYYY-MM-DD.sql.gz, …`.
-      # KNOWN LIMIT: generic {service} substring — Alloy labels are only
-      # service/container/job, and the host log /var/log/cogito-backup.log is
-      # NOT shipped by Alloy today (Docker-API discovery only), so until log
-      # shipping for it exists this rule sees NoData → OK and CANNOT fire.
-      # Operator: pin the Delivery panel 6 query first; until then the nightly
-      # check is `infra/ops.sh dlq` / `ls /var/log/cogito-backup.log`.
+      # SHIPPED THIS WAVE: host log /var/log/cogito-backup.log now tails to Loki
+      # as {service="cogito-backup",job="backup"} (Alloy file mount, read-only).
+      # Operator: confirm lines in Explore post-apply; until then the nightly
+      # check remains `infra/ops.sh dlq` / `ls /var/log/cogito-backup.log`.
       - uid: backup-stale
         title: BackupStale
         condition: C
@@ -575,7 +586,8 @@ groups:
           summary: "No nightly-backup success heartbeat in Loki for 25h (verify R2 object + /var/log/cogito-backup.log on the VPS — see comment)"
         labels:
           severity: warning
-        # NoData=OK with the caveat above: NoData here most likely means the
-        # backup log never reaches Loki, which is itself the gap to close.
-        noDataState: OK
+        # KeepLast: holds last state; until the shipping flows, confirm
+        # {service="cogito-backup"} lines in Explore post-apply (see caveat above).
+        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
+        noDataState: KeepLast
         execErrState: Error
