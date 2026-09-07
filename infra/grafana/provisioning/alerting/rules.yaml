@@ -188,3 +188,51 @@ groups:
           severity: warning
         noDataState: OK
         execErrState: Error
+
+      # Catches a silently-failing scrape (2026-09-07: the cadvisor target
+      # went down and nothing fired — no rule watched `up`). Vanished
+      # targets (series absent, not 0) still evaluate to NoData → OK; Kuma
+      # and the watchdog cover host/API independently.
+      - uid: target-down
+        title: TargetDown
+        condition: C
+        for: 5m
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: 'up == 0'
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: A
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: B
+              refId: C
+              type: threshold
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+        annotations:
+          summary: "Prometheus scrape target down (up == 0 for 5m)"
+        labels:
+          severity: warning
+        noDataState: OK
+        execErrState: Error
