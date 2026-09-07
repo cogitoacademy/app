@@ -152,9 +152,9 @@ VPS (OVH 2vCPU/3.7GB/38GB, Ubuntu; ufw: 80/443 public, 22+8000+6001+6002 tailnet
   - fail2ban sshd jail enabled; unattended-upgrades on; sshd `PasswordAuthentication no`, root key-only for Coolify's internal loopback SSH
   - Docker pinned (no unpinned get.docker.com); verify no host ports except 80/443 public
 - [x] Playbook `tailscale.yml` — **#115**: install Tailscale, `tailscale up --authkey={{ ts_auth_key }} --hostname=cogito-vps --advertise-tags=tag:server` — the key lives in the SOPS vault (user pasted `tskey-auth-...`; lead never sees it).
-- [ ] Playbook `coolify-resources.yml`: drive the **Coolify API** — re-declare the existing app Postgres/Redis containers (names, volumes, private network), the API + web app resources (image tags, ports, domains, health checks), and all env vars from SOPS. **WRITTEN (2026-08-28) — includes the Task 0.2 Traefik route for the deploy-webhook path (UI fallback + probe) and guarded Bearer support in the CD pipeline; apply pending.**
-- Commit: `feat(infra): ansible host hardening, tailscale join, coolify resources` — **scaffold merged via #115; coolify-resources.yml written 2026-08-28 (apply pending)**
-- [ ] **Apply** (operator runs `ansible-playbook` with the vault; or via a worker pane with `herd attach` for the vault password).
+- [x] Playbook `coolify-resources.yml`: drive the **Coolify API** — re-declare the existing app Postgres/Redis containers (names, volumes, private network), the API + web app resources (image tags, ports, domains, health checks), and all env vars from SOPS. **WRITTEN (2026-08-28) — APPLIED 2026-08-31 (47 env vars, deploy-webhook route live, probe 401 = auth-required).**
+- Commit: `feat(infra): ansible host hardening, tailscale join, coolify resources` — **scaffold merged via #115; coolify-resources.yml written 2026-08-28, APPLIED 2026-08-31 (47 env vars to cogito-api via `infra/apply.sh`)**
+- [x] **Apply** (operator runs `ansible-playbook` with the vault; or via a worker pane with `herd attach` for the vault password). **DONE 2026-08-31 — Tailscale joined+verified, host hardened, Coolify resources applied.**
 - [ ] **Verify lock-down**: SSH via tailnet IP works; public `:8000` refused; `coolify` container only reachable via tailnet; app `/health` still ok.
 
 ### Task 1.3: Verify existing containers are declared + drift-check
@@ -212,7 +212,7 @@ VPS (OVH 2vCPU/3.7GB/38GB, Ubuntu; ufw: 80/443 public, 22+8000+6001+6002 tailnet
 - [x] Log rotation 10m×3 verified live on all containers 2026-09-05 (`docker inspect`).
 - [x] Security posture: ufw/fail2ban/sshd + tailnet-only Coolify applied 2026-08-31; SOPS key off-repo (Age key in GitHub secrets is the documented INFRA-AUTOMATION exception). Remaining console bits (secret scanning, GHCR rotation, resource-access map) stay operator-owned — tracked in RUNBOOK, not here.
 - [x] Docs: DEPLOYMENT/RUNBOOK/CONTEXT carry the pipeline, incident tables (FAILURES.md), and live topology.
-- [x] Observability extended 2026-09-05 (OBSERVABILITY-STABILITY-WAVE): Loki+Prometheus+Grafana declared (operator apply pending), traceId end-to-end, exposition `/metrics`.
+- [x] Observability extended 2026-09-05 (OBSERVABILITY-STABILITY-WAVE): Loki+Prometheus+Grafana declared, **APPLIED live 2026-09-05** (Loki ingesting, 3/3 Prometheus targets UP, Grafana provisioned, 2G swap live), traceId end-to-end, exposition `/metrics`.
 
 ---
 

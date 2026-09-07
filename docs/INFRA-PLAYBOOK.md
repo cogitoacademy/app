@@ -138,7 +138,7 @@ inside CD automatically before each deploy, with an R2 snapshot taken first
 bun run db:generate            # create migration locally (PR)
 # merge → CD migrates automatically; do NOT run db:migrate against prod by hand
 ./ops.sh db "SELECT ..."       # inspect prod data (read)
-./ops.sh studio                # Drizzle Studio over an SSH tunnel (read-write — care)
+./ops.sh studio                # Studio UI via SSH tunnel to the owned cogito-studio service (tailnet-only, writes in maintenance windows)
 ```
 
 Migration broke at deploy time? CD exits before the deploy; **never
