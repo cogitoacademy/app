@@ -62,8 +62,10 @@ docker pull ghcr.io/google/cadvisor:v0.60.5
 ssh -i ~/.ssh/cogito_vps -f -N -L 8000:127.0.0.1:8000 ubuntu@<tailnet-ip>
 ./infra/apply.sh observability   # or: ansible-playbook -i infra/ansible/inventory.ini infra/ansible/observability.yml --ask-become-pass
 
-# 2. Redeploy cogito-alloy in the Coolify UI (compose drift needs a redeploy;
-#    the Play 2 handler restarts only on provisioned-file change)
+# 2. Redeploy: AUTOMATIC since the image-drift repair — Play 2 compares the
+#    running cAdvisor image with the pin and calls restart with latest:true
+#    (pull + recreate, alloy-only, ~1–2 min container-metrics gap) on
+#    mismatch, then waits for MATCHED. No UI click needed; verify via §V1.
 
 # 3. Coolify UI: set GF_SECURITY_ADMIN_PASSWORD on cogito-grafana to the
 #    rotated vault value (keeps fresh volumes consistent with live)
