@@ -9,6 +9,12 @@
 // drivers and Coolify upgrades). No `local.file_match` / `loki.source.file`
 // component may be added to this file.
 //
+// EXCEPTION (2026-09-07, operator-approved): ONE `loki.source.file`
+// tailing the single host file /var/log/cogito-backup.log (read-only
+// bind-mount) — outside /var/lib/docker, so the storage-driver brittleness
+// rationale does not apply. No other file source may be added without a new
+// approval.
+//
 // Log privacy: labels carry the container/service name + traceId/userId
 // from the log line. Emitters never log email; this shipper adds no PII.
 
