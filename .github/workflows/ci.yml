@@ -31,7 +31,7 @@ jobs:
       # Same dorny pin as infra-apply.yml. On pull_request this diffs the PR
       # against its base; on workflow_dispatch the outputs may be empty, so
       # the gated jobs below treat a manual dispatch as "run everything".
-      - uses: dorny/paths-filter@v3.0.2
+      - uses: dorny/paths-filter@v4.0.3
         id: filter
         with:
           filters: |

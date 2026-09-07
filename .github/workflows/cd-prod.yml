@@ -33,7 +33,7 @@ jobs:
       # docs commit no longer restarts the production API containers.
       # packages/db/** counts as code: migration-only changes still need the
       # snapshot → migrate → deploy sequence.
-      - uses: dorny/paths-filter@v3.0.2
+      - uses: dorny/paths-filter@v4.0.3
         id: filter
         with:
           filters: |
