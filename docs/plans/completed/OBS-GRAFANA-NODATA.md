@@ -1,11 +1,11 @@
 # Grafana No-Data + cAdvisor Blind Spot
 
-| Field   | Value                                                                                                                                                                                                                |
-| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status  | Active — dashboards/alerts, rotation, folder unification, and pipeline repairs all merged + applied; single Cogito folder verified live; REMAINS: one UI Redeploy of cogito-alloy, then container-label verification |
-| Created | 2026-09-06                                                                                                                                                                                                           |
-| Branch  | `fix/obs-grafana-no-data` (merged #214) + follow-ups #216/#217/#218/#219/#221 (merged)                                                                                                                               |
-| Workers | `obs-panels` (dashboards/alerts, `agent/obs-panels-fix` 453625d8) · `obs-host` (diagnosis + image bump, `agent/obs-cadvisor-fix` f4c5efd2)                                                                           |
+| Field   | Value                                                                                                                                                  |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Status  | Completed 2026-09-07 (merged #214/#216/#217/#218/#219/#221/#222; pipeline auto-redeployed cAdvisor, labels verified live, single folder verified live) |
+| Created | 2026-09-06                                                                                                                                             |
+| Branch  | `fix/obs-grafana-no-data` (merged #214) + follow-ups #216/#217/#218/#219/#221 (merged)                                                                 |
+| Workers | `obs-panels` (dashboards/alerts, `agent/obs-panels-fix` 453625d8) · `obs-host` (diagnosis + image bump, `agent/obs-cadvisor-fix` f4c5efd2)             |
 
 ## 1. Symptom (live, 2026-09-06)
 
@@ -65,7 +65,10 @@ ssh -i ~/.ssh/cogito_vps -f -N -L 8000:127.0.0.1:8000 ubuntu@<tailnet-ip>
 # 2. Redeploy: AUTOMATIC since the image-drift repair — Play 2 compares the
 #    running cAdvisor image with the pin and calls restart with latest:true
 #    (pull + recreate, alloy-only, ~1–2 min container-metrics gap) on
-#    mismatch, then waits for MATCHED. No UI click needed; verify via §V1.
+#    mismatch, then waits for MATCHED. DONE 2026-09-07: pipeline run for #223
+#    fired the redeploy (v0.52.1 → v0.60.5); series now carry name +
+#    container_label_* (18 named of 607) and the Infra panel query returns
+#    8 rows. No UI click was needed.
 
 # 3. Coolify UI: set GF_SECURITY_ADMIN_PASSWORD on cogito-grafana to the
 #    rotated vault value (keeps fresh volumes consistent with live)
