@@ -1,11 +1,11 @@
 # Infra Reliability Wave
 
-| Field    | Value                                                                                 |
-| -------- | ------------------------------------------------------------------------------------- |
-| Status   | **Active** (created 2026-09-07)                                                       |
-| Branch   | `w/infra-reliability-wave` (merges `w/infra-reliability-prod`, `-obs`, `-docs`) |
-| Workers  | 3 (docs worker = this branch; prod/obs workers touch no docs)                         |
-| Entry    | Operator commands live in [INFRA-PLAYBOOK.md](../../INFRA-PLAYBOOK.md); detail behind it in [RUNBOOK.md](../../RUNBOOK.md) |
+| Field   | Value                                                                                                                      |
+| ------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Status  | **Active** (created 2026-09-07)                                                                                            |
+| Branch  | `w/infra-reliability-wave` (merges `w/infra-reliability-prod`, `-obs`, `-docs`)                                            |
+| Workers | 3 (docs worker = this branch; prod/obs workers touch no docs)                                                              |
+| Entry   | Operator commands live in [INFRA-PLAYBOOK.md](../../INFRA-PLAYBOOK.md); detail behind it in [RUNBOOK.md](../../RUNBOOK.md) |
 
 Docs follow code — no stale page left. This wave syncs every stale doc to the
 applied 2026-08-31 → 2026-09-05 reality and records the wave plan plus accepted
@@ -37,24 +37,24 @@ risks in one place.
 > O = obs worker (`w/infra-reliability-obs`), D = docs worker
 > (`w/infra-reliability-docs`), V = operator verify (Phase 6 of the wave plan).
 
-| ID    | Task                                                                 | Lands in |
-| ----- | -------------------------------------------------------------------- | -------- |
-| P1    | Studio = gateway path (`ssh -L 4983`, preflight, trap cleanup)       | `infra/ops.sh` |
-| P2    | `cl.` verify = 404 on `/` + 401/405 on deploy probe (was 302)        | `infra/apply.sh` |
-| P3    | Resource bounds (api 512m / web 256m intent), Loki/Grafana/Alloy healthchecks, scrape 30s | `coolify-resources.yml`, `observability.yml`, `prometheus.yml` |
-| P4    | `.sops.yaml` regex covers all 53 `app_env_keys` + ops keys (0 missing) | `.sops.yaml` |
-| P5    | Drift truth: DB names, 53 env names, webhook fill-or-skip            | `drift-check.yml` |
-| P6    | `app_info{version}` gauge in `/metrics` + unit test                  | `metrics.ts`, `metrics-exposition.test.ts` |
-| P7–P10 | Web-version note, dual-scrape design, port hygiene, prune/rotation policy | `WORKER-REPORT.md` + Coolify comment (prod worktree) |
-| P11–P15 | Scanning/risk record, origin-bypass sketch, DB-URL/ACL/runner notes | `host-hardening.yml` comments + `WORKER-REPORT.md` (+ §5 below) |
-| O1    | App RED v2: per-path top-10 rate / 5xx% / p95, 4xx-vs-5xx            | `app-red.json` (panels 5–8) |
-| O2    | Infra v2: per-mode CPU, swap, disk forecast, container CPU/restarts  | `infra.json` (panels 5–9) |
-| O3    | Delivery v2: `app_info` stat (NoData-safe), backup heartbeat (Loki)  | `delivery.json` (panels 5–6) |
-| O4    | NEW Saturation board: burn rates + retention-vs-disk math (no cuts)  | `saturation.json` |
-| O5    | 7 new alerts (CPU/mem/disk-forecast/restarts/backup-stale), Discord-ops | `rules.yaml` (5 → 12 rules) |
-| O6–O7 | Kuma cert click-path + Alloy/log-shipping caveats                    | `WORKER-REPORT.md` (obs worktree) |
-| D1–D9 | Ghost-row removal, DEPLOYMENT-PLAN phases, DEEP-DIVE §7, coolify-setup rewrite, infra-apply header, MagicDNS inventory, staging-example deletion, RUNBOOK date | `*.md`, `inventory.ini` (docs worktree) |
-| V1–V7 | Operator live verify: health sha, boards UP, studio connects, Kuma certs, UI password, mem-bounds, internal-scrape attach (restore drill → next session §6) | Operator session (not in git) |
+| ID      | Task                                                                                                                                                           | Lands in                                                        |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| P1      | Studio = gateway path (`ssh -L 4983`, preflight, trap cleanup)                                                                                                 | `infra/ops.sh`                                                  |
+| P2      | `cl.` verify = 404 on `/` + 401/405 on deploy probe (was 302)                                                                                                  | `infra/apply.sh`                                                |
+| P3      | Resource bounds (api 512m / web 256m intent), Loki/Grafana/Alloy healthchecks, scrape 30s                                                                      | `coolify-resources.yml`, `observability.yml`, `prometheus.yml`  |
+| P4      | `.sops.yaml` regex covers all 53 `app_env_keys` + ops keys (0 missing)                                                                                         | `.sops.yaml`                                                    |
+| P5      | Drift truth: DB names, 53 env names, webhook fill-or-skip                                                                                                      | `drift-check.yml`                                               |
+| P6      | `app_info{version}` gauge in `/metrics` + unit test                                                                                                            | `metrics.ts`, `metrics-exposition.test.ts`                      |
+| P7–P10  | Web-version note, dual-scrape design, port hygiene, prune/rotation policy                                                                                      | `WORKER-REPORT.md` + Coolify comment (prod worktree)            |
+| P11–P15 | Scanning/risk record, origin-bypass sketch, DB-URL/ACL/runner notes                                                                                            | `host-hardening.yml` comments + `WORKER-REPORT.md` (+ §5 below) |
+| O1      | App RED v2: per-path top-10 rate / 5xx% / p95, 4xx-vs-5xx                                                                                                      | `app-red.json` (panels 5–8)                                     |
+| O2      | Infra v2: per-mode CPU, swap, disk forecast, container CPU/restarts                                                                                            | `infra.json` (panels 5–9)                                       |
+| O3      | Delivery v2: `app_info` stat (NoData-safe), backup heartbeat (Loki)                                                                                            | `delivery.json` (panels 5–6)                                    |
+| O4      | NEW Saturation board: burn rates + retention-vs-disk math (no cuts)                                                                                            | `saturation.json`                                               |
+| O5      | 7 new alerts (CPU/mem/disk-forecast/restarts/backup-stale), Discord-ops                                                                                        | `rules.yaml` (5 → 12 rules)                                     |
+| O6–O7   | Kuma cert click-path + Alloy/log-shipping caveats                                                                                                              | `WORKER-REPORT.md` (obs worktree)                               |
+| D1–D9   | Ghost-row removal, DEPLOYMENT-PLAN phases, DEEP-DIVE §7, coolify-setup rewrite, infra-apply header, MagicDNS inventory, staging-example deletion, RUNBOOK date | `*.md`, `inventory.ini` (docs worktree)                         |
+| V1–V7   | Operator live verify: health sha, boards UP, studio connects, Kuma certs, UI password, mem-bounds, internal-scrape attach (restore drill → next session §6)    | Operator session (not in git)                                   |
 
 ## 3. Scope
 

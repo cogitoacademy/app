@@ -67,7 +67,9 @@
       "type": "stat",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 21 },
-      "fieldConfig": { "defaults": { "noValue": "no app_info yet — prod worker dependency" } },
+      "fieldConfig": {
+        "defaults": { "noValue": "no app_info yet — prod worker dependency" }
+      },
       "targets": [
         {
           "refId": "A",
