@@ -4,6 +4,15 @@
 # when the name is missing (with instant_deploy so Coolify starts it), PATCH
 # drift on an existing service, re-runs are no-ops.
 #
+# COMPOSE-DRIFT CAVEAT (2026-09-07): GET /api/v1/services/{uuid} does NOT
+# return `docker_compose_raw` (nor `urls`) on this Coolify build, so a
+# present-but-different compose is undetectable — and an absent field must
+# NOT be read as "no drift" (that misread left the cAdvisor v0.60.5 bump in
+# git for a day while Coolify kept running v0.52.1). When the field is
+# absent we therefore enforce the declared state (PATCH). Cost: updated_at
+# churn on every apply; no redeploy/restart is triggered by PATCH alone, so
+# image changes still need an explicit redeploy afterwards.
+#
 # Expected loop var `obs_spec`:
 #   name: Coolify service name (e.g. cogito-loki)
 #   description: human description for the create call
@@ -59,7 +68,8 @@
       {%- if obs_detail.json.name is defined and obs_detail.json.name != obs_spec.name -%}{%- set ns.parts = ns.parts + ['name: ' ~ obs_detail.json.name ~ ' != ' ~ obs_spec.name] -%}{%- endif -%}
       {%- if obs_detail.json.description is defined and obs_detail.json.description != obs_spec.description -%}{%- set ns.parts = ns.parts + ['description drift'] -%}{%- endif -%}
       {%- if obs_detail.json.docker_compose_raw is defined and (obs_detail.json.docker_compose_raw | string | trim) != (obs_spec.docker_compose_raw | string | trim) -%}{%- set ns.parts = ns.parts + ['docker_compose_raw drift'] -%}{%- endif -%}
-      {%- if obs_detail.json.urls is defined and (obs_detail.json.urls | default([]) | length) != (obs_spec.urls | default([]) | length) -%}{%- set ns.parts = ns.parts + ['urls drift: live has ' ~ (obs_detail.json.urls | default([]) | length | string) ~ ' url(s), declared ' ~ (obs_spec.urls | default([]) | length | string)] -%}{%- endif -%}
+      {%- if obs_detail.json.urls is not defined -%}{%- set ns.parts = ns.parts + ['urls unverifiable via GET — enforcing declared state'] -%}
+      {%- elif (obs_detail.json.urls | default([]) | length) != (obs_spec.urls | default([]) | length) -%}{%- set ns.parts = ns.parts + ['urls drift: live has ' ~ (obs_detail.json.urls | default([]) | length | string) ~ ' url(s), declared ' ~ (obs_spec.urls | default([]) | length | string)] -%}{%- endif -%}
       {{- ns.parts | join('; ') -}}
 
 - name: PATCH drifted fields on {{ obs_spec.name }}

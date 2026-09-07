@@ -864,8 +864,14 @@
         user: admin
         password: "{{ grafana_admin_password }}"
         force_basic_auth: true
-        status_code: 200
       register: grafana_folders
+      # Grafana may be mid-restart from the Play 2 handler when this play
+      # starts (2026-09-07: Play 3 died on connection-refused seconds after a
+      # restart; the upfront wait_for only proves the port was open once).
+      # Retry instead of failing on the first refused connection.
+      until: grafana_folders.status == 200
+      retries: 6
+      delay: 10
       no_log: true
 
     - name: Ensure the Cogito alert folder exists (create when missing only)
@@ -892,8 +898,10 @@
         user: admin
         password: "{{ grafana_admin_password }}"
         force_basic_auth: true
-        status_code: 200
       register: grafana_contacts
+      until: grafana_contacts.status == 200
+      retries: 6
+      delay: 10
       no_log: true
 
     - name: Create the Discord-ops contact point when missing (rotation stays a UI action)
@@ -920,8 +928,10 @@
         user: admin
         password: "{{ grafana_admin_password }}"
         force_basic_auth: true
-        status_code: 200
       register: grafana_policy
+      until: grafana_policy.status == 200
+      retries: 6
+      delay: 10
       no_log: true
 
     - name: Set Discord-ops as the default receiver when it is not
