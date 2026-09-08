@@ -249,9 +249,6 @@ function BookingQueue() {
               }}
               placeholder="#12 or 12"
             />
-            <FieldDescription>
-              Search by exact reference number.
-            </FieldDescription>
           </Field>
           <Field className="min-w-56">
             <FieldLabel>Override category</FieldLabel>
@@ -450,7 +447,7 @@ function BookingQueue() {
                             {getOverrideCategory(item.overrideMeta) ? (
                               <Badge
                                 className="whitespace-nowrap"
-                                variant="secondary"
+                                variant="tertiary"
                               >
                                 {humanize(
                                   getOverrideCategory(item.overrideMeta)!,
@@ -465,7 +462,7 @@ function BookingQueue() {
                               {getOverrideReason(item.overrideMeta) ??
                                 "No reported reason"}
                             </Text>
-                            <Text className="text-sm text-dimmed">
+                            <Text className="text-sm text-dimmed italic">
                               Source: admin override
                             </Text>
                           </TableCell>
@@ -473,19 +470,20 @@ function BookingQueue() {
                             {getStringArray(
                               getOverrideMetadata(item.overrideMeta)
                                 ?.affectedParticipants,
-                            ).length || "—"}
+                            ).length || "-"}
                           </TableCell>
                           <TableCell className="align-top">
                             <SlaStatus item={item} timezone={item.timezone} />
                           </TableCell>
-                          <TableCell className="align-top whitespace-nowrap text-sm">
+                          <TableCell className="align-top whitespace-nowrap text-sm flex items-center">
+                            <CogitoMarks size={3} />
                             {item.holdAmount} held
                           </TableCell>
                           <TableCell className="align-top px-3! py-4! sm:px-6!">
                             <div className="flex flex-col items-stretch gap-1.5">
                               <Button
                                 size="sm"
-                                variant="secondary"
+                                variant="tertiary"
                                 render={
                                   <Link
                                     to="/admin-operations/bookings/$bookingId"
@@ -499,8 +497,9 @@ function BookingQueue() {
                               </Button>
                               <Button
                                 size="sm"
-                                variant="plain"
+                                variant="underline"
                                 onClick={() => setSelected(item)}
+                                className="text-danger justify-center!"
                               >
                                 Override
                               </Button>
@@ -1020,8 +1019,8 @@ function AdminParticipantFinancialDetails({
                 key={entry.id}
               >
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary">{humanize(entry.entryType)}</Badge>
-                  <Text className="text-muted">
+                  <Badge variant="tertiary">{humanize(entry.entryType)}</Badge>
+                  <Text className="text-muted text-sm">
                     {formatBookingDate(entry.createdAt, timezone)}
                   </Text>
                 </div>
@@ -1035,13 +1034,7 @@ function AdminParticipantFinancialDetails({
             ))}
           </div>
         ) : (
-          <EmptyState
-            icon={<IconCoins />}
-            title="No ledger entries"
-            description="No Marks activity references this booking."
-            size="inline"
-            className="px-0 py-3"
-          />
+          <Text className="text-xs mt-1">No data yet.</Text>
         )}
       </div>
     </div>
@@ -2371,7 +2364,7 @@ function SlaStatus({
 }) {
   const now = useNow();
   if (!item.slaDeadline) {
-    return <Text className="text-sm text-muted">Not reported</Text>;
+    return <Text className="text-sm text-muted italic">Not reported</Text>;
   }
 
   return (

@@ -331,8 +331,7 @@ function RouteComponent() {
                     ? "New tutor invitations will appear here."
                     : "Go back to the previous page to continue browsing invitations."
                 }
-                tone="secondary"
-                size="compact"
+                tone="primary"
                 className="rounded-lg"
               />
             ) : (

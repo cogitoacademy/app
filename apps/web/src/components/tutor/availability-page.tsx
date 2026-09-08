@@ -501,7 +501,7 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
           </Card>
         </form>
 
-        <div className="space-y-4 xl:sticky xl:top-6">
+        <div className="space-y-4 xl:sticky xl:top-0">
           <Card>
             <CardHeader>
               <IconBox variant="danger-subtle">

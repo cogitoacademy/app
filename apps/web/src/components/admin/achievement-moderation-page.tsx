@@ -485,6 +485,7 @@ function ModerationTable({
                       <TableCell className="align-center text-right">
                         <Button
                           variant="tertiary"
+                          className="whitespace-nowrap"
                           size="sm"
                           onClick={() => setSelectedAchievement(achievement)}
                         >

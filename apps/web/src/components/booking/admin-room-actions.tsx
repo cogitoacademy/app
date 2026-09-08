@@ -314,7 +314,7 @@ function RoomSummary({
 }) {
   return (
     <div className="flex min-w-0 items-start gap-3">
-      <IconBox variant="tertiary" size="sm" aria-hidden="true">
+      <IconBox variant="tertiary-subtle" size="md" aria-hidden="true">
         <IconMapPin />
       </IconBox>
       <div className="min-w-0">

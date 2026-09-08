@@ -364,7 +364,7 @@ function GuideChapterNav({
   return (
     <nav
       aria-label="Guide chapters"
-      className="order-first min-w-0 lg:order-last lg:sticky lg:top-6 lg:self-start"
+      className="order-first min-w-0 lg:order-last lg:sticky lg:top-0 lg:self-start"
     >
       <div className="py-5 lg:py-1">
         <div className="flex items-center justify-between gap-4">

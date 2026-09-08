@@ -996,7 +996,7 @@ export function BookingDetailPage({
           </div>
         </div>
 
-        <aside className="order-2 grid min-w-0 gap-4 lg:order-none lg:col-start-2 lg:row-start-1 lg:sticky lg:top-4">
+        <aside className="order-2 grid min-w-0 gap-4 lg:order-none lg:col-start-2 lg:row-start-1 lg:sticky lg:top-0">
           {extensions?.sidebar ?? (
             <Card className="min-w-0 overflow-hidden">
               <CardHeader>

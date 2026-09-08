@@ -44,7 +44,7 @@ export function TablePagination({
   const rangeLabel =
     itemCount === 0
       ? `No ${label} on this page`
-      : `Showing ${firstItem}–${lastItem} ${label}`;
+      : `Showing ${firstItem} – ${lastItem} ${label}`;
 
   function changePage(change: () => void) {
     change();
@@ -67,7 +67,7 @@ export function TablePagination({
   const nextDisabled = !hasNext || isFetching;
 
   return (
-    <Pagination className="mt-4 flex-col gap-3 border-t border-card-separator pt-4 sm:flex-row sm:items-center sm:justify-between">
+    <Pagination className="flex-col gap-3 border-t border-card-separator pt-4 min-[550px]:flex-row items-center min-[550px]:justify-between">
       <Text className="text-sm text-muted" aria-live="polite">
         {rangeLabel} · Page {page + 1}
       </Text>
