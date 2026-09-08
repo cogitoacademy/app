@@ -787,7 +787,7 @@ The tutor `/profile` editor presents education, competition achievements, and ex
 - Student achievement levels are presented in this order: `International`, `National`, `Province/State`, `City/Regency`, `School`. The student proof field gives Google Drive guidance (upload proof, set General access to “Anyone with the link” + Viewer, then paste the link); students do not provide the public documentation image.
 - The student form uses one clear Location value (for example `Jakarta, Indonesia`, `Geneva, Switzerland`, or `Online`) and a long-answer `Brief Description` field with a ranked-result example. The public documentation image is an admin-only correction field.
 - `adminUpdate` lets admins correct all submission fields plus the public documentation image while a record is `pending`/`pending_review`; it uses the row version as a compare-and-swap, writes an `achievement_admin_updated` audit record, and leaves status unchanged until the separate review action.
-- The achievement form uses the shared Selia calendar; selected/today states are drawn on the rounded day button rather than its square grid cell. Its portal-based date picker and Category/Level selects render above the achievement dialog so students can interact with every popup control.
+- The achievement form uses the shared Selia calendar; selected/today states are drawn on the rounded day button rather than its square grid cell. Add, edit, and admin-correction forms open as swipe-down bottom drawers below the `sm` breakpoint and right-side drawers at `sm` and above. Their portal-based date picker and Category/Level selects render above the drawer so every popup control remains interactive.
 
 ### Wallet Module (protected)
 

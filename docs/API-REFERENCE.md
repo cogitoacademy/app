@@ -750,6 +750,8 @@ The web tutor profile editor groups education, competition achievements, and exp
 
 ### `achievement.create`
 
+The create/edit/correction form is presented as a bottom drawer on mobile and a right-side drawer from the `sm` breakpoint. This is client-side presentation only and does not change RPC inputs, outputs, or persistence.
+
 - **Auth:** Student (`studentProcedure` — tutors/admins get FORBIDDEN, F17; FR-18 is student-facing)
 - **Input:** `{ eventName, category, award, level, awardingDate?, location?, description?, subjects?, evidenceUrl? }`
 - **Output:** `{ achievement }`

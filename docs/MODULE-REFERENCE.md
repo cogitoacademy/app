@@ -260,7 +260,7 @@ The calendar frontend consumes `listCompetitions()` as a read-only projection. I
 - Student create/update schemas exclude `documentationUrl`; the student form presents the level options in `International`, `National`, `Province/State`, `City/Regency`, `School` order and instructs students to share Google Drive proof with “Anyone with the link can view” + Viewer
 - The student form uses one explicit location value such as `Jakarta, Indonesia`, `Geneva, Switzerland`, or `Online`, and a long-answer `Brief Description` field with a ranked-result example
 - `listApprovedPublic()` must select only public-safe fields. It must not return `userId` or `evidenceUrl`; the public site uses `displayName` and `documentationUrl` when rendering an approved record.
-- The student achievement form uses shared Selia portal controls for Category, Level, and Awarding Date; those popups must remain above the modal dialog layer.
+- The student and admin achievement forms use a responsive Selia drawer: bottom with downward dismissal below `sm`, right-side with rightward dismissal at `sm` and above. Shared portal controls for Category, Level, and Awarding Date must remain above the drawer layer.
 - Optimistic locking prevents lost updates (`version` field)
 - Admin correction is allowed only for `pending`/`pending_review`, can update every submission field plus public documentation, writes an audit snapshot, and does not change status; admin review changes status to `approved` or `rejected`
 - Student and admin list pages use database pagination; the UI may request one extra row as a `hasNext` sentinel, but never loads the complete achievement collection into the browser.

@@ -477,6 +477,8 @@ Open `/profile` as a tutor and confirm the Public profile has no duplicate free-
 
 Open **View details** from both `/achievements` and `/admin-achievements`. Confirm Status retains its semantic badge beneath the field label, while Category, Level, Subjects, Award, Awarded, and Location use the same label/value hierarchy. Below the `sm` breakpoint, confirm the detail opens from the bottom, stays usable within the viewport, and dismisses with a downward swipe. At `sm` and wider, confirm it opens from the right and dismisses with a rightward swipe. Resize across the breakpoint while the drawer is open and confirm its placement and dismissal direction update together. Open both available attachment types and confirm image URLs render in the preview, **Open original** launches the source in a new tab, and a non-image or inaccessible URL shows the preview-unavailable fallback without removing the original link.
 
+Open **Add Achievement**, edit a pending achievement, and use **Correct** from the admin moderation queue. Below `sm`, confirm each form opens as a bottom drawer and dismisses downward; at `sm` and wider, confirm it opens from the right and dismisses rightward. Resize while open, verify the direction updates, and confirm the Category, Level, and Awarding Date popups remain usable above the drawer.
+
 ### Tutor profile validation and action smoke check
 
 Open `/profile` as a tutor with a draft or changes-requested profile. Leave one
