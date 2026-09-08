@@ -170,7 +170,7 @@ export function BalancePage() {
               Track your Marks, active holds, and top-up options.
             </Text>
           </div>
-          <Card className="min-w-0">
+          <Card className="min-w-0 mb-0 mt-auto">
             <CardBody className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-3 p-4 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:p-5">
               <IconBox variant="tertiary">
                 {kbAccessible ? <IconBook /> : <IconLockOpen />}
