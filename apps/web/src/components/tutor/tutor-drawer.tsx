@@ -174,7 +174,7 @@ export function TutorDrawer({
         direction={isDesktop ? "right" : "bottom"}
         className={isDesktop ? "w-full max-w-lg" : undefined}
       >
-        <div className="relative h-[300px] shrink-0 rounded-t-xl overflow-hidden bg-muted">
+        <div className="relative max-h-[270px] md:h-[300px] shrink-0 rounded-t-xl overflow-hidden bg-muted">
           {selectedTutor.user?.image ? (
             <img
               src={selectedTutor.user.image}
@@ -229,43 +229,22 @@ export function TutorDrawer({
           </DrawerClose>
         </div>
         <DrawerBody>
-          <DrawerTitle className="truncate text-2xl">{tutorName}</DrawerTitle>
-          {t.modality && (
-            <div className="mt-3">
-              <Badge variant={MODALITY_VARIANTS[t.modality] ?? "secondary"}>
-                {MODALITY_LABELS[t.modality] ?? t.modality}
-              </Badge>
-            </div>
-          )}
+          <div className="flex justify-between items-start flex-wrap gap-y-3  ">
+            <DrawerTitle className="truncate text-xl md:text-2xl">
+              {tutorName}
+            </DrawerTitle>
+            {t.modality && (
+              <div>
+                <Badge variant={MODALITY_VARIANTS[t.modality] ?? "secondary"}>
+                  {MODALITY_LABELS[t.modality] ?? t.modality}
+                </Badge>
+              </div>
+            )}
+          </div>
+
           {t.shortBio && (
             <div className="mt-3">
               <Text className="text-muted">{t.shortBio}</Text>
-            </div>
-          )}
-
-          {subjectGroups.length > 0 && (
-            <div className="mt-5">
-              <Heading size="sm" className="mb-2">
-                Specializations
-              </Heading>
-              <div className="flex flex-col gap-2">
-                {subjectGroups.map((group) => (
-                  <div key={group.parent?.id ?? group.children[0]?.id}>
-                    {group.parent && (
-                      <Text className="mb-1 font-medium">
-                        {group.parent.name}
-                      </Text>
-                    )}
-                    <div className="flex flex-wrap gap-1.5">
-                      {group.children.map((subject) => (
-                        <Badge key={subject.id} variant="primary" size="md">
-                          {subject.name}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
             </div>
           )}
 
