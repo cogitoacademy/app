@@ -63,9 +63,9 @@ RPC, schema, persistence, or operational contract changed.
 The student tutor drawer mirrors the public tutor profile treatment with a
 full-width 300px hero using the published profile image, top-aligned cover
 cropping, a bottom gradient, a close affordance, and specialization badges
-overlaid at the bottom. Education, achievements, and experiences render inside
-one combined **Achievements & experience** panel, while legacy achievement and
-experience text remains a fallback for older profiles. Tutor cards keep their
+overlaid at the bottom. Education, achievements, and experiences render in
+separate profile-highlight cards, while legacy achievement and experience text
+remains a fallback for older profiles. Tutor cards keep their
 desktop metadata on one line with natural-width specialization labels that do
 not repeat the parent category, reveal one, two, or three badges at
 progressively wider breakpoints, and retain a `From [Marks icon] #` price
@@ -795,7 +795,7 @@ The tutor `/profile` editor presents education, competition achievements, and ex
 - Shared Selia controls keep category/specialization IDs and modality values for query inputs while rendering labels; tutor onboarding shows all competition categories with checkboxes, while the tutor list allows multiple categories and specializations, with empty arrays meaning “All”. Tutor discovery keeps search visible and places category, specialization, and modality controls in a collapsed-by-default filter panel; its trigger retains an active-selection count when the panel is closed. The panel expands with a short height/fade transition, rotates its chevron, remains outside keyboard navigation while closed, and disables motion when reduced motion is requested. Multi-select values truncate only the leading label while keeping the `+N more` chip and its ring visible. Search and filter changes debounce `listPublished` by 300 ms so rapid typing or multi-select toggles coalesce into one request.
 - On mobile, tutor discovery cards use a compact profile composition: a 56-pixel avatar and identity header, two-line bio, short specialization badges, and a separated price footer with the shared Marks prefix plus a chevron. Desktop retains the denser horizontal summary, uses natural-width child specialization labels without a repeated parent category, keeps its metadata on one line, and progressively reveals additional specialization badges at wider breakpoints while preserving the `From [Marks icon] #` price label. The whole card remains the profile trigger with a smooth hover-shadow treatment and no translate or pressed-scale effect.
 - The student-facing tutor drawer renders available pricing maps as one group-size matrix with separate Online and Offline Marks columns, prefixing populated price cells with the Cogito Marks icon. This is presentation-only; the discovery response and pricing contracts remain unchanged.
-- The student-facing tutor drawer opens as a swipe-down bottom sheet below the `sm` breakpoint and as a right-side drawer at `sm` and above. It keeps its 300px image hero and booking footer outside the profile body's single vertical scroll container; the body may overscroll locally without moving those fixed regions, so long structured profiles remain reachable on short viewports. Education, achievements, and experiences share one combined profile-highlights panel with legacy text fallbacks. This is presentation-only; the discovery response and pricing contracts remain unchanged.
+- The student-facing tutor drawer opens as a swipe-down bottom sheet below the `sm` breakpoint and as a right-side drawer at `sm` and above. It keeps its 300px image hero and booking footer outside the profile body's single vertical scroll container; the body may overscroll locally without moving those fixed regions, so long structured profiles remain reachable on short viewports. Education, achievements, and experiences render in separate profile-highlight cards with legacy text fallbacks. This is presentation-only; the discovery response and pricing contracts remain unchanged.
 
 ### Invite Module (public + protected)
 

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Avatar, AvatarFallback } from "@cogito-app/ui/components/selia/avatar";
+import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import {
@@ -144,14 +145,18 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
     })),
   );
   const heroSubjects = subjectLabels.slice(0, 3);
-  const hasProfileHighlights = Boolean(
-    selectedTutor.education?.length ||
+  const hasEducation = Boolean(selectedTutor.education?.length);
+  const hasAchievements = Boolean(
     selectedTutor.competitionAchievements?.length ||
-    selectedTutor.experienceEntries?.length ||
     selectedTutor.achievements?.trim() ||
-    selectedTutor.experiences?.trim() ||
     selectedTutor.credentialsSummary?.trim(),
   );
+  const hasExperiences = Boolean(
+    selectedTutor.experienceEntries?.length ||
+    selectedTutor.experiences?.trim(),
+  );
+  const hasProfileHighlights =
+    hasEducation || hasAchievements || hasExperiences;
 
   return (
     <Drawer
@@ -277,22 +282,52 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
 
           {hasProfileHighlights ? (
             <section
-              aria-labelledby="tutor-drawer-highlights-heading"
-              className="mt-5 rounded-xl bg-accent p-4"
+              aria-label="Tutor profile highlights"
+              className="mt-5 flex flex-col gap-3"
             >
-              <TutorAchievementsDisplay
-                className="flex flex-col gap-5"
-                education={selectedTutor.education}
-                competitionAchievements={selectedTutor.competitionAchievements}
-                experienceEntries={selectedTutor.experienceEntries}
-                legacyAchievementText={
-                  selectedTutor.achievements?.trim()
-                    ? selectedTutor.achievements
-                    : selectedTutor.credentialsSummary
-                }
-                legacyExperienceText={selectedTutor.experiences}
-                idPrefix="tutor-drawer-highlights"
-              />
+              {hasEducation ? (
+                <Card className="bg-accent shadow-none">
+                  <CardBody className="p-4">
+                    <TutorAchievementsDisplay
+                      className="flex flex-col"
+                      education={selectedTutor.education}
+                      idPrefix="tutor-drawer-education"
+                    />
+                  </CardBody>
+                </Card>
+              ) : null}
+
+              {hasAchievements ? (
+                <Card className="bg-accent shadow-none">
+                  <CardBody className="p-4">
+                    <TutorAchievementsDisplay
+                      className="flex flex-col"
+                      competitionAchievements={
+                        selectedTutor.competitionAchievements
+                      }
+                      legacyAchievementText={
+                        selectedTutor.achievements?.trim()
+                          ? selectedTutor.achievements
+                          : selectedTutor.credentialsSummary
+                      }
+                      idPrefix="tutor-drawer-achievements"
+                    />
+                  </CardBody>
+                </Card>
+              ) : null}
+
+              {hasExperiences ? (
+                <Card className="bg-accent shadow-none">
+                  <CardBody className="p-4">
+                    <TutorAchievementsDisplay
+                      className="flex flex-col"
+                      experienceEntries={selectedTutor.experienceEntries}
+                      legacyExperienceText={selectedTutor.experiences}
+                      idPrefix="tutor-drawer-experiences"
+                    />
+                  </CardBody>
+                </Card>
+              ) : null}
             </section>
           ) : null}
 

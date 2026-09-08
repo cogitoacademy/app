@@ -157,9 +157,9 @@ Marks prefix and profile chevron. Desktop keeps the horizontal summary.
 
 The student tutor drawer now uses a full-width 300px image hero with
 top-aligned cover cropping, a bottom gradient, close control, and overlaid
-specialization badges. Education, achievements, and experiences render in one
-combined **Achievements & experience** panel, with legacy text fallbacks for
-older profiles. Desktop tutor cards progressively reveal one, two, or three
+specialization badges. Education, achievements, and experiences render in
+separate profile-highlight cards, with legacy text fallbacks for older
+profiles. Desktop tutor cards progressively reveal one, two, or three
 natural-width child specialization labels without repeating the parent
 category by breakpoint while keeping the `From [Marks icon] #` price treatment
 on one line. This is presentation-only; discovery contracts remain unchanged.
@@ -968,6 +968,8 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 - v1.59 (2026-09-02): Consolidated admin booking details: room controls and participant wallet/ledger facts now live in Session overview, the admin participant grid is one column, review context moved to the right rail, Marks values use the shared `CogitoMarks` component, and State history matches the shared Activity timeline.
 - v1.59 (2026-09-02): Replaced the booking-detail **Propose new time** dialog with a height-constrained bottom Selia drawer on mobile and a right-side drawer on desktop. The form body scrolls independently and the action footer remains accessible; RPC and state-transition contracts are unchanged.
 - v1.58 (2026-09-02): Refined admin offline room assignment into a Room approvals queue plus context-aware booking-detail actions. Removed manual booking UUID/date-time entry; assign, relocate, and cancellation now use the selected booking's existing schedule and room context.
+
+- v1.61 (2026-09-08): Split the student tutor drawer's education, achievements, and experiences into separate profile-highlight cards. No RPC, schema, or persistence contract changed.
 
 - v1.57 (2026-09-02): Replaced the admin wallet lookup's exact user-ID input with an admin-only identity search by name, email, or user ID. Results are bounded and selectable, and wallet/ledger reads run only for the selected account. Added the `admin.searchUsers` RPC and updated the admin API/module/runbook references.
 

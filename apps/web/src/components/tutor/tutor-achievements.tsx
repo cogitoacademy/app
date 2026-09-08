@@ -201,12 +201,9 @@ export function TutorAchievementsDisplay({
           <Heading id={`${idPrefix}-education-heading`} size="sm">
             Education
           </Heading>
-          <ul className="mt-3 flex list-none flex-col gap-4 p-0">
+          <ul className="mt-3 list-disc space-y-4 pl-5 marker:text-muted">
             {educationRows.map(({ entry, key }) => (
-              <li key={key} className="flex items-start gap-2.5">
-                <span aria-hidden="true" className="mt-0.5 text-muted">
-                  •
-                </span>
+              <li key={key}>
                 <div className="min-w-0">
                   <Text className="font-semibold leading-snug">
                     {entry.university}
@@ -229,12 +226,9 @@ export function TutorAchievementsDisplay({
           >
             Achievements
           </Heading>
-          <ul className="mt-3 flex list-none flex-col gap-4 p-0">
+          <ul className="mt-3 list-disc space-y-4 pl-5 marker:text-muted">
             {competitionRows.map(({ entry, key }) => (
-              <li key={key} className="flex items-start gap-2.5">
-                <span aria-hidden="true" className="mt-0.5 text-muted">
-                  •
-                </span>
+              <li key={key}>
                 <div className="min-w-0">
                   <Text className="font-semibold leading-snug">
                     {entry.competitionName} {entry.year}
@@ -265,12 +259,9 @@ export function TutorAchievementsDisplay({
           <Heading id={`${idPrefix}-experiences-heading`} size="sm">
             Experiences
           </Heading>
-          <ul className="mt-3 flex list-none flex-col gap-4 p-0">
+          <ul className="mt-3 list-disc space-y-4 pl-5 marker:text-muted">
             {experienceRows.map(({ entry, key }) => (
-              <li key={key} className="flex items-start gap-2.5">
-                <span aria-hidden="true" className="mt-0.5 text-muted">
-                  •
-                </span>
+              <li key={key}>
                 <div className="min-w-0">
                   <Text className="font-semibold leading-snug">
                     {entry.role} · {entry.organization}
