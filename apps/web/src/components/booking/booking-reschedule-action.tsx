@@ -312,6 +312,7 @@ export function BookingRescheduleAction({
                                   type="button"
                                   size="sm"
                                   variant={selected ? "primary" : "outline"}
+                                  aria-label={`${formatTimeValue(slot.startDate, RESCHEDULE_TIMEZONE)}–${formatTimeValue(slot.endDate, RESCHEDULE_TIMEZONE)} WIB`}
                                   aria-pressed={selected}
                                   className="h-9"
                                   onClick={() => {
