@@ -38,6 +38,16 @@ This covers the shared student/tutor cards, contact and lifecycle cards, room
 assignment, and the admin review-context, wallet-impact, and state-history
 extensions without changing an API or persistence contract.
 
+### Responsive card-info follow-up (2026-09-08)
+
+Remaining explanatory card-header copy on dashboard, admin, tutor
+availability/onboarding, profile, notification, achievement, and wallet surfaces
+now uses the shared title-adjacent `CardInfoPreview`/`InfoPreview` pattern.
+Sign-in/sign-up use title-only headers, and their loader reserves the full auth
+content height to keep the legal notice stationary. Primary content summaries and
+identity/resource metadata remain inline. This is a presentation-only
+mobile-containment change.
+
 ### Sidebar booking-action badge follow-up (2026-09-04)
 
 The authenticated sidebar now shows a compact, `99+`-capped badge beside the

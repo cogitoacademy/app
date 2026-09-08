@@ -9,7 +9,6 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
-  CardDescription,
   CardHeader,
   CardHeaderAction,
   CardInfoPreview,
@@ -473,10 +472,15 @@ function AnalyticsContent({
             <IconBox variant="info-subtle">
               <IconUserPlus />
             </IconBox>
-            <CardTitle>Audience growth</CardTitle>
-            <CardDescription>
-              New student and tutor accounts created during the selected period.
-            </CardDescription>
+            <CardTitle>
+              Audience growth
+              <CardInfoPreview>
+                <InfoPreview
+                  title="Audience growth"
+                  description="New student and tutor accounts created during the selected period."
+                />
+              </CardInfoPreview>
+            </CardTitle>
           </CardHeader>
           <CardBody>
             {hasUserTrend ? (
@@ -551,11 +555,15 @@ function AnalyticsContent({
             <IconBox variant="warning-subtle">
               <IconChartHistogram />
             </IconBox>
-            <CardTitle>Demand signals</CardTitle>
-            <CardDescription>
-              Format mix and the most requested specialization categories in the
-              selected period.
-            </CardDescription>
+            <CardTitle>
+              Demand signals
+              <CardInfoPreview>
+                <InfoPreview
+                  title="Demand signals"
+                  description="Format mix and the most requested specialization categories in the selected period."
+                />
+              </CardInfoPreview>
+            </CardTitle>
           </CardHeader>
           <CardBody className="space-y-6">
             <div>

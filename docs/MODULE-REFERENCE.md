@@ -56,7 +56,11 @@ The shared Selia card module exposes `CardInfoPreview` as an inline title slot
 for the app's icon-triggered `InfoPreview` popover. Its first use moves the admin
 Booking activity explanation into the title row, and the popover trigger now
 accepts a caller-provided icon. Booking-detail cards and their admin extensions
-use the same composition for explanatory header copy. No service, repository,
+use the same composition for explanatory header copy. Dashboard, admin, tutor
+availability, onboarding, profile, notification, and wallet headers use it as
+well, while sign-in/sign-up use title-only headers and primary content and
+metadata stay inline. Their initial session loader reserves the authentication
+content height to prevent the legal notice from shifting. No service, repository,
 event key, or business rule changed.
 
 ## Sidebar logo contrast (2026-09-04)

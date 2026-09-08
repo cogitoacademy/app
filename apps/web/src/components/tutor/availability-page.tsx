@@ -19,9 +19,9 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
-  CardDescription,
   CardFooter,
   CardHeader,
+  CardInfoPreview,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import { Checkbox } from "@cogito-app/ui/components/selia/checkbox";
@@ -45,6 +45,7 @@ import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { formatBookingTimeRange } from "@/components/booking/booking-ui";
 import { MinuteTimeInput } from "@/components/booking/minute-time-input";
 import { EmptyState } from "@/components/empty-state";
+import { InfoPreview } from "@/components/info-preview";
 import Loader from "@/components/loader";
 import { useNow } from "@/hooks/use-now";
 import { getUserFacingError } from "@/lib/error-message";
@@ -333,10 +334,15 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
               <IconBox variant="primary-subtle" size="md">
                 <IconClock />
               </IconBox>
-              <CardTitle>Weekly hours</CardTitle>
-              <CardDescription className="leading-none">
-                Choose when students can normally book you.
-              </CardDescription>
+              <CardTitle>
+                Weekly hours
+                <CardInfoPreview>
+                  <InfoPreview
+                    title="Weekly hours"
+                    description="Choose when students can normally book you."
+                  />
+                </CardInfoPreview>
+              </CardTitle>
             </CardHeader>
             <CardBody className="divide-y divide-item-border py-0">
               {DAYS.map(([day, label]) => {
@@ -508,10 +514,15 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
               <IconBox variant="danger-subtle">
                 <IconCalendarEvent />
               </IconBox>
-              <CardTitle>Date override</CardTitle>
-              <CardDescription className="leading-none">
-                Add different hours for one specific date.
-              </CardDescription>
+              <CardTitle>
+                Date override
+                <CardInfoPreview>
+                  <InfoPreview
+                    title="Date override"
+                    description="Add different hours for one specific date."
+                  />
+                </CardInfoPreview>
+              </CardTitle>
             </CardHeader>
             <CardBody>
               <form onSubmit={saveOverride} className="space-y-3">
@@ -565,10 +576,15 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
               <IconBox variant="tertiary">
                 <IconSettings />
               </IconBox>
-              <CardTitle>Scheduling rules</CardTitle>
-              <CardDescription className="leading-none">
-                Existing bookings stay reserved when weekly hours change.
-              </CardDescription>
+              <CardTitle>
+                Scheduling rules
+                <CardInfoPreview>
+                  <InfoPreview
+                    title="Scheduling rules"
+                    description="Existing bookings stay reserved when weekly hours change."
+                  />
+                </CardInfoPreview>
+              </CardTitle>
             </CardHeader>
             <CardBody className="space-y-3">
               <Rule label="Session duration" value="90 minutes" />
@@ -584,10 +600,15 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
           <IconBox variant="success-subtle">
             <IconCalendarEvent />
           </IconBox>
-          <CardTitle>Calendar preview</CardTitle>
-          <CardDescription>
-            Windows currently visible to students.
-          </CardDescription>
+          <CardTitle>
+            Calendar preview
+            <CardInfoPreview>
+              <InfoPreview
+                title="Calendar preview"
+                description="Windows currently visible to students."
+              />
+            </CardInfoPreview>
+          </CardTitle>
         </CardHeader>
         <CardBody>
           <div className="mb-4 flex items-center justify-between">

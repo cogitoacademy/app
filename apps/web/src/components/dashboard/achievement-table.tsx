@@ -21,10 +21,11 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
-  CardDescription,
   CardHeader,
+  CardInfoPreview,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
+import { InfoPreview } from "@/components/info-preview";
 import {
   Drawer,
   DrawerBody,
@@ -138,10 +139,15 @@ export function AchievementTable({
     <>
       <Card className="w-full min-w-0 max-w-full overflow-hidden">
         <CardHeader>
-          <CardTitle>Achievement list</CardTitle>
-          <CardDescription>
-            Scan your submissions and open any row for the full details.
-          </CardDescription>
+          <CardTitle>
+            Achievement list
+            <CardInfoPreview>
+              <InfoPreview
+                title="Achievement list"
+                description="Scan your submissions and open any row for the full details."
+              />
+            </CardInfoPreview>
+          </CardTitle>
         </CardHeader>
         <CardBody className="min-w-0 max-w-full">
           <TableContainer className="w-[calc(100%+3rem)]! min-w-0">

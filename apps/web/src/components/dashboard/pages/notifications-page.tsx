@@ -20,9 +20,9 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
-  CardDescription,
   CardFooter,
   CardHeader,
+  CardInfoPreview,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import { Checkbox } from "@cogito-app/ui/components/selia/checkbox";
@@ -42,6 +42,7 @@ import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { cn } from "@cogito-app/ui/lib/utils";
 
 import { EmptyStateCard } from "@/components/empty-state";
+import { InfoPreview } from "@/components/info-preview";
 import Loader from "@/components/loader";
 import { useNow } from "@/hooks/use-now";
 import { getUserFacingError } from "@/lib/error-message";
@@ -249,16 +250,18 @@ export function NotificationsPage() {
             <div>
               <CardTitle>
                 All activity
+                <CardInfoPreview>
+                  <InfoPreview
+                    title="All activity"
+                    description="Newest updates appear first. Select rows to change their read status."
+                  />
+                </CardInfoPreview>
                 {unreadCount > 0 ? (
                   <Badge variant="info" className="ml-1">
                     {unreadCount} unread
                   </Badge>
                 ) : null}
               </CardTitle>
-              <CardDescription>
-                Newest updates appear first. Select rows to change their read
-                status.
-              </CardDescription>
             </div>
 
             {unreadCount > 0 ? (

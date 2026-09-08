@@ -140,8 +140,13 @@ label, title, and explanatory content. The admin dashboard's Booking activity
 card uses this composition instead of a separate header description. The shared
 booking-detail surface follows the same treatment for Session overview, Series
 sessions, Activity, Honorarium/Marks, lifecycle, contact, room-assignment, and
-admin-extension cards. This is presentation-only and changes no RPC or
-persisted data contract.
+admin-extension cards. Explanatory header copy across dashboard, admin, tutor
+availability, onboarding, profile, notification, and wallet cards also uses this
+compact title-adjacent preview. Sign-in and sign-up keep title-only headers, and
+their initial loader reserves the full authentication content height so the legal
+notice remains stable. Descriptions that are primary card content or metadata
+remain visible. This is presentation-only and changes no RPC or persisted data
+contract.
 
 ## Competition Calendar empty months (2026-09-04)
 

@@ -18,10 +18,11 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
-  CardDescription,
   CardHeader,
+  CardInfoPreview,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
+import { InfoPreview } from "@/components/info-preview";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Input } from "@cogito-app/ui/components/selia/input";
@@ -413,10 +414,15 @@ function ModerationTable({
     <>
       <Card className="w-full min-w-0 max-w-full overflow-hidden">
         <CardHeader>
-          <CardTitle>Submissions</CardTitle>
-          <CardDescription>
-            Open any submission for the full details and moderation actions.
-          </CardDescription>
+          <CardTitle>
+            Submissions
+            <CardInfoPreview>
+              <InfoPreview
+                title="Submissions"
+                description="Open any submission for the full details and moderation actions."
+              />
+            </CardInfoPreview>
+          </CardTitle>
         </CardHeader>
         <CardBody aria-busy={mutationPending} className="min-w-0 max-w-full">
           <TableContainer className="w-[calc(100%+3rem)]! min-w-0">

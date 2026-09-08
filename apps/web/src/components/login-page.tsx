@@ -13,11 +13,11 @@ export function LoginPage() {
   const { redirect } = useSearch({ from: "/login" });
 
   return (
-    <main className="relative min-h-svh w-full px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+    <main className="relative min-h-svh w-full px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8 flex items-center">
       <div className="absolute right-4 top-4 z-30 sm:right-6 sm:top-6 lg:right-8 lg:top-8 hidden">
         <ModeToggle />
       </div>
-      <div className="mx-auto grid w-full grid-cols-1 gap-4 lg:min-h-[calc(100svh-4rem)] lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-8">
+      <div className="mx-auto grid w-full grid-cols-1 lg:min-h-[calc(100svh-4rem)] lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-8">
         <section
           aria-label="Cogito"
           className="relative mx-auto flex min-h-0 w-full max-w-md items-start justify-start overflow-visible rounded-none bg-transparent p-0 lg:isolate lg:mx-0 lg:min-h-full lg:max-w-none lg:items-center lg:justify-center lg:overflow-hidden lg:rounded-[2rem] lg:bg-foreground lg:p-8"
@@ -86,10 +86,10 @@ export function LoginPage() {
           </div>
           <img
             src="/logo extended.png"
-            alt="Cogito Academy"
+            alt=""
             width={256}
             height={64}
-            className="relative z-10 ml-1.5 h-auto w-40 max-w-full object-contain object-left sm:w-56 lg:absolute lg:left-10 lg:top-10 lg:ml-0 lg:w-64"
+            className="relative z-10 h-auto w-36 max-w-full mx-auto object-contain object-left sm:w-42 lg:absolute lg:left-10 lg:top-10 lg:ml-0 lg:w-64"
           />
         </section>
 

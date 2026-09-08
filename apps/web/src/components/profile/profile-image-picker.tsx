@@ -417,7 +417,7 @@ export function ProfileImagePicker({
           <Button
             type="button"
             variant="plain"
-            className="group size-auto rounded-full p-0!"
+            className="group size-auto rounded-full p-0! w-fit mx-auto"
             aria-label="Change profile photo"
             disabled={disabled || isUploading}
             onClick={() => fileInputRef.current?.click()}

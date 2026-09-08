@@ -323,20 +323,18 @@ export function EconomySettingsPage() {
                   <Badge variant="warning" pill>
                     Editing
                   </Badge>
-                  <Button variant="plain" size="sm" onClick={cancelEditing}>
+                  <Button variant="danger" size="icon" onClick={cancelEditing}>
                     <IconX />
-                    Cancel
                   </Button>
                 </div>
               ) : (
                 <Button
-                  variant="outline"
-                  size="sm"
+                  variant="tertiary"
+                  size="icon"
                   onClick={startEditing}
                   disabled={settings.isPending || !settings.data}
                 >
                   <IconPencil />
-                  Edit schedule
                 </Button>
               )}
             </CardHeaderAction>

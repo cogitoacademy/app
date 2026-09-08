@@ -3,9 +3,9 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
-  CardDescription,
   CardFooter,
   CardHeader,
+  CardInfoPreview,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
@@ -32,6 +32,7 @@ import {
 } from "@tabler/icons-react";
 
 import { WhatsAppSupportDialog } from "@/components/whatsapp-support-dialog";
+import { InfoPreview } from "@/components/info-preview";
 import { StatCard } from "./stat-card";
 
 const milestones = [
@@ -182,11 +183,15 @@ function SupportCard() {
         <IconBox variant="success">
           <IconUsersGroup />
         </IconBox>
-        <CardTitle>Need guidance?</CardTitle>
-        <CardDescription>
-          Contact Cogito support or check competition dates before committing to
-          a study plan.
-        </CardDescription>
+        <CardTitle>
+          Need guidance?
+          <CardInfoPreview>
+            <InfoPreview
+              title="Need guidance?"
+              description="Contact Cogito support or check competition dates before committing to a study plan."
+            />
+          </CardInfoPreview>
+        </CardTitle>
       </CardHeader>
       <CardBody className="flex flex-col gap-3">
         <WhatsAppSupportDialog

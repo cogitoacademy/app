@@ -13,12 +13,13 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
-  CardDescription,
   CardFooter,
   CardHeader,
+  CardInfoPreview,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import { TutorTermsOfService } from "./tutor-terms-of-service";
+import { InfoPreview } from "@/components/info-preview";
 import {
   Field,
   FieldDescription,
@@ -1042,10 +1043,15 @@ export function OnboardingForm({
             <IconBox variant="warning-subtle">
               <IconAlertTriangle aria-hidden="true" />
             </IconBox>
-            <CardTitle>Review feedback</CardTitle>
-            <CardDescription>
-              Update the relevant section before submitting again.
-            </CardDescription>
+            <CardTitle>
+              Review feedback
+              <CardInfoPreview>
+                <InfoPreview
+                  title="Review feedback"
+                  description="Update the relevant section before submitting again."
+                />
+              </CardInfoPreview>
+            </CardTitle>
           </CardHeader>
           <CardBody className="grid gap-4">
             {profile.adminReviewNote &&
@@ -1096,11 +1102,15 @@ export function OnboardingForm({
             <IconBox variant="tertiary-subtle">
               <IconPhoto aria-hidden="true" />
             </IconBox>
-            <CardTitle>Profile photo review</CardTitle>
-            <CardDescription>
-              Your submitted photo stays unchanged until the Cogito team
-              finishes its review and publishes any edited version.
-            </CardDescription>
+            <CardTitle>
+              Profile photo review
+              <CardInfoPreview>
+                <InfoPreview
+                  title="Profile photo review"
+                  description="Your submitted photo stays unchanged until the Cogito team finishes its review and publishes any edited version."
+                />
+              </CardInfoPreview>
+            </CardTitle>
           </CardHeader>
           <CardBody className="flex flex-wrap items-start gap-6">
             <div className="flex flex-col items-center gap-2 text-center">
@@ -1173,11 +1183,15 @@ export function OnboardingForm({
                 <IconBox variant="tertiary-subtle">
                   <IconPhoto aria-hidden="true" />
                 </IconBox>
-                <CardTitle>Profile photo</CardTitle>
-                <CardDescription>
-                  Submit one clear photo. The Cogito team will apply the
-                  standard background before publishing or updating it.
-                </CardDescription>
+                <CardTitle>
+                  Profile photo
+                  <CardInfoPreview>
+                    <InfoPreview
+                      title="Profile photo"
+                      description="Submit one clear photo. The Cogito team will apply the standard background before publishing or updating it."
+                    />
+                  </CardInfoPreview>
+                </CardTitle>
               </CardHeader>
               <CardBody className="flex flex-wrap items-start gap-8">
                 {profile.onboardingStatus === "published" ? (
@@ -1310,11 +1324,15 @@ export function OnboardingForm({
                 <IconBox variant="secondary-subtle">
                   <IconUser aria-hidden="true" />
                 </IconBox>
-                <CardTitle>Public profile</CardTitle>
-                <CardDescription>
-                  This is the first information students use to understand your
-                  teaching style.
-                </CardDescription>
+                <CardTitle>
+                  Public profile
+                  <CardInfoPreview>
+                    <InfoPreview
+                      title="Public profile"
+                      description="This is the first information students use to understand your teaching style."
+                    />
+                  </CardInfoPreview>
+                </CardTitle>
               </CardHeader>
               <CardBody className="grid gap-5 sm:grid-cols-[1fr_2fr]">
                 <Field>
@@ -1420,10 +1438,15 @@ export function OnboardingForm({
                 <IconBox variant="info-subtle">
                   <IconSchool aria-hidden="true" />
                 </IconBox>
-                <CardTitle>Teaching setup</CardTitle>
-                <CardDescription>
-                  Set the session format and your IDR honorarium.
-                </CardDescription>
+                <CardTitle>
+                  Teaching setup
+                  <CardInfoPreview>
+                    <InfoPreview
+                      title="Teaching setup"
+                      description="Set the session format and your IDR honorarium."
+                    />
+                  </CardInfoPreview>
+                </CardTitle>
               </CardHeader>
               <CardBody className="flex flex-col gap-5">
                 <Field>
@@ -1498,10 +1521,15 @@ export function OnboardingForm({
                 <IconBox variant="success-subtle">
                   <IconBuildingBank aria-hidden="true" />
                 </IconBox>
-                <CardTitle>Payout account</CardTitle>
-                <CardDescription>
-                  Weekly honorarium payouts are sent to this bank account.
-                </CardDescription>
+                <CardTitle>
+                  Payout account
+                  <CardInfoPreview>
+                    <InfoPreview
+                      title="Payout account"
+                      description="Weekly honorarium payouts are sent to this bank account."
+                    />
+                  </CardInfoPreview>
+                </CardTitle>
               </CardHeader>
               <CardBody className="flex flex-col gap-5">
                 <div className="grid gap-5 sm:grid-cols-2">
@@ -1734,11 +1762,15 @@ export function OnboardingForm({
               <IconBox variant="info-subtle">
                 <IconSchool aria-hidden="true" />
               </IconBox>
-              <CardTitle>Achievements &amp; experience</CardTitle>
-              <CardDescription>
-                Add your education, competition achievements, and relevant
-                teaching, work, or mentoring experience in one place.
-              </CardDescription>
+              <CardTitle>
+                Achievements &amp; experience
+                <CardInfoPreview>
+                  <InfoPreview
+                    title="Achievements & experience"
+                    description="Add your education, competition achievements, and relevant teaching, work, or mentoring experience in one place."
+                  />
+                </CardInfoPreview>
+              </CardTitle>
             </CardHeader>
             <CardBody>
               <TutorAchievementsEditor

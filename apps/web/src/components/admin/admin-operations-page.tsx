@@ -155,8 +155,8 @@ export function AdminOperationsPage() {
           Keep every booking moving
         </Heading>
         <Text className="text-muted">
-          Resolve booking issues, inspect wallets, and coordinate offline
-          rooms from one workspace.
+          Resolve booking issues, inspect wallets, and coordinate offline rooms
+          from one workspace.
         </Text>
       </div>
       <Tabs defaultValue="queue" className="min-w-0 max-w-full">
@@ -336,10 +336,15 @@ function BookingQueue() {
           className="w-full min-w-0 max-w-full overflow-hidden"
         >
           <CardHeader>
-            <CardTitle>Booking monitor</CardTitle>
-            <CardDescription>
-              Urgent and action-required bookings appear first.
-            </CardDescription>
+            <CardTitle>
+              Booking monitor
+              <CardInfoPreview>
+                <InfoPreview
+                  title="Booking monitor"
+                  description="Urgent and action-required bookings appear first."
+                />
+              </CardInfoPreview>
+            </CardTitle>
           </CardHeader>
           <CardBody
             aria-busy={queueQuery.isFetching}
@@ -1408,11 +1413,15 @@ function WalletLookup() {
     <Stack direction="column" spacing="md">
       <Card>
         <CardHeader>
-          <CardTitle>Find a wallet</CardTitle>
-          <CardDescription>
-            Search by name, email, or user ID, then choose the account to
-            inspect.
-          </CardDescription>
+          <CardTitle>
+            Find a wallet
+            <CardInfoPreview>
+              <InfoPreview
+                title="Find a wallet"
+                description="Search by name, email, or user ID, then choose the account to inspect."
+              />
+            </CardInfoPreview>
+          </CardTitle>
         </CardHeader>
         <CardBody>
           <form
@@ -1468,10 +1477,15 @@ function WalletLookup() {
       ) : searchQuery.data?.length ? (
         <Card>
           <CardHeader>
-            <CardTitle>Matching users</CardTitle>
-            <CardDescription>
-              Select an account to load its wallet and latest ledger activity.
-            </CardDescription>
+            <CardTitle>
+              Matching users
+              <CardInfoPreview>
+                <InfoPreview
+                  title="Matching users"
+                  description="Select an account to load its wallet and latest ledger activity."
+                />
+              </CardInfoPreview>
+            </CardTitle>
           </CardHeader>
           <CardBody className="space-y-2">
             {searchQuery.data.map((user) => (
@@ -1566,8 +1580,15 @@ function WalletLookup() {
       {selectedUser && ledgerQuery.data ? (
         <Card>
           <CardHeader>
-            <CardTitle>Ledger</CardTitle>
-            <CardDescription>Latest wallet entries</CardDescription>
+            <CardTitle>
+              Ledger
+              <CardInfoPreview>
+                <InfoPreview
+                  title="Ledger"
+                  description="Latest wallet entries."
+                />
+              </CardInfoPreview>
+            </CardTitle>
           </CardHeader>
           <CardBody>
             {ledgerQuery.data.items.length === 0 ? (
@@ -1799,10 +1820,15 @@ function RoomCatalog({ onAddRoom }: { onAddRoom: () => void }) {
     <Card id="admin-room-catalog" className="scroll-mt-4">
       <CardHeader className="flex-wrap">
         <div className="min-w-0 flex-1">
-          <CardTitle>Active rooms</CardTitle>
-          <CardDescription>
-            Rooms shown here are available for offline booking and assignment.
-          </CardDescription>
+          <CardTitle>
+            Active rooms
+            <CardInfoPreview>
+              <InfoPreview
+                title="Active rooms"
+                description="Rooms shown here are available for offline booking and assignment."
+              />
+            </CardInfoPreview>
+          </CardTitle>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <Button

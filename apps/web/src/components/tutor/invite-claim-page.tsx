@@ -5,8 +5,8 @@ import { useNavigate } from "@tanstack/react-router";
 import {
   Card,
   CardBody,
-  CardDescription,
   CardHeader,
+  CardInfoPreview,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import { Button } from "@cogito-app/ui/components/selia/button";
@@ -15,6 +15,7 @@ import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { client } from "@/utils/orpc";
 import { authClient } from "@/lib/auth-client";
 import { getUserFacingError } from "@/lib/error-message";
+import { InfoPreview } from "@/components/info-preview";
 
 export function InviteClaimPage({ token }: { token: string }) {
   const navigate = useNavigate();
@@ -145,10 +146,15 @@ export function InviteClaimPage({ token }: { token: string }) {
       <div className="flex min-h-screen items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader align="center">
-            <CardTitle>Tutor Invitation</CardTitle>
-            <CardDescription>
-              Verify your invitation to become a tutor on Cogito
-            </CardDescription>
+            <CardTitle>
+              Tutor Invitation
+              <CardInfoPreview>
+                <InfoPreview
+                  title="Tutor Invitation"
+                  description="Verify your invitation to become a tutor on Cogito."
+                />
+              </CardInfoPreview>
+            </CardTitle>
           </CardHeader>
           <CardBody className="flex flex-col gap-4">
             <Text className="text-center text-muted">
@@ -171,11 +177,20 @@ export function InviteClaimPage({ token }: { token: string }) {
     <div className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader align="center">
-          <CardTitle>Welcome, {inviteInfo?.displayName}!</CardTitle>
-          <CardDescription>
-            You've been invited to join Cogito as a tutor. This invitation was
-            sent to <strong>{inviteInfo?.email}</strong>.
-          </CardDescription>
+          <CardTitle>
+            Welcome, {inviteInfo?.displayName}!
+            <CardInfoPreview>
+              <InfoPreview
+                title="Tutor invitation"
+                description={
+                  <>
+                    You&apos;ve been invited to join Cogito as a tutor. This
+                    invitation was sent to <strong>{inviteInfo?.email}</strong>.
+                  </>
+                }
+              />
+            </CardInfoPreview>
+          </CardTitle>
         </CardHeader>
         <CardBody className="flex flex-col gap-4">
           <Text>

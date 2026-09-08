@@ -4,8 +4,8 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
-  CardDescription,
   CardHeader,
+  CardInfoPreview,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import {
@@ -23,6 +23,7 @@ import z from "zod";
 
 import { authClient } from "@/lib/auth-client";
 import { getUserFacingError } from "@/lib/error-message";
+import { InfoPreview } from "@/components/info-preview";
 
 export function ForgotPasswordForm() {
   const [submittedEmail, setSubmittedEmail] = useState<string | null>(null);
@@ -65,11 +66,21 @@ export function ForgotPasswordForm() {
       <div className="w-full flex items-center justify-center p-4 lg:min-h-[calc(100svh-4rem)]">
         <Card className="w-full lg:w-5/12 xl:w-md">
           <CardHeader align="center">
-            <CardTitle>Check your email</CardTitle>
-            <CardDescription>
-              If an account exists for <b>{submittedEmail}</b>, we&apos;ve sent
-              a link to reset your password. The link expires in 1 hour.
-            </CardDescription>
+            <CardTitle>
+              Check your email
+              <CardInfoPreview>
+                <InfoPreview
+                  title="Check your email"
+                  description={
+                    <>
+                      If an account exists for <b>{submittedEmail}</b>,
+                      we&apos;ve sent a link to reset your password. The link
+                      expires in 1 hour.
+                    </>
+                  }
+                />
+              </CardInfoPreview>
+            </CardTitle>
           </CardHeader>
           <CardBody className="flex flex-col gap-5">
             <Text className="text-center">
@@ -85,11 +96,15 @@ export function ForgotPasswordForm() {
     <div className="w-full flex items-center justify-center p-4 lg:min-h-[calc(100svh-4rem)]">
       <Card className="w-full lg:w-5/12 xl:w-md">
         <CardHeader align="center">
-          <CardTitle>Forgot your password?</CardTitle>
-          <CardDescription>
-            Enter your email and we&apos;ll send you a link to reset your
-            password
-          </CardDescription>
+          <CardTitle>
+            Forgot your password?
+            <CardInfoPreview>
+              <InfoPreview
+                title="Forgot your password?"
+                description="Enter your email and we'll send you a link to reset your password."
+              />
+            </CardInfoPreview>
+          </CardTitle>
         </CardHeader>
         <CardBody className="flex flex-col gap-5">
           <form

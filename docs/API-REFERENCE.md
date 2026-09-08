@@ -56,9 +56,11 @@ The widget's Balance-page CTA is presentation-only: **Find a tutor** links to
 
 The admin Booking activity explanation now opens from the shared Selia
 `CardInfoPreview` popover trigger beside its card title. Booking-detail cards
-and their admin extensions use the same pattern instead of standalone header
-descriptions. This frontend-only change adds no RPC path and changes no request
-envelope, response shape, schema, or persistence contract.
+and their admin extensions, plus explanatory headers on dashboard, admin, tutor,
+profile, notification, and wallet surfaces use the same pattern instead of
+standalone header descriptions. Sign-in and sign-up use title-only headers. This frontend-only change
+adds no RPC path and changes no request envelope, response shape, schema, or
+persistence contract.
 
 ## Competition Calendar empty months (2026-09-04)
 
