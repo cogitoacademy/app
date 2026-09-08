@@ -14,6 +14,7 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 import { lazy, Suspense } from "react";
 
 import Loader from "@/components/loader";
+import { DashboardWelcomeCard } from "@/components/dashboard/dashboard-welcome-card";
 import { orpc } from "@/utils/orpc";
 
 const AdminAnalytics = lazy(() =>
@@ -39,7 +40,6 @@ export function AdminDashboardPage({ adminName }: { adminName: string }) {
   const achievementStats = useQuery(
     orpc.achievement.adminStats.queryOptions({ input: undefined }),
   );
-  const firstName = adminName.trim().split(/\s+/)[0] || "Admin";
   const urgentBookings = (bookingQueue.data?.items ?? []).filter(
     (item) =>
       item.escalated ||
@@ -60,13 +60,11 @@ export function AdminDashboardPage({ adminName }: { adminName: string }) {
   const achievementCount = achievementStats.data?.pending ?? 0;
   return (
     <Stack direction="column" spacing="lg">
-      <div>
-        <Heading className="text-3xl">Good to see you, {firstName}</Heading>
-        <Text className="mt-2 max-w-2xl text-muted">
-          Clear time-sensitive operations first, then move through tutor and
-          achievement reviews.
-        </Text>
-      </div>
+      <DashboardWelcomeCard
+        name={adminName}
+        viewerRole="admin"
+        priorityCount={priorityItems.length + tutorCount + achievementCount}
+      />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Metric

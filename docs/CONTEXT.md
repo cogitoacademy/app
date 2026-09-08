@@ -2,6 +2,18 @@
 
 Last updated: 2026-09-08
 
+## Role- and time-aware dashboard greetings (2026-09-08)
+
+The student, tutor, and admin dashboards now share `DashboardWelcomeCard` and
+the pure `dashboard-greetings` phrase engine. It selects from distinct copy for
+morning (05:00–10:59), midday (11:00–14:59), afternoon (15:00–17:59), and
+evening (18:00–04:59) in the browser's local time. Each role has its own title
+pool, while the supporting line can reflect an upcoming student lesson, tutor
+review queue, or admin priority workload. A random choice is captured once per
+card mount, so ordinary query updates and re-renders do not make the greeting
+jump. Student and tutor titles use the account's first name; admin titles
+deliberately use the fixed label `Admin` instead of the account name.
+
 ## Unified booking-detail actions (2026-09-08)
 
 The booking detail header is now the single action zone for propose, cancel,
@@ -400,7 +412,7 @@ self-ban. Coolify's service/resource setup remains a one-time control-plane
 operation. The end-to-end provisioning, release, manual CI-quota fallback,
 verification, and rollback procedure is documented in [Setup and Deployment](./DEPLOYMENT.md).
 
-The authenticated `/guide` route is the product-facing **How Cogito Works** guide. It is a frontend-only, code-managed journey map rather than a developer setup document. Students can see only the Student journey; tutors can switch between Tutor and Student; admins can switch between Admin, Tutor, and Student. The role selector sits on its own at the top of the page, while the introduction and journey sit in a centered `max-w-6xl` guide shell. Step details open by default so the full flow can be read without one-by-one interaction; a single global control can collapse or restore all details, while each step remains individually keyboard-accessible. Each view combines a detailed tutoring lifecycle timeline with expandable exception branches and links to the existing feature routes; desktop uses a sticky secondary chapter rail on the right with one restrained progress header and Selia `Item` rows with a semantic media tint for chapter wayfinding, while mobile stacks the same navigation above the content. Timeline markers use the grid row's normal stretch behavior, so collapsed mobile details leave no residual body space and the connector still spans expanded rows. Its Scandinavian treatment uses a neutral, sans-serif hierarchy, restrained borders, purposeful whitespace, and smooth reduced-motion-aware details so the guide works for learners from ages 5–18 as well as tutors and admins. Timing-sensitive copy is explicit and bolded in the rendered guide: invite links last 7 days; booking response, participant confirmation, reconfirmation, and room approval use 12-hour windows unless the session starts sooner; student self-service changes close at H-2 (2 hours before start); reschedule proposals last 24 hours; lateness is measured at 15 minutes; meeting retries run every 5 minutes for up to 3 attempts; and the admin support SLA is 30 minutes in business hours or 4 hours outside. The static content source is `apps/web/src/components/guide/guide-content.ts`; no API or database contract is involved.
+The authenticated `/guide` route is the product-facing **How Cogito Works** guide. It is a frontend-only, code-managed journey map rather than a developer setup document. Students can see only the Student journey; tutors can switch between Tutor and Student; admins can switch between Admin, Tutor, and Student. A full-width role switcher and introductory Selia `Card` explain the selected journey before a responsive two-column reading layout. Desktop keeps the chapter index sticky on the left; mobile turns the same index into a horizontal, snap-scrolling row above the content, avoiding the former multi-column overflow risk. Each numbered step is a keyboard-accessible Selia card with default-open details, a global collapse/expand control, status badges, exception branches, and feature CTAs. Its token-based layout, responsive type, compact mobile padding, and reduced-motion-aware disclosure animation support learners ages 5–18 as well as tutors and admins. Timing-sensitive copy is explicit and bolded in the rendered guide: invite links last 7 days; booking response, participant confirmation, reconfirmation, and room approval use 12-hour windows unless the session starts sooner; student self-service changes close at H-2 (2 hours before start); reschedule proposals last 24 hours; lateness is measured at 15 minutes; meeting retries run every 5 minutes for up to 3 attempts; and the admin support SLA is 30 minutes in business hours or 4 hours outside. The static content source is `apps/web/src/components/guide/guide-content.ts`; no API or database contract is involved.
 
 The shared frontend pending state is rendered by `apps/web/src/components/loader.tsx` as the default loading component: a token-based loading ring whose primary Selia `Spinner` arc uses `cogito-orange`, with a loading label and reduced-motion behavior. Feature loading placeholders that previously used bespoke pulse skeletons now reuse this same component. It is presentation-only and keeps the same router/onboarding/auth loading entry points.
 

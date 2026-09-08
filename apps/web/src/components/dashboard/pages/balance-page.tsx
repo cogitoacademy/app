@@ -162,7 +162,7 @@ export function BalancePage() {
             <Heading level={1} size="md">
               Balance
             </Heading>
-            <Text className="mt-1 text-muted">
+            <Text className="text-muted">
               Track your Marks, active holds, and top-up options.
             </Text>
           </div>

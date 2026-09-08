@@ -2,6 +2,17 @@
 
 Last updated: 2026-09-08
 
+## Dynamic dashboard greeting smoke check (2026-09-08)
+
+Open `/dashboard` as a student, tutor, and admin. Confirm the greeting uses the
+account's first name for students and tutors, always uses the fixed label
+`Admin` for admins, and contains role-appropriate language. Test browser-local
+hours at 05:00, 11:00, 15:00, and 18:00 to cover morning, midday, afternoon,
+and evening boundaries. Reloading may choose another phrase; background query
+updates must not change the chosen phrase. Also verify an upcoming student
+lesson, a tutor review queue, and a non-empty admin priority queue produce
+relevant supporting copy.
+
 ## Unified booking-action smoke check (2026-09-08)
 
 Open booking details for student, tutor, and admin roles. Verify every available
@@ -257,9 +268,9 @@ Open `/guide` after signing in as each supported role. Verify the guide loads wi
 - Tutor: Tutor and Student.
 - Admin: Admin, Tutor, and Student.
 
-Select each available role view from the standalone control at the top and confirm the URL updates with `?view=...`, all step details are open on first load, and a disallowed view falls back to the role's default. On desktop, verify the guide is centered within a `max-w-6xl` shell and the right-side chapter rail remains sticky; its single progress index, numbered Selia `Item` rows with a badge-like semantic `ItemMedia` tint, step counts, and selected chapter should update as you scroll and click. On narrow screens, verify the rail stacks above the content without horizontal scrolling. Use the global Collapse/Expand details control and individual timeline buttons with both pointer and keyboard input; verify the height and content transitions are smooth, every collapsed row shrinks to its visible trigger without blank body space, expanded connectors still span the full row, reduced-motion preferences remove the motion, and statuses, What if? branches, and CTAs remain readable. Confirm the important timing callouts render as bold text and state the concrete rules: invite links expire after 7 days; booking response, participant confirmation, reconfirmation, and room approval allow 12 hours unless the session starts sooner; student self-service changes close at H-2 (2 hours before start); reschedule proposals expire after 24 hours; lateness/no-show reporting starts after 15 minutes; meeting retries run every 5 minutes for up to 3 attempts; and support exceptions use a 30-minute business-hours or 4-hour outside-hours SLA. Check that CTAs open the existing tutor, booking, profile, operations, achievement, economy, calendar, balance, and resource surfaces.
+Select each available role view from the full-width control at the top and confirm the URL updates with `?view=...`, all step details are open on first load, and a disallowed view falls back to the role's default. On desktop, verify the `max-w-7xl` guide shell uses a sticky chapter index on the left and that its selected chapter updates as the page scrolls or an item is clicked. On narrow screens, verify the chapter index becomes a horizontally scrollable, snap-aligned row above the content and the page has no horizontal overflow. Check that the hero highlights change with the selected role and reflow from three columns to one. Use the global and per-step disclosure controls with pointer and keyboard input; verify collapsed cards return to header height without blank space, animations respect reduced-motion preferences, and statuses, exception branches, and CTAs remain readable. Confirm the important timing callouts render as bold text and state the concrete rules: invite links expire after 7 days; booking response, participant confirmation, reconfirmation, and room approval allow 12 hours unless the session starts sooner; student self-service changes close at H-2 (2 hours before start); reschedule proposals expire after 24 hours; lateness/no-show reporting starts after 15 minutes; meeting retries run every 5 minutes for up to 3 attempts; and support exceptions use a 30-minute business-hours or 4-hour outside-hours SLA. Check that CTAs open the existing tutor, booking, profile, operations, achievement, economy, calendar, balance, and resource surfaces.
 
-Guide copy is maintained in `apps/web/src/components/guide/guide-content.ts`. When a booking state, role responsibility, or linked route changes, update the corresponding typed step/branch and the guide content test in the same change. The guide is intentionally code-managed in v1; no admin editor, CMS publish step, or API migration is required. During local visual refinement, toggle the development-only Tweaks Bar with `Ctrl/Cmd+Shift+.`; treat its values as exploration until the chosen change is copied deliberately into the guide styles.
+Guide copy is maintained in `apps/web/src/components/guide/guide-content.ts`. When a booking state, role responsibility, or linked route changes, update the corresponding typed step/branch and the guide content test in the same change. The guide is intentionally code-managed in v1; no admin editor, CMS publish step, or API migration is required.
 
 The shared frontend pending state uses the default loading component from `apps/web/src/components/loader.tsx` and the local Selia `Spinner` from `packages/ui/components/selia/spinner.tsx`. If a navigation or feature smoke test catches a loading state, verify the `cogito-orange` primary progress arc and `Loading` label remain visible in both light and dark themes, and that the ring remains understandable without animation under reduced-motion preferences. No bespoke pulse skeleton should appear in the web app.
 

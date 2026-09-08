@@ -274,13 +274,13 @@ function AnalyticsContent({
             />
           }
           helper={
-            <>
+            <div className="flex items-center gap-x-1">
               <CogitoMarks
                 value={numberFormatter.format(data.summary.platformTakeMarks)}
                 size="3"
               />{" "}
               platform take
-            </>
+            </div>
           }
           tone="info-subtle"
         />

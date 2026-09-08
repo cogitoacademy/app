@@ -316,7 +316,7 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
           <Heading level={1} size="md">
             Availability
           </Heading>
-          <Text className="mt-1 text-muted">
+          <Text className="text-muted">
             Set recurring hours once, then add exceptions for specific dates.
           </Text>
         </div>

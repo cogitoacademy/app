@@ -63,7 +63,6 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
         new Date(b.scheduledStartAt).getTime(),
     );
   const nextBooking = upcoming[0];
-  const profileStatus = profile.data?.onboardingStatus ?? "draft";
   const pendingHonorarium = payouts.data?.tutorPayoutIdr ?? 0;
   const hasBankDetails = Boolean(
     profile.data?.bankName?.trim() &&
@@ -82,7 +81,7 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
 
   return (
     <Stack direction="column" spacing="lg">
-      <div className="grid items-start gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <DashboardWelcomeCard
           name={tutorName}
           viewerRole="tutor"
@@ -125,24 +124,20 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
         </div>
       </div>
 
-      <div className="grid items-start gap-4 lg:grid-cols-2">
-        <NextLessonSection
-          booking={nextBooking}
-          isLoading={bookings.isPending}
-          viewerRole="tutor"
-        />
+      <NextLessonSection
+        booking={nextBooking}
+        isLoading={bookings.isPending}
+        viewerRole="tutor"
+      />
 
+      <div className="grid items-start gap-4 lg:grid-cols-2">
         <ReviewRequestsCard
           isLoading={bookings.isPending}
           reviewQueue={reviewQueue}
         />
-      </div>
-
-      <div className="grid items-start gap-4 lg:grid-cols-2">
-        <TeachingSetupCard profileStatus={profileStatus} />
 
         <Card className="min-w-0">
-          <CardHeader>
+          <CardHeader className="py-4">
             <CardTitle>Payout details</CardTitle>
             <CardHeaderAction>
               <InfoPreview
@@ -212,49 +207,6 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
     </Stack>
   );
 }
-
-function TeachingSetupCard({ profileStatus }: { profileStatus: string }) {
-  return (
-    <Card className="min-w-0">
-      <CardHeader>
-        <CardTitle>Teaching setup</CardTitle>
-      </CardHeader>
-      <CardBody className="flex flex-col gap-3">
-        <div className="flex items-center justify-between rounded-lg bg-accent p-4">
-          <Text className="font-medium">Profile status</Text>
-          <Badge
-            variant={profileStatus === "published" ? "success" : "warning"}
-            pill
-            className="capitalize"
-          >
-            {profileStatus.replaceAll("_", " ")}
-          </Badge>
-        </div>
-        <Button
-          variant="secondary"
-          block
-          nativeButton={false}
-          render={
-            <Link to="/availability" aria-label="Manage tutor availability" />
-          }
-        >
-          Manage availability <IconArrowRight />
-        </Button>
-        {profileStatus !== "published" ? (
-          <Button
-            variant="outline"
-            block
-            nativeButton={false}
-            render={<Link to="/profile" aria-label="Complete tutor profile" />}
-          >
-            Complete tutor profile <IconArrowRight />
-          </Button>
-        ) : null}
-      </CardBody>
-    </Card>
-  );
-}
-
 function ReviewRequestsCard({
   isLoading,
   reviewQueue,
@@ -269,7 +221,7 @@ function ReviewRequestsCard({
         <CardHeaderAction>
           <Button
             variant="plain"
-            size="sm"
+            size="xs"
             nativeButton={false}
             render={
               <Link to="/bookings" aria-label="View all tutor bookings" />
@@ -326,7 +278,7 @@ function MetricCard({
 }) {
   return (
     <Card className="h-full">
-      <CardBody className="flex h-full items-stretch justify-between p-5">
+      <CardBody className="flex flex-col h-full items-stretch justify-between p-5">
         <div className="flex items-center gap-4 self-start">
           <IconBox variant={tone}>{icon}</IconBox>
           <Text className="text-muted">{label}</Text>
