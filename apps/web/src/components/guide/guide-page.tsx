@@ -29,7 +29,6 @@ import {
   ItemMeta,
   ItemTitle,
 } from "@cogito-app/ui/components/selia/item";
-import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Tabs, TabsItem, TabsList } from "@cogito-app/ui/components/selia/tabs";
 import { Text, TextLink } from "@cogito-app/ui/components/selia/text";
 import { cn } from "@cogito-app/ui/lib/utils";
@@ -158,9 +157,9 @@ function GuidePageContent({ role, view }: { role?: string; view: GuideView }) {
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <Text className="text-sm font-medium text-muted">Panduan Cogito</Text>
+          <Text className="text-sm font-medium text-muted">Cogito guide</Text>
           <Text className="text-sm text-dimmed">
-            Pilih sudut pandang yang ingin kamu pelajari.
+            Choose the perspective you want to explore.
           </Text>
         </div>
         <Tabs
@@ -174,10 +173,7 @@ function GuidePageContent({ role, view }: { role?: string; view: GuideView }) {
           }}
           className="w-full sm:w-auto"
         >
-          <TabsList
-            aria-label="Pilih panduan berdasarkan peran"
-            className="w-full"
-          >
+          <TabsList aria-label="Choose a guide by role" className="w-full">
             {allowedViews.map((allowedView) => (
               <TabsItem key={allowedView} value={allowedView}>
                 {GUIDE_VIEW_META[allowedView].shortLabel}
@@ -189,7 +185,7 @@ function GuidePageContent({ role, view }: { role?: string; view: GuideView }) {
 
       <GuideHero content={content} />
 
-      <div className="grid min-w-0 gap-6 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-10">
+      <div className="grid min-w-0 gap-6 xl:grid-cols-[15rem_minmax(0,1fr)] xl:gap-10">
         <GuideChapterNav
           chapters={content.chapters}
           activeChapterId={activeChapterId}
@@ -199,10 +195,10 @@ function GuidePageContent({ role, view }: { role?: string; view: GuideView }) {
           <div className="mb-5 flex items-center justify-between gap-4">
             <div>
               <Heading size="sm" level={2}>
-                Perjalananmu di Cogito
+                Your journey with Cogito
               </Heading>
               <Text className="mt-1 text-sm text-muted">
-                Ikuti alurnya dari awal sampai selesai.
+                Follow the flow from start to finish.
               </Text>
             </div>
             <Button
@@ -213,10 +209,10 @@ function GuidePageContent({ role, view }: { role?: string; view: GuideView }) {
                 setExpandedStepIds(allExpanded ? new Set() : new Set(stepIds))
               }
               aria-label={
-                allExpanded ? "Tutup semua detail" : "Buka semua detail"
+                allExpanded ? "Collapse all details" : "Expand all details"
               }
             >
-              {allExpanded ? "Tutup semua" : "Buka semua"}
+              {allExpanded ? "Collapse all" : "Expand all"}
             </Button>
           </div>
 
@@ -247,10 +243,10 @@ function GuideHero({
 }) {
   return (
     <Card className="overflow-hidden">
-      <CardBody className="grid gap-8 p-5! sm:p-8! lg:grid-cols-[minmax(0,1.25fr)_minmax(20rem,0.75fr)] lg:gap-12 lg:p-10!">
+      <CardBody className="grid gap-8 p-5! sm:p-8! xl:grid-cols-[minmax(0,1.25fr)_minmax(20rem,0.75fr)] xl:gap-12 xl:p-10!">
         <div className="flex min-w-0 flex-col justify-center">
           <Badge variant="primary" className="mb-5 w-fit">
-            Mulai dari sini
+            Start here
           </Badge>
           <Heading
             size="lg"
@@ -263,10 +259,10 @@ function GuideHero({
           </Text>
           <div className="mt-6 flex items-center gap-2 text-sm font-medium text-foreground">
             <IconRoute className="size-4 text-primary" aria-hidden="true" />
-            {content.chapters.length} bagian, dijelaskan langkah demi langkah
+            {content.chapters.length} chapters, explained step by step
           </div>
         </div>
-        <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+        <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
           {content.highlights.map((highlight, index) => (
             <GuideFact
               key={highlight.label}
@@ -322,17 +318,17 @@ function GuideChapterNav({
 }) {
   return (
     <nav
-      aria-label="Daftar bagian panduan"
-      className="min-w-0 lg:sticky lg:top-6 lg:self-start"
+      aria-label="Guide chapters"
+      className="min-w-0 xl:sticky xl:top-0 xl:self-start"
     >
-      <Text className="mb-3 hidden text-xs font-semibold uppercase tracking-wider text-dimmed lg:block">
-        Isi panduan
+      <Text className="mb-3 hidden text-xs font-semibold uppercase tracking-wider text-dimmed xl:block">
+        In this guide
       </Text>
-      <ol className="-mx-4 flex snap-x gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0 lg:flex-col lg:overflow-visible lg:pb-0">
+      <ol className="-mx-4 flex snap-x gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0 xl:flex-col xl:overflow-visible xl:pb-0">
         {chapters.map((chapter, index) => {
           const isActive = activeChapterId === chapter.id;
           return (
-            <li key={chapter.id} className="shrink-0 snap-start lg:w-full">
+            <li key={chapter.id} className="shrink-0 snap-start xl:w-full">
               <Item
                 render={
                   <a
@@ -345,7 +341,7 @@ function GuideChapterNav({
                 variant="plain"
                 size="sm"
                 className={cn(
-                  "min-w-[12rem] rounded-lg! px-3! py-2.5! no-underline lg:min-w-0",
+                  "min-w-[12rem] rounded-lg! px-3! py-2.5! no-underline xl:min-w-0",
                   isActive ? "bg-accent!" : "hover:bg-accent/60!",
                 )}
               >
@@ -360,11 +356,9 @@ function GuideChapterNav({
                   {String(index + 1).padStart(2, "0")}
                 </ItemMedia>
                 <ItemContent className="min-w-0 gap-0.5">
-                  <ItemTitle className="truncate text-sm">
-                    {chapter.title}
-                  </ItemTitle>
+                  <ItemTitle className="text-sm">{chapter.title}</ItemTitle>
                   <ItemMeta className="text-xs">
-                    {chapter.steps.length} langkah
+                    {chapter.steps.length} steps
                   </ItemMeta>
                 </ItemContent>
               </Item>
@@ -398,7 +392,7 @@ function GuideChapterSection({
         </IconBox>
         <div className="min-w-0">
           <Text className="text-xs font-semibold uppercase tracking-wider text-dimmed">
-            Bagian {chapterNumber}
+            Chapter {chapterNumber}
           </Text>
           <Heading size="md" level={3} className="mt-1 text-balance">
             {chapter.title}
@@ -438,7 +432,7 @@ function GuideStepCard({
   const detailsId = `${step.id}-details`;
   return (
     <Card className={cn("transition-shadow", isExpanded && "shadow-card")}>
-      <CardHeader className="p-0!">
+      <CardHeader className="p-0! border-none">
         <button
           type="button"
           className="col-span-full grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 rounded-xl p-4 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:gap-4 sm:p-5"
@@ -496,10 +490,10 @@ function GuideStepCard({
 
 function GuideStepDetails({ step }: { step: GuideStep }) {
   return (
-    <Stack spacing="lg">
+    <div className="space-y-6">
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_16rem]">
         <div>
-          <Text className="mb-3 text-sm font-semibold">Yang akan terjadi</Text>
+          <Text className="mb-3 text-sm font-semibold">What happens</Text>
           <ul className="space-y-2.5">
             {step.details.map((detail) => (
               <li
@@ -520,7 +514,7 @@ function GuideStepDetails({ step }: { step: GuideStep }) {
         {step.statuses?.length ? (
           <div>
             <Text className="mb-3 text-sm font-semibold">
-              Status yang mungkin
+              Possible statuses
             </Text>
             <div className="flex flex-wrap gap-2">
               {step.statuses.map((status) => (
@@ -532,9 +526,7 @@ function GuideStepDetails({ step }: { step: GuideStep }) {
       </div>
       {step.branches?.length ? (
         <div>
-          <Text className="mb-3 text-sm font-semibold">
-            Kalau rencana berubah
-          </Text>
+          <Text className="mb-3 text-sm font-semibold">If plans change</Text>
           <div className="grid gap-3 xl:grid-cols-2">
             {step.branches.map((branch) => (
               <GuideBranchCard key={branch.title} branch={branch} />
@@ -543,7 +535,7 @@ function GuideStepDetails({ step }: { step: GuideStep }) {
         </div>
       ) : null}
       {step.cta ? <GuideCta cta={step.cta} /> : null}
-    </Stack>
+    </div>
   );
 }
 
@@ -568,11 +560,11 @@ function GuideBranchCard({ branch }: { branch: GuideBranch }) {
         {branch.title}
       </ItemTitle>
       <ItemDescription>
-        <span className="font-medium text-foreground">Saat:</span>{" "}
+        <span className="font-medium text-foreground">When:</span>{" "}
         <GuideCopy text={branch.trigger} />
       </ItemDescription>
       <ItemDescription>
-        <span className="font-medium text-foreground">Maka:</span>{" "}
+        <span className="font-medium text-foreground">Then:</span>{" "}
         <GuideCopy text={branch.outcome} />
       </ItemDescription>
       {branch.cta ? <GuideCta cta={branch.cta} /> : null}
