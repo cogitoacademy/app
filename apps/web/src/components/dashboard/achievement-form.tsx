@@ -3,15 +3,15 @@
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
-  Dialog,
-  DialogBody,
-  DialogClose,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogPopup,
-  DialogTitle,
-} from "@cogito-app/ui/components/selia/dialog";
+  Drawer,
+  DrawerBody,
+  DrawerClose,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerPopup,
+  DrawerTitle,
+} from "@cogito-app/ui/components/selia/drawer";
 import {
   Field,
   FieldDescription,
@@ -36,7 +36,7 @@ import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { IconPlus, IconX } from "@tabler/icons-react";
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { z } from "zod";
 
 import { getUserFacingError } from "@/lib/error-message";
@@ -161,10 +161,20 @@ export function AchievementForm({
   onOpenChange,
   onSuccess,
 }: AchievementFormProps) {
+  const [isDesktop, setIsDesktop] = useState(false);
   const [subjectInput, setSubjectInput] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const isAdmin = audience === "admin";
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 640px)");
+    const updateViewport = () => setIsDesktop(mediaQuery.matches);
+
+    updateViewport();
+    mediaQuery.addEventListener("change", updateViewport);
+    return () => mediaQuery.removeEventListener("change", updateViewport);
+  }, []);
 
   const createMutation = useMutation(
     orpc.achievement.create.mutationOptions({
@@ -342,26 +352,33 @@ export function AchievementForm({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogPopup className="max-w-lg">
-        <DialogHeader className="flex-col items-start gap-1.5 border-b border-border">
-          <DialogTitle>
+    <Drawer
+      open={open}
+      onOpenChange={onOpenChange}
+      swipeDirection={isDesktop ? "right" : "down"}
+    >
+      <DrawerPopup
+        direction={isDesktop ? "right" : "bottom"}
+        className={isDesktop ? "w-full max-w-lg" : undefined}
+      >
+        <DrawerHeader className="flex-col items-start gap-1.5 border-b border-drawer-border pb-4.5">
+          <DrawerTitle>
             {isAdmin
               ? "Correct Achievement"
               : mode === "create"
                 ? "Add Achievement"
                 : "Edit Achievement"}
-          </DialogTitle>
-          <DialogDescription>
+          </DrawerTitle>
+          <DrawerDescription>
             {isAdmin
               ? "Update any field that needs correcting before you approve this submission."
               : mode === "create"
                 ? "Submit your competition achievements to be showcased on cogitoacademy.id"
                 : "Edit and resubmit your achievement for review"}
-          </DialogDescription>
-        </DialogHeader>
+          </DrawerDescription>
+        </DrawerHeader>
 
-        <DialogBody className="min-h-0">
+        <DrawerBody>
           {formError ? (
             <Text className="mb-4 text-danger">{formError}</Text>
           ) : null}
@@ -652,16 +669,16 @@ export function AchievementForm({
               </form.Field>
             </Stack>
           </form>
-        </DialogBody>
+        </DrawerBody>
 
-        <DialogFooter>
-          <DialogClose
+        <DrawerFooter>
+          <DrawerClose
             render={
               <Button variant="secondary" type="button" aria-label="Cancel" />
             }
           >
             Cancel
-          </DialogClose>
+          </DrawerClose>
           <Button
             type="button"
             disabled={isPending}
@@ -671,8 +688,8 @@ export function AchievementForm({
           >
             {submitLabel}
           </Button>
-        </DialogFooter>
-      </DialogPopup>
-    </Dialog>
+        </DrawerFooter>
+      </DrawerPopup>
+    </Drawer>
   );
 }

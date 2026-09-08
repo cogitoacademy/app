@@ -20,7 +20,7 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 
 import {
   formatCompetitionDates,
-  getCategoryEventClass,
+  getCategoryBadgeClass,
   getCategoryLabel,
   getEducationLevelLabel,
 } from "./calendar-utils";
@@ -46,7 +46,7 @@ function CategoryBadges({ event }: { event: CalendarCompetition }) {
           key={`${event.id}-${category.coreCategory}`}
           variant="secondary"
           size="sm"
-          className={getCategoryEventClass(category.coreCategory)}
+          className={getCategoryBadgeClass(category.coreCategory)}
         >
           {getCategoryLabel(category.coreCategory)}
         </Badge>

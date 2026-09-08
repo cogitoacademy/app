@@ -11,6 +11,7 @@ import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 
 import { EmptyStateCard } from "@/components/empty-state";
+import Loader from "@/components/loader";
 import { orpc } from "@/utils/orpc";
 
 import {
@@ -50,23 +51,7 @@ export function CompetitionCalendarPage() {
     [competitions.data],
   );
 
-  if (competitions.isPending) {
-    return (
-      <Stack
-        direction="column"
-        spacing="lg"
-        className="min-h-0 flex-1 flex-nowrap"
-      >
-        <div>
-          <Heading>Your Gateway to the World Stage</Heading>
-          <Text className="mt-1 text-muted">
-            Loading published competitions…
-          </Text>
-        </div>
-        <div className="h-96 animate-pulse rounded-lg border border-border bg-accent/30" />
-      </Stack>
-    );
-  }
+  if (competitions.isPending) return <Loader />;
 
   if (competitions.isError) {
     return (
@@ -101,7 +86,7 @@ export function CompetitionCalendarPage() {
         <CompetitionCalendar events={events} />
       ) : (
         <EmptyStateCard
-          icon={<IconCalendarEvent />}
+          icon={<IconCalendarEvent className="text-cogito-orange" />}
           title="No competitions yet"
           description="Published competitions will appear here when they are available."
         />

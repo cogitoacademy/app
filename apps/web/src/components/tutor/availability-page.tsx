@@ -45,6 +45,7 @@ import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { formatBookingTimeRange } from "@/components/booking/booking-ui";
 import { MinuteTimeInput } from "@/components/booking/minute-time-input";
 import { EmptyState } from "@/components/empty-state";
+import Loader from "@/components/loader";
 import { useNow } from "@/hooks/use-now";
 import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
@@ -175,7 +176,7 @@ function scheduleFromSlots(slots: readonly AvailabilitySlot[]) {
 
 export function AvailabilityPage() {
   const availability = useQuery(orpc.tutor.listAvailability.queryOptions());
-  if (availability.isPending) return <AvailabilitySkeleton />;
+  if (availability.isPending) return <Loader />;
 
   const slots = ((availability.data ?? []) as AvailabilitySlot[]).toSorted(
     (a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime(),
@@ -709,15 +710,6 @@ function Rule({ label, value }: { label: string; value: string }) {
     <div className="flex justify-between gap-3">
       <Text className="text-sm text-muted">{label}</Text>
       <Text className="text-sm font-medium">{value}</Text>
-    </div>
-  );
-}
-
-function AvailabilitySkeleton() {
-  return (
-    <div className="grid animate-pulse gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.6fr)]">
-      <Card className="min-h-160 bg-accent/40" />
-      <Card className="min-h-96 bg-accent/40" />
     </div>
   );
 }

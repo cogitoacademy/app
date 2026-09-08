@@ -35,6 +35,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { EmptyState } from "@/components/empty-state";
 import { CogitoMarks } from "@/components/cogito-marks";
 import { BalanceWidget } from "@/components/dashboard/balance-widget";
+import { InfoPreview } from "@/components/info-preview";
 import { orpc } from "@/utils/orpc";
 import { getUserFacingError } from "@/lib/error-message";
 
@@ -159,52 +160,54 @@ export function BalancePage() {
       direction="column"
       spacing="lg"
     >
-      <div>
-        <Heading level={1} size="md">
-          Balance
-        </Heading>
-        <Text className="mt-1 text-muted">
-          Track your Marks, active holds, and top-up options.
-        </Text>
-      </div>
-      <div className="grid min-w-0 grid-cols-1 items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-        <BalanceWidget
-          availableBalance={availableBalance}
-          heldBalance={heldBalance}
-          totalBalance={totalBalance}
-          isLoading={walletLoading}
-          actionLabel="Find a tutor"
-          actionHref="/tutors"
-          actionIcon={<IconUsers />}
-        />
-        <Card className="h-full min-w-0">
-          <CardHeader>
-            <CardTitle>Knowledge Bank Access</CardTitle>
-            <CardDescription>
-              Knowledge Bank access requires at least 35 Marks in your wallet.
-              You are not paying 35 Marks to open it.
-            </CardDescription>
-          </CardHeader>
-          <CardBody>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3 rounded-lg border border-border p-4">
+      <div className="grid min-w-0 grid-cols-1 items-stretch gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <div className="flex min-w-0 flex-col gap-4">
+          <div>
+            <Heading level={1} size="md">
+              Balance
+            </Heading>
+            <Text className="mt-1 text-muted">
+              Track your Marks, active holds, and top-up options.
+            </Text>
+          </div>
+          <Card className="min-w-0">
+            <CardBody className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-3 p-4 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:p-5">
               <IconBox variant="tertiary">
                 {kbAccessible ? <IconBook /> : <IconLockOpen />}
               </IconBox>
               <div className="min-w-0">
-                <Heading size="sm">
-                  {kbAccessible
-                    ? "You have access"
-                    : `${Math.max(0, 35 - totalBalance)} Marks needed`}
-                </Heading>
+                <div className="flex items-center gap-1.5">
+                  <Heading size="sm">Knowledge Bank</Heading>
+                  <InfoPreview
+                    title="Knowledge Bank access"
+                    description={
+                      <>
+                        Keep at least
+                        <CogitoMarks value={35} size="3" className="mx-1" />
+                        in your total wallet balance to unlock the Knowledge
+                        Bank. The Marks are not charged when you open it.
+                      </>
+                    }
+                  />
+                </div>
                 <Text className="text-dimmed text-sm">
-                  {kbAccessible
-                    ? "You meet the 35-Mark threshold. Visit the Knowledge Bank to explore materials."
-                    : "Top up your wallet to unlock the Knowledge Bank."}
+                  {kbAccessible ? (
+                    "Unlocked — explore your learning materials."
+                  ) : (
+                    <>
+                      <CogitoMarks
+                        value={Math.max(0, 35 - totalBalance)}
+                        size="3"
+                        className="mr-1"
+                      />
+                      more to unlock.
+                    </>
+                  )}
                 </Text>
               </div>
               {kbAccessible ? (
                 <Button
-                  className="w-full sm:ml-auto sm:w-auto sm:shrink-0 group"
+                  className="col-span-2 w-full sm:col-span-1 sm:w-auto sm:shrink-0"
                   render={
                     <Link
                       to="/knowledge-bank"
@@ -213,21 +216,32 @@ export function BalancePage() {
                   }
                   nativeButton={false}
                 >
-                  Open Knowledge Bank
+                  Open
                 </Button>
               ) : (
                 <Button
-                  className="w-full sm:ml-auto sm:w-auto sm:shrink-0"
+                  className="col-span-2 w-full sm:col-span-1 sm:w-auto sm:shrink-0"
                   variant="secondary"
                   render={<a href="#top-up-marks" aria-label="Top up wallet" />}
                   nativeButton={false}
                 >
-                  Top up wallet
+                  Top up
                 </Button>
               )}
-            </div>
-          </CardBody>
-        </Card>
+            </CardBody>
+          </Card>
+        </div>
+        <div className="min-w-0 [&>*]:h-full">
+          <BalanceWidget
+            availableBalance={availableBalance}
+            heldBalance={heldBalance}
+            totalBalance={totalBalance}
+            isLoading={walletLoading}
+            actionLabel="Find a tutor"
+            actionHref="/tutors"
+            actionIcon={<IconUsers />}
+          />
+        </div>
       </div>
 
       <Card id="top-up-marks" className="w-full min-w-0 max-w-full">
@@ -341,17 +355,7 @@ export function BalancePage() {
                   <CardBody>
                     <div className="space-y-1">
                       <Text className="text-3xl font-bold">
-                        <span className="inline-flex items-center gap-1.5">
-                          {pkg.marks}
-                          <img
-                            src="/cogito-mark.png"
-                            alt=""
-                            aria-hidden="true"
-                            width={16}
-                            height={16}
-                            className="h-[0.75em] w-auto translate-y-[-0.05em]"
-                          />
-                        </span>
+                        <CogitoMarks value={pkg.marks} size="5" />
                       </Text>
                     </div>
                     <Separator className="my-3" />
@@ -466,6 +470,7 @@ export function BalancePage() {
                       >
                         <CogitoMarks
                           value={`${direction > 0 ? "+" : direction < 0 ? "-" : ""}${entry.amount}`}
+                          size="4"
                         />
                       </Text>
                       <Text className="inline-flex items-center gap-1 text-sm text-muted sm:justify-end">

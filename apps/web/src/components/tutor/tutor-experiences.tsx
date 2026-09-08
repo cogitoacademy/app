@@ -159,12 +159,14 @@ export function TutorExperiencesDisplay({
                 •
               </span>
               <div className="min-w-0">
-                <Text className="font-semibold leading-snug">
-                  {entry.role} · {entry.organization}
-                </Text>
-                <Text className="mt-0.5 text-sm text-muted">
-                  {formatExperiencePeriod(entry)}
-                </Text>
+                <div className="flex items-center justify-between">
+                  <Text className="font-semibold leading-snug">
+                    {entry.role} · {entry.organization}
+                  </Text>
+                  <Text className="mt-0.5 text-sm text-muted">
+                    {formatExperiencePeriod(entry)}
+                  </Text>
+                </div>
                 <Text className="mt-1 whitespace-pre-line text-muted">
                   {entry.description}
                 </Text>

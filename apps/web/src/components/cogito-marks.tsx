@@ -30,7 +30,7 @@ export function CogitoMarks({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 whitespace-nowrap",
+        "inline-flex items-center gap-1 whitespace-nowrap align-middle leading-none",
         className,
       )}
       aria-label={`${value} Marks`}

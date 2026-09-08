@@ -2,12 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  IconAlertTriangle,
-  IconCalendarEvent,
-  IconMessage,
-  IconNotes,
-} from "@tabler/icons-react";
+import { IconAlertTriangle, IconMessage, IconNotes } from "@tabler/icons-react";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
@@ -55,13 +50,117 @@ import { getUserFacingError } from "@/lib/error-message";
 import { useNow } from "@/hooks/use-now";
 import { orpc } from "@/utils/orpc";
 
-type DialogKind = "report" | "decline-invite" | "withdraw-invite" | null;
+type DialogKind =
+  | "report"
+  | "decline-invite"
+  | "manage-invites"
+  | "withdraw-invite"
+  | null;
 type SupportCategory =
   | "tutor_late"
   | "tutor_no_show"
   | "technical"
   | "payment"
   | "other";
+
+type BookingLifecycleContextInput = {
+  viewerRole: string;
+  currentState: string;
+  bookingType: string;
+  scheduledStartAt: string | Date;
+  participantRole?: string;
+  participantState?: string;
+  isBookingProposer?: boolean;
+  pendingInvitees?: { userId: string; name: string }[];
+  perStudentMarks?: number;
+  proposedStartAt?: string | Date;
+  proposedEndAt?: string | Date;
+  activeProposalId?: string;
+  isRescheduleProposer?: boolean;
+  viewerRescheduleDecision?: "pending" | "accepted" | "rejected";
+  timezone?: string;
+  now?: number;
+};
+
+export function getBookingLifecycleContext({
+  viewerRole,
+  currentState,
+  bookingType,
+  scheduledStartAt,
+  participantRole,
+  participantState,
+  isBookingProposer,
+  pendingInvitees = [],
+  perStudentMarks,
+  proposedStartAt,
+  proposedEndAt,
+  activeProposalId,
+  isRescheduleProposer,
+  viewerRescheduleDecision,
+  timezone,
+  now = Date.now(),
+}: BookingLifecycleContextInput) {
+  const isStudent = viewerRole === "student";
+  const hasPendingReschedule =
+    currentState === "reschedule_proposed" && Boolean(activeProposalId);
+
+  if (hasPendingReschedule) {
+    if (viewerRescheduleDecision === "accepted") {
+      if (isRescheduleProposer) {
+        return bookingType === "group"
+          ? "Your proposed time is waiting for the other participants."
+          : `Your proposed time is waiting for the ${viewerRole === "tutor" ? "student" : "tutor"} to respond.`;
+      }
+      return bookingType === "group"
+        ? "You accepted the new time. Waiting for the other participants."
+        : `You accepted the new time. Waiting for the ${viewerRole === "tutor" ? "student" : "tutor"} to respond.`;
+    }
+
+    if (proposedStartAt && proposedEndAt) {
+      return `A new time was proposed for ${formatBookingDate(proposedStartAt, timezone)} · ${formatBookingTimeRange(proposedStartAt, proposedEndAt, timezone)}.`;
+    }
+    return "A new time was proposed. Review it before continuing.";
+  }
+
+  if (
+    isStudent &&
+    bookingType === "group" &&
+    currentState === "awaiting_participant_confirmation" &&
+    participantRole === "invitee" &&
+    participantState === "pending"
+  ) {
+    return `You have been invited to this group session. Accepting will reserve ${perStudentMarks === undefined ? "the required Marks" : `${perStudentMarks} Marks`}.`;
+  }
+
+  if (
+    isStudent &&
+    currentState === "awaiting_reconfirmation" &&
+    ["confirmed", "reconfirmed"].includes(participantState ?? "") &&
+    participantState !== "reconfirmed"
+  ) {
+    return `The booking details changed. Review the updated schedule and ${perStudentMarks === undefined ? "price" : `${perStudentMarks} Marks`} before continuing.`;
+  }
+
+  if (
+    isStudent &&
+    Boolean(isBookingProposer) &&
+    (bookingType === "group" || bookingType === "series") &&
+    currentState === "awaiting_participant_confirmation" &&
+    pendingInvitees.length > 0
+  ) {
+    return `${pendingInvitees.length} invitation${pendingInvitees.length === 1 ? " is" : "s are"} still pending.`;
+  }
+
+  if (
+    isStudent &&
+    ["scheduled", "no_show"].includes(currentState) &&
+    now >= new Date(scheduledStartAt).getTime() + 15 * 60_000
+  ) {
+    return "If the tutor is late or absent, you can report the issue to support.";
+  }
+
+  return null;
+}
 
 export function BookingLifecycleActions({
   bookingId,
@@ -75,13 +174,8 @@ export function BookingLifecycleActions({
   participantState,
   isBookingProposer,
   pendingInvitees,
-  perStudentMarks,
-  proposedStartAt,
-  proposedEndAt,
   activeProposalId,
-  isRescheduleProposer,
   viewerRescheduleDecision,
-  rescheduleReason,
   onBookingChanged,
   section = "all",
 }: {
@@ -285,201 +379,102 @@ export function BookingLifecycleActions({
     confirmInvite.isPending ||
     declineInvite.isPending ||
     withdrawInvite.isPending;
-  const acceptedRescheduleMessage = isRescheduleProposer
-    ? bookingType === "group"
-      ? "Your proposed time is waiting for the other participants."
-      : `Your proposed time is waiting for the ${viewerRole === "tutor" ? "student" : "tutor"} to respond.`
-    : bookingType === "group"
-      ? "You accepted the new time. Waiting for the other participants."
-      : `You accepted the new time. Waiting for the ${viewerRole === "tutor" ? "student" : "tutor"} to respond.`;
-
   return (
     <>
       {showActions && hasActions ? (
-        <Card>
-          <CardHeader>
-            <IconBox variant="warning-subtle">
-              <IconCalendarEvent />
-            </IconBox>
-            <CardTitle>
-              Booking actions
-              <CardInfoPreview>
-                <InfoPreview
-                  title="Booking actions"
-                  description="Manage schedule changes or report an issue with this session."
-                  label="About booking actions"
-                />
-              </CardInfoPreview>
-            </CardTitle>
-          </CardHeader>
-          {hasPendingReschedule ? (
-            <CardBody className="space-y-3">
-              <Text className="font-medium">A new time was proposed</Text>
-              {proposedStartAt && proposedEndAt ? (
-                <Text className="text-muted">
-                  {formatBookingDate(proposedStartAt, timezone)} ·{" "}
-                  {formatBookingTimeRange(
-                    proposedStartAt,
-                    proposedEndAt,
-                    timezone,
-                  )}
-                </Text>
-              ) : (
-                <Text className="text-muted">
-                  Review the proposed schedule and choose whether to continue.
-                </Text>
-              )}
-              {rescheduleReason ? (
-                <Text className="text-sm text-muted">
-                  Reason: {rescheduleReason}
-                </Text>
-              ) : null}
-              {viewerRescheduleDecision === "accepted" ? (
-                <Text className="text-sm text-success">
-                  {acceptedRescheduleMessage}
-                </Text>
-              ) : null}
-              {viewerRescheduleDecision === "pending" ? (
-                <Text className="text-xs text-muted">
-                  Accepting records your vote. The booking time changes only
-                  after every required party accepts.
-                </Text>
-              ) : null}
-            </CardBody>
+        <>
+          {canReportLateness ? (
+            <Button
+              variant="plain"
+              size="sm-icon"
+              onClick={() => setDialog("report")}
+              aria-label="Report a tutor issue"
+              title="Report a tutor issue"
+            >
+              <IconAlertTriangle />
+            </Button>
           ) : null}
-          {canRespondToInvite ? (
-            <CardBody className="space-y-2">
-              <Text className="font-medium">
-                You have been invited to this group session
-              </Text>
-              <Text className="text-muted">
-                Accepting reserves {perStudentMarks ?? "the required"} Marks
-                from your wallet.
-              </Text>
-            </CardBody>
-          ) : null}
-          {canWithdrawInvite ? (
-            <CardBody className="space-y-3">
-              <div>
-                <Text className="font-medium">Pending invitations</Text>
-                <Text className="text-muted">
-                  Withdraw an invitation before that participant confirms.
-                </Text>
-              </div>
-              <div className="space-y-2">
-                {invitees.map((invitee) => (
-                  <div
-                    key={invitee.userId}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2"
-                  >
-                    <Text className="min-w-0 truncate">{invitee.name}</Text>
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={() => {
-                        setWithdrawInviteTarget(invitee);
-                        setDialog("withdraw-invite");
-                      }}
-                      disabled={invitePending}
-                    >
-                      Withdraw invite
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </CardBody>
-          ) : null}
-          {canReconfirm ? (
-            <CardBody className="space-y-2">
-              <Text className="font-medium">The booking details changed</Text>
-              <Text className="text-muted">
-                Review the updated schedule and price of{" "}
-                {perStudentMarks ?? "the required"} Marks before continuing.
-              </Text>
-            </CardBody>
-          ) : null}
-          <CardFooter className="flex-wrap justify-end gap-2">
-            {canReportLateness ? (
+          {canDecideReschedule ? (
+            <>
               <Button
                 variant="danger"
                 size="sm"
-                onClick={() => setDialog("report")}
+                onClick={() =>
+                  reject.mutate({ bookingId, proposalId: activeProposalId })
+                }
+                progress={reject.isPending}
+                disabled={decisionPending}
               >
-                <IconAlertTriangle /> Report tutor issue
+                Reject
               </Button>
-            ) : null}
-            {canDecideReschedule ? (
-              <>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() =>
-                    reject.mutate({ bookingId, proposalId: activeProposalId })
-                  }
-                  progress={reject.isPending}
-                  disabled={decisionPending}
-                >
-                  Reject
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() =>
-                    accept.mutate({ bookingId, proposalId: activeProposalId })
-                  }
-                  progress={accept.isPending}
-                  disabled={decisionPending}
-                >
-                  Accept new time
-                </Button>
-              </>
-            ) : null}
-            {canRespondToInvite ? (
-              <>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => setDialog("decline-invite")}
-                  disabled={invitePending}
-                >
-                  Decline invitation
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() => confirmInvite.mutate({ bookingId })}
-                  progress={confirmInvite.isPending}
-                  disabled={invitePending}
-                >
-                  Accept invitation
-                </Button>
-              </>
-            ) : null}
-            {canReconfirm ? (
-              <>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => reconfirm.mutate({ bookingId, accept: false })}
-                  progress={
-                    reconfirm.isPending && reconfirm.variables?.accept === false
-                  }
-                  disabled={reconfirm.isPending}
-                >
-                  Decline changes
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() => reconfirm.mutate({ bookingId, accept: true })}
-                  progress={
-                    reconfirm.isPending && reconfirm.variables?.accept === true
-                  }
-                  disabled={reconfirm.isPending}
-                >
-                  Reconfirm booking
-                </Button>
-              </>
-            ) : null}
-          </CardFooter>
-        </Card>
+              <Button
+                size="sm"
+                onClick={() =>
+                  accept.mutate({ bookingId, proposalId: activeProposalId })
+                }
+                progress={accept.isPending}
+                disabled={decisionPending}
+              >
+                Accept new time
+              </Button>
+            </>
+          ) : null}
+          {canRespondToInvite ? (
+            <>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => setDialog("decline-invite")}
+                disabled={invitePending}
+              >
+                Decline invitation
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => confirmInvite.mutate({ bookingId })}
+                progress={confirmInvite.isPending}
+                disabled={invitePending}
+              >
+                Accept invitation
+              </Button>
+            </>
+          ) : null}
+          {canWithdrawInvite ? (
+            <Button
+              variant="plain"
+              size="sm"
+              onClick={() => setDialog("manage-invites")}
+              disabled={invitePending}
+            >
+              Manage invitations
+            </Button>
+          ) : null}
+          {canReconfirm ? (
+            <>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => reconfirm.mutate({ bookingId, accept: false })}
+                progress={
+                  reconfirm.isPending && reconfirm.variables?.accept === false
+                }
+                disabled={reconfirm.isPending}
+              >
+                Decline changes
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => reconfirm.mutate({ bookingId, accept: true })}
+                progress={
+                  reconfirm.isPending && reconfirm.variables?.accept === true
+                }
+                disabled={reconfirm.isPending}
+              >
+                Reconfirm booking
+              </Button>
+            </>
+          ) : null}
+        </>
       ) : null}
 
       {showSupplementary && isCompleted ? (
@@ -656,6 +651,45 @@ export function BookingLifecycleActions({
               disabled={declineInvite.isPending}
             >
               Decline invitation
+            </Button>
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
+
+      <Dialog
+        open={dialog === "manage-invites"}
+        onOpenChange={(open) => !open && setDialog(null)}
+      >
+        <DialogPopup>
+          <DialogHeader className="flex-col items-start gap-1.5">
+            <DialogTitle>Pending invitations</DialogTitle>
+            <DialogDescription>
+              Withdraw an invitation before that participant confirms.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody className="space-y-2">
+            {invitees.map((invitee) => (
+              <div
+                key={invitee.userId}
+                className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2"
+              >
+                <Text className="min-w-0 truncate">{invitee.name}</Text>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => {
+                    setWithdrawInviteTarget(invitee);
+                    setDialog("withdraw-invite");
+                  }}
+                >
+                  Withdraw
+                </Button>
+              </div>
+            ))}
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setDialog(null)}>
+              Done
             </Button>
           </DialogFooter>
         </DialogPopup>

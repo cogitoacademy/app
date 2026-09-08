@@ -25,6 +25,7 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 
 import { EmptyState } from "@/components/empty-state";
 import { InfoPreview } from "@/components/info-preview";
+import Loader from "@/components/loader";
 import {
   isUpcomingBooking,
   NextLessonSection,
@@ -280,7 +281,7 @@ function ReviewRequestsCard({
       </CardHeader>
       <CardBody>
         {isLoading ? (
-          <div className="h-28 animate-pulse rounded-lg bg-accent" />
+          <Loader />
         ) : reviewQueue.length > 0 ? (
           <Stack direction="column" spacing="sm" className="m-0!">
             {reviewQueue.slice(0, 3).map((booking) => (

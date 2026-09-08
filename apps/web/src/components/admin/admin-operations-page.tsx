@@ -88,6 +88,7 @@ import {
 import { EmptyState } from "@/components/empty-state";
 import { InfoPreview } from "@/components/info-preview";
 import { CogitoMarks } from "@/components/cogito-marks";
+import Loader from "@/components/loader";
 import { TablePagination } from "@/components/table-pagination";
 import {
   Tabs,
@@ -854,17 +855,28 @@ function AdminWalletImpactCard({
         <AdminMetricRow
           label="Original reservation"
           value={
-            <CogitoMarks value={formatMarksValue(booking.originalMarks)} />
+            <CogitoMarks
+              value={formatMarksValue(booking.originalMarks)}
+              size="4"
+            />
           }
         />
         <AdminMetricRow
           label="Currently held"
-          value={<CogitoMarks value={formatMarksValue(booking.holdAmount)} />}
+          value={
+            <CogitoMarks
+              value={formatMarksValue(booking.holdAmount)}
+              size="4"
+            />
+          }
         />
         <AdminMetricRow
           label="Refunded"
           value={
-            <CogitoMarks value={formatMarksValue(booking.refundedAmount)} />
+            <CogitoMarks
+              value={formatMarksValue(booking.refundedAmount)}
+              size="4"
+            />
           }
         />
         <AdminMetricRow
@@ -1617,7 +1629,9 @@ function WalletLookup() {
                               {humanize(entry.entryType)}
                             </Badge>
                           </TableCell>
-                          <TableCell>{entry.amount} Marks</TableCell>
+                          <TableCell>
+                            <CogitoMarks value={entry.amount} size="3" />
+                          </TableCell>
                           <TableCell>{entry.bookingId ?? "—"}</TableCell>
                           <TableCell>
                             {formatBookingDate(entry.createdAt)}
@@ -1813,7 +1827,7 @@ function RoomCatalog({ onAddRoom }: { onAddRoom: () => void }) {
       </CardHeader>
       <CardBody>
         {roomsQuery.isPending ? (
-          <div className="min-h-24 animate-pulse rounded-lg bg-accent/30" />
+          <Loader />
         ) : roomsQuery.isError ? (
           <div className="flex flex-col items-start gap-3">
             <Text className="text-muted">
@@ -2110,7 +2124,7 @@ function PendingRoomApprovals({
       </CardHeader>
       <CardBody>
         {isPending ? (
-          <div className="min-h-32 animate-pulse rounded-lg bg-accent/30" />
+          <Loader />
         ) : errorMessage ? (
           <div className="flex flex-col items-start gap-3">
             <Text className="text-muted">{errorMessage}</Text>
@@ -2255,7 +2269,9 @@ function BalanceCard({ label, value }: { label: string; value: number }) {
         </IconBox>
         <div>
           <Text className="text-sm text-muted">{label}</Text>
-          <Text className="text-2xl font-semibold">{value} Marks</Text>
+          <Text className="text-2xl font-semibold">
+            <CogitoMarks value={value} size="5" />
+          </Text>
         </div>
       </CardBody>
     </Card>
@@ -2264,7 +2280,9 @@ function BalanceCard({ label, value }: { label: string; value: number }) {
 function LoadingCard() {
   return (
     <Card>
-      <CardBody className="min-h-48 animate-pulse bg-accent/30" />
+      <CardBody>
+        <Loader />
+      </CardBody>
     </Card>
   );
 }

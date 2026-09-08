@@ -38,6 +38,8 @@ import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 
 import { EmptyStateCard } from "@/components/empty-state";
+import { CogitoMarks } from "@/components/cogito-marks";
+import Loader from "@/components/loader";
 import { serverUrl } from "@/lib/server-url";
 import { orpc } from "@/utils/orpc";
 import { getCategoryLabel } from "./knowledge-bank-utils";
@@ -84,24 +86,7 @@ export function KnowledgeBankPage() {
   }, [category, items, search]);
   const hasFilters = category !== "all" || search.trim().length > 0;
 
-  if (resources.isPending) {
-    return (
-      <Stack direction="column" spacing="lg">
-        <div>
-          <Heading>Knowledge Bank</Heading>
-          <Text className="mt-1 text-muted">Loading learning materials…</Text>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3].map((item) => (
-            <div
-              key={item}
-              className="h-48 animate-pulse rounded-lg border border-border bg-accent/30"
-            />
-          ))}
-        </div>
-      </Stack>
-    );
-  }
+  if (resources.isPending) return <Loader />;
 
   if (resources.isError) {
     return (
@@ -122,7 +107,24 @@ export function KnowledgeBankPage() {
         icon={<IconLock />}
         tone="warning"
         title="Knowledge Bank is locked"
-        description={`Keep at least ${access?.threshold ?? 35} Marks in your wallet to unlock the learning materials. Your current balance is ${access?.balance ?? 0} Marks.`}
+        description={
+          <>
+            Keep at least
+            <CogitoMarks
+              value={access?.threshold ?? 35}
+              size="3"
+              className="mx-1"
+            />
+            in your wallet to unlock the learning materials. Your current
+            balance is
+            <CogitoMarks
+              value={access?.balance ?? 0}
+              size="3"
+              className="mx-1"
+            />
+            .
+          </>
+        }
         action={
           <Button
             nativeButton={false}
@@ -140,7 +142,6 @@ export function KnowledgeBankPage() {
       <Stack direction="column" spacing="lg">
         <div>
           <div className="flex items-center gap-2">
-            <IconBook2 className="size-6 text-primary" />
             <Heading>Knowledge Bank</Heading>
           </div>
           <Text className="mt-1 max-w-2xl text-muted">

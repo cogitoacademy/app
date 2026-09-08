@@ -10,11 +10,7 @@ import {
 } from "@tabler/icons-react";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
-import {
-  Card,
-  CardBody,
-  CardHeader,
-} from "@cogito-app/ui/components/selia/card";
+import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Input } from "@cogito-app/ui/components/selia/input";
 import {
@@ -34,6 +30,7 @@ import {
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { EmptyStateCard } from "@/components/empty-state";
+import Loader from "@/components/loader";
 import { orpc } from "@/utils/orpc";
 import { TutorCard } from "./tutor-card";
 import { TutorDrawer } from "./tutor-drawer";
@@ -392,18 +389,7 @@ export function TutorsPageContent() {
       )}
 
       {isPending ? (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          {[
-            "tutor-skeleton-1",
-            "tutor-skeleton-2",
-            "tutor-skeleton-3",
-            "tutor-skeleton-4",
-            "tutor-skeleton-5",
-            "tutor-skeleton-6",
-          ].map((placeholder) => (
-            <TutorCardSkeleton key={placeholder} />
-          ))}
-        </div>
+        <Loader />
       ) : tutors.length === 0 ? (
         <EmptyStateCard
           className="z-1"
@@ -444,25 +430,5 @@ export function TutorsPageContent() {
         onOpenChange={setDrawerOpen}
       />
     </Stack>
-  );
-}
-
-function TutorCardSkeleton() {
-  return (
-    <Card className="animate-pulse">
-      <CardHeader>
-        <div className="h-5 w-32 rounded bg-muted" />
-        <div className="h-5 w-16 rounded bg-muted" />
-      </CardHeader>
-      <CardBody className="flex flex-col gap-3">
-        <div className="h-4 w-full rounded bg-muted" />
-        <div className="h-4 w-2/3 rounded bg-muted" />
-        <div className="flex flex-wrap gap-1.5">
-          <div className="h-5 w-16 rounded bg-muted" />
-          <div className="h-5 w-20 rounded bg-muted" />
-          <div className="h-5 w-14 rounded bg-muted" />
-        </div>
-      </CardBody>
-    </Card>
   );
 }

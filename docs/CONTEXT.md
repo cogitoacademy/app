@@ -1,6 +1,21 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-09-05
+Last updated: 2026-09-08
+
+## Unified booking-detail actions (2026-09-08)
+
+The booking detail header is now the single action zone for propose, cancel,
+review, complete, reschedule decisions, invitations, reconfirmation, and
+lateness reporting. Lifecycle states that need explanation replace the generic
+state description with concise contextual copy. The old sticky-rail Booking
+actions card is removed; session notes and support reports remain in the main
+flow. Lateness reporting is an accessible icon-only secondary action. This
+supersedes older placement notes below that refer to contextual booking actions
+in the sticky rail.
+
+## Competition field color tokens (2026-09-08)
+
+The authenticated app now uses the academy's canonical competition palette rather than approximating fields with generic status colors. The shared UI theme exposes paired background/foreground tokens for MUN, Olympiad, WSC, Research & Essay, Debate, Business Plan, and Speech. App surfaces can consume the tokens directly, while `apps/web/src/lib/competition-colors.ts` maps Sanity `coreCategory`, current subject-taxonomy parent slugs, and legacy category slugs to reusable soft and solid class sets; unknown categories fall back to Research & Essay. Competition-field badges in tutor discovery cards, the tutor drawer, onboarding selections, and calendar details use the solid treatment. Their foreground is white for every field except Business Plan, which uses the academy's dark foreground. Calendar event surfaces remain soft for readability in the calendar grid and agenda.
 
 ## Request tracing with W3C traceparent (2026-09-05)
 
@@ -48,13 +63,20 @@ RPC, schema, persistence, or operational contract changed.
 The student tutor drawer mirrors the public tutor profile treatment with a
 full-width 300px hero using the published profile image, top-aligned cover
 cropping, a bottom gradient, a close affordance, and specialization badges
-overlaid at the bottom. Education, achievements, and experiences render inside
-one combined **Achievements & experience** panel, while legacy achievement and
-experience text remains a fallback for older profiles. Tutor cards keep their
+overlaid at the bottom. Education, achievements, and experiences render in
+separate profile-highlight cards, while legacy achievement and experience text
+remains a fallback for older profiles. Tutor cards keep their
 desktop metadata on one line with natural-width specialization labels that do
 not repeat the parent category, reveal one, two, or three badges at
 progressively wider breakpoints, and retain a `From [Marks icon] #` price
 label; no RPC, schema, or persistence contract changed.
+
+The student `/tutors/:tutorId/book` page also exposes **View tutor profile**
+beside the booking heading. It reuses the same published-profile drawer from
+the tutor directory, keeps the booking form mounted while the drawer is open,
+and replaces the drawer's booking CTA with **Back to booking**. This is
+frontend-only; the existing `tutors.getProfile` response is sufficient and no
+RPC, schema, or persistence contract changed.
 
 ## Student dashboard balance widget (2026-09-04)
 
@@ -77,9 +99,25 @@ history cannot impose a desktop-sized intrinsic width on the entire page. The
 QRIS payment code also scales to the nested card's available width instead of
 enforcing a fixed 272-pixel padded box.
 
+The Balance page presents Knowledge Bank eligibility as a compact status card.
+Its 35-Mark rule and no-charge explanation live in an accessible info preview,
+while the always-visible surface is limited to the current status and a short
+Open or Top up action. On mobile the action occupies a single full-width row;
+on wider screens the same content collapses into one horizontal row. The page
+heading and compact card form the wider left column, while the denser balance
+widget fills a narrower right rail. The Knowledge Bank card keeps its natural
+content height instead of stretching to the grid row, preventing empty vertical
+space inside its boundary. The two columns stack in the same reading order on
+mobile.
+
 Marks history renders the transaction date on its own metadata line below the
 reason. Transaction amounts and resulting balances use the shared `CogitoMarks`
 icon-prefix presentation instead of spelling out Marks as a text suffix.
+`CogitoMarks` call sites declare an icon size appropriate to their surrounding
+typography: size 3 for compact body/metadata text, size 4 for standard values,
+and sizes 5–6 for prominent totals. The component uses a vertically centered
+inline-flex box with middle alignment; prose-only call sites add local inline
+margin while grouped labels continue to rely on their parent gap.
 
 ## Card title info preview (2026-09-04)
 
@@ -101,7 +139,14 @@ and month navigation remain available; the month view does not replace the grid
 with an empty state. The page-level empty state is still used when no published
 competitions exist at all, while the agenda view may continue to explain an
 event-free selected period. This is frontend-only and changes no API, schema, or
-persistence contract.
+persistence contract. When the page-level state is shown because there are no
+published competitions, its calendar glyph keeps the Cogito orange accent.
+
+## Competition Calendar empty-state accent (2026-09-08)
+
+The page-level no-competition state keeps the calendar icon in the brand orange
+token while shared empty-state tones remain unchanged for other surfaces. This
+is frontend-only and changes no API, schema, or persistence contract.
 
 ## Sidebar booking-action badge (2026-09-04)
 
@@ -355,9 +400,9 @@ self-ban. Coolify's service/resource setup remains a one-time control-plane
 operation. The end-to-end provisioning, release, manual CI-quota fallback,
 verification, and rollback procedure is documented in [Setup and Deployment](./DEPLOYMENT.md).
 
-The authenticated `/guide` route is the product-facing **How Cogito Works** guide. It is a frontend-only, code-managed journey map rather than a developer setup document. Students can see only the Student journey; tutors can switch between Tutor and Student; admins can switch between Admin, Tutor, and Student. The role selector sits on its own at the top of the page, while the introduction and journey sit in a centered `max-w-6xl` guide shell. Step details open by default so the full flow can be read without one-by-one interaction; a single global control can collapse or restore all details, while each step remains individually keyboard-accessible. Each view combines a detailed tutoring lifecycle timeline with expandable exception branches and links to the existing feature routes; desktop uses a sticky secondary chapter rail on the right with one restrained progress header and Selia `Item` rows with a semantic media tint for chapter wayfinding, while mobile stacks the same navigation above the content. Its Scandinavian treatment uses a neutral, sans-serif hierarchy, restrained borders, purposeful whitespace, and smooth reduced-motion-aware details so the guide works for learners from ages 5–18 as well as tutors and admins. Timing-sensitive copy is explicit and bolded in the rendered guide: invite links last 7 days; booking response, participant confirmation, reconfirmation, and room approval use 12-hour windows unless the session starts sooner; student self-service changes close at H-2 (2 hours before start); reschedule proposals last 24 hours; lateness is measured at 15 minutes; meeting retries run every 5 minutes for up to 3 attempts; and the admin support SLA is 30 minutes in business hours or 4 hours outside. The static content source is `apps/web/src/components/guide/guide-content.ts`; no API or database contract is involved.
+The authenticated `/guide` route is the product-facing **How Cogito Works** guide. It is a frontend-only, code-managed journey map rather than a developer setup document. Students can see only the Student journey; tutors can switch between Tutor and Student; admins can switch between Admin, Tutor, and Student. The role selector sits on its own at the top of the page, while the introduction and journey sit in a centered `max-w-6xl` guide shell. Step details open by default so the full flow can be read without one-by-one interaction; a single global control can collapse or restore all details, while each step remains individually keyboard-accessible. Each view combines a detailed tutoring lifecycle timeline with expandable exception branches and links to the existing feature routes; desktop uses a sticky secondary chapter rail on the right with one restrained progress header and Selia `Item` rows with a semantic media tint for chapter wayfinding, while mobile stacks the same navigation above the content. Timeline markers use the grid row's normal stretch behavior, so collapsed mobile details leave no residual body space and the connector still spans expanded rows. Its Scandinavian treatment uses a neutral, sans-serif hierarchy, restrained borders, purposeful whitespace, and smooth reduced-motion-aware details so the guide works for learners from ages 5–18 as well as tutors and admins. Timing-sensitive copy is explicit and bolded in the rendered guide: invite links last 7 days; booking response, participant confirmation, reconfirmation, and room approval use 12-hour windows unless the session starts sooner; student self-service changes close at H-2 (2 hours before start); reschedule proposals last 24 hours; lateness is measured at 15 minutes; meeting retries run every 5 minutes for up to 3 attempts; and the admin support SLA is 30 minutes in business hours or 4 hours outside. The static content source is `apps/web/src/components/guide/guide-content.ts`; no API or database contract is involved.
 
-The app-wide TanStack Router pending state is rendered by `apps/web/src/components/loader.tsx` as a visible token-based loading ring with a contrasting track, the local Selia `Spinner` component as its primary progress arc, a loading label, and reduced-motion behavior. It is presentation-only and keeps the same router/onboarding/auth loading entry points.
+The shared frontend pending state is rendered by `apps/web/src/components/loader.tsx` as the default loading component: a token-based loading ring whose primary Selia `Spinner` arc uses `cogito-orange`, with a loading label and reduced-motion behavior. Feature loading placeholders that previously used bespoke pulse skeletons now reuse this same component. It is presentation-only and keeps the same router/onboarding/auth loading entry points.
 
 Unknown client-side paths render the branded `NotFoundPage` from the root route instead of TanStack Router's generic `Not Found` fallback. Route and outer-boundary failures use the matching `ErrorPage` status treatment with a single tertiary browser-back action. Network failures across query and auth surfaces are normalized by `apps/web/src/lib/error-message.ts`; technical messages such as `Failed to fetch` become plain-language connection guidance without changing any API or persistence contract.
 
@@ -390,6 +435,7 @@ Before submission, the admin tutor invite form checks whether the normalized ema
 Booking scheduling and reschedule rules: [Booking Scheduling and Reschedule Specification](./booking-scheduling-and-reschedule-spec.md) (v1.0.0, 2026-08-16). Student booking and reschedule forms expose 15-minute minus/plus controls, derive the fixed 90-minute end time, and show tutor-window validation only when the chosen start is outside the allowed range.
 
 The student booking form uses a balanced responsive composition. At desktop widths, session format and the sticky booking summary occupy the right rail; availability remains a card grid, and selecting a slot expands that slot into a two-column row with its own start-time editor directly beside it. On narrower screens, the same editor stacks below its selected slot, modality returns to the start of the form flow, and the full summary moves into a bottom drawer opened from a persistent compact price/schedule preview; the drawer submit button remains associated with the booking form.
+The page header remains stable while the Participants section owns the live Solo/Group badge. Its student search field uses the Selia `InputGroupAddon` search icon, and the field, results popup, and result actions inherit default Selia radii without local pill or enlarged-radius overrides. Both summary surfaces describe participant scope separately from Single/Series cadence, list every selected series date and time, and distinguish the student's price from the balance reserved at submission. Monetary values use the shared `CogitoMarks` component. User-facing booking dates use the shared compact `EEE, d MMM yyyy` booking formatter, while the calendar strip omits the year to preserve space.
 
 Booking list rows and the booking-detail header reuse the canonical
 Calendar/Meet event-title format (`Cogito - {Competition} | {Tutor} x
@@ -460,6 +506,8 @@ Online meeting status stays compact as an accessible Selia `IconInfoSquareRounde
 The booking detail overview merges the date and session hours into one `Date & time` field with a calendar-clock icon, then places Format & access beside it in a responsive two-column grid that stacks on narrow screens. The Participants heading uses the same Selia `IconBox` treatment as the other overview fields.
 
 The booking detail desktop layout keeps the overview/activity flow in an independent left column from the sticky Actions/financial rail, so the rail height cannot create a blank grid row before Activity. Narrow layouts retain the order overview → actions/financial content → Activity. On the admin detail, offline room controls and participant wallet/ledger facts are embedded in Session overview, the participant list uses one column, review context sits in the right rail with Wallet impact, Marks amounts use the shared `CogitoMarks` icon-and-value component, and State history reuses the standard Activity timeline while retaining the admin-only actor identifier. This is presentation-only; no RPC, schema, or persistence contract changes.
+
+The tutor reschedule drawer presents its two scheduling modes through the shared Selia Tabs component and groups published availability by local calendar date. The tutor `/book` flow uses one cohesive date-first scheduler: Online/Offline also uses Selia Tabs, its calendar strip shows seven consecutive dates on desktop and three on mobile (dates without slots remain visible but disabled), and selecting an available date reveals concrete valid 15-minute starts grouped into Morning, Afternoon, and Evening for the fixed 90-minute session. Series selection is keyed by availability slot plus concrete start, so multiple non-overlapping sessions may be selected from one availability window or calendar date; overlapping 90-minute choices are disabled. Chosen starts appear in a separate Selected sessions tray. Selected dates and times rely on the button variant without redundant check icons. Card explanations use the shared CardInfoPreview/InfoPreview popover pattern, while Specialization and the optional focus prompt share one semantic Session details fieldset instead of separate cards. Users no longer select a broad availability window and adjust it in a second control, and modality no longer occupies a standalone side card. Booking payload semantics are unchanged.
 
 Removing a room from a scheduled offline booking keeps the booking scheduled. Admins may subsequently assign a new room from the same overview controls; the backend permits this only when the booking is offline and has no active room assignment, preserving relocation as the path when a room is still active.
 
@@ -771,7 +819,7 @@ The tutor `/profile` editor presents education, competition achievements, and ex
 - Shared Selia controls keep category/specialization IDs and modality values for query inputs while rendering labels; tutor onboarding shows all competition categories with checkboxes, while the tutor list allows multiple categories and specializations, with empty arrays meaning “All”. Tutor discovery keeps search visible and places category, specialization, and modality controls in a collapsed-by-default filter panel; its trigger retains an active-selection count when the panel is closed. The panel expands with a short height/fade transition, rotates its chevron, remains outside keyboard navigation while closed, and disables motion when reduced motion is requested. Multi-select values truncate only the leading label while keeping the `+N more` chip and its ring visible. Search and filter changes debounce `listPublished` by 300 ms so rapid typing or multi-select toggles coalesce into one request.
 - On mobile, tutor discovery cards use a compact profile composition: a 56-pixel avatar and identity header, two-line bio, short specialization badges, and a separated price footer with the shared Marks prefix plus a chevron. Desktop retains the denser horizontal summary, uses natural-width child specialization labels without a repeated parent category, keeps its metadata on one line, and progressively reveals additional specialization badges at wider breakpoints while preserving the `From [Marks icon] #` price label. The whole card remains the profile trigger with a smooth hover-shadow treatment and no translate or pressed-scale effect.
 - The student-facing tutor drawer renders available pricing maps as one group-size matrix with separate Online and Offline Marks columns, prefixing populated price cells with the Cogito Marks icon. This is presentation-only; the discovery response and pricing contracts remain unchanged.
-- The student-facing tutor drawer opens as a swipe-down bottom sheet below the `sm` breakpoint and as a right-side drawer at `sm` and above. It keeps its 300px image hero and booking footer outside the profile body's single vertical scroll container; the body may overscroll locally without moving those fixed regions, so long structured profiles remain reachable on short viewports. Education, achievements, and experiences share one combined profile-highlights panel with legacy text fallbacks. This is presentation-only; the discovery response and pricing contracts remain unchanged.
+- The student-facing tutor drawer opens as a swipe-down bottom sheet below the `sm` breakpoint and as a right-side drawer at `sm` and above. It keeps its 300px image hero and booking footer outside the profile body's single vertical scroll container; the body may overscroll locally without moving those fixed regions, so long structured profiles remain reachable on short viewports. Education, achievements, and experiences render in separate profile-highlight cards with legacy text fallbacks. This is presentation-only; the discovery response and pricing contracts remain unchanged.
 
 ### Invite Module (public + protected)
 
@@ -787,7 +835,7 @@ The tutor `/profile` editor presents education, competition achievements, and ex
 - Student achievement levels are presented in this order: `International`, `National`, `Province/State`, `City/Regency`, `School`. The student proof field gives Google Drive guidance (upload proof, set General access to “Anyone with the link” + Viewer, then paste the link); students do not provide the public documentation image.
 - The student form uses one clear Location value (for example `Jakarta, Indonesia`, `Geneva, Switzerland`, or `Online`) and a long-answer `Brief Description` field with a ranked-result example. The public documentation image is an admin-only correction field.
 - `adminUpdate` lets admins correct all submission fields plus the public documentation image while a record is `pending`/`pending_review`; it uses the row version as a compare-and-swap, writes an `achievement_admin_updated` audit record, and leaves status unchanged until the separate review action.
-- The achievement form uses the shared Selia calendar; selected/today states are drawn on the rounded day button rather than its square grid cell. Its portal-based date picker and Category/Level selects render above the achievement dialog so students can interact with every popup control.
+- The achievement form uses the shared Selia calendar; selected/today states are drawn on the rounded day button rather than its square grid cell. Add, edit, and admin-correction forms open as swipe-down bottom drawers below the `sm` breakpoint and right-side drawers at `sm` and above. Their portal-based date picker and Category/Level selects render above the drawer so every popup control remains interactive.
 
 ### Wallet Module (protected)
 
@@ -1410,3 +1458,7 @@ Status: **all fixed and merged via #106 (2026-08-26)**; the follow-up re-audit f
 ## Tutor weekly honorarium and payout account (2026-08-28)
 
 Tutor-facing financial UI uses IDR only; internal/student Marks values are not presented to tutors. The tutor dashboard shows completed-session honorarium awaiting admin payment, not a calendar-reset total. Admin-confirmed payout records advance an exclusive cutoff so the pending amount clears only after payment. Tutor profiles store private payout bank details: bank name, account number, account-holder name, account-opening city/regency, ownership choice, and transfer-responsibility acknowledgment. Only the exact bank name `BCA` is fee-free, representing conventional BCA; BCA Syariah, `blu` (BCA Digital), and every other bank name incur a Rp2,500 deduction once per payout. The public tutor discovery projection omits all payout fields.
+
+## Cogito Marks amount presentation (2026-09-08)
+
+Student- and admin-facing numeric Marks amounts use the shared `CogitoMarks` component, which prefixes the value with the Cogito mark symbol and supplies an accessible `N Marks` label. Conceptual copy such as “Top Up Marks” remains plain text.

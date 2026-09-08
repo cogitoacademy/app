@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Avatar, AvatarFallback } from "@cogito-app/ui/components/selia/avatar";
+import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import {
@@ -18,6 +19,7 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import { IconX } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import { CogitoMarks } from "@/components/cogito-marks";
+import { getCompetitionFieldClass } from "@/lib/competition-colors";
 import { groupTutorSubjects, type TutorSubject } from "./subject-taxonomy";
 import { TutorPricingTable } from "./tutor-pricing-table";
 import {
@@ -73,6 +75,7 @@ type TutorDrawerProps = {
   } | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  showBookingAction?: boolean;
 };
 
 type PricingModality = "online" | "offline";
@@ -108,7 +111,12 @@ function getPricingTableData(
   return { modalities, rows };
 }
 
-export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
+export function TutorDrawer({
+  tutor,
+  open,
+  onOpenChange,
+  showBookingAction = true,
+}: TutorDrawerProps) {
   const [isDesktop, setIsDesktop] = useState(false);
 
   useEffect(() => {
@@ -136,17 +144,25 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
     selectedTutor.expertise,
   );
   const subjectLabels = subjectGroups.flatMap((group) =>
-    group.children.map((subject) => ({ id: subject.id, label: subject.name })),
+    group.children.map((subject) => ({
+      id: subject.id,
+      field: group.parent?.slug ?? subject.slug,
+      label: subject.name,
+    })),
   );
   const heroSubjects = subjectLabels.slice(0, 3);
-  const hasProfileHighlights = Boolean(
-    selectedTutor.education?.length ||
+  const hasEducation = Boolean(selectedTutor.education?.length);
+  const hasAchievements = Boolean(
     selectedTutor.competitionAchievements?.length ||
-    selectedTutor.experienceEntries?.length ||
     selectedTutor.achievements?.trim() ||
-    selectedTutor.experiences?.trim() ||
     selectedTutor.credentialsSummary?.trim(),
   );
+  const hasExperiences = Boolean(
+    selectedTutor.experienceEntries?.length ||
+    selectedTutor.experiences?.trim(),
+  );
+  const hasProfileHighlights =
+    hasEducation || hasAchievements || hasExperiences;
 
   return (
     <Drawer
@@ -158,7 +174,7 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
         direction={isDesktop ? "right" : "bottom"}
         className={isDesktop ? "w-full max-w-lg" : undefined}
       >
-        <div className="relative h-[300px] shrink-0 rounded-t-xl overflow-hidden bg-muted">
+        <div className="relative max-h-[270px] md:h-[300px] shrink-0 rounded-t-xl overflow-hidden bg-muted">
           {selectedTutor.user?.image ? (
             <img
               src={selectedTutor.user.image}
@@ -178,14 +194,12 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
           />
           {heroSubjects.length > 0 ? (
             <div className="absolute inset-x-4 bottom-4 z-10 flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden">
-              {heroSubjects.map((subject, index) => (
+              {heroSubjects.map((subject) => (
                 <Badge
                   key={subject.id}
-                  variant={
-                    (["primary", "tertiary", "secondary"] as const)[index % 3]
-                  }
+                  variant="secondary"
                   size="md"
-                  className="shrink-0 max-w-[45%] truncate whitespace-nowrap bg-background/90"
+                  className={`shrink-0 max-w-[45%] truncate whitespace-nowrap shadow-sm ${getCompetitionFieldClass(subject.field, "solid")}`}
                 >
                   {subject.label}
                 </Badge>
@@ -215,43 +229,22 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
           </DrawerClose>
         </div>
         <DrawerBody>
-          <DrawerTitle className="truncate text-2xl">{tutorName}</DrawerTitle>
-          {t.modality && (
-            <div className="mt-3">
-              <Badge variant={MODALITY_VARIANTS[t.modality] ?? "secondary"}>
-                {MODALITY_LABELS[t.modality] ?? t.modality}
-              </Badge>
-            </div>
-          )}
+          <div className="flex justify-between items-start flex-wrap gap-y-3  ">
+            <DrawerTitle className="truncate text-xl md:text-2xl">
+              {tutorName}
+            </DrawerTitle>
+            {t.modality && (
+              <div>
+                <Badge variant={MODALITY_VARIANTS[t.modality] ?? "secondary"}>
+                  {MODALITY_LABELS[t.modality] ?? t.modality}
+                </Badge>
+              </div>
+            )}
+          </div>
+
           {t.shortBio && (
             <div className="mt-3">
               <Text className="text-muted">{t.shortBio}</Text>
-            </div>
-          )}
-
-          {subjectGroups.length > 0 && (
-            <div className="mt-5">
-              <Heading size="sm" className="mb-2">
-                Specializations
-              </Heading>
-              <div className="flex flex-col gap-2">
-                {subjectGroups.map((group) => (
-                  <div key={group.parent?.id ?? group.children[0]?.id}>
-                    {group.parent && (
-                      <Text className="mb-1 font-medium">
-                        {group.parent.name}
-                      </Text>
-                    )}
-                    <div className="flex flex-wrap gap-1.5">
-                      {group.children.map((subject) => (
-                        <Badge key={subject.id} variant="primary" size="md">
-                          {subject.name}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
             </div>
           )}
 
@@ -274,22 +267,52 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
 
           {hasProfileHighlights ? (
             <section
-              aria-labelledby="tutor-drawer-highlights-heading"
-              className="mt-5 rounded-xl bg-accent p-4"
+              aria-label="Tutor profile highlights"
+              className="mt-5 flex flex-col gap-3"
             >
-              <TutorAchievementsDisplay
-                className="flex flex-col gap-5"
-                education={selectedTutor.education}
-                competitionAchievements={selectedTutor.competitionAchievements}
-                experienceEntries={selectedTutor.experienceEntries}
-                legacyAchievementText={
-                  selectedTutor.achievements?.trim()
-                    ? selectedTutor.achievements
-                    : selectedTutor.credentialsSummary
-                }
-                legacyExperienceText={selectedTutor.experiences}
-                idPrefix="tutor-drawer-highlights"
-              />
+              {hasEducation ? (
+                <Card className="bg-accent shadow-none">
+                  <CardBody className="p-4">
+                    <TutorAchievementsDisplay
+                      className="flex flex-col"
+                      education={selectedTutor.education}
+                      idPrefix="tutor-drawer-education"
+                    />
+                  </CardBody>
+                </Card>
+              ) : null}
+
+              {hasAchievements ? (
+                <Card className="bg-accent shadow-none">
+                  <CardBody className="p-4">
+                    <TutorAchievementsDisplay
+                      className="flex flex-col"
+                      competitionAchievements={
+                        selectedTutor.competitionAchievements
+                      }
+                      legacyAchievementText={
+                        selectedTutor.achievements?.trim()
+                          ? selectedTutor.achievements
+                          : selectedTutor.credentialsSummary
+                      }
+                      idPrefix="tutor-drawer-achievements"
+                    />
+                  </CardBody>
+                </Card>
+              ) : null}
+
+              {hasExperiences ? (
+                <Card className="bg-accent shadow-none">
+                  <CardBody className="p-4">
+                    <TutorAchievementsDisplay
+                      className="flex flex-col"
+                      experienceEntries={selectedTutor.experienceEntries}
+                      legacyExperienceText={selectedTutor.experiences}
+                      idPrefix="tutor-drawer-experiences"
+                    />
+                  </CardBody>
+                </Card>
+              ) : null}
             </section>
           ) : null}
 
@@ -298,19 +321,34 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
           </DrawerDescription>
         </DrawerBody>
         <DrawerFooter>
-          <Button
-            block
-            nativeButton={false}
-            render={
-              <Link
-                to="/tutors/$tutorId/book"
-                params={{ tutorId: selectedTutor.id }}
-                aria-label={`Book ${t.user?.name ?? "tutor"}`}
-              />
-            }
-          >
-            Book a session
-          </Button>
+          {showBookingAction ? (
+            <Button
+              block
+              nativeButton={false}
+              render={
+                <Link
+                  to="/tutors/$tutorId/book"
+                  params={{ tutorId: selectedTutor.id }}
+                  aria-label={`Book ${t.user?.name ?? "tutor"}`}
+                />
+              }
+            >
+              Book a session
+            </Button>
+          ) : (
+            <DrawerClose
+              render={
+                <Button
+                  block
+                  variant="secondary"
+                  type="button"
+                  aria-label="Back to booking"
+                />
+              }
+            >
+              Back to booking
+            </DrawerClose>
+          )}
         </DrawerFooter>
       </DrawerPopup>
     </Drawer>

@@ -61,6 +61,7 @@ import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
 import { EmptyStateCard } from "@/components/empty-state";
+import Loader from "@/components/loader";
 import { TablePagination } from "@/components/table-pagination";
 import {
   AchievementForm,
@@ -143,7 +144,7 @@ export function AchievementModerationPage() {
     }),
   );
 
-  if (achievementsQuery.isPending) return <ModerationSkeleton />;
+  if (achievementsQuery.isPending) return <Loader />;
 
   if (achievementsQuery.isError) {
     return (
@@ -543,14 +544,5 @@ function QueueStat({
         </Badge>
       </CardBody>
     </Card>
-  );
-}
-
-function ModerationSkeleton() {
-  return (
-    <div className="grid animate-pulse gap-4 xl:grid-cols-2">
-      <Card className="min-h-96 bg-accent/40" />
-      <Card className="min-h-96 bg-accent/40" />
-    </div>
   );
 }

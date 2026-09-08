@@ -12,6 +12,7 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
 import { EmptyStateCard } from "@/components/empty-state";
+import Loader from "@/components/loader";
 import { AchievementBanner } from "../achievement-banner";
 import { AchievementEmptyState } from "../achievement-empty-state";
 import { AchievementFilters } from "../achievement-filters";
@@ -125,7 +126,7 @@ export function AchivementsPage() {
       )}
 
       {achievements.isPending || achievementStats.isPending ? (
-        <Card className="min-h-72 animate-pulse bg-accent/40" />
+        <Loader />
       ) : total === 0 && page === 0 ? (
         <AchievementEmptyState />
       ) : visibleItems.length === 0 ? (

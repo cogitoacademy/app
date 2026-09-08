@@ -7,21 +7,11 @@ import {
 } from "date-fns";
 
 import type { CalendarCompetition } from "./calendar-types";
+import { getCompetitionFieldClass } from "@/lib/competition-colors";
 
 export const EVENT_HEIGHT = 24;
 export const EVENT_GAP = 4;
 export const AGENDA_DAYS_TO_SHOW = 30;
-
-const categoryEventStyles: Record<string, string> = {
-  mun: "bg-info/15 text-info hover:bg-info/25 border-info",
-  olimpiade: "bg-danger/15 text-danger hover:bg-danger/25 border-danger",
-  wsc: "bg-warning/15 text-warning hover:bg-warning/25 border-warning",
-  kti: "bg-primary/15 text-primary hover:bg-primary/25 border-primary",
-  debat:
-    "bg-secondary/20 text-secondary-foreground hover:bg-secondary/30 border-secondary",
-  business: "bg-success/15 text-success hover:bg-success/25 border-success",
-  pidato: "bg-tertiary/15 text-tertiary hover:bg-tertiary/25 border-tertiary",
-};
 
 const categoryLabels: Record<string, string> = {
   mun: "Model United Nations",
@@ -49,10 +39,11 @@ export function getEducationLevelLabel(level: string) {
 }
 
 export function getCategoryEventClass(coreCategory?: string) {
-  return (
-    categoryEventStyles[coreCategory ?? ""] ??
-    "bg-primary/15 text-primary hover:bg-primary/25 border-primary"
-  );
+  return getCompetitionFieldClass(coreCategory, "soft");
+}
+
+export function getCategoryBadgeClass(coreCategory?: string) {
+  return getCompetitionFieldClass(coreCategory, "solid");
 }
 
 export function getBorderRadiusClass(isFirstDay: boolean, isLastDay: boolean) {

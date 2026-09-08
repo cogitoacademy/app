@@ -29,6 +29,7 @@ import {
 import { DashboardWelcomeCard } from "@/components/dashboard/dashboard-welcome-card";
 import { BalanceWidget } from "@/components/dashboard/balance-widget";
 import { EmptyState } from "@/components/empty-state";
+import Loader from "@/components/loader";
 import {
   TutorSummary,
   type TutorSummaryData,
@@ -93,25 +94,25 @@ export function StudentDashboardPage({ studentName }: { studentName: string }) {
 
 function CompetitionCalendarCard() {
   return (
-    <Card>
-      <CardBody className="p-5">
-        <IconBox variant="tertiary-subtle" className="mb-4">
+    <Card className="h-full">
+      <CardBody className="flex h-full flex-col p-5">
+        <IconBox variant="tertiary-subtle" className="mb-4" size="lg">
           <IconCalendarEvent />
         </IconBox>
         <Heading size="sm">Competition Calendar</Heading>
-        <Text className="mt-1 text-sm text-muted">
+        <Text className="mt-1 mb-3 text-sm text-muted">
           Find upcoming academic competitions and important dates.
         </Text>
         <Button
-          variant="plain"
-          size="sm"
-          className="mt-4 -ml-3"
+          variant="tertiary"
+          size="icon"
+          className="mt-auto self-end"
           nativeButton={false}
           render={
             <Link to="/calendar" aria-label="Open competition calendar" />
           }
         >
-          Explore calendar <IconArrowRight />
+          <IconArrowRight />
         </Button>
       </CardBody>
     </Card>
@@ -142,14 +143,7 @@ function RecommendedTutorsCard({
       </CardHeader>
       <CardBody>
         {isLoading ? (
-          <Stack direction="column" spacing="sm" className="m-0!">
-            {["tutor-one", "tutor-two", "tutor-three"].map((key) => (
-              <div
-                key={key}
-                className="h-24 animate-pulse rounded-lg bg-accent"
-              />
-            ))}
-          </Stack>
+          <Loader />
         ) : tutors.length ? (
           <Stack direction="column" spacing="sm" className="m-0!">
             {tutors.map((tutor, index) => (

@@ -31,6 +31,8 @@ import {
 } from "@tabler/icons-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
+import { CogitoMarks } from "@/components/cogito-marks";
+import Loader from "@/components/loader";
 import {
   Area,
   AreaChart,
@@ -129,10 +131,6 @@ const tooltipStyle = {
 type ChartValue = number | string | ReadonlyArray<number | string> | undefined;
 type ChartName = number | string | undefined;
 
-function formatMarks(value: number) {
-  return `${numberFormatter.format(value)} Marks`;
-}
-
 function formatDateTick(value: string) {
   const [year, month, day] = value.split("-").map(Number);
   return new Intl.DateTimeFormat("en-US", {
@@ -212,7 +210,7 @@ export function AdminAnalytics() {
       </div>
 
       {analytics.isPending ? (
-        <AnalyticsSkeleton />
+        <Loader />
       ) : analytics.isError || !analytics.data ? (
         <AnalyticsError onRetry={() => analytics.refetch()} />
       ) : (
@@ -269,8 +267,21 @@ function AnalyticsContent({
         <AnalyticsMetric
           icon={<IconChartHistogram />}
           label="Gross Marks volume"
-          value={formatMarks(data.summary.grossMarks)}
-          helper={`${formatMarks(data.summary.platformTakeMarks)} platform take`}
+          value={
+            <CogitoMarks
+              value={numberFormatter.format(data.summary.grossMarks)}
+              size="5"
+            />
+          }
+          helper={
+            <>
+              <CogitoMarks
+                value={numberFormatter.format(data.summary.platformTakeMarks)}
+                size="3"
+              />{" "}
+              platform take
+            </>
+          }
           tone="info-subtle"
         />
         <AnalyticsMetric
@@ -652,8 +663,8 @@ function AnalyticsMetric({
 }: {
   icon: React.ReactNode;
   label: string;
-  value: string;
-  helper: string;
+  value: ReactNode;
+  helper: ReactNode;
   tone: "primary-subtle" | "success-subtle" | "info-subtle" | "warning-subtle";
 }) {
   return (
@@ -687,25 +698,6 @@ function ChartEmpty({
       className={`flex ${compact ? "min-h-12" : "h-72"} items-center justify-center rounded-lg border border-dashed border-border bg-accent/40 px-4 text-center`}
     >
       <Text className="text-sm text-muted">{message}</Text>
-    </div>
-  );
-}
-
-function AnalyticsSkeleton() {
-  return (
-    <div className="space-y-4" aria-label="Loading business insights">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {Array.from({ length: 4 }, (_, index) => (
-          <div
-            key={index}
-            className="h-36 animate-pulse rounded-xl bg-accent"
-          />
-        ))}
-      </div>
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.65fr)]">
-        <div className="h-96 animate-pulse rounded-xl bg-accent" />
-        <div className="h-96 animate-pulse rounded-xl bg-accent" />
-      </div>
     </div>
   );
 }

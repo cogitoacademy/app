@@ -2,6 +2,17 @@
 
 Last updated: 2026-09-04
 
+## Booking-detail action presentation (2026-09-08)
+
+All available booking actions now render in the shared detail header below the
+status badge. Lifecycle context replaces the generic state description when a
+response or explanation is needed, and the old sticky-rail Booking actions card
+is removed. Per-session series rescheduling remains on its target session row.
+No RPC input, output, or route contract changed; this note supersedes older
+frontend placement descriptions below.
+
+> **Competition color note (2026-09-08):** Competition colors remain presentation-only and are derived in the web client from each category's existing `coreCategory`. Competition-field badges use the solid academy treatment with white foregrounds except for Business Plan's dark foreground; calendar event surfaces retain the soft treatment. No RPC input or output shape changed.
+
 ## Server-backed table pagination (2026-09-04)
 
 All database-backed web tables now request bounded pages from the API. The
@@ -46,7 +57,9 @@ envelope, response shape, schema, or persistence contract.
 The month-view presentation keeps its standard calendar grid when the selected
 month has no returned events, so month navigation and date cells remain usable.
 This is a frontend-only behavior change; `content.listCompetitions` keeps the
-same input, output, authentication, and response envelope.
+same input, output, authentication, and response envelope. When no published
+competitions are returned, the page-level empty state keeps its calendar glyph
+in the Cogito orange accent.
 
 ## Sidebar booking-action badge (2026-09-04)
 
@@ -133,6 +146,12 @@ be reopened in read-only mode after acceptance.
 
 The student tutor-discovery drawer opens as a swipe-down bottom sheet below the `sm` breakpoint and a right-side drawer at `sm` and above. It and the admin tutor-review drawer keep their header/action regions outside the scroll container while `Drawer.Content` owns the single vertical scroll region for long profile content. The body may overscroll locally, but that motion is contained and cannot move the fixed regions. This is client-side presentation only; no RPC path, request envelope, response shape, schema, or persistence contract changed.
 
+The create-booking surface at `/tutors/:tutorId/book` reuses that same drawer
+through a **View tutor profile** action beside the booking heading. Closing it
+returns to the still-mounted booking form, and the drawer shows **Back to
+booking** instead of a duplicate booking CTA. This is presentation-only and
+does not add an RPC path or change the `tutors.getProfile` contract.
+
 ## Stable collection transitions (2026-08-28)
 
 The admin tutor tables, tutor discovery list, and admin booking queue retain
@@ -173,7 +192,7 @@ existing admin role-management flow.
 
 The web dashboard mostly composes existing procedures: the shared booking list uses protected `booking.listMine` for student, tutor, and admin visibility (with admin seeing all bookings), while tutor discovery remains student-only (`tutors.listPublished`) and tutor/admin dashboards compose their remaining role-specific procedures. The admin dashboard's Business insights section additionally calls the admin-only `admin.getDashboardAnalytics` aggregate procedure for 7/30/90-day WIB metrics and a live booking-state portfolio. Student and tutor next-lesson sections derive the nearest future non-terminal, non-pending item client-side and reuse the booking-list card; the tutor dashboard's above-the-fold ordering of welcome/setup, review requests, and next lesson is presentation-only. Student and tutor welcome cards also share one frontend visual component with role-specific copy and links. On narrow screens, the rounded booking status-tab strip fills the available page width and only its inner tab list scrolls horizontally inside a scrollbar-hidden region; internal paint padding keeps selected-tab shadows and focus rings visible, while shared empty-state cards preserve their rounded glow and card shadow without widening the page. These are presentation-only details except for the documented admin analytics read.
 
-The authenticated `/guide` (`How Cogito Works`) route is frontend-only. Its typed journey content is bundled with the web app, is role-filtered in the route UI, and adds no RPC procedure, request input, response output, or persistence contract. The centered `max-w-6xl` shell, Selia-composed chapter rail, and bold timing callouts are presentation-only; the callouts restate existing 7-day, 12-hour, H-2, 15-minute, 24-hour, meeting-retry, and support-SLA rules. The development-only anti-slop Tweaks Bar is a static browser asset and does not change the production API surface.
+The authenticated `/guide` (`How Cogito Works`) route is frontend-only. Its typed journey content is bundled with the web app, is role-filtered in the route UI, and adds no RPC procedure, request input, response output, or persistence contract. The centered `max-w-6xl` shell, Selia-composed chapter rail, whitespace-free collapsed mobile steps, and bold timing callouts are presentation-only; the callouts restate existing 7-day, 12-hour, H-2, 15-minute, 24-hour, meeting-retry, and support-SLA rules. The development-only anti-slop Tweaks Bar is a static browser asset and does not change the production API surface.
 
 The global route pending loader is also presentation-only. It composes the local Selia `Spinner` with a token-based loading ring and label for route, onboarding, and auth loading states, adding no RPC procedure, request input, response output, or persistence contract.
 
@@ -192,7 +211,7 @@ Sanity is queried only by the API server. The browser receives normalized conten
 - **Auth:** Protected
 - **Input:** None
 - **Output:** `[{ id, title, description, location, categories: [{ id, name, coreCategory }], educationLevels, startDate, endDate, scale, organizer, registrationDeadline, registrationLink, socialMediaLink }]`
-- **Description:** Returns published competition calendar entries with English projections for every authenticated role. The app route is `GET /calendar` in the SPA; the read-only UI presents the data in month and 30-day agenda views and opens a responsive details modal without changing this API contract. The route uses a contained viewport layout so the calendar body handles vertical scrolling and the month grid handles horizontal scrolling. The month view keeps the normal grid visible when the selected month has no events; the page-level empty state still applies when no competitions are returned at all.
+- **Description:** Returns published competition calendar entries with English projections for every authenticated role. The app route is `GET /calendar` in the SPA; the read-only UI presents the data in month and 30-day agenda views and opens a responsive details modal without changing this API contract. The route uses a contained viewport layout so the calendar body handles vertical scrolling and the month grid handles horizontal scrolling. The month view keeps the normal grid visible when the selected month has no events; the page-level empty state still applies when no competitions are returned at all and keeps its calendar glyph in the Cogito orange accent.
 
 ### `content.listStudentResources`
 
@@ -694,7 +713,7 @@ The web tutor profile editor groups education, competition achievements, and exp
 - **Auth:** Student
 - **Input:** `{ search?, expertise?, categoryId?, subjectId?, categoryIds?, subjectIds?, modality?, limit?, offset? }` (`limit` default 20, max 50)
 - **Output:** `{ items: TutorProfile[] }`; each profile includes its published `user.image` when available, `education`, `competitionAchievements`, `experienceEntries`, `subjects: [{ id, slug, name, description?, isSelectable, parent }]`, and computed `pricesByModality.online/offline` Marks maps when the profile has IDR base honoraria
-- **Description:** `categoryId`/`subjectId` remain supported for single-value clients. `categoryIds` and `subjectIds` accept up to 50 unique values and match any selected value within that facet; when both facets are present, the same normalized category/specialization relation must satisfy the selected category and specialization constraints. Search matches normalized specialization names as well as legacy profile text; no matching normalized relation returns an empty `items` array. Structured education, competition achievements, and experience entries are returned in their normalized arrays; older profiles may still rely on legacy `achievements`, `experiences`, or `credentialsSummary` text. Marks prices are derived from the active economy config; tutor IDR base honoraria are not exposed in this student response. The frontend may render the returned modality maps as one group-size matrix with separate Online and Offline columns, prefixing populated values with the Cogito Marks icon; tutor cards render natural-width child specialization names without repeating the parent category, keep their desktop metadata on one line, and use a smooth hover-shadow treatment without translate or pressed-scale effects. These are presentation details and do not alter the RPC contract.
+- **Description:** `categoryId`/`subjectId` remain supported for single-value clients. `categoryIds` and `subjectIds` accept up to 50 unique values and match any selected value within that facet; when both facets are present, the same normalized category/specialization relation must satisfy the selected category and specialization constraints. Search matches normalized specialization names as well as legacy profile text; no matching normalized relation returns an empty `items` array. Structured education, competition achievements, and experience entries are returned in their normalized arrays; older profiles may still rely on legacy `achievements`, `experiences`, or `credentialsSummary` text. Marks prices are derived from the active economy config; tutor IDR base honoraria are not exposed in this student response. The frontend may render the returned modality maps as one group-size matrix with separate Online and Offline columns, prefixing populated values with the Cogito Marks icon; tutor cards render natural-width child specialization names without repeating the parent category, keep their desktop metadata on one line, and use a smooth hover-shadow treatment without translate or pressed-scale effects; the tutor drawer presents education, achievements, and experiences in separate profile-highlight cards. These are presentation details and do not alter the RPC contract.
 
 ### `tutors.getProfile`
 
@@ -749,6 +768,8 @@ The web tutor profile editor groups education, competition achievements, and exp
 - **Description:** Returns aggregate status counts for the authenticated user's achievements. `pending` combines `pending` and `pending_review`.
 
 ### `achievement.create`
+
+The create/edit/correction form is presented as a bottom drawer on mobile and a right-side drawer from the `sm` breakpoint. This is client-side presentation only and does not change RPC inputs, outputs, or persistence.
 
 - **Auth:** Student (`studentProcedure` — tutors/admins get FORBIDDEN, F17; FR-18 is student-facing)
 - **Input:** `{ eventName, category, award, level, awardingDate?, location?, description?, subjects?, evidenceUrl? }`
@@ -901,11 +922,11 @@ The web tutor profile editor groups education, competition achievements, and exp
 ### `booking.createSolo`
 
 - **Auth:** Verified Student (`verifiedStudentProcedure` — student role with a verified email; unverified → `FORBIDDEN`)
-- **Input:** `{ tutorId, subjectId?, availabilitySlotId, modality, scheduledStartAt, timezone?, learningGoal }` (`subjectId` selects one active specialization offered by the tutor and is snapshotted as the session topic; legacy callers may omit it and the sole tutor specialization is selected automatically; `learningGoal` carries Session Notes and accepts up to 2,000 characters including reference links; duration is server-fixed to 90 minutes)
+- **Input:** `{ tutorId, subjectId?, availabilitySlotId, modality, scheduledStartAt, timezone?, learningGoal }` (`subjectId` selects one active specialization offered by the tutor and is snapshotted as the session topic; legacy callers may omit it and the sole tutor specialization is selected automatically; `learningGoal` carries Session Notes and accepts up to 2,000 characters including reference links; duration is server-fixed to 90 minutes). The web form may group `subjectId` and `learningGoal` into one Session details fieldset and present `modality` with Selia Tabs; this presentation does not change the RPC input.
 - **Output:** `{ booking }`
 - **Errors:** `BOOKING_NOT_FOUND` (404), `BOOKING_NOT_EDITABLE` (400), `BOOKING_CONFLICT` (409), `INSUFFICIENT_MARKS` (400)
 - **Description:** Creates a solo booking and holds Marks; idempotency via `idempotency-key` header
-- **Frontend note:** The student form places modality and the summary in a desktop right rail. Availability remains a card grid; each selected slot reveals its own adjacent start-time editor when width permits and stacks it below on narrow screens. Mobile uses a compact sticky bottom preview plus review drawer. The drawer submission targets the same form and does not change this RPC contract.
+- **Frontend note:** The student form places modality and the summary in a desktop right rail. Availability remains a card grid; each selected slot reveals its own adjacent start-time editor when width permits and stacks it below on narrow screens. Desktop and mobile summaries state participant scope separately from single/series cadence, list concrete series dates, and distinguish the student's price from the balance reserved by the applicable hold rule. Monetary values use `CogitoMarks`, and displayed booking dates use the shared compact formatter. Mobile uses a compact sticky bottom preview plus review drawer. The drawer submission targets the same form and does not change this RPC contract.
 
 ### `booking.get`
 
@@ -951,7 +972,7 @@ RPC contract.
 - **Auth:** Protected; booking tutor, proposer, or participant
 - **Input:** `{ bookingId }`
 - **Output:** `AvailabilitySlot[]`
-- **Description:** Returns active tutor availability for the booking-scoped reschedule picker. Access is checked against the booking rather than tutor discovery visibility.
+- **Description:** Returns active tutor availability for the booking-scoped reschedule picker. Access is checked against the booking rather than tutor discovery visibility. Frontend scheduling surfaces may group these unchanged window records by local date and derive valid 15-minute session starts that leave room for the fixed 90-minute duration; presentation grouping such as Morning/Afternoon/Evening does not change the selected source `availabilitySlotId` used by proposal/booking inputs.
 - **Rate limit:** This protected read is intentionally excluded from the booking mutation limiter; repeated picker refreshes do not consume the 30/minute booking-action budget.
 - **Reschedule invariant:** `/rpc/booking/proposeReschedule` and `/rpc/tutorActions/proposeReschedule` reject a proposed start in the same minute as the active booking/target-session start or the pending proposal for that same target with `BOOKING_NOT_EDITABLE`. Proposal replacement is serialized, and only one pending proposal may exist per booking.
 
@@ -1000,7 +1021,7 @@ RPC contract.
 ### `booking.createSeries`
 
 - **Auth:** Verified Student (`verifiedStudentProcedure`; unverified → `FORBIDDEN`)
-- **Input:** `{ tutorId, subjectId?, availabilitySlotId, modality, sessions: [{ availabilitySlotId, scheduledStartAt }], timezone?, learningGoal }` (`subjectId` selects an active tutor specialization; `learningGoal` carries Session Notes including reference links; 2–4 fixed 90-minute sessions)
+- **Input:** `{ tutorId, subjectId?, availabilitySlotId, modality, sessions: [{ availabilitySlotId, scheduledStartAt }], timezone?, learningGoal }` (`subjectId` selects an active tutor specialization; `learningGoal` carries Session Notes including reference links; 2–4 fixed 90-minute sessions). Multiple non-overlapping sessions may reference the same availability slot when each concrete start fits that window; `assertNoIntraSeriesOverlap` rejects overlapping 90-minute sessions.
 - **Output:** `{ booking }`
 - **Errors:** `BOOKING_SERIES_SIZE` (400) if sessions < 2 or > 4
 - **Description:** Creates a multi-session solo series booking
@@ -1347,3 +1368,5 @@ The successful mutation also best-effort updates the existing offline Calendar e
 ## Tutor payout profile fields (2026-08-28)
 
 `/rpc/tutor/updateMyProfile` accepts payout-account fields (`bankName`, `bankAccountNumber`, `bankAccountHolderName`, `bankAccountOpeningCity`, `bankAccountOwnership`, and `bankTransferDisclaimerAccepted`) inside the standard `{"json": <input>}` envelope. `/rpc/tutor/getMyProfile` returns the private fields to the authenticated tutor; the public tutor discovery projection omits all of them. `/rpc/tutor/submitForReview` requires every payout field plus the acknowledgment. Only the exact bank name `BCA` represents conventional BCA and has no transfer fee; `BCA Syariah`, `blu`/`BCA Digital`, and all other bank names incur Rp2,500 once per payout. `/rpc/tutor/payouts/get` with no date filters returns honorarium since the latest admin-paid cutoff; explicit date filters remain available for reporting. Admins use `/rpc/admin/payouts/tutor/pending` to inspect unpaid honorarium and `/rpc/admin/payouts/tutor/mark-paid` to atomically create a paid payout record. Completion timestamps, rather than calendar weeks, determine which completed sessions enter a payout batch; completion and payout use a per-tutor lock to avoid a race at the cutoff.
+
+Numeric Marks fields returned by wallet, booking, pricing, and analytics procedures remain numbers. The web client presents those values with the shared `CogitoMarks` symbol component; this is presentation-only and does not change RPC inputs or outputs.

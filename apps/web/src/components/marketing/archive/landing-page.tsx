@@ -2,6 +2,7 @@
 
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
+import { CogitoMarks } from "@/components/cogito-marks";
 import {
   Card,
   CardBody,
@@ -239,12 +240,11 @@ export function LandingPage() {
                       className="rounded-lg border border-item-border bg-item p-3"
                     >
                       <Text className="text-xs text-muted">{option.label}</Text>
-                      <div className="mt-3 flex items-center gap-1.5">
-                        <img src="/cogito-mark.png" alt="" className="h-5" />
-                        <span className="text-lg font-semibold">
-                          {option.marks}
-                        </span>
-                      </div>
+                      <CogitoMarks
+                        className="mt-3 text-lg font-semibold"
+                        value={option.marks}
+                        size="5"
+                      />
                     </div>
                   ))}
                 </div>

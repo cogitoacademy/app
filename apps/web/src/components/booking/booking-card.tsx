@@ -18,7 +18,7 @@ import {
 } from "@cogito-app/ui/components/selia/avatar";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
-import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
+import { Card } from "@cogito-app/ui/components/selia/card";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Separator } from "@cogito-app/ui/components/selia/separator";
 import { Text } from "@cogito-app/ui/components/selia/text";
@@ -34,7 +34,9 @@ import {
   getBookingStateLabel,
   getBookingStateVariant,
 } from "@/components/booking/booking-ui";
+import { CogitoMarks } from "@/components/cogito-marks";
 import { EmptyStateCard } from "@/components/empty-state";
+import Loader from "@/components/loader";
 
 export type BookingCardPerson = {
   id: string;
@@ -203,21 +205,6 @@ export function BookingListCard({
   );
 }
 
-export function BookingListCardSkeleton({ className }: { className?: string }) {
-  return (
-    <Card className={cn("animate-pulse", className)}>
-      <CardBody className="flex gap-4 p-5">
-        <div className="size-16 shrink-0 rounded-xl bg-accent" />
-        <div className="min-w-0 flex-1 space-y-3">
-          <div className="h-4 w-1/3 rounded bg-accent" />
-          <div className="h-3 w-2/3 rounded bg-accent" />
-          <div className="h-3 w-1/2 rounded bg-accent" />
-        </div>
-      </CardBody>
-    </Card>
-  );
-}
-
 export function NextLessonSection({
   booking,
   isLoading,
@@ -259,7 +246,7 @@ export function NextLessonSection({
       </div>
 
       {isLoading ? (
-        <BookingListCardSkeleton />
+        <Loader />
       ) : booking ? (
         <BookingListCard
           booking={booking}
@@ -565,26 +552,7 @@ function FinancialValue({ label, value }: { label: string; value: number }) {
   return (
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
       <span className="text-muted">{label}</span>
-      <MarkAmount value={value} />
-    </span>
-  );
-}
-
-function MarkAmount({ value }: { value: number }) {
-  return (
-    <span
-      className="inline-flex items-center gap-1 whitespace-nowrap"
-      aria-label={`${value} Marks`}
-    >
-      <img
-        src="/cogito-mark.png"
-        alt=""
-        aria-hidden="true"
-        width={16}
-        height={16}
-        className="size-4 shrink-0 object-contain"
-      />
-      <span>{value}</span>
+      <CogitoMarks value={value} size="3" />
     </span>
   );
 }

@@ -67,7 +67,9 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
+import { CogitoMarks } from "@/components/cogito-marks";
 import { EmptyState } from "@/components/empty-state";
+import Loader from "@/components/loader";
 import { useNow } from "@/hooks/use-now";
 import { InfoPreview } from "@/components/info-preview";
 import { getUserFacingError } from "@/lib/error-message";
@@ -82,7 +84,10 @@ import {
   getBookingStateVariant,
   getBookingTypeLabel,
 } from "./booking-ui";
-import { BookingLifecycleActions } from "./booking-lifecycle-actions";
+import {
+  BookingLifecycleActions,
+  getBookingLifecycleContext,
+} from "./booking-lifecycle-actions";
 import {
   BOOKING_DEADLINE_STATES,
   BookingDeadlineNotice,
@@ -101,8 +106,6 @@ import {
 } from "./booking-pricing";
 import { ContactRequestPanel } from "./contact-request-panel";
 import { ManualMeetingLinkDialog } from "./manual-meeting-link-dialog";
-
-const COGITO_MARK_SRC = "/cogito-mark.png";
 
 type BookingConfirmation = {
   action: "cancel" | "complete";
@@ -313,7 +316,7 @@ export function BookingDetailPage({
     setConfirmationDialog({ action: "complete", sessionId });
   };
 
-  if (bookingQuery.isPending) return <BookingDetailSkeleton />;
+  if (bookingQuery.isPending) return <Loader />;
 
   if (bookingQuery.isError) {
     return (
@@ -440,6 +443,9 @@ export function BookingDetailPage({
     rescheduleReason: activeRescheduleProposal?.reason ?? undefined,
     onBookingChanged: refreshBookingQueries,
   };
+  const lifecycleContext = !isAdmin
+    ? getBookingLifecycleContext({ ...lifecycleActionProps, now })
+    : null;
 
   const meetingUrl = booking.meetingUrl;
   const seriesSessions = sessionsQuery.data ?? undefined;
@@ -522,7 +528,8 @@ export function BookingDetailPage({
             </div>
             <Heading className="break-words text-2xl">{eventTitle}</Heading>
             <Text className="mt-2 max-w-2xl text-muted">
-              {getBookingStateDescription(booking.currentState)}
+              {lifecycleContext ??
+                getBookingStateDescription(booking.currentState)}
             </Text>
             {booking.disclaimer ? (
               <div className="mt-3 max-w-2xl rounded-lg border border-warning-border bg-warning/10 px-3 py-2 text-sm text-warning-foreground">
@@ -543,7 +550,8 @@ export function BookingDetailPage({
             canCancel ||
             showHeaderReschedule ||
             canComplete ||
-            hasHeaderActions ? (
+            hasHeaderActions ||
+            Boolean(lifecycleContext) ? (
               <div
                 className="flex w-full flex-col gap-2 sm:mt-auto sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end"
                 role="group"
@@ -551,6 +559,12 @@ export function BookingDetailPage({
               >
                 {extensions?.headerActions}
                 {rescheduleAction}
+                {!isAdmin ? (
+                  <BookingLifecycleActions
+                    {...lifecycleActionProps}
+                    section="actions"
+                  />
+                ) : null}
                 {canReview ? (
                   <>
                     <Button
@@ -983,12 +997,6 @@ export function BookingDetailPage({
         </div>
 
         <aside className="order-2 grid min-w-0 gap-4 lg:order-none lg:col-start-2 lg:row-start-1 lg:sticky lg:top-4">
-          {!isAdmin ? (
-            <BookingLifecycleActions
-              {...lifecycleActionProps}
-              section="actions"
-            />
-          ) : null}
           {extensions?.sidebar ?? (
             <Card className="min-w-0 overflow-hidden">
               <CardHeader>
@@ -1013,7 +1021,7 @@ export function BookingDetailPage({
               <CardBody className="space-y-4">
                 {isTutor ? (
                   isSeriesBooking ? (
-                    <Stack direction="column" spacing="sm">
+                    <Stack className="m-0!" direction="column" spacing="sm">
                       <SummaryRow
                         label={`Total honorarium (${seriesSessionCount} sessions)`}
                         value={`Rp${totalHonorariumIdr.toLocaleString("id-ID")}`}
@@ -1032,22 +1040,29 @@ export function BookingDetailPage({
                   <>
                     <SummaryRow
                       label="Original price"
-                      value={<MarkAmount value={booking.originalMarks} />}
+                      value={
+                        <CogitoMarks value={booking.originalMarks} size="4" />
+                      }
                     />
                     <SummaryRow
                       label="Currently held"
-                      value={<MarkAmount value={booking.holdAmount} />}
+                      value={
+                        <CogitoMarks value={booking.holdAmount} size="4" />
+                      }
                     />
                     <SummaryRow
                       label="Refunded"
-                      value={<MarkAmount value={booking.refundedAmount} />}
+                      value={
+                        <CogitoMarks value={booking.refundedAmount} size="4" />
+                      }
                     />
                     {booking.priceSnapshot ? (
                       <SummaryRow
                         label="Per participant"
                         value={
-                          <MarkAmount
+                          <CogitoMarks
                             value={booking.priceSnapshot.perStudent}
+                            size="4"
                           />
                         }
                       />
@@ -1653,34 +1668,6 @@ function SummaryRow({
     <div className="flex items-center justify-between gap-4">
       <Text className="text-muted">{label}</Text>
       <Text className="font-medium">{value}</Text>
-    </div>
-  );
-}
-
-function MarkAmount({ value }: { value: number }) {
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 whitespace-nowrap"
-      aria-label={`${value} Marks`}
-    >
-      <img
-        src={COGITO_MARK_SRC}
-        alt=""
-        aria-hidden="true"
-        width={16}
-        height={16}
-        className="size-4 shrink-0 object-contain"
-      />
-      <span>{value}</span>
-    </span>
-  );
-}
-
-function BookingDetailSkeleton() {
-  return (
-    <div className="grid animate-pulse gap-4 lg:grid-cols-[1.4fr_1fr]">
-      <Card className="min-h-80 bg-accent/40" />
-      <Card className="min-h-80 bg-accent/40" />
     </div>
   );
 }

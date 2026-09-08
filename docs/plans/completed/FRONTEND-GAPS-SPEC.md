@@ -142,6 +142,8 @@ The admin tutor review card now resolves proposed `subjectIds` through the activ
 
 The student `/achievements` list and admin `/admin-achievements` moderation queue now use compact minimum-width Selia tables instead of card grids. Rows expose core identity/status/date information and a shared responsive detail drawer contains consistently labeled metadata, proof/documentation image previews with original-link fallbacks, moderator notes, and the relevant student or admin actions. It opens as a bottom sheet on mobile and from the right at the `sm` breakpoint and above. The table containers scroll horizontally when the viewport is narrower than the column minimums, without changing any RPC, schema, or persistence contract.
 
+The shared achievement create/edit/correction form follows the same responsive drawer pattern: bottom sheet with downward dismissal below `sm`, then a right-side drawer with rightward dismissal at `sm` and above.
+
 ### Tutor discovery pricing matrix follow-up (2026-08-27)
 
 The student-facing tutor drawer now combines the available Online and Offline Marks maps into one group-size table. Each modality has its own price column, populated values use the shared Cogito Marks icon prefix, and an em dash makes a missing modality/size combination explicit. The profile uses a bottom sheet on mobile and a right-side drawer from the `sm` breakpoint. This is a presentation-only change; the `tutors.listPublished`/`tutors.getProfile` response and pricing contracts are unchanged.
@@ -155,9 +157,9 @@ Marks prefix and profile chevron. Desktop keeps the horizontal summary.
 
 The student tutor drawer now uses a full-width 300px image hero with
 top-aligned cover cropping, a bottom gradient, close control, and overlaid
-specialization badges. Education, achievements, and experiences render in one
-combined **Achievements & experience** panel, with legacy text fallbacks for
-older profiles. Desktop tutor cards progressively reveal one, two, or three
+specialization badges. Education, achievements, and experiences render in
+separate profile-highlight cards, with legacy text fallbacks for older
+profiles. Desktop tutor cards progressively reveal one, two, or three
 natural-width child specialization labels without repeating the parent
 category by breakpoint while keeping the `From [Marks icon] #` price treatment
 on one line. This is presentation-only; discovery contracts remain unchanged.
@@ -178,6 +180,12 @@ page-level empty state still covers the case where no published competitions
 exist at all, and the agenda view may still show its event-free period message.
 This is presentation-only; the `content.listCompetitions` contract is
 unchanged.
+
+### Competition Calendar empty-state accent follow-up (2026-09-08)
+
+The page-level no-competition state keeps its calendar glyph in the Cogito
+orange token. The accent is scoped to this page and does not alter shared
+empty-state defaults or the `content.listCompetitions` contract.
 
 ### Theme shortcut follow-up (2026-08-26)
 
@@ -565,9 +573,11 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-15
 
-**Current state:** **CLOSED (2026-08-19; role-dispatch follow-up 2026-08-22; no-op/race guards 2026-08-28; drawer follow-up 2026-09-02; time/reason UX follow-up 2026-09-04).** `booking-reschedule-action.tsx` uses 15-minute minus/plus controls, derives the fixed 90-minute end, surfaces tutor-window errors only when invalid, and requires the reason for both student and tutor proposals. The role-aware `booking.proposeReschedule`/`tutorActions.proposeReschedule` routes enforce the same non-blank reason contract, support per-session `sessionId`, and supersede pending proposals. The editor remains a height-constrained bottom Selia drawer on mobile and a right-side drawer on desktop, with a scrollable body and separate action footer.
+**Current state:** **CLOSED (2026-08-19; role-dispatch follow-up 2026-08-22; no-op/race guards 2026-08-28; drawer follow-up 2026-09-02; time/reason UX follow-up 2026-09-04; compact picker and Selia Tabs follow-up 2026-09-08).** `booking-reschedule-action.tsx` uses the shared two-option Selia Tabs component for scheduling mode, groups availability by local date into compact time chips, uses 15-minute minus/plus controls, derives the fixed 90-minute end, surfaces tutor-window errors only when invalid, and requires the reason for both student and tutor proposals. The create-booking `/book` flow now uses one cohesive date-first scheduling card with Selia Tabs for modality, seven consecutive dates per desktop page and three per mobile page with no-slot dates disabled, Morning/Afternoon/Evening groups of concrete valid 15-minute starts, and a removable Selected sessions tray. Composite slot-and-start selection supports multiple non-overlapping sessions on one day. Section descriptions use CardInfoPreview/InfoPreview, while Specialization and optional focus share one semantic Session details fieldset. The role-aware `booking.proposeReschedule`/`tutorActions.proposeReschedule` routes enforce the same non-blank reason contract, support per-session `sessionId`, and supersede pending proposals. The editor remains a height-constrained bottom Selia drawer on mobile and a right-side drawer on desktop, with a scrollable body and separate action footer.
 
 **Create-booking layout follow-up (2026-09-04):** the form now balances desktop content with modality and summary in a sticky right rail. Availability stays in its original card grid; selecting a card expands that item into a row with its own adjacent start-time editor rather than moving all editors into one panel. On narrow screens the editor stacks below its card, and the summary becomes a compact sticky preview plus bottom review drawer. Both responsive submit surfaces reuse the same form state and mutation path.
+
+**Create-booking summary follow-up (2026-09-08):** the changing Solo/Group badge moved from the page header to Participants. The participant search uses a Selia input-group magnifier addon, and its input, result popup, and result actions inherit default Selia radii. Desktop and mobile summaries keep participant scope separate from Single/Series cadence, enumerate selected series dates, use compact shared booking dates, and distinguish the student's total from the amount reserved by the applicable hold rule. Displayed monetary values use `CogitoMarks`, and the reserve explanation uses completion/cancellation/no-show language instead of the internal “booking lifecycle” term.
 
 **Required (after G6 backend fix):**
 
@@ -917,6 +927,11 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 
 ### Version Notes
 
+- v1.73 (2026-09-08): Replaced bespoke pulse skeleton placeholders across the
+  web loading states with the shared `apps/web/src/components/loader.tsx`
+  component and its `cogito-orange` Selia spinner. No RPC, schema, or
+  persistence contract changed.
+
 - v1.72 (2026-09-04): Constrained the shared select positioner and popup to
   Base UI's available viewport width so tutor discovery filters remain fully
   visible at the 320 px CSS minimum. No RPC, schema, persistence, or URL
@@ -960,6 +975,8 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 - v1.59 (2026-09-02): Consolidated admin booking details: room controls and participant wallet/ledger facts now live in Session overview, the admin participant grid is one column, review context moved to the right rail, Marks values use the shared `CogitoMarks` component, and State history matches the shared Activity timeline.
 - v1.59 (2026-09-02): Replaced the booking-detail **Propose new time** dialog with a height-constrained bottom Selia drawer on mobile and a right-side drawer on desktop. The form body scrolls independently and the action footer remains accessible; RPC and state-transition contracts are unchanged.
 - v1.58 (2026-09-02): Refined admin offline room assignment into a Room approvals queue plus context-aware booking-detail actions. Removed manual booking UUID/date-time entry; assign, relocate, and cancellation now use the selected booking's existing schedule and room context.
+
+- v1.61 (2026-09-08): Split the student tutor drawer's education, achievements, and experiences into separate profile-highlight cards. No RPC, schema, or persistence contract changed.
 
 - v1.57 (2026-09-02): Replaced the admin wallet lookup's exact user-ID input with an admin-only identity search by name, email, or user ID. Results are bounded and selectable, and wallet/ledger reads run only for the selected account. Added the `admin.searchUsers` RPC and updated the admin API/module/runbook references.
 
@@ -1021,6 +1038,7 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 - v1.17 (2026-08-24): Refined the booking-detail overview row so Date is date-only, Session time owns the hour display, Format & access shares the same flex-wrapped row, Participants uses the matching Selia `IconBox`, and desktop header actions align to the bottom of the right column beneath the status badge. No RPC, schema, or persistence contract changed.
 - v1.15 (2026-08-24): Reduced booking-detail vertical density by replacing the full online meeting-pending/failed status panel with an accessible Selia info/warning icon popover. The popover retains the existing explanation and retry/admin setup badge; ready links and the meeting CTA are unchanged. No RPC, schema, or persistence contract changed.
 - v1.13 (2026-08-24): Refined tutor availability controls so weekly minute-time fields share the compact start-field width with a centered range separator, suggestions can grow beyond the field, and modality triggers keep icons beside labels. This remains presentation-only; RPC, schema, and persistence contracts are unchanged.
+- v1.18 (2026-09-08): Unified non-admin booking actions in the shared header action group, removed the separate sticky-rail Booking actions card, and promoted lifecycle decision context into the header summary. Lateness reporting is now an accessible icon-only secondary action. No RPC, schema, or persistence contract changed.
 - v1.14 (2026-08-24): Moved role-appropriate primary booking actions below the shared status badge. Tutor review keeps propose/decline/accept together; students see their available propose/cancel actions in the same header slot. Admins continue to use the dedicated operations and override workflow. No RPC, schema, or persistence contract changed.
 - v1.12 (2026-08-23): Fixed the shared Selia portal layer for `DatePicker` and `SelectPopup` so achievement-form date, Category, Level, and calendar month/year controls remain above modal dialogs and clickable. No RPC, schema, or persistence contract changed.
 - v1.16 (2026-08-24): Hardened email sign-in/sign-up transitions: await Better Auth success and a fresh session before navigation, suppress the overlapping auth-store refetch during the handoff, and make the authenticated parent guard use the fresh session. Added E2E coverage against an intermediate `/login` navigation. No auth API or persistence contract changed.

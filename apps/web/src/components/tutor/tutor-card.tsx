@@ -22,6 +22,7 @@ import { Separator } from "@cogito-app/ui/components/selia/separator";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { IconChevronRight } from "@tabler/icons-react";
 import { CogitoMarks } from "@/components/cogito-marks";
+import { getCompetitionFieldClass } from "@/lib/competition-colors";
 import { groupTutorSubjects, type TutorSubject } from "./subject-taxonomy";
 
 const MODALITY_LABELS: Record<string, string> = {
@@ -83,6 +84,7 @@ function getTutorSubjectLabels(
   return groupTutorSubjects(tutor.subjects, tutor.expertise).flatMap((group) =>
     group.children.map((child) => ({
       id: child.id,
+      field: group.parent?.slug ?? child.slug,
       label:
         includeCategory && group.parent
           ? `${group.parent.name}: ${child.name}`
@@ -130,7 +132,7 @@ export function TutorSummary({
             <Badge
               variant="tertiary"
               size="sm"
-              className="min-w-0 max-w-[12rem] shrink truncate whitespace-nowrap"
+              className={`min-w-0 max-w-[12rem] shrink truncate whitespace-nowrap ${getCompetitionFieldClass(subjectLabels[0].field, "solid")}`}
             >
               {subjectLabels[0].label}
             </Badge>
@@ -139,7 +141,7 @@ export function TutorSummary({
             <Badge
               variant="tertiary"
               size="sm"
-              className="hidden min-w-0 max-w-[12rem] shrink truncate whitespace-nowrap lg:inline-flex"
+              className={`hidden min-w-0 max-w-[12rem] shrink truncate whitespace-nowrap lg:inline-flex ${getCompetitionFieldClass(subjectLabels[1].field, "solid")}`}
             >
               {subjectLabels[1].label}
             </Badge>
@@ -148,7 +150,7 @@ export function TutorSummary({
             <Badge
               variant="tertiary"
               size="sm"
-              className="hidden min-w-0 max-w-[12rem] shrink truncate whitespace-nowrap 2xl:inline-flex"
+              className={`hidden min-w-0 max-w-[12rem] shrink truncate whitespace-nowrap 2xl:inline-flex ${getCompetitionFieldClass(subjectLabels[2].field, "solid")}`}
             >
               {subjectLabels[2].label}
             </Badge>
@@ -181,20 +183,9 @@ export function TutorSummary({
             </Badge>
           ) : null}
           {startingPrice !== null && (
-            <span
-              className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap"
-              aria-label={`From ${startingPrice} Marks`}
-            >
+            <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap">
               From
-              <img
-                src="/cogito-mark.png"
-                alt=""
-                aria-hidden="true"
-                width={12}
-                height={12}
-                className="size-3 shrink-0 object-contain"
-              />
-              <span>{startingPrice}</span>
+              <CogitoMarks value={startingPrice} size="3" />
             </span>
           )}
         </ItemMeta>
@@ -249,7 +240,7 @@ function MobileTutorCardContent({ tutor }: { tutor: TutorSummaryData }) {
           <Badge
             variant="tertiary"
             size="sm"
-            className="min-w-0 max-w-full truncate"
+            className={`min-w-0 max-w-full truncate ${getCompetitionFieldClass(subjectLabels[0]?.field, "solid")}`}
           >
             {subjectLabels[0]?.label}
           </Badge>
