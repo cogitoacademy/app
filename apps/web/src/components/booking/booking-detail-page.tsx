@@ -1013,7 +1013,7 @@ export function BookingDetailPage({
               <CardBody className="space-y-4">
                 {isTutor ? (
                   isSeriesBooking ? (
-                    <Stack direction="column" spacing="sm">
+                    <Stack className="m-0!" direction="column" spacing="sm">
                       <SummaryRow
                         label={`Total honorarium (${seriesSessionCount} sessions)`}
                         value={`Rp${totalHonorariumIdr.toLocaleString("id-ID")}`}
