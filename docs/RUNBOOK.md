@@ -1014,6 +1014,7 @@ sum(rate(http_requests_total[5m]))`, and `breaker_state or on() vector(0)`
   recur); only real data resolves. Side effect: an alert firing when its
   datasource dies stays firing — check `/targets` first when an alert won't
   clear.
+- **rsyslog ufw.log suspend loop (2026-08-30..09-08, fixed):** rotated-away `ufw.log` was never recreated, so privilege-dropped rsyslog failed every UFW BLOCK write forever (49k+ suspend lines, 30MB syslog bloat). Fixed live (`syslog:adm 640`) + durable via host-hardening (`create 640 syslog adm` + ensure-file task; manual `harden` phase, excluded from auto-apply).
 - **Tailscale HTTPS (optional):** enabling HTTPS in the Tailscale admin console
   (DNS → Enable HTTPS) gives the same `cogito-vps.tail674634.ts.net` name a
   trusted certificate; until then use plain `http` over the tailnet, which is

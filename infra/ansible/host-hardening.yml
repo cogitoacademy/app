@@ -101,6 +101,26 @@
         from_ip: "{{ tailnet_cidr }}"
       loop: "{{ coolify_ports }}"
 
+    # ufw.log must stay syslog:adm-writable across rotation — else rsyslog
+    # suspend-loops on open error (seen 2026-08-30..09-08 when file was absent).
+    - name: UFW logrotate creates ufw.log with rsyslog-writable ownership
+      ansible.builtin.lineinfile:
+        path: /etc/logrotate.d/ufw
+        regexp: ^\s*create\b.*
+        line: "  create 640 syslog adm"
+        insertafter: ^/var/log/ufw\.log
+        state: present
+
+    - name: Ensure /var/log/ufw.log exists with rsyslog-writable ownership
+      ansible.builtin.file:
+        path: /var/log/ufw.log
+        state: touch
+        owner: syslog
+        group: adm
+        mode: "0640"
+        modification_time: preserve
+        access_time: preserve
+
     - name: Fail2ban sshd jail enabled
       ansible.builtin.copy:
         dest: /etc/fail2ban/jail.local
