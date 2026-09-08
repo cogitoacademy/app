@@ -71,6 +71,13 @@ not repeat the parent category, reveal one, two, or three badges at
 progressively wider breakpoints, and retain a `From [Marks icon] #` price
 label; no RPC, schema, or persistence contract changed.
 
+The student `/tutors/:tutorId/book` page also exposes **View tutor profile**
+beside the booking heading. It reuses the same published-profile drawer from
+the tutor directory, keeps the booking form mounted while the drawer is open,
+and replaces the drawer's booking CTA with **Back to booking**. This is
+frontend-only; the existing `tutors.getProfile` response is sufficient and no
+RPC, schema, or persistence contract changed.
+
 ## Student dashboard balance widget (2026-09-04)
 
 The student dashboard replaces its standalone Knowledge Bank promo card with a

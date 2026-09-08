@@ -462,6 +462,16 @@ Open the create-booking page with a tutor that supports both modalities and seve
 
 In the same drawer, select the booking's current date and start minute. Confirm the UI explains that a different time is required and disables **Send proposal**. While a proposal is pending, reopen the drawer and select that pending start minute; it must also be disabled. Repeat against a non-first series session's own active time. Direct RPC requests for either no-op must return `BOOKING_NOT_EDITABLE` without creating or superseding a proposal. Finally, submit two concurrent proposals for one booking and verify no more than one `pending` row exists.
 
+### Booking-page tutor profile preview smoke check
+
+On `/tutors/:tutorId/book`, activate **View tutor profile** beside the booking
+heading. At narrow widths it must open the existing tutor profile as a
+bottom sheet; at `sm` and wider it must open as a right-side drawer. Confirm
+the profile body scrolls independently, **Back to booking** closes the drawer,
+and selected subject, schedule, notes, invitees, and other booking state remain
+unchanged. The directory flow at `/tutors` must continue to show **Book a
+session** in the same drawer.
+
 ### Tutor specialization taxonomy smoke check
 
 On the tutor list, search remains visible while category, specialization, and

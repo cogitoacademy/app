@@ -11,6 +11,7 @@ import {
   IconChevronUp,
   IconCoins,
   IconDeviceLaptop,
+  IconEye,
   IconMapPin,
   IconSchool,
   IconWallet,
@@ -69,6 +70,7 @@ import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { EmptyState } from "@/components/empty-state";
 import { CogitoMarks } from "@/components/cogito-marks";
 import { InfoPreview } from "@/components/info-preview";
+import { TutorDrawer } from "@/components/tutor/tutor-drawer";
 import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
 import { getBookingPriceSummary } from "./booking-pricing";
@@ -178,6 +180,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
   const [studentSearch, setStudentSearch] = useState("");
   const [debouncedStudentSearch, setDebouncedStudentSearch] = useState("");
   const [invitees, setInvitees] = useState<StudentMatch[]>([]);
+  const [tutorProfileOpen, setTutorProfileOpen] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
 
   useEffect(() => {
@@ -585,6 +588,16 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                   : "Choose an available slot and review the Marks hold before sending your request."}
             </Text>
           </div>
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full shrink-0 sm:w-auto"
+            aria-expanded={tutorProfileOpen}
+            onClick={() => setTutorProfileOpen(true)}
+          >
+            <IconEye />
+            View tutor profile
+          </Button>
         </div>
       </div>
 
@@ -1252,6 +1265,13 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
           </Button>
         </div>
       </div>
+
+      <TutorDrawer
+        tutor={profile}
+        open={tutorProfileOpen}
+        onOpenChange={setTutorProfileOpen}
+        showBookingAction={false}
+      />
 
       <Drawer
         open={summaryOpen}

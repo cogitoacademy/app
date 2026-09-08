@@ -75,6 +75,7 @@ type TutorDrawerProps = {
   } | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  showBookingAction?: boolean;
 };
 
 type PricingModality = "online" | "offline";
@@ -110,7 +111,12 @@ function getPricingTableData(
   return { modalities, rows };
 }
 
-export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
+export function TutorDrawer({
+  tutor,
+  open,
+  onOpenChange,
+  showBookingAction = true,
+}: TutorDrawerProps) {
   const [isDesktop, setIsDesktop] = useState(false);
 
   useEffect(() => {
@@ -336,19 +342,34 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
           </DrawerDescription>
         </DrawerBody>
         <DrawerFooter>
-          <Button
-            block
-            nativeButton={false}
-            render={
-              <Link
-                to="/tutors/$tutorId/book"
-                params={{ tutorId: selectedTutor.id }}
-                aria-label={`Book ${t.user?.name ?? "tutor"}`}
-              />
-            }
-          >
-            Book a session
-          </Button>
+          {showBookingAction ? (
+            <Button
+              block
+              nativeButton={false}
+              render={
+                <Link
+                  to="/tutors/$tutorId/book"
+                  params={{ tutorId: selectedTutor.id }}
+                  aria-label={`Book ${t.user?.name ?? "tutor"}`}
+                />
+              }
+            >
+              Book a session
+            </Button>
+          ) : (
+            <DrawerClose
+              render={
+                <Button
+                  block
+                  variant="secondary"
+                  type="button"
+                  aria-label="Back to booking"
+                />
+              }
+            >
+              Back to booking
+            </DrawerClose>
+          )}
         </DrawerFooter>
       </DrawerPopup>
     </Drawer>

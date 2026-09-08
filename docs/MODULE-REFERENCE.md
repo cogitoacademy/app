@@ -1091,6 +1091,11 @@ The web tutor profile editor groups education, competition achievements, and exp
 - Tutor discovery cards use natural-width child specialization labels without repeating the parent category, keep desktop metadata on one line, reveal additional specialization badges at wider breakpoints, and retain the `From [Marks icon] #` starting-price treatment. This is presentation-only and does not change discovery filters or response fields.
 - Long student and admin tutor profiles scroll inside the drawer content area while header/action regions stay outside that scroll area; local body overscroll is contained and cannot move the fixed regions. This is presentation-only and does not change the discovery or review contracts.
 
+The student booking route `/tutors/:tutorId/book` reuses the published tutor
+drawer through a **View tutor profile** header action. It preserves the
+booking form state while open and swaps the drawer CTA to **Back to booking**;
+no discovery input, output, or RPC contract changes.
+
 **Dependencies:** `DiscoveryRepo`, `PricingPort`
 
 ---

@@ -146,6 +146,12 @@ be reopened in read-only mode after acceptance.
 
 The student tutor-discovery drawer opens as a swipe-down bottom sheet below the `sm` breakpoint and a right-side drawer at `sm` and above. It and the admin tutor-review drawer keep their header/action regions outside the scroll container while `Drawer.Content` owns the single vertical scroll region for long profile content. The body may overscroll locally, but that motion is contained and cannot move the fixed regions. This is client-side presentation only; no RPC path, request envelope, response shape, schema, or persistence contract changed.
 
+The create-booking surface at `/tutors/:tutorId/book` reuses that same drawer
+through a **View tutor profile** action beside the booking heading. Closing it
+returns to the still-mounted booking form, and the drawer shows **Back to
+booking** instead of a duplicate booking CTA. This is presentation-only and
+does not add an RPC path or change the `tutors.getProfile` contract.
+
 ## Stable collection transitions (2026-08-28)
 
 The admin tutor tables, tutor discovery list, and admin booking queue retain
