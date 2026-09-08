@@ -930,7 +930,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                               variant={active ? "tertiary" : "plain"}
                               aria-pressed={active}
                               disabled={!available}
-                              className="min-w-0 flex-col gap-0.5 px-1 py-6"
+                              className="min-w-0 flex-col gap-0.5 px-1 py-9 min-[395px]:py-6"
                               onClick={() => setSelectedAvailabilityDate(date)}
                             >
                               <span className="text-xs opacity-70">

@@ -21,15 +21,7 @@ import {
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
-import {
-  getSelectItemValue,
-  Select,
-  SelectItem,
-  SelectList,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@cogito-app/ui/components/selia/select";
+import { Tabs, TabsItem, TabsList } from "@cogito-app/ui/components/selia/tabs";
 import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 
 import { EmptyState } from "@/components/empty-state";
@@ -137,6 +129,7 @@ export function BookingRescheduleAction({
   const [reason, setReason] = useState("");
   const [isDesktop, setIsDesktop] = useState(false);
   const [availabilityCutoff, setAvailabilityCutoff] = useState(0);
+  const [showAllAvailability, setShowAllAvailability] = useState(false);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(min-width: 640px)");
@@ -184,6 +177,13 @@ export function BookingRescheduleAction({
       )
     : undefined;
   const usingAvailability = mode === "availability";
+  const slotsByDate = Map.groupBy(slots, (slot) =>
+    formatDateValue(slot.startDate, RESCHEDULE_TIMEZONE),
+  );
+  const availabilityDates = [...slotsByDate.entries()];
+  const visibleAvailabilityDates = showAllAvailability
+    ? availabilityDates
+    : availabilityDates.slice(0, 4);
   const validTime =
     isValidMinuteTime(newTime) &&
     (!usingAvailability || isTimeWithinRange(newTime, minTime, maxTime));
@@ -229,6 +229,20 @@ export function BookingRescheduleAction({
       : orpc.booking.proposeReschedule.mutationOptions(proposalMutationOptions),
   );
 
+  const selectMode = (next: "availability" | "custom") => {
+    setMode(next);
+    setNewDate("");
+    setNewTime(
+      next === "custom" && effectiveCurrentStartAt
+        ? snapTimeToQuarter(
+            formatTimeValue(effectiveCurrentStartAt, RESCHEDULE_TIMEZONE),
+          )
+        : "",
+    );
+    setSelectedSlotId("");
+    setShowAllAvailability(false);
+  };
+
   return (
     <>
       <Button
@@ -258,41 +272,19 @@ export function BookingRescheduleAction({
             {isTutor ? (
               <Field>
                 <FieldLabel>Scheduling method</FieldLabel>
-                <Select
+                <Tabs
                   value={mode}
                   onValueChange={(value) => {
-                    const next = getSelectItemValue(value);
-                    if (next === "availability" || next === "custom") {
-                      setMode(next);
-                      setNewDate("");
-                      setNewTime(
-                        next === "custom" && effectiveCurrentStartAt
-                          ? snapTimeToQuarter(
-                              formatTimeValue(
-                                effectiveCurrentStartAt,
-                                RESCHEDULE_TIMEZONE,
-                              ),
-                            )
-                          : "",
-                      );
-                      setSelectedSlotId("");
+                    if (value === "availability" || value === "custom") {
+                      selectMode(value);
                     }
                   }}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose a scheduling method" />
-                  </SelectTrigger>
-                  <SelectPopup>
-                    <SelectList>
-                      <SelectItem value="availability">
-                        Use my availability
-                      </SelectItem>
-                      <SelectItem value="custom">
-                        Choose a custom time
-                      </SelectItem>
-                    </SelectList>
-                  </SelectPopup>
-                </Select>
+                  <TabsList aria-label="Scheduling method">
+                    <TabsItem value="availability">Availability</TabsItem>
+                    <TabsItem value="custom">Custom time</TabsItem>
+                  </TabsList>
+                </Tabs>
               </Field>
             ) : null}
 
@@ -304,57 +296,75 @@ export function BookingRescheduleAction({
                     Loading tutor availability…
                   </div>
                 ) : slots.length > 0 ? (
-                  <div className="grid max-h-72 gap-2 overflow-y-auto p-0.5 sm:grid-cols-2">
-                    {slots.map((slot) => {
-                      const selected = slot.id === selectedSlotId;
-                      return (
-                        <Button
-                          key={slot.id}
-                          type="button"
-                          variant={selected ? "primary" : "outline"}
-                          aria-pressed={selected}
-                          className="h-auto min-h-20 justify-start px-4 py-3 text-left"
-                          onClick={() => {
-                            const earliestStart = getEarliestStart(
-                              slot.startDate,
-                            );
-                            setSelectedSlotId(slot.id);
-                            setNewDate(
-                              formatDateValue(
-                                earliestStart,
-                                RESCHEDULE_TIMEZONE,
-                              ),
-                            );
-                            setNewTime(
-                              formatTimeValue(
-                                earliestStart,
-                                RESCHEDULE_TIMEZONE,
-                              ),
-                            );
-                          }}
-                        >
-                          <span className="flex min-w-0 flex-col items-start gap-1">
-                            <span className="font-medium">
-                              {formatSlotDate(slot.startDate)}
-                            </span>
-                            <span className="flex items-center gap-1.5 text-sm opacity-80">
-                              <IconClock />
-                              {formatTimeValue(
-                                slot.startDate,
-                                RESCHEDULE_TIMEZONE,
-                              )}
-                              –
-                              {formatTimeValue(
-                                slot.endDate,
-                                RESCHEDULE_TIMEZONE,
-                              )}{" "}
-                              WIB
-                            </span>
-                          </span>
-                          {selected ? <IconCheck className="ml-auto" /> : null}
-                        </Button>
-                      );
-                    })}
+                  <div className="space-y-3">
+                    <div className="grid gap-3 rounded-lg border border-item-border p-3 sm:grid-cols-2">
+                      {visibleAvailabilityDates.map(([date, dateSlots]) => (
+                        <div key={date} className="space-y-2">
+                          <div className="py-1 text-sm font-medium">
+                            {formatSlotDate(dateSlots[0]!.startDate)}
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {dateSlots.map((slot) => {
+                              const selected = slot.id === selectedSlotId;
+                              return (
+                                <Button
+                                  key={slot.id}
+                                  type="button"
+                                  size="sm"
+                                  variant={selected ? "primary" : "outline"}
+                                  aria-pressed={selected}
+                                  className="h-9"
+                                  onClick={() => {
+                                    const earliestStart = getEarliestStart(
+                                      slot.startDate,
+                                    );
+                                    setSelectedSlotId(slot.id);
+                                    setNewDate(
+                                      formatDateValue(
+                                        earliestStart,
+                                        RESCHEDULE_TIMEZONE,
+                                      ),
+                                    );
+                                    setNewTime(
+                                      formatTimeValue(
+                                        earliestStart,
+                                        RESCHEDULE_TIMEZONE,
+                                      ),
+                                    );
+                                  }}
+                                >
+                                  <IconClock />
+                                  {formatTimeValue(
+                                    slot.startDate,
+                                    RESCHEDULE_TIMEZONE,
+                                  )}
+                                  –
+                                  {formatTimeValue(
+                                    slot.endDate,
+                                    RESCHEDULE_TIMEZONE,
+                                  )}
+                                  {selected ? <IconCheck /> : null}
+                                </Button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {availabilityDates.length > 4 ? (
+                      <Button
+                        type="button"
+                        variant="underline"
+                        size="sm"
+                        onClick={() =>
+                          setShowAllAvailability((current) => !current)
+                        }
+                      >
+                        {showAllAvailability
+                          ? "Show less"
+                          : `See more availability (${availabilityDates.length - 4})`}
+                      </Button>
+                    ) : null}
                   </div>
                 ) : (
                   <EmptyState
