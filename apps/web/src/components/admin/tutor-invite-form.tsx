@@ -89,7 +89,7 @@ export function TutorInviteForm() {
   }
 
   return (
-    <Card>
+    <Card className="self-start">
       <CardHeader>
         <CardTitle>Invite Tutor</CardTitle>
       </CardHeader>

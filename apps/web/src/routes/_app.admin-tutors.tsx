@@ -288,7 +288,7 @@ function RouteComponent() {
       <div className="grid lg:grid-cols-[1fr_2fr] gap-6">
         <TutorInviteForm />
 
-        <Card id="admin-tutor-invites" className="scroll-mt-4">
+        <Card id="admin-tutor-invites" className="flex scroll-mt-4 flex-col">
           <CardHeader>
             <CardTitle>Invitations</CardTitle>
             <CardHeaderAction>
@@ -314,7 +314,10 @@ function RouteComponent() {
               </Select>
             </CardHeaderAction>
           </CardHeader>
-          <CardBody aria-busy={invitesFetching}>
+          <CardBody
+            aria-busy={invitesFetching}
+            className="flex flex-1 flex-col *:data-[slot=pagination]:mt-auto"
+          >
             {invites.length === 0 ? (
               <EmptyState
                 icon={<IconInbox />}

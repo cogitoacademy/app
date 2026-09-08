@@ -998,6 +998,7 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 - v1.53 (2026-09-01): Grouped tutor education, competition achievements, experiences, and their separate proof-link fields into one combined Achievements & experience profile card. No RPC, schema, or persistence contract changed.
 
 - v1.52 (2026-09-01): Set independent Manage Tutors page sizes to 3 invitations and 5 tutor profiles while retaining separate pagination state. No RPC, schema, or persistence contract changed.
+- v1.54 (2026-09-08): Keep the Invite Tutor card at content height so the adjacent Invitations table cannot create an empty strip below its footer, and bottom-align Invitations pagination within the height supplied by its parent grid row whenever content is shorter. No RPC, schema, or persistence contract changed.
 
 - v1.51 (2026-09-01): Fixed the Manage Tutors invitation-table badge mapping so invited is warning, accepted is success, and expired/revoked are danger, with a secondary fallback for unknown values. No RPC, schema, or persistence contract changed.
 

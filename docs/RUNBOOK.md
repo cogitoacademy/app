@@ -1892,3 +1892,7 @@ Apply migrations `0034_faulty_richard_fisk.sql`, `0035_ordinary_lyja.sql`, and `
 ## Cogito Marks visual smoke check
 
 Check wallet balances/history, tutor pricing, booking creation/detail/cards, Knowledge Bank eligibility, and admin wallet/analytics screens. Every visible numeric Marks amount must show the Cogito mark symbol immediately before the value; ordinary labels and action copy that mention Marks should remain text. Screen-reader inspection should expose each amount as “N Marks”.
+
+## Invite Tutor card visual smoke check
+
+On `/admin-tutors` at desktop width, verify the Invite Tutor card ends directly after its footer. The adjacent Invitations card may be taller, but it must not stretch the form card or leave a white strip below the footer. Filter Invitations to reduce its records and verify pagination stays aligned to the bottom of the height supplied by its parent grid row.
