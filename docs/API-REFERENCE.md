@@ -2,6 +2,15 @@
 
 Last updated: 2026-09-04
 
+## Booking-detail action presentation (2026-09-08)
+
+All available booking actions now render in the shared detail header below the
+status badge. Lifecycle context replaces the generic state description when a
+response or explanation is needed, and the old sticky-rail Booking actions card
+is removed. Per-session series rescheduling remains on its target session row.
+No RPC input, output, or route contract changed; this note supersedes older
+frontend placement descriptions below.
+
 > **Competition color note (2026-09-08):** Competition colors remain presentation-only and are derived in the web client from each category's existing `coreCategory`. No RPC input or output shape changed.
 
 ## Server-backed table pagination (2026-09-04)

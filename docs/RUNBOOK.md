@@ -2,6 +2,17 @@
 
 Last updated: 2026-09-07
 
+## Unified booking-action smoke check (2026-09-08)
+
+Open booking details for student, tutor, and admin roles. Verify every available
+booking action appears in the header action group below the status badge and the
+old sticky-rail Booking actions card never renders. Reschedule, invitation,
+reconfirmation, and pending-invite states must show contextual copy in place of
+the generic state description. After the 15-minute lateness threshold, the
+report icon must expose `Report a tutor issue` to assistive technology and open
+the existing report dialog. This check supersedes older action-placement steps
+below; session notes and support reports remain in the main flow.
+
 ## Competition field palette
 
 The competition palette is compiled into the shared UI CSS and requires no environment variables, secrets, migrations, or deployment-time configuration. After changing a field token or slug mapping, run the UI/web typecheck and web build so Tailwind verifies every generated utility.

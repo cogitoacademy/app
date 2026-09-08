@@ -2,6 +2,16 @@
 
 Last updated: 2026-09-04
 
+## Booking-detail action ownership (2026-09-08)
+
+`BookingLifecycleActions` remains the owner of lifecycle mutations, pending
+state, and dialogs, but its action controls now compose into the shared booking
+detail header. `getBookingLifecycleContext` derives the summary copy for
+reschedule, invitation, reconfirmation, pending-invite, and lateness cases. The
+report action is icon-only with an accessible name and native tooltip. This is
+presentation-only and supersedes older references below to a separate sticky
+Booking actions card.
+
 ## Competition field presentation
 
 Competition colors are a frontend presentation concern shared through `packages/ui/src/styles/globals.css`. Each field has `competition-{field}` and `competition-{field}-foreground` Tailwind tokens. `apps/web/src/lib/competition-colors.ts` is the canonical mapping from academy `coreCategory` slugs (`mun`, `olimpiade`, `wsc`, `kti`, `debat`, `business`, `pidato`) to `soft` and `solid` class sets. Unknown slugs deliberately use the KTI/Research fallback. Calendar events and category badges use the soft mapping; solid is available for badges and other field-owned surfaces.

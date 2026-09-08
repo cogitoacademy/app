@@ -2,6 +2,17 @@
 
 Last updated: 2026-09-05
 
+## Unified booking-detail actions (2026-09-08)
+
+The booking detail header is now the single action zone for propose, cancel,
+review, complete, reschedule decisions, invitations, reconfirmation, and
+lateness reporting. Lifecycle states that need explanation replace the generic
+state description with concise contextual copy. The old sticky-rail Booking
+actions card is removed; session notes and support reports remain in the main
+flow. Lateness reporting is an accessible icon-only secondary action. This
+supersedes older placement notes below that refer to contextual booking actions
+in the sticky rail.
+
 ## Competition field color tokens (2026-09-08)
 
 The authenticated app now uses the academy's canonical competition palette rather than approximating fields with generic status colors. The shared UI theme exposes paired background/foreground tokens for MUN, Olympiad, WSC, Research & Essay, Debate, Business Plan, and Speech. App surfaces can consume the tokens directly, while `apps/web/src/lib/competition-colors.ts` maps Sanity `coreCategory` values to reusable soft and solid class sets; unknown categories fall back to Research & Essay.

@@ -83,7 +83,10 @@ import {
   getBookingStateVariant,
   getBookingTypeLabel,
 } from "./booking-ui";
-import { BookingLifecycleActions } from "./booking-lifecycle-actions";
+import {
+  BookingLifecycleActions,
+  getBookingLifecycleContext,
+} from "./booking-lifecycle-actions";
 import {
   BOOKING_DEADLINE_STATES,
   BookingDeadlineNotice,
@@ -439,6 +442,9 @@ export function BookingDetailPage({
     rescheduleReason: activeRescheduleProposal?.reason ?? undefined,
     onBookingChanged: refreshBookingQueries,
   };
+  const lifecycleContext = !isAdmin
+    ? getBookingLifecycleContext({ ...lifecycleActionProps, now })
+    : null;
 
   const meetingUrl = booking.meetingUrl;
   const seriesSessions = sessionsQuery.data ?? undefined;
@@ -521,7 +527,8 @@ export function BookingDetailPage({
             </div>
             <Heading className="break-words text-2xl">{eventTitle}</Heading>
             <Text className="mt-2 max-w-2xl text-muted">
-              {getBookingStateDescription(booking.currentState)}
+              {lifecycleContext ??
+                getBookingStateDescription(booking.currentState)}
             </Text>
             {booking.disclaimer ? (
               <div className="mt-3 max-w-2xl rounded-lg border border-warning-border bg-warning/10 px-3 py-2 text-sm text-warning-foreground">
@@ -542,7 +549,8 @@ export function BookingDetailPage({
             canCancel ||
             showHeaderReschedule ||
             canComplete ||
-            hasHeaderActions ? (
+            hasHeaderActions ||
+            Boolean(lifecycleContext) ? (
               <div
                 className="flex w-full flex-col gap-2 sm:mt-auto sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end"
                 role="group"
@@ -550,6 +558,12 @@ export function BookingDetailPage({
               >
                 {extensions?.headerActions}
                 {rescheduleAction}
+                {!isAdmin ? (
+                  <BookingLifecycleActions
+                    {...lifecycleActionProps}
+                    section="actions"
+                  />
+                ) : null}
                 {canReview ? (
                   <>
                     <Button
@@ -982,12 +996,6 @@ export function BookingDetailPage({
         </div>
 
         <aside className="order-2 grid min-w-0 gap-4 lg:order-none lg:col-start-2 lg:row-start-1 lg:sticky lg:top-4">
-          {!isAdmin ? (
-            <BookingLifecycleActions
-              {...lifecycleActionProps}
-              section="actions"
-            />
-          ) : null}
           {extensions?.sidebar ?? (
             <Card className="min-w-0 overflow-hidden">
               <CardHeader>
