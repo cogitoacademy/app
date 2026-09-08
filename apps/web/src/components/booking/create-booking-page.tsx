@@ -1176,18 +1176,17 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                 label="Reserved now"
                 value={<CogitoMarks value={requiredHold} size="3" />}
               />
-              <div className="flex items-center justify-between gap-4">
-                <span className="flex items-center gap-2 text-muted">
-                  <IconWallet className="size-4" aria-hidden="true" /> Available
-                </span>
-                <Text className="font-medium">
-                  {walletQuery.isPending ? (
+              <SummaryRow
+                label="Available balance"
+                value={
+                  walletQuery.isPending ? (
                     "Loading…"
                   ) : (
                     <CogitoMarks value={availableBalance} size="3" />
-                  )}
-                </Text>
-              </div>
+                  )
+                }
+                icon={<IconWallet />}
+              />
               {!walletQuery.isPending && hasEnoughMarks ? (
                 <SummaryRow
                   label="Balance after reserve"
