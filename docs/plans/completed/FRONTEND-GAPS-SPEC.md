@@ -116,7 +116,7 @@ accounts. This is frontend routing only and adds no API or database contract.
 
 ### Tutor profile and payout privacy follow-up (2026-08-28)
 
-Tutor onboarding now has one structured Achievements section and one structured Experiences section, with legacy achievement/credential/experience text retained as a fallback. Achievement and experience entries use repeatable cards with bounded year fields; year values remain ungrouped, and an ongoing experience leaves End year blank. Client-side max-length checks measure the trimmed value to match the API schemas. Availability-summary and credential-proof inputs are retired. Base honorarium is adjusted only through Rp 5,000 minus/plus controls and its six group-size outcomes are shown in tables. Tutor portraits use a staged source-to-final workflow: the tutor submits one uploaded source image, an admin uploads the background-standardized replacement, and approval/publication promotes that replacement to the canonical public image; the tutor/admin surfaces expose the review history. Tutor-facing history shows actor names/types without account emails. Tutor payout details expose only completed sessions and IDR honorarium, removing take-rate and Marks terminology from the tutor interface.
+Tutor onboarding now has one structured Achievements section and one structured Experiences section, with legacy achievement/credential/experience text retained as a fallback. Achievement and experience entries use repeatable cards with bounded year fields; year values remain ungrouped, and an ongoing experience leaves End year blank. Client-side max-length checks measure the trimmed value to match the API schemas. Availability-summary and credential-proof inputs are retired. Base honorarium is adjusted only through Rp5,000 minus/plus controls and its six group-size outcomes are shown in tables. Tutor portraits use a staged source-to-final workflow: the tutor submits one uploaded source image, an admin uploads the background-standardized replacement, and approval/publication promotes that replacement to the canonical public image; the tutor/admin surfaces expose the review history. Tutor-facing history shows actor names/types without account emails. Tutor payout details expose only completed sessions and IDR honorarium, removing take-rate and Marks terminology from the tutor interface.
 
 Achievement and Experience sections retain separate optional proof URL fields for compatibility. The tutor-facing copy recommends putting both evidence types in one Google Drive folder with the “Anyone with the link can view” setting. The URLs remain visible to admins during review, participate in the protected edit-review flow, and are intentionally omitted from public tutor discovery.
 
@@ -730,17 +730,17 @@ Full override form per PRD §Emergency Override UI/UX:
 
 ### F13: Tutor Payout View
 
-**Status: CLOSED (REVIEW-FIXES-3 P6)** — payout details card on the tutor dashboard (completed sessions, total Marks, Cogito take, tutor payout + Rp 7,000 conversion) backed by `tutor.getMyPayouts`, with unpaid-honorarium and transfer-fee explanations available through shared `InfoPreview` popovers.
+**Status: CLOSED (REVIEW-FIXES-3 P6)** — payout details card on the tutor dashboard (completed sessions, total Marks, Cogito take, tutor payout + Rp7,000 conversion) backed by `tutor.getMyPayouts`, with unpaid-honorarium and transfer-fee explanations available through shared `InfoPreview` popovers.
 
 **PRD:** DL-11
 
-**Current state:** **CLOSED (2026-08-19).** Payout details card on the tutor dashboard (completed sessions, total Marks, Cogito take, tutor payout + Rp 7,000 conversion) backed by `tutor.getMyPayouts` (`tutor-dashboard-page.tsx:53`), with accessible info popovers for the unpaid-honorarium and transfer-fee explanations.
+**Current state:** **CLOSED (2026-08-19).** Payout details card on the tutor dashboard (completed sessions, total Marks, Cogito take, tutor payout + Rp7,000 conversion) backed by `tutor.getMyPayouts` (`tutor-dashboard-page.tsx:53`), with accessible info popovers for the unpaid-honorarium and transfer-fee explanations.
 
 **Required (backend ready):**
 
 1. New route or section in tutor dashboard: "My payouts"
 2. Calls `tutor.getMyPayouts` with date range
-3. Shows: total completed sessions, total Marks earned, Cogito's take, tutor's payout amount (Marks × Rp 7,000)
+3. Shows: total completed sessions, total Marks earned, Cogito's take, tutor's payout amount (Marks × Rp7,000)
 4. Admin version: `admin.getTutorPayouts` for any tutor
 
 **Acceptance:**

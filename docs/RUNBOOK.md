@@ -274,8 +274,11 @@ As a signed-in student or tutor, open `/notifications` and confirm the list show
 ### Economy rate-control smoke check
 
 As an admin, open `/admin-economy`, confirm the Marks value, tutor minimum/increments,
-and online/offline Cogito take schedule are visible. Change a Cogito base or increment
-by a valid Rp 5,000 step, save, reload, and verify the version increments and the
+and online/offline Cogito take schedule are visible and read-only by default. Select
+**Edit schedule**, confirm the editing badge and cancel action appear, then change a Cogito base or increment
+either by typing an IDR amount or using the Rp5,000 stepper controls, confirm the
+shared class-size pricing table preview updates by a valid Rp5,000 step, then save,
+reload, and verify the version increments and the
 preview for class sizes 1–6 changes. The save is optimistic-lock protected and affects
 only future booking/repricing snapshots; existing booking snapshots must remain unchanged.
 After a successful change, verify no `Cogito rate updated` in-app notification appears
@@ -285,7 +288,7 @@ As a student or tutor, opening `/admin-economy` must redirect away and direct
 `admin.getEconomySettings`/update calls must return FORBIDDEN.
 
 The tutor profile at `/profile` should show IDR base honorarium fields (online/offline), enforce the
-Rp 50,000 minimum and Rp 5,000 steps, show one combined six-row preview matrix for the
+Rp50,000 minimum and Rp5,000 steps, show one combined six-row preview matrix for the
 selected modalities, and must not describe Marks as cash-out. Student
 tutor discovery and booking previews should show computed Marks per student for the
 selected modality; legacy profiles without `baseRatesIdr` remain readable. Change a
@@ -694,7 +697,7 @@ after boot is promoted by the Better Auth signup hook. Set `ADMIN_EMAILS` to a
 comma-separated list when more than one trusted account should be bootstrapped.
 Other admin accounts may still be granted through the existing admin role UI/API.
 
-Default catalog values follow PRD OQ-01: Starter 50 Marks / Rp 312,500, Learner 120 Marks / Rp 690,000, Explorer 200 Marks / Rp 1,070,000, Pioneer 400 Marks / Rp 2,000,000. Migration `0041_seed_mark_packages.sql` inserts missing rows and updates those name/Marks/price fields when a matching code already exists, while preserving an existing `is_active` choice. Seed demo students are marked email-verified so the local booking smoke flow can exercise the verified-student guard without an external OTP provider. To change the catalog after deployment, use the admin mark-package API; do not delete rows because payment records reference the package id and retain amount/Marks snapshots.
+Default catalog values follow PRD OQ-01: Starter 50 Marks / Rp312,500, Learner 120 Marks / Rp690,000, Explorer 200 Marks / Rp1,070,000, Pioneer 400 Marks / Rp2,000,000. Migration `0041_seed_mark_packages.sql` inserts missing rows and updates those name/Marks/price fields when a matching code already exists, while preserving an existing `is_active` choice. Seed demo students are marked email-verified so the local booking smoke flow can exercise the verified-student guard without an external OTP provider. To change the catalog after deployment, use the admin mark-package API; do not delete rows because payment records reference the package id and retain amount/Marks snapshots.
 
 If production is currently missing packages, deploy the migration and verify with:
 
@@ -1432,7 +1435,7 @@ Concurrent modification conflict. The `version` field didn't match. Retry the op
 - `Payment simulation error: 403 REQUEST_FORBIDDEN_ERROR` — verify the production key is a Test Mode secret (`xnd_development_...`) with **Money-in / Payments → Write** permission, while `XENDIT_MODE=test`; then create a fresh purchase.
 - `Payment simulation error: 400 INACTIVE_PAYMENT_METHOD` — the dynamic QR has already been completed, canceled, or expired. On the patched build, retrying once performs an authoritative status reconciliation; if it still fails, use a fresh pending intent rather than retrying the inactive QR indefinitely.
 - `Payment simulation error: 400 ...` — inspect the Xendit error code/message for amount mismatch or another request validation failure. Do not retry an old payment indefinitely; create a fresh pending intent after correcting the request/configuration.
-- `Payment provider error: 503 ...` on Explorer (Rp 1,070,000) / Pioneer (Rp 2,000,000) only — **Xendit Test Mode amount cap (~IDR 1,000,000)**. Starter/Learner work; all four packages work in Live Mode (QRIS channel limit is 1–10,000,000 IDR). For UAT use Starter/Learner, or temporarily lower the package price below 1M via the admin mark-package API. The Balance page labels Explorer/Pioneer in Test Mode.
+- `Payment provider error: 503 ...` on Explorer (Rp1,070,000) / Pioneer (Rp2,000,000) only — **Xendit Test Mode amount cap (~IDR 1,000,000)**. Starter/Learner work; all four packages work in Live Mode (QRIS channel limit is 1–10,000,000 IDR). For UAT use Starter/Learner, or temporarily lower the package price below 1M via the admin mark-package API. The Balance page labels Explorer/Pioneer in Test Mode.
 - Re-purchase behavior — a PAID, SETTLED, FAILED, EXPIRED, or REFUNDED attempt is retained as history and the next `payment.createPurchase` call creates a new payment row/provider reference. Only the latest PENDING attempt is reused. Test transactions in the production database therefore do not permanently lock a package for the UAT account.
 
 ### Database Connection Errors
@@ -1623,7 +1626,7 @@ The production app can run Xendit Test Mode first. The switch to Live Mode happe
 1. **Pre-flight:** run the sandbox checklist above against the sandbox keys. Confirm `XENDIT_DEFAULT_PAYMENT_METHOD` matches the launch channel (default `qris`).
 2. **Webhook wiring:** set the Xendit dashboard webhook URL to `https://api.cogitoacademy.id/webhooks/payments/xendit` and confirm the dashboard sends the `api-version: 2024-11-11` payload shape (`data.payment_id` / `data.payment_request_id`). The webhook idempotency key derives from the verified payload id/reference plus normalized lifecycle status — no `x-callback-token` guessing. During UAT, send the same paid payload twice (the second must be idempotent), then verify a different lifecycle status for the same payment is not suppressed.
 3. **Env:** in the SOPS-encrypted prod env, set `XENDIT_MODE=live` and replace the Test Mode `XENDIT_SECRET_KEY`/`XENDIT_WEBHOOK_TOKEN` with Live Mode credentials. Keep the redirect URLs, update the webhook configuration to Live Mode, and set `WEBHOOK_ALLOWED_IPS` to the live egress IPs from Xendit. The env schema fails boot if `PAYMENT_PROVIDER=xendit` lacks credentials or an explicit mode, so a half-swapped config cannot silently run the stub.
-4. **Live smoke:** run one real small purchase (Pioneer 400 / Rp 2,000,000 or the smallest approved package) end-to-end: create purchase → Xendit checkout → webhook → wallet credit once. Verify the redirect return works and the balance page reflects the credit.
+4. **Live smoke:** run one real small purchase (Pioneer 400 / Rp2,000,000 or the smallest approved package) end-to-end: create purchase → Xendit checkout → webhook → wallet credit once. Verify the redirect return works and the balance page reflects the credit.
 5. **Negative tests:** deliver a webhook with a wrong token (rejected), from a non-allowlisted IP (rejected), and a duplicate delivery (idempotent — single credit).
 6. **Refund path:** confirm an `adminRefund` writes `refund_record` with `amount_idr = 0` and `provider_event_id` NULL — no Xendit cash refund is ever issued (PRD §677).
 7. **Rollback:** keep Test Mode keys/token and the UAT allowlist in the SOPS vault under separate named entries. Roll back by restoring `XENDIT_MODE=test` plus the Test Mode credentials/allowlist and redeploying; use `PAYMENT_PROVIDER=stub` only as an emergency fallback. Document the switch timestamp and transaction reference in the ops log.

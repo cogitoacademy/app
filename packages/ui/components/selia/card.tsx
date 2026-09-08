@@ -93,7 +93,7 @@ export function CardTitle({
     props: {
       "data-slot": "card-title",
       className: cn(
-        "text-lg font-semibold leading-none",
+        "text-base md:text-lg font-semibold leading-none",
         "has-[>[data-slot=card-info-preview]]:flex has-[>[data-slot=card-info-preview]]:flex-wrap has-[>[data-slot=card-info-preview]]:items-center has-[>[data-slot=card-info-preview]]:gap-2",
         className,
       ),

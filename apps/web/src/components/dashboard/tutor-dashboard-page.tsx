@@ -163,7 +163,7 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
               <div>
                 <Text className="text-sm text-muted">Unpaid honorarium</Text>
                 <Text className="mt-1 text-lg font-semibold">
-                  Rp {pendingHonorarium.toLocaleString("id-ID")}
+                  Rp{pendingHonorarium.toLocaleString("id-ID")}
                 </Text>
                 <Text className="mt-1 text-sm text-muted">
                   {payouts.data?.completedSessions ?? 0} completed session

@@ -255,7 +255,7 @@
 ## PR P6 — Remaining frontend F-items + auth hardening (after PR #55 lands)
 
 - [x] **6.1 (F8)** per-session series completion UI — session list on tutor booking detail + `completeSession({sessionId})`. — merged with PR #55's detail page; per-session list + complete buttons added (P6)
-- [x] **6.2 (F13)** tutor payout view — `tutor.getMyPayouts` table (split, Cogito take, Rp 7,000 conversion). — payout details card on the tutor dashboard (P6)
+- [x] **6.2 (F13)** tutor payout view — `tutor.getMyPayouts` table (split, Cogito take, Rp7,000 conversion). — payout details card on the tutor dashboard (P6)
 - [x] **6.3 (F14)** group-series no-opt-out disclaimer — booking detail + invitee accept screen (backend `disclaimer` already on `booking.get`). — warning callout on booking detail (P6)
 - [x] **6.4 (F16)** public achievements — new public procedure (`achievement.listApproved`) + landing section. — backend procedure + live landing section (P6)
 - **6.5 (G2)** email verification — better-auth `emailVerification` plugin + resend wiring + UI (may split into its own PR; requires Resend).

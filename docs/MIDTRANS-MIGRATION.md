@@ -154,7 +154,7 @@ the stub.
    production payment methods are active.
 2. In Coolify: replace the Sandbox keys with the **Production** Server/Client
    keys and set `MIDTRANS_MODE=live`. Keep `PAYMENT_PROVIDER=midtrans`.
-3. **Live smoke:** run one real small purchase (Pioneer 400 / Rp 2,000,000 or
+3. **Live smoke:** run one real small purchase (Pioneer 400 / Rp2,000,000 or
    the smallest approved package) end-to-end: create purchase → Snap page →
    pay → webhook → wallet credit once. Verify the redirect return and the
    balance page.

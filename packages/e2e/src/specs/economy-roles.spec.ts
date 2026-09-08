@@ -183,7 +183,7 @@ test("admin blocks a negative economy amount without persisting it", async ({
   await page.getByRole("button", { name: "Save take schedule" }).click();
 
   await expect(
-    page.getByText("All amounts must use Rp 5,000 increments.", {
+    page.getByText("All amounts must use Rp5,000 increments.", {
       exact: true,
     }),
   ).toBeVisible();

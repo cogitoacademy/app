@@ -197,10 +197,10 @@ function validateBaseRates(
       return `A ${required} base honorarium is required`;
     }
     if (value < config.minTutorBaseRateIdr) {
-      return `${required} base honorarium must be at least Rp ${config.minTutorBaseRateIdr.toLocaleString("id-ID")}`;
+      return `${required} base honorarium must be at least Rp${config.minTutorBaseRateIdr.toLocaleString("id-ID")}`;
     }
     if (value % 5_000 !== 0) {
-      return `${required} base honorarium must use Rp 5,000 increments`;
+      return `${required} base honorarium must use Rp5,000 increments`;
     }
   }
 

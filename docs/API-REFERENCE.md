@@ -492,7 +492,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `admin.updateEconomySettings`
 
 - **Auth:** Admin
-- **Input:** `{ expectedVersion, onlineCogitoBaseIdr, onlineCogitoIncrementIdr, offlineCogitoBaseIdr, offlineCogitoIncrementIdr }` (IDR values use Rp 5,000 increments; bases are at least Rp 5,000; increments are non-negative)
+- **Input:** `{ expectedVersion, onlineCogitoBaseIdr, onlineCogitoIncrementIdr, offlineCogitoBaseIdr, offlineCogitoIncrementIdr }` (IDR values use Rp5,000 increments; bases are at least Rp5,000; increments are non-negative)
 - **Output:** The updated economy settings object; `version` increments only when at least one schedule value changes
 - **Errors:** `ECONOMY_CONFIG_CONFLICT` (409) when `expectedVersion` is stale; validation errors (400) for unsupported values
 - **Description:** Updates the active Cogito take schedule, records an audit event, and affects only future bookings and new repricing snapshots. Existing booking snapshots remain unchanged. The update does not notify tutors; their IDR honorarium settings and the student-facing Marks preview remain separate concerns. Saving identical values is a no-op and creates no new audit event or notification.
@@ -843,7 +843,7 @@ The create/edit/correction form is presented as a bottom drawer on mobile and a 
 - **Auth:** Protected
 - **Input:** None
 - **Output:** `{ xenditMode: "test" | "live" | null, packages: MarkPackage[] }`
-- **Description:** Returns active purchasable mark packages plus the client-visible payment mode signal. `xenditMode` is `"test"` when `PAYMENT_PROVIDER=xendit` and `XENDIT_MODE=test`, `"live"` for Live Mode, and `null` when the stub provider is active — the web app uses it to label packages that exceed the Xendit Test Mode amount cap (~IDR 1,000,000; Explorer/Pioneer are rejected in Test Mode but work in Live Mode). The default catalog is installed automatically by versioned database migration `0041_seed_mark_packages.sql`; values are Starter Pack 50 Marks / Rp 312,500; Learner Pack 120 Marks / Rp 690,000; Explorer Pack 200 Marks / Rp 1,070,000; Pioneer Pack 400 Marks / Rp 2,000,000. Admins can manage later catalog changes through `adminMarkPackage.*`.
+- **Description:** Returns active purchasable mark packages plus the client-visible payment mode signal. `xenditMode` is `"test"` when `PAYMENT_PROVIDER=xendit` and `XENDIT_MODE=test`, `"live"` for Live Mode, and `null` when the stub provider is active — the web app uses it to label packages that exceed the Xendit Test Mode amount cap (~IDR 1,000,000; Explorer/Pioneer are rejected in Test Mode but work in Live Mode). The default catalog is installed automatically by versioned database migration `0041_seed_mark_packages.sql`; values are Starter Pack 50 Marks / Rp312,500; Learner Pack 120 Marks / Rp690,000; Explorer Pack 200 Marks / Rp1,070,000; Pioneer Pack 400 Marks / Rp2,000,000. Admins can manage later catalog changes through `adminMarkPackage.*`.
 
 ### `wallet.knowledgeBankEligible`
 

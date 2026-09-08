@@ -328,7 +328,7 @@ does not change the shared empty-state tone defaults.
 - User lookup is case-insensitive and bounded; exact email/ID matches rank first, and wildcard characters are treated literally
 - Ledger filters must target exactly one wallet (`walletId` or `userId`, not both)
 - Economy writes require the current `version`; stale writes fail with `ECONOMY_CONFIG_CONFLICT`
-- Economy base and increment values are validated in Rp 5,000 increments; increments are non-negative
+- Economy base and increment values are validated in Rp5,000 increments; increments are non-negative
 - Existing booking price snapshots are immutable when the active schedule changes
 - Rate changes affect only future booking/repricing snapshots; they do not create tutor notifications
 - Re-saving the same four schedule values is a no-op and does not increment the economy version or write an audit row
@@ -804,9 +804,9 @@ chat directory.
 
 **Business Rules:**
 
-- Computational value defaults to Rp 5,000 per Mark
-- Tutor minimum base defaults to Rp 50,000; online/offline tutor increments default to Rp 30,000/Rp 40,000
-- Cogito take defaults to online Rp 50,000 + Rp 20,000 per additional student and offline Rp 90,000 + Rp 40,000 per additional student
+- Computational value defaults to Rp5,000 per Mark
+- Tutor minimum base defaults to Rp50,000; online/offline tutor increments default to Rp30,000/Rp40,000
+- Cogito take defaults to online Rp50,000 + Rp20,000 per additional student and offline Rp90,000 + Rp40,000 per additional student
 - Admin may edit only the active Cogito take fields through `admin.*`; every update is audit-logged
 - The config version is copied into new economic snapshots; existing snapshots do not change
 
@@ -827,7 +827,7 @@ chat directory.
 - `computeSplit(modality, tutorPricePerStudent, headcount)` — Legacy compatibility split for profiles that still use the old Marks pricing map
 - `computeEconomics(modality, baseRateIdr, headcount, config)` — Returns the IDR honorarium, IDR Cogito take, total IDR, total Marks, rounded per-student Marks, and immutable snapshot fields
 - `validatePrices(prices, modality)` — Validates floor prices by modality; returns error string or null
-- `validateBaseRates(baseRatesIdr, modality, config?)` — Validates minimum IDR base honorarium, supported modalities, and Rp 5,000 increments
+- `validateBaseRates(baseRatesIdr, modality, config?)` — Validates minimum IDR base honorarium, supported modalities, and Rp5,000 increments
 
 **Dependencies:** None (pure functions)
 
@@ -1030,7 +1030,7 @@ The web tutor profile editor groups education, competition achievements, and exp
 - `submitForReview` can only be called from `draft`/`changes_requested` status
 - A complete first tutor submission requires bilingual Terms of Service acceptance; the acceptance timestamp/version is immutable after the first write and is not included in public tutor discovery. The sticky onboarding action area keeps the document available in read-only mode for later review
 - Profile updates use optimistic locking (`version`)
-- New tutor pricing is stored as IDR base honoraria by modality (`baseRatesIdr`) and validated against the active economy minimum and Rp 5,000 increments; published tutors may change these rates at any time, new bookings use the new rate, and existing booking snapshots remain authoritative for payout. The legacy Marks map remains readable during migration
+- New tutor pricing is stored as IDR base honoraria by modality (`baseRatesIdr`) and validated against the active economy minimum and Rp5,000 increments; published tutors may change these rates at any time, new bookings use the new rate, and existing booking snapshots remain authoritative for payout. The legacy Marks map remains readable during migration
 - The tutor profile editor at `/profile` renders selected modalities in one combined six-row IDR group-size matrix using the same table structure as the student discovery drawer; this is presentation-only. The legacy `/onboarding` path redirects to `/profile` for tutors.
 - The tutor profile editor places the profile-photo upload first and uses a clickable avatar with the shared circular crop flow. Compact Selia `InfoPreview` popovers reveal the full submitted/current/proposed image on demand. For a published tutor it labels `user.image` as the current public photo and a differing `pendingProfileChanges.profileImageUrl` as the proposed photo. The admin review drawer compares both assets side by side; `approve_edits` remains the only operation that promotes the proposal into `user.image`.
 - The admin tutor index derives the status badge from `onboardingStatus` plus `profileEditStatus`; published tutors with `pending_review` edits show **Edit review**, and edits returned with `changes_requested` show **Revision requested**, making review-needed rows visible before opening the drawer.

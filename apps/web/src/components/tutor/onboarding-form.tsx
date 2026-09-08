@@ -837,7 +837,7 @@ export function OnboardingForm({
       if (!Number.isInteger(value) || value < 50_000 || value % 5_000 !== 0) {
         addError(
           `baseRatesIdr.${key}`,
-          `${key === "online" ? "Online" : "Offline"} base honorarium must be an IDR amount of at least Rp 50,000 in Rp 5,000 increments.`,
+          `${key === "online" ? "Online" : "Offline"} base honorarium must be an IDR amount of at least Rp50,000 in Rp5,000 increments.`,
         );
       }
     }
