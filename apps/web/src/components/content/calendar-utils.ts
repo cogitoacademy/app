@@ -42,6 +42,10 @@ export function getCategoryEventClass(coreCategory?: string) {
   return getCompetitionFieldClass(coreCategory, "soft");
 }
 
+export function getCategoryBadgeClass(coreCategory?: string) {
+  return getCompetitionFieldClass(coreCategory, "solid");
+}
+
 export function getBorderRadiusClass(isFirstDay: boolean, isLastDay: boolean) {
   if (isFirstDay && isLastDay) return "rounded";
   if (isFirstDay) return "rounded-l-sm rounded-r-none";

@@ -1,6 +1,6 @@
 # Cogito Runbook
 
-Last updated: 2026-09-07
+Last updated: 2026-09-08
 
 ## Unified booking-action smoke check (2026-09-08)
 
@@ -15,7 +15,7 @@ below; session notes and support reports remain in the main flow.
 
 ## Competition field palette
 
-The competition palette is compiled into the shared UI CSS and requires no environment variables, secrets, migrations, or deployment-time configuration. After changing a field token or slug mapping, run the UI/web typecheck and web build so Tailwind verifies every generated utility.
+The competition palette is compiled into the shared UI CSS and requires no environment variables, secrets, migrations, or deployment-time configuration. Competition-field badges in tutor discovery, tutor drawers, onboarding selections, and calendar details should use solid field backgrounds with white foregrounds except for Business Plan's dark foreground. Calendar event tiles intentionally remain soft. After changing a field token or slug mapping, run the UI/web typecheck and web build so Tailwind verifies every generated utility.
 
 > **Start here for ops:** [INFRA-PLAYBOOK.md](./INFRA-PLAYBOOK.md) is the entry
 > point (scenario → command table). This document holds the detailed

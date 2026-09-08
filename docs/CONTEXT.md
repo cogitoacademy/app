@@ -1,6 +1,6 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-09-05
+Last updated: 2026-09-08
 
 ## Unified booking-detail actions (2026-09-08)
 
@@ -15,7 +15,7 @@ in the sticky rail.
 
 ## Competition field color tokens (2026-09-08)
 
-The authenticated app now uses the academy's canonical competition palette rather than approximating fields with generic status colors. The shared UI theme exposes paired background/foreground tokens for MUN, Olympiad, WSC, Research & Essay, Debate, Business Plan, and Speech. App surfaces can consume the tokens directly, while `apps/web/src/lib/competition-colors.ts` maps Sanity `coreCategory` values to reusable soft and solid class sets; unknown categories fall back to Research & Essay.
+The authenticated app now uses the academy's canonical competition palette rather than approximating fields with generic status colors. The shared UI theme exposes paired background/foreground tokens for MUN, Olympiad, WSC, Research & Essay, Debate, Business Plan, and Speech. App surfaces can consume the tokens directly, while `apps/web/src/lib/competition-colors.ts` maps Sanity `coreCategory`, current subject-taxonomy parent slugs, and legacy category slugs to reusable soft and solid class sets; unknown categories fall back to Research & Essay. Competition-field badges in tutor discovery cards, the tutor drawer, onboarding selections, and calendar details use the solid treatment. Their foreground is white for every field except Business Plan, which uses the academy's dark foreground. Calendar event surfaces remain soft for readability in the calendar grid and agenda.
 
 ## Request tracing with W3C traceparent (2026-09-05)
 

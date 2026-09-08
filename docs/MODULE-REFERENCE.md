@@ -1,6 +1,6 @@
 # Cogito Module Reference
 
-Last updated: 2026-09-04
+Last updated: 2026-09-08
 
 ## Booking-detail action ownership (2026-09-08)
 
@@ -14,7 +14,7 @@ Booking actions card.
 
 ## Competition field presentation
 
-Competition colors are a frontend presentation concern shared through `packages/ui/src/styles/globals.css`. Each field has `competition-{field}` and `competition-{field}-foreground` Tailwind tokens. `apps/web/src/lib/competition-colors.ts` is the canonical mapping from academy `coreCategory` slugs (`mun`, `olimpiade`, `wsc`, `kti`, `debat`, `business`, `pidato`) to `soft` and `solid` class sets. Unknown slugs deliberately use the KTI/Research fallback. Calendar events and category badges use the soft mapping; solid is available for badges and other field-owned surfaces.
+Competition colors are a frontend presentation concern shared through `packages/ui/src/styles/globals.css`. Each field has `competition-{field}` and `competition-{field}-foreground` Tailwind tokens. `apps/web/src/lib/competition-colors.ts` is the canonical mapping from academy `coreCategory` slugs (`mun`, `olimpiade`, `wsc`, `kti`, `debat`, `business`, `pidato`), current taxonomy parent slugs, and archived legacy slugs to `soft` and `solid` class sets. Unknown slugs deliberately use the KTI/Research fallback. Tutor-card, tutor-drawer, onboarding, and calendar-detail competition badges use the solid mapping; their foreground is white except for Business Plan's dark foreground. Calendar event surfaces intentionally use the soft mapping. Child specializations inherit the field of their parent category.
 
 ## Server-backed table pagination (2026-09-04)
 

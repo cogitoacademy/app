@@ -6,6 +6,7 @@ import { Checkbox } from "@cogito-app/ui/components/selia/checkbox";
 import { Chip, ChipButton } from "@cogito-app/ui/components/selia/chip";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { orpc } from "@/utils/orpc";
+import { getCompetitionFieldClass } from "@/lib/competition-colors";
 import { IconX } from "@tabler/icons-react";
 
 export const MAX_TUTOR_SUBJECTS = 7;
@@ -91,24 +92,27 @@ export function SubjectSelector({
 }: SubjectSelectorProps) {
   const { data: categories, isPending, isError } = useSubjectTaxonomy();
 
-  const selectedSubjectLabels = useMemo(() => {
-    const labels = new Map<string, string>();
+  const selectedSubjectMeta = useMemo(() => {
+    const metadata = new Map<string, { field: string; label: string }>();
 
     for (const subject of selectedSubjects ?? []) {
-      labels.set(
-        subject.id,
-        subject.parent
+      metadata.set(subject.id, {
+        field: subject.parent?.slug ?? subject.slug,
+        label: subject.parent
           ? `${subject.parent.name} · ${subject.name}`
           : subject.name,
-      );
+      });
     }
     for (const category of categories) {
       for (const child of category.children) {
-        labels.set(child.id, `${category.name} · ${child.name}`);
+        metadata.set(child.id, {
+          field: category.slug,
+          label: `${category.name} · ${child.name}`,
+        });
       }
     }
 
-    return labels;
+    return metadata;
   }, [categories, selectedSubjects]);
 
   const legacySelectedSubjects = useMemo(
@@ -161,12 +165,21 @@ export function SubjectSelector({
           aria-label="Selected competition specializations"
         >
           {selectedIds.map((subjectId) => (
-            <Chip key={subjectId} variant="primary" pill size="sm">
-              {selectedSubjectLabels.get(subjectId) ??
+            <Chip
+              key={subjectId}
+              variant="primary"
+              pill
+              size="sm"
+              className={getCompetitionFieldClass(
+                selectedSubjectMeta.get(subjectId)?.field,
+                "solid",
+              )}
+            >
+              {selectedSubjectMeta.get(subjectId)?.label ??
                 "Selected specialization"}
               <ChipButton
                 type="button"
-                aria-label={`Remove ${selectedSubjectLabels.get(subjectId) ?? "selected specialization"}`}
+                aria-label={`Remove ${selectedSubjectMeta.get(subjectId)?.label ?? "selected specialization"}`}
                 onClick={() => toggleSubject(subjectId, false)}
               >
                 <IconX />

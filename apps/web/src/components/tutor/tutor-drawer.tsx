@@ -18,6 +18,7 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import { IconX } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import { CogitoMarks } from "@/components/cogito-marks";
+import { getCompetitionFieldClass } from "@/lib/competition-colors";
 import { groupTutorSubjects, type TutorSubject } from "./subject-taxonomy";
 import { TutorPricingTable } from "./tutor-pricing-table";
 import {
@@ -136,7 +137,11 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
     selectedTutor.expertise,
   );
   const subjectLabels = subjectGroups.flatMap((group) =>
-    group.children.map((subject) => ({ id: subject.id, label: subject.name })),
+    group.children.map((subject) => ({
+      id: subject.id,
+      field: group.parent?.slug ?? subject.slug,
+      label: subject.name,
+    })),
   );
   const heroSubjects = subjectLabels.slice(0, 3);
   const hasProfileHighlights = Boolean(
@@ -178,14 +183,12 @@ export function TutorDrawer({ tutor, open, onOpenChange }: TutorDrawerProps) {
           />
           {heroSubjects.length > 0 ? (
             <div className="absolute inset-x-4 bottom-4 z-10 flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden">
-              {heroSubjects.map((subject, index) => (
+              {heroSubjects.map((subject) => (
                 <Badge
                   key={subject.id}
-                  variant={
-                    (["primary", "tertiary", "secondary"] as const)[index % 3]
-                  }
+                  variant="secondary"
                   size="md"
-                  className="shrink-0 max-w-[45%] truncate whitespace-nowrap bg-background/90"
+                  className={`shrink-0 max-w-[45%] truncate whitespace-nowrap shadow-sm ${getCompetitionFieldClass(subject.field, "solid")}`}
                 >
                   {subject.label}
                 </Badge>

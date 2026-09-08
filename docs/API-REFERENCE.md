@@ -11,7 +11,7 @@ is removed. Per-session series rescheduling remains on its target session row.
 No RPC input, output, or route contract changed; this note supersedes older
 frontend placement descriptions below.
 
-> **Competition color note (2026-09-08):** Competition colors remain presentation-only and are derived in the web client from each category's existing `coreCategory`. No RPC input or output shape changed.
+> **Competition color note (2026-09-08):** Competition colors remain presentation-only and are derived in the web client from each category's existing `coreCategory`. Competition-field badges use the solid academy treatment with white foregrounds except for Business Plan's dark foreground; calendar event surfaces retain the soft treatment. No RPC input or output shape changed.
 
 ## Server-backed table pagination (2026-09-04)
 

@@ -42,13 +42,66 @@ export type CompetitionColorStyle =
 
 const fallbackCompetitionField: CompetitionField = "kti";
 
+const competitionFieldAliases: Record<string, CompetitionField> = {
+  mun: "mun",
+  "model-united-nations": "mun",
+  "competition-model-united-nations": "mun",
+  olimpiade: "olimpiade",
+  olympiad: "olimpiade",
+  "competition-olympiad": "olimpiade",
+  wsc: "wsc",
+  "world-scholars-cup": "wsc",
+  "competition-world-scholars-cup": "wsc",
+  kti: "kti",
+  "essay-scientific-writing": "kti",
+  "competition-essay-writing": "kti",
+  debat: "debat",
+  debate: "debat",
+  "competition-debate": "debat",
+  business: "business",
+  "business-plan": "business",
+  "competition-business": "business",
+  pidato: "pidato",
+  "public-speaking": "pidato",
+  "competition-public-speaking": "pidato",
+};
+
+export function getCompetitionField(field: string | undefined) {
+  if (!field) return fallbackCompetitionField;
+
+  const normalized = field.trim().toLowerCase();
+  const exactMatch = competitionFieldAliases[normalized];
+  if (exactMatch) return exactMatch;
+
+  if (normalized.includes("united-nations") || normalized.startsWith("mun-"))
+    return "mun";
+  if (normalized.includes("world-scholar") || normalized.startsWith("wsc-"))
+    return "wsc";
+  if (normalized.includes("olympiad") || normalized.includes("olimpiade"))
+    return "olimpiade";
+  if (normalized.includes("debate") || normalized.includes("debat"))
+    return "debat";
+  if (normalized.includes("business")) return "business";
+  if (
+    normalized.includes("public-speaking") ||
+    normalized.includes("speech") ||
+    normalized.includes("pidato")
+  )
+    return "pidato";
+  if (
+    normalized.includes("essay") ||
+    normalized.includes("writing") ||
+    normalized.includes("research") ||
+    normalized.includes("kti")
+  )
+    return "kti";
+
+  return fallbackCompetitionField;
+}
+
 export function getCompetitionFieldClass(
   field: string | undefined,
   style: CompetitionColorStyle = "soft",
 ) {
-  const normalizedField = field as CompetitionField;
-  return (
-    competitionFieldClasses[normalizedField]?.[style] ??
-    competitionFieldClasses[fallbackCompetitionField][style]
-  );
+  return competitionFieldClasses[getCompetitionField(field)][style];
 }

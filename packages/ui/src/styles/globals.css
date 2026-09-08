@@ -88,19 +88,19 @@
   --info-border: oklch(0.5703 0.160671 249.8244);
   /* Competition palette imported from cogito-acad's canonical field colors. */
   --competition-mun: oklch(0.695641 0.132326 232.54);
-  --competition-mun-foreground: oklch(0.2036 0.0029 247.97);
+  --competition-mun-foreground: oklch(1 0 0);
   --competition-olympiad: oklch(0.566845 0.202167 31.43);
   --competition-olympiad-foreground: oklch(1 0 0);
   --competition-wsc: oklch(0.884795 0.181642 94.9);
-  --competition-wsc-foreground: oklch(0.2036 0.0029 247.97);
+  --competition-wsc-foreground: oklch(1 0 0);
   --competition-research: oklch(0.698358 0.202646 44.07);
-  --competition-research-foreground: oklch(0.2036 0.0029 247.97);
+  --competition-research-foreground: oklch(1 0 0);
   --competition-debate: oklch(0.581114 0.199813 315.44);
   --competition-debate-foreground: oklch(1 0 0);
   --competition-business: oklch(0.804266 0.214364 151.41);
   --competition-business-foreground: oklch(0.2036 0.0029 247.97);
   --competition-speech: oklch(0.773372 0.101596 354.57);
-  --competition-speech-foreground: oklch(0.2036 0.0029 247.97);
+  --competition-speech-foreground: oklch(1 0 0);
   --kbd: oklch(0.9197 0.004 286.32);
   --kbd-foreground: var(--foreground);
   --kbd-border: oklch(0.8377 0.0083 286.22);
