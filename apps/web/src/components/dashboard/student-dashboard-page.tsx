@@ -94,25 +94,25 @@ export function StudentDashboardPage({ studentName }: { studentName: string }) {
 
 function CompetitionCalendarCard() {
   return (
-    <Card>
-      <CardBody className="p-5">
-        <IconBox variant="tertiary-subtle" className="mb-4">
+    <Card className="h-full">
+      <CardBody className="flex h-full flex-col p-5">
+        <IconBox variant="tertiary-subtle" className="mb-4" size="lg">
           <IconCalendarEvent />
         </IconBox>
         <Heading size="sm">Competition Calendar</Heading>
-        <Text className="mt-1 text-sm text-muted">
+        <Text className="mt-1 mb-3 text-sm text-muted">
           Find upcoming academic competitions and important dates.
         </Text>
         <Button
-          variant="plain"
-          size="sm"
-          className="mt-4 -ml-3"
+          variant="tertiary"
+          size="icon"
+          className="mt-auto self-end"
           nativeButton={false}
           render={
             <Link to="/calendar" aria-label="Open competition calendar" />
           }
         >
-          Explore calendar <IconArrowRight />
+          <IconArrowRight />
         </Button>
       </CardBody>
     </Card>
