@@ -31,6 +31,7 @@ import {
 } from "@tabler/icons-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
+import { CogitoMarks } from "@/components/cogito-marks";
 import {
   Area,
   AreaChart,
@@ -128,10 +129,6 @@ const tooltipStyle = {
 
 type ChartValue = number | string | ReadonlyArray<number | string> | undefined;
 type ChartName = number | string | undefined;
-
-function formatMarks(value: number) {
-  return `${numberFormatter.format(value)} Marks`;
-}
 
 function formatDateTick(value: string) {
   const [year, month, day] = value.split("-").map(Number);
@@ -269,8 +266,21 @@ function AnalyticsContent({
         <AnalyticsMetric
           icon={<IconChartHistogram />}
           label="Gross Marks volume"
-          value={formatMarks(data.summary.grossMarks)}
-          helper={`${formatMarks(data.summary.platformTakeMarks)} platform take`}
+          value={
+            <CogitoMarks
+              value={numberFormatter.format(data.summary.grossMarks)}
+              size="5"
+            />
+          }
+          helper={
+            <>
+              <CogitoMarks
+                value={numberFormatter.format(data.summary.platformTakeMarks)}
+                size="3"
+              />{" "}
+              platform take
+            </>
+          }
           tone="info-subtle"
         />
         <AnalyticsMetric
@@ -652,8 +662,8 @@ function AnalyticsMetric({
 }: {
   icon: React.ReactNode;
   label: string;
-  value: string;
-  helper: string;
+  value: ReactNode;
+  helper: ReactNode;
   tone: "primary-subtle" | "success-subtle" | "info-subtle" | "warning-subtle";
 }) {
   return (

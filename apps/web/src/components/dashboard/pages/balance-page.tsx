@@ -181,8 +181,9 @@ export function BalancePage() {
           <CardHeader>
             <CardTitle>Knowledge Bank Access</CardTitle>
             <CardDescription>
-              Knowledge Bank access requires at least 35 Marks in your wallet.
-              You are not paying 35 Marks to open it.
+              Knowledge Bank access requires at least <CogitoMarks value={35} />{" "}
+              in your wallet. You are not paying <CogitoMarks value={35} /> to
+              open it.
             </CardDescription>
           </CardHeader>
           <CardBody>
@@ -192,9 +193,14 @@ export function BalancePage() {
               </IconBox>
               <div className="min-w-0">
                 <Heading size="sm">
-                  {kbAccessible
-                    ? "You have access"
-                    : `${Math.max(0, 35 - totalBalance)} Marks needed`}
+                  {kbAccessible ? (
+                    "You have access"
+                  ) : (
+                    <>
+                      <CogitoMarks value={Math.max(0, 35 - totalBalance)} />{" "}
+                      needed
+                    </>
+                  )}
                 </Heading>
                 <Text className="text-dimmed text-sm">
                   {kbAccessible
@@ -341,17 +347,7 @@ export function BalancePage() {
                   <CardBody>
                     <div className="space-y-1">
                       <Text className="text-3xl font-bold">
-                        <span className="inline-flex items-center gap-1.5">
-                          {pkg.marks}
-                          <img
-                            src="/cogito-mark.png"
-                            alt=""
-                            aria-hidden="true"
-                            width={16}
-                            height={16}
-                            className="h-[0.75em] w-auto translate-y-[-0.05em]"
-                          />
-                        </span>
+                        <CogitoMarks value={pkg.marks} size="5" />
                       </Text>
                     </div>
                     <Separator className="my-3" />

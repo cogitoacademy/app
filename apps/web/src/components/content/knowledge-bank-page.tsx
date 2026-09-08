@@ -38,6 +38,7 @@ import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 
 import { EmptyStateCard } from "@/components/empty-state";
+import { CogitoMarks } from "@/components/cogito-marks";
 import { serverUrl } from "@/lib/server-url";
 import { orpc } from "@/utils/orpc";
 import { getCategoryLabel } from "./knowledge-bank-utils";
@@ -122,7 +123,13 @@ export function KnowledgeBankPage() {
         icon={<IconLock />}
         tone="warning"
         title="Knowledge Bank is locked"
-        description={`Keep at least ${access?.threshold ?? 35} Marks in your wallet to unlock the learning materials. Your current balance is ${access?.balance ?? 0} Marks.`}
+        description={
+          <>
+            Keep at least <CogitoMarks value={access?.threshold ?? 35} /> in
+            your wallet to unlock the learning materials. Your current balance
+            is <CogitoMarks value={access?.balance ?? 0} />.
+          </>
+        }
         action={
           <Button
             nativeButton={false}

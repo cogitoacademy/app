@@ -34,6 +34,7 @@ import {
   getBookingStateLabel,
   getBookingStateVariant,
 } from "@/components/booking/booking-ui";
+import { CogitoMarks } from "@/components/cogito-marks";
 import { EmptyStateCard } from "@/components/empty-state";
 
 export type BookingCardPerson = {
@@ -565,26 +566,7 @@ function FinancialValue({ label, value }: { label: string; value: number }) {
   return (
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
       <span className="text-muted">{label}</span>
-      <MarkAmount value={value} />
-    </span>
-  );
-}
-
-function MarkAmount({ value }: { value: number }) {
-  return (
-    <span
-      className="inline-flex items-center gap-1 whitespace-nowrap"
-      aria-label={`${value} Marks`}
-    >
-      <img
-        src="/cogito-mark.png"
-        alt=""
-        aria-hidden="true"
-        width={16}
-        height={16}
-        className="size-4 shrink-0 object-contain"
-      />
-      <span>{value}</span>
+      <CogitoMarks value={value} />
     </span>
   );
 }

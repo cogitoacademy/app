@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -61,6 +61,7 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
 import { EmptyState } from "@/components/empty-state";
+import { CogitoMarks } from "@/components/cogito-marks";
 import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
 import { getBookingPriceSummary } from "./booking-pricing";
@@ -875,10 +876,13 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                           ? "Price per student"
                           : "Session price"}
                     </Text>
-                    <Text className="text-xl font-semibold">{price} Marks</Text>
+                    <Text className="text-xl font-semibold">
+                      <CogitoMarks value={price} size="5" />
+                    </Text>
                     {selectedSlots.length > 1 ? (
                       <Text className="text-xs text-muted">
-                        {baseSessionPrice} Marks per session
+                        <CogitoMarks value={baseSessionPrice} size="3" /> per
+                        session
                       </Text>
                     ) : null}
                   </div>
@@ -899,7 +903,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
               {isGroupBooking && selectedSlots.length === 1 ? (
                 <SummaryRow
                   label="Temporary hold"
-                  value={`${requiredHold} Marks`}
+                  value={<CogitoMarks value={requiredHold} />}
                 />
               ) : null}
               <div className="flex items-center justify-between gap-4">
@@ -907,16 +911,19 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                   <IconWallet className="size-4" aria-hidden="true" /> Available
                 </span>
                 <Text className="font-medium">
-                  {walletQuery.isPending
-                    ? "Loading…"
-                    : `${availableBalance} Marks`}
+                  {walletQuery.isPending ? (
+                    "Loading…"
+                  ) : (
+                    <CogitoMarks value={availableBalance} />
+                  )}
                 </Text>
               </div>
               {!walletQuery.isPending && !hasEnoughMarks ? (
                 <div className="rounded-lg border border-danger-border bg-danger/10 p-3">
                   <Text className="text-sm text-danger">
-                    You need {requiredHold - availableBalance} more Marks for
-                    the temporary hold.
+                    You need{" "}
+                    <CogitoMarks value={requiredHold - availableBalance} /> more
+                    for the temporary hold.
                   </Text>
                 </div>
               ) : null}
@@ -976,7 +983,9 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
             <Text className="truncate text-xs text-muted">
               {scheduleSummary}
             </Text>
-            <Text className="font-semibold">{price} Marks</Text>
+            <Text className="font-semibold">
+              <CogitoMarks value={price} />
+            </Text>
           </div>
           <Button
             type="button"
@@ -1012,19 +1021,24 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
               }
             />
             <SummaryRow label="Schedule" value={scheduleSummary} />
-            <SummaryRow label="Total" value={`${price} Marks`} />
+            <SummaryRow label="Total" value={<CogitoMarks value={price} />} />
             <SummaryRow
               label="Available balance"
               value={
-                walletQuery.isPending ? "Loading…" : `${availableBalance} Marks`
+                walletQuery.isPending ? (
+                  "Loading…"
+                ) : (
+                  <CogitoMarks value={availableBalance} />
+                )
               }
               icon={<IconWallet />}
             />
             {!walletQuery.isPending && !hasEnoughMarks ? (
               <div className="rounded-lg border border-danger-border bg-danger/10 p-3">
                 <Text className="text-sm text-danger">
-                  You need {requiredHold - availableBalance} more Marks for the
-                  temporary hold.
+                  You need{" "}
+                  <CogitoMarks value={requiredHold - availableBalance} /> more
+                  for the temporary hold.
                 </Text>
               </div>
             ) : null}
@@ -1068,7 +1082,7 @@ function SummaryRow({
   icon,
 }: {
   label: string;
-  value: string;
+  value: ReactNode;
   icon?: React.ReactNode;
 }) {
   return (

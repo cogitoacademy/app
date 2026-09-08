@@ -2,6 +2,10 @@
 
 Last updated: 2026-09-05
 
+## Competition field color tokens (2026-09-08)
+
+The authenticated app now uses the academy's canonical competition palette rather than approximating fields with generic status colors. The shared UI theme exposes paired background/foreground tokens for MUN, Olympiad, WSC, Research & Essay, Debate, Business Plan, and Speech. App surfaces can consume the tokens directly, while `apps/web/src/lib/competition-colors.ts` maps Sanity `coreCategory` values to reusable soft and solid class sets; unknown categories fall back to Research & Essay.
+
 ## Request tracing with W3C traceparent (2026-09-05)
 
 Every request carries a `traceId` end to end via `AsyncLocalStorage`
@@ -460,6 +464,8 @@ Online meeting status stays compact as an accessible Selia `IconInfoSquareRounde
 The booking detail overview merges the date and session hours into one `Date & time` field with a calendar-clock icon, then places Format & access beside it in a responsive two-column grid that stacks on narrow screens. The Participants heading uses the same Selia `IconBox` treatment as the other overview fields.
 
 The booking detail desktop layout keeps the overview/activity flow in an independent left column from the sticky Actions/financial rail, so the rail height cannot create a blank grid row before Activity. Narrow layouts retain the order overview → actions/financial content → Activity. On the admin detail, offline room controls and participant wallet/ledger facts are embedded in Session overview, the participant list uses one column, review context sits in the right rail with Wallet impact, Marks amounts use the shared `CogitoMarks` icon-and-value component, and State history reuses the standard Activity timeline while retaining the admin-only actor identifier. This is presentation-only; no RPC, schema, or persistence contract changes.
+
+The tutor reschedule drawer presents its two scheduling modes as an always-visible segmented control. Published availability is grouped by local calendar date, with compact selectable time-window chips beneath each date, instead of repeating the date in full-size cards. The tutor `/book` flow uses the same grouped picker and moves time adjustment for chosen slots into a separate Selected sessions section so multi-session selection remains clear. Selection and proposal payload semantics are unchanged.
 
 Removing a room from a scheduled offline booking keeps the booking scheduled. Admins may subsequently assign a new room from the same overview controls; the backend permits this only when the booking is offline and has no active room assignment, preserving relocation as the path when a room is still active.
 
@@ -1410,3 +1416,7 @@ Status: **all fixed and merged via #106 (2026-08-26)**; the follow-up re-audit f
 ## Tutor weekly honorarium and payout account (2026-08-28)
 
 Tutor-facing financial UI uses IDR only; internal/student Marks values are not presented to tutors. The tutor dashboard shows completed-session honorarium awaiting admin payment, not a calendar-reset total. Admin-confirmed payout records advance an exclusive cutoff so the pending amount clears only after payment. Tutor profiles store private payout bank details: bank name, account number, account-holder name, account-opening city/regency, ownership choice, and transfer-responsibility acknowledgment. Only the exact bank name `BCA` is fee-free, representing conventional BCA; BCA Syariah, `blu` (BCA Digital), and every other bank name incur a Rp2,500 deduction once per payout. The public tutor discovery projection omits all payout fields.
+
+## Cogito Marks amount presentation (2026-09-08)
+
+Student- and admin-facing numeric Marks amounts use the shared `CogitoMarks` component, which prefixes the value with the Cogito mark symbol and supplies an accessible `N Marks` label. Conceptual copy such as “Top Up Marks” remains plain text.

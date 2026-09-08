@@ -2,6 +2,8 @@
 
 Last updated: 2026-09-04
 
+> **Competition color note (2026-09-08):** Competition colors remain presentation-only and are derived in the web client from each category's existing `coreCategory`. No RPC input or output shape changed.
+
 ## Server-backed table pagination (2026-09-04)
 
 All database-backed web tables now request bounded pages from the API. The
@@ -953,7 +955,7 @@ RPC contract.
 - **Auth:** Protected; booking tutor, proposer, or participant
 - **Input:** `{ bookingId }`
 - **Output:** `AvailabilitySlot[]`
-- **Description:** Returns active tutor availability for the booking-scoped reschedule picker. Access is checked against the booking rather than tutor discovery visibility.
+- **Description:** Returns active tutor availability for the booking-scoped reschedule picker. Access is checked against the booking rather than tutor discovery visibility. The frontend groups these unchanged slot records by local date and renders compact selectable time-window chips.
 - **Rate limit:** This protected read is intentionally excluded from the booking mutation limiter; repeated picker refreshes do not consume the 30/minute booking-action budget.
 - **Reschedule invariant:** `/rpc/booking/proposeReschedule` and `/rpc/tutorActions/proposeReschedule` reject a proposed start in the same minute as the active booking/target-session start or the pending proposal for that same target with `BOOKING_NOT_EDITABLE`. Proposal replacement is serialized, and only one pending proposal may exist per booking.
 
@@ -1349,3 +1351,5 @@ The successful mutation also best-effort updates the existing offline Calendar e
 ## Tutor payout profile fields (2026-08-28)
 
 `/rpc/tutor/updateMyProfile` accepts payout-account fields (`bankName`, `bankAccountNumber`, `bankAccountHolderName`, `bankAccountOpeningCity`, `bankAccountOwnership`, and `bankTransferDisclaimerAccepted`) inside the standard `{"json": <input>}` envelope. `/rpc/tutor/getMyProfile` returns the private fields to the authenticated tutor; the public tutor discovery projection omits all of them. `/rpc/tutor/submitForReview` requires every payout field plus the acknowledgment. Only the exact bank name `BCA` represents conventional BCA and has no transfer fee; `BCA Syariah`, `blu`/`BCA Digital`, and all other bank names incur Rp2,500 once per payout. `/rpc/tutor/payouts/get` with no date filters returns honorarium since the latest admin-paid cutoff; explicit date filters remain available for reporting. Admins use `/rpc/admin/payouts/tutor/pending` to inspect unpaid honorarium and `/rpc/admin/payouts/tutor/mark-paid` to atomically create a paid payout record. Completion timestamps, rather than calendar weeks, determine which completed sessions enter a payout batch; completion and payout use a per-tutor lock to avoid a race at the cutoff.
+
+Numeric Marks fields returned by wallet, booking, pricing, and analytics procedures remain numbers. The web client presents those values with the shared `CogitoMarks` symbol component; this is presentation-only and does not change RPC inputs or outputs.

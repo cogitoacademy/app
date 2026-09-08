@@ -67,6 +67,7 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
+import { CogitoMarks } from "@/components/cogito-marks";
 import { EmptyState } from "@/components/empty-state";
 import { useNow } from "@/hooks/use-now";
 import { InfoPreview } from "@/components/info-preview";
@@ -101,8 +102,6 @@ import {
 } from "./booking-pricing";
 import { ContactRequestPanel } from "./contact-request-panel";
 import { ManualMeetingLinkDialog } from "./manual-meeting-link-dialog";
-
-const COGITO_MARK_SRC = "/cogito-mark.png";
 
 type BookingConfirmation = {
   action: "cancel" | "complete";
@@ -1032,21 +1031,21 @@ export function BookingDetailPage({
                   <>
                     <SummaryRow
                       label="Original price"
-                      value={<MarkAmount value={booking.originalMarks} />}
+                      value={<CogitoMarks value={booking.originalMarks} />}
                     />
                     <SummaryRow
                       label="Currently held"
-                      value={<MarkAmount value={booking.holdAmount} />}
+                      value={<CogitoMarks value={booking.holdAmount} />}
                     />
                     <SummaryRow
                       label="Refunded"
-                      value={<MarkAmount value={booking.refundedAmount} />}
+                      value={<CogitoMarks value={booking.refundedAmount} />}
                     />
                     {booking.priceSnapshot ? (
                       <SummaryRow
                         label="Per participant"
                         value={
-                          <MarkAmount
+                          <CogitoMarks
                             value={booking.priceSnapshot.perStudent}
                           />
                         }
@@ -1654,25 +1653,6 @@ function SummaryRow({
       <Text className="text-muted">{label}</Text>
       <Text className="font-medium">{value}</Text>
     </div>
-  );
-}
-
-function MarkAmount({ value }: { value: number }) {
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 whitespace-nowrap"
-      aria-label={`${value} Marks`}
-    >
-      <img
-        src={COGITO_MARK_SRC}
-        alt=""
-        aria-hidden="true"
-        width={16}
-        height={16}
-        className="size-4 shrink-0 object-contain"
-      />
-      <span>{value}</span>
-    </span>
   );
 }
 

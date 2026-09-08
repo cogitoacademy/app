@@ -1617,7 +1617,9 @@ function WalletLookup() {
                               {humanize(entry.entryType)}
                             </Badge>
                           </TableCell>
-                          <TableCell>{entry.amount} Marks</TableCell>
+                          <TableCell>
+                            <CogitoMarks value={entry.amount} />
+                          </TableCell>
                           <TableCell>{entry.bookingId ?? "—"}</TableCell>
                           <TableCell>
                             {formatBookingDate(entry.createdAt)}
@@ -2255,7 +2257,9 @@ function BalanceCard({ label, value }: { label: string; value: number }) {
         </IconBox>
         <div>
           <Text className="text-sm text-muted">{label}</Text>
-          <Text className="text-2xl font-semibold">{value} Marks</Text>
+          <Text className="text-2xl font-semibold">
+            <CogitoMarks value={value} size="5" />
+          </Text>
         </div>
       </CardBody>
     </Card>

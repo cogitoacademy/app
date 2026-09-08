@@ -2,6 +2,10 @@
 
 Last updated: 2026-09-04
 
+## Competition field presentation
+
+Competition colors are a frontend presentation concern shared through `packages/ui/src/styles/globals.css`. Each field has `competition-{field}` and `competition-{field}-foreground` Tailwind tokens. `apps/web/src/lib/competition-colors.ts` is the canonical mapping from academy `coreCategory` slugs (`mun`, `olimpiade`, `wsc`, `kti`, `debat`, `business`, `pidato`) to `soft` and `solid` class sets. Unknown slugs deliberately use the KTI/Research fallback. Calendar events and category badges use the soft mapping; solid is available for badges and other field-owned surfaces.
+
 ## Server-backed table pagination (2026-09-04)
 
 Data-table pagination is owned by the module that reads the collection. The
@@ -489,9 +493,9 @@ recipient consent.
 
 **Purpose:** Core booking lifecycle — solo, group, and series bookings with state machine transitions, reschedule approval, session notes, wallet holds, payouts, and meeting integration.
 
-Reschedule proposals must include a non-blank reason, change the active booking or target-session start minute, and cannot repeat the pending proposal for the same target. `proposeReschedule` serializes replacements with a booking-scoped transaction advisory lock; `reschedule_booking_pending_uniq` independently guarantees at most one pending proposal per booking. The booking-detail proposal editor is presented in a height-constrained bottom Selia drawer on mobile and a right-side drawer on desktop. For series bookings (solo and group) the header-level reschedule action is hidden and each non-terminal session row exposes its own per-session `Propose new time` drawer that sends `sessionId`; solo/group single bookings keep the booking-level action. Tutor honorarium display sums across series sessions (`getTotalHonorariumIdr`, per-session snapshot fallback plus derived session-count fallback mirroring `aggregateTutorPayouts`), showing `Total honorarium (N sessions)` plus per-session breakdown; solo/group single bookings show the single-session honorarium.
+Reschedule proposals must include a non-blank reason, change the active booking or target-session start minute, and cannot repeat the pending proposal for the same target. `proposeReschedule` serializes replacements with a booking-scoped transaction advisory lock; `reschedule_booking_pending_uniq` independently guarantees at most one pending proposal per booking. The booking-detail proposal editor is presented in a height-constrained bottom Selia drawer on mobile and a right-side drawer on desktop. Tutors switch between published availability and a custom time through a two-option segmented control; availability windows are grouped by Jakarta calendar date and rendered as compact time chips. For series bookings (solo and group) the header-level reschedule action is hidden and each non-terminal session row exposes its own per-session `Propose new time` drawer that sends `sessionId`; solo/group single bookings keep the booking-level action. Tutor honorarium display sums across series sessions (`getTotalHonorariumIdr`, per-session snapshot fallback plus derived session-count fallback mirroring `aggregateTutorPayouts`), showing `Total honorarium (N sessions)` plus per-session breakdown; solo/group single bookings show the single-session honorarium.
 
-The create-booking module keeps all submit state in the parent form while presenting it through two responsive surfaces: a desktop right-rail summary and a mobile bottom summary drawer. Each selected availability card renders its own adjacent time stepper from the shared `selectedSlotIds`/`startTimes` state; there is no separate consolidated time-editor panel. The drawer button uses the form `id`, so there is no duplicate mutation path.
+The create-booking module keeps all submit state in the parent form while presenting it through two responsive surfaces: a desktop right-rail summary and a mobile bottom summary drawer. Availability windows are grouped by Jakarta calendar date and rendered as compact multi-select time chips. The shared `selectedSlotIds`/`startTimes` state drives a separate Selected sessions editor grid for 15-minute start adjustments. The drawer button uses the form `id`, so there is no duplicate mutation path.
 
 **Files:**
 
@@ -1146,3 +1150,5 @@ The web tutor profile editor groups education, competition achievements, and exp
 ## Tutor payout presentation (2026-08-28)
 
 Tutor financial presentation is denominated in IDR and must not expose Marks. The dashboard's honorarium is the unpaid balance since the latest admin-paid cutoff, not lifetime earnings or a calendar-reset balance. Admin payout records are immutable and contain the cutoff, gross, bank, transfer fee, net, paidAt, and paidBy. Only conventional BCA (the exact bank name `BCA`) has no transfer deduction; BCA Syariah, `blu` (BCA Digital), and other banks deduct Rp2,500 once per payout. Bank name, account number, account-holder name, account-opening city/regency, ownership, and the transfer disclaimer are private tutor-profile payout fields; all are required by onboarding submission validation and omitted from public discovery.
+
+Numeric Marks amounts in the web UI are rendered through `apps/web/src/components/cogito-marks.tsx`. The component owns the Cogito mark-symbol prefix, supported icon sizes, whitespace behavior, and accessible `value + Marks` label; feature components should not duplicate that markup.

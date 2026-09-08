@@ -181,20 +181,9 @@ export function TutorSummary({
             </Badge>
           ) : null}
           {startingPrice !== null && (
-            <span
-              className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap"
-              aria-label={`From ${startingPrice} Marks`}
-            >
+            <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap">
               From
-              <img
-                src="/cogito-mark.png"
-                alt=""
-                aria-hidden="true"
-                width={12}
-                height={12}
-                className="size-3 shrink-0 object-contain"
-              />
-              <span>{startingPrice}</span>
+              <CogitoMarks value={startingPrice} size="3" />
             </span>
           )}
         </ItemMeta>

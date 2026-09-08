@@ -44,6 +44,7 @@ import {
 } from "@tabler/icons-react";
 
 import { getUserFacingError } from "@/lib/error-message";
+import { CogitoMarks } from "@/components/cogito-marks";
 import { resolveProfileImageUrl } from "@/lib/profile-image-url";
 import { client, orpc } from "@/utils/orpc";
 import {
@@ -973,7 +974,7 @@ export function TutorReviewCard({
                               : "mt-0.5 font-semibold"
                           }
                         >
-                          {price} Marks
+                          <CogitoMarks value={price} />
                         </Text>
                         <Text
                           className={

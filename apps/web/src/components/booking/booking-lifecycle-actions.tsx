@@ -47,6 +47,7 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
 import { EmptyState } from "@/components/empty-state";
+import { CogitoMarks } from "@/components/cogito-marks";
 import { InfoPreview } from "@/components/info-preview";
 import { formatBookingDate, formatBookingTimeRange } from "./booking-ui";
 import { SessionNoteEditor } from "./session-note-editor";
@@ -353,7 +354,12 @@ export function BookingLifecycleActions({
                 You have been invited to this group session
               </Text>
               <Text className="text-muted">
-                Accepting reserves {perStudentMarks ?? "the required"} Marks
+                Accepting reserves{" "}
+                {perStudentMarks === undefined ? (
+                  "the required Marks"
+                ) : (
+                  <CogitoMarks value={perStudentMarks} />
+                )}{" "}
                 from your wallet.
               </Text>
             </CardBody>
@@ -394,7 +400,12 @@ export function BookingLifecycleActions({
               <Text className="font-medium">The booking details changed</Text>
               <Text className="text-muted">
                 Review the updated schedule and price of{" "}
-                {perStudentMarks ?? "the required"} Marks before continuing.
+                {perStudentMarks === undefined ? (
+                  "the required Marks"
+                ) : (
+                  <CogitoMarks value={perStudentMarks} />
+                )}{" "}
+                before continuing.
               </Text>
             </CardBody>
           ) : null}

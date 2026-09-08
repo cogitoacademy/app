@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 
+import { CogitoMarks } from "@/components/cogito-marks";
 import { orpc } from "@/utils/orpc";
 
 export function BalanceBadge() {
@@ -19,17 +20,7 @@ export function BalanceBadge() {
       {isLoading ? (
         <span className="text-muted">—</span>
       ) : (
-        <>
-          <img
-            src="/cogito-mark.png"
-            alt=""
-            aria-hidden="true"
-            width={12}
-            height={12}
-            className="size-3 w-auto"
-          />
-          <span>{balance}</span>
-        </>
+        <CogitoMarks value={balance} size="3" />
       )}
     </div>
   );
