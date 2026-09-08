@@ -13,6 +13,7 @@ import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { lazy, Suspense } from "react";
 
+import Loader from "@/components/loader";
 import { orpc } from "@/utils/orpc";
 
 const AdminAnalytics = lazy(() =>
@@ -88,19 +89,10 @@ export function AdminDashboardPage({ adminName }: { adminName: string }) {
         />
       </div>
 
-      <Suspense fallback={<AnalyticsLoading />}>
+      <Suspense fallback={<Loader />}>
         <AdminAnalytics />
       </Suspense>
     </Stack>
-  );
-}
-
-function AnalyticsLoading() {
-  return (
-    <div
-      className="h-48 animate-pulse rounded-xl bg-accent"
-      aria-label="Loading business insights"
-    />
   );
 }
 

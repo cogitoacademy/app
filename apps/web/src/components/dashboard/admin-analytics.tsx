@@ -32,6 +32,7 @@ import {
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { CogitoMarks } from "@/components/cogito-marks";
+import Loader from "@/components/loader";
 import {
   Area,
   AreaChart,
@@ -209,7 +210,7 @@ export function AdminAnalytics() {
       </div>
 
       {analytics.isPending ? (
-        <AnalyticsSkeleton />
+        <Loader />
       ) : analytics.isError || !analytics.data ? (
         <AnalyticsError onRetry={() => analytics.refetch()} />
       ) : (
@@ -697,25 +698,6 @@ function ChartEmpty({
       className={`flex ${compact ? "min-h-12" : "h-72"} items-center justify-center rounded-lg border border-dashed border-border bg-accent/40 px-4 text-center`}
     >
       <Text className="text-sm text-muted">{message}</Text>
-    </div>
-  );
-}
-
-function AnalyticsSkeleton() {
-  return (
-    <div className="space-y-4" aria-label="Loading business insights">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {Array.from({ length: 4 }, (_, index) => (
-          <div
-            key={index}
-            className="h-36 animate-pulse rounded-xl bg-accent"
-          />
-        ))}
-      </div>
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.65fr)]">
-        <div className="h-96 animate-pulse rounded-xl bg-accent" />
-        <div className="h-96 animate-pulse rounded-xl bg-accent" />
-      </div>
     </div>
   );
 }

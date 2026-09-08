@@ -29,6 +29,7 @@ import {
 import { DashboardWelcomeCard } from "@/components/dashboard/dashboard-welcome-card";
 import { BalanceWidget } from "@/components/dashboard/balance-widget";
 import { EmptyState } from "@/components/empty-state";
+import Loader from "@/components/loader";
 import {
   TutorSummary,
   type TutorSummaryData,
@@ -142,14 +143,7 @@ function RecommendedTutorsCard({
       </CardHeader>
       <CardBody>
         {isLoading ? (
-          <Stack direction="column" spacing="sm" className="m-0!">
-            {["tutor-one", "tutor-two", "tutor-three"].map((key) => (
-              <div
-                key={key}
-                className="h-24 animate-pulse rounded-lg bg-accent"
-              />
-            ))}
-          </Stack>
+          <Loader />
         ) : tutors.length ? (
           <Stack direction="column" spacing="sm" className="m-0!">
             {tutors.map((tutor, index) => (

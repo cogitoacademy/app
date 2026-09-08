@@ -69,6 +69,7 @@ import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
 import { CogitoMarks } from "@/components/cogito-marks";
 import { EmptyState } from "@/components/empty-state";
+import Loader from "@/components/loader";
 import { useNow } from "@/hooks/use-now";
 import { InfoPreview } from "@/components/info-preview";
 import { getUserFacingError } from "@/lib/error-message";
@@ -315,7 +316,7 @@ export function BookingDetailPage({
     setConfirmationDialog({ action: "complete", sessionId });
   };
 
-  if (bookingQuery.isPending) return <BookingDetailSkeleton />;
+  if (bookingQuery.isPending) return <Loader />;
 
   if (bookingQuery.isError) {
     return (
@@ -1660,15 +1661,6 @@ function SummaryRow({
     <div className="flex items-center justify-between gap-4">
       <Text className="text-muted">{label}</Text>
       <Text className="font-medium">{value}</Text>
-    </div>
-  );
-}
-
-function BookingDetailSkeleton() {
-  return (
-    <div className="grid animate-pulse gap-4 lg:grid-cols-[1.4fr_1fr]">
-      <Card className="min-h-80 bg-accent/40" />
-      <Card className="min-h-80 bg-accent/40" />
     </div>
   );
 }

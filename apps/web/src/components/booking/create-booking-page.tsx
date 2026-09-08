@@ -70,6 +70,7 @@ import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { EmptyState } from "@/components/empty-state";
 import { CogitoMarks } from "@/components/cogito-marks";
 import { InfoPreview } from "@/components/info-preview";
+import Loader from "@/components/loader";
 import { TutorDrawer } from "@/components/tutor/tutor-drawer";
 import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
@@ -335,7 +336,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
     });
   }
 
-  if (profileQuery.isPending) return <CreateBookingSkeleton />;
+  if (profileQuery.isPending) return <Loader />;
 
   if (profileQuery.isError) {
     return (
@@ -1368,18 +1369,6 @@ function SummaryRow({
         {icon ? <span className="[&>svg]:size-4">{icon}</span> : null}
         {value}
       </span>
-    </div>
-  );
-}
-
-function CreateBookingSkeleton() {
-  return (
-    <div className="grid animate-pulse gap-4 lg:grid-cols-[1.35fr_0.65fr]">
-      <div className="space-y-4">
-        <div className="h-24 rounded-xl bg-accent" />
-        <div className="h-72 rounded-xl bg-accent" />
-      </div>
-      <div className="h-96 rounded-xl bg-accent" />
     </div>
   );
 }

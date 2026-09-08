@@ -88,6 +88,7 @@ import {
 import { EmptyState } from "@/components/empty-state";
 import { InfoPreview } from "@/components/info-preview";
 import { CogitoMarks } from "@/components/cogito-marks";
+import Loader from "@/components/loader";
 import { TablePagination } from "@/components/table-pagination";
 import {
   Tabs,
@@ -1815,7 +1816,7 @@ function RoomCatalog({ onAddRoom }: { onAddRoom: () => void }) {
       </CardHeader>
       <CardBody>
         {roomsQuery.isPending ? (
-          <div className="min-h-24 animate-pulse rounded-lg bg-accent/30" />
+          <Loader />
         ) : roomsQuery.isError ? (
           <div className="flex flex-col items-start gap-3">
             <Text className="text-muted">
@@ -2112,7 +2113,7 @@ function PendingRoomApprovals({
       </CardHeader>
       <CardBody>
         {isPending ? (
-          <div className="min-h-32 animate-pulse rounded-lg bg-accent/30" />
+          <Loader />
         ) : errorMessage ? (
           <div className="flex flex-col items-start gap-3">
             <Text className="text-muted">{errorMessage}</Text>
@@ -2268,7 +2269,9 @@ function BalanceCard({ label, value }: { label: string; value: number }) {
 function LoadingCard() {
   return (
     <Card>
-      <CardBody className="min-h-48 animate-pulse bg-accent/30" />
+      <CardBody>
+        <Loader />
+      </CardBody>
     </Card>
   );
 }

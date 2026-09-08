@@ -42,6 +42,7 @@ import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { cn } from "@cogito-app/ui/lib/utils";
 
 import { EmptyStateCard } from "@/components/empty-state";
+import Loader from "@/components/loader";
 import { useNow } from "@/hooks/use-now";
 import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
@@ -212,7 +213,7 @@ export function NotificationsPage() {
         </Text>
       </div>
       {notificationsQuery.isPending ? (
-        <NotificationsLoading />
+        <Loader />
       ) : notificationsQuery.isError ? (
         <Card>
           <CardBody className="flex min-h-64 flex-col items-center justify-center text-center">
@@ -471,25 +472,6 @@ function NotificationItem({
         ) : null}
       </ItemAction>
     </Item>
-  );
-}
-
-function NotificationsLoading() {
-  return (
-    <Card>
-      <CardBody className="space-y-3">
-        {[
-          "notification-loading-1",
-          "notification-loading-2",
-          "notification-loading-3",
-        ].map((key) => (
-          <div
-            key={key}
-            className="h-20 animate-pulse rounded-(--radius-lg) bg-accent/50"
-          />
-        ))}
-      </CardBody>
-    </Card>
   );
 }
 

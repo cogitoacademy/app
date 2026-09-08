@@ -30,12 +30,12 @@ import { cn } from "@cogito-app/ui/lib/utils";
 
 import {
   BookingListCard,
-  BookingListCardSkeleton,
   PENDING_BOOKING_STATES,
   TERMINAL_BOOKING_STATES,
   type BookingListItem,
 } from "@/components/booking/booking-card";
 import { EmptyStateCard } from "@/components/empty-state";
+import Loader from "@/components/loader";
 import { useRole } from "@/hooks/use-role";
 import { useNow } from "@/hooks/use-now";
 import { getUserFacingError } from "@/lib/error-message";
@@ -164,7 +164,7 @@ export function BookingsPage() {
       </div>
 
       {isLoading ? (
-        <BookingListSkeleton />
+        <Loader />
       ) : isInitialError ? (
         <Card className="w-full min-w-0 max-w-full">
           <CardBody className="flex min-h-64 flex-col items-center justify-center text-center">
@@ -316,21 +316,6 @@ function BookingTabBar({
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function BookingListSkeleton() {
-  return (
-    <div
-      className="grid min-w-0 max-w-full gap-3"
-      aria-label="Loading bookings"
-    >
-      {["booking-skeleton-primary", "booking-skeleton-secondary"].map(
-        (placeholder) => (
-          <BookingListCardSkeleton key={placeholder} />
-        ),
-      )}
     </div>
   );
 }

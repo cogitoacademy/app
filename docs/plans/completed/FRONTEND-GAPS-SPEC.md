@@ -925,6 +925,11 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 
 ### Version Notes
 
+- v1.73 (2026-09-08): Replaced bespoke pulse skeleton placeholders across the
+  web loading states with the shared `apps/web/src/components/loader.tsx`
+  component and its `cogito-orange` Selia spinner. No RPC, schema, or
+  persistence contract changed.
+
 - v1.72 (2026-09-04): Constrained the shared select positioner and popup to
   Base UI's available viewport width so tutor discovery filters remain fully
   visible at the 320 px CSS minimum. No RPC, schema, persistence, or URL

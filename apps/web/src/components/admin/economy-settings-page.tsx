@@ -30,6 +30,7 @@ import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
+import Loader from "@/components/loader";
 import { orpc } from "@/utils/orpc";
 
 type FormValues = {
@@ -363,7 +364,7 @@ export function EconomySettingsPage() {
           </CardHeader>
           <CardBody>
             {settings.isPending ? (
-              <div className="h-48 animate-pulse rounded-lg bg-accent" />
+              <Loader />
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-80 text-sm">

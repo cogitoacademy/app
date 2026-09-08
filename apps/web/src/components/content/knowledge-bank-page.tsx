@@ -39,6 +39,7 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 
 import { EmptyStateCard } from "@/components/empty-state";
 import { CogitoMarks } from "@/components/cogito-marks";
+import Loader from "@/components/loader";
 import { serverUrl } from "@/lib/server-url";
 import { orpc } from "@/utils/orpc";
 import { getCategoryLabel } from "./knowledge-bank-utils";
@@ -85,24 +86,7 @@ export function KnowledgeBankPage() {
   }, [category, items, search]);
   const hasFilters = category !== "all" || search.trim().length > 0;
 
-  if (resources.isPending) {
-    return (
-      <Stack direction="column" spacing="lg">
-        <div>
-          <Heading>Knowledge Bank</Heading>
-          <Text className="mt-1 text-muted">Loading learning materials…</Text>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3].map((item) => (
-            <div
-              key={item}
-              className="h-48 animate-pulse rounded-lg border border-border bg-accent/30"
-            />
-          ))}
-        </div>
-      </Stack>
-    );
-  }
+  if (resources.isPending) return <Loader />;
 
   if (resources.isError) {
     return (
