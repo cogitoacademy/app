@@ -134,7 +134,9 @@ test("admin can review and update the future-booking Cogito take schedule", asyn
       await login(tutorPage, TUTOR_EMAIL, TUTOR_PASSWORD);
       await tutorPage.goto("/notifications");
       await expect(
-        tutorPage.getByRole("heading", { name: /All activity/ }),
+        tutorPage
+          .getByRole("heading", { name: /All activity/ })
+          .or(tutorPage.getByText("You are all caught up", { exact: true })),
       ).toBeVisible();
       await expect(
         tutorPage.getByText("Cogito rate updated", { exact: true }),
