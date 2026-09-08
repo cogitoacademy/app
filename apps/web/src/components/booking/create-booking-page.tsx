@@ -13,6 +13,7 @@ import {
   IconDeviceLaptop,
   IconEye,
   IconMapPin,
+  IconSearch,
   IconSchool,
   IconWallet,
   IconX,
@@ -49,7 +50,10 @@ import {
 } from "@cogito-app/ui/components/selia/drawer";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Input } from "@cogito-app/ui/components/selia/input";
-import { InputGroup } from "@cogito-app/ui/components/selia/input-group";
+import {
+  InputGroup,
+  InputGroupAddon,
+} from "@cogito-app/ui/components/selia/input-group";
 import { Separator } from "@cogito-app/ui/components/selia/separator";
 import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import { Chip, ChipButton } from "@cogito-app/ui/components/selia/chip";
@@ -70,7 +74,6 @@ import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { EmptyState } from "@/components/empty-state";
 import { CogitoMarks } from "@/components/cogito-marks";
 import { InfoPreview } from "@/components/info-preview";
-import Loader from "@/components/loader";
 import { TutorDrawer } from "@/components/tutor/tutor-drawer";
 import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
@@ -85,6 +88,7 @@ import {
   formatTimeValue,
   toSessionStart,
 } from "@/components/booking/booking-session-time";
+import { formatBookingDateOnly } from "@/components/booking/booking-ui";
 
 const BOOKING_TIMEZONE = "Asia/Jakarta";
 const DEFAULT_SOLO_PRICE = 42;
@@ -108,18 +112,8 @@ function getBookingErrorMessage(error: Error) {
   );
 }
 
-function formatSlotDate(value: Date | string) {
-  return new Intl.DateTimeFormat("en-US", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    timeZone: BOOKING_TIMEZONE,
-  }).format(new Date(value));
-}
-
 function formatDatePart(value: Date | string, part: "weekday" | "dayMonth") {
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat("en-GB", {
     weekday: part === "weekday" ? "short" : undefined,
     day: part === "dayMonth" ? "numeric" : undefined,
     month: part === "dayMonth" ? "short" : undefined,
@@ -336,7 +330,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
     });
   }
 
-  if (profileQuery.isPending) return <Loader />;
+  if (profileQuery.isPending) return <CreateBookingSkeleton />;
 
   if (profileQuery.isError) {
     return (
@@ -462,6 +456,17 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
   const availableBalance = walletQuery.data?.availableBalance ?? 0;
   const hasEnoughMarks = availableBalance >= requiredHold;
   const tutorName = profile.user?.name ?? "Cogito tutor";
+  const subjectSummary = selectedSubject
+    ? `${selectedSubject.parent.name} — ${selectedSubject.name}`
+    : "Not specified";
+  const participantSummary = isGroupBooking
+    ? `You + ${invitees.length} ${invitees.length === 1 ? "invitee" : "invitees"}`
+    : "Solo";
+  const sessionSummary =
+    selectedSlots.length > 1
+      ? `Series · ${selectedSlots.length} sessions`
+      : "Single session";
+  const balanceAfterHold = Math.max(availableBalance - requiredHold, 0);
   const hasInvalidStartTime = selectedSlots.some((slot) => {
     const value = slot.time;
     const latestStart = new Date(
@@ -498,7 +503,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
     selectedSlots.length > 1
       ? `${selectedSlots.length} of 2–4 sessions selected`
       : selectedSlot
-        ? `${formatSlotDate(selectedSlot.startDate)}, ${selectedSlot.time}–${addMinutesToTime(selectedSlot.time, 90)} WIB`
+        ? `${formatBookingDateOnly(selectedSlot.startDate, BOOKING_TIMEZONE)} · ${selectedSlot.time}–${addMinutesToTime(selectedSlot.time, 90)} WIB`
         : "Choose a time";
 
   function submitBooking(event: React.FormEvent<HTMLFormElement>) {
@@ -571,22 +576,12 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
         </Button>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <Badge variant="info" pill>
-              {selectedSlots.length > 1
-                ? "Session series"
-                : isGroupBooking
-                  ? "Group session"
-                  : "Solo session"}
-            </Badge>
-            <Heading level={1} size="md" className="mt-3">
+            <Heading level={1} size="md">
               Book {tutorName}
             </Heading>
             <Text className="mt-1 text-muted">
-              {selectedSlots.length > 1
-                ? "Choose 2–4 available times for a recurring learning plan."
-                : isGroupBooking
-                  ? "Invite friends, choose one time, and review each student's Marks price."
-                  : "Choose an available slot and review the Marks hold before sending your request."}
+              Choose your session details and review the cost before sending
+              your request.
             </Text>
           </div>
           <Button
@@ -596,11 +591,13 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
             aria-expanded={tutorProfileOpen}
             onClick={() => setTutorProfileOpen(true)}
           >
-            <IconEye />
+            <IconEye aria-hidden="true" />
             View tutor profile
           </Button>
         </div>
       </div>
+
+      <Separator />
 
       <form
         id="create-booking-form"
@@ -654,11 +651,6 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                         </SelectList>
                       </SelectPopup>
                     </Select>
-                    <FieldDescription>
-                      {selectedSubject
-                        ? `${selectedSubject.parent.name} - ${selectedSubject.name}`
-                        : "This appears in the Calendar and Google Meet details."}
-                    </FieldDescription>
                   </Field>
                 ) : (
                   <Text className="text-sm text-muted">
@@ -679,17 +671,22 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                     placeholder="Share your learning goal, topics, questions, or reference links…"
                   />
                   <FieldDescription>
-                    Paste any useful reference links here. {sessionNotes.length}
+                    {sessionNotes.length}
                     /2,000 characters
                   </FieldDescription>
                 </Field>
                 <Separator />
-                <div className="space-y-1">
-                  <Text className="font-medium">Participants (optional)</Text>
-                  <Text className="text-sm text-muted">
-                    Invite up to five students. Adding someone makes this a
-                    group booking.
-                  </Text>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <Text className="font-medium">Participants (optional)</Text>
+                    <Text className="text-sm text-muted">
+                      Invite up to five students. Adding someone makes this a
+                      group booking.
+                    </Text>
+                  </div>
+                  <Badge variant="info" pill>
+                    {isGroupBooking ? `Group · ${invitees.length + 1}` : "Solo"}
+                  </Badge>
                 </div>
                 <Field>
                   <FieldLabel htmlFor="student-search" className="sr-only">
@@ -733,7 +730,10 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                     </div>
                   ) : null}
                   <div className="relative">
-                    <InputGroup className="min-w-0 rounded-full">
+                    <InputGroup className="min-w-0">
+                      <InputGroupAddon>
+                        <IconSearch aria-hidden="true" />
+                      </InputGroupAddon>
                       <Input
                         id="student-search"
                         name="student-search"
@@ -759,7 +759,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                     {studentSearchQuery.isFetching ||
                     studentSearchQuery.isError ||
                     debouncedStudentSearch.length >= 2 ? (
-                      <div className="absolute inset-x-0 top-full z-30 mt-2 rounded-lg border border-popover-border bg-popover p-1.5 text-popover-foreground shadow-popover">
+                      <div className="absolute inset-x-0 top-full z-30 mt-2 rounded border border-popover-border bg-popover p-1.5 text-popover-foreground shadow-popover">
                         {studentSearchQuery.isFetching ? (
                           <Text className="px-2.5 py-2 text-sm text-muted">
                             Searching students…
@@ -788,7 +788,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                                 key={student.id}
                                 type="button"
                                 variant="plain"
-                                className="h-auto w-full justify-start rounded px-2.5 py-2"
+                                className="h-auto w-full justify-start px-2.5 py-2"
                                 onClick={() => addInvitee(student)}
                               >
                                 <Avatar size="sm" className="size-7!">
@@ -983,7 +983,10 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                       <div>
                         <Text className="font-medium">
                           {activeDateSlots[0]
-                            ? formatSlotDate(activeDateSlots[0].startDate)
+                            ? formatBookingDateOnly(
+                                activeDateSlots[0].startDate,
+                                BOOKING_TIMEZONE,
+                              )
                             : "Choose a date"}
                         </Text>
                         <Text className="text-sm text-muted">
@@ -1075,6 +1078,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                           {selectedSlots.length}/4
                         </Badge>
                       </div>
+                      <Separator />
                       <div className="grid gap-6 sm:grid-cols-2">
                         {selectedSlots.map((slot) => {
                           const startTime = slot.time;
@@ -1085,7 +1089,10 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                             >
                               <div className="min-w-0">
                                 <Text className="truncate font-medium">
-                                  {formatSlotDate(slot.startDate)}
+                                  {formatBookingDateOnly(
+                                    slot.startDate,
+                                    BOOKING_TIMEZONE,
+                                  )}
                                 </Text>
                                 <Text className="text-sm text-muted">
                                   {startTime}–{addMinutesToTime(startTime, 90)}{" "}
@@ -1096,7 +1103,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                                 type="button"
                                 variant="danger"
                                 size="sm"
-                                aria-label={`Remove ${formatSlotDate(slot.startDate)} at ${startTime}`}
+                                aria-label={`Remove ${formatBookingDateOnly(slot.startDate, BOOKING_TIMEZONE)} at ${startTime}`}
                                 onClick={() =>
                                   setSelectedSessions((current) =>
                                     current.filter(
@@ -1119,7 +1126,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
           </Card>
         </div>
 
-        <div className="order-1 space-y-4 lg:order-2 lg:sticky lg:top-6">
+        <div className="order-1 space-y-4 lg:order-2 lg:sticky lg:top-0">
           <Card className="hidden lg:block">
             <CardHeader>
               <IconBox variant="warning-subtle">
@@ -1130,7 +1137,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                 <CardInfoPreview>
                   <InfoPreview
                     title="Booking summary"
-                    description="Review the tutor, format, schedule, and Marks hold before requesting."
+                    description="Review the participants, session plan, schedule, and reserved balance before requesting."
                     label="About booking summary"
                     tone="warning"
                   />
@@ -1139,8 +1146,11 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
             </CardHeader>
             <CardBody className="space-y-5">
               <SummaryRow label="Tutor" value={tutorName} />
+              <SummaryRow label="Subject" value={subjectSummary} />
+              <SummaryRow label="Participants" value={participantSummary} />
+              <SummaryRow label="Sessions" value={sessionSummary} />
               <SummaryRow
-                label="Modality"
+                label="Format"
                 value={effectiveModality === "online" ? "Online" : "Offline"}
                 icon={
                   effectiveModality === "online" ? (
@@ -1150,33 +1160,22 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                   )
                 }
               />
-              <SummaryRow label="Schedule" value={scheduleSummary} />
-              <div className="">
-                <div className="flex items-center justify-between gap-4">
-                  <Text className="text-sm text-muted">
-                    {isGroupBooking ? "Price per student" : "Session price"}
-                  </Text>
-                  <Text className="text-base font-semibold">
-                    <CogitoMarks value={price} size="3" />
-                  </Text>
-                </div>
-                <Text className="mt-3 text-sm text-muted">
-                  Held now and only deducted according to the booking lifecycle.
-                </Text>
-                {isGroupBooking && selectedSlots.length === 1 ? (
-                  <Text className="mt-2 text-xs text-muted">
-                    A temporary hold covers {invitees.length + 1} target
-                    participants. Excess Marks are released as invitees confirm.
-                  </Text>
-                ) : null}
-              </div>
+              <BookingScheduleSummary selectedSlots={selectedSlots} />
               <Separator />
-              {isGroupBooking && selectedSlots.length === 1 ? (
-                <SummaryRow
-                  label="Temporary hold"
-                  value={<CogitoMarks value={requiredHold} />}
-                />
-              ) : null}
+              <SummaryRow
+                label={
+                  selectedSlots.length > 1
+                    ? `Your total · ${selectedSlots.length} sessions`
+                    : isGroupBooking
+                      ? "Price per student"
+                      : "Session price"
+                }
+                value={<CogitoMarks value={price} size="3" />}
+              />
+              <SummaryRow
+                label="Reserved now"
+                value={<CogitoMarks value={requiredHold} size="3" />}
+              />
               <div className="flex items-center justify-between gap-4">
                 <span className="flex items-center gap-2 text-muted">
                   <IconWallet className="size-4" aria-hidden="true" /> Available
@@ -1185,10 +1184,28 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                   {walletQuery.isPending ? (
                     "Loading…"
                   ) : (
-                    <CogitoMarks value={availableBalance} />
+                    <CogitoMarks value={availableBalance} size="3" />
                   )}
                 </Text>
               </div>
+              {!walletQuery.isPending && hasEnoughMarks ? (
+                <SummaryRow
+                  label="Balance after reserve"
+                  value={<CogitoMarks value={balanceAfterHold} size="3" />}
+                />
+              ) : null}
+              <Text className="text-sm text-muted">
+                This balance is reserved when you send the request. It is
+                charged after a completed session or when cancellation and
+                no-show rules apply; otherwise, it is returned.
+              </Text>
+              {isGroupBooking && selectedSlots.length === 1 ? (
+                <Text className="text-xs text-muted">
+                  The initial reserve covers all {invitees.length + 1} expected
+                  participants. The excess is returned as invitees confirm and
+                  cover their share.
+                </Text>
+              ) : null}
               {!walletQuery.isPending && !hasEnoughMarks ? (
                 <div className="rounded-lg border border-danger-border bg-danger/10 p-3">
                   <Text className="flex flex-wrap items-center gap-1 text-sm text-danger">
@@ -1222,9 +1239,9 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                   block
                   size="md"
                   nativeButton={false}
-                  render={<Link to="/balance" aria-label="Top up Marks" />}
+                  render={<Link to="/balance" aria-label="Top up balance" />}
                 >
-                  Top up Marks
+                  Top up balance
                 </Button>
               )}
               {createBooking.isError ||
@@ -1286,8 +1303,11 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
           </DrawerHeader>
           <DrawerBody className="space-y-5">
             <SummaryRow label="Tutor" value={tutorName} />
+            <SummaryRow label="Subject" value={subjectSummary} />
+            <SummaryRow label="Participants" value={participantSummary} />
+            <SummaryRow label="Sessions" value={sessionSummary} />
             <SummaryRow
-              label="Modality"
+              label="Format"
               value={effectiveModality === "online" ? "Online" : "Offline"}
               icon={
                 effectiveModality === "online" ? (
@@ -1297,8 +1317,22 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                 )
               }
             />
-            <SummaryRow label="Schedule" value={scheduleSummary} />
-            <SummaryRow label="Total" value={<CogitoMarks value={price} />} />
+            <BookingScheduleSummary selectedSlots={selectedSlots} />
+            <Separator />
+            <SummaryRow
+              label={
+                selectedSlots.length > 1
+                  ? `Your total · ${selectedSlots.length} sessions`
+                  : isGroupBooking
+                    ? "Price per student"
+                    : "Session price"
+              }
+              value={<CogitoMarks value={price} />}
+            />
+            <SummaryRow
+              label="Reserved now"
+              value={<CogitoMarks value={requiredHold} />}
+            />
             <SummaryRow
               label="Available balance"
               value={
@@ -1310,6 +1344,24 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
               }
               icon={<IconWallet />}
             />
+            {!walletQuery.isPending && hasEnoughMarks ? (
+              <SummaryRow
+                label="Balance after reserve"
+                value={<CogitoMarks value={balanceAfterHold} />}
+              />
+            ) : null}
+            <Text className="text-sm text-muted">
+              This balance is reserved when you send the request. It is charged
+              after a completed session or when cancellation and no-show rules
+              apply; otherwise, it is returned.
+            </Text>
+            {isGroupBooking && selectedSlots.length === 1 ? (
+              <Text className="text-xs text-muted">
+                The initial reserve covers all {invitees.length + 1} expected
+                participants. The excess is returned as invitees confirm and
+                cover their share.
+              </Text>
+            ) : null}
             {!walletQuery.isPending && !hasEnoughMarks ? (
               <div className="rounded-lg border border-danger-border bg-danger/10 p-3">
                 <Text className="flex flex-wrap items-center gap-1 text-sm text-danger">
@@ -1341,9 +1393,9 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                 block
                 size="lg"
                 nativeButton={false}
-                render={<Link to="/balance" aria-label="Top up Marks" />}
+                render={<Link to="/balance" aria-label="Top up balance" />}
               >
-                Top up Marks
+                Top up balance
               </Button>
             )}
           </DrawerFooter>
@@ -1369,6 +1421,63 @@ function SummaryRow({
         {icon ? <span className="[&>svg]:size-4">{icon}</span> : null}
         {value}
       </span>
+    </div>
+  );
+}
+
+function BookingScheduleSummary({
+  selectedSlots,
+}: {
+  selectedSlots: Array<{
+    key: string;
+    startDate: Date | string;
+    time: string;
+  }>;
+}) {
+  if (selectedSlots.length === 0) {
+    return <SummaryRow label="Schedule" value="Choose a time" />;
+  }
+
+  if (selectedSlots.length === 1) {
+    const slot = selectedSlots[0]!;
+    return (
+      <SummaryRow
+        label="Date & time"
+        value={`${formatBookingDateOnly(slot.startDate, BOOKING_TIMEZONE)} · ${slot.time}–${addMinutesToTime(slot.time, 90)} WIB`}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <Text className="text-sm text-muted">Schedule</Text>
+      <div className="space-y-2 rounded-lg bg-item p-3">
+        {selectedSlots.map((slot) => (
+          <div
+            key={slot.key}
+            className="flex items-start justify-between gap-3 text-sm"
+          >
+            <Text className="text-muted">
+              {formatBookingDateOnly(slot.startDate, BOOKING_TIMEZONE)}
+            </Text>
+            <Text className="shrink-0 text-right font-medium">
+              {slot.time}–{addMinutesToTime(slot.time, 90)} WIB
+            </Text>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CreateBookingSkeleton() {
+  return (
+    <div className="grid animate-pulse gap-4 lg:grid-cols-[1.35fr_0.65fr]">
+      <div className="space-y-4">
+        <div className="h-24 rounded-xl bg-accent" />
+        <div className="h-72 rounded-xl bg-accent" />
+      </div>
+      <div className="h-96 rounded-xl bg-accent" />
     </div>
   );
 }

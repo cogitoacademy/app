@@ -99,9 +99,25 @@ history cannot impose a desktop-sized intrinsic width on the entire page. The
 QRIS payment code also scales to the nested card's available width instead of
 enforcing a fixed 272-pixel padded box.
 
+The Balance page presents Knowledge Bank eligibility as a compact status card.
+Its 35-Mark rule and no-charge explanation live in an accessible info preview,
+while the always-visible surface is limited to the current status and a short
+Open or Top up action. On mobile the action occupies a single full-width row;
+on wider screens the same content collapses into one horizontal row. The page
+heading and compact card form the wider left column, while the denser balance
+widget fills a narrower right rail. The Knowledge Bank card keeps its natural
+content height instead of stretching to the grid row, preventing empty vertical
+space inside its boundary. The two columns stack in the same reading order on
+mobile.
+
 Marks history renders the transaction date on its own metadata line below the
 reason. Transaction amounts and resulting balances use the shared `CogitoMarks`
 icon-prefix presentation instead of spelling out Marks as a text suffix.
+`CogitoMarks` call sites declare an icon size appropriate to their surrounding
+typography: size 3 for compact body/metadata text, size 4 for standard values,
+and sizes 5–6 for prominent totals. The component uses a vertically centered
+inline-flex box with middle alignment; prose-only call sites add local inline
+margin while grouped labels continue to rely on their parent gap.
 
 ## Card title info preview (2026-09-04)
 
@@ -419,6 +435,7 @@ Before submission, the admin tutor invite form checks whether the normalized ema
 Booking scheduling and reschedule rules: [Booking Scheduling and Reschedule Specification](./booking-scheduling-and-reschedule-spec.md) (v1.0.0, 2026-08-16). Student booking and reschedule forms expose 15-minute minus/plus controls, derive the fixed 90-minute end time, and show tutor-window validation only when the chosen start is outside the allowed range.
 
 The student booking form uses a balanced responsive composition. At desktop widths, session format and the sticky booking summary occupy the right rail; availability remains a card grid, and selecting a slot expands that slot into a two-column row with its own start-time editor directly beside it. On narrower screens, the same editor stacks below its selected slot, modality returns to the start of the form flow, and the full summary moves into a bottom drawer opened from a persistent compact price/schedule preview; the drawer submit button remains associated with the booking form.
+The page header remains stable while the Participants section owns the live Solo/Group badge. Its student search field uses the Selia `InputGroupAddon` search icon, and the field, results popup, and result actions inherit default Selia radii without local pill or enlarged-radius overrides. Both summary surfaces describe participant scope separately from Single/Series cadence, list every selected series date and time, and distinguish the student's price from the balance reserved at submission. Monetary values use the shared `CogitoMarks` component. User-facing booking dates use the shared compact `EEE, d MMM yyyy` booking formatter, while the calendar strip omits the year to preserve space.
 
 Booking list rows and the booking-detail header reuse the canonical
 Calendar/Meet event-title format (`Cogito - {Competition} | {Tutor} x
@@ -490,7 +507,7 @@ The booking detail overview merges the date and session hours into one `Date & t
 
 The booking detail desktop layout keeps the overview/activity flow in an independent left column from the sticky Actions/financial rail, so the rail height cannot create a blank grid row before Activity. Narrow layouts retain the order overview → actions/financial content → Activity. On the admin detail, offline room controls and participant wallet/ledger facts are embedded in Session overview, the participant list uses one column, review context sits in the right rail with Wallet impact, Marks amounts use the shared `CogitoMarks` icon-and-value component, and State history reuses the standard Activity timeline while retaining the admin-only actor identifier. This is presentation-only; no RPC, schema, or persistence contract changes.
 
-The tutor reschedule drawer presents its two scheduling modes as an always-visible segmented control. Published availability is grouped by local calendar date, with compact selectable time-window chips beneath each date, instead of repeating the date in full-size cards. The tutor `/book` flow uses the same grouped picker and moves time adjustment for chosen slots into a separate Selected sessions section so multi-session selection remains clear. Selection and proposal payload semantics are unchanged.
+The tutor reschedule drawer presents its two scheduling modes through the shared Selia Tabs component and groups published availability by local calendar date. The tutor `/book` flow uses one cohesive date-first scheduler: Online/Offline also uses Selia Tabs, its calendar strip shows seven consecutive dates on desktop and three on mobile (dates without slots remain visible but disabled), and selecting an available date reveals concrete valid 15-minute starts grouped into Morning, Afternoon, and Evening for the fixed 90-minute session. Series selection is keyed by availability slot plus concrete start, so multiple non-overlapping sessions may be selected from one availability window or calendar date; overlapping 90-minute choices are disabled. Chosen starts appear in a separate Selected sessions tray. Selected dates and times rely on the button variant without redundant check icons. Card explanations use the shared CardInfoPreview/InfoPreview popover pattern, while Specialization and the optional focus prompt share one semantic Session details fieldset instead of separate cards. Users no longer select a broad availability window and adjust it in a second control, and modality no longer occupies a standalone side card. Booking payload semantics are unchanged.
 
 Removing a room from a scheduled offline booking keeps the booking scheduled. Admins may subsequently assign a new room from the same overview controls; the backend permits this only when the booking is offline and has no active room assignment, preserving relocation as the path when a room is still active.
 

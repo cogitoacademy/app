@@ -922,11 +922,11 @@ The create/edit/correction form is presented as a bottom drawer on mobile and a 
 ### `booking.createSolo`
 
 - **Auth:** Verified Student (`verifiedStudentProcedure` — student role with a verified email; unverified → `FORBIDDEN`)
-- **Input:** `{ tutorId, subjectId?, availabilitySlotId, modality, scheduledStartAt, timezone?, learningGoal }` (`subjectId` selects one active specialization offered by the tutor and is snapshotted as the session topic; legacy callers may omit it and the sole tutor specialization is selected automatically; `learningGoal` carries Session Notes and accepts up to 2,000 characters including reference links; duration is server-fixed to 90 minutes)
+- **Input:** `{ tutorId, subjectId?, availabilitySlotId, modality, scheduledStartAt, timezone?, learningGoal }` (`subjectId` selects one active specialization offered by the tutor and is snapshotted as the session topic; legacy callers may omit it and the sole tutor specialization is selected automatically; `learningGoal` carries Session Notes and accepts up to 2,000 characters including reference links; duration is server-fixed to 90 minutes). The web form may group `subjectId` and `learningGoal` into one Session details fieldset and present `modality` with Selia Tabs; this presentation does not change the RPC input.
 - **Output:** `{ booking }`
 - **Errors:** `BOOKING_NOT_FOUND` (404), `BOOKING_NOT_EDITABLE` (400), `BOOKING_CONFLICT` (409), `INSUFFICIENT_MARKS` (400)
 - **Description:** Creates a solo booking and holds Marks; idempotency via `idempotency-key` header
-- **Frontend note:** The student form places modality and the summary in a desktop right rail. Availability remains a card grid; each selected slot reveals its own adjacent start-time editor when width permits and stacks it below on narrow screens. Mobile uses a compact sticky bottom preview plus review drawer. The drawer submission targets the same form and does not change this RPC contract.
+- **Frontend note:** The student form places modality and the summary in a desktop right rail. Availability remains a card grid; each selected slot reveals its own adjacent start-time editor when width permits and stacks it below on narrow screens. Desktop and mobile summaries state participant scope separately from single/series cadence, list concrete series dates, and distinguish the student's price from the balance reserved by the applicable hold rule. Monetary values use `CogitoMarks`, and displayed booking dates use the shared compact formatter. Mobile uses a compact sticky bottom preview plus review drawer. The drawer submission targets the same form and does not change this RPC contract.
 
 ### `booking.get`
 
@@ -972,7 +972,7 @@ RPC contract.
 - **Auth:** Protected; booking tutor, proposer, or participant
 - **Input:** `{ bookingId }`
 - **Output:** `AvailabilitySlot[]`
-- **Description:** Returns active tutor availability for the booking-scoped reschedule picker. Access is checked against the booking rather than tutor discovery visibility. The frontend groups these unchanged slot records by local date and renders compact selectable time-window chips.
+- **Description:** Returns active tutor availability for the booking-scoped reschedule picker. Access is checked against the booking rather than tutor discovery visibility. Frontend scheduling surfaces may group these unchanged window records by local date and derive valid 15-minute session starts that leave room for the fixed 90-minute duration; presentation grouping such as Morning/Afternoon/Evening does not change the selected source `availabilitySlotId` used by proposal/booking inputs.
 - **Rate limit:** This protected read is intentionally excluded from the booking mutation limiter; repeated picker refreshes do not consume the 30/minute booking-action budget.
 - **Reschedule invariant:** `/rpc/booking/proposeReschedule` and `/rpc/tutorActions/proposeReschedule` reject a proposed start in the same minute as the active booking/target-session start or the pending proposal for that same target with `BOOKING_NOT_EDITABLE`. Proposal replacement is serialized, and only one pending proposal may exist per booking.
 
@@ -1021,7 +1021,7 @@ RPC contract.
 ### `booking.createSeries`
 
 - **Auth:** Verified Student (`verifiedStudentProcedure`; unverified → `FORBIDDEN`)
-- **Input:** `{ tutorId, subjectId?, availabilitySlotId, modality, sessions: [{ availabilitySlotId, scheduledStartAt }], timezone?, learningGoal }` (`subjectId` selects an active tutor specialization; `learningGoal` carries Session Notes including reference links; 2–4 fixed 90-minute sessions)
+- **Input:** `{ tutorId, subjectId?, availabilitySlotId, modality, sessions: [{ availabilitySlotId, scheduledStartAt }], timezone?, learningGoal }` (`subjectId` selects an active tutor specialization; `learningGoal` carries Session Notes including reference links; 2–4 fixed 90-minute sessions). Multiple non-overlapping sessions may reference the same availability slot when each concrete start fits that window; `assertNoIntraSeriesOverlap` rejects overlapping 90-minute sessions.
 - **Output:** `{ booking }`
 - **Errors:** `BOOKING_SERIES_SIZE` (400) if sessions < 2 or > 4
 - **Description:** Creates a multi-session solo series booking
