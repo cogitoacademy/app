@@ -115,7 +115,8 @@ lcov artifact and enforces 100% for `packages/api` lines, overall lines,
 functions, and branches. A 0/0 branch total is treated as 100%; coverage test
 command failures are explicitly propagated after the comment/gate step. The
 gate is configured by `.github/workflows/ci.yml` and implemented in
-`.github/scripts/coverage-comment.ts`.
+`.github/scripts/coverage-comment.ts`. The renderer separates the gate
+blockquote and tables with blank lines required by GitHub Markdown.
 
 ## Collection transition behavior (2026-08-28)
 

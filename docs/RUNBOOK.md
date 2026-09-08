@@ -1349,7 +1349,9 @@ overall lines, functions, and branches from `coverage/lcov.info`; a 0/0 branch
 total is treated as 100%. If this gate fails, inspect the missing function/line
 records in the generated lcov report and add a behavior-level test before
 pushing. A failed coverage test command is also propagated explicitly after
-the comment step. The Bun command's own function/statement output is
+the comment step. The generated PR comment uses blank lines between its status
+blockquote and tables; preserve these separators when editing the renderer.
+The Bun command's own function/statement output is
 diagnostic; the lcov gate is authoritative.
 
 The CI lint job uses the pinned oxlint 1.80.0 and oxfmt 0.65.0 toolchain. It

@@ -232,14 +232,19 @@ async function main() {
   const perFileTable =
     perFileRows.length > 0
       ? [
-          `\n### Lowest Coverage Files\n`,
+          `### Lowest Coverage Files`,
+          ``,
           `| File | Lines | Functions |`,
           `|------|-------|-----------|`,
           ...perFileRows,
         ].join("\n")
       : "";
 
-  const comment = [header, gateLine, summaryTable, perFileTable].join("\n");
+  // GitHub needs a blank line between a blockquote and a table (and between
+  // other block-level sections), otherwise it renders the table as plain text.
+  const comment = [header, gateLine, summaryTable, perFileTable]
+    .filter(Boolean)
+    .join("\n\n");
 
   console.log(comment);
 
