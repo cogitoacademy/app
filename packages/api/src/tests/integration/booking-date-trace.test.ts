@@ -130,10 +130,10 @@ describe("Booking date/time round-trip trace", () => {
   });
 
   test("slot → client construction → API → DB row preserves the WIB wall-clock time", async () => {
-    // 1. Create a slot at 2026-09-08 11:00 WIB (= 04:00 UTC) — the exact
+    // 1. Create a slot at 2099-09-08 11:00 WIB (= 04:00 UTC) — the exact
     //    construction the availability page uses.
-    const slotStart = new Date("2026-09-08T11:00:00+07:00");
-    const slotEnd = new Date("2026-09-08T13:00:00+07:00");
+    const slotStart = new Date("2099-09-08T11:00:00+07:00");
+    const slotEnd = new Date("2099-09-08T13:00:00+07:00");
     const [slot] = await db
       .insert(availabilitySlot)
       .values({
@@ -148,7 +148,7 @@ describe("Booking date/time round-trip trace", () => {
     // 2. Client-side: user picks date 8 / time 11:00 (the slot's own start).
     const pickedTime = formatTimeValue(slot!.startDate);
     const built = toSessionStart(slot!.startDate, pickedTime);
-    expect(built.toISOString()).toBe("2026-09-08T04:00:00.000Z");
+    expect(built.toISOString()).toBe("2099-09-08T04:00:00.000Z");
 
     // 3. Send over the wire as the client would (Date → ISO string).
     const b = await studentClient.booking.createSolo({
@@ -163,7 +163,7 @@ describe("Booking date/time round-trip trace", () => {
     const [row] = await db.select().from(booking).where(eq(booking.id, b.id));
     expect(row).toBeDefined();
     expect(row!.scheduledStartAt.toISOString()).toBe(
-      "2026-09-08T04:00:00.000Z",
+      "2099-09-08T04:00:00.000Z",
     );
 
     // 5. Display side: formatting the stored instant in WIB must show
@@ -180,14 +180,14 @@ describe("Booking date/time round-trip trace", () => {
       hour12: false,
       timeZone: BOOKING_TIMEZONE,
     }).format(row!.scheduledStartAt);
-    expect(displayDate).toBe("2026-09-08");
+    expect(displayDate).toBe("2099-09-08");
     expect(displayTime).toBe("11:00");
   });
 
   test("near-midnight slot round-trips without off-by-one-day drift", async () => {
-    // Slot at 2026-09-08 00:30 WIB (= 2026-09-07T17:30:00Z).
-    const slotStart = new Date("2026-09-08T00:30:00+07:00");
-    const slotEnd = new Date("2026-09-08T02:30:00+07:00");
+    // Slot at 2099-09-08 00:30 WIB (= 2099-09-07T17:30:00Z).
+    const slotStart = new Date("2099-09-08T00:30:00+07:00");
+    const slotEnd = new Date("2099-09-08T02:30:00+07:00");
     const [slot] = await db
       .insert(availabilitySlot)
       .values({
@@ -201,7 +201,7 @@ describe("Booking date/time round-trip trace", () => {
 
     const pickedTime = formatTimeValue(slot!.startDate);
     const built = toSessionStart(slot!.startDate, pickedTime);
-    expect(built.toISOString()).toBe("2026-09-07T17:30:00.000Z");
+    expect(built.toISOString()).toBe("2099-09-07T17:30:00.000Z");
 
     const b = await studentClient.booking.createSolo({
       tutorId,
@@ -213,7 +213,7 @@ describe("Booking date/time round-trip trace", () => {
 
     const [row] = await db.select().from(booking).where(eq(booking.id, b.id));
     expect(row!.scheduledStartAt.toISOString()).toBe(
-      "2026-09-07T17:30:00.000Z",
+      "2099-09-07T17:30:00.000Z",
     );
 
     const displayDate = new Intl.DateTimeFormat("en-CA", {
@@ -228,7 +228,7 @@ describe("Booking date/time round-trip trace", () => {
       hour12: false,
       timeZone: BOOKING_TIMEZONE,
     }).format(row!.scheduledStartAt);
-    expect(displayDate).toBe("2026-09-08");
+    expect(displayDate).toBe("2099-09-08");
     expect(displayTime).toBe("00:30");
   });
 });
