@@ -66,15 +66,13 @@ async function openBookingPage(page: Page) {
 }
 
 async function chooseAvailableSlot(page: Page, index = 0) {
-  const availabilityCard = page
-    .locator('[data-slot="card"]')
-    .filter({
-      has: page.getByRole("heading", {
-        name: /^Available times/,
-      }),
-    });
+  const availabilityCard = page.locator('[data-slot="card"]').filter({
+    has: page.getByRole("heading", {
+      name: /^Available times/,
+    }),
+  });
   const dateButtons = availabilityCard.locator(
-    'button[aria-pressed]:has(> span):not(:disabled):not([data-disabled])',
+    "button[aria-pressed]:has(> span):not(:disabled):not([data-disabled])",
   );
 
   for (let pageNumber = 0; pageNumber < 10; pageNumber += 1) {
