@@ -14,6 +14,7 @@ import {
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
+import { Divider } from "@cogito-app/ui/components/selia/divider";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
@@ -218,13 +219,15 @@ export function BookingsPage() {
               aria-labelledby={`booking-group-${group.key}`}
               className="min-w-0 max-w-full"
             >
-              <Heading
-                id={`booking-group-${group.key}`}
-                size="sm"
-                className="mb-3 text-muted"
-              >
-                {group.label}
-              </Heading>
+              <Divider className="mb-3">
+                <Heading
+                  id={`booking-group-${group.key}`}
+                  size="sm"
+                  className="text-muted"
+                >
+                  {group.label}
+                </Heading>
+              </Divider>
               <div className="grid min-w-0 gap-3">
                 {group.items.map((booking) => (
                   <BookingListCard
@@ -254,12 +257,13 @@ export function BookingsPage() {
             </Text>
           ) : null}
           <Button
-            variant="outline"
+            variant="underline"
             onClick={() => void bookingsQuery.fetchNextPage()}
             progress={bookingsQuery.isFetchingNextPage}
             disabled={bookingsQuery.isFetchingNextPage}
           >
-            <IconChevronDown /> Load more bookings
+            Load more bookings
+            <IconChevronDown />
           </Button>
         </div>
       ) : null}
