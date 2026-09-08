@@ -9,6 +9,8 @@
 
 ## Completed (merged to main)
 
+| [COMPETITION-FIELD-COLORS.md](completed/COMPETITION-FIELD-COLORS.md) | working tree | — | **Completed locally 2026-09-08** — academy field palette imported as paired Selia tokens with reusable soft/solid mappings |
+
 | [OBSERVABILITY-DECLARATIVE.md](completed/OBSERVABILITY-DECLARATIVE.md) | `f/obs-declarative-wave` + `f/obs-wave2` | #202, #206 | **Completed 2026-09-06** — PLG declarative via pipeline (services + Play-2 files + drift gates + auto-apply); follow-ups #203/#204/#205 landed alongside |
 
 | [INFRA-RELIABILITY-WAVE.md](completed/INFRA-RELIABILITY-WAVE.md) | w/infra-reliability-wave (merged prod/obs/docs) | #226 | **Completed 2026-09-07** — studio gateway, verify truth, resource bounds, sops regex, drift truth, app_info gauge, 4 board updates + saturation board, 7 new alerts, docs sync |
