@@ -229,6 +229,10 @@ Editorial content integration is also read-only: Sanity remains the source of tr
 
 The calendar frontend consumes `listCompetitions()` as a read-only projection. It mirrors the academy's month/agenda interaction model (multi-day spans, overflow popup, 30-day agenda, and event-details modal) while using Cogito App Selia components, design tokens, and Tabler icons. Its authenticated route is viewport-contained: the calendar card body owns vertical scrolling, while the month grid owns horizontal scrolling so the page shell and calendar toolbar do not scroll with the grid. The month view always keeps the standard grid visible, including for an event-free selected month; the page-level empty state remains reserved for a response with no competitions at all. The Knowledge Bank frontend is available at the authenticated `/knowledge-bank` route and renders resource category slugs as mapped or title-cased labels while keeping raw slugs for filtering.
 
+When the page-level no-competition state is rendered, its calendar glyph uses
+the Cogito orange token; this accent is scoped to the Competition Calendar and
+does not change the shared empty-state tone defaults.
+
 **Business Rules:**
 
 - Sanity is queried with `perspective: "published"`; the API token, if used, stays server-side.

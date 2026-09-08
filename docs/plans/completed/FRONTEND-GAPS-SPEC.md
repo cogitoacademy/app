@@ -181,6 +181,12 @@ exist at all, and the agenda view may still show its event-free period message.
 This is presentation-only; the `content.listCompetitions` contract is
 unchanged.
 
+### Competition Calendar empty-state accent follow-up (2026-09-08)
+
+The page-level no-competition state keeps its calendar glyph in the Cogito
+orange token. The accent is scoped to this page and does not alter shared
+empty-state defaults or the `content.listCompetitions` contract.
+
 ### Theme shortcut follow-up (2026-08-26)
 
 The authenticated shell's existing Light/Dark/System menu now also responds to `D`. Outside editable fields, the shortcut toggles between the currently rendered light and dark modes, including when the saved preference is System; repeated keydown events and modifier-key combinations are ignored. `next-themes` continues to own preference persistence. This is frontend-only and adds no API, schema, or persistence contract.

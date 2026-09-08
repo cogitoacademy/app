@@ -101,7 +101,7 @@ export function CompetitionCalendarPage() {
         <CompetitionCalendar events={events} />
       ) : (
         <EmptyStateCard
-          icon={<IconCalendarEvent />}
+          icon={<IconCalendarEvent className="text-cogito-orange" />}
           title="No competitions yet"
           description="Published competitions will appear here when they are available."
         />

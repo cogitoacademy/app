@@ -57,7 +57,9 @@ envelope, response shape, schema, or persistence contract.
 The month-view presentation keeps its standard calendar grid when the selected
 month has no returned events, so month navigation and date cells remain usable.
 This is a frontend-only behavior change; `content.listCompetitions` keeps the
-same input, output, authentication, and response envelope.
+same input, output, authentication, and response envelope. When no published
+competitions are returned, the page-level empty state keeps its calendar glyph
+in the Cogito orange accent.
 
 ## Sidebar booking-action badge (2026-09-04)
 
@@ -203,7 +205,7 @@ Sanity is queried only by the API server. The browser receives normalized conten
 - **Auth:** Protected
 - **Input:** None
 - **Output:** `[{ id, title, description, location, categories: [{ id, name, coreCategory }], educationLevels, startDate, endDate, scale, organizer, registrationDeadline, registrationLink, socialMediaLink }]`
-- **Description:** Returns published competition calendar entries with English projections for every authenticated role. The app route is `GET /calendar` in the SPA; the read-only UI presents the data in month and 30-day agenda views and opens a responsive details modal without changing this API contract. The route uses a contained viewport layout so the calendar body handles vertical scrolling and the month grid handles horizontal scrolling. The month view keeps the normal grid visible when the selected month has no events; the page-level empty state still applies when no competitions are returned at all.
+- **Description:** Returns published competition calendar entries with English projections for every authenticated role. The app route is `GET /calendar` in the SPA; the read-only UI presents the data in month and 30-day agenda views and opens a responsive details modal without changing this API contract. The route uses a contained viewport layout so the calendar body handles vertical scrolling and the month grid handles horizontal scrolling. The month view keeps the normal grid visible when the selected month has no events; the page-level empty state still applies when no competitions are returned at all and keeps its calendar glyph in the Cogito orange accent.
 
 ### `content.listStudentResources`
 

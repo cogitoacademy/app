@@ -116,7 +116,14 @@ and month navigation remain available; the month view does not replace the grid
 with an empty state. The page-level empty state is still used when no published
 competitions exist at all, while the agenda view may continue to explain an
 event-free selected period. This is frontend-only and changes no API, schema, or
-persistence contract.
+persistence contract. When the page-level state is shown because there are no
+published competitions, its calendar glyph keeps the Cogito orange accent.
+
+## Competition Calendar empty-state accent (2026-09-08)
+
+The page-level no-competition state keeps the calendar icon in the brand orange
+token while shared empty-state tones remain unchanged for other surfaces. This
+is frontend-only and changes no API, schema, or persistence contract.
 
 ## Sidebar booking-action badge (2026-09-04)
 
