@@ -509,7 +509,7 @@ function GuideStepRow({
         "motion-reduce:transition-none",
       )}
     >
-      <div className="flex min-h-full flex-col items-center py-1">
+      <div className="flex flex-col items-center py-1">
         <Badge
           variant="tertiary"
           pill

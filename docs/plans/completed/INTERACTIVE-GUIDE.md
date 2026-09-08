@@ -17,6 +17,7 @@ Completed — 2026-08-24
 - Refined the visual direction into a Scandinavian treatment: neutral sans-serif hierarchy, restrained borders, purposeful whitespace, and less card-heavy timeline grouping for learners ages 5–18 and adult operators.
 - Added a development-only anti-slop Tweaks Bar at `apps/web/public/tweaks-bar.js` for iterative visual tuning; it is not a production API or content surface.
 - Added typed, code-managed guide content covering student, tutor, and admin lifecycles plus supporting product features.
+- Fixed the mobile timeline collapse layout so closed detail panels no longer retain their former body height; expanded timeline connectors continue to follow the full row.
 - Added explicit, bold timing callouts to remove ambiguity around 7-day invites, 12-hour response windows, H-2 self-service cutoffs, 24-hour reschedule proposals, 15-minute lateness, meeting retries, and support SLAs.
 - Added guide access/content tests and updated the sidebar, route title, context, API reference, module reference, and runbook.
 
