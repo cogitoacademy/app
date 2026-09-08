@@ -974,7 +974,7 @@ export function TutorReviewCard({
                               : "mt-0.5 font-semibold"
                           }
                         >
-                          <CogitoMarks value={price} />
+                          <CogitoMarks value={price} size="4" />
                         </Text>
                         <Text
                           className={

@@ -1040,15 +1040,21 @@ export function BookingDetailPage({
                   <>
                     <SummaryRow
                       label="Original price"
-                      value={<CogitoMarks value={booking.originalMarks} />}
+                      value={
+                        <CogitoMarks value={booking.originalMarks} size="4" />
+                      }
                     />
                     <SummaryRow
                       label="Currently held"
-                      value={<CogitoMarks value={booking.holdAmount} />}
+                      value={
+                        <CogitoMarks value={booking.holdAmount} size="4" />
+                      }
                     />
                     <SummaryRow
                       label="Refunded"
-                      value={<CogitoMarks value={booking.refundedAmount} />}
+                      value={
+                        <CogitoMarks value={booking.refundedAmount} size="4" />
+                      }
                     />
                     {booking.priceSnapshot ? (
                       <SummaryRow
@@ -1056,6 +1062,7 @@ export function BookingDetailPage({
                         value={
                           <CogitoMarks
                             value={booking.priceSnapshot.perStudent}
+                            size="4"
                           />
                         }
                       />

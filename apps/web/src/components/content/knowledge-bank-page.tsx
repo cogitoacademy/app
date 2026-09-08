@@ -109,9 +109,20 @@ export function KnowledgeBankPage() {
         title="Knowledge Bank is locked"
         description={
           <>
-            Keep at least <CogitoMarks value={access?.threshold ?? 35} /> in
-            your wallet to unlock the learning materials. Your current balance
-            is <CogitoMarks value={access?.balance ?? 0} />.
+            Keep at least
+            <CogitoMarks
+              value={access?.threshold ?? 35}
+              size="3"
+              className="mx-1"
+            />
+            in your wallet to unlock the learning materials. Your current
+            balance is
+            <CogitoMarks
+              value={access?.balance ?? 0}
+              size="3"
+              className="mx-1"
+            />
+            .
           </>
         }
         action={
@@ -131,7 +142,6 @@ export function KnowledgeBankPage() {
       <Stack direction="column" spacing="lg">
         <div>
           <div className="flex items-center gap-2">
-            <IconBook2 className="size-6 text-primary" />
             <Heading>Knowledge Bank</Heading>
           </div>
           <Text className="mt-1 max-w-2xl text-muted">

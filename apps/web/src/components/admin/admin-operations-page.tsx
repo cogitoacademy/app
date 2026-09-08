@@ -855,17 +855,28 @@ function AdminWalletImpactCard({
         <AdminMetricRow
           label="Original reservation"
           value={
-            <CogitoMarks value={formatMarksValue(booking.originalMarks)} />
+            <CogitoMarks
+              value={formatMarksValue(booking.originalMarks)}
+              size="4"
+            />
           }
         />
         <AdminMetricRow
           label="Currently held"
-          value={<CogitoMarks value={formatMarksValue(booking.holdAmount)} />}
+          value={
+            <CogitoMarks
+              value={formatMarksValue(booking.holdAmount)}
+              size="4"
+            />
+          }
         />
         <AdminMetricRow
           label="Refunded"
           value={
-            <CogitoMarks value={formatMarksValue(booking.refundedAmount)} />
+            <CogitoMarks
+              value={formatMarksValue(booking.refundedAmount)}
+              size="4"
+            />
           }
         />
         <AdminMetricRow
@@ -1619,7 +1630,7 @@ function WalletLookup() {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            <CogitoMarks value={entry.amount} />
+                            <CogitoMarks value={entry.amount} size="3" />
                           </TableCell>
                           <TableCell>{entry.bookingId ?? "—"}</TableCell>
                           <TableCell>

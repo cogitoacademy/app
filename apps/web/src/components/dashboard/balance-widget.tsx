@@ -42,13 +42,13 @@ export function BalanceWidget({
             <div className="min-w-0 flex flex-col leading-tight">
               <Text className="text-xs text-muted md:text-sm">Held</Text>
               <Text className="mt-1 text-base font-semibold tabular-nums md:text-lg">
-                <CogitoMarks value={isLoading ? "—" : heldBalance} />
+                <CogitoMarks value={isLoading ? "—" : heldBalance} size="4" />
               </Text>
             </div>
             <div className="min-w-0 flex flex-col items-end overflow-hidden leading-tight">
               <Text className="text-xs text-muted md:text-sm">Total</Text>
               <Text className="mt-1 text-base font-semibold tabular-nums md:text-lg">
-                <CogitoMarks value={isLoading ? "—" : totalBalance} />
+                <CogitoMarks value={isLoading ? "—" : totalBalance} size="4" />
               </Text>
             </div>
           </div>

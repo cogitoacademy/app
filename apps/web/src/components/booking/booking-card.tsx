@@ -552,7 +552,7 @@ function FinancialValue({ label, value }: { label: string; value: number }) {
   return (
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
       <span className="text-muted">{label}</span>
-      <CogitoMarks value={value} />
+      <CogitoMarks value={value} size="3" />
     </span>
   );
 }
