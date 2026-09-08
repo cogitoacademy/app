@@ -943,6 +943,13 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
   restored the prior hover-only card interaction without translating the card
   or adding a pressed-scale effect. No RPC, schema, or persistence contract changed.
 
+- v1.71 (2026-09-08): Kept the three admin achievement moderation count cards
+  in one compact row below the `sm` breakpoint, with reduced mobile padding and
+  stacked label/value content. Shared full-bleed tables followed by pagination
+  now preserve their bottom spacing, preventing the last row hover from running
+  into the pagination divider across achievement, tutor-invitation, and other
+  paginated tables. No RPC, schema, or persistence contract changed.
+
 - v1.70 (2026-09-04): Fixed Knowledge Bank category labels in the filter
   dropdown and resource cards by mapping known Sanity slugs and title-casing
   unknown hyphenated/underscored slugs; raw category values remain unchanged

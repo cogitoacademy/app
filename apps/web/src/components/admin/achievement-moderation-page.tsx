@@ -225,7 +225,7 @@ export function AchievementModerationPage() {
         </Select>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
         <QueueStat label="Pending" value={pendingCount} variant="warning" />
         <QueueStat label="Approved" value={approvedCount} variant="success" />
         <QueueStat label="Rejected" value={rejectedCount} variant="danger" />
@@ -537,8 +537,10 @@ function QueueStat({
 }) {
   return (
     <Card>
-      <CardBody className="flex items-center justify-between gap-4 py-4">
-        <Text className="font-medium">{label}</Text>
+      <CardBody className="flex min-w-0 flex-col items-start gap-2 p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-4">
+        <Text className="truncate text-sm font-medium sm:text-base">
+          {label}
+        </Text>
         <Badge variant={variant} pill>
           {value}
         </Badge>
