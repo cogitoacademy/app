@@ -1,6 +1,6 @@
 # Cogito Module Reference
 
-Last updated: 2026-09-08
+Last updated: 2026-09-09
 
 ## Dashboard greeting presentation (2026-09-08)
 
@@ -197,7 +197,7 @@ production/staging review seed is deliberately separate: it uses
 and creates local-login student/tutor/admin review identities without touching
 the Google Calendar operator account.
 
-The frontend form-control refactor remains outside this service boundary. Selia controls provide consistent date, time, number, and multiline-input UX while retaining semantic HTML behavior and the existing API contracts. Shared text-entry controls use an explicit 16px font size below the `lg` breakpoint to prevent mobile focus zoom, then use the tokenized `text-base` size from `lg` upward. Tutor availability keeps compact, equal-width minute-time fields with a visual range separator and content-sized suggestions, and modality triggers render icons beside labels. Portal-based date/select popups are layered above dialogs so the shared controls remain usable inside modal forms.
+The frontend form-control refactor remains outside this service boundary. Selia controls provide consistent date, time, number, and multiline-input UX while retaining semantic HTML behavior and the existing API contracts. Shared text-entry controls use an explicit 16px font size below the `lg` breakpoint to prevent mobile focus zoom, then use the tokenized `text-base` size from `lg` upward. Tutor availability keeps compact, equal-width minute-time fields with a visual range separator and content-sized suggestions, and modality triggers render icons beside labels. Its date-override editor validates the selected dates and shared ranges locally before calling the atomic batch procedure, while its calendar preview uses a seven-day selector plus selected-day detail, presents the published source/modality metadata, and gates slot removal behind a confirmation dialog without changing the delete service contract. Portal-based date/select popups are layered above dialogs so the shared controls remain usable inside modal forms.
 
 Frontend dashboard integration is intentionally read-only and role-scoped: student data comes from booking/discovery/wallet, tutor data from tutor actions/profile/availability/payouts, and admin data from booking operations/tutor moderation/achievement moderation. The shared booking list keeps financial/status metadata beside participant avatars, uses the Cogito mark icon plus status-badge tooltips for compact row presentation, orders active/all rows by nearest scheduled start while keeping past/cancelled history newest-first, and defaults by role to Upcoming (student), Pending when tutor requests exist (tutor), or All (admin); an explicit `tab` query parameter wins. On narrow screens, its rounded status-tab strip fills the available width while only the inner tab list scrolls horizontally within a hidden-scrollbar region so the page itself does not overflow; internal paint padding keeps selected-tab shadows and focus rings visible, and shared empty-state cards preserve their rounded glow and card shadow without widening the page. Student and tutor dashboards derive their next lesson from the same non-terminal, non-pending upcoming set and render the shared `BookingListCard`, so visual changes to the booking card apply to all three surfaces. They also render the shared `DashboardWelcomeCard` with role-specific copy and destinations, keeping the SVG illustration, minimum height, spacing, and CTA structure aligned. The tutor dashboard presents welcome/setup first and keeps the review queue and next lesson in the next visible row, with a stable empty/loading review card; its payout details card uses shared `InfoPreview` popovers for the unpaid-honorarium and transfer-fee explanations. Booking detail activity uses transition-specific icons and a single destination-state badge for scanability. Dashboard cards link to the existing feature routes where mutations and detailed workflows live.
 
@@ -1015,10 +1015,10 @@ The web tutor profile editor groups education, competition achievements, and exp
 
 - `tutor.types.ts` — Zod schemas for profile fields and structured achievements/experiences, `submitForReviewInput`, the `2026-09` Terms of Service version, and `getMyPayoutsInput`
 - `tutor-experiences.ts` — Structured experience entry validation and limits
-- `availability.types.ts` — Availability slot types (`upsert`, weekly-create, weekly-replace, delete)
+- `availability.types.ts` — Availability slot types (`upsert`, atomic date-override batch create, weekly-create, weekly-replace, delete)
 - `tutor.errors.ts` — `TutorProfileNotFoundError`, `TutorNotAvailableError`, `AvailabilitySlotOverlapError`, `InvalidTutorPricingError`, `TutorTermsNotAcceptedError`, `OptimisticLockError`, `InvalidDateRangeError`, `WeeklyAvailabilityRangeError`
 - `tutor.repo.ts` — `findByUserId`, `create`, `update`, `listProfileHistory`, `upsertAvailability`
-- `tutor.service.ts` — `getMyProfile`, `getMyProfileHistory`, `updateMyProfile`, `submitForReview`, `listAvailability`, `upsertAvailability`, `createWeeklyAvailability`, `replaceWeeklyAvailability`, `deleteAvailability`, `getMyPayouts`
+- `tutor.service.ts` — `getMyProfile`, `getMyProfileHistory`, `updateMyProfile`, `submitForReview`, `listAvailability`, `upsertAvailability`, `createDateOverrides`, `createWeeklyAvailability`, `replaceWeeklyAvailability`, `deleteAvailability`, `getMyPayouts`
 - `tutor.handler.ts` — Maps handler context/input
 - `tutor.router.ts` — Tutor-guarded routes (`tutorProcedure`)
 
@@ -1030,6 +1030,7 @@ The web tutor profile editor groups education, competition achievements, and exp
 - `submitForReview(userId, input = {})` — Validates required fields + pricing, accepting either structured or legacy achievement/experience data, then sets `onboardingStatus` to `pending_review`; records audit log. The first submission requires `input.acceptTerms === true` when no prior acceptance exists, persists `termsOfServiceAcceptedAt` and `termsOfServiceVersion` (`2026-09`) once in the same transaction as the status change, and later submissions do not require the flag. Its incomplete-profile, pricing, and Terms of Service errors preserve details for the editor. The web tutor profile form at `/profile` redirects to `/dashboard` after the mutation succeeds.
 - `listAvailability(userId)` — Lists the tutor's active future availability slots
 - `upsertAvailability(userId, input)` — Creates/updates a slot, rejecting overlaps
+- `createDateOverrides(userId, input)` — Atomically creates up to 56 one-off windows across selected dates; deactivates conflicting recurring occurrences and rejects the whole batch on an intra-batch or existing one-off conflict
 - `createWeeklyAvailability(userId, input)` — Materializes weekly slots through `repeatUntil` (≤ 53 occurrences), rejecting overlaps
 - `replaceWeeklyAvailability(userId, input)` — Atomically replaces future recurring occurrences from weekday/time ranges; preserves one-off overrides and skips generated occurrences they supersede
 - `deleteAvailability(userId, slotId)` — Deactivates a slot (soft delete)
@@ -1042,6 +1043,7 @@ The web tutor profile editor groups education, competition achievements, and exp
 - Only tutors with `published` status are visible in discovery
 - Availability slots must be in the future and non-overlapping
 - A one-off slot deactivates a conflicting recurring occurrence, making date overrides authoritative without changing other weeks
+- The tutor date-override editor applies one `online`, `offline`, or `both` modality and up to four time ranges to as many as 14 selected dates. The generated slots commit atomically so a conflict never leaves a partially saved batch.
 - `submitForReview` can only be called from `draft`/`changes_requested` status
 - A complete first tutor submission requires bilingual Terms of Service acceptance; the acceptance timestamp/version is immutable after the first write and is not included in public tutor discovery. The sticky onboarding action area keeps the document available in read-only mode for later review
 - Profile updates use optimistic locking (`version`)

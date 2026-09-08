@@ -5,6 +5,7 @@ import type { TutorService } from "./tutor.service";
 import { updateMyProfileInput, submitForReviewInput } from "./tutor.types";
 import {
   upsertAvailabilityInput,
+  createDateOverridesInput,
   createWeeklyAvailabilityInput,
   replaceWeeklyAvailabilityInput,
   deleteAvailabilityInput,
@@ -14,6 +15,7 @@ import { getMyPayoutsInput } from "./tutor.types";
 
 type UpdateMyProfileInput = z.infer<typeof updateMyProfileInput>;
 type UpsertAvailabilityInput = z.infer<typeof upsertAvailabilityInput>;
+type CreateDateOverridesInput = z.infer<typeof createDateOverridesInput>;
 type CreateWeeklyAvailabilityInput = z.infer<
   typeof createWeeklyAvailabilityInput
 >;
@@ -84,6 +86,19 @@ export function createTutorHandler(tutorService: TutorService) {
     }) => {
       return withDomainMap(
         () => tutorService.upsertAvailability(context.session!.user.id, input),
+        mapTutorError,
+      );
+    },
+
+    createDateOverrides: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: CreateDateOverridesInput;
+    }) => {
+      return withDomainMap(
+        () => tutorService.createDateOverrides(context.session!.user.id, input),
         mapTutorError,
       );
     },

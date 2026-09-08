@@ -1,6 +1,6 @@
 # Cogito API Reference
 
-Last updated: 2026-09-08
+Last updated: 2026-09-09
 
 ## Dashboard greeting presentation (2026-09-08)
 

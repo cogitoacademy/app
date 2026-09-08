@@ -391,7 +391,7 @@ for classmates.
 | `/_app/profile`              | profile-page.tsx + tutor-profile-page.tsx | Complete — role-aware student profile and tutor profile editor; tutor state, review feedback, pricing, and consolidated actions are available at the canonical route |
 | `/_app/onboarding`           | compatibility redirect                    | Complete — legacy tutor links redirect to `/profile`; other roles redirect to `/dashboard`                                                                           |
 | `/_app/tutor-bookings`       | tutor-bookings-page.tsx                   | Compatibility redirect to the shared `/bookings` list                                                                                                                |
-| `/_app/availability`         | availability-page.tsx                     | Complete baseline — Calendly-style weekly hours, date overrides, rules summary, and week preview                                                                     |
+| `/_app/availability`         | availability-page.tsx                     | Complete — weekly hours, atomic multi-date/multi-range overrides with Online/Offline/Both selection, booking-consistent preview, and confirmed window removal          |
 | `/_app/notifications`        | notifications-page.tsx                    | Exists (full page)                                                                                                                                                   |
 | `/_app/admin`                | admin-dashboard-page.tsx                  | Complete F1 admin workspace entry point                                                                                                                              |
 | `/_app/admin-operations`     | admin-operations-page.tsx                 | Complete F1 queue/detail surface — filters, hydrated participants/wallets/ledger, override, rooms, and searchable wallet lookup                                      |
@@ -1108,3 +1108,15 @@ the complete local suite now contains 14 tests, with the booking flow passing
 unchanged; protected detail/list/session/availability reads are excluded from
 the booking mutation rate-limit bucket so normal refreshes cannot block a
 reschedule action.
+
+### Tutor bulk date-override follow-up (2026-09-09)
+
+The tutor availability page replaces the single-date/single-range override
+form with Online/Offline/Both tabs, removable multi-date selection, and up to
+four shared time ranges. Saving expands the selection into at most 56 one-off
+windows and calls the new atomic `tutor.createDateOverrides` procedure. Batch
+and existing one-off overlaps reject the full request; conflicting recurring
+occurrences are soft-deactivated. The redundant read-only Scheduling rules card
+is removed because duration and timezone remain visible in the page header.
+Inline client validation prevents save for missing/past/duplicate dates,
+malformed or reversed times, range overlaps, and known one-off conflicts.

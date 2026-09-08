@@ -25,6 +25,44 @@ export const upsertAvailabilityInput = z
     path: ["endDate"],
   });
 
+const dateOverrideSlotInput = z
+  .object({
+    startDate: futureDate,
+    endDate: futureDate,
+    modality: z.enum(["online", "offline", "both"]),
+  })
+  .refine((slot) => slot.endDate > slot.startDate, {
+    message: "endDate must be after startDate",
+    path: ["endDate"],
+  });
+
+export const createDateOverridesInput = z
+  .object({
+    slots: z.array(dateOverrideSlotInput).min(1).max(56),
+  })
+  .superRefine((input, ctx) => {
+    for (let index = 0; index < input.slots.length; index += 1) {
+      const slot = input.slots[index]!;
+      for (
+        let candidateIndex = index + 1;
+        candidateIndex < input.slots.length;
+        candidateIndex += 1
+      ) {
+        const candidate = input.slots[candidateIndex]!;
+        if (
+          slot.startDate < candidate.endDate &&
+          slot.endDate > candidate.startDate
+        ) {
+          ctx.addIssue({
+            code: "custom",
+            message: "Date override slots must not overlap",
+            path: ["slots", candidateIndex, "startDate"],
+          });
+        }
+      }
+    }
+  });
+
 export const deleteAvailabilityInput = z.object({
   id: z.string().max(100),
 });

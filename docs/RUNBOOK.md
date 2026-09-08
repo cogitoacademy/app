@@ -1,6 +1,21 @@
 # Cogito Runbook
 
-Last updated: 2026-09-08
+Last updated: 2026-09-09
+
+## Bulk date-override smoke check (2026-09-09)
+
+Open `/availability` as a tutor. In **Date overrides**, verify the Online,
+Offline, and Both tabs are keyboard-accessible; add and remove several future
+dates; add up to four non-overlapping time ranges; and save. The calendar
+preview must show every selected date/range with the chosen modality. Repeat
+with a past/duplicate date, malformed or reversed time, overlapping range, and
+conflict against an existing one-off window: inline validation must explain the
+problem, keep Save disabled, and prevent the request. Bypass the client check
+with the API test or a second browser only for the conflict case; the server
+must still fail without persisting any part of the batch. A
+conflicting weekly-generated occurrence should be soft-deactivated and replaced
+by the override. This feature adds no migration, environment variable, job, or
+deployment-time configuration.
 
 ## Dynamic dashboard greeting smoke check (2026-09-08)
 
@@ -393,7 +408,7 @@ consent, in notifications, or in audit records.
 
 ### Form-control smoke check
 
-On availability/profile/admin forms, verify dates use the Selia date picker, times use the 24-hour minute control, multiline fields use Selia Textarea, and IDR amounts use Selia NumberField. Focus each text-entry field at a narrow viewport and confirm its rendered font is 16px or larger so the browser does not zoom the page. On `/availability`, confirm both weekly time fields stay compact and equal in width with a centered dash between them, while focusing a time field allows its suggestions to extend beyond the field when needed; confirm the modality trigger keeps its icon and label on one row. On the calendar, verify month/year dropdowns open as Selia selects and retain the selected value. No app-level raw date, time, number, select, or textarea control should appear, and the browser console should remain free of runtime errors.
+On availability/profile/admin forms, verify dates use the Selia date picker, times use the 24-hour minute control, multiline fields use Selia Textarea, and IDR amounts use Selia NumberField. Focus each text-entry field at a narrow viewport and confirm its rendered font is 16px or larger so the browser does not zoom the page. On `/availability`, confirm both weekly time fields stay compact and equal in width with a centered dash between them, while focusing a time field allows its suggestions to extend beyond the field when needed; confirm the modality trigger keeps its icon and label on one row. At desktop width, verify Calendar preview appears below Date override, its seven-day strip selects only dates with windows, and the selected-day panel shows time, weekly/override source, and modality. Clicking a window's trash action must open a confirmation dialog; cancelling preserves the window and confirming removes it with success/error feedback. On the calendar, verify month/year dropdowns open as Selia selects and retain the selected value. No app-level raw date, time, number, select, or textarea control should appear, and the browser console should remain free of runtime errors.
 
 ### Achievement form smoke check
 

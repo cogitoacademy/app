@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  createDateOverridesInput,
   createWeeklyAvailabilityInput,
   deleteAvailabilityInput,
   replaceWeeklyAvailabilityInput,
@@ -147,6 +148,63 @@ describe("upsertAvailabilityInput", () => {
         ),
       ).toBe(true);
     }
+  });
+});
+
+describe("createDateOverridesInput", () => {
+  test("accepts multiple one-off slots including both modalities", () => {
+    const result = createDateOverridesInput.safeParse({
+      slots: [
+        {
+          startDate: future(2),
+          endDate: future(3),
+          modality: "both",
+        },
+        {
+          startDate: future(4),
+          endDate: future(5),
+          modality: "online",
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  test("rejects overlapping slots in the same batch", () => {
+    const start = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+    const result = createDateOverridesInput.safeParse({
+      slots: [
+        {
+          startDate: start,
+          endDate: new Date(start.getTime() + 2 * 60 * 60 * 1000),
+          modality: "offline",
+        },
+        {
+          startDate: new Date(start.getTime() + 60 * 60 * 1000),
+          endDate: new Date(start.getTime() + 3 * 60 * 60 * 1000),
+          modality: "offline",
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects an empty batch", () => {
+    expect(createDateOverridesInput.safeParse({ slots: [] }).success).toBe(
+      false,
+    );
+  });
+
+  test("rejects more than 56 slots", () => {
+    const slots = Array.from({ length: 57 }, (_, index) => ({
+      startDate: future(index * 2 + 2),
+      endDate: future(index * 2 + 3),
+      modality: "online" as const,
+    }));
+
+    expect(createDateOverridesInput.safeParse({ slots }).success).toBe(false);
   });
 });
 
