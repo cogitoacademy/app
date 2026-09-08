@@ -160,10 +160,11 @@ export function BalancePage() {
         <div className="flex min-w-0 flex-col gap-4">
           <div>
             <Heading level={1} size="md">
-              Balance
+              Manage your Marks
             </Heading>
             <Text className="text-muted">
-              Track your Marks, active holds, and top-up options.
+              See what’s available, review active holds, and top up when you
+              need to.
             </Text>
           </div>
           <Card className="min-w-0 mb-0 mt-auto">

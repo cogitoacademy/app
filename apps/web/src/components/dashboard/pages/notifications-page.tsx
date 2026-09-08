@@ -206,10 +206,10 @@ export function NotificationsPage() {
     <Stack direction="column" spacing="lg">
       <div>
         <Heading level={1} size="md">
-          Notifications
+          Keep up with what matters
         </Heading>
         <Text className="mt-1 text-muted">
-          Review booking and account updates in one place.
+          Catch up on booking activity and important account updates.
         </Text>
       </div>
       {notificationsQuery.isPending ? (

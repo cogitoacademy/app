@@ -314,10 +314,11 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <Heading level={1} size="md">
-            Availability
+            Open your calendar to students
           </Heading>
           <Text className="text-muted">
-            Set recurring hours once, then add exceptions for specific dates.
+            Set your regular teaching hours, then adjust individual dates when
+            plans change.
           </Text>
         </div>
         <Badge variant="secondary" pill>

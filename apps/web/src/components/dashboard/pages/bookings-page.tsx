@@ -131,7 +131,7 @@ export function BookingsPage() {
         <div className="min-w-0 max-w-full">
           <div className="flex items-center gap-2">
             <Heading level={1} size="md">
-              Bookings
+              Stay on top of every session
             </Heading>
             {bookingsQuery.isFetching &&
             !bookingsQuery.isPending &&

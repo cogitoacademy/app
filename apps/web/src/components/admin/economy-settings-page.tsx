@@ -276,7 +276,7 @@ export function EconomySettingsPage() {
       <div>
         <div className="flex flex-wrap items-center gap-2">
           <Heading level={1} size="md">
-            Economy settings
+            Shape a sustainable booking economy
           </Heading>
         </div>
         <Text className="mt-1 max-w-3xl text-muted">

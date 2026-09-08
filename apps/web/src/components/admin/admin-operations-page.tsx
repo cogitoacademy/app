@@ -152,11 +152,11 @@ export function AdminOperationsPage() {
     >
       <div>
         <Heading level={1} size="md">
-          Operations
+          Keep every booking moving
         </Heading>
         <Text className="text-muted">
-          Monitor bookings, preview overrides, inspect wallets, and assign
-          offline rooms.
+          Resolve booking issues, inspect wallets, and coordinate offline
+          rooms from one workspace.
         </Text>
       </div>
       <Tabs defaultValue="queue" className="min-w-0 max-w-full">

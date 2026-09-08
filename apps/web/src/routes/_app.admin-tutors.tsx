@@ -278,11 +278,11 @@ function RouteComponent() {
     <div className="flex flex-col gap-6">
       <div>
         <Heading level={1} size="md">
-          Manage tutors
+          Build a trusted tutor network
         </Heading>
         <Text className="mt-1 text-muted">
-          Invite tutors, review profiles, and keep the published directory
-          accurate.
+          Invite new tutors, review their profiles, and keep the public
+          directory accurate.
         </Text>
       </div>
       <div className="grid lg:grid-cols-[1fr_2fr] gap-6">

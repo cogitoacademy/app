@@ -198,10 +198,10 @@ export function AchievementModerationPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <Heading level={1} size="md">
-            Achievement moderation
+            Verify every achievement
           </Heading>
           <Text className="text-muted">
-            Review student evidence before achievements become public.
+            Review student evidence and publish only trusted submissions.
           </Text>
         </div>
         <Select

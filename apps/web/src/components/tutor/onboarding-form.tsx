@@ -998,7 +998,9 @@ export function OnboardingForm({
       <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <Heading level={1} size="md">
-            {isDraft ? "Build your tutor profile" : "Your tutor profile"}
+            {isDraft
+              ? "Build a profile students can trust"
+              : "Keep your profile ready for students"}
           </Heading>
           <Text className="text-muted">
             Give students a clear picture of your expertise, teaching format,
