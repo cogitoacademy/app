@@ -341,7 +341,7 @@ data would be misleading. Notifications already retain loaded pages through
 
 Student cancellation closes at the exact scheduled start and requires a written reason that is persisted in activity and shared with the tutor. Tutor request declines and student/tutor reschedule proposals likewise require a non-blank reason at the API boundary. The backend rejects `booking.cancel`, participant `withdraw`, and per-series-session cancellation at or after the applicable `scheduledStartAt`, leaving the booking live for tutor completion; the booking-detail UI hides the primary cancel action on the same boundary. Pre-start H-2 penalties remain unchanged. Attendance or delivery problems after start use support/admin review instead of allowing a student cancellation path to strand tutor payout.
 
-The shared `/bookings` surface is task-oriented with Needs action, Upcoming, Recurring, History, and All tabs. Students and tutors are taken to Needs action when a response is pending. History consolidates terminal outcomes. URL-backed Recommended sorting keeps pending decisions above active bookings and terminal outcomes at the bottom, with Soonest and Latest alternatives.
+The shared `/bookings` surface is task-oriented with Needs action, Upcoming, Series, History, and All tabs. Students and tutors are taken to Needs action when a response is pending. History consolidates terminal outcomes. URL-backed Recommended sorting keeps pending decisions above active bookings and terminal outcomes at the bottom, with Soonest and Latest alternatives.
 
 ## Admin wallet lookup search (2026-09-02)
 

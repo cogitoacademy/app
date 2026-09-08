@@ -44,7 +44,7 @@ import { orpc } from "@/utils/orpc";
 export const BOOKING_TABS = [
   { value: "action", label: "Needs action" },
   { value: "upcoming", label: "Upcoming" },
-  { value: "recurring", label: "Recurring" },
+  { value: "recurring", label: "Series" },
   { value: "history", label: "History" },
   { value: "all", label: "All" },
 ] as const;
@@ -449,7 +449,7 @@ function getEmptyStateTitle(tab: BookingTab) {
     case "upcoming":
       return "No upcoming bookings";
     case "recurring":
-      return "No recurring bookings";
+      return "No series bookings";
     case "history":
       return "No booking history";
     case "all":

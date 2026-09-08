@@ -255,7 +255,7 @@ Update (2026-08-28, started-session cancellation): student cancellation now clos
 
 ### Shared booking list follow-up (2026-08-22)
 
-Update (2026-08-28): navigation is now Needs action, Upcoming, Recurring, History, and All. History consolidates terminal outcomes; URL-backed Recommended/Soonest/Latest sorting defaults to decisions first, active bookings next, and terminal outcomes last. Students and tutors land on Needs action whenever pending decisions exist.
+Update (2026-08-28): navigation is now Needs action, Upcoming, Series, History, and All. History consolidates terminal outcomes; URL-backed Recommended/Soonest/Latest sorting defaults to decisions first, active bookings next, and terminal outcomes last. Students and tutors land on Needs action whenever pending decisions exist. The visible Series label retains the legacy `tab=recurring` query value for existing links.
 
 Update (2026-08-28, timing): shared booking cards now show server-deadline countdowns for pending states and same-day/start proximity indicators for confirmed or scheduled sessions. The implementation shares one live clock across visible cards and does not alter lifecycle state client-side.
 The indicator is positioned after financial metadata in the list; dashboard next-lesson cards intentionally suppress financial metadata.
