@@ -4,8 +4,8 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
-  CardDescription,
   CardHeader,
+  CardInfoPreview,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import {
@@ -24,6 +24,7 @@ import z from "zod";
 
 import { authClient } from "@/lib/auth-client";
 import { getUserFacingError } from "@/lib/error-message";
+import { InfoPreview } from "@/components/info-preview";
 
 export function ResetPasswordForm({
   token,
@@ -86,11 +87,15 @@ export function ResetPasswordForm({
       <div className="w-full flex items-center justify-center p-4 lg:min-h-[calc(100svh-4rem)]">
         <Card className="w-full lg:w-5/12 xl:w-md">
           <CardHeader align="center">
-            <CardTitle>Invalid or expired link</CardTitle>
-            <CardDescription>
-              This password reset link is invalid or has expired. Request a new
-              one to continue.
-            </CardDescription>
+            <CardTitle>
+              Invalid or expired link
+              <CardInfoPreview>
+                <InfoPreview
+                  title="Invalid or expired link"
+                  description="This password reset link is invalid or has expired. Request a new one to continue."
+                />
+              </CardInfoPreview>
+            </CardTitle>
           </CardHeader>
           <CardBody className="flex flex-col gap-5">
             <Button block onClick={() => navigate({ to: "/forgot-password" })}>
@@ -109,10 +114,15 @@ export function ResetPasswordForm({
     <div className="w-full flex items-center justify-center p-4 lg:min-h-[calc(100svh-4rem)]">
       <Card className="w-full lg:w-5/12 xl:w-md">
         <CardHeader align="center">
-          <CardTitle>Set a new password</CardTitle>
-          <CardDescription>
-            Choose a new password for your account
-          </CardDescription>
+          <CardTitle>
+            Set a new password
+            <CardInfoPreview>
+              <InfoPreview
+                title="Set a new password"
+                description="Choose a new password for your account."
+              />
+            </CardInfoPreview>
+          </CardTitle>
         </CardHeader>
         <CardBody className="flex flex-col gap-5">
           <form

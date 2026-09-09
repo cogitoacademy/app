@@ -568,6 +568,78 @@ export function createTutorService(deps: {
     });
   }
 
+  /**
+   * Creates multiple one-off availability windows atomically.
+   * Conflicting recurring occurrences are deactivated, while conflicts with
+   * existing one-off windows reject the complete batch.
+   */
+  async function createDateOverrides(
+    userId: string,
+    input: {
+      slots: Array<{
+        startDate: Date;
+        endDate: Date;
+        modality: "online" | "offline" | "both";
+      }>;
+    },
+  ) {
+    const slots = input.slots.toSorted(
+      (left, right) => left.startDate.getTime() - right.startDate.getTime(),
+    );
+
+    return db.transaction(async (tx) => {
+      await lockTutorForBooking(tx, userId);
+
+      for (let index = 0; index < slots.length; index += 1) {
+        const slot = slots[index]!;
+        if (
+          slots
+            .slice(index + 1)
+            .some(
+              (candidate) =>
+                slot.startDate < candidate.endDate &&
+                slot.endDate > candidate.startDate,
+            )
+        ) {
+          throw new AvailabilitySlotOverlapError(userId);
+        }
+      }
+
+      const existing = await tutorRepo.listAvailability(tx, userId, {
+        from: new Date(),
+      });
+      const recurringIds = new Set<string>();
+
+      for (const slot of slots) {
+        for (const current of existing) {
+          if (
+            slot.startDate < current.endDate &&
+            slot.endDate > current.startDate
+          ) {
+            if (!current.isRecurring) {
+              throw new AvailabilitySlotOverlapError(userId);
+            }
+            recurringIds.add(current.id);
+          }
+        }
+      }
+
+      await Promise.all(
+        [...recurringIds].map((id) => tutorRepo.deleteAvailability(tx, id)),
+      );
+
+      return Promise.all(
+        slots.map((slot) =>
+          tutorRepo.upsertAvailability(tx, userId, {
+            ...slot,
+            isRecurring: false,
+            isActive: true,
+          }),
+        ),
+      );
+    });
+  }
+
   async function createWeeklyAvailability(
     userId: string,
     input: {
@@ -755,6 +827,7 @@ export function createTutorService(deps: {
     submitForReview,
     listAvailability,
     upsertAvailability,
+    createDateOverrides,
     createWeeklyAvailability,
     replaceWeeklyAvailability,
     deleteAvailability,

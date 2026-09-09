@@ -33,7 +33,7 @@ interface PricingFieldsProps {
 }
 
 function formatIdr(value: number) {
-  return "Rp " + value.toLocaleString("id-ID");
+  return "Rp" + value.toLocaleString("id-ID");
 }
 
 export function TutorPricingFields({
@@ -68,7 +68,7 @@ export function TutorPricingFields({
         <Text className="font-medium">Base honorarium</Text>
         <Text className="mt-1 text-sm text-muted">
           Adjust your one-student IDR honorarium with the minus and plus
-          controls. Each step is Rp 5,000. Changes apply to new bookings;
+          controls. Each step is Rp5,000. Changes apply to new bookings;
           existing bookings keep their original honorarium for payout.
         </Text>
       </div>
@@ -92,9 +92,6 @@ export function TutorPricingFields({
                 snapOnStep
                 locale="id-ID"
                 format={{
-                  style: "currency",
-                  currency: "IDR",
-                  currencyDisplay: "symbol",
                   maximumFractionDigits: 0,
                 }}
                 onValueChange={(nextValue) =>
@@ -109,18 +106,26 @@ export function TutorPricingFields({
                   aria-invalid={Boolean(error)}
                 >
                   <NumberFieldDecrement
-                    aria-label={`Decrease ${key} base honorarium by Rp 5,000`}
+                    aria-label={`Decrease ${key} base honorarium by Rp5,000`}
                   >
                     <IconMinus />
                   </NumberFieldDecrement>
-                  <NumberFieldInput
-                    className="min-w-0 flex-1 font-medium"
-                    aria-invalid={Boolean(error)}
-                    aria-describedby={error ? errorId : undefined}
-                    inputMode="numeric"
-                  />
+                  <div className="flex h-full min-w-0 flex-1 items-center justify-center">
+                    <span className="font-medium" aria-hidden="true">
+                      Rp
+                    </span>
+                    <NumberFieldInput
+                      className="h-full min-w-0 px-0 text-left font-medium"
+                      style={{
+                        width: `${(value ?? MIN_BASE_RATE_IDR).toLocaleString("id-ID").length}ch`,
+                      }}
+                      aria-invalid={Boolean(error)}
+                      aria-describedby={error ? errorId : undefined}
+                      inputMode="numeric"
+                    />
+                  </div>
                   <NumberFieldIncrement
-                    aria-label={`Increase ${key} base honorarium by Rp 5,000`}
+                    aria-label={`Increase ${key} base honorarium by Rp5,000`}
                   >
                     <IconPlus />
                   </NumberFieldIncrement>

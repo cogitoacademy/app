@@ -7,9 +7,9 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
-  CardDescription,
   CardFooter,
   CardHeader,
+  CardInfoPreview,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import {
@@ -40,6 +40,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { authClient } from "@/lib/auth-client";
 import { AccountIdentityCard } from "@/components/profile/account-identity-card";
+import { InfoPreview } from "@/components/info-preview";
 import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
 
@@ -319,10 +320,15 @@ export function ProfilePage({
                 <IconBox variant="info-subtle">
                   <IconSchool aria-hidden="true" />
                 </IconBox>
-                <CardTitle>Learning profile</CardTitle>
-                <CardDescription>
-                  Help tutors understand your study context before a session.
-                </CardDescription>
+                <CardTitle>
+                  Learning profile
+                  <CardInfoPreview>
+                    <InfoPreview
+                      title="Learning profile"
+                      description="Help tutors understand your study context before a session."
+                    />
+                  </CardInfoPreview>
+                </CardTitle>
               </CardHeader>
               <CardBody className="grid gap-5 sm:grid-cols-2">
                 <div className="sm:col-span-2">
@@ -367,11 +373,15 @@ export function ProfilePage({
                 <IconBox variant="tertiary-subtle">
                   <IconUsers aria-hidden="true" />
                 </IconBox>
-                <CardTitle>Parent or guardian</CardTitle>
-                <CardDescription>
-                  Optional contact details for coordination and important
-                  updates.
-                </CardDescription>
+                <CardTitle>
+                  Parent or guardian
+                  <CardInfoPreview>
+                    <InfoPreview
+                      title="Parent or guardian"
+                      description="Optional contact details for coordination and important updates."
+                    />
+                  </CardInfoPreview>
+                </CardTitle>
               </CardHeader>
               <CardBody className="grid gap-5 sm:grid-cols-2">
                 <FieldBlock
@@ -407,11 +417,15 @@ export function ProfilePage({
               <IconBox variant="info-subtle">
                 <IconLock aria-hidden="true" />
               </IconBox>
-              <CardTitle>Contact privacy</CardTitle>
-              <CardDescription>
-                Choose whether classmates from completed shared sessions may
-                send you a contact request.
-              </CardDescription>
+              <CardTitle>
+                Contact privacy
+                <CardInfoPreview>
+                  <InfoPreview
+                    title="Contact privacy"
+                    description="Choose whether classmates from completed shared sessions may send you a contact request."
+                  />
+                </CardInfoPreview>
+              </CardTitle>
             </CardHeader>
             <CardBody>
               <form.Field name="allowContactRequests">

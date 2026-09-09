@@ -66,9 +66,41 @@ async function openBookingPage(page: Page) {
 }
 
 async function chooseAvailableSlot(page: Page, index = 0) {
-  const slot = page.getByRole("button", { name: /WIB/ }).nth(index);
-  await expect(slot).toBeVisible();
-  await slot.click();
+  const availabilityCard = page.locator('[data-slot="card"]').filter({
+    has: page.getByRole("heading", {
+      name: /^Available times/,
+    }),
+  });
+  const dateButtons = availabilityCard.locator(
+    "button[aria-pressed]:has(> span):not(:disabled):not([data-disabled])",
+  );
+
+  for (let pageNumber = 0; pageNumber < 10; pageNumber += 1) {
+    const availableDateCount = await dateButtons.count();
+    if (index < availableDateCount) {
+      const dateButton = dateButtons.nth(index);
+      await dateButton.click();
+      await expect(dateButton).toHaveAttribute("aria-pressed", "true");
+      const slot = availabilityCard
+        .locator(
+          'button[aria-label$=" WIB"]:not(:disabled):not([data-disabled])',
+        )
+        .first();
+      await expect(slot).toBeVisible();
+      await slot.click();
+      return;
+    }
+
+    index -= availableDateCount;
+    const nextDates = availabilityCard.getByRole("button", {
+      name: "Next available dates",
+      exact: true,
+    });
+    await expect(nextDates).toBeEnabled();
+    await nextDates.click();
+  }
+
+  throw new Error("Could not find the requested available booking date");
 }
 
 async function createSoloBooking(
@@ -109,7 +141,10 @@ async function openTutorBooking(browser: Browser, bookingId: string) {
   await login(page, TUTOR_EMAIL, TUTOR_PASSWORD);
   await page.goto("/bookings?tab=action");
   await expect(
-    page.getByRole("heading", { name: "Bookings", exact: true }).last(),
+    page.getByRole("heading", {
+      name: "Stay on top of every session",
+      exact: true,
+    }),
   ).toBeVisible();
   const reviewLink = await findBookingActionLink(
     page,
@@ -198,9 +233,7 @@ test("student can configure an offline group booking and see the target hold", a
     .getByLabel("What would you like to focus on?")
     .fill("Practice a group problem-solving session.");
 
-  const modality = page.getByRole("combobox", { name: "Modality" });
-  await modality.click();
-  await page.getByRole("option", { name: "Offline" }).click();
+  await page.getByRole("tab", { name: "Offline", exact: true }).click();
   await expect(
     page.getByText("Room information appears after approval.", { exact: true }),
   ).toBeVisible();
@@ -215,11 +248,15 @@ test("student can configure an offline group booking and see the target hold", a
   await friend.click();
   await chooseAvailableSlot(page, 1);
 
-  await expect(page.getByText("Temporary hold", { exact: true })).toBeVisible();
-  await expect(page.getByText("80 Marks", { exact: true })).toBeVisible();
+  const reservedRow = page
+    .getByText("Reserved now", { exact: true })
+    .first()
+    .locator("..");
+  await expect(reservedRow).toContainText("Reserved now");
+  await expect(reservedRow.getByLabel(/^\d+ Marks$/)).toBeVisible();
   await expect(
     page.getByText(
-      "A temporary hold covers 2 target participants. Excess Marks are released as invitees confirm.",
+      "The initial reserve covers all 2 expected participants. The excess is returned as invitees confirm and cover their share.",
       { exact: true },
     ),
   ).toBeVisible();

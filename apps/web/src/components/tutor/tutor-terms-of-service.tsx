@@ -11,12 +11,6 @@ import {
   DialogTitle,
 } from "@cogito-app/ui/components/selia/dialog";
 import { Button } from "@cogito-app/ui/components/selia/button";
-import {
-  Field,
-  FieldDescription,
-  FieldLabel,
-} from "@cogito-app/ui/components/selia/field";
-import { Checkbox } from "@cogito-app/ui/components/selia/checkbox";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Text } from "@cogito-app/ui/components/selia/text";
@@ -238,19 +232,9 @@ function TermsLanguageBlock({
 
 export function TutorTermsOfService({
   open,
-  accepted,
-  readOnly = false,
-  isSubmitting,
-  onAcceptedChange,
-  onAccept,
   onOpenChange,
 }: {
   open: boolean;
-  accepted: boolean;
-  readOnly?: boolean;
-  isSubmitting: boolean;
-  onAcceptedChange: (accepted: boolean) => void;
-  onAccept: () => void | Promise<void>;
   onOpenChange: (open: boolean) => void;
 }) {
   return (
@@ -308,60 +292,27 @@ export function TutorTermsOfService({
             ))}
           </div>
 
-          {readOnly ? (
-            <div className="mt-5 rounded-lg border border-item-border bg-item p-4">
-              <Text className="text-sm text-muted">
-                Dokumen ini tersedia untuk dibaca ulang. This is a read-only
-                copy of the Tutor Terms of Service.
-              </Text>
-            </div>
-          ) : (
-            <div className="mt-5 flex items-start gap-3 rounded-lg border border-item-border bg-item p-4">
-              <Checkbox
-                id="tutor-terms-of-service-accepted"
-                checked={accepted}
-                disabled={isSubmitting}
-                onCheckedChange={(checked) =>
-                  onAcceptedChange(checked === true)
-                }
-              />
-              <Field className="min-w-0">
-                <FieldLabel htmlFor="tutor-terms-of-service-accepted">
-                  Saya telah membaca, memahami, dan menyetujui seluruh Syarat
-                  dan Ketentuan Kemitraan Tutor Cogito Academy.
-                </FieldLabel>
-                <FieldDescription>
-                  I have read, understood, and agree to the Cogito Academy Tutor
-                  Terms of Service.
-                </FieldDescription>
-              </Field>
-            </div>
-          )}
+          <div className="mt-5 rounded-lg border border-item-border bg-item p-4">
+            <Text className="text-sm text-muted">
+              Dokumen ini tersedia untuk dibaca ulang. This is a read-only copy
+              of the Tutor Terms of Service.
+            </Text>
+          </div>
         </DialogBody>
 
         <DialogFooter className="flex-col-reverse items-stretch sm:flex-row sm:items-center">
           <DialogClose
-            disabled={isSubmitting}
             render={
               <Button
                 variant="tertiary"
                 type="button"
-                aria-label={readOnly ? "Close" : "Cancel"}
+                aria-label="Close"
+                className="w-full sm:w-auto"
               />
             }
           >
-            {readOnly ? "Close" : "Cancel"}
+            Close
           </DialogClose>
-          {!readOnly ? (
-            <Button
-              type="button"
-              progress={isSubmitting}
-              disabled={!accepted || isSubmitting}
-              onClick={() => void onAccept()}
-            >
-              Accept &amp; Complete Profile
-            </Button>
-          ) : null}
         </DialogFooter>
       </DialogPopup>
     </Dialog>

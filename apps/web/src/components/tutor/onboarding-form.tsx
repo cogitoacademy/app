@@ -13,12 +13,13 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
-  CardDescription,
   CardFooter,
   CardHeader,
+  CardInfoPreview,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import { TutorTermsOfService } from "./tutor-terms-of-service";
+import { InfoPreview } from "@/components/info-preview";
 import {
   Field,
   FieldDescription,
@@ -77,10 +78,6 @@ import {
   SubjectSelector,
   type TutorSubject,
 } from "./subject-taxonomy";
-import {
-  ProfilePhotoHistory,
-  type ProfilePhotoHistoryEntry,
-} from "./profile-photo-history";
 
 type Modality = "online" | "offline" | "both";
 type BankAccountOwnership = "self" | "trusted_person";
@@ -98,7 +95,6 @@ const TUTOR_STATUS_BADGES: Record<string, TutorStatusBadge> = {
   published: { label: "Published", variant: "success" },
   suspended: { label: "Suspended", variant: "danger" },
 };
-const EMPTY_PROFILE_HISTORY: ProfilePhotoHistoryEntry[] = [];
 
 interface OnboardingFormProps {
   accountUser: {
@@ -155,13 +151,16 @@ interface OnboardingFormProps {
     profileEditAdminNote: string | null;
     version: number;
   };
-  profileHistory?: ProfilePhotoHistoryEntry[];
 }
 
 function haveSameSubjectIds(left: readonly string[], right: readonly string[]) {
   if (left.length !== right.length) return false;
   const rightSet = new Set(right);
   return left.every((subjectId) => rightSet.has(subjectId));
+}
+
+function haveSameStructuredValue(left: unknown, right: unknown) {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 const TUTOR_FIELD_LABELS: Record<string, string> = {
@@ -177,6 +176,7 @@ const TUTOR_FIELD_LABELS: Record<string, string> = {
   bankAccountOpeningCity: "Account opening city/regency",
   bankAccountOwnership: "Account ownership",
   bankTransferDisclaimerAccepted: "Transfer-account confirmation",
+  termsOfService: "Tutor Terms of Service",
   subjects: "Specializations",
   baseRatesIdr: "Base honorarium",
   education: "Education",
@@ -319,6 +319,7 @@ function getTutorErrorFocusTarget(
   }
   if (field === "shortBio") return "tutor-short-bio";
   if (field === "profileImageUrl") return "tutor-profile-image";
+  if (field === "termsOfService") return "tutor-terms-of-service-accepted";
   if (field.startsWith("achievementProofUrls.")) {
     return "tutor-achievement-proofs";
   }
@@ -326,6 +327,54 @@ function getTutorErrorFocusTarget(
     return "tutor-experience-proofs";
   }
   return `tutor-${field}`;
+}
+
+function TutorTermsConsent({
+  accepted,
+  disabled,
+  error,
+  onAcceptedChange,
+  onOpenTerms,
+}: {
+  accepted: boolean;
+  disabled: boolean;
+  error?: string;
+  onAcceptedChange: (accepted: boolean) => void;
+  onOpenTerms: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <Checkbox
+        id="tutor-terms-of-service-accepted"
+        checked={accepted}
+        disabled={disabled}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? "tutor-terms-of-service-error" : undefined}
+        onCheckedChange={(checked) => onAcceptedChange(checked === true)}
+      />
+      <Field className="min-w-0 gap-1">
+        <FieldLabel
+          htmlFor="tutor-terms-of-service-accepted"
+          className="text-sm font-medium leading-relaxed gap-1"
+        >
+          <span>I agree to the</span>
+          <Button
+            type="button"
+            variant="underline"
+            size="xs"
+            aria-haspopup="dialog"
+            className="h-auto! min-h-0! px-0! align-baseline text-sm! font-medium! underline"
+            onClick={onOpenTerms}
+          >
+            Tutor Terms of Service
+          </Button>
+        </FieldLabel>
+        {error ? (
+          <FieldError id="tutor-terms-of-service-error">{error}</FieldError>
+        ) : null}
+      </Field>
+    </div>
+  );
 }
 
 function readServerFieldErrors(error: unknown) {
@@ -387,11 +436,7 @@ function readServerFieldErrors(error: unknown) {
   return fieldErrors;
 }
 
-export function OnboardingForm({
-  accountUser,
-  profile,
-  profileHistory = EMPTY_PROFILE_HISTORY,
-}: OnboardingFormProps) {
+export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const pending = profile.pendingProfileChanges ?? {};
@@ -448,10 +493,14 @@ export function OnboardingForm({
   const [name, setName] = useState(accountUser.name ?? "");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
-  const [termsDialogMode, setTermsDialogMode] = useState<
-    "accept" | "view" | null
-  >(null);
+  const [isTutorTermsOpen, setIsTutorTermsOpen] = useState(false);
   const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
+  const hasRecordedTutorTermsAcceptance = Boolean(
+    profile.termsOfServiceAcceptedAt,
+  );
+  const requiresTutorTermsAcceptance =
+    profile.onboardingStatus !== "published" &&
+    !hasRecordedTutorTermsAcceptance;
   const savedNameRef = useRef(accountUser.name.trim());
 
   const nameMutation = useMutation({
@@ -807,6 +856,12 @@ export function OnboardingForm({
         "Please confirm the transfer-account responsibility statement.",
       );
     }
+    if (requireComplete && requiresTutorTermsAcceptance && !hasAcceptedTerms) {
+      addError(
+        "termsOfService",
+        "Agree to the Tutor Terms of Service before submitting.",
+      );
+    }
 
     if (form.subjectIds.length > MAX_TUTOR_SUBJECTS) {
       addError(
@@ -837,7 +892,7 @@ export function OnboardingForm({
       if (!Number.isInteger(value) || value < 50_000 || value % 5_000 !== 0) {
         addError(
           `baseRatesIdr.${key}`,
-          `${key === "online" ? "Online" : "Offline"} base honorarium must be an IDR amount of at least Rp 50,000 in Rp 5,000 increments.`,
+          `${key === "online" ? "Online" : "Offline"} base honorarium must be an IDR amount of at least Rp50,000 in Rp5,000 increments.`,
         );
       }
     }
@@ -906,18 +961,11 @@ export function OnboardingForm({
       );
     } catch {
       // handled by mutation callbacks
-      if (acceptTerms) setTermsDialogMode("accept");
     }
   }
 
-  async function handleAcceptTerms() {
-    if (!hasAcceptedTerms) return;
-    await submitValidatedProfile(true);
-  }
-
   function openTutorTerms() {
-    setHasAcceptedTerms(false);
-    setTermsDialogMode("view");
+    setIsTutorTermsOpen(true);
   }
 
   async function handleSubmitForReview() {
@@ -931,22 +979,17 @@ export function OnboardingForm({
       return;
     }
 
-    if (
-      profile.onboardingStatus !== "published" &&
-      !profile.termsOfServiceAcceptedAt
-    ) {
-      setHasAcceptedTerms(false);
-      setTermsDialogMode("accept");
-      return;
-    }
-
-    await submitValidatedProfile();
+    await submitValidatedProfile(requiresTutorTermsAcceptance);
   }
 
   const isDraft =
     profile.onboardingStatus === "draft" ||
     profile.onboardingStatus === "changes_requested";
   const isEditable = isDraft || profile.onboardingStatus === "published";
+  const isSubmitting =
+    nameMutation.isPending ||
+    updateMutation.isPending ||
+    submitMutation.isPending;
   const statusBadge = TUTOR_STATUS_BADGES[profile.onboardingStatus] ?? {
     label: profile.onboardingStatus.replaceAll("_", " "),
     variant: "secondary" as const,
@@ -992,15 +1035,34 @@ export function OnboardingForm({
   const hasProposedProfileImage =
     Boolean(selectedProfileImageValue) &&
     selectedProfileImageUrl !== currentProfileImageUrl;
+  const editedProfileSections = [
+    !haveSameStructuredValue(form.education, profile.education ?? [])
+      ? "Education"
+      : null,
+    !haveSameStructuredValue(
+      form.competitionAchievements,
+      profile.competitionAchievements ?? [],
+    )
+      ? "Competition achievements"
+      : null,
+    !haveSameStructuredValue(
+      form.experienceEntries,
+      profile.experienceEntries ?? [],
+    )
+      ? "Experience"
+      : null,
+  ].filter((label): label is string => label !== null);
 
   return (
     <div className="mx-auto flex w-full flex-col gap-6">
       <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <Heading size="lg">
-            {isDraft ? "Build your tutor profile" : "Your tutor profile"}
+          <Heading level={1} size="md">
+            {isDraft
+              ? "Build a profile students can trust"
+              : "Keep your profile ready for students"}
           </Heading>
-          <Text className="mt-2 max-w-2xl text-muted">
+          <Text className="text-muted">
             Give students a clear picture of your expertise, teaching format,
             and availability.
           </Text>
@@ -1040,10 +1102,15 @@ export function OnboardingForm({
             <IconBox variant="warning-subtle">
               <IconAlertTriangle aria-hidden="true" />
             </IconBox>
-            <CardTitle>Review feedback</CardTitle>
-            <CardDescription>
-              Update the relevant section before submitting again.
-            </CardDescription>
+            <CardTitle>
+              Review feedback
+              <CardInfoPreview>
+                <InfoPreview
+                  title="Review feedback"
+                  description="Update the relevant section before submitting again."
+                />
+              </CardInfoPreview>
+            </CardTitle>
           </CardHeader>
           <CardBody className="grid gap-4">
             {profile.adminReviewNote &&
@@ -1094,13 +1161,17 @@ export function OnboardingForm({
             <IconBox variant="tertiary-subtle">
               <IconPhoto aria-hidden="true" />
             </IconBox>
-            <CardTitle>Profile photo review</CardTitle>
-            <CardDescription>
-              Your submitted photo stays unchanged until the Cogito team
-              finishes its review and publishes any edited version.
-            </CardDescription>
+            <CardTitle>
+              Profile photo review
+              <CardInfoPreview>
+                <InfoPreview
+                  title="Profile photo review"
+                  description="Your submitted photo stays unchanged until the Cogito team finishes its review and publishes any edited version."
+                />
+              </CardInfoPreview>
+            </CardTitle>
           </CardHeader>
-          <CardBody className="flex flex-wrap items-start gap-6">
+          <CardBody className="flex items-start gap-6">
             <div className="flex flex-col items-center gap-2 text-center">
               <Avatar size="lg" className="size-20!">
                 <AvatarImage
@@ -1123,12 +1194,6 @@ export function OnboardingForm({
                 />
               </div>
             </div>
-            <div className="basis-full">
-              <ProfilePhotoHistory
-                entries={profileHistory}
-                title="Photo & review history"
-              />
-            </div>
           </CardBody>
         </Card>
       ) : null}
@@ -1150,7 +1215,7 @@ export function OnboardingForm({
               className="w-full sm:w-auto"
               onClick={openTutorTerms}
             >
-              View Tutor Terms
+              Review Tutor Terms
             </Button>
           </CardFooter>
         </Card>
@@ -1171,11 +1236,15 @@ export function OnboardingForm({
                 <IconBox variant="tertiary-subtle">
                   <IconPhoto aria-hidden="true" />
                 </IconBox>
-                <CardTitle>Profile photo</CardTitle>
-                <CardDescription>
-                  Submit one clear photo. The Cogito team will apply the
-                  standard background before publishing or updating it.
-                </CardDescription>
+                <CardTitle>
+                  Profile photo
+                  <CardInfoPreview>
+                    <InfoPreview
+                      title="Profile photo"
+                      description="Submit one clear photo. The Cogito team will apply the standard background before publishing or updating it."
+                    />
+                  </CardInfoPreview>
+                </CardTitle>
               </CardHeader>
               <CardBody className="flex flex-wrap items-start gap-8">
                 {profile.onboardingStatus === "published" ? (
@@ -1294,25 +1363,23 @@ export function OnboardingForm({
                     </FieldError>
                   </Field>
                 ) : null}
-                <div className="basis-full">
-                  <ProfilePhotoHistory
-                    entries={profileHistory}
-                    title="Photo & review history"
-                  />
-                </div>
               </CardBody>
             </Card>
 
             <Card className="min-w-0 xl:col-span-2">
               <CardHeader>
-                <IconBox variant="secondary-subtle">
+                <IconBox variant="tertiary-subtle">
                   <IconUser aria-hidden="true" />
                 </IconBox>
-                <CardTitle>Public profile</CardTitle>
-                <CardDescription>
-                  This is the first information students use to understand your
-                  teaching style.
-                </CardDescription>
+                <CardTitle>
+                  Public profile
+                  <CardInfoPreview>
+                    <InfoPreview
+                      title="Public profile"
+                      description="This is the first information students use to understand your teaching style."
+                    />
+                  </CardInfoPreview>
+                </CardTitle>
               </CardHeader>
               <CardBody className="grid gap-5 sm:grid-cols-[1fr_2fr]">
                 <Field>
@@ -1418,10 +1485,15 @@ export function OnboardingForm({
                 <IconBox variant="info-subtle">
                   <IconSchool aria-hidden="true" />
                 </IconBox>
-                <CardTitle>Teaching setup</CardTitle>
-                <CardDescription>
-                  Set the session format and your IDR honorarium.
-                </CardDescription>
+                <CardTitle>
+                  Teaching setup
+                  <CardInfoPreview>
+                    <InfoPreview
+                      title="Teaching setup"
+                      description="Set the session format and your IDR honorarium."
+                    />
+                  </CardInfoPreview>
+                </CardTitle>
               </CardHeader>
               <CardBody className="flex flex-col gap-5">
                 <Field>
@@ -1496,10 +1568,15 @@ export function OnboardingForm({
                 <IconBox variant="success-subtle">
                   <IconBuildingBank aria-hidden="true" />
                 </IconBox>
-                <CardTitle>Payout account</CardTitle>
-                <CardDescription>
-                  Weekly honorarium payouts are sent to this bank account.
-                </CardDescription>
+                <CardTitle>
+                  Payout account
+                  <CardInfoPreview>
+                    <InfoPreview
+                      title="Payout account"
+                      description="Weekly honorarium payouts are sent to this bank account."
+                    />
+                  </CardInfoPreview>
+                </CardTitle>
               </CardHeader>
               <CardBody className="flex flex-col gap-5">
                 <div className="grid gap-5 sm:grid-cols-2">
@@ -1732,11 +1809,15 @@ export function OnboardingForm({
               <IconBox variant="info-subtle">
                 <IconSchool aria-hidden="true" />
               </IconBox>
-              <CardTitle>Achievements &amp; experience</CardTitle>
-              <CardDescription>
-                Add your education, competition achievements, and relevant
-                teaching, work, or mentoring experience in one place.
-              </CardDescription>
+              <CardTitle>
+                Achievements &amp; experience
+                <CardInfoPreview>
+                  <InfoPreview
+                    title="Achievements & experience"
+                    description="Add your education, competition achievements, and relevant teaching, work, or mentoring experience in one place."
+                  />
+                </CardInfoPreview>
+              </CardTitle>
             </CardHeader>
             <CardBody>
               <TutorAchievementsEditor
@@ -1759,7 +1840,7 @@ export function OnboardingForm({
                 errors={errors}
                 showPreview={false}
               />
-              <Field className="mt-6">
+              <Field className="mt-6 border-t border-card-separator pt-6">
                 <FieldLabel htmlFor="tutor-achievement-proofs">
                   Achievement proof links
                 </FieldLabel>
@@ -1814,7 +1895,7 @@ export function OnboardingForm({
                   </FieldError>
                 ) : null}
               </Field>
-              <div className="mt-8 border-t border-card-separator pt-8">
+              <div className="mt-6 border-t border-card-separator pt-6">
                 <TutorExperiencesEditor
                   experienceEntries={form.experienceEntries}
                   legacyText={form.experiences}
@@ -1886,11 +1967,33 @@ export function OnboardingForm({
                     </FieldError>
                   ) : null}
                 </Field>
-                <div className="mt-6 rounded-lg border border-item-border bg-accent p-4">
-                  <Text className="text-sm font-medium">Public preview</Text>
+                <div className="mt-6 border-t border-card-separator pt-6">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <Text className="text-sm font-medium">
+                      {isDraft ? "Draft preview" : "Changes preview"}
+                    </Text>
+                    <Badge
+                      variant={
+                        editedProfileSections.length > 0
+                          ? "warning"
+                          : "secondary"
+                      }
+                      size="sm"
+                      pill
+                    >
+                      {isDraft
+                        ? "Not public yet"
+                        : editedProfileSections.length > 0
+                          ? `${editedProfileSections.length} section${editedProfileSections.length === 1 ? "" : "s"} edited`
+                          : "No new changes"}
+                    </Badge>
+                  </div>
                   <Text className="mt-1 text-sm text-muted">
-                    Education, achievements, and experiences are shown together
-                    as students will see them on your profile.
+                    {isDraft
+                      ? "This updates live from the fields above and shows how students will see this part of your profile after approval."
+                      : editedProfileSections.length > 0
+                        ? `Previewing proposed changes to ${editedProfileSections.join(", ")}. They stay private until approved.`
+                        : "This matches the information currently visible to students."}
                   </Text>
                   <div className="mt-4">
                     <TutorAchievementsDisplay
@@ -1906,8 +2009,8 @@ export function OnboardingForm({
           </Card>
 
           <Card className="sticky bottom-0 z-10 overflow-hidden *:border-none">
-            <CardFooter className="flex-col items-stretch gap-4 2xl:flex-row 2xl:items-center 2xl:justify-between">
-              <div>
+            <CardFooter className="flex-col items-stretch gap-4 3xl:flex-row 3xl:items-center 3xl:justify-between">
+              <div className="min-w-0 flex-1">
                 <Text className="font-medium">
                   {isDraft
                     ? "Ready to move your profile forward?"
@@ -1919,19 +2022,20 @@ export function OnboardingForm({
                     : "Save changes while you work, or submit the latest version for admin review. You can continue updating during review."}
                 </Text>
               </div>
-              <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row lg:items-center sm:justify-end">
+              <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end 2xl:shrink-0">
+                <TutorTermsConsent
+                  accepted={hasRecordedTutorTermsAcceptance || hasAcceptedTerms}
+                  disabled={hasRecordedTutorTermsAcceptance || isSubmitting}
+                  error={errors.termsOfService}
+                  onAcceptedChange={(accepted) => {
+                    setHasAcceptedTerms(accepted);
+                    clearError("termsOfService");
+                  }}
+                  onOpenTerms={openTutorTerms}
+                />
                 <Button
                   type="button"
-                  variant="underline"
-                  size="xs"
-                  className="w-full sm:w-auto"
-                  onClick={openTutorTerms}
-                >
-                  View Tutor Terms
-                </Button>
-                <Button
-                  type="button"
-                  size="xs"
+                  size="sm"
                   variant="secondary"
                   className="w-full sm:w-auto"
                   progress={nameMutation.isPending || updateMutation.isPending}
@@ -1947,7 +2051,7 @@ export function OnboardingForm({
                 {isEditable ? (
                   <Button
                     type="button"
-                    size="xs"
+                    size="sm"
                     className="w-full sm:w-auto"
                     progress={
                       nameMutation.isPending
@@ -1975,20 +2079,8 @@ export function OnboardingForm({
       ) : null}
 
       <TutorTermsOfService
-        open={termsDialogMode !== null}
-        readOnly={termsDialogMode === "view"}
-        accepted={hasAcceptedTerms}
-        isSubmitting={
-          nameMutation.isPending ||
-          updateMutation.isPending ||
-          submitMutation.isPending
-        }
-        onAcceptedChange={setHasAcceptedTerms}
-        onAccept={handleAcceptTerms}
-        onOpenChange={(open) => {
-          if (!open) setHasAcceptedTerms(false);
-          if (!open) setTermsDialogMode(null);
-        }}
+        open={isTutorTermsOpen}
+        onOpenChange={setIsTutorTermsOpen}
       />
     </div>
   );

@@ -72,7 +72,7 @@ export function Layout({
         id="main-content"
         tabIndex={-1}
         className={cn(
-          "flex h-dvh min-h-0 min-w-0 max-w-full flex-col overflow-hidden transition-[margin] duration-200 motion-reduce:transition-none",
+          "fixed inset-0 flex min-h-0 min-w-0 flex-col overflow-hidden transition-[margin] duration-200 motion-reduce:transition-none",
           sidebarOpen ? "xl:ml-72" : "xl:ml-0",
         )}
       >
@@ -117,7 +117,7 @@ export function Layout({
             "flex min-h-0 min-w-0 max-w-full flex-1 flex-col gap-6 overflow-x-hidden *:shrink-0 max-xl:p-4",
             contentScrollMode === "contained"
               ? "overflow-hidden"
-              : "overflow-y-auto",
+              : "overflow-y-auto overscroll-contain",
             "xl:p-4 border-l border-t border-border xl:rounded-tl-4xl",
           )}
         >

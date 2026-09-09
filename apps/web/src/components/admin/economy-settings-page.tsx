@@ -6,7 +6,11 @@ import {
   IconCalculator,
   IconDeviceFloppy,
   IconInfoCircle,
+  IconMinus,
+  IconPencil,
+  IconPlus,
   IconShieldCheck,
+  IconX,
 } from "@tabler/icons-react";
 
 import { Badge } from "@cogito-app/ui/components/selia/badge";
@@ -14,8 +18,9 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
-  CardDescription,
   CardHeader,
+  CardHeaderAction,
+  CardInfoPreview,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import {
@@ -25,12 +30,20 @@ import {
 } from "@cogito-app/ui/components/selia/field";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
-import { NumberField } from "@cogito-app/ui/components/selia/number-field";
+import {
+  NumberField,
+  NumberFieldDecrement,
+  NumberFieldGroup,
+  NumberFieldIncrement,
+  NumberFieldInput,
+} from "@cogito-app/ui/components/selia/number-field";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
 import Loader from "@/components/loader";
+import { InfoPreview } from "@/components/info-preview";
+import { TutorPricingTable } from "@/components/tutor/tutor-pricing-table";
 import { orpc } from "@/utils/orpc";
 
 type FormValues = {
@@ -62,7 +75,7 @@ function formFromSettings(settings: {
 }
 
 function formatIdr(value: number) {
-  return "Rp " + value.toLocaleString("id-ID");
+  return "Rp" + value.toLocaleString("id-ID");
 }
 
 function parseAmount(value: string) {
@@ -72,16 +85,75 @@ function parseAmount(value: string) {
   return Number.isInteger(parsed) ? parsed : null;
 }
 
+function TakeAmountInput({
+  id,
+  name,
+  label,
+  min,
+  value,
+  disabled,
+  onValueChange,
+}: {
+  id: string;
+  name: string;
+  label: string;
+  min: number;
+  value: number | null;
+  disabled: boolean;
+  onValueChange: (value: number | null) => void;
+}) {
+  return (
+    <NumberField
+      min={min}
+      step={5_000}
+      snapOnStep
+      allowOutOfRange
+      locale="id-ID"
+      format={{
+        maximumFractionDigits: 0,
+      }}
+      value={value}
+      disabled={disabled}
+      onValueChange={onValueChange}
+    >
+      <NumberFieldGroup className="w-full">
+        <NumberFieldDecrement aria-label={`Decrease ${label} by Rp5,000`}>
+          <IconMinus />
+        </NumberFieldDecrement>
+        <div className="flex h-full min-w-0 flex-1 items-center justify-center">
+          <span className="font-medium" aria-hidden="true">
+            Rp
+          </span>
+          <NumberFieldInput
+            id={id}
+            name={name}
+            className="h-full min-w-0 px-0 text-left font-medium"
+            style={{
+              width: `${(value ?? 0).toLocaleString("id-ID").length}ch`,
+            }}
+            inputMode="numeric"
+          />
+        </div>
+        <NumberFieldIncrement aria-label={`Increase ${label} by Rp5,000`}>
+          <IconPlus />
+        </NumberFieldIncrement>
+      </NumberFieldGroup>
+    </NumberField>
+  );
+}
+
 export function EconomySettingsPage() {
   const queryClient = useQueryClient();
   const settings = useQuery(orpc.admin.getEconomySettings.queryOptions());
   const [draftForm, setDraftForm] = useState(EMPTY_FORM);
   const [draftVersion, setDraftVersion] = useState<number | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const form =
-    settings.data && draftVersion !== settings.data.version
+  const form = isEditing
+    ? draftForm
+    : settings.data
       ? formFromSettings(settings.data)
-      : draftForm;
+      : EMPTY_FORM;
 
   const values = useMemo(
     () => ({
@@ -92,6 +164,15 @@ export function EconomySettingsPage() {
     }),
     [form],
   );
+  const hasChanges = settings.data
+    ? form.onlineCogitoBaseIdr !== String(settings.data.onlineCogitoBaseIdr) ||
+      form.onlineCogitoIncrementIdr !==
+        String(settings.data.onlineCogitoIncrementIdr) ||
+      form.offlineCogitoBaseIdr !==
+        String(settings.data.offlineCogitoBaseIdr) ||
+      form.offlineCogitoIncrementIdr !==
+        String(settings.data.offlineCogitoIncrementIdr)
+    : false;
 
   const mutation = useMutation(
     orpc.admin.updateEconomySettings.mutationOptions({
@@ -100,6 +181,9 @@ export function EconomySettingsPage() {
         await queryClient.invalidateQueries({
           queryKey: orpc.admin.getEconomySettings.key(),
         });
+        setIsEditing(false);
+        setDraftForm(EMPTY_FORM);
+        setDraftVersion(null);
         toastManager.add({
           title: "Economy settings saved",
           description: "The new take schedule applies to future bookings.",
@@ -119,14 +203,26 @@ export function EconomySettingsPage() {
   );
 
   function updateField(key: keyof FormValues, value: string) {
-    setDraftForm(() => ({
-      ...(settings.data && draftVersion !== settings.data.version
-        ? formFromSettings(settings.data)
-        : draftForm),
+    setDraftForm((current) => ({
+      ...current,
       [key]: value,
     }));
-    setDraftVersion(settings.data?.version ?? null);
     setError(null);
+  }
+
+  function startEditing() {
+    if (!settings.data) return;
+    setDraftForm(formFromSettings(settings.data));
+    setDraftVersion(settings.data.version);
+    setError(null);
+    setIsEditing(true);
+  }
+
+  function cancelEditing() {
+    setDraftForm(EMPTY_FORM);
+    setDraftVersion(null);
+    setError(null);
+    setIsEditing(false);
   }
 
   function save() {
@@ -148,11 +244,11 @@ export function EconomySettingsPage() {
         values.offlineIncrement,
       ].some((amount) => amount < 0 || amount % 5_000 !== 0)
     ) {
-      setError("All amounts must use Rp 5,000 increments.");
+      setError("All amounts must use Rp5,000 increments.");
       return;
     }
     mutation.mutate({
-      expectedVersion: settings.data.version,
+      expectedVersion: draftVersion ?? settings.data.version,
       onlineCogitoBaseIdr: values.onlineBase,
       onlineCogitoIncrementIdr: values.onlineIncrement,
       offlineCogitoBaseIdr: values.offlineBase,
@@ -162,7 +258,7 @@ export function EconomySettingsPage() {
 
   const preview = settings.data
     ? [1, 2, 3, 4, 5, 6].map((size) => ({
-        size,
+        size: String(size),
         online:
           (values.onlineBase ?? settings.data.onlineCogitoBaseIdr) +
           (size - 1) *
@@ -180,11 +276,8 @@ export function EconomySettingsPage() {
       <div>
         <div className="flex flex-wrap items-center gap-2">
           <Heading level={1} size="md">
-            Economy settings
+            Shape a sustainable booking economy
           </Heading>
-          <Badge variant="warning" pill>
-            Admin only
-          </Badge>
         </div>
         <Text className="mt-1 max-w-3xl text-muted">
           Set the Cogito platform take used when a new booking calculates its
@@ -195,7 +288,7 @@ export function EconomySettingsPage() {
 
       <div className="flex items-start gap-2.5 rounded-lg border border-info-border bg-info/10 px-3 py-3">
         <IconInfoCircle
-          className="mt-0.5 size-4 shrink-0 text-info"
+          className="mt-1 size-4 shrink-0 text-info"
           aria-hidden="true"
         />
         <div>
@@ -214,10 +307,38 @@ export function EconomySettingsPage() {
             <IconBox variant="primary-subtle">
               <IconShieldCheck />
             </IconBox>
-            <CardTitle>Cogito take schedule</CardTitle>
-            <CardDescription>
-              Amounts are IDR per class. Use Rp 5,000 increments.
-            </CardDescription>
+            <CardTitle>
+              Cogito take schedule
+              <CardInfoPreview>
+                <InfoPreview
+                  title="Cogito take schedule"
+                  description="Amounts are IDR per class. Use Rp5,000 increments. Changes apply only to future bookings."
+                  label="About the Cogito take schedule"
+                />
+              </CardInfoPreview>
+            </CardTitle>
+            <CardHeaderAction>
+              {isEditing ? (
+                <div className="flex items-center gap-2">
+                  <Badge variant="warning" pill>
+                    Editing
+                  </Badge>
+                  <Button variant="danger" size="icon" onClick={cancelEditing}>
+                    <IconX />
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="tertiary"
+                  size="icon"
+                  aria-label="Edit Cogito take schedule"
+                  onClick={startEditing}
+                  disabled={settings.isPending || !settings.data}
+                >
+                  <IconPencil />
+                </Button>
+              )}
+            </CardHeaderAction>
           </CardHeader>
           <CardBody className="flex flex-col gap-5">
             <div className="grid gap-5 sm:grid-cols-2">
@@ -225,18 +346,15 @@ export function EconomySettingsPage() {
                 <Text className="font-semibold">Online</Text>
                 <Field>
                   <FieldLabel htmlFor="online-cogito-base">
-                    Base take · class for 1
+                    Base take · Class for 1
                   </FieldLabel>
-                  <NumberField
+                  <TakeAmountInput
                     id="online-cogito-base"
-                    inputProps={{
-                      name: "onlineCogitoBaseIdr",
-                      inputMode: "numeric",
-                    }}
+                    name="onlineCogitoBaseIdr"
+                    label="online base take"
                     min={5_000}
-                    step={5_000}
-                    allowOutOfRange
                     value={parseAmount(form.onlineCogitoBaseIdr)}
+                    disabled={!isEditing || mutation.isPending}
                     onValueChange={(value) =>
                       updateField(
                         "onlineCogitoBaseIdr",
@@ -255,16 +373,13 @@ export function EconomySettingsPage() {
                   <FieldLabel htmlFor="online-cogito-increment">
                     Additional student increment
                   </FieldLabel>
-                  <NumberField
+                  <TakeAmountInput
                     id="online-cogito-increment"
-                    inputProps={{
-                      name: "onlineCogitoIncrementIdr",
-                      inputMode: "numeric",
-                    }}
+                    name="onlineCogitoIncrementIdr"
+                    label="online additional student increment"
                     min={0}
-                    step={5_000}
-                    allowOutOfRange
                     value={parseAmount(form.onlineCogitoIncrementIdr)}
+                    disabled={!isEditing || mutation.isPending}
                     onValueChange={(value) =>
                       updateField(
                         "onlineCogitoIncrementIdr",
@@ -282,18 +397,15 @@ export function EconomySettingsPage() {
                 <Text className="font-semibold">Offline</Text>
                 <Field>
                   <FieldLabel htmlFor="offline-cogito-base">
-                    Base take · class for 1
+                    Base take · Class for 1
                   </FieldLabel>
-                  <NumberField
+                  <TakeAmountInput
                     id="offline-cogito-base"
-                    inputProps={{
-                      name: "offlineCogitoBaseIdr",
-                      inputMode: "numeric",
-                    }}
+                    name="offlineCogitoBaseIdr"
+                    label="offline base take"
                     min={5_000}
-                    step={5_000}
-                    allowOutOfRange
                     value={parseAmount(form.offlineCogitoBaseIdr)}
+                    disabled={!isEditing || mutation.isPending}
                     onValueChange={(value) =>
                       updateField(
                         "offlineCogitoBaseIdr",
@@ -312,16 +424,13 @@ export function EconomySettingsPage() {
                   <FieldLabel htmlFor="offline-cogito-increment">
                     Additional student increment
                   </FieldLabel>
-                  <NumberField
+                  <TakeAmountInput
                     id="offline-cogito-increment"
-                    inputProps={{
-                      name: "offlineCogitoIncrementIdr",
-                      inputMode: "numeric",
-                    }}
+                    name="offlineCogitoIncrementIdr"
+                    label="offline additional student increment"
                     min={0}
-                    step={5_000}
-                    allowOutOfRange
                     value={parseAmount(form.offlineCogitoIncrementIdr)}
+                    disabled={!isEditing || mutation.isPending}
                     onValueChange={(value) =>
                       updateField(
                         "offlineCogitoIncrementIdr",
@@ -341,62 +450,59 @@ export function EconomySettingsPage() {
                 {error}
               </Text>
             ) : null}
-            <Button
-              onClick={save}
-              disabled={settings.isPending || mutation.isPending}
-            >
-              <IconDeviceFloppy />
-              {mutation.isPending ? "Saving…" : "Save take schedule"}
-            </Button>
+            {isEditing ? (
+              <Button
+                onClick={save}
+                disabled={
+                  settings.isPending || mutation.isPending || !hasChanges
+                }
+                progress={mutation.isPending}
+              >
+                <IconDeviceFloppy />
+                {mutation.isPending
+                  ? "Saving…"
+                  : hasChanges
+                    ? "Save changes"
+                    : "No changes to save"}
+              </Button>
+            ) : null}
           </CardBody>
         </Card>
 
         <Card>
           <CardHeader>
-            <IconBox variant="secondary-subtle">
+            <IconBox variant="secondary">
               <IconCalculator />
             </IconBox>
-            <CardTitle>Schedule preview</CardTitle>
-            <CardDescription>
-              The active Mark computational value is{" "}
-              {settings.data ? formatIdr(settings.data.markValueIdr) : "—"}.
-            </CardDescription>
+            <CardTitle>
+              Schedule preview
+              <CardInfoPreview>
+                <InfoPreview
+                  title="Schedule preview"
+                  description={
+                    <>
+                      The active Mark computational value is{" "}
+                      {settings.data
+                        ? formatIdr(settings.data.markValueIdr)
+                        : "—"}
+                      .
+                    </>
+                  }
+                  label="About the schedule preview"
+                />
+              </CardInfoPreview>
+            </CardTitle>
           </CardHeader>
           <CardBody>
             {settings.isPending ? (
               <Loader />
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-80 text-sm">
-                  <thead>
-                    <tr className="border-b border-item-border text-left text-muted">
-                      <th className="px-2 py-2 font-medium">Class size</th>
-                      <th className="px-2 py-2 text-right font-medium">
-                        Online
-                      </th>
-                      <th className="px-2 py-2 text-right font-medium">
-                        Offline
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {preview.map((row) => (
-                      <tr
-                        key={row.size}
-                        className="border-b border-item-border last:border-0"
-                      >
-                        <td className="px-2 py-2">Class for {row.size}</td>
-                        <td className="px-2 py-2 text-right font-medium">
-                          {formatIdr(row.online)}
-                        </td>
-                        <td className="px-2 py-2 text-right font-medium">
-                          {formatIdr(row.offline)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <TutorPricingTable
+                modalities={["online", "offline"]}
+                rows={preview}
+                columnLabels={{ online: "Online", offline: "Offline" }}
+                renderValue={formatIdr}
+              />
             )}
           </CardBody>
         </Card>

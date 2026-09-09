@@ -11,7 +11,10 @@ for (const viewport of [
     await page.goto("/bookings?tab=upcoming");
 
     await expect(
-      page.getByRole("heading", { name: "Bookings", exact: true }).last(),
+      page.getByRole("heading", {
+        name: "Stay on top of every session",
+        exact: true,
+      }),
     ).toBeVisible();
     await expect(
       page

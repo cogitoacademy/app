@@ -27,10 +27,10 @@ Enable students to purchase Marks packages via a stub payment provider. Purchase
 
 Seed values (from PRD §FR-04):
 
-- starter: 50 Marks / Rp 430,000
-- learner: 120 Marks / Rp 990,000
-- explorer: 200 Marks / Rp 1,570,000
-- pioneer: 300 Marks / Rp 2,180,000
+- starter: 50 Marks / Rp430,000
+- learner: 120 Marks / Rp990,000
+- explorer: 200 Marks / Rp1,570,000
+- pioneer: 300 Marks / Rp2,180,000
 
 ### `paymentRecord`
 

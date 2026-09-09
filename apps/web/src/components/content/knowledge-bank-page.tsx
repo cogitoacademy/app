@@ -142,11 +142,11 @@ export function KnowledgeBankPage() {
       <Stack direction="column" spacing="lg">
         <div>
           <div className="flex items-center gap-2">
-            <Heading>Knowledge Bank</Heading>
+            <Heading>Learn from curated resources</Heading>
           </div>
           <Text className="mt-1 max-w-2xl text-muted">
-            Explore curated learning materials for your academic and competition
-            goals.
+            Find focused materials to strengthen your academic and competition
+            preparation.
           </Text>
         </div>
 

@@ -152,11 +152,11 @@ export function AdminOperationsPage() {
     >
       <div>
         <Heading level={1} size="md">
-          Operations
+          Keep every booking moving
         </Heading>
         <Text className="text-muted">
-          Monitor bookings, preview overrides, inspect wallets, and assign
-          offline rooms.
+          Resolve booking issues, inspect wallets, and coordinate offline rooms
+          from one workspace.
         </Text>
       </div>
       <Tabs defaultValue="queue" className="min-w-0 max-w-full">
@@ -249,9 +249,6 @@ function BookingQueue() {
               }}
               placeholder="#12 or 12"
             />
-            <FieldDescription>
-              Search by exact reference number.
-            </FieldDescription>
           </Field>
           <Field className="min-w-56">
             <FieldLabel>Override category</FieldLabel>
@@ -339,10 +336,15 @@ function BookingQueue() {
           className="w-full min-w-0 max-w-full overflow-hidden"
         >
           <CardHeader>
-            <CardTitle>Booking monitor</CardTitle>
-            <CardDescription>
-              Urgent and action-required bookings appear first.
-            </CardDescription>
+            <CardTitle>
+              Booking monitor
+              <CardInfoPreview>
+                <InfoPreview
+                  title="Booking monitor"
+                  description="Urgent and action-required bookings appear first."
+                />
+              </CardInfoPreview>
+            </CardTitle>
           </CardHeader>
           <CardBody
             aria-busy={queueQuery.isFetching}
@@ -450,7 +452,7 @@ function BookingQueue() {
                             {getOverrideCategory(item.overrideMeta) ? (
                               <Badge
                                 className="whitespace-nowrap"
-                                variant="secondary"
+                                variant="tertiary"
                               >
                                 {humanize(
                                   getOverrideCategory(item.overrideMeta)!,
@@ -465,7 +467,7 @@ function BookingQueue() {
                               {getOverrideReason(item.overrideMeta) ??
                                 "No reported reason"}
                             </Text>
-                            <Text className="text-sm text-dimmed">
+                            <Text className="text-sm text-dimmed italic">
                               Source: admin override
                             </Text>
                           </TableCell>
@@ -473,19 +475,20 @@ function BookingQueue() {
                             {getStringArray(
                               getOverrideMetadata(item.overrideMeta)
                                 ?.affectedParticipants,
-                            ).length || "—"}
+                            ).length || "-"}
                           </TableCell>
                           <TableCell className="align-top">
                             <SlaStatus item={item} timezone={item.timezone} />
                           </TableCell>
-                          <TableCell className="align-top whitespace-nowrap text-sm">
-                            {item.holdAmount} held
+                          <TableCell className="align-top whitespace-nowrap text-sm flex items-center">
+                            <CogitoMarks value={item.holdAmount} size="3" />
+                            held
                           </TableCell>
                           <TableCell className="align-top px-3! py-4! sm:px-6!">
                             <div className="flex flex-col items-stretch gap-1.5">
                               <Button
                                 size="sm"
-                                variant="secondary"
+                                variant="tertiary"
                                 render={
                                   <Link
                                     to="/admin-operations/bookings/$bookingId"
@@ -499,8 +502,9 @@ function BookingQueue() {
                               </Button>
                               <Button
                                 size="sm"
-                                variant="plain"
+                                variant="underline"
                                 onClick={() => setSelected(item)}
+                                className="text-danger justify-center!"
                               >
                                 Override
                               </Button>
@@ -1020,8 +1024,8 @@ function AdminParticipantFinancialDetails({
                 key={entry.id}
               >
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary">{humanize(entry.entryType)}</Badge>
-                  <Text className="text-muted">
+                  <Badge variant="tertiary">{humanize(entry.entryType)}</Badge>
+                  <Text className="text-muted text-sm">
                     {formatBookingDate(entry.createdAt, timezone)}
                   </Text>
                 </div>
@@ -1035,13 +1039,7 @@ function AdminParticipantFinancialDetails({
             ))}
           </div>
         ) : (
-          <EmptyState
-            icon={<IconCoins />}
-            title="No ledger entries"
-            description="No Marks activity references this booking."
-            size="inline"
-            className="px-0 py-3"
-          />
+          <Text className="text-xs mt-1">No data yet.</Text>
         )}
       </div>
     </div>
@@ -1415,11 +1413,15 @@ function WalletLookup() {
     <Stack direction="column" spacing="md">
       <Card>
         <CardHeader>
-          <CardTitle>Find a wallet</CardTitle>
-          <CardDescription>
-            Search by name, email, or user ID, then choose the account to
-            inspect.
-          </CardDescription>
+          <CardTitle>
+            Find a wallet
+            <CardInfoPreview>
+              <InfoPreview
+                title="Find a wallet"
+                description="Search by name, email, or user ID, then choose the account to inspect."
+              />
+            </CardInfoPreview>
+          </CardTitle>
         </CardHeader>
         <CardBody>
           <form
@@ -1475,10 +1477,15 @@ function WalletLookup() {
       ) : searchQuery.data?.length ? (
         <Card>
           <CardHeader>
-            <CardTitle>Matching users</CardTitle>
-            <CardDescription>
-              Select an account to load its wallet and latest ledger activity.
-            </CardDescription>
+            <CardTitle>
+              Matching users
+              <CardInfoPreview>
+                <InfoPreview
+                  title="Matching users"
+                  description="Select an account to load its wallet and latest ledger activity."
+                />
+              </CardInfoPreview>
+            </CardTitle>
           </CardHeader>
           <CardBody className="space-y-2">
             {searchQuery.data.map((user) => (
@@ -1573,8 +1580,15 @@ function WalletLookup() {
       {selectedUser && ledgerQuery.data ? (
         <Card>
           <CardHeader>
-            <CardTitle>Ledger</CardTitle>
-            <CardDescription>Latest wallet entries</CardDescription>
+            <CardTitle>
+              Ledger
+              <CardInfoPreview>
+                <InfoPreview
+                  title="Ledger"
+                  description="Latest wallet entries."
+                />
+              </CardInfoPreview>
+            </CardTitle>
           </CardHeader>
           <CardBody>
             {ledgerQuery.data.items.length === 0 ? (
@@ -1806,10 +1820,15 @@ function RoomCatalog({ onAddRoom }: { onAddRoom: () => void }) {
     <Card id="admin-room-catalog" className="scroll-mt-4">
       <CardHeader className="flex-wrap">
         <div className="min-w-0 flex-1">
-          <CardTitle>Active rooms</CardTitle>
-          <CardDescription>
-            Rooms shown here are available for offline booking and assignment.
-          </CardDescription>
+          <CardTitle>
+            Active rooms
+            <CardInfoPreview>
+              <InfoPreview
+                title="Active rooms"
+                description="Rooms shown here are available for offline booking and assignment."
+              />
+            </CardInfoPreview>
+          </CardTitle>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <Button
@@ -2371,7 +2390,7 @@ function SlaStatus({
 }) {
   const now = useNow();
   if (!item.slaDeadline) {
-    return <Text className="text-sm text-muted">Not reported</Text>;
+    return <Text className="text-sm text-muted italic">Not reported</Text>;
   }
 
   return (

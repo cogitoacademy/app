@@ -93,7 +93,7 @@ export function CardTitle({
     props: {
       "data-slot": "card-title",
       className: cn(
-        "text-lg font-semibold leading-none",
+        "text-base md:text-lg font-semibold leading-none",
         "has-[>[data-slot=card-info-preview]]:flex has-[>[data-slot=card-info-preview]]:flex-wrap has-[>[data-slot=card-info-preview]]:items-center has-[>[data-slot=card-info-preview]]:gap-2",
         className,
       ),
@@ -138,6 +138,7 @@ export function CardBody({ className, ...props }: React.ComponentProps<"div">) {
       className={cn(
         "p-6 **:data-[slot=item]:px-6",
         "*:data-[slot=table-container]:-m-6 **:data-[slot=table-head]:border-t-0",
+        "has-[>[data-slot=pagination]]:*:data-[slot=table-container]:mb-0",
         "*:data-[slot=stack]:-m-6",
         "not-[:has(caption)]:[&_tbody>tr:last-child>td:first-child]:rounded-bl-xl",
         "not-[:has(caption)]:[&_tbody>tr:last-child>td:last-child]:rounded-br-xl",

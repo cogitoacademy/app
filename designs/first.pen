@@ -1955,7 +1955,7 @@
                               "id": "gxRqo",
                               "name": "Starter Pack Detail",
                               "fill": "#69707D",
-                              "content": "50 Marks • ~Rp 8,500 / Mark",
+                              "content": "50 Marks • ~Rp8,500 / Mark",
                               "fontFamily": "Inter",
                               "fontSize": 13,
                               "fontWeight": "normal"
@@ -1975,7 +1975,7 @@
                               "id": "tKTg2",
                               "name": "Starter Pack Price",
                               "fill": "#161718",
-                              "content": "Rp 430,000",
+                              "content": "Rp430,000",
                               "fontFamily": "Inter",
                               "fontSize": 18,
                               "fontWeight": "740"
@@ -2054,7 +2054,7 @@
                               "id": "HVBBM",
                               "name": "Learner Pack Detail",
                               "fill": "#69707D",
-                              "content": "120 Marks • ~Rp 8,200 / Mark",
+                              "content": "120 Marks • ~Rp8,200 / Mark",
                               "fontFamily": "Inter",
                               "fontSize": 13,
                               "fontWeight": "normal"
@@ -2074,7 +2074,7 @@
                               "id": "cFYVv",
                               "name": "Learner Pack Price",
                               "fill": "#161718",
-                              "content": "Rp 990,000",
+                              "content": "Rp990,000",
                               "fontFamily": "Inter",
                               "fontSize": 18,
                               "fontWeight": "740"
@@ -2178,7 +2178,7 @@
                               "id": "Dg0XB",
                               "name": "Explorer Pack Detail",
                               "fill": "#69707D",
-                              "content": "200 Marks • ~Rp 7,800 / Mark",
+                              "content": "200 Marks • ~Rp7,800 / Mark",
                               "fontFamily": "Inter",
                               "fontSize": 13,
                               "fontWeight": "normal"
@@ -2198,7 +2198,7 @@
                               "id": "vOkql",
                               "name": "Explorer Pack Price",
                               "fill": "#161718",
-                              "content": "Rp 1,570,000",
+                              "content": "Rp1,570,000",
                               "fontFamily": "Inter",
                               "fontSize": 18,
                               "fontWeight": "740"
@@ -2302,7 +2302,7 @@
                               "id": "dM1pg",
                               "name": "Pioneer Pack Detail",
                               "fill": "#69707D",
-                              "content": "300 Marks • ~Rp 7,250 / Mark",
+                              "content": "300 Marks • ~Rp7,250 / Mark",
                               "fontFamily": "Inter",
                               "fontSize": 13,
                               "fontWeight": "normal"
@@ -2322,7 +2322,7 @@
                               "id": "q1Jn5r",
                               "name": "Pioneer Pack Price",
                               "fill": "#161718",
-                              "content": "Rp 2,180,000",
+                              "content": "Rp2,180,000",
                               "fontFamily": "Inter",
                               "fontSize": 18,
                               "fontWeight": "740"

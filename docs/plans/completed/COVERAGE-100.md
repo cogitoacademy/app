@@ -18,3 +18,6 @@ bun test --coverage --timeout 30000 packages/api/src/tests/ packages/env/src/ pa
 ```
 
 The full local run completed with 2,147 passing tests and 0 failures. The final lcov artifact reports 16,248/16,248 API lines and 18,265/18,265 overall lines. Bun may still report its independent function/statement threshold when the command exits; CI's enforced gate is the line coverage check in `.github/scripts/coverage-comment.ts`.
+
+The PR coverage comment renderer keeps the gate blockquote and both Markdown
+tables in separate blocks so GitHub displays the report as tables.

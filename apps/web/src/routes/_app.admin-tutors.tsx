@@ -278,17 +278,17 @@ function RouteComponent() {
     <div className="flex flex-col gap-6">
       <div>
         <Heading level={1} size="md">
-          Manage tutors
+          Build a trusted tutor network
         </Heading>
         <Text className="mt-1 text-muted">
-          Invite tutors, review profiles, and keep the published directory
-          accurate.
+          Invite new tutors, review their profiles, and keep the public
+          directory accurate.
         </Text>
       </div>
       <div className="grid lg:grid-cols-[1fr_2fr] gap-6">
         <TutorInviteForm />
 
-        <Card id="admin-tutor-invites" className="scroll-mt-4">
+        <Card id="admin-tutor-invites" className="flex scroll-mt-4 flex-col">
           <CardHeader>
             <CardTitle>Invitations</CardTitle>
             <CardHeaderAction>
@@ -314,7 +314,10 @@ function RouteComponent() {
               </Select>
             </CardHeaderAction>
           </CardHeader>
-          <CardBody aria-busy={invitesFetching}>
+          <CardBody
+            aria-busy={invitesFetching}
+            className="flex flex-1 flex-col *:data-[slot=pagination]:mt-auto"
+          >
             {invites.length === 0 ? (
               <EmptyState
                 icon={<IconInbox />}
@@ -328,8 +331,7 @@ function RouteComponent() {
                     ? "New tutor invitations will appear here."
                     : "Go back to the previous page to continue browsing invitations."
                 }
-                tone="secondary"
-                size="compact"
+                tone="primary"
                 className="rounded-lg"
               />
             ) : (

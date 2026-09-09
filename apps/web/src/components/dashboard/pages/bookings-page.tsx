@@ -14,6 +14,7 @@ import {
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
+import { Divider } from "@cogito-app/ui/components/selia/divider";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
@@ -44,7 +45,7 @@ import { orpc } from "@/utils/orpc";
 export const BOOKING_TABS = [
   { value: "action", label: "Needs action" },
   { value: "upcoming", label: "Upcoming" },
-  { value: "recurring", label: "Recurring" },
+  { value: "recurring", label: "Series" },
   { value: "history", label: "History" },
   { value: "all", label: "All" },
 ] as const;
@@ -130,7 +131,7 @@ export function BookingsPage() {
         <div className="min-w-0 max-w-full">
           <div className="flex items-center gap-2">
             <Heading level={1} size="md">
-              Bookings
+              Stay on top of every session
             </Heading>
             {bookingsQuery.isFetching &&
             !bookingsQuery.isPending &&
@@ -218,13 +219,15 @@ export function BookingsPage() {
               aria-labelledby={`booking-group-${group.key}`}
               className="min-w-0 max-w-full"
             >
-              <Heading
-                id={`booking-group-${group.key}`}
-                size="sm"
-                className="mb-3 text-muted"
-              >
-                {group.label}
-              </Heading>
+              <Divider className="mb-3">
+                <Heading
+                  id={`booking-group-${group.key}`}
+                  size="sm"
+                  className="text-muted"
+                >
+                  {group.label}
+                </Heading>
+              </Divider>
               <div className="grid min-w-0 gap-3">
                 {group.items.map((booking) => (
                   <BookingListCard
@@ -254,12 +257,13 @@ export function BookingsPage() {
             </Text>
           ) : null}
           <Button
-            variant="outline"
+            variant="underline"
             onClick={() => void bookingsQuery.fetchNextPage()}
             progress={bookingsQuery.isFetchingNextPage}
             disabled={bookingsQuery.isFetchingNextPage}
           >
-            <IconChevronDown /> Load more bookings
+            Load more bookings
+            <IconChevronDown />
           </Button>
         </div>
       ) : null}
@@ -449,7 +453,7 @@ function getEmptyStateTitle(tab: BookingTab) {
     case "upcoming":
       return "No upcoming bookings";
     case "recurring":
-      return "No recurring bookings";
+      return "No series bookings";
     case "history":
       return "No booking history";
     case "all":

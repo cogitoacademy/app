@@ -9,8 +9,11 @@
 ## Delivered
 
 - Added the persistent singleton economy_config model and migration 0028_economy_config.sql with the client-approved defaults.
-- Added admin-only getEconomySettings and updateEconomySettings procedures with Rp 5,000 validation, optimistic version control, and economy_config_updated audit records.
+- Added admin-only getEconomySettings and updateEconomySettings procedures with Rp5,000 validation, optimistic version control, and economy_config_updated audit records.
 - Added the /admin-economy page with online/offline Cogito base and per-student increment inputs, class-size preview, persistence feedback, and future-booking warning.
+- Refined the admin controls to support both direct IDR entry and Rp5,000 stepper buttons, and reused the tutor pricing table for the schedule preview so economy breakdowns share one presentation pattern.
+- Made the active schedule read-only by default, with an explicit pencil edit action, editing-state badge, cancel/reset behavior, dirty-state save affordance, and automatic return to read-only after save.
+- Moved economy card descriptions into header info previews to keep both card headers compact on mobile.
 - Added the transactional economy update and audit trail; the former tutor-facing `Cogito rate updated` notification fan-out was retired in the 2026-09-02 notification inbox follow-up because tutors do not need the platform take schedule.
 - Added baseRatesIdr for tutor profiles. New profiles use IDR honorarium formulas; legacy Marks price maps remain readable.
 - Made tutor discovery and booking previews calculate Marks from the active economy config for the selected modality.

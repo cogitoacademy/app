@@ -1,6 +1,32 @@
 # Cogito Runbook
 
-Last updated: 2026-09-08
+Last updated: 2026-09-09
+
+## Bulk date-override smoke check (2026-09-09)
+
+Open `/availability` as a tutor. In **Date overrides**, verify the Online,
+Offline, and Both tabs are keyboard-accessible; add and remove several future
+dates; add up to four non-overlapping time ranges; and save. The calendar
+preview must show every selected date/range with the chosen modality. Repeat
+with a past/duplicate date, malformed or reversed time, overlapping range, and
+conflict against an existing one-off window: inline validation must explain the
+problem, keep Save disabled, and prevent the request. Bypass the client check
+with the API test or a second browser only for the conflict case; the server
+must still fail without persisting any part of the batch. A
+conflicting weekly-generated occurrence should be soft-deactivated and replaced
+by the override. This feature adds no migration, environment variable, job, or
+deployment-time configuration.
+
+## Dynamic dashboard greeting smoke check (2026-09-08)
+
+Open `/dashboard` as a student, tutor, and admin. Confirm the greeting uses the
+account's first name for students and tutors, always uses the fixed label
+`Admin` for admins, and contains role-appropriate language. Test browser-local
+hours at 05:00, 11:00, 15:00, and 18:00 to cover morning, midday, afternoon,
+and evening boundaries. Reloading may choose another phrase; background query
+updates must not change the chosen phrase. Also verify an upcoming student
+lesson, a tutor review queue, and a non-empty admin priority queue produce
+relevant supporting copy.
 
 ## Unified booking-action smoke check (2026-09-08)
 
@@ -122,7 +148,7 @@ only load wallet data after an admin selects a result.
 
 Started-session cancellation check: open a scheduled booking as its student before start and confirm Cancel booking is available. The confirmation dialog must require a non-blank reason, keep its submit action disabled for whitespace-only input, and share the saved reason in booking activity/notification. Tutor decline and both student/tutor reschedule APIs must also reject a missing or blank reason. At/after `scheduledStartAt`, reload the detail and confirm the action is absent. Calling `/rpc/booking/cancel`, participant withdrawal, or per-series-session cancellation directly must return `BOOKING_CANCELLATION_DEADLINE_PASSED`, must not deduct/release Marks or cancel the meeting, and the tutor must still be able to complete the booking. Route post-start delivery/attendance problems through support/admin review.
 
-Booking-list smoke check: verify Needs action, Upcoming, Recurring, History, and All. Students and tutors default to Needs action when pending decisions exist and Upcoming otherwise; admins default to All. Recommended places pending decisions above active bookings and terminal outcomes at the bottom. Soonest and Latest order by scheduled date, `?tab=`/`?sort=` preserve choices, and History contains every terminal outcome. With more than 20 bookings, verify **Load more bookings** appends the next cursor without removing the current cards, keeps the page stable while loading, and removes itself after the final page. Tab counts should show `+` until all pages are loaded.
+Booking-list smoke check: verify Needs action, Upcoming, Series, History, and All. Students and tutors default to Needs action when pending decisions exist and Upcoming otherwise; admins default to All. Recommended places pending decisions above active bookings and terminal outcomes at the bottom. Soonest and Latest order by scheduled date, `?tab=`/`?sort=` preserve choices, and History contains every terminal outcome. With more than 20 bookings, verify **Load more bookings** appends the next cursor without removing the current cards, keeps the page stable while loading, and removes itself after the final page. Tab counts should show `+` until all pages are loaded.
 
 Timing-chip check: pending rows with `deadlineAt` show Respond in, switch to warning within three hours and danger within 30 minutes, then say Response overdue without pretending the state is Expired. Confirmed/scheduled rows show Today, Starts in within three hours, Starting soon within 30 minutes, and In progress between start and end. Completed, declined, cancelled, expired, and other terminal rows show no chip. Leave the page open and confirm labels refresh without reloading.
 On `/bookings`, verify the timing chip follows the role-appropriate financial summary (IDR Honorarium for tutors; Earns/Total or You pay for student/admin views) and has a vertical divider on its left. On student and tutor dashboards, verify the shared next-lesson card hides You pay/Earns/Total while retaining the timing chip.
@@ -197,16 +223,19 @@ does not fall into the generic error screen, and the browser console has no
 `FieldError` has been rendered outside a Selia `Field` root; inspect the affected
 form composition before checking the API or database.
 
-For a complete draft or `changes_requested` tutor, click **Submit for review**
-and confirm the bilingual Indonesian/English Terms of Service dialog opens. The
-primary action must remain disabled until the agreement checkbox is selected;
-both language sections must be readable in Indonesian-then-English order, and Cancel/Exit must leave the
-profile unsubmitted. Accept the terms and verify the profile moves to
-`pending_review`. Reload the tutor profile and submit again after a revision;
-the dialog should not appear a second time, and the acceptance timestamp/version
-should remain unchanged. The sticky action area must still show
-**View Tutor Terms**; opening it shows the current document
-without the acceptance checkbox or a submit action.
+For a complete draft or `changes_requested` tutor, verify the sticky profile
+action area shows one **I agree to the Tutor Terms of Service** checkbox and a
+**Read terms** action. The checkbox must expose an inline error and receive
+focus when **Submit for review** is pressed while it is unchecked. **Read
+terms** opens the bilingual Indonesian/English document in Indonesian-then-
+English order; closing it preserves the checkbox state, and the dialog has no
+second acceptance checkbox or submit action. At narrow widths, confirm the
+consent copy wraps naturally and the save/submit buttons stack without
+horizontal overflow. Check the agreement, submit, and verify the profile moves
+to `pending_review`. Reload the tutor profile and submit again after a
+revision; the checkbox should remain checked/disabled, the read-only action
+should still work, and the acceptance timestamp/version should remain
+unchanged.
 
 For Google sign-in, start from `https://app.cogitoacademy.id/login` in an incognito/clean browser and confirm the provider callback is `https://api.cogitoacademy.id/api/auth/callback/google`, followed by the frontend route `/auth/callback` and the role-appropriate destination. The Google authorization URL must contain `prompt=consent`; record the Google permission screen in the verification video and click **Show all services** so every requested identity scope is fully expanded and readable before accepting. In DevTools, the initial auth response must set `better-auth.state` with `Secure`, `HttpOnly`, and `SameSite=Lax`; the callback request must include that cookie and its `state` query parameter. Keep the Google Cloud OAuth client configured with the frontend origin `https://app.cogitoacademy.id` and the API redirect URI `https://api.cogitoacademy.id/api/auth/callback/google`. This login flow requests identity scopes only. For the separate Calendar scope used by automatic Meet creation, use the dedicated Meet OAuth client and the consent/refresh-token procedure in `docs/GOOGLE-MEET-SETUP.md`; do not add Calendar access to every user's login.
 
@@ -257,9 +286,9 @@ Open `/guide` after signing in as each supported role. Verify the guide loads wi
 - Tutor: Tutor and Student.
 - Admin: Admin, Tutor, and Student.
 
-Select each available role view from the standalone control at the top and confirm the URL updates with `?view=...`, all step details are open on first load, and a disallowed view falls back to the role's default. On desktop, verify the guide is centered within a `max-w-6xl` shell and the right-side chapter rail remains sticky; its single progress index, numbered Selia `Item` rows with a badge-like semantic `ItemMedia` tint, step counts, and selected chapter should update as you scroll and click. On narrow screens, verify the rail stacks above the content without horizontal scrolling. Use the global Collapse/Expand details control and individual timeline buttons with both pointer and keyboard input; verify the height and content transitions are smooth, every collapsed row shrinks to its visible trigger without blank body space, expanded connectors still span the full row, reduced-motion preferences remove the motion, and statuses, What if? branches, and CTAs remain readable. Confirm the important timing callouts render as bold text and state the concrete rules: invite links expire after 7 days; booking response, participant confirmation, reconfirmation, and room approval allow 12 hours unless the session starts sooner; student self-service changes close at H-2 (2 hours before start); reschedule proposals expire after 24 hours; lateness/no-show reporting starts after 15 minutes; meeting retries run every 5 minutes for up to 3 attempts; and support exceptions use a 30-minute business-hours or 4-hour outside-hours SLA. Check that CTAs open the existing tutor, booking, profile, operations, achievement, economy, calendar, balance, and resource surfaces.
+Select each available role view from the full-width control at the top and confirm the URL updates with `?view=...`, all step details are open on first load, and a disallowed view falls back to the role's default. On desktop, verify the `max-w-7xl` guide shell uses a sticky chapter index on the left and that its selected chapter updates as the page scrolls or an item is clicked. On narrow screens, verify the chapter index becomes a horizontally scrollable, snap-aligned row above the content and the page has no horizontal overflow. Check that the hero highlights change with the selected role and reflow from three columns to one. Use the global and per-step disclosure controls with pointer and keyboard input; verify collapsed cards return to header height without blank space, animations respect reduced-motion preferences, and statuses, exception branches, and CTAs remain readable. Confirm the important timing callouts render as bold text and state the concrete rules: invite links expire after 7 days; booking response, participant confirmation, reconfirmation, and room approval allow 12 hours unless the session starts sooner; student self-service changes close at H-2 (2 hours before start); reschedule proposals expire after 24 hours; lateness/no-show reporting starts after 15 minutes; meeting retries run every 5 minutes for up to 3 attempts; and support exceptions use a 30-minute business-hours or 4-hour outside-hours SLA. Check that CTAs open the existing tutor, booking, profile, operations, achievement, economy, calendar, balance, and resource surfaces.
 
-Guide copy is maintained in `apps/web/src/components/guide/guide-content.ts`. When a booking state, role responsibility, or linked route changes, update the corresponding typed step/branch and the guide content test in the same change. The guide is intentionally code-managed in v1; no admin editor, CMS publish step, or API migration is required. During local visual refinement, toggle the development-only Tweaks Bar with `Ctrl/Cmd+Shift+.`; treat its values as exploration until the chosen change is copied deliberately into the guide styles.
+Guide copy is maintained in `apps/web/src/components/guide/guide-content.ts`. When a booking state, role responsibility, or linked route changes, update the corresponding typed step/branch and the guide content test in the same change. The guide is intentionally code-managed in v1; no admin editor, CMS publish step, or API migration is required.
 
 The shared frontend pending state uses the default loading component from `apps/web/src/components/loader.tsx` and the local Selia `Spinner` from `packages/ui/components/selia/spinner.tsx`. If a navigation or feature smoke test catches a loading state, verify the `cogito-orange` primary progress arc and `Loading` label remain visible in both light and dark themes, and that the ring remains understandable without animation under reduced-motion preferences. No bespoke pulse skeleton should appear in the web app.
 
@@ -274,8 +303,11 @@ As a signed-in student or tutor, open `/notifications` and confirm the list show
 ### Economy rate-control smoke check
 
 As an admin, open `/admin-economy`, confirm the Marks value, tutor minimum/increments,
-and online/offline Cogito take schedule are visible. Change a Cogito base or increment
-by a valid Rp 5,000 step, save, reload, and verify the version increments and the
+and online/offline Cogito take schedule are visible and read-only by default. Select
+**Edit schedule**, confirm the editing badge and cancel action appear, then change a Cogito base or increment
+either by typing an IDR amount or using the Rp5,000 stepper controls, confirm the
+shared class-size pricing table preview updates by a valid Rp5,000 step, then save,
+reload, and verify the version increments and the
 preview for class sizes 1–6 changes. The save is optimistic-lock protected and affects
 only future booking/repricing snapshots; existing booking snapshots must remain unchanged.
 After a successful change, verify no `Cogito rate updated` in-app notification appears
@@ -285,7 +317,7 @@ As a student or tutor, opening `/admin-economy` must redirect away and direct
 `admin.getEconomySettings`/update calls must return FORBIDDEN.
 
 The tutor profile at `/profile` should show IDR base honorarium fields (online/offline), enforce the
-Rp 50,000 minimum and Rp 5,000 steps, show one combined six-row preview matrix for the
+Rp50,000 minimum and Rp5,000 steps, show one combined six-row preview matrix for the
 selected modalities, and must not describe Marks as cash-out. Student
 tutor discovery and booking previews should show computed Marks per student for the
 selected modality; legacy profiles without `baseRatesIdr` remain readable. Change a
@@ -333,7 +365,7 @@ Verify booking titles use `Cogito - {Competition} | {Tutor} x {Student}` and
 group/group-series titles use `& Friends`, matching the Google Calendar/Meet
 summary rather than listing participants with `+N`.
 
-With seeded student, tutor, and admin sessions, open `/bookings` and verify the same list layout loads for each role. Students see proposer/participant bookings, tutors see assigned bookings with the Cogito mark icon before `Earns: X` and `Total: Y`, and admins see the full list with the icon before `Total X` and `Tutor Y`, with no lifecycle mutations. Verify the Upcoming/Pending/Recurring/Past/Cancelled/All tabs, that generic status badges are hidden outside All (except attention states), and that hovering/focusing a visible status badge shows its explanation. On a narrow viewport, confirm the rounded tab strip fills the available page width, only the inner tab list can be swiped horizontally to reach every tab, active-tab shadows and focus rings remain visible at both scroll edges, and the page does not create horizontal overflow or show a scrollbar. Confirm the empty-state outline and decorative glow remain visible inside the rounded card boundary without creating overflow. Confirm mobile rows keep date, location, and tutor name readable beside the booking summary, while desktop time/location/tutor metadata stays aligned and the action button remains at the far edge. For single-session group bookings, student `You pay` must show the per-student amount, and the participant avatar stack must not include the tutor. Open a row’s detail page to perform actions; list rows should not expose inline cancellation or reschedule mutations. `/tutor-bookings` should redirect to `/bookings`.
+With seeded student, tutor, and admin sessions, open `/bookings` and verify the same list layout loads for each role. Students see proposer/participant bookings, tutors see assigned bookings with the Cogito mark icon before `Earns: X` and `Total: Y`, and admins see the full list with the icon before `Total X` and `Tutor Y`, with no lifecycle mutations. Verify the Upcoming/Pending/Series/Past/Cancelled/All tabs, that generic status badges are hidden outside All (except attention states), and that hovering/focusing a visible status badge shows its explanation. On a narrow viewport, confirm the rounded tab strip fills the available page width, only the inner tab list can be swiped horizontally to reach every tab, active-tab shadows and focus rings remain visible at both scroll edges, and the page does not create horizontal overflow or show a scrollbar. Confirm the empty-state outline and decorative glow remain visible inside the rounded card boundary without creating overflow. Confirm mobile rows keep date, location, and tutor name readable beside the booking summary, while desktop time/location/tutor metadata stays aligned and the action button remains at the far edge. For single-session group bookings, student `You pay` must show the per-student amount, and the participant avatar stack must not include the tutor. Open a row’s detail page to perform actions; list rows should not expose inline cancellation or reschedule mutations. `/tutor-bookings` should redirect to `/bookings`.
 
 Verify the role-aware default tab: students and tutors open on Needs action when pending decisions exist and Upcoming otherwise; admins open on All. Explicit `?tab=` and `?sort=` selections must override the defaults. Recommended sorting must put pending decisions above active bookings and terminal outcomes at the bottom, using soonest dates within active groups and latest dates in History. Verify that Soonest and Latest order solely by scheduled date.
 
@@ -379,7 +411,7 @@ consent, in notifications, or in audit records.
 
 ### Form-control smoke check
 
-On availability/profile/admin forms, verify dates use the Selia date picker, times use the 24-hour minute control, multiline fields use Selia Textarea, and IDR amounts use Selia NumberField. Focus each text-entry field at a narrow viewport and confirm its rendered font is 16px or larger so the browser does not zoom the page. On `/availability`, confirm both weekly time fields stay compact and equal in width with a centered dash between them, while focusing a time field allows its suggestions to extend beyond the field when needed; confirm the modality trigger keeps its icon and label on one row. On the calendar, verify month/year dropdowns open as Selia selects and retain the selected value. No app-level raw date, time, number, select, or textarea control should appear, and the browser console should remain free of runtime errors.
+On availability/profile/admin forms, verify dates use the Selia date picker, times use the 24-hour minute control, multiline fields use Selia Textarea, and IDR amounts use Selia NumberField. Focus each text-entry field at a narrow viewport and confirm its rendered font is 16px or larger so the browser does not zoom the page. On `/availability`, confirm both weekly time fields stay compact and equal in width with a centered dash between them, while focusing a time field allows its suggestions to extend beyond the field when needed; confirm the modality trigger keeps its icon and label on one row. At desktop width, verify Calendar preview appears below Date override, its seven-day strip selects only dates with windows, and the selected-day panel shows time, weekly/override source, and modality. Clicking a window's trash action must open a confirmation dialog; cancelling preserves the window and confirming removes it with success/error feedback. On the calendar, verify month/year dropdowns open as Selia selects and retain the selected value. No app-level raw date, time, number, select, or textarea control should appear, and the browser console should remain free of runtime errors.
 
 ### Achievement form smoke check
 
@@ -458,6 +490,14 @@ On `/tutors/:tutorId/book`, verify Available times is the only scheduling card: 
 
 ### Student booking responsive-layout smoke check
 
+At a narrow viewport, smoke-test dashboard, admin operations, tutor
+availability/onboarding, profile, notifications, achievements, and wallet cards.
+Explanatory header copy must be available from the info trigger beside the title
+without reserving a second header row. Sign-in and sign-up must have title-only
+headers; while their initial session check is loading, the loader must reserve the
+full auth content height so the legal notice does not shift upward. Content
+summaries and account/resource metadata must remain visible inline.
+
 Open the create-booking page with a tutor that supports both modalities and several availability windows. At desktop width, confirm Session format and Booking summary form a sticky right rail and availability remains a two-column card grid. The page header must not show a changing booking-type badge; adding invitees updates the Participants badge and both summaries from Solo to `You + N invitees`. Confirm the participant search has a decorative leading magnifier and that its input, results popup, and result actions use the default Selia radius rather than pill or enlarged local overrides. Select one slot: only that card should expand into a full row, with its own start-time editor directly beside it; there must be no consolidated “Selected session time” panel. Select additional series slots and confirm each one retains an adjacent editor. The summary must distinguish Participants from Sessions (`Single session` or `Series · N sessions`) and list every selected series date and time in compact `EEE, d MMM yyyy` form. Changing modality must clear incompatible selected slots. At mobile width, confirm each editor stacks below its selected slot, Session format appears before the main booking fields, the desktop summary is absent, and a sticky bottom preview shows the current schedule and `CogitoMarks` price without covering the final content. Open **Review**, verify the bottom drawer mirrors tutor, subject, participants, sessions, format, schedule, price, reserved amount, available balance, and post-reserve balance. For a one-session group, the reserved amount must cover the target headcount; for group series it must cover only the proposer's package. Submit from the drawer and confirm exactly one booking request is created. Test insufficient balance, no selected time, blank session notes, a 2–4 session series, and a group booking; button labels and disabled/progress states must match the desktop summary.
 
 In the same drawer, select the booking's current date and start minute. Confirm the UI explains that a different time is required and disables **Send proposal**. While a proposal is pending, reopen the drawer and select that pending start minute; it must also be disabled. Repeat against a non-first series session's own active time. Direct RPC requests for either no-op must return `BOOKING_NOT_EDITABLE` without creating or superseding a proposal. Finally, submit two concurrent proposals for one booking and verify no more than one `pending` row exists.
@@ -495,7 +535,7 @@ without repeating the parent category, size to their content, and truncate
 within the single metadata row when necessary. Confirm the `+N` count and
 `From [Marks icon] #` price block stay visible on the same line.
 
-Open `/profile` as a tutor and verify the selector loads exactly seven active competition categories and 33 specializations from `tutors.listSubjects`. All categories should be visible with keyboard-accessible checkboxes, no manual specialization input, selected-specialization chips, and a 7-specialization limit. The selector should show the current count, disable an eighth selection, and the submit validation should reject any over-limit state. Select specializations from multiple categories, save a draft, and confirm the selections reload with the profile. A submission with no current specialization must be blocked; archived legacy specializations on an existing profile should remain visible as read-only labels. Published tutor discovery should expose current specializations and allow students to filter by category or specialization. On the tutor list page, category, specialization, and modality filter triggers must show their labels rather than raw IDs or values. Confirm category and specialization filters support multiple values, retain overlapping specializations while categories are added, remove specializations that are no longer available after a category is removed, and wait about 300 ms after typing/toggling before `listPublished` runs. Open a tutor drawer with both modalities and verify pricing appears in one table with `Group Size`, `Online (Marks)`, and `Offline (Marks)` columns; populated prices should have the Cogito Marks icon as a prefix, and a size available in only one modality should show an em dash in the other column. Below the `sm` breakpoint, confirm the student tutor profile opens from the bottom and dismisses with a downward swipe; at `sm` and wider, confirm it opens from the right and dismisses rightward. On a short viewport, confirm the profile body scrolls independently while its header and booking/close footer remain visible; body overscroll may bounce locally, but the fixed regions must not move.
+Open `/profile` as a tutor and verify the selector loads exactly seven active competition categories and 33 specializations from `tutors.listSubjects`. At `md` and wider, confirm the category cards form two independent vertical stacks without a large blank area beside a taller card; below `md`, confirm they collapse into one visible column. All categories should be visible with keyboard-accessible checkboxes, no manual specialization input, selected-specialization chips, and a 7-specialization limit. The selector should show the current count, disable an eighth selection, and the submit validation should reject any over-limit state. Select specializations from multiple categories, save a draft, and confirm the selections reload with the profile. A submission with no current specialization must be blocked; archived legacy specializations on an existing profile should remain visible as read-only labels. Published tutor discovery should expose current specializations and allow students to filter by category or specialization. On the tutor list page, category, specialization, and modality filter triggers must show their labels rather than raw IDs or values. Confirm category and specialization filters support multiple values, retain overlapping specializations while categories are added, remove specializations that are no longer available after a category is removed, and wait about 300 ms after typing/toggling before `listPublished` runs. Open a tutor drawer with both modalities and verify pricing appears in one table with `Group Size`, `Online (Marks)`, and `Offline (Marks)` columns; populated prices should have the Cogito Marks icon as a prefix, and a size available in only one modality should show an em dash in the other column. Below the `sm` breakpoint, confirm the student tutor profile opens from the bottom and dismisses with a downward swipe; at `sm` and wider, confirm it opens from the right and dismisses rightward. On a short viewport, confirm the profile body scrolls independently while its header and booking/close footer remain visible; body overscroll may bounce locally, but the fixed regions must not move.
 
 ### Tutor achievement and experience formatting smoke check
 
@@ -694,7 +734,7 @@ after boot is promoted by the Better Auth signup hook. Set `ADMIN_EMAILS` to a
 comma-separated list when more than one trusted account should be bootstrapped.
 Other admin accounts may still be granted through the existing admin role UI/API.
 
-Default catalog values follow PRD OQ-01: Starter 50 Marks / Rp 312,500, Learner 120 Marks / Rp 690,000, Explorer 200 Marks / Rp 1,070,000, Pioneer 400 Marks / Rp 2,000,000. Migration `0041_seed_mark_packages.sql` inserts missing rows and updates those name/Marks/price fields when a matching code already exists, while preserving an existing `is_active` choice. Seed demo students are marked email-verified so the local booking smoke flow can exercise the verified-student guard without an external OTP provider. To change the catalog after deployment, use the admin mark-package API; do not delete rows because payment records reference the package id and retain amount/Marks snapshots.
+Default catalog values follow PRD OQ-01: Starter 50 Marks / Rp312,500, Learner 120 Marks / Rp690,000, Explorer 200 Marks / Rp1,070,000, Pioneer 400 Marks / Rp2,000,000. Migration `0041_seed_mark_packages.sql` inserts missing rows and updates those name/Marks/price fields when a matching code already exists, while preserving an existing `is_active` choice. Seed demo students are marked email-verified so the local booking smoke flow can exercise the verified-student guard without an external OTP provider. To change the catalog after deployment, use the admin mark-package API; do not delete rows because payment records reference the package id and retain amount/Marks snapshots.
 
 If production is currently missing packages, deploy the migration and verify with:
 
@@ -1349,7 +1389,9 @@ overall lines, functions, and branches from `coverage/lcov.info`; a 0/0 branch
 total is treated as 100%. If this gate fails, inspect the missing function/line
 records in the generated lcov report and add a behavior-level test before
 pushing. A failed coverage test command is also propagated explicitly after
-the comment step. The Bun command's own function/statement output is
+the comment step. The generated PR comment uses blank lines between its status
+blockquote and tables; preserve these separators when editing the renderer.
+The Bun command's own function/statement output is
 diagnostic; the lcov gate is authoritative.
 
 The CI lint job uses the pinned oxlint 1.80.0 and oxfmt 0.65.0 toolchain. It
@@ -1430,7 +1472,7 @@ Concurrent modification conflict. The `version` field didn't match. Retry the op
 - `Payment simulation error: 403 REQUEST_FORBIDDEN_ERROR` — verify the production key is a Test Mode secret (`xnd_development_...`) with **Money-in / Payments → Write** permission, while `XENDIT_MODE=test`; then create a fresh purchase.
 - `Payment simulation error: 400 INACTIVE_PAYMENT_METHOD` — the dynamic QR has already been completed, canceled, or expired. On the patched build, retrying once performs an authoritative status reconciliation; if it still fails, use a fresh pending intent rather than retrying the inactive QR indefinitely.
 - `Payment simulation error: 400 ...` — inspect the Xendit error code/message for amount mismatch or another request validation failure. Do not retry an old payment indefinitely; create a fresh pending intent after correcting the request/configuration.
-- `Payment provider error: 503 ...` on Explorer (Rp 1,070,000) / Pioneer (Rp 2,000,000) only — **Xendit Test Mode amount cap (~IDR 1,000,000)**. Starter/Learner work; all four packages work in Live Mode (QRIS channel limit is 1–10,000,000 IDR). For UAT use Starter/Learner, or temporarily lower the package price below 1M via the admin mark-package API. The Balance page labels Explorer/Pioneer in Test Mode.
+- `Payment provider error: 503 ...` on Explorer (Rp1,070,000) / Pioneer (Rp2,000,000) only — **Xendit Test Mode amount cap (~IDR 1,000,000)**. Starter/Learner work; all four packages work in Live Mode (QRIS channel limit is 1–10,000,000 IDR). For UAT use Starter/Learner, or temporarily lower the package price below 1M via the admin mark-package API. The Balance page labels Explorer/Pioneer in Test Mode.
 - Re-purchase behavior — a PAID, SETTLED, FAILED, EXPIRED, or REFUNDED attempt is retained as history and the next `payment.createPurchase` call creates a new payment row/provider reference. Only the latest PENDING attempt is reused. Test transactions in the production database therefore do not permanently lock a package for the UAT account.
 
 ### Database Connection Errors
@@ -1621,7 +1663,7 @@ The production app can run Xendit Test Mode first. The switch to Live Mode happe
 1. **Pre-flight:** run the sandbox checklist above against the sandbox keys. Confirm `XENDIT_DEFAULT_PAYMENT_METHOD` matches the launch channel (default `qris`).
 2. **Webhook wiring:** set the Xendit dashboard webhook URL to `https://api.cogitoacademy.id/webhooks/payments/xendit` and confirm the dashboard sends the `api-version: 2024-11-11` payload shape (`data.payment_id` / `data.payment_request_id`). The webhook idempotency key derives from the verified payload id/reference plus normalized lifecycle status — no `x-callback-token` guessing. During UAT, send the same paid payload twice (the second must be idempotent), then verify a different lifecycle status for the same payment is not suppressed.
 3. **Env:** in the SOPS-encrypted prod env, set `XENDIT_MODE=live` and replace the Test Mode `XENDIT_SECRET_KEY`/`XENDIT_WEBHOOK_TOKEN` with Live Mode credentials. Keep the redirect URLs, update the webhook configuration to Live Mode, and set `WEBHOOK_ALLOWED_IPS` to the live egress IPs from Xendit. The env schema fails boot if `PAYMENT_PROVIDER=xendit` lacks credentials or an explicit mode, so a half-swapped config cannot silently run the stub.
-4. **Live smoke:** run one real small purchase (Pioneer 400 / Rp 2,000,000 or the smallest approved package) end-to-end: create purchase → Xendit checkout → webhook → wallet credit once. Verify the redirect return works and the balance page reflects the credit.
+4. **Live smoke:** run one real small purchase (Pioneer 400 / Rp2,000,000 or the smallest approved package) end-to-end: create purchase → Xendit checkout → webhook → wallet credit once. Verify the redirect return works and the balance page reflects the credit.
 5. **Negative tests:** deliver a webhook with a wrong token (rejected), from a non-allowlisted IP (rejected), and a duplicate delivery (idempotent — single credit).
 6. **Refund path:** confirm an `adminRefund` writes `refund_record` with `amount_idr = 0` and `provider_event_id` NULL — no Xendit cash refund is ever issued (PRD §677).
 7. **Rollback:** keep Test Mode keys/token and the UAT allowlist in the SOPS vault under separate named entries. Roll back by restoring `XENDIT_MODE=test` plus the Test Mode credentials/allowlist and redeploying; use `PAYMENT_PROVIDER=stub` only as an emergency fallback. Document the switch timestamp and transaction reference in the ops log.
@@ -1890,3 +1932,7 @@ Apply migrations `0034_faulty_richard_fisk.sql`, `0035_ordinary_lyja.sql`, and `
 ## Cogito Marks visual smoke check
 
 Check wallet balances/history, tutor pricing, booking creation/detail/cards, Knowledge Bank eligibility, and admin wallet/analytics screens. Every visible numeric Marks amount must show the Cogito mark symbol immediately before the value; ordinary labels and action copy that mention Marks should remain text. Screen-reader inspection should expose each amount as “N Marks”.
+
+## Invite Tutor card visual smoke check
+
+On `/admin-tutors` at desktop width, verify the Invite Tutor card ends directly after its footer. The adjacent Invitations card may be taller, but it must not stretch the form card or leave a white strip below the footer. Filter Invitations to reduce its records and verify pagination stays aligned to the bottom of the height supplied by its parent grid row.

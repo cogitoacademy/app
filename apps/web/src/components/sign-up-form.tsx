@@ -4,7 +4,6 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
@@ -134,15 +133,18 @@ export default function SignUpForm({
   });
 
   if (isPending && !isAuthTransitioning) {
-    return <Loader />;
+    return (
+      <div className="flex min-h-[calc(100svh-6rem-94.5px)] w-full items-center justify-center p-4">
+        <Loader />
+      </div>
+    );
   }
 
   return (
-    <div className="w-full flex items-center justify-center p-4 lg:min-h-[calc(100svh-6rem)]">
+    <div className="w-full flex items-center justify-center p-4 lg:min-h-[calc(100svh-6rem-94.5px)]">
       <Card className="w-full lg:w-5/12 xl:w-md">
         <CardHeader align="center">
           <CardTitle level={1}>Create your account</CardTitle>
-          <CardDescription>Enter your details to get started</CardDescription>
         </CardHeader>
         <CardBody className="flex flex-col gap-5">
           <div className="flex flex-col gap-2.5">
@@ -150,7 +152,7 @@ export default function SignUpForm({
               type="button"
               variant="secondary"
               block
-              size="lg"
+              size="sm"
               onClick={() => {
                 const callbackUrl = new URL(
                   "/auth/callback",
@@ -186,7 +188,7 @@ export default function SignUpForm({
               Sign up with Google
             </Button>
           </div>
-          <Divider variant="center" className="my-2">
+          <Divider variant="center" className="md:my-2">
             Or sign up with email
           </Divider>
           <form
@@ -346,7 +348,7 @@ export default function SignUpForm({
                     </Button>
                   </div>
                   <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                    <FieldDescription>
+                    <FieldDescription className="text-xs md:text-sm">
                       At least 8 characters with uppercase, lowercase, and a
                       number.
                     </FieldDescription>
@@ -383,7 +385,7 @@ export default function SignUpForm({
             </form.Subscribe>
           </form>
 
-          <Text className="text-center">
+          <Text className="text-center text-sm md:text-base">
             Already have an account?{" "}
             <TextLink
               render={

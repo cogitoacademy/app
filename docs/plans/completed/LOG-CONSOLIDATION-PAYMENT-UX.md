@@ -36,8 +36,8 @@ with path, statusCode, description, requestId, requestClient (userId).
 - `balance-page.tsx` purchase mutation has `onSuccess` but **no `onError`** —
   failures are silent.
 - Xendit Test Mode rejects payment requests above ~IDR 1,000,000:
-  - Starter Rp 312,500 ✅ · Learner Rp 690,000 ✅
-  - Explorer Rp 1,070,000 ❌ `SERVICE_UNAVAILABLE` · Pioneer Rp 2,000,000 ❌
+  - Starter Rp312,500 ✅ · Learner Rp690,000 ✅
+  - Explorer Rp1,070,000 ❌ `SERVICE_UNAVAILABLE` · Pioneer Rp2,000,000 ❌
   - QRIS channel limit is 1–10,000,000 IDR (Xendit docs), so this is a
     **Test Mode cap**, not a channel limit. Live Mode accepts all four.
 - Decision (operator, 2026-09-03): **label** Explorer/Pioneer in Test Mode

@@ -8,6 +8,7 @@ import {
 } from "./tutor.types";
 import {
   upsertAvailabilityInput,
+  createDateOverridesInput,
   createWeeklyAvailabilityInput,
   replaceWeeklyAvailabilityInput,
   deleteAvailabilityInput,
@@ -82,6 +83,18 @@ export function createTutorRouter(handler: TutorHandler) {
       })
       .input(upsertAvailabilityInput)
       .handler(handler.upsertAvailability),
+
+    createDateOverrides: tutorProcedure
+      .route({
+        method: "POST",
+        path: "/tutor/availability/overrides/create",
+        tags: ["Tutor"],
+        summary: "Create date overrides",
+        description:
+          "Atomically creates multiple one-off tutor availability windows",
+      })
+      .input(createDateOverridesInput)
+      .handler(handler.createDateOverrides),
 
     createWeeklyAvailability: tutorProcedure
       .route({

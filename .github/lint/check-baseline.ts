@@ -14,7 +14,10 @@ const baseline = (await Bun.file(baselineUrl).text())
   .filter(Boolean)
   .toSorted();
 
-const lint = Bun.spawn(["bunx", "oxlint@1.80.0", "--format=json"], {
+// Spawn through the active Bun executable instead of a shell-specific `bunx`
+// shim. Resolve the workspace-installed oxlint so the same lockfile-pinned
+// version is used locally and in CI.
+const lint = Bun.spawn([process.execPath, "x", "oxlint", "--format=json"], {
   stdout: "pipe",
   stderr: "ignore",
 });

@@ -1,6 +1,17 @@
 # Cogito Module Reference
 
-Last updated: 2026-09-08
+Last updated: 2026-09-09
+
+## Dashboard greeting presentation (2026-09-08)
+
+`apps/web/src/components/dashboard/dashboard-greetings.ts` owns the four local
+time bands and the phrase pools for `student`, `tutor`, and `admin`.
+`createDashboardGreeting` is a pure selector: callers supply role, name, hour,
+random value, and optional workload context. `DashboardWelcomeCard` owns the
+minute-level clock refresh and a mount-stable random value. The greeting is a
+frontend presentation concern; it adds no service, event key, or business
+rule. The selector hardcodes `Admin` for the admin role, while student and tutor
+roles derive the first name from the supplied account name.
 
 ## Booking-detail action ownership (2026-09-08)
 
@@ -45,7 +56,11 @@ The shared Selia card module exposes `CardInfoPreview` as an inline title slot
 for the app's icon-triggered `InfoPreview` popover. Its first use moves the admin
 Booking activity explanation into the title row, and the popover trigger now
 accepts a caller-provided icon. Booking-detail cards and their admin extensions
-use the same composition for explanatory header copy. No service, repository,
+use the same composition for explanatory header copy. Dashboard, admin, tutor
+availability, onboarding, profile, notification, and wallet headers use it as
+well, while sign-in/sign-up use title-only headers and primary content and
+metadata stay inline. Their initial session loader reserves the authentication
+content height to prevent the legal notice from shifting. No service, repository,
 event key, or business rule changed.
 
 ## Sidebar logo contrast (2026-09-04)
@@ -115,7 +130,8 @@ lcov artifact and enforces 100% for `packages/api` lines, overall lines,
 functions, and branches. A 0/0 branch total is treated as 100%; coverage test
 command failures are explicitly propagated after the comment/gate step. The
 gate is configured by `.github/workflows/ci.yml` and implemented in
-`.github/scripts/coverage-comment.ts`.
+`.github/scripts/coverage-comment.ts`. The renderer separates the gate
+blockquote and tables with blank lines required by GitHub Markdown.
 
 ## Collection transition behavior (2026-08-28)
 
@@ -129,7 +145,7 @@ lookup and student search do not retain stale results across a changed query.
 Manage Tutors requests three invitations and five tutor profiles per page; the
 two collections keep independent page size, offset, and next-page state.
 
-The shared booking list uses Needs action, Upcoming, Recurring, History, and All tabs. Students and tutors land on Needs action when pending decisions exist; admins retain All. Recommended sorting ranks pending decisions first, active bookings next, and terminal outcomes last; Soonest and Latest provide direct date ordering. The URL stores both presentation choices. The page consumes `booking.listMine` in cursor-backed batches of 20 with an explicit **Load more bookings** action. Infinite-query pages are appended without replacing loaded cards; tabs and sorting operate on loaded pages, and counts use a `+` suffix while another cursor remains.
+The shared booking list uses Needs action, Upcoming, Series, History, and All tabs. Students and tutors land on Needs action when pending decisions exist; admins retain All. Recommended sorting ranks pending decisions first, active bookings next, and terminal outcomes last; Soonest and Latest provide direct date ordering. The URL stores both presentation choices. The page consumes `booking.listMine` in cursor-backed batches of 20 with an explicit **Load more bookings** action. Infinite-query pages are appended without replacing loaded cards; tabs and sorting operate on loaded pages, and counts use a `+` suffix while another cursor remains.
 
 `BookingListCard` derives one contextual time chip from server facts: pending states read `deadlineAt`, confirmed/scheduled states read the scheduled window, and terminal states render none. A module-level external clock store updates all mounted cards from one 30-second interval rather than allocating one timer per row.
 The reusable card exposes `showFinancialInfo`; booking lists keep it enabled and place the time chip after it, while dashboard next-lesson cards disable it.
@@ -181,11 +197,11 @@ production/staging review seed is deliberately separate: it uses
 and creates local-login student/tutor/admin review identities without touching
 the Google Calendar operator account.
 
-The frontend form-control refactor remains outside this service boundary. Selia controls provide consistent date, time, number, and multiline-input UX while retaining semantic HTML behavior and the existing API contracts. Shared text-entry controls use an explicit 16px font size below the `lg` breakpoint to prevent mobile focus zoom, then use the tokenized `text-base` size from `lg` upward. Tutor availability keeps compact, equal-width minute-time fields with a visual range separator and content-sized suggestions, and modality triggers render icons beside labels. Portal-based date/select popups are layered above dialogs so the shared controls remain usable inside modal forms.
+The frontend form-control refactor remains outside this service boundary. Selia controls provide consistent date, time, number, and multiline-input UX while retaining semantic HTML behavior and the existing API contracts. Shared text-entry controls use an explicit 16px font size below the `lg` breakpoint to prevent mobile focus zoom, then use the tokenized `text-base` size from `lg` upward. Tutor availability keeps compact, equal-width minute-time fields with a visual range separator and content-sized suggestions, and modality triggers render icons beside labels. Its date-override editor validates the selected dates and shared ranges locally before calling the atomic batch procedure, while its calendar preview uses a seven-day selector plus selected-day detail, presents the published source/modality metadata, and gates slot removal behind a confirmation dialog without changing the delete service contract. Portal-based date/select popups are layered above dialogs so the shared controls remain usable inside modal forms.
 
 Frontend dashboard integration is intentionally read-only and role-scoped: student data comes from booking/discovery/wallet, tutor data from tutor actions/profile/availability/payouts, and admin data from booking operations/tutor moderation/achievement moderation. The shared booking list keeps financial/status metadata beside participant avatars, uses the Cogito mark icon plus status-badge tooltips for compact row presentation, orders active/all rows by nearest scheduled start while keeping past/cancelled history newest-first, and defaults by role to Upcoming (student), Pending when tutor requests exist (tutor), or All (admin); an explicit `tab` query parameter wins. On narrow screens, its rounded status-tab strip fills the available width while only the inner tab list scrolls horizontally within a hidden-scrollbar region so the page itself does not overflow; internal paint padding keeps selected-tab shadows and focus rings visible, and shared empty-state cards preserve their rounded glow and card shadow without widening the page. Student and tutor dashboards derive their next lesson from the same non-terminal, non-pending upcoming set and render the shared `BookingListCard`, so visual changes to the booking card apply to all three surfaces. They also render the shared `DashboardWelcomeCard` with role-specific copy and destinations, keeping the SVG illustration, minimum height, spacing, and CTA structure aligned. The tutor dashboard presents welcome/setup first and keeps the review queue and next lesson in the next visible row, with a stable empty/loading review card; its payout details card uses shared `InfoPreview` popovers for the unpaid-honorarium and transfer-fee explanations. Booking detail activity uses transition-specific icons and a single destination-state badge for scanability. Dashboard cards link to the existing feature routes where mutations and detailed workflows live.
 
-The authenticated frontend guide is a read-only, code-managed journey map at `/guide`. Its content lives in `apps/web/src/components/guide/guide-content.ts`, while `guide-page.tsx` renders the responsive Scandinavian timeline inside a centered `max-w-6xl` shell, a standalone top-level role switcher, a restrained sticky desktop chapter rail with a progress index, a semantic `ItemMedia` tint for the numbered chapter markers, and Selia `Item` rows, stacked mobile chapter navigation, default-open step details with a global collapse/expand control, status badges, expandable exception branches, and feature CTAs. Timeline markers stretch with their CSS Grid rows without imposing a percentage minimum height, allowing collapsed detail panels to return to trigger height without residual whitespace. Visibility is role-scoped: student → Student; tutor → Tutor + Student; admin → Admin + Tutor + Student. Important timing rules are rendered as bold copy from the typed content, including 7-day tutor invites, 12-hour response and room windows, H-2 (2 hours before start) self-service cutoffs, 24-hour reschedule proposals, 15-minute lateness, 5-minute meeting retries with 3 attempts, and the 30-minute / 4-hour support SLA. In development, the page mounts the anti-slop Tweaks Bar (`/tweaks-bar.js`) for live visual tuning; the script source was removed in #152 so the DEV-only mount is currently a no-op 404, and it is not part of the production product surface. The guide is documentation of existing behavior and does not create a service module or API contract.
+The authenticated frontend guide is a read-only, code-managed journey map at `/guide`. Its content lives in `apps/web/src/components/guide/guide-content.ts`, while `guide-page.tsx` composes a role switcher, Selia `Card` hero and highlights, a sticky left desktop chapter index, a horizontally scrollable snap index on mobile, and numbered disclosure cards for each step. Details open by default and can be toggled globally or per step; each card can also show statuses, exception branches, and feature CTAs. Visibility is role-scoped: student → Student; tutor → Tutor + Student; admin → Admin + Tutor + Student. Important timing rules are rendered as bold copy from the typed content, including 7-day tutor invites, 12-hour response and room windows, H-2 (2 hours before start) self-service cutoffs, 24-hour reschedule proposals, 15-minute lateness, 5-minute meeting retries with 3 attempts, and the 30-minute / 4-hour support SLA. The guide is documentation of existing behavior and does not create a service module or API contract.
 
 The shared frontend pending state is rendered by `apps/web/src/components/loader.tsx` as the default loading component: a token-based loading ring with the local Selia `Spinner` primary arc in `cogito-orange`, a visible loading label, and reduced-motion support. Feature loading placeholders that previously used bespoke pulse skeletons reuse this component as well. The reusable `Spinner` source lives at `packages/ui/components/selia/spinner.tsx`; this is presentation-only and does not introduce a service module.
 
@@ -327,7 +343,7 @@ does not change the shared empty-state tone defaults.
 - User lookup is case-insensitive and bounded; exact email/ID matches rank first, and wildcard characters are treated literally
 - Ledger filters must target exactly one wallet (`walletId` or `userId`, not both)
 - Economy writes require the current `version`; stale writes fail with `ECONOMY_CONFIG_CONFLICT`
-- Economy base and increment values are validated in Rp 5,000 increments; increments are non-negative
+- Economy base and increment values are validated in Rp5,000 increments; increments are non-negative
 - Existing booking price snapshots are immutable when the active schedule changes
 - Rate changes affect only future booking/repricing snapshots; they do not create tutor notifications
 - Re-saving the same four schedule values is a no-op and does not increment the economy version or write an audit row
@@ -803,9 +819,9 @@ chat directory.
 
 **Business Rules:**
 
-- Computational value defaults to Rp 5,000 per Mark
-- Tutor minimum base defaults to Rp 50,000; online/offline tutor increments default to Rp 30,000/Rp 40,000
-- Cogito take defaults to online Rp 50,000 + Rp 20,000 per additional student and offline Rp 90,000 + Rp 40,000 per additional student
+- Computational value defaults to Rp5,000 per Mark
+- Tutor minimum base defaults to Rp50,000; online/offline tutor increments default to Rp30,000/Rp40,000
+- Cogito take defaults to online Rp50,000 + Rp20,000 per additional student and offline Rp90,000 + Rp40,000 per additional student
 - Admin may edit only the active Cogito take fields through `admin.*`; every update is audit-logged
 - The config version is copied into new economic snapshots; existing snapshots do not change
 
@@ -826,7 +842,7 @@ chat directory.
 - `computeSplit(modality, tutorPricePerStudent, headcount)` — Legacy compatibility split for profiles that still use the old Marks pricing map
 - `computeEconomics(modality, baseRateIdr, headcount, config)` — Returns the IDR honorarium, IDR Cogito take, total IDR, total Marks, rounded per-student Marks, and immutable snapshot fields
 - `validatePrices(prices, modality)` — Validates floor prices by modality; returns error string or null
-- `validateBaseRates(baseRatesIdr, modality, config?)` — Validates minimum IDR base honorarium, supported modalities, and Rp 5,000 increments
+- `validateBaseRates(baseRatesIdr, modality, config?)` — Validates minimum IDR base honorarium, supported modalities, and Rp5,000 increments
 
 **Dependencies:** None (pure functions)
 
@@ -993,16 +1009,20 @@ workflow does not change the RPC contracts.
 
 **Purpose:** Tutor profile management — create, update, submit for review, availability management, and payout summaries.
 
-The web tutor profile editor groups education, competition achievements, and experiences into one combined **Achievements & experience** section with one public preview; each subsection retains its own private proof-link list. Short bios are limited to 50 words, and the form recommends one Google Drive folder with the “Anyone with the link can view” setting for both achievement and experience evidence.
+The web tutor profile editor groups education, competition achievements, and experiences into one combined **Achievements & experience** section with consistent full-width, border-light subsections. Typography, whitespace, thin rules, and row-based entries establish hierarchy without nested cards; each subsection retains its own private proof-link list. Its live preview labels draft versus published-profile edit state and names the structured sections that differ from the current public profile. The tutor-facing photo card only presents the current/proposed photo, while audit history remains an admin review concern. Short bios are limited to 50 words, and the form recommends one Google Drive folder with the “Anyone with the link can view” setting for both achievement and experience evidence.
+
+Compact student and tutor profile-photo pickers use a native screen-reader-only file input instead of Selia's visible full-width Input. The dashboard shell therefore retains a single contained content scroller without document-level overflow.
+
+The authenticated dashboard shell is viewport-fixed. Its content pane exclusively owns vertical page scrolling and contains overscroll, so long tutor forms do not create a second document scrollbar; non-dashboard public and authentication routes continue using document scrolling.
 
 **Files:**
 
 - `tutor.types.ts` — Zod schemas for profile fields and structured achievements/experiences, `submitForReviewInput`, the `2026-09` Terms of Service version, and `getMyPayoutsInput`
 - `tutor-experiences.ts` — Structured experience entry validation and limits
-- `availability.types.ts` — Availability slot types (`upsert`, weekly-create, weekly-replace, delete)
+- `availability.types.ts` — Availability slot types (`upsert`, atomic date-override batch create, weekly-create, weekly-replace, delete)
 - `tutor.errors.ts` — `TutorProfileNotFoundError`, `TutorNotAvailableError`, `AvailabilitySlotOverlapError`, `InvalidTutorPricingError`, `TutorTermsNotAcceptedError`, `OptimisticLockError`, `InvalidDateRangeError`, `WeeklyAvailabilityRangeError`
 - `tutor.repo.ts` — `findByUserId`, `create`, `update`, `listProfileHistory`, `upsertAvailability`
-- `tutor.service.ts` — `getMyProfile`, `getMyProfileHistory`, `updateMyProfile`, `submitForReview`, `listAvailability`, `upsertAvailability`, `createWeeklyAvailability`, `replaceWeeklyAvailability`, `deleteAvailability`, `getMyPayouts`
+- `tutor.service.ts` — `getMyProfile`, `getMyProfileHistory`, `updateMyProfile`, `submitForReview`, `listAvailability`, `upsertAvailability`, `createDateOverrides`, `createWeeklyAvailability`, `replaceWeeklyAvailability`, `deleteAvailability`, `getMyPayouts`
 - `tutor.handler.ts` — Maps handler context/input
 - `tutor.router.ts` — Tutor-guarded routes (`tutorProcedure`)
 
@@ -1014,6 +1034,7 @@ The web tutor profile editor groups education, competition achievements, and exp
 - `submitForReview(userId, input = {})` — Validates required fields + pricing, accepting either structured or legacy achievement/experience data, then sets `onboardingStatus` to `pending_review`; records audit log. The first submission requires `input.acceptTerms === true` when no prior acceptance exists, persists `termsOfServiceAcceptedAt` and `termsOfServiceVersion` (`2026-09`) once in the same transaction as the status change, and later submissions do not require the flag. Its incomplete-profile, pricing, and Terms of Service errors preserve details for the editor. The web tutor profile form at `/profile` redirects to `/dashboard` after the mutation succeeds.
 - `listAvailability(userId)` — Lists the tutor's active future availability slots
 - `upsertAvailability(userId, input)` — Creates/updates a slot, rejecting overlaps
+- `createDateOverrides(userId, input)` — Atomically creates up to 56 one-off windows across selected dates; deactivates conflicting recurring occurrences and rejects the whole batch on an intra-batch or existing one-off conflict
 - `createWeeklyAvailability(userId, input)` — Materializes weekly slots through `repeatUntil` (≤ 53 occurrences), rejecting overlaps
 - `replaceWeeklyAvailability(userId, input)` — Atomically replaces future recurring occurrences from weekday/time ranges; preserves one-off overrides and skips generated occurrences they supersede
 - `deleteAvailability(userId, slotId)` — Deactivates a slot (soft delete)
@@ -1026,10 +1047,11 @@ The web tutor profile editor groups education, competition achievements, and exp
 - Only tutors with `published` status are visible in discovery
 - Availability slots must be in the future and non-overlapping
 - A one-off slot deactivates a conflicting recurring occurrence, making date overrides authoritative without changing other weeks
+- The tutor date-override editor applies one `online`, `offline`, or `both` modality and up to four time ranges to as many as 14 selected dates. The generated slots commit atomically so a conflict never leaves a partially saved batch.
 - `submitForReview` can only be called from `draft`/`changes_requested` status
-- A complete first tutor submission requires bilingual Terms of Service acceptance; the acceptance timestamp/version is immutable after the first write and is not included in public tutor discovery. The sticky onboarding action area keeps the document available in read-only mode for later review
+- A complete first tutor submission requires bilingual Terms of Service acceptance; the profile action area owns one **I agree to the Tutor Terms of Service** checkbox and opens the document through a read-only **Read terms** action. The acceptance timestamp/version is immutable after the first write and is not included in public tutor discovery. After acceptance the checkbox is checked/disabled and **Review Tutor Terms** remains available; the consent row and action controls wrap responsively without changing the service contract
 - Profile updates use optimistic locking (`version`)
-- New tutor pricing is stored as IDR base honoraria by modality (`baseRatesIdr`) and validated against the active economy minimum and Rp 5,000 increments; published tutors may change these rates at any time, new bookings use the new rate, and existing booking snapshots remain authoritative for payout. The legacy Marks map remains readable during migration
+- New tutor pricing is stored as IDR base honoraria by modality (`baseRatesIdr`) and validated against the active economy minimum and Rp5,000 increments; published tutors may change these rates at any time, new bookings use the new rate, and existing booking snapshots remain authoritative for payout. The legacy Marks map remains readable during migration
 - The tutor profile editor at `/profile` renders selected modalities in one combined six-row IDR group-size matrix using the same table structure as the student discovery drawer; this is presentation-only. The legacy `/onboarding` path redirects to `/profile` for tutors.
 - The tutor profile editor places the profile-photo upload first and uses a clickable avatar with the shared circular crop flow. Compact Selia `InfoPreview` popovers reveal the full submitted/current/proposed image on demand. For a published tutor it labels `user.image` as the current public photo and a differing `pendingProfileChanges.profileImageUrl` as the proposed photo. The admin review drawer compares both assets side by side; `approve_edits` remains the only operation that promotes the proposal into `user.image`.
 - The admin tutor index derives the status badge from `onboardingStatus` plus `profileEditStatus`; published tutors with `pending_review` edits show **Edit review**, and edits returned with `changes_requested` show **Revision requested**, making review-needed rows visible before opening the drawer.
@@ -1062,6 +1084,7 @@ The web tutor profile editor groups education, competition achievements, and exp
 - Tutors may select at most 7 active specializations; the web selector communicates the cap and disables additional choices, while the API validates the same limit
 - The legacy `expertise` JSON remains for compatibility with existing rows and clients, but normalized `subjectIds` drives new onboarding and discovery filters
 - The onboarding selector renders every current category with keyboard-accessible checkboxes, keeps normalized IDs for persistence/filtering, and shows archived profile subjects as read-only labels; raw UUIDs are an implementation detail and must not appear in user-facing controls
+- At `md` and wider breakpoints, the onboarding selector places alternating category cards into two independent vertical stacks so variable card heights do not create empty gaps beside shorter cards; below `md`, the cards use one visible column. This is presentation-only and does not change taxonomy or selection contracts
 
 ---
 
@@ -1172,3 +1195,5 @@ no discovery input, output, or RPC contract changes.
 Tutor financial presentation is denominated in IDR and must not expose Marks. The dashboard's honorarium is the unpaid balance since the latest admin-paid cutoff, not lifetime earnings or a calendar-reset balance. Admin payout records are immutable and contain the cutoff, gross, bank, transfer fee, net, paidAt, and paidBy. Only conventional BCA (the exact bank name `BCA`) has no transfer deduction; BCA Syariah, `blu` (BCA Digital), and other banks deduct Rp2,500 once per payout. Bank name, account number, account-holder name, account-opening city/regency, ownership, and the transfer disclaimer are private tutor-profile payout fields; all are required by onboarding submission validation and omitted from public discovery.
 
 Numeric Marks amounts in the web UI are rendered through `apps/web/src/components/cogito-marks.tsx`. The component owns the Cogito mark-symbol prefix, supported icon sizes, whitespace behavior, and accessible `value + Marks` label; feature components should not duplicate that markup.
+
+The admin Invite Tutor form card opts out of CSS Grid cross-axis stretching. Keep it content-height so `CardFooter` remains flush with the card's rounded bottom boundary. The neighboring Invitations card follows the grid parent's stretched height as a flex column, and its body pushes `TablePagination` to the bottom whenever the table content is shorter than that space. These layout rules do not affect invitation service behavior.

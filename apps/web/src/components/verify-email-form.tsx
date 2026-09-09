@@ -4,8 +4,8 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
-  CardDescription,
   CardHeader,
+  CardInfoPreview,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import {
@@ -22,6 +22,7 @@ import z from "zod";
 
 import { authClient } from "@/lib/auth-client";
 import { getUserFacingError } from "@/lib/error-message";
+import { InfoPreview } from "@/components/info-preview";
 
 export function VerifyEmailForm({
   email,
@@ -123,12 +124,19 @@ export function VerifyEmailForm({
       <div className="w-full flex items-center justify-center p-4 lg:min-h-[calc(100svh-4rem)]">
         <Card className="w-full lg:w-5/12 xl:w-md">
           <CardHeader align="center">
-            <CardTitle>Email verified</CardTitle>
-            <CardDescription>
-              {redirectPath
-                ? "Your email is verified. Continue where you left off."
-                : "Your email is verified. You can now sign in."}
-            </CardDescription>
+            <CardTitle>
+              Email verified
+              <CardInfoPreview>
+                <InfoPreview
+                  title="Email verified"
+                  description={
+                    redirectPath
+                      ? "Your email is verified. Continue where you left off."
+                      : "Your email is verified. You can now sign in."
+                  }
+                />
+              </CardInfoPreview>
+            </CardTitle>
           </CardHeader>
           <CardBody className="flex flex-col gap-5">
             {redirectPath ? (
@@ -153,10 +161,15 @@ export function VerifyEmailForm({
     <div className="w-full flex items-center justify-center p-4 lg:min-h-[calc(100svh-4rem)]">
       <Card className="w-full lg:w-5/12 xl:w-md">
         <CardHeader align="center">
-          <CardTitle>Verify your email</CardTitle>
-          <CardDescription>
-            Enter the 6-digit code we sent to your email.
-          </CardDescription>
+          <CardTitle>
+            Verify your email
+            <CardInfoPreview>
+              <InfoPreview
+                title="Verify your email"
+                description="Enter the 6-digit code we sent to your email."
+              />
+            </CardInfoPreview>
+          </CardTitle>
         </CardHeader>
         <CardBody className="flex flex-col gap-5">
           <form

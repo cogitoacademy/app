@@ -38,7 +38,7 @@ import {
   IconLogout,
   IconRoute,
   IconSelector,
-  IconShieldCheck,
+  IconSettings,
   IconTimelineEventText,
   IconUser,
   IconUserSquare,
@@ -71,7 +71,7 @@ const tutorNavItems = [
 
 const adminNavItems = [
   { to: "/admin", label: "Dashboard", icon: IconHome },
-  { to: "/admin-operations", label: "Operations", icon: IconShieldCheck },
+  { to: "/admin-operations", label: "Operations", icon: IconSettings },
   { to: "/bookings", label: "Bookings", icon: IconCalendarEvent },
   { to: "/admin-tutors", label: "Tutors", icon: IconUsersGroup },
   { to: "/admin-economy", label: "Economy", icon: IconAdjustments },

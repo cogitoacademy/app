@@ -4,7 +4,6 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
@@ -160,17 +159,18 @@ export default function SignInForm({
   });
 
   if (isPending && !isAuthTransitioning) {
-    return <Loader />;
+    return (
+      <div className="flex min-h-[calc(100svh-6rem-94.5px)] w-full items-center justify-center p-4">
+        <Loader />
+      </div>
+    );
   }
 
   return (
-    <div className="w-full flex items-center justify-center p-4 lg:min-h-[calc(100svh-6rem)]">
+    <div className="w-full flex items-center justify-center p-4 lg:min-h-[calc(100svh-6rem-94.5px)]">
       <Card className="w-full lg:w-5/12 xl:w-md">
         <CardHeader align="center">
           <CardTitle level={1}>Sign in to your account</CardTitle>
-          <CardDescription>
-            Sign in with your Email or Google account
-          </CardDescription>
         </CardHeader>
         <CardBody className="flex flex-col gap-5">
           <div className="flex flex-col gap-2.5">
@@ -178,7 +178,7 @@ export default function SignInForm({
               type="button"
               variant="secondary"
               block
-              size="lg"
+              size="sm"
               onClick={() => {
                 const callbackUrl = new URL(
                   "/auth/callback",
@@ -214,7 +214,7 @@ export default function SignInForm({
               Sign in with Google
             </Button>
           </div>
-          <Divider variant="center" className="my-2">
+          <Divider variant="center" className="md:my-2">
             Or continue with email
           </Divider>
           <form
@@ -332,7 +332,7 @@ export default function SignInForm({
                     </Button>
                   </div>
                   <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                    <FieldDescription>
+                    <FieldDescription className="text-xs md:text-sm">
                       Use at least 8 characters.
                     </FieldDescription>
                     {field.form.state.submissionAttempts > 0 &&
@@ -368,7 +368,7 @@ export default function SignInForm({
             </form.Subscribe>
           </form>
 
-          <Text className="text-center">
+          <Text className="text-center text-sm md:text-base">
             Don&apos;t have an account?{" "}
             <TextLink
               render={

@@ -1033,6 +1033,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                                     type="button"
                                     size="sm"
                                     variant={selected ? "primary" : "outline"}
+                                    aria-label={`${time} WIB`}
                                     aria-pressed={selected}
                                     disabled={
                                       overlapsSelected ||

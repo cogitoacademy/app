@@ -1,6 +1,14 @@
 # Cogito API Reference
 
-Last updated: 2026-09-04
+Last updated: 2026-09-09
+
+## Dashboard greeting presentation (2026-09-08)
+
+Student, tutor, and admin dashboard greetings are selected entirely in the web
+client from role, browser-local hour, and already-fetched dashboard counts. No
+RPC endpoint, request envelope, response shape, or persistence contract
+changed. The admin account name is intentionally ignored for greeting copy and
+rendered as `Admin`.
 
 ## Booking-detail action presentation (2026-09-08)
 
@@ -48,9 +56,11 @@ The widget's Balance-page CTA is presentation-only: **Find a tutor** links to
 
 The admin Booking activity explanation now opens from the shared Selia
 `CardInfoPreview` popover trigger beside its card title. Booking-detail cards
-and their admin extensions use the same pattern instead of standalone header
-descriptions. This frontend-only change adds no RPC path and changes no request
-envelope, response shape, schema, or persistence contract.
+and their admin extensions, plus explanatory headers on dashboard, admin, tutor,
+profile, notification, and wallet surfaces use the same pattern instead of
+standalone header descriptions. Sign-in and sign-up use title-only headers. This frontend-only change
+adds no RPC path and changes no request envelope, response shape, schema, or
+persistence contract.
 
 ## Competition Calendar empty months (2026-09-04)
 
@@ -128,9 +138,10 @@ new web UI.
 
 ## Tutor Terms of Service acceptance (2026-09-02)
 
-The first complete tutor onboarding submission opens a bilingual
-Indonesian/English Terms of Service dialog before review submission. Saving a
-draft remains available without accepting the terms. The tutor must check the
+The tutor profile action area presents one bilingual consent checkbox labeled
+**I agree to the Tutor Terms of Service**. The adjacent **Read terms** action
+opens the Indonesian/English document in a read-only dialog. Saving a draft
+remains available without accepting the terms; the tutor must check the
 agreement box before the client sends `tutor.submitForReview`.
 
 Acceptance is enforced server-side and recorded once on `tutor_profile` with
@@ -138,9 +149,11 @@ Acceptance is enforced server-side and recorded once on `tutor_profile` with
 acceptance write and the `pending_review` status transition share the same
 transaction. Subsequent submissions, including `changes_requested` revisions,
 do not need to send the acceptance again. The acceptance metadata is excluded
-from public tutor-discovery projections. The sticky onboarding action area keeps
-**View Tutor Terms** available so the current document can
-be reopened in read-only mode after acceptance.
+from public tutor-discovery projections. After acceptance, the profile action
+area keeps the consent checkbox checked and disabled while **Review Tutor
+Terms** reopens the current document in the same read-only dialog. The consent
+row and action buttons stack and wrap on narrow viewports so the terms control
+never forces horizontal overflow.
 
 ## Tutor profile drawers (2026-08-31)
 
@@ -161,7 +174,7 @@ tables use the server-backed contracts documented below, while the admin
 booking queue and wallet ledger use cursor pagination. No URL search parameter
 is added for table pagination.
 
-Booking-list UI note: `/bookings` uses Needs action, Upcoming, Recurring, History, and All tabs. Students and tutors default to Needs action when a response is pending and Upcoming otherwise; admins default to All. URL-backed Recommended, Soonest, and Latest sorting is client-side; Recommended ranks pending, active, then terminal bookings, and History consolidates terminal outcomes. The web list consumes the existing `nextCursor` in batches of 20 through an infinite query and appends with **Load more bookings**; loaded cards remain visible during the next-page request. Tab counts are lower bounds and show `+` while more pages remain. The RPC contract is unchanged.
+Booking-list UI note: `/bookings` uses Needs action, Upcoming, Series, History, and All tabs. Students and tutors default to Needs action when a response is pending and Upcoming otherwise; admins default to All. URL-backed Recommended, Soonest, and Latest sorting is client-side; Recommended ranks pending, active, then terminal bookings, and History consolidates terminal outcomes. The web list consumes the existing `nextCursor` in batches of 20 through an infinite query and appends with **Load more bookings**; loaded cards remain visible during the next-page request. Tab counts are lower bounds and show `+` while more pages remain. The RPC contract is unchanged.
 
 Booking-card timing note: list rows already include the booking `deadlineAt` column. The web client uses it for pending response countdowns and uses scheduled start/end times for Today, Starts in, Starting soon, and In progress labels. It never derives response windows from `createdAt` and does not infer an Expired lifecycle state before the server transitions it.
 The list presentation places the timing chip after financial metadata with a divider; dashboard reuse hides the financial metadata. This remains presentation-only.
@@ -192,7 +205,7 @@ existing admin role-management flow.
 
 The web dashboard mostly composes existing procedures: the shared booking list uses protected `booking.listMine` for student, tutor, and admin visibility (with admin seeing all bookings), while tutor discovery remains student-only (`tutors.listPublished`) and tutor/admin dashboards compose their remaining role-specific procedures. The admin dashboard's Business insights section additionally calls the admin-only `admin.getDashboardAnalytics` aggregate procedure for 7/30/90-day WIB metrics and a live booking-state portfolio. Student and tutor next-lesson sections derive the nearest future non-terminal, non-pending item client-side and reuse the booking-list card; the tutor dashboard's above-the-fold ordering of welcome/setup, review requests, and next lesson is presentation-only. Student and tutor welcome cards also share one frontend visual component with role-specific copy and links. On narrow screens, the rounded booking status-tab strip fills the available page width and only its inner tab list scrolls horizontally inside a scrollbar-hidden region; internal paint padding keeps selected-tab shadows and focus rings visible, while shared empty-state cards preserve their rounded glow and card shadow without widening the page. These are presentation-only details except for the documented admin analytics read.
 
-The authenticated `/guide` (`How Cogito Works`) route is frontend-only. Its typed journey content is bundled with the web app, is role-filtered in the route UI, and adds no RPC procedure, request input, response output, or persistence contract. The centered `max-w-6xl` shell, Selia-composed chapter rail, whitespace-free collapsed mobile steps, and bold timing callouts are presentation-only; the callouts restate existing 7-day, 12-hour, H-2, 15-minute, 24-hour, meeting-retry, and support-SLA rules. The development-only anti-slop Tweaks Bar is a static browser asset and does not change the production API surface.
+The authenticated `/guide` (`How Cogito Works`) route is frontend-only. Its typed journey content is bundled with the web app, is role-filtered in the route UI, and adds no RPC procedure, request input, response output, or persistence contract. The responsive Selia hero, sticky desktop/horizontal mobile chapter index, collapsible step cards, and bold timing callouts are presentation-only; the callouts restate existing 7-day, 12-hour, H-2, 15-minute, 24-hour, meeting-retry, and support-SLA rules.
 
 The global route pending loader is also presentation-only. It composes the local Selia `Spinner` with a token-based loading ring and label for route, onboarding, and auth loading states, adding no RPC procedure, request input, response output, or persistence contract.
 
@@ -238,7 +251,9 @@ graph. The coverage gate requires 100% coverage for `packages/api` lines,
 overall lines, functions, and branches; a file set with no instrumented
 branches is reported as 100% for that metric. Coverage is reported from the
 same lcov artifact used by `.github/scripts/coverage-comment.ts`, and a
-coverage test-command failure is propagated after the comment/gate step.
+coverage test-command failure is propagated after the comment/gate step. Its
+PR output uses blank-line-separated Markdown blocks so GitHub renders the
+summary and per-file sections as tables.
 
 ### Auth Levels
 
@@ -490,7 +505,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `admin.updateEconomySettings`
 
 - **Auth:** Admin
-- **Input:** `{ expectedVersion, onlineCogitoBaseIdr, onlineCogitoIncrementIdr, offlineCogitoBaseIdr, offlineCogitoIncrementIdr }` (IDR values use Rp 5,000 increments; bases are at least Rp 5,000; increments are non-negative)
+- **Input:** `{ expectedVersion, onlineCogitoBaseIdr, onlineCogitoIncrementIdr, offlineCogitoBaseIdr, offlineCogitoIncrementIdr }` (IDR values use Rp5,000 increments; bases are at least Rp5,000; increments are non-negative)
 - **Output:** The updated economy settings object; `version` increments only when at least one schedule value changes
 - **Errors:** `ECONOMY_CONFIG_CONFLICT` (409) when `expectedVersion` is stale; validation errors (400) for unsupported values
 - **Description:** Updates the active Cogito take schedule, records an audit event, and affects only future bookings and new repricing snapshots. Existing booking snapshots remain unchanged. The update does not notify tutors; their IDR honorarium settings and the student-facing Marks preview remain separate concerns. Saving identical values is a no-op and creates no new audit event or notification.
@@ -628,7 +643,7 @@ All routes are admin-only. Package `code` is the stable business key used by
 - **Auth:** Tutor
 - **Input:** None
 - **Output:** Up to 50 newest audit entries for the authenticated tutor profile, including action, actor identity (`id` and display name only), actor type, timestamps, and photo/review workflow details; account email is not returned
-- **Description:** Returns the profile history shown to the tutor. Published photo replacements remain proposals until an admin approves them.
+- **Description:** Returns tutor profile audit history for audit-capable surfaces. The focused tutor photo editor no longer embeds this history. Published photo replacements remain proposals until an admin approves them.
 
 ### `tutor.updateMyProfile`
 
@@ -665,6 +680,15 @@ The web tutor profile editor groups education, competition achievements, and exp
 - **Errors:** `AVAILABILITY_SLOT_OVERLAP` (409)
 - **Description:** Creates or updates a single availability window
 
+### `tutor.createDateOverrides`
+
+- **RPC path:** `/rpc/tutor/createDateOverrides`
+- **Auth:** Tutor
+- **Input:** `{ slots: [{ startDate, endDate, modality }] }` (1–56 future, non-overlapping one-off windows; `modality` is `online`, `offline`, or `both`)
+- **Output:** `AvailabilitySlot[]`
+- **Errors:** `AVAILABILITY_SLOT_OVERLAP` (409) when the submitted batch overlaps itself or an existing one-off window
+- **Description:** Atomically creates multiple date-specific availability windows. Conflicting recurring occurrences are soft-deactivated; any one-off conflict rolls back the complete batch.
+
 ### `tutor.createWeeklyAvailability`
 
 - **Auth:** Tutor
@@ -687,7 +711,7 @@ The web tutor profile editor groups education, competition achievements, and exp
 - **Auth:** Tutor
 - **Input:** `{ id }`
 - **Output:** None (void)
-- **Description:** Deactivates (soft-deletes) an availability slot
+- **Description:** Deactivates (soft-deletes) an availability slot. The tutor calendar preview asks for confirmation before calling this unchanged procedure.
 
 ### `tutor.getMyPayouts`
 
@@ -841,7 +865,7 @@ The create/edit/correction form is presented as a bottom drawer on mobile and a 
 - **Auth:** Protected
 - **Input:** None
 - **Output:** `{ xenditMode: "test" | "live" | null, packages: MarkPackage[] }`
-- **Description:** Returns active purchasable mark packages plus the client-visible payment mode signal. `xenditMode` is `"test"` when `PAYMENT_PROVIDER=xendit` and `XENDIT_MODE=test`, `"live"` for Live Mode, and `null` when the stub provider is active — the web app uses it to label packages that exceed the Xendit Test Mode amount cap (~IDR 1,000,000; Explorer/Pioneer are rejected in Test Mode but work in Live Mode). The default catalog is installed automatically by versioned database migration `0041_seed_mark_packages.sql`; values are Starter Pack 50 Marks / Rp 312,500; Learner Pack 120 Marks / Rp 690,000; Explorer Pack 200 Marks / Rp 1,070,000; Pioneer Pack 400 Marks / Rp 2,000,000. Admins can manage later catalog changes through `adminMarkPackage.*`.
+- **Description:** Returns active purchasable mark packages plus the client-visible payment mode signal. `xenditMode` is `"test"` when `PAYMENT_PROVIDER=xendit` and `XENDIT_MODE=test`, `"live"` for Live Mode, and `null` when the stub provider is active — the web app uses it to label packages that exceed the Xendit Test Mode amount cap (~IDR 1,000,000; Explorer/Pioneer are rejected in Test Mode but work in Live Mode). The default catalog is installed automatically by versioned database migration `0041_seed_mark_packages.sql`; values are Starter Pack 50 Marks / Rp312,500; Learner Pack 120 Marks / Rp690,000; Explorer Pack 200 Marks / Rp1,070,000; Pioneer Pack 400 Marks / Rp2,000,000. Admins can manage later catalog changes through `adminMarkPackage.*`.
 
 ### `wallet.knowledgeBankEligible`
 
@@ -950,7 +974,7 @@ RPC contract.
 - **Auth:** Protected
 - **Input:** `{ cursor?, limit?, states? }`
 - **Output:** `{ items: Booking[], nextCursor }`
-- **Description:** Shared role-aware booking list. Students see bookings where they are proposer or participant, tutors see bookings assigned to them, and admins see all bookings. `states` can narrow the result for server-side consumers; the web list requests 20 items at a time, follows `nextCursor` for **Load more bookings**, and applies its Upcoming/Pending/Recurring/Past/Cancelled/All presentation filters client-side, defaults to Upcoming for students, Pending for tutors with pending requests (otherwise Upcoming), and All for admins, unless an explicit `tab` query parameter is present. It sorts Upcoming/Pending/Recurring/All by nearest scheduled start, while Past/Cancelled remain newest-first. Related user projections contain display identity only (`id`, `name`, `image`, `role`); internal meeting attendee email arrays are never part of this response. The web row presents Marks with the Cogito mark icon and keeps status explanations in the status-badge tooltip. On narrow screens, the rounded status-tab strip stays within the available page width while only its inner tab list scrolls horizontally without showing a native scrollbar; internal paint padding keeps selected-tab shadows and focus rings visible, and shared empty-state cards keep their rounded glow and card shadow visible without widening the page. Dashboards reuse the same read model for their next-lesson card; no dashboard-specific endpoint is required.
+- **Description:** Shared role-aware booking list. Students see bookings where they are proposer or participant, tutors see bookings assigned to them, and admins see all bookings. `states` can narrow the result for server-side consumers; the web list requests 20 items at a time, follows `nextCursor` for **Load more bookings**, and applies its Upcoming/Pending/Series/Past/Cancelled/All presentation filters client-side, defaults to Upcoming for students, Pending for tutors with pending requests (otherwise Upcoming), and All for admins, unless an explicit `tab` query parameter is present. It sorts Upcoming/Pending/Series/All by nearest scheduled start, while Past/Cancelled remain newest-first. Related user projections contain display identity only (`id`, `name`, `image`, `role`); internal meeting attendee email arrays are never part of this response. The web row presents Marks with the Cogito mark icon and keeps status explanations in the status-badge tooltip. On narrow screens, the rounded status-tab strip stays within the available page width while only its inner tab list scrolls horizontally without showing a native scrollbar; internal paint padding keeps selected-tab shadows and focus rings visible, and shared empty-state cards keep their rounded glow and card shadow visible without widening the page. Dashboards reuse the same read model for their next-lesson card; no dashboard-specific endpoint is required.
 
 ### `booking.cancel`
 
@@ -1370,3 +1394,5 @@ The successful mutation also best-effort updates the existing offline Calendar e
 `/rpc/tutor/updateMyProfile` accepts payout-account fields (`bankName`, `bankAccountNumber`, `bankAccountHolderName`, `bankAccountOpeningCity`, `bankAccountOwnership`, and `bankTransferDisclaimerAccepted`) inside the standard `{"json": <input>}` envelope. `/rpc/tutor/getMyProfile` returns the private fields to the authenticated tutor; the public tutor discovery projection omits all of them. `/rpc/tutor/submitForReview` requires every payout field plus the acknowledgment. Only the exact bank name `BCA` represents conventional BCA and has no transfer fee; `BCA Syariah`, `blu`/`BCA Digital`, and all other bank names incur Rp2,500 once per payout. `/rpc/tutor/payouts/get` with no date filters returns honorarium since the latest admin-paid cutoff; explicit date filters remain available for reporting. Admins use `/rpc/admin/payouts/tutor/pending` to inspect unpaid honorarium and `/rpc/admin/payouts/tutor/mark-paid` to atomically create a paid payout record. Completion timestamps, rather than calendar weeks, determine which completed sessions enter a payout batch; completion and payout use a per-tutor lock to avoid a race at the cutoff.
 
 Numeric Marks fields returned by wallet, booking, pricing, and analytics procedures remain numbers. The web client presents those values with the shared `CogitoMarks` symbol component; this is presentation-only and does not change RPC inputs or outputs.
+
+The 2026-09-08 Invite Tutor card height and Invitations pagination alignment corrections are presentation-only; tutor invitation RPC paths, envelopes, inputs, and outputs are unchanged.

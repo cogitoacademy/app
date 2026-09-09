@@ -7,9 +7,9 @@ import { Badge } from "@cogito-app/ui/components/selia/badge";
 import {
   Card,
   CardBody,
-  CardDescription,
   CardFooter,
   CardHeader,
+  CardInfoPreview,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
@@ -64,11 +64,7 @@ function getLedgerDirection(entryType: string) {
 }
 
 function formatIdr(amount: number) {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-  }).format(amount);
+  return `Rp${amount.toLocaleString("id-ID")}`;
 }
 
 export function BalancePage() {
@@ -164,13 +160,14 @@ export function BalancePage() {
         <div className="flex min-w-0 flex-col gap-4">
           <div>
             <Heading level={1} size="md">
-              Balance
+              Manage your Marks
             </Heading>
-            <Text className="mt-1 text-muted">
-              Track your Marks, active holds, and top-up options.
+            <Text className="text-muted">
+              See what’s available, review active holds, and top up when you
+              need to.
             </Text>
           </div>
-          <Card className="min-w-0">
+          <Card className="min-w-0 mb-0 mt-auto">
             <CardBody className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-3 p-4 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:p-5">
               <IconBox variant="tertiary">
                 {kbAccessible ? <IconBook /> : <IconLockOpen />}
@@ -246,10 +243,15 @@ export function BalancePage() {
 
       <Card id="top-up-marks" className="w-full min-w-0 max-w-full">
         <CardHeader>
-          <CardTitle>Top Up Marks</CardTitle>
-          <CardDescription>
-            Choose a package to add Marks to your wallet
-          </CardDescription>
+          <CardTitle>
+            Top Up Marks
+            <CardInfoPreview>
+              <InfoPreview
+                title="Top Up Marks"
+                description="Choose a package to add Marks to your wallet."
+              />
+            </CardInfoPreview>
+          </CardTitle>
         </CardHeader>
         <CardBody>
           <div className="rounded-lg border border-border bg-card p-4 mb-4">
@@ -266,12 +268,15 @@ export function BalancePage() {
           {qrPayload ? (
             <Card className="mb-4 min-w-0 max-w-full">
               <CardHeader>
-                <CardTitle>Scan QRIS to pay</CardTitle>
-                <CardDescription>
-                  Open your banking or e-wallet app, scan this code, and
-                  complete the payment. Your Marks are credited after Xendit
-                  confirms the payment.
-                </CardDescription>
+                <CardTitle>
+                  Scan QRIS to pay
+                  <CardInfoPreview>
+                    <InfoPreview
+                      title="Scan QRIS to pay"
+                      description="Open your banking or e-wallet app, scan this code, and complete the payment. Your Marks are credited after Xendit confirms the payment."
+                    />
+                  </CardInfoPreview>
+                </CardTitle>
               </CardHeader>
               <CardBody className="flex min-w-0 flex-col items-center gap-4">
                 <div className="w-full max-w-68 rounded-lg bg-background p-4 text-foreground">
@@ -403,11 +408,15 @@ export function BalancePage() {
 
       <Card className="w-full min-w-0 max-w-full">
         <CardHeader>
-          <CardTitle>Marks history</CardTitle>
-          <CardDescription>
-            Top-ups, booking reservations, releases, and completed session
-            payments
-          </CardDescription>
+          <CardTitle>
+            Marks history
+            <CardInfoPreview>
+              <InfoPreview
+                title="Marks history"
+                description="Top-ups, booking reservations, releases, and completed session payments."
+              />
+            </CardInfoPreview>
+          </CardTitle>
         </CardHeader>
         <CardBody className="min-w-0 overflow-hidden">
           {ledgerLoading ? (

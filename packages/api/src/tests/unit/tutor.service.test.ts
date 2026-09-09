@@ -848,6 +848,28 @@ describe("Tutor Service", () => {
       expect(result).toEqual(slots);
     });
 
+    test("createDateOverrides rejects overlapping slots in the same batch", async () => {
+      const deps = makeDeps();
+      const service = createTutorService(deps as any);
+
+      await expect(
+        service.createDateOverrides("u1", {
+          slots: [
+            {
+              startDate: new Date("2026-01-01T10:00:00Z"),
+              endDate: new Date("2026-01-01T11:00:00Z"),
+              modality: "online",
+            },
+            {
+              startDate: new Date("2026-01-01T10:30:00Z"),
+              endDate: new Date("2026-01-01T11:30:00Z"),
+              modality: "offline",
+            },
+          ],
+        }),
+      ).rejects.toThrow(AvailabilitySlotOverlapError);
+    });
+
     test("upsertAvailability throws AvailabilitySlotOverlapError on overlap", async () => {
       const existing = [
         {

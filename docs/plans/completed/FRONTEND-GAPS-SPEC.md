@@ -38,6 +38,16 @@ This covers the shared student/tutor cards, contact and lifecycle cards, room
 assignment, and the admin review-context, wallet-impact, and state-history
 extensions without changing an API or persistence contract.
 
+### Responsive card-info follow-up (2026-09-08)
+
+Remaining explanatory card-header copy on dashboard, admin, tutor
+availability/onboarding, profile, notification, achievement, and wallet surfaces
+now uses the shared title-adjacent `CardInfoPreview`/`InfoPreview` pattern.
+Sign-in/sign-up use title-only headers, and their loader reserves the full auth
+content height to keep the legal notice stationary. Primary content summaries and
+identity/resource metadata remain inline. This is a presentation-only
+mobile-containment change.
+
 ### Sidebar booking-action badge follow-up (2026-09-04)
 
 The authenticated sidebar now shows a compact, `99+`-capped badge beside the
@@ -116,7 +126,7 @@ accounts. This is frontend routing only and adds no API or database contract.
 
 ### Tutor profile and payout privacy follow-up (2026-08-28)
 
-Tutor onboarding now has one structured Achievements section and one structured Experiences section, with legacy achievement/credential/experience text retained as a fallback. Achievement and experience entries use repeatable cards with bounded year fields; year values remain ungrouped, and an ongoing experience leaves End year blank. Client-side max-length checks measure the trimmed value to match the API schemas. Availability-summary and credential-proof inputs are retired. Base honorarium is adjusted only through Rp 5,000 minus/plus controls and its six group-size outcomes are shown in tables. Tutor portraits use a staged source-to-final workflow: the tutor submits one uploaded source image, an admin uploads the background-standardized replacement, and approval/publication promotes that replacement to the canonical public image; the tutor/admin surfaces expose the review history. Tutor-facing history shows actor names/types without account emails. Tutor payout details expose only completed sessions and IDR honorarium, removing take-rate and Marks terminology from the tutor interface.
+Tutor onboarding now has one structured Achievements section and one structured Experiences section, with legacy achievement/credential/experience text retained as a fallback. Achievement and experience entries use repeatable cards with bounded year fields; year values remain ungrouped, and an ongoing experience leaves End year blank. Client-side max-length checks measure the trimmed value to match the API schemas. Availability-summary and credential-proof inputs are retired. Base honorarium is adjusted only through Rp5,000 minus/plus controls and its six group-size outcomes are shown in tables. Tutor portraits use a staged source-to-final workflow: the tutor submits one uploaded source image, an admin uploads the background-standardized replacement, and approval/publication promotes that replacement to the canonical public image; the tutor/admin surfaces expose the review history. Tutor-facing history shows actor names/types without account emails. Tutor payout details expose only completed sessions and IDR honorarium, removing take-rate and Marks terminology from the tutor interface.
 
 Achievement and Experience sections retain separate optional proof URL fields for compatibility. The tutor-facing copy recommends putting both evidence types in one Google Drive folder with the “Anyone with the link can view” setting. The URLs remain visible to admins during review, participate in the protected edit-review flow, and are intentionally omitted from public tutor discovery.
 
@@ -132,7 +142,7 @@ Tutor onboarding captures structured education (up to 2 entries) and one structu
 
 Tutor onboarding now uses the normalized competition category/specialization catalog exposed by `tutors.listSubjects`. The current catalog has seven categories and 33 specializations. Tutors must select at least one current specialization before submitting for review, and the student tutor catalog supports category and specialization filters. Archived legacy specializations remain visible on existing tutor profiles but cannot be newly selected. The legacy expertise field remains a compatibility fallback; future category changes should preserve the pending-review behavior for published profiles.
 
-The onboarding selector stores normalized IDs for persistence and renders all current categories with keyboard-accessible checkboxes. Tutors may select at most 7 active specializations; the selector shows the cap and current count, disables an eighth choice, and the submit/API validation rejects any over-limit payload. Selected specializations appear as chips, while archived profile specializations are shown read-only. The tutor list continues to support selecting multiple categories and specializations; specialization options are the union of the selected categories, the API matches selected values within each facet, and the list query debounces rapid search/filter changes by 300 ms. Search stays visible while category, specialization, and modality controls live in a collapsed-by-default filter panel whose trigger shows the active-selection count. The panel uses a reduced-motion-aware height/fade transition and removes closed controls from keyboard navigation. Product-facing copy uses **specialization**; compatibility API/database names such as `subjectIds`, `subjects`, and `listSubjects` remain unchanged.
+The onboarding selector stores normalized IDs for persistence and renders all current categories with keyboard-accessible checkboxes. Tutors may select at most 7 active specializations; the selector shows the cap and current count, disables an eighth choice, and the submit/API validation rejects any over-limit payload. Selected specializations appear as chips, while archived profile specializations are shown read-only. At `md` and wider breakpoints, category cards use two independent vertical stacks with alternating categories to avoid height-driven empty gaps; below `md`, they collapse into one visible column. The tutor list continues to support selecting multiple categories and specializations; specialization options are the union of the selected categories, the API matches selected values within each facet, and the list query debounces rapid search/filter changes by 300 ms. Search stays visible while category, specialization, and modality controls live in a collapsed-by-default filter panel whose trigger shows the active-selection count. The panel uses a reduced-motion-aware height/fade transition and removes closed controls from keyboard navigation. Product-facing copy uses **specialization**; compatibility API/database names such as `subjectIds`, `subjects`, and `listSubjects` remain unchanged.
 
 ### Admin tutor review readability follow-up (2026-08-27)
 
@@ -255,7 +265,7 @@ Update (2026-08-28, started-session cancellation): student cancellation now clos
 
 ### Shared booking list follow-up (2026-08-22)
 
-Update (2026-08-28): navigation is now Needs action, Upcoming, Recurring, History, and All. History consolidates terminal outcomes; URL-backed Recommended/Soonest/Latest sorting defaults to decisions first, active bookings next, and terminal outcomes last. Students and tutors land on Needs action whenever pending decisions exist.
+Update (2026-08-28): navigation is now Needs action, Upcoming, Series, History, and All. History consolidates terminal outcomes; URL-backed Recommended/Soonest/Latest sorting defaults to decisions first, active bookings next, and terminal outcomes last. Students and tutors land on Needs action whenever pending decisions exist. The visible Series label retains the legacy `tab=recurring` query value for existing links.
 
 Update (2026-08-28, timing): shared booking cards now show server-deadline countdowns for pending states and same-day/start proximity indicators for confirmed or scheduled sessions. The implementation shares one live clock across visible cards and does not alter lifecycle state client-side.
 The indicator is positioned after financial metadata in the list; dashboard next-lesson cards intentionally suppress financial metadata.
@@ -381,7 +391,7 @@ for classmates.
 | `/_app/profile`              | profile-page.tsx + tutor-profile-page.tsx | Complete — role-aware student profile and tutor profile editor; tutor state, review feedback, pricing, and consolidated actions are available at the canonical route |
 | `/_app/onboarding`           | compatibility redirect                    | Complete — legacy tutor links redirect to `/profile`; other roles redirect to `/dashboard`                                                                           |
 | `/_app/tutor-bookings`       | tutor-bookings-page.tsx                   | Compatibility redirect to the shared `/bookings` list                                                                                                                |
-| `/_app/availability`         | availability-page.tsx                     | Complete baseline — Calendly-style weekly hours, date overrides, rules summary, and week preview                                                                     |
+| `/_app/availability`         | availability-page.tsx                     | Complete — weekly hours, atomic multi-date/multi-range overrides with Online/Offline/Both selection, booking-consistent preview, and confirmed window removal        |
 | `/_app/notifications`        | notifications-page.tsx                    | Exists (full page)                                                                                                                                                   |
 | `/_app/admin`                | admin-dashboard-page.tsx                  | Complete F1 admin workspace entry point                                                                                                                              |
 | `/_app/admin-operations`     | admin-operations-page.tsx                 | Complete F1 queue/detail surface — filters, hydrated participants/wallets/ledger, override, rooms, and searchable wallet lookup                                      |
@@ -730,17 +740,17 @@ Full override form per PRD §Emergency Override UI/UX:
 
 ### F13: Tutor Payout View
 
-**Status: CLOSED (REVIEW-FIXES-3 P6)** — payout details card on the tutor dashboard (completed sessions, total Marks, Cogito take, tutor payout + Rp 7,000 conversion) backed by `tutor.getMyPayouts`, with unpaid-honorarium and transfer-fee explanations available through shared `InfoPreview` popovers.
+**Status: CLOSED (REVIEW-FIXES-3 P6)** — payout details card on the tutor dashboard (completed sessions, total Marks, Cogito take, tutor payout + Rp7,000 conversion) backed by `tutor.getMyPayouts`, with unpaid-honorarium and transfer-fee explanations available through shared `InfoPreview` popovers.
 
 **PRD:** DL-11
 
-**Current state:** **CLOSED (2026-08-19).** Payout details card on the tutor dashboard (completed sessions, total Marks, Cogito take, tutor payout + Rp 7,000 conversion) backed by `tutor.getMyPayouts` (`tutor-dashboard-page.tsx:53`), with accessible info popovers for the unpaid-honorarium and transfer-fee explanations.
+**Current state:** **CLOSED (2026-08-19).** Payout details card on the tutor dashboard (completed sessions, total Marks, Cogito take, tutor payout + Rp7,000 conversion) backed by `tutor.getMyPayouts` (`tutor-dashboard-page.tsx:53`), with accessible info popovers for the unpaid-honorarium and transfer-fee explanations.
 
 **Required (backend ready):**
 
 1. New route or section in tutor dashboard: "My payouts"
 2. Calls `tutor.getMyPayouts` with date range
-3. Shows: total completed sessions, total Marks earned, Cogito's take, tutor's payout amount (Marks × Rp 7,000)
+3. Shows: total completed sessions, total Marks earned, Cogito's take, tutor's payout amount (Marks × Rp7,000)
 4. Admin version: `admin.getTutorPayouts` for any tutor
 
 **Acceptance:**
@@ -943,6 +953,13 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
   restored the prior hover-only card interaction without translating the card
   or adding a pressed-scale effect. No RPC, schema, or persistence contract changed.
 
+- v1.71 (2026-09-08): Kept the three admin achievement moderation count cards
+  in one compact row below the `sm` breakpoint, with reduced mobile padding and
+  stacked label/value content. Shared full-bleed tables followed by pagination
+  now preserve their bottom spacing, preventing the last row hover from running
+  into the pagination divider across achievement, tutor-invitation, and other
+  paginated tables. No RPC, schema, or persistence contract changed.
+
 - v1.70 (2026-09-04): Fixed Knowledge Bank category labels in the filter
   dropdown and resource cards by mapping known Sanity slugs and title-casing
   unknown hyphenated/underscored slugs; raw category values remain unchanged
@@ -991,6 +1008,7 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 - v1.53 (2026-09-01): Grouped tutor education, competition achievements, experiences, and their separate proof-link fields into one combined Achievements & experience profile card. No RPC, schema, or persistence contract changed.
 
 - v1.52 (2026-09-01): Set independent Manage Tutors page sizes to 3 invitations and 5 tutor profiles while retaining separate pagination state. No RPC, schema, or persistence contract changed.
+- v1.54 (2026-09-08): Keep the Invite Tutor card at content height so the adjacent Invitations table cannot create an empty strip below its footer, and bottom-align Invitations pagination within the height supplied by its parent grid row whenever content is shorter. No RPC, schema, or persistence contract changed.
 
 - v1.51 (2026-09-01): Fixed the Manage Tutors invitation-table badge mapping so invited is warning, accepted is success, and expired/revoked are danger, with a secondary fallback for unknown values. No RPC, schema, or persistence contract changed.
 
@@ -1090,3 +1108,15 @@ the complete local suite now contains 14 tests, with the booking flow passing
 unchanged; protected detail/list/session/availability reads are excluded from
 the booking mutation rate-limit bucket so normal refreshes cannot block a
 reschedule action.
+
+### Tutor bulk date-override follow-up (2026-09-09)
+
+The tutor availability page replaces the single-date/single-range override
+form with Online/Offline/Both tabs, removable multi-date selection, and up to
+four shared time ranges. Saving expands the selection into at most 56 one-off
+windows and calls the new atomic `tutor.createDateOverrides` procedure. Batch
+and existing one-off overlaps reject the full request; conflicting recurring
+occurrences are soft-deactivated. The redundant read-only Scheduling rules card
+is removed because duration and timezone remain visible in the page header.
+Inline client validation prevents save for missing/past/duplicate dates,
+malformed or reversed times, range overlaps, and known one-off conflicts.

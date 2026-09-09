@@ -11,24 +11,36 @@ import {
   IconDeviceLaptop,
   IconMapPin,
   IconPlus,
-  IconSettings,
   IconTrash,
+  IconX,
 } from "@tabler/icons-react";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
-  CardDescription,
   CardFooter,
   CardHeader,
+  CardInfoPreview,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import { Checkbox } from "@cogito-app/ui/components/selia/checkbox";
+import { Chip, ChipButton } from "@cogito-app/ui/components/selia/chip";
 import { DatePicker } from "@cogito-app/ui/components/selia/date-picker";
-import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
+import {
+  Field,
+  FieldError,
+  FieldLabel,
+} from "@cogito-app/ui/components/selia/field";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
+import {
+  Item,
+  ItemAction,
+  ItemContent,
+  ItemMedia,
+  ItemTitle,
+} from "@cogito-app/ui/components/selia/item";
 import {
   getSelectItemValue,
   Select,
@@ -39,13 +51,16 @@ import {
   SelectValue,
 } from "@cogito-app/ui/components/selia/select";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
+import { Tabs, TabsItem, TabsList } from "@cogito-app/ui/components/selia/tabs";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
 import { formatBookingTimeRange } from "@/components/booking/booking-ui";
 import { MinuteTimeInput } from "@/components/booking/minute-time-input";
-import { EmptyState } from "@/components/empty-state";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { InfoPreview } from "@/components/info-preview";
 import Loader from "@/components/loader";
+import { getDateOverrideValidationError } from "@/components/tutor/availability-override-validation";
 import { useNow } from "@/hooks/use-now";
 import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
@@ -64,6 +79,7 @@ const DAYS = [
 
 type Modality = "online" | "offline" | "both";
 type TimeRange = { id: string; start: string; end: string; modality: Modality };
+type OverrideRange = Omit<TimeRange, "modality">;
 type WeeklyDay = { enabled: boolean; ranges: TimeRange[] };
 type WeeklySchedule = Record<number, WeeklyDay>;
 type AvailabilitySlot = {
@@ -79,8 +95,16 @@ const MODALITY_OPTIONS: ReadonlyArray<{
   label: string;
   icon?: ReactNode;
 }> = [
-  { value: "online", label: "Online", icon: <IconDeviceLaptop /> },
-  { value: "offline", label: "Offline", icon: <IconMapPin /> },
+  {
+    value: "online",
+    label: "Online",
+    icon: <IconDeviceLaptop aria-hidden="true" />,
+  },
+  {
+    value: "offline",
+    label: "Offline",
+    icon: <IconMapPin aria-hidden="true" />,
+  },
   { value: "both", label: "Both" },
 ];
 
@@ -89,6 +113,12 @@ const newRange = (): TimeRange => ({
   start: "09:00",
   end: "17:00",
   modality: "online",
+});
+
+const newOverrideRange = (): OverrideRange => ({
+  id: crypto.randomUUID(),
+  start: "09:00",
+  end: "17:00",
 });
 
 function initialSchedule(): WeeklySchedule {
@@ -121,6 +151,33 @@ function addDays(value: string, days: number) {
 function weekStart(value: string) {
   const date = new Date(`${value}T00:00:00Z`);
   return addDays(value, -((date.getUTCDay() + 6) % 7));
+}
+
+function formatOverrideDate(value: string) {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: TIMEZONE,
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(`${value}T00:00:00+07:00`));
+}
+
+function formatPreviewDate(value: string) {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: TIMEZONE,
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(`${value}T00:00:00+07:00`));
+}
+
+function formatPreviewDay(value: string) {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: TIMEZONE,
+    day: "numeric",
+    month: "short",
+  }).format(new Date(`${value}T00:00:00+07:00`));
 }
 
 function errorMessage(error: unknown) {
@@ -199,11 +256,18 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
   const [repeatUntil, setRepeatUntil] = useState(() =>
     dateKey(Date.now() + 12 * 7 * DAY_MS),
   );
-  const [overrideDate, setOverrideDate] = useState(() =>
+  const [overrideDates, setOverrideDates] = useState<string[]>(() => [
     dateKey(Date.now() + DAY_MS),
-  );
-  const [override, setOverride] = useState<TimeRange>(newRange);
+  ]);
+  const [overrideDateCandidate, setOverrideDateCandidate] = useState("");
+  const [overrideModality, setOverrideModality] = useState<Modality>("online");
+  const [overrideRanges, setOverrideRanges] = useState<OverrideRange[]>(() => [
+    newOverrideRange(),
+  ]);
   const [previewStart, setPreviewStart] = useState(() => weekStart(dateKey()));
+  const [selectedPreviewDate, setSelectedPreviewDate] = useState("");
+  const [slotPendingRemoval, setSlotPendingRemoval] =
+    useState<AvailabilitySlot | null>(null);
   const now = useNow();
   const minimumDate = useMemo(() => dateKey(now + DAY_MS), [now]);
   const refresh = () =>
@@ -229,15 +293,21 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
         }),
     }),
   );
-  const addOverride = useMutation(
-    orpc.tutor.upsertAvailability.mutationOptions({
-      onSuccess: () => {
-        toastManager.add({ title: "Date override added", type: "success" });
+  const createDateOverrides = useMutation(
+    orpc.tutor.createDateOverrides.mutationOptions({
+      onSuccess: (createdSlots) => {
+        toastManager.add({
+          title: "Date overrides saved",
+          description: `${createdSlots.length} availability windows created.`,
+          type: "success",
+        });
+        setOverrideDates([]);
+        setOverrideRanges([newOverrideRange()]);
         void refresh();
       },
       onError: (error: unknown) =>
         toastManager.add({
-          title: "Date override could not be added",
+          title: "Date overrides could not be saved",
           description: errorMessage(error),
           type: "error",
         }),
@@ -245,7 +315,20 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
   );
   const removeSlot = useMutation(
     orpc.tutor.deleteAvailability.mutationOptions({
-      onSuccess: () => void refresh(),
+      onSuccess: () => {
+        toastManager.add({
+          title: "Availability removed",
+          type: "success",
+        });
+        setSlotPendingRemoval(null);
+        void refresh();
+      },
+      onError: (error: unknown) =>
+        toastManager.add({
+          title: "Availability could not be removed",
+          description: errorMessage(error),
+          type: "error",
+        }),
     }),
   );
 
@@ -261,9 +344,22 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
     }
     return result;
   }, [slots]);
-  const hasPreviewSlots = previewDays.some(
-    (date) => (slotsByDay.get(date) ?? []).length > 0,
+  const overrideSlotCount = overrideDates.length * overrideRanges.length;
+  const overrideValidationError = useMemo(
+    () =>
+      getDateOverrideValidationError({
+        dates: overrideDates,
+        ranges: overrideRanges,
+        minimumDate,
+        existingSlots: slots,
+      }),
+    [minimumDate, overrideDates, overrideRanges, slots],
   );
+  const activePreviewDate =
+    selectedPreviewDate && previewDays.includes(selectedPreviewDate)
+      ? selectedPreviewDate
+      : (previewDays.find((date) => (slotsByDay.get(date) ?? []).length > 0) ??
+        previewDays[0]!);
 
   function updateDay(day: number, fn: (value: WeeklyDay) => WeeklyDay) {
     setSchedule((current) => ({ ...current, [day]: fn(current[day]!) }));
@@ -299,13 +395,23 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
 
   function saveOverride(event: FormEvent) {
     event.preventDefault();
-    if (override.end <= override.start) return;
-    addOverride.mutate({
-      startDate: new Date(`${overrideDate}T${override.start}:00+07:00`),
-      endDate: new Date(`${overrideDate}T${override.end}:00+07:00`),
-      modality: override.modality,
-      isRecurring: false,
-      isActive: true,
+    if (overrideValidationError) {
+      toastManager.add({
+        title: "Check date overrides",
+        description: overrideValidationError,
+        type: "error",
+      });
+      return;
+    }
+
+    createDateOverrides.mutate({
+      slots: overrideDates.flatMap((date) =>
+        overrideRanges.map((range) => ({
+          startDate: new Date(`${date}T${range.start}:00+07:00`),
+          endDate: new Date(`${date}T${range.end}:00+07:00`),
+          modality: overrideModality,
+        })),
+      ),
     });
   }
 
@@ -314,10 +420,11 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <Heading level={1} size="md">
-            Availability
+            Open your calendar to students
           </Heading>
-          <Text className="mt-1 text-muted">
-            Set recurring hours once, then add exceptions for specific dates.
+          <Text className="text-muted">
+            Set your regular teaching hours, then adjust individual dates when
+            plans change.
           </Text>
         </div>
         <Badge variant="secondary" pill>
@@ -325,17 +432,22 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
         </Badge>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.9fr)] xl:items-start">
+      <div className="grid gap-4 2xl:grid-cols-[minmax(0,30fr)_minmax(0,25fr)] xl:items-start">
         <form onSubmit={saveWeekly}>
           <Card>
             <CardHeader>
               <IconBox variant="primary-subtle" size="md">
                 <IconClock />
               </IconBox>
-              <CardTitle>Weekly hours</CardTitle>
-              <CardDescription className="leading-none">
-                Choose when students can normally book you.
-              </CardDescription>
+              <CardTitle>
+                Weekly hours
+                <CardInfoPreview>
+                  <InfoPreview
+                    title="Weekly hours"
+                    description="Choose when students can normally book you."
+                  />
+                </CardInfoPreview>
+              </CardTitle>
             </CardHeader>
             <CardBody className="divide-y divide-item-border py-0">
               {DAYS.map(([day, label]) => {
@@ -343,7 +455,7 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
                 return (
                   <div
                     key={day}
-                    className="grid gap-3 py-4 sm:grid-cols-[8rem_1fr]"
+                    className="grid gap-3 py-4 sm:grid-cols-[7rem_1fr]"
                   >
                     <label className="flex items-center gap-3 self-start pt-2">
                       <Checkbox
@@ -501,170 +613,362 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
           </Card>
         </form>
 
-        <div className="space-y-4 xl:sticky xl:top-6">
+        <div className="space-y-4 xl:sticky xl:top-0">
           <Card>
             <CardHeader>
               <IconBox variant="danger-subtle">
                 <IconCalendarEvent />
               </IconBox>
-              <CardTitle>Date override</CardTitle>
-              <CardDescription className="leading-none">
-                Add different hours for one specific date.
-              </CardDescription>
+              <CardTitle>
+                Date overrides
+                <CardInfoPreview>
+                  <InfoPreview
+                    title="Date overrides"
+                    description="Apply the same one-time hours to up to 14 selected dates. These hours replace conflicting weekly availability."
+                  />
+                </CardInfoPreview>
+              </CardTitle>
             </CardHeader>
             <CardBody>
-              <form onSubmit={saveOverride} className="space-y-3">
+              <form onSubmit={saveOverride} className="space-y-4">
+                <Tabs
+                  value={overrideModality}
+                  onValueChange={(value) => {
+                    if (
+                      value === "online" ||
+                      value === "offline" ||
+                      value === "both"
+                    ) {
+                      setOverrideModality(value);
+                    }
+                  }}
+                >
+                  <TabsList aria-label="Override format">
+                    {MODALITY_OPTIONS.map((option) => (
+                      <TabsItem key={option.value} value={option.value}>
+                        {option.icon}
+                        {option.label}
+                      </TabsItem>
+                    ))}
+                  </TabsList>
+                </Tabs>
                 <Field>
-                  <FieldLabel htmlFor="override-date">Date</FieldLabel>
+                  <FieldLabel htmlFor="override-date">Dates</FieldLabel>
                   <DatePicker
                     id="override-date"
                     minDate={minimumDate}
-                    value={overrideDate}
-                    onChange={setOverrideDate}
+                    value={overrideDateCandidate}
+                    placeholder={
+                      overrideDates.length === 0
+                        ? "Add a date"
+                        : "Add another date"
+                    }
+                    disabled={overrideDates.length >= 14}
+                    onChange={(date) => {
+                      setOverrideDateCandidate("");
+                      if (!date) return;
+                      setOverrideDates((current) =>
+                        current.includes(date)
+                          ? current
+                          : [...current, date].toSorted(),
+                      );
+                    }}
                   />
+                  {overrideDates.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {overrideDates.map((date) => (
+                        <Chip key={date} pill>
+                          {formatOverrideDate(date)}
+                          <ChipButton
+                            type="button"
+                            aria-label={`Remove ${formatOverrideDate(date)}`}
+                            onClick={() =>
+                              setOverrideDates((current) =>
+                                current.filter((item) => item !== date),
+                              )
+                            }
+                          >
+                            <IconX aria-hidden="true" />
+                          </ChipButton>
+                        </Chip>
+                      ))}
+                    </div>
+                  ) : (
+                    <Text className="text-xs text-muted">
+                      Choose at least one date.
+                    </Text>
+                  )}
                 </Field>
-                <div className="grid grid-cols-2 gap-2">
-                  <MinuteTimeInput
-                    id="override-start"
-                    ariaLabel="Override start"
-                    value={override.start}
-                    onChange={(value) =>
-                      setOverride((current) => ({
-                        ...current,
-                        start: value,
-                      }))
-                    }
-                  />
-                  <MinuteTimeInput
-                    id="override-end"
-                    ariaLabel="Override end"
-                    value={override.end}
-                    onChange={(value) =>
-                      setOverride((current) => ({
-                        ...current,
-                        end: value,
-                      }))
-                    }
-                  />
-                </div>
-                <ModalitySelect
-                  value={override.modality}
-                  onChange={(modality) =>
-                    setOverride((current) => ({ ...current, modality }))
-                  }
-                />
-                <Button type="submit" block progress={addOverride.isPending}>
-                  <IconPlus /> Add date override
+                <Field>
+                  <FieldLabel>Available hours</FieldLabel>
+                  <div className="space-y-2">
+                    {overrideRanges.map((range, index) => (
+                      <div
+                        key={range.id}
+                        className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-center gap-2"
+                      >
+                        <MinuteTimeInput
+                          id={`override-${range.id}-start`}
+                          ariaLabel={`Override time ${index + 1} start`}
+                          value={range.start}
+                          onChange={(start) =>
+                            setOverrideRanges((current) =>
+                              current.map((item) =>
+                                item.id === range.id
+                                  ? { ...item, start }
+                                  : item,
+                              ),
+                            )
+                          }
+                        />
+                        <Text aria-hidden="true" className="text-muted">
+                          –
+                        </Text>
+                        <MinuteTimeInput
+                          id={`override-${range.id}-end`}
+                          ariaLabel={`Override time ${index + 1} end`}
+                          value={range.end}
+                          onChange={(end) =>
+                            setOverrideRanges((current) =>
+                              current.map((item) =>
+                                item.id === range.id ? { ...item, end } : item,
+                              ),
+                            )
+                          }
+                        />
+                        <Button
+                          type="button"
+                          variant="danger"
+                          size="sm-icon"
+                          aria-label={`Remove override time ${index + 1}`}
+                          disabled={overrideRanges.length === 1}
+                          onClick={() =>
+                            setOverrideRanges((current) =>
+                              current.filter((item) => item.id !== range.id),
+                            )
+                          }
+                        >
+                          <IconTrash aria-hidden="true" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="plain"
+                      size="xs"
+                      disabled={overrideRanges.length >= 4}
+                      onClick={() =>
+                        setOverrideRanges((current) => [
+                          ...current,
+                          newOverrideRange(),
+                        ])
+                      }
+                    >
+                      <IconPlus aria-hidden="true" /> Add hours
+                    </Button>
+                  </div>
+                  {overrideValidationError ? (
+                    <FieldError role="alert">
+                      {overrideValidationError}
+                    </FieldError>
+                  ) : null}
+                </Field>
+                <Button
+                  type="submit"
+                  block
+                  disabled={overrideValidationError !== null}
+                  progress={createDateOverrides.isPending}
+                >
+                  Save {overrideSlotCount} override
+                  {overrideSlotCount === 1 ? "" : "s"}
                 </Button>
               </form>
             </CardBody>
           </Card>
-          <Card>
-            <CardHeader>
-              <IconBox variant="tertiary">
-                <IconSettings />
-              </IconBox>
-              <CardTitle>Scheduling rules</CardTitle>
-              <CardDescription className="leading-none">
-                Existing bookings stay reserved when weekly hours change.
-              </CardDescription>
-            </CardHeader>
-            <CardBody className="space-y-3">
-              <Rule label="Session duration" value="90 minutes" />
-              <Rule label="Timezone" value="Asia/Jakarta" />
-              <Rule label="Availability" value="Weekly + overrides" />
-            </CardBody>
-          </Card>
+          <CalendarPreview
+            previewDays={previewDays}
+            slotsByDay={slotsByDay}
+            activeDate={activePreviewDate}
+            onSelectDate={setSelectedPreviewDate}
+            onPreviousWeek={() =>
+              setPreviewStart((current) => addDays(current, -7))
+            }
+            onNextWeek={() => setPreviewStart((current) => addDays(current, 7))}
+            onRequestRemove={setSlotPendingRemoval}
+          />
         </div>
       </div>
+      <ConfirmationDialog
+        open={slotPendingRemoval !== null}
+        onOpenChange={(open) => {
+          if (!open) setSlotPendingRemoval(null);
+        }}
+        title="Remove this availability?"
+        description={
+          slotPendingRemoval
+            ? `${formatBookingTimeRange(slotPendingRemoval.startDate, slotPendingRemoval.endDate, TIMEZONE)} will no longer be visible to students.`
+            : "This availability will no longer be visible to students."
+        }
+        confirmLabel="Remove availability"
+        confirmVariant="danger"
+        pending={removeSlot.isPending}
+        onConfirm={() => {
+          if (slotPendingRemoval)
+            removeSlot.mutate({ id: slotPendingRemoval.id });
+        }}
+      />
+    </Stack>
+  );
+}
 
-      <Card>
-        <CardHeader>
-          <IconBox variant="success-subtle">
-            <IconCalendarEvent />
-          </IconBox>
-          <CardTitle>Calendar preview</CardTitle>
-          <CardDescription>
-            Windows currently visible to students.
-          </CardDescription>
-        </CardHeader>
-        <CardBody>
-          <div className="mb-4 flex items-center justify-between">
+function CalendarPreview({
+  previewDays,
+  slotsByDay,
+  activeDate,
+  onSelectDate,
+  onPreviousWeek,
+  onNextWeek,
+  onRequestRemove,
+}: {
+  previewDays: string[];
+  slotsByDay: Map<string, AvailabilitySlot[]>;
+  activeDate: string;
+  onSelectDate: (date: string) => void;
+  onPreviousWeek: () => void;
+  onNextWeek: () => void;
+  onRequestRemove: (slot: AvailabilitySlot) => void;
+}) {
+  const activeSlots = slotsByDay.get(activeDate) ?? [];
+
+  return (
+    <Card>
+      <CardHeader>
+        <IconBox variant="success-subtle">
+          <IconCalendarEvent />
+        </IconBox>
+        <CardTitle>
+          Calendar preview
+          <CardInfoPreview>
+            <InfoPreview
+              title="Calendar preview"
+              description="Windows currently visible to students in Western Indonesia Time."
+              tone="success"
+            />
+          </CardInfoPreview>
+        </CardTitle>
+      </CardHeader>
+      <CardBody>
+        <div className="space-y-4">
+          <div className="flex items-center gap-1">
             <Button
+              type="button"
               variant="plain"
               size="sm-icon"
               aria-label="Previous week"
-              onClick={() => setPreviewStart((current) => addDays(current, -7))}
+              onClick={onPreviousWeek}
             >
               <IconChevronLeft />
             </Button>
-            <Text className="font-medium">Week of {previewStart}</Text>
+            <div className="grid min-w-0 flex-1 grid-cols-7 gap-1">
+              {previewDays.map((date, index) => {
+                const active = date === activeDate;
+                return (
+                  <Button
+                    key={date}
+                    type="button"
+                    variant={active ? "tertiary" : "plain"}
+                    aria-label={`${DAYS[index]![1]}, ${date}`}
+                    aria-pressed={active}
+                    className="min-w-0 flex-col gap-0 px-0 py-6"
+                    onClick={() => onSelectDate(date)}
+                  >
+                    <span className="text-xs opacity-70">
+                      {DAYS[index]![2]}
+                    </span>
+                    <span className="text-xs font-medium">
+                      {formatPreviewDay(date)}
+                    </span>
+                  </Button>
+                );
+              })}
+            </div>
             <Button
+              type="button"
               variant="plain"
               size="sm-icon"
               aria-label="Next week"
-              onClick={() => setPreviewStart((current) => addDays(current, 7))}
+              onClick={onNextWeek}
             >
               <IconChevronRight />
             </Button>
           </div>
-          {hasPreviewSlots ? (
-            <div className="grid gap-2 md:grid-cols-7">
-              {previewDays.map((date, index) => (
-                <div
-                  key={date}
-                  className="min-h-40 rounded-lg border border-item-border bg-item p-2"
-                >
-                  <Text className="text-xs font-medium">
-                    {DAYS[index]![2]} · {date.slice(8)}
-                  </Text>
-                  <div className="mt-2 space-y-2">
-                    {(slotsByDay.get(date) ?? []).map((slot) => (
-                      <div
-                        key={slot.id}
-                        className="rounded border border-item-border bg-background p-2"
-                      >
-                        <Text className="text-xs font-medium">
-                          {formatBookingTimeRange(
-                            slot.startDate,
-                            slot.endDate,
-                            TIMEZONE,
-                          )}
-                        </Text>
-                        <div className="mt-1 flex items-center justify-between gap-1">
-                          <Badge
-                            variant={slot.isRecurring ? "info" : "warning"}
-                            pill
-                          >
-                            {slot.isRecurring ? "Weekly" : "Override"}
-                          </Badge>
-                          <Button
-                            variant="plain"
-                            size="xs-icon"
-                            aria-label="Remove availability"
-                            onClick={() => removeSlot.mutate({ id: slot.id })}
-                          >
-                            <IconTrash />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <Text className="font-medium">
+                {formatPreviewDate(activeDate)}
+              </Text>
+              <Badge variant="secondary" pill>
+                {activeSlots.length}{" "}
+                {activeSlots.length === 1 ? "window" : "windows"}
+              </Badge>
             </div>
-          ) : (
-            <EmptyState
-              icon={<IconCalendarEvent />}
-              title="No availability this week"
-              description="Save weekly hours or add a date override to show booking windows here."
-              tone="secondary"
-              size="compact"
-            />
-          )}
-        </CardBody>
-      </Card>
-    </Stack>
+            {activeSlots.length > 0 ? (
+              <div className="space-y-2">
+                {activeSlots.map((slot) => (
+                  <Item key={slot.id} size="sm">
+                    <ItemMedia>
+                      <IconBox variant="success-subtle">
+                        <IconClock />
+                      </IconBox>
+                    </ItemMedia>
+                    <ItemContent className="min-w-0 gap-1.5">
+                      <ItemTitle>
+                        {formatBookingTimeRange(
+                          slot.startDate,
+                          slot.endDate,
+                          TIMEZONE,
+                        )}
+                      </ItemTitle>
+                      <div className="flex flex-wrap gap-1.5">
+                        <Badge
+                          variant={slot.isRecurring ? "info" : "warning"}
+                          pill
+                        >
+                          {slot.isRecurring ? "Weekly" : "Override"}
+                        </Badge>
+                        <Badge variant="secondary" pill>
+                          {slot.modality === "both"
+                            ? "Online & offline"
+                            : slot.modality === "offline"
+                              ? "Offline"
+                              : "Online"}
+                        </Badge>
+                      </div>
+                    </ItemContent>
+                    <ItemAction>
+                      <Button
+                        type="button"
+                        variant="danger"
+                        size="sm-icon"
+                        aria-label={`Remove availability at ${timeValue(slot.startDate)}`}
+                        onClick={() => onRequestRemove(slot)}
+                      >
+                        <IconTrash />
+                      </Button>
+                    </ItemAction>
+                  </Item>
+                ))}
+              </div>
+            ) : (
+              <Text className="py-4 text-center text-sm text-muted">
+                No availability on this date.
+              </Text>
+            )}
+          </div>
+        </div>
+      </CardBody>
+    </Card>
   );
 }
 
@@ -702,14 +1006,5 @@ function ModalitySelect({
         </SelectList>
       </SelectPopup>
     </Select>
-  );
-}
-
-function Rule({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between gap-3">
-      <Text className="text-sm text-muted">{label}</Text>
-      <Text className="text-sm font-medium">{value}</Text>
-    </div>
   );
 }

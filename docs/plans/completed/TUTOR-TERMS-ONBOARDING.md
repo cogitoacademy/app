@@ -1,6 +1,6 @@
 # Tutor Terms of Service onboarding
 
-Status: Completed locally — 2026-09-02
+Status: Completed locally — 2026-09-02; UX follow-up completed — 2026-09-09
 
 ## Objective
 
@@ -11,11 +11,12 @@ review.
 ## Delivered
 
 - Added the nine-clause bilingual Terms of Service dialog to the tutor profile
-  form. Draft saves remain available without consent; the submit action opens
-  the dialog only when the tutor has no recorded acceptance.
-- Added a persistent **View Tutor Terms** action in the
-  sticky onboarding action area. After acceptance it reopens the document in
-  read-only mode.
+  form. The dialog is read-only; draft saves remain available without consent.
+- Added one responsive **I agree to the Tutor Terms of Service** checkbox to
+  the sticky onboarding action area. **Read terms** opens the document without
+  duplicating the consent control, and the checkbox remains checked/disabled
+  after the server records acceptance. Non-editable profiles retain a
+  **Review Tutor Terms** action for read-only review.
 - Added `acceptTerms?: boolean` to `tutor.submitForReview` and enforced the
   requirement in the service, including `TUTOR_TERMS_NOT_ACCEPTED` for direct
   API callers that skip consent.

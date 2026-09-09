@@ -6,6 +6,8 @@ Completed — 2026-08-24
 
 ## Delivered
 
+- Responsive presentation refreshed 2026-09-08: the guide now uses a Selia card hero, role-aware highlight rail, sticky left desktop chapter index, horizontal snap-scrolling mobile chapter index, and compact numbered disclosure cards. The obsolete development Tweaks Bar mount was removed.
+
 - Added authenticated `/guide` route with `view=student|tutor|admin` search state.
 - Enforced role visibility: student → Student; tutor → Tutor + Student; admin → Admin + Tutor + Student.
 - Added Selia-based responsive journey timeline with role tabs, chapter navigation, expandable steps, statuses, exception branches, and internal CTAs.

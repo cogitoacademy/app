@@ -18,10 +18,11 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
-  CardDescription,
   CardHeader,
+  CardInfoPreview,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
+import { InfoPreview } from "@/components/info-preview";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Input } from "@cogito-app/ui/components/selia/input";
@@ -198,10 +199,10 @@ export function AchievementModerationPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <Heading level={1} size="md">
-            Achievement moderation
+            Verify every achievement
           </Heading>
           <Text className="text-muted">
-            Review student evidence before achievements become public.
+            Review student evidence and publish only trusted submissions.
           </Text>
         </div>
         <Select
@@ -225,7 +226,7 @@ export function AchievementModerationPage() {
         </Select>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
         <QueueStat label="Pending" value={pendingCount} variant="warning" />
         <QueueStat label="Approved" value={approvedCount} variant="success" />
         <QueueStat label="Rejected" value={rejectedCount} variant="danger" />
@@ -413,10 +414,15 @@ function ModerationTable({
     <>
       <Card className="w-full min-w-0 max-w-full overflow-hidden">
         <CardHeader>
-          <CardTitle>Submissions</CardTitle>
-          <CardDescription>
-            Open any submission for the full details and moderation actions.
-          </CardDescription>
+          <CardTitle>
+            Submissions
+            <CardInfoPreview>
+              <InfoPreview
+                title="Submissions"
+                description="Open any submission for the full details and moderation actions."
+              />
+            </CardInfoPreview>
+          </CardTitle>
         </CardHeader>
         <CardBody aria-busy={mutationPending} className="min-w-0 max-w-full">
           <TableContainer className="w-[calc(100%+3rem)]! min-w-0">
@@ -485,6 +491,7 @@ function ModerationTable({
                       <TableCell className="align-center text-right">
                         <Button
                           variant="tertiary"
+                          className="whitespace-nowrap"
                           size="sm"
                           onClick={() => setSelectedAchievement(achievement)}
                         >
@@ -537,8 +544,10 @@ function QueueStat({
 }) {
   return (
     <Card>
-      <CardBody className="flex items-center justify-between gap-4 py-4">
-        <Text className="font-medium">{label}</Text>
+      <CardBody className="flex min-w-0 flex-col items-start gap-2 p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-4">
+        <Text className="truncate text-sm font-medium sm:text-base">
+          {label}
+        </Text>
         <Badge variant={variant} pill>
           {value}
         </Badge>
