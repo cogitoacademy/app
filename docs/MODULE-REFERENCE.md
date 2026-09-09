@@ -2,6 +2,14 @@
 
 Last updated: 2026-09-09
 
+## Achievement summary presentation (2026-09-09)
+
+The student achievement page composes its Total, Approved, and Pending values
+inside one Selia card with three persistent columns, preventing the summary
+from stacking into three card rows on narrow screens. Its source uses the
+correctly spelled `AchievementsPage` / `achievements-page.tsx` names. No
+service, event key, or business rule changed.
+
 ## Dashboard greeting presentation (2026-09-08)
 
 `apps/web/src/components/dashboard/dashboard-greetings.ts` owns the four local

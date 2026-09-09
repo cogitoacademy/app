@@ -24,7 +24,7 @@ import { TablePagination } from "@/components/table-pagination";
 
 const ACHIEVEMENTS_PAGE_SIZE = 10;
 
-export function AchivementsPage() {
+export function AchievementsPage() {
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
   const [createOpen, setCreateOpen] = useState(false);

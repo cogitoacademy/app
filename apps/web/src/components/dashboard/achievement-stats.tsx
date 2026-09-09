@@ -16,11 +16,13 @@ export function AchievementStats({
   pending,
 }: AchievementStatsProps) {
   return (
-    <div className="grid gap-3 sm:grid-cols-3">
-      <AchievementStat label="Total" value={total} variant="info" />
-      <AchievementStat label="Approved" value={approved} variant="success" />
-      <AchievementStat label="Pending" value={pending} variant="warning" />
-    </div>
+    <Card>
+      <CardBody className="grid grid-cols-3 p-0">
+        <AchievementStat label="Total" value={total} variant="info" />
+        <AchievementStat label="Approved" value={approved} variant="success" />
+        <AchievementStat label="Pending" value={pending} variant="warning" />
+      </CardBody>
+    </Card>
   );
 }
 
@@ -34,13 +36,11 @@ function AchievementStat({
   variant: "info" | "secondary" | "success" | "warning";
 }) {
   return (
-    <Card>
-      <CardBody className="flex items-center justify-between gap-4 py-4">
-        <Text className="font-medium">{label}</Text>
-        <Badge variant={variant} pill className="tabular-nums">
-          {value}
-        </Badge>
-      </CardBody>
-    </Card>
+    <div className="flex min-w-0 flex-col items-center gap-1.5 border-l border-border px-2 pt-2 pb-3 first:border-l-0 sm:flex-row sm:justify-between sm:px-4">
+      <Text className="truncate font-medium">{label}</Text>
+      <Badge variant={variant} pill className="shrink-0 tabular-nums">
+        {value}
+      </Badge>
+    </div>
   );
 }

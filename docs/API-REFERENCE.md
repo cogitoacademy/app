@@ -2,6 +2,12 @@
 
 Last updated: 2026-09-09
 
+## Achievement summary UI note (2026-09-09)
+
+The student achievement summary was compacted into one three-column card and
+the page component typo was corrected. Achievement RPC paths, inputs, response
+envelopes, and outputs are unchanged.
+
 ## Dashboard greeting presentation (2026-09-08)
 
 Student, tutor, and admin dashboard greetings are selected entirely in the web

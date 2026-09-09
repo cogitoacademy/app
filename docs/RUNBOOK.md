@@ -433,7 +433,8 @@ calendar month/year dropdowns as well; each popup must remain clickable and
 must not be hidden behind the dialog backdrop.
 
 With at least one submission present, verify the student achievement list is a
-compact summary with small label-and-pill count cards matching the admin queue,
+compact single-card summary whose Total, Approved, and Pending label-and-pill
+counts remain in three columns even at narrow widths,
 followed by a semantic table with readable achievement, status, awarded date,
 and **View details** columns. Open a row and confirm the drawer exposes category,
 level, location, description, attachments, and moderator notes; pending rows

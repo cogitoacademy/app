@@ -11,6 +11,13 @@
 
 This document catalogs all PRD-required frontend surfaces that are not yet implemented. It runs in parallel with (or after) the backend PRD gaps spec — each frontend gap references the backend gap it depends on.
 
+### Achievement summary density follow-up (2026-09-09)
+
+The student achievement summary now shares one Selia card across Total,
+Approved, and Pending, keeping all three counts in one row at narrow widths.
+The page source typo was also corrected to `achievements-page.tsx` and
+`AchievementsPage`. RPC, schema, and persistence contracts are unchanged.
+
 The backend spec is `docs/plans/completed/PRD-GAPS-SPEC.md` (backend-only). This is the frontend counterpart.
 
 ### Student dashboard balance-widget follow-up (2026-09-04)

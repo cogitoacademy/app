@@ -2,6 +2,14 @@
 
 Last updated: 2026-09-09
 
+## Achievement summary presentation (2026-09-09)
+
+The student `/achievements` page renders Total, Approved, and Pending counts in
+one compact three-column Selia card at every viewport width. The page component
+and file use the correctly spelled `AchievementsPage` / `achievements-page.tsx`
+names. This is presentation-only and changes no RPC, schema, or persistence
+contract.
+
 ## Role- and time-aware dashboard greetings (2026-09-08)
 
 The student, tutor, and admin dashboards now share `DashboardWelcomeCard` and
