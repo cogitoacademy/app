@@ -749,15 +749,26 @@ export function createBookingService(deps: {
   async function listAccessible(
     userId: string,
     userRole: string,
-    opts: { cursor?: string; limit?: number; states?: string[] } = {},
+    opts: {
+      cursor?: string;
+      limit?: number;
+      states?: string[];
+      view?: "action" | "upcoming" | "recurring" | "history" | "all";
+    } = {},
   ) {
     const limit = Math.min(opts.limit ?? DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT);
-    const rows = await repo.listBookingsForAccess(userId, {
-      states: opts.states,
-      limit,
-      cursor: opts.cursor,
-      includeAll: userRole === "admin",
-    });
+    const [rows, counts] = await Promise.all([
+      repo.listBookingsForAccess(userId, {
+        states: opts.states,
+        limit,
+        cursor: opts.cursor,
+        includeAll: userRole === "admin",
+        ...(opts.view ? { view: opts.view } : {}),
+      }),
+      repo.countBookingsForAccess(userId, {
+        includeAll: userRole === "admin",
+      }),
+    ]);
     const items = rows.slice(0, limit);
     const nextCursor =
       rows.length > limit
@@ -766,7 +777,7 @@ export function createBookingService(deps: {
             items[items.length - 1]!.id,
           )
         : null;
-    return { items, nextCursor };
+    return { items, nextCursor, counts };
   }
 
   /**

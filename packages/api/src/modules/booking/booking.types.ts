@@ -176,6 +176,9 @@ export const listMineInput = z.object({
   cursor: z.string().max(100).optional(),
   limit: z.number().int().min(1).max(100).optional(),
   states: z.array(z.string().max(100)).max(15).optional(),
+  view: z
+    .enum(["action", "upcoming", "recurring", "history", "all"])
+    .optional(),
 });
 
 export const listSessionsInput = z.object({

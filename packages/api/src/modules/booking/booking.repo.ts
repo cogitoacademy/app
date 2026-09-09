@@ -45,6 +45,25 @@ import {
 } from "../../shared/constants";
 import { BOOKING_STATE } from "./booking-state.types";
 
+const BOOKING_ACTION_STATES = [
+  "awaiting_tutor_review",
+  "reschedule_proposed",
+  "awaiting_reconfirmation",
+  "awaiting_admin_room_approval",
+  "awaiting_participant_confirmation",
+] as const;
+
+const TERMINAL_BOOKING_STATES = [
+  "completed",
+  "cancelled",
+  "late_cancelled",
+  "no_show",
+  "declined",
+  "expired",
+] as const;
+
+type BookingListView = "action" | "upcoming" | "recurring" | "history" | "all";
+
 // Booking participants can see one another's display identity, but not the
 // private account fields on the auth user row. Email is resolved separately by
 // server-side notification/meeting code when it is genuinely required.
@@ -103,6 +122,26 @@ function bookingCursorCondition(cursor: string): SQL<unknown> {
     lt(booking.scheduledStartAt, scheduledStartAt),
     and(eq(booking.scheduledStartAt, scheduledStartAt), lt(booking.id, id)),
   )!;
+}
+
+function bookingViewCondition(
+  view: BookingListView | undefined,
+  now: Date,
+): SQL<unknown> | undefined {
+  if (!view || view === "all") return undefined;
+  const pending = inArray(booking.currentState, [...BOOKING_ACTION_STATES]);
+  const terminal = inArray(booking.currentState, [...TERMINAL_BOOKING_STATES]);
+
+  switch (view) {
+    case "action":
+      return pending;
+    case "upcoming":
+      return and(gte(booking.scheduledEndAt, now), not(terminal), not(pending));
+    case "recurring":
+      return and(eq(booking.type, "series"), not(terminal));
+    case "history":
+      return or(terminal, and(lt(booking.scheduledEndAt, now), not(pending)));
+  }
 }
 
 /**
@@ -1179,6 +1218,7 @@ export function createBookingRepo(db: DbType) {
       limit: number;
       cursor?: string;
       includeAll?: boolean;
+      view?: BookingListView;
     },
   ) {
     const conditions = [];
@@ -1203,6 +1243,8 @@ export function createBookingRepo(db: DbType) {
     if (opts.states?.length) {
       conditions.push(inArray(booking.currentState, opts.states));
     }
+    const viewCondition = bookingViewCondition(opts.view, new Date());
+    if (viewCondition) conditions.push(viewCondition);
     if (opts.cursor) {
       conditions.push(bookingCursorCondition(opts.cursor));
     }
@@ -1222,12 +1264,57 @@ export function createBookingRepo(db: DbType) {
     });
   }
 
+  async function countBookingsForAccess(
+    userId: string,
+    opts: { includeAll?: boolean },
+  ) {
+    const conditions = [];
+    if (!opts.includeAll) {
+      const participantBooking = db
+        .select({ id: bookingParticipant.id })
+        .from(bookingParticipant)
+        .where(
+          and(
+            eq(bookingParticipant.bookingId, booking.id),
+            eq(bookingParticipant.userId, userId),
+          ),
+        );
+      conditions.push(
+        or(
+          eq(booking.proposerId, userId),
+          eq(booking.tutorId, userId),
+          exists(participantBooking),
+        ),
+      );
+    }
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+    const now = new Date();
+    const [counts] = await db
+      .select({
+        action: sql<number>`count(*) filter (where ${bookingViewCondition("action", now)})`,
+        upcoming: sql<number>`count(*) filter (where ${bookingViewCondition("upcoming", now)})`,
+        recurring: sql<number>`count(*) filter (where ${bookingViewCondition("recurring", now)})`,
+        history: sql<number>`count(*) filter (where ${bookingViewCondition("history", now)})`,
+        all: sql<number>`count(*)`,
+      })
+      .from(booking)
+      .where(where);
+    return {
+      action: Number(counts?.action ?? 0),
+      upcoming: Number(counts?.upcoming ?? 0),
+      recurring: Number(counts?.recurring ?? 0),
+      history: Number(counts?.history ?? 0),
+      all: Number(counts?.all ?? 0),
+    };
+  }
+
   return {
     findBookingById,
     findBookingWithParticipants,
     listBookingsByProposer,
     listBookingsByTutor,
     listBookingsForAccess,
+    countBookingsForAccess,
     findTutorProfile,
     findTutorSubjectTopic,
     findAvailabilitySlot,

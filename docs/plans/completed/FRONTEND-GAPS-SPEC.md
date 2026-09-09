@@ -297,10 +297,23 @@ otherwise), and admins see All; an explicit `tab` query parameter wins.
 
 ### Booking-list tab overflow follow-up (2026-08-26)
 
-The rounded booking status-tab strip fills the available width on narrow
+The booking status switcher uses a page-local button tablist with Selia color tokens, and its rounded strip fills the available width on narrow
 screens. Only its inner tab list remains horizontally swipeable, while the
 native scrollbar is hidden so the page itself does not overflow. This is a
 presentation-only change with no RPC, schema, or persistence contract change.
+The mobile sort control lives in the wrapping header action row so the tab strip
+directly precedes its content; at the `sm` breakpoint and above it remains beside
+the tabs.
+The active background changes directly without the shared sliding indicator.
+
+### Booking-list server filtering follow-up (2026-09-09)
+
+`booking.listMine` now accepts `view` and applies Needs action, Upcoming,
+Series, History, or All predicates before cursor pagination. Every response also
+returns exact role-scoped facet counts. The web page switches active state
+optimistically, shows its content loader for the new query key, and appends only
+the selected view's cursor pages. Sorting remains client-side within loaded
+filtered pages.
 
 ### Booking-list overflow polish follow-up (2026-08-28)
 

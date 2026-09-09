@@ -493,6 +493,11 @@ describe("Validation bounds — array .max()", () => {
       expect(result.error.issues[0].message).toMatch(/<=15/i);
     }
   });
+
+  test("booking list view accepts known tabs and rejects unknown tabs", () => {
+    expect(listMineInput.safeParse({ view: "history" }).success).toBe(true);
+    expect(listMineInput.safeParse({ view: "cancelled" }).success).toBe(false);
+  });
 });
 
 describe("Validation bounds — date in the future", () => {

@@ -385,11 +385,11 @@ Search results are replaced only after the submitted query completes, and
 wildcard characters are treated literally.
 
 The shared booking list consumes `booking.listMine` with cursor-based infinite
-loading in batches of 20. Loaded cards remain visible while **Load more
-bookings** fetches the next cursor, so large histories do not require an
-unbounded first response or replace the current screen. Tabs and sorting still
-apply client-side to the loaded pages; tab counts show `+` while more pages
-remain because they are lower bounds until the list is fully loaded.
+loading in batches of 20. Each tab is filtered server-side through the `view`
+input, and the response includes exact role-scoped facet counts. Changing tabs
+loads a fresh filtered first page; **Load more bookings** appends only that
+view's next cursor. Sorting remains client-side within the loaded filtered
+pages.
 
 Shared booking cards include a compact time indicator. Deadline-bound pending states use the server-provided `deadlineAt` to show `Respond in`, urgent, or overdue messaging; confirmed/scheduled bookings show Today, Starts in, Starting soon, or In progress when relevant. Terminal bookings show no time indicator. One shared client clock refreshes all visible cards every 30 seconds.
 In booking lists, this indicator sits after the role-appropriate financial summary (Marks for students/admins, IDR honorarium for tutors) with a vertical divider. Dashboard next-lesson cards hide their financial summary to keep the compact overview focused on people, timing, and the detail action.
@@ -514,7 +514,7 @@ Competition Calendar and Knowledge Bank content are now delivered inside the aut
 
 The shared booking list sorts active and all rows by the nearest scheduled start while keeping past/cancelled history newest-first. It defaults to Upcoming for students, Pending for tutors when requests need review (otherwise Upcoming), and All for admins; an explicit `tab` query parameter overrides the role-aware default. Dashboard next-lesson cards use the nearest future booking that is neither terminal nor pending, matching the list's Upcoming semantics. The tutor review queue keeps a stable empty/loading card so the requests and next-lesson modules remain visible together even when no review request exists.
 
-On narrow screens, the rounded booking status-tab strip fills the available page width; only its inner tab list scrolls horizontally, with the native scrollbar hidden. Internal paint padding keeps selected-tab shadows and focus rings visible at either scroll edge, while shared empty-state cards preserve their rounded decorative glow and card shadow without widening the page. This is presentation-only and does not change the `booking.listMine` contract.
+The booking status switcher uses a page-local semantic button tablist styled with Selia's `tabs`, `tabs-accent`, and `tabs-border` tokens. The active state updates optimistically on click while the filtered content shows the normal loader until the server returns the selected view. On narrow screens, sorting moves into the wrapping header action row while the rounded tab strip directly precedes the booking content; only the inner list scrolls horizontally. On larger screens, sorting remains beside the tabs.
 
 ## Admin offline room workflow (2026-09-02)
 
