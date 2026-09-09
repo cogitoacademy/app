@@ -159,9 +159,10 @@ export function BookingsPage() {
             <Button
               render={<Link to="/tutors" aria-label="Find a tutor" />}
               nativeButton={false}
-              className="w-fit sm:w-auto sm:shrink-0"
+              className="w-fit max-[363.98px]:size-9.5 max-[363.98px]:px-0 sm:w-auto sm:shrink-0"
             >
-              <IconCalendarPlus /> Book a session
+              <IconCalendarPlus />
+              <span className="max-[363.98px]:sr-only">Book a session</span>
             </Button>
           ) : null}
           <div className="max-w-full sm:hidden">
