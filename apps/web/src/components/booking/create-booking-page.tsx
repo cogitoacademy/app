@@ -684,8 +684,8 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                       group booking.
                     </Text>
                   </div>
-                  <Badge variant="info" pill>
-                    {isGroupBooking ? `Group · ${invitees.length + 1}` : "Solo"}
+                  <Badge variant="info" pill className="whitespace-nowrap">
+                    {isGroupBooking ? `Group: ${invitees.length + 1}` : "Solo"}
                   </Badge>
                 </div>
                 <Field>

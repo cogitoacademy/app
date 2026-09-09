@@ -225,7 +225,7 @@ export function TutorsPageContent() {
   return (
     <Stack
       direction="column"
-      spacing="lg"
+      spacing="md"
       className="w-full min-w-0 max-w-full"
     >
       <div>
@@ -412,7 +412,7 @@ export function TutorsPageContent() {
         />
       ) : (
         <div
-          className="grid grid-cols-1 gap-4 xl:grid-cols-2"
+          className="grid grid-cols-1 gap-4 xl:grid-cols-2 mt-2"
           aria-busy={isFetching}
         >
           {tutors.map((tutor: PublishedTutor) => (

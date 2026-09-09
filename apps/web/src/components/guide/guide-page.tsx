@@ -202,7 +202,7 @@ function GuidePageContent({ role, view }: { role?: string; view: GuideView }) {
               </Text>
             </div>
             <Button
-              variant="plain"
+              variant="tertiary"
               size="sm"
               className="shrink-0"
               onClick={() =>
@@ -391,13 +391,13 @@ function GuideChapterSection({
           <ChapterIcon />
         </IconBox>
         <div className="min-w-0">
-          <Text className="text-xs font-semibold uppercase tracking-wider text-dimmed">
+          <Text className="text-xs font-semibold text-dimmed">
             Chapter {chapterNumber}
           </Text>
-          <Heading size="md" level={3} className="mt-1 text-balance">
+          <Heading size="sm" level={3} className="mt-1 text-balance">
             {chapter.title}
           </Heading>
-          <Text className="mt-1 max-w-3xl text-pretty text-muted">
+          <Text className="mt-1 max-w-3xl text-sm text-pretty text-muted">
             <GuideCopy text={chapter.description} />
           </Text>
         </div>

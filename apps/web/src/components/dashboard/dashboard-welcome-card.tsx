@@ -36,7 +36,7 @@ export function DashboardWelcomeCard({
     { hasUpcomingLesson, reviewCount, priorityCount },
   );
   return (
-    <Card className="relative min-h-40 overflow-hidden bg-primary/10">
+    <Card className="relative min-h-70 md:min-h-40 overflow-hidden bg-primary/10">
       <LearningOrbitIllustration />
       <CardBody className="relative z-1 flex h-full flex-col items-start justify-between gap-8 p-6">
         <div>

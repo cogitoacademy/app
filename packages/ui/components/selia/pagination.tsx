@@ -64,6 +64,7 @@ export function PaginationButton({
       className: cn(
         buttonVariants({ variant: active ? "secondary" : "plain" }),
         active && "pointer-events-none",
+        "text-sm md:text-base",
         props.className,
       ),
       ...props,

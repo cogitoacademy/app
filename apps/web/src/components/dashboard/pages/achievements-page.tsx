@@ -132,37 +132,32 @@ export function AchievementsPage() {
         <AchievementEmptyState />
       ) : visibleItems.length === 0 ? (
         <Card>
-          <div className="p-4">
-            <EmptyStateCard
-              icon={<IconFilterOff />}
-              title={
-                page === 0
-                  ? "No matching achievements"
-                  : "No achievements on this page"
-              }
-              description={
-                page === 0
-                  ? "Try another category or status filter."
-                  : "Go back to the previous page to continue browsing achievements."
-              }
-              tone="secondary"
-              size="compact"
+          <EmptyStateCard
+            icon={<IconFilterOff />}
+            title={
+              page === 0
+                ? "No matching achievements"
+                : "No achievements on this page"
+            }
+            description={
+              page === 0
+                ? "Try another category or status filter."
+                : "Go back to the previous page to continue browsing achievements."
+            }
+            tone="info"
+          />
+          {page > 0 ? (
+            <TablePagination
+              label="achievements"
+              pageSize={ACHIEVEMENTS_PAGE_SIZE}
+              page={page}
+              itemCount={0}
+              hasNext={false}
+              isFetching={achievements.isFetching}
+              onPrevious={() => setPage((current) => Math.max(0, current - 1))}
+              onNext={() => setPage((current) => current + 1)}
             />
-            {page > 0 ? (
-              <TablePagination
-                label="achievements"
-                pageSize={ACHIEVEMENTS_PAGE_SIZE}
-                page={page}
-                itemCount={0}
-                hasNext={false}
-                isFetching={achievements.isFetching}
-                onPrevious={() =>
-                  setPage((current) => Math.max(0, current - 1))
-                }
-                onNext={() => setPage((current) => current + 1)}
-              />
-            ) : null}
-          </div>
+          ) : null}
         </Card>
       ) : (
         <AchievementTable

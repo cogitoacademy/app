@@ -9,9 +9,7 @@ import {
   IconCalendarPlus,
   IconChevronDown,
   IconInbox,
-  IconRefresh,
 } from "@tabler/icons-react";
-import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
 import { Divider } from "@cogito-app/ui/components/selia/divider";
@@ -140,18 +138,9 @@ export function BookingsPage() {
     >
       <div className="flex w-full min-w-0 max-w-full flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0 max-w-full">
-          <div className="flex items-center gap-2">
-            <Heading level={1} size="md">
-              Stay on top of every session
-            </Heading>
-            {bookingsQuery.isFetching &&
-            !bookingsQuery.isPending &&
-            !bookingsQuery.isFetchingNextPage ? (
-              <Badge variant="secondary" pill>
-                <IconRefresh className="animate-spin" /> Refreshing
-              </Badge>
-            ) : null}
-          </div>
+          <Heading level={1} size="md">
+            Stay on top of every session
+          </Heading>
           <Text className="max-w-full text-muted">{pageDescription}</Text>
         </div>
         <div className="flex w-full min-w-0 flex-wrap items-center justify-end gap-2 sm:w-auto sm:flex-nowrap">

@@ -140,12 +140,22 @@ export function CompetitionCalendar({
           <div className="flex min-w-0 items-center gap-1 sm:gap-2">
             <Button
               variant="secondary"
-              size="sm"
+              size="md"
+              onClick={handleToday}
+              aria-label="Go to today"
+              className="hidden min-[422px]:inline-flex"
+            >
+              <IconCalendarCheck />
+              <span>Today</span>
+            </Button>
+            <Button
+              variant="secondary"
+              size="icon"
+              className="min-[422px]:hidden shrink-0"
               onClick={handleToday}
               aria-label="Go to today"
             >
               <IconCalendarCheck />
-              <span className="max-[359px]:sr-only">Today</span>
             </Button>
             <div className="flex items-center">
               <Button
@@ -190,7 +200,7 @@ export function CompetitionCalendar({
                 <span className="hidden max-[479px]:inline" aria-hidden="true">
                   {view === "month" ? "M" : "A"}
                 </span>
-                <IconChevronDown />
+                <IconChevronDown className="hidden min-[366px]:block" />
               </MenuTrigger>
               <MenuPopup align="end" size="compact">
                 <MenuRadioGroup value={view} onValueChange={handleViewChange}>

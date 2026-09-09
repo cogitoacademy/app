@@ -36,7 +36,7 @@ function AchievementStat({
   variant: "info" | "secondary" | "success" | "warning";
 }) {
   return (
-    <div className="flex min-w-0 flex-col items-center gap-1.5 border-l border-border px-2 pt-2 pb-3 first:border-l-0 sm:flex-row sm:justify-between sm:px-4">
+    <div className="flex min-w-0 flex-col items-center gap-1.5 border-l border-border px-2 pt-2 pb-3 sm:pt-3 first:border-l-0 sm:flex-row sm:justify-between sm:px-4">
       <Text className="truncate font-medium">{label}</Text>
       <Badge variant={variant} pill className="shrink-0 tabular-nums">
         {value}
