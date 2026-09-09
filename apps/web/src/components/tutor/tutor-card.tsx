@@ -106,11 +106,17 @@ export function TutorSummary({
 
   return (
     <Item className="items-center border-0 bg-transparent p-0!" size="lg">
-      <ItemMedia>
+      <ItemMedia className="flex flex-col items-center gap-1.5">
         <Avatar size="md" className="size-[67px]!">
           <AvatarImage src={tutor.user?.image ?? undefined} alt={tutorName} />
           <AvatarFallback>{getInitials(tutorName)}</AvatarFallback>
         </Avatar>
+        {startingPrice !== null ? (
+          <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs text-dimmed sm:hidden">
+            From
+            <CogitoMarks value={startingPrice} size="3" />
+          </span>
+        ) : null}
       </ItemMedia>
       <ItemContent className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
@@ -183,7 +189,7 @@ export function TutorSummary({
             </Badge>
           ) : null}
           {startingPrice !== null && (
-            <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap">
+            <span className="hidden shrink-0 items-center gap-1 whitespace-nowrap sm:inline-flex">
               From
               <CogitoMarks value={startingPrice} size="3" />
             </span>
