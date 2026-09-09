@@ -178,6 +178,7 @@ const TUTOR_FIELD_LABELS: Record<string, string> = {
   bankAccountOpeningCity: "Account opening city/regency",
   bankAccountOwnership: "Account ownership",
   bankTransferDisclaimerAccepted: "Transfer-account confirmation",
+  termsOfService: "Tutor Terms of Service",
   subjects: "Specializations",
   baseRatesIdr: "Base honorarium",
   education: "Education",
@@ -320,6 +321,7 @@ function getTutorErrorFocusTarget(
   }
   if (field === "shortBio") return "tutor-short-bio";
   if (field === "profileImageUrl") return "tutor-profile-image";
+  if (field === "termsOfService") return "tutor-terms-of-service-accepted";
   if (field.startsWith("achievementProofUrls.")) {
     return "tutor-achievement-proofs";
   }
@@ -327,6 +329,56 @@ function getTutorErrorFocusTarget(
     return "tutor-experience-proofs";
   }
   return `tutor-${field}`;
+}
+
+function TutorTermsConsent({
+  accepted,
+  disabled,
+  error,
+  onAcceptedChange,
+  onOpenTerms,
+}: {
+  accepted: boolean;
+  disabled: boolean;
+  error?: string;
+  onAcceptedChange: (accepted: boolean) => void;
+  onOpenTerms: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <Checkbox
+        id="tutor-terms-of-service-accepted"
+        checked={accepted}
+        disabled={disabled}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? "tutor-terms-of-service-error" : undefined}
+        onCheckedChange={(checked) => onAcceptedChange(checked === true)}
+      />
+      <Field className="min-w-0 gap-1">
+        <FieldLabel
+          htmlFor="tutor-terms-of-service-accepted"
+          className="text-sm font-medium leading-relaxed gap-1"
+        >
+          <span>
+            I agree to the
+          </span>
+          <Button
+            type="button"
+            variant="underline"
+            size="xs"
+            aria-haspopup="dialog"
+            className="h-auto! min-h-0! px-0! align-baseline text-sm! font-medium! underline"
+            onClick={onOpenTerms}
+          >
+            Tutor Terms of Service
+          </Button>
+        </FieldLabel>
+        {error ? (
+          <FieldError id="tutor-terms-of-service-error">{error}</FieldError>
+        ) : null}
+      </Field>
+    </div>
+  );
 }
 
 function readServerFieldErrors(error: unknown) {
@@ -449,10 +501,14 @@ export function OnboardingForm({
   const [name, setName] = useState(accountUser.name ?? "");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
-  const [termsDialogMode, setTermsDialogMode] = useState<
-    "accept" | "view" | null
-  >(null);
+  const [isTutorTermsOpen, setIsTutorTermsOpen] = useState(false);
   const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
+  const hasRecordedTutorTermsAcceptance = Boolean(
+    profile.termsOfServiceAcceptedAt,
+  );
+  const requiresTutorTermsAcceptance =
+    profile.onboardingStatus !== "published" &&
+    !hasRecordedTutorTermsAcceptance;
   const savedNameRef = useRef(accountUser.name.trim());
 
   const nameMutation = useMutation({
@@ -808,6 +864,12 @@ export function OnboardingForm({
         "Please confirm the transfer-account responsibility statement.",
       );
     }
+    if (requireComplete && requiresTutorTermsAcceptance && !hasAcceptedTerms) {
+      addError(
+        "termsOfService",
+        "Agree to the Tutor Terms of Service before submitting.",
+      );
+    }
 
     if (form.subjectIds.length > MAX_TUTOR_SUBJECTS) {
       addError(
@@ -907,18 +969,11 @@ export function OnboardingForm({
       );
     } catch {
       // handled by mutation callbacks
-      if (acceptTerms) setTermsDialogMode("accept");
     }
   }
 
-  async function handleAcceptTerms() {
-    if (!hasAcceptedTerms) return;
-    await submitValidatedProfile(true);
-  }
-
   function openTutorTerms() {
-    setHasAcceptedTerms(false);
-    setTermsDialogMode("view");
+    setIsTutorTermsOpen(true);
   }
 
   async function handleSubmitForReview() {
@@ -932,22 +987,17 @@ export function OnboardingForm({
       return;
     }
 
-    if (
-      profile.onboardingStatus !== "published" &&
-      !profile.termsOfServiceAcceptedAt
-    ) {
-      setHasAcceptedTerms(false);
-      setTermsDialogMode("accept");
-      return;
-    }
-
-    await submitValidatedProfile();
+    await submitValidatedProfile(requiresTutorTermsAcceptance);
   }
 
   const isDraft =
     profile.onboardingStatus === "draft" ||
     profile.onboardingStatus === "changes_requested";
   const isEditable = isDraft || profile.onboardingStatus === "published";
+  const isSubmitting =
+    nameMutation.isPending ||
+    updateMutation.isPending ||
+    submitMutation.isPending;
   const statusBadge = TUTOR_STATUS_BADGES[profile.onboardingStatus] ?? {
     label: profile.onboardingStatus.replaceAll("_", " "),
     variant: "secondary" as const,
@@ -1162,7 +1212,7 @@ export function OnboardingForm({
               className="w-full sm:w-auto"
               onClick={openTutorTerms}
             >
-              View Tutor Terms
+              Review Tutor Terms
             </Button>
           </CardFooter>
         </Card>
@@ -1940,8 +1990,8 @@ export function OnboardingForm({
           </Card>
 
           <Card className="sticky bottom-0 z-10 overflow-hidden *:border-none">
-            <CardFooter className="flex-col items-stretch gap-4 2xl:flex-row 2xl:items-center 2xl:justify-between">
-              <div>
+            <CardFooter className="flex-col items-stretch gap-4 3xl:flex-row 3xl:items-center 3xl:justify-between">
+              <div className="min-w-0 flex-1">
                 <Text className="font-medium">
                   {isDraft
                     ? "Ready to move your profile forward?"
@@ -1953,19 +2003,22 @@ export function OnboardingForm({
                     : "Save changes while you work, or submit the latest version for admin review. You can continue updating during review."}
                 </Text>
               </div>
-              <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row lg:items-center sm:justify-end">
+              <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end 2xl:shrink-0">
+                <TutorTermsConsent
+                  accepted={
+                    hasRecordedTutorTermsAcceptance || hasAcceptedTerms
+                  }
+                  disabled={hasRecordedTutorTermsAcceptance || isSubmitting}
+                  error={errors.termsOfService}
+                  onAcceptedChange={(accepted) => {
+                    setHasAcceptedTerms(accepted);
+                    clearError("termsOfService");
+                  }}
+                  onOpenTerms={openTutorTerms}
+                />
                 <Button
                   type="button"
-                  variant="underline"
-                  size="xs"
-                  className="w-full sm:w-auto"
-                  onClick={openTutorTerms}
-                >
-                  View Tutor Terms
-                </Button>
-                <Button
-                  type="button"
-                  size="xs"
+                  size="sm"
                   variant="secondary"
                   className="w-full sm:w-auto"
                   progress={nameMutation.isPending || updateMutation.isPending}
@@ -1981,7 +2034,7 @@ export function OnboardingForm({
                 {isEditable ? (
                   <Button
                     type="button"
-                    size="xs"
+                    size="sm"
                     className="w-full sm:w-auto"
                     progress={
                       nameMutation.isPending
@@ -2009,20 +2062,8 @@ export function OnboardingForm({
       ) : null}
 
       <TutorTermsOfService
-        open={termsDialogMode !== null}
-        readOnly={termsDialogMode === "view"}
-        accepted={hasAcceptedTerms}
-        isSubmitting={
-          nameMutation.isPending ||
-          updateMutation.isPending ||
-          submitMutation.isPending
-        }
-        onAcceptedChange={setHasAcceptedTerms}
-        onAccept={handleAcceptTerms}
-        onOpenChange={(open) => {
-          if (!open) setHasAcceptedTerms(false);
-          if (!open) setTermsDialogMode(null);
-        }}
+        open={isTutorTermsOpen}
+        onOpenChange={setIsTutorTermsOpen}
       />
     </div>
   );

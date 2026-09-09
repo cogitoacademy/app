@@ -134,14 +134,14 @@ export default function SignUpForm({
 
   if (isPending && !isAuthTransitioning) {
     return (
-      <div className="flex min-h-[calc(100svh-6rem)] w-full items-center justify-center p-4">
+      <div className="flex min-h-[calc(100svh-6rem-94.5px)] w-full items-center justify-center p-4">
         <Loader />
       </div>
     );
   }
 
   return (
-    <div className="w-full flex items-center justify-center p-4 lg:min-h-[calc(100svh-6rem)]">
+    <div className="w-full flex items-center justify-center p-4 lg:min-h-[calc(100svh-6rem-94.5px)]">
       <Card className="w-full lg:w-5/12 xl:w-md">
         <CardHeader align="center">
           <CardTitle level={1}>Create your account</CardTitle>

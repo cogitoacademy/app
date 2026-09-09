@@ -1045,7 +1045,7 @@ The web tutor profile editor groups education, competition achievements, and exp
 - A one-off slot deactivates a conflicting recurring occurrence, making date overrides authoritative without changing other weeks
 - The tutor date-override editor applies one `online`, `offline`, or `both` modality and up to four time ranges to as many as 14 selected dates. The generated slots commit atomically so a conflict never leaves a partially saved batch.
 - `submitForReview` can only be called from `draft`/`changes_requested` status
-- A complete first tutor submission requires bilingual Terms of Service acceptance; the acceptance timestamp/version is immutable after the first write and is not included in public tutor discovery. The sticky onboarding action area keeps the document available in read-only mode for later review
+- A complete first tutor submission requires bilingual Terms of Service acceptance; the profile action area owns one **I agree to the Tutor Terms of Service** checkbox and opens the document through a read-only **Read terms** action. The acceptance timestamp/version is immutable after the first write and is not included in public tutor discovery. After acceptance the checkbox is checked/disabled and **Review Tutor Terms** remains available; the consent row and action controls wrap responsively without changing the service contract
 - Profile updates use optimistic locking (`version`)
 - New tutor pricing is stored as IDR base honoraria by modality (`baseRatesIdr`) and validated against the active economy minimum and Rp5,000 increments; published tutors may change these rates at any time, new bookings use the new rate, and existing booking snapshots remain authoritative for payout. The legacy Marks map remains readable during migration
 - The tutor profile editor at `/profile` renders selected modalities in one combined six-row IDR group-size matrix using the same table structure as the student discovery drawer; this is presentation-only. The legacy `/onboarding` path redirects to `/profile` for tutors.
@@ -1080,6 +1080,7 @@ The web tutor profile editor groups education, competition achievements, and exp
 - Tutors may select at most 7 active specializations; the web selector communicates the cap and disables additional choices, while the API validates the same limit
 - The legacy `expertise` JSON remains for compatibility with existing rows and clients, but normalized `subjectIds` drives new onboarding and discovery filters
 - The onboarding selector renders every current category with keyboard-accessible checkboxes, keeps normalized IDs for persistence/filtering, and shows archived profile subjects as read-only labels; raw UUIDs are an implementation detail and must not appear in user-facing controls
+- At `md` and wider breakpoints, the onboarding selector places alternating category cards into two independent vertical stacks so variable card heights do not create empty gaps beside shorter cards; below `md`, the cards use one visible column. This is presentation-only and does not change taxonomy or selection contracts
 
 ---
 

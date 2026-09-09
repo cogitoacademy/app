@@ -223,16 +223,19 @@ does not fall into the generic error screen, and the browser console has no
 `FieldError` has been rendered outside a Selia `Field` root; inspect the affected
 form composition before checking the API or database.
 
-For a complete draft or `changes_requested` tutor, click **Submit for review**
-and confirm the bilingual Indonesian/English Terms of Service dialog opens. The
-primary action must remain disabled until the agreement checkbox is selected;
-both language sections must be readable in Indonesian-then-English order, and Cancel/Exit must leave the
-profile unsubmitted. Accept the terms and verify the profile moves to
-`pending_review`. Reload the tutor profile and submit again after a revision;
-the dialog should not appear a second time, and the acceptance timestamp/version
-should remain unchanged. The sticky action area must still show
-**View Tutor Terms**; opening it shows the current document
-without the acceptance checkbox or a submit action.
+For a complete draft or `changes_requested` tutor, verify the sticky profile
+action area shows one **I agree to the Tutor Terms of Service** checkbox and a
+**Read terms** action. The checkbox must expose an inline error and receive
+focus when **Submit for review** is pressed while it is unchecked. **Read
+terms** opens the bilingual Indonesian/English document in Indonesian-then-
+English order; closing it preserves the checkbox state, and the dialog has no
+second acceptance checkbox or submit action. At narrow widths, confirm the
+consent copy wraps naturally and the save/submit buttons stack without
+horizontal overflow. Check the agreement, submit, and verify the profile moves
+to `pending_review`. Reload the tutor profile and submit again after a
+revision; the checkbox should remain checked/disabled, the read-only action
+should still work, and the acceptance timestamp/version should remain
+unchanged.
 
 For Google sign-in, start from `https://app.cogitoacademy.id/login` in an incognito/clean browser and confirm the provider callback is `https://api.cogitoacademy.id/api/auth/callback/google`, followed by the frontend route `/auth/callback` and the role-appropriate destination. The Google authorization URL must contain `prompt=consent`; record the Google permission screen in the verification video and click **Show all services** so every requested identity scope is fully expanded and readable before accepting. In DevTools, the initial auth response must set `better-auth.state` with `Secure`, `HttpOnly`, and `SameSite=Lax`; the callback request must include that cookie and its `state` query parameter. Keep the Google Cloud OAuth client configured with the frontend origin `https://app.cogitoacademy.id` and the API redirect URI `https://api.cogitoacademy.id/api/auth/callback/google`. This login flow requests identity scopes only. For the separate Calendar scope used by automatic Meet creation, use the dedicated Meet OAuth client and the consent/refresh-token procedure in `docs/GOOGLE-MEET-SETUP.md`; do not add Calendar access to every user's login.
 
@@ -532,7 +535,7 @@ without repeating the parent category, size to their content, and truncate
 within the single metadata row when necessary. Confirm the `+N` count and
 `From [Marks icon] #` price block stay visible on the same line.
 
-Open `/profile` as a tutor and verify the selector loads exactly seven active competition categories and 33 specializations from `tutors.listSubjects`. All categories should be visible with keyboard-accessible checkboxes, no manual specialization input, selected-specialization chips, and a 7-specialization limit. The selector should show the current count, disable an eighth selection, and the submit validation should reject any over-limit state. Select specializations from multiple categories, save a draft, and confirm the selections reload with the profile. A submission with no current specialization must be blocked; archived legacy specializations on an existing profile should remain visible as read-only labels. Published tutor discovery should expose current specializations and allow students to filter by category or specialization. On the tutor list page, category, specialization, and modality filter triggers must show their labels rather than raw IDs or values. Confirm category and specialization filters support multiple values, retain overlapping specializations while categories are added, remove specializations that are no longer available after a category is removed, and wait about 300 ms after typing/toggling before `listPublished` runs. Open a tutor drawer with both modalities and verify pricing appears in one table with `Group Size`, `Online (Marks)`, and `Offline (Marks)` columns; populated prices should have the Cogito Marks icon as a prefix, and a size available in only one modality should show an em dash in the other column. Below the `sm` breakpoint, confirm the student tutor profile opens from the bottom and dismisses with a downward swipe; at `sm` and wider, confirm it opens from the right and dismisses rightward. On a short viewport, confirm the profile body scrolls independently while its header and booking/close footer remain visible; body overscroll may bounce locally, but the fixed regions must not move.
+Open `/profile` as a tutor and verify the selector loads exactly seven active competition categories and 33 specializations from `tutors.listSubjects`. At `md` and wider, confirm the category cards form two independent vertical stacks without a large blank area beside a taller card; below `md`, confirm they collapse into one visible column. All categories should be visible with keyboard-accessible checkboxes, no manual specialization input, selected-specialization chips, and a 7-specialization limit. The selector should show the current count, disable an eighth selection, and the submit validation should reject any over-limit state. Select specializations from multiple categories, save a draft, and confirm the selections reload with the profile. A submission with no current specialization must be blocked; archived legacy specializations on an existing profile should remain visible as read-only labels. Published tutor discovery should expose current specializations and allow students to filter by category or specialization. On the tutor list page, category, specialization, and modality filter triggers must show their labels rather than raw IDs or values. Confirm category and specialization filters support multiple values, retain overlapping specializations while categories are added, remove specializations that are no longer available after a category is removed, and wait about 300 ms after typing/toggling before `listPublished` runs. Open a tutor drawer with both modalities and verify pricing appears in one table with `Group Size`, `Online (Marks)`, and `Offline (Marks)` columns; populated prices should have the Cogito Marks icon as a prefix, and a size available in only one modality should show an em dash in the other column. Below the `sm` breakpoint, confirm the student tutor profile opens from the bottom and dismisses with a downward swipe; at `sm` and wider, confirm it opens from the right and dismisses rightward. On a short viewport, confirm the profile body scrolls independently while its header and booking/close footer remain visible; body overscroll may bounce locally, but the fixed regions must not move.
 
 ### Tutor achievement and experience formatting smoke check
 

@@ -138,9 +138,10 @@ new web UI.
 
 ## Tutor Terms of Service acceptance (2026-09-02)
 
-The first complete tutor onboarding submission opens a bilingual
-Indonesian/English Terms of Service dialog before review submission. Saving a
-draft remains available without accepting the terms. The tutor must check the
+The tutor profile action area presents one bilingual consent checkbox labeled
+**I agree to the Tutor Terms of Service**. The adjacent **Read terms** action
+opens the Indonesian/English document in a read-only dialog. Saving a draft
+remains available without accepting the terms; the tutor must check the
 agreement box before the client sends `tutor.submitForReview`.
 
 Acceptance is enforced server-side and recorded once on `tutor_profile` with
@@ -148,9 +149,11 @@ Acceptance is enforced server-side and recorded once on `tutor_profile` with
 acceptance write and the `pending_review` status transition share the same
 transaction. Subsequent submissions, including `changes_requested` revisions,
 do not need to send the acceptance again. The acceptance metadata is excluded
-from public tutor-discovery projections. The sticky onboarding action area keeps
-**View Tutor Terms** available so the current document can
-be reopened in read-only mode after acceptance.
+from public tutor-discovery projections. After acceptance, the profile action
+area keeps the consent checkbox checked and disabled while **Review Tutor
+Terms** reopens the current document in the same read-only dialog. The consent
+row and action buttons stack and wrap on narrow viewports so the terms control
+never forces horizontal overflow.
 
 ## Tutor profile drawers (2026-08-31)
 
@@ -677,6 +680,15 @@ The web tutor profile editor groups education, competition achievements, and exp
 - **Errors:** `AVAILABILITY_SLOT_OVERLAP` (409)
 - **Description:** Creates or updates a single availability window
 
+### `tutor.createDateOverrides`
+
+- **RPC path:** `/rpc/tutor/createDateOverrides`
+- **Auth:** Tutor
+- **Input:** `{ slots: [{ startDate, endDate, modality }] }` (1–56 future, non-overlapping one-off windows; `modality` is `online`, `offline`, or `both`)
+- **Output:** `AvailabilitySlot[]`
+- **Errors:** `AVAILABILITY_SLOT_OVERLAP` (409) when the submitted batch overlaps itself or an existing one-off window
+- **Description:** Atomically creates multiple date-specific availability windows. Conflicting recurring occurrences are soft-deactivated; any one-off conflict rolls back the complete batch.
+
 ### `tutor.createWeeklyAvailability`
 
 - **Auth:** Tutor
@@ -699,7 +711,7 @@ The web tutor profile editor groups education, competition achievements, and exp
 - **Auth:** Tutor
 - **Input:** `{ id }`
 - **Output:** None (void)
-- **Description:** Deactivates (soft-deletes) an availability slot
+- **Description:** Deactivates (soft-deletes) an availability slot. The tutor calendar preview asks for confirmation before calling this unchanged procedure.
 
 ### `tutor.getMyPayouts`
 

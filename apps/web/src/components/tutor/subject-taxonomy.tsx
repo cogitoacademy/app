@@ -225,48 +225,63 @@ export function SubjectSelector({
 
       {categories.length > 0 ? (
         <div
-          className="grid items-start gap-3 md:grid-cols-2"
+          className="flex flex-col gap-3 md:flex-row md:items-start"
           aria-label="Competition categories"
         >
-          {categories.map((category) => (
-            <fieldset
-              key={category.id}
-              className="min-w-0 rounded-lg border border-item-border bg-item p-3"
-            >
-              <legend className="px-1 font-semibold">{category.name}</legend>
-              <div className="grid min-[500px]:grid-cols-2 gap-2">
-                {category.children.map((child) => {
-                  const checked = selectedIds.includes(child.id);
-                  const limitReached =
-                    !checked && selectedIds.length >= MAX_TUTOR_SUBJECTS;
-                  const inputId = `${triggerId ?? "tutor-subject"}-${child.id}`;
+          {[0, 1].map((columnIndex) => {
+            const columnCategories = categories.filter(
+              (_, categoryIndex) => categoryIndex % 2 === columnIndex,
+            );
 
-                  return (
-                    <label
-                      key={child.id}
-                      htmlFor={inputId}
-                      className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors ${
-                        limitReached
-                          ? "cursor-not-allowed text-dimmed opacity-60"
-                          : "cursor-pointer hover:bg-background"
-                      }`}
-                    >
-                      <Checkbox
-                        id={inputId}
-                        checked={checked}
-                        disabled={limitReached}
-                        aria-label={child.name}
-                        onCheckedChange={(nextChecked) =>
-                          toggleSubject(child.id, Boolean(nextChecked))
-                        }
-                      />
-                      <span className="min-w-0">{child.name}</span>
-                    </label>
-                  );
-                })}
+            return columnCategories.length > 0 ? (
+              <div
+                key={columnIndex}
+                className="flex min-w-0 flex-col gap-3 md:flex-1"
+              >
+                {columnCategories.map((category) => (
+                  <fieldset
+                    key={category.id}
+                    className="min-w-0 rounded-lg border border-item-border bg-item p-3"
+                  >
+                    <legend className="px-1 font-semibold">
+                      {category.name}
+                    </legend>
+                    <div className="grid gap-2 min-[500px]:grid-cols-2">
+                      {category.children.map((child) => {
+                        const checked = selectedIds.includes(child.id);
+                        const limitReached =
+                          !checked && selectedIds.length >= MAX_TUTOR_SUBJECTS;
+                        const inputId = `${triggerId ?? "tutor-subject"}-${child.id}`;
+
+                        return (
+                          <label
+                            key={child.id}
+                            htmlFor={inputId}
+                            className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors ${
+                              limitReached
+                                ? "cursor-not-allowed text-dimmed opacity-60"
+                                : "cursor-pointer hover:bg-background"
+                            }`}
+                          >
+                            <Checkbox
+                              id={inputId}
+                              checked={checked}
+                              disabled={limitReached}
+                              aria-label={child.name}
+                              onCheckedChange={(nextChecked) =>
+                                toggleSubject(child.id, Boolean(nextChecked))
+                              }
+                            />
+                            <span className="min-w-0">{child.name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </fieldset>
+                ))}
               </div>
-            </fieldset>
-          ))}
+            ) : null;
+          })}
         </div>
       ) : null}
 
