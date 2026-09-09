@@ -402,17 +402,30 @@ export function ProfileImagePicker({
         >
           Profile photo
         </FieldLabel>
-        <Input
-          ref={fileInputRef}
-          id={id}
-          name={id}
-          type="file"
-          accept={PROFILE_IMAGE_TYPES.join(",")}
-          disabled={disabled || isUploading}
-          aria-invalid={error ? true : undefined}
-          className={compactTrigger ? "sr-only" : undefined}
-          onChange={handleFileChange}
-        />
+        {compactTrigger ? (
+          <input
+            ref={fileInputRef}
+            id={id}
+            name={id}
+            type="file"
+            accept={PROFILE_IMAGE_TYPES.join(",")}
+            disabled={disabled || isUploading}
+            aria-invalid={error ? true : undefined}
+            className="sr-only"
+            onChange={handleFileChange}
+          />
+        ) : (
+          <Input
+            ref={fileInputRef}
+            id={id}
+            name={id}
+            type="file"
+            accept={PROFILE_IMAGE_TYPES.join(",")}
+            disabled={disabled || isUploading}
+            aria-invalid={error ? true : undefined}
+            onChange={handleFileChange}
+          />
+        )}
         {compactTrigger ? (
           <Button
             type="button"

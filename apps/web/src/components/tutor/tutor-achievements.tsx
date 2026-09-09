@@ -377,8 +377,8 @@ export function TutorAchievementsEditor({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="flex min-w-0 flex-col gap-4 rounded-lg border border-item-border bg-item p-4">
+      <div className="divide-y divide-card-separator">
+        <section className="flex min-w-0 flex-col gap-4 pb-6">
           <div className="flex items-start gap-3">
             <IconSchool
               className="mt-0.5 size-5 shrink-0 text-muted"
@@ -397,11 +397,11 @@ export function TutorAchievementsEditor({
             </div>
           </div>
 
-          <div className="flex flex-col gap-4">
+          <div className="divide-y divide-item-border">
             {education.map((entry, index) => (
               <div
                 key={educationKeys[index] ?? `${editorId}-education-${index}`}
-                className="relative rounded-lg border border-item-border bg-card p-3"
+                className="relative py-4 first:pt-0 last:pb-0"
               >
                 <Button
                   type="button"
@@ -413,7 +413,7 @@ export function TutorAchievementsEditor({
                 >
                   <IconTrash aria-hidden="true" />
                 </Button>
-                <div className="flex flex-col gap-3 pr-8">
+                <div className="grid gap-3 pr-8 sm:grid-cols-2">
                   <Field>
                     <FieldLabel htmlFor={`${idPrefix}-university-${index}`}>
                       University
@@ -498,7 +498,7 @@ export function TutorAchievementsEditor({
           ) : null}
         </section>
 
-        <section className="flex min-w-0 flex-col gap-4 rounded-lg border border-item-border bg-item p-4">
+        <section className="flex min-w-0 flex-col gap-4 pt-6">
           <div className="flex items-start gap-3">
             <IconTrophy
               className="mt-0.5 size-5 shrink-0 text-muted"
@@ -518,13 +518,13 @@ export function TutorAchievementsEditor({
             </div>
           </div>
 
-          <div className="flex flex-col gap-4">
+          <div className="divide-y divide-item-border">
             {competitionAchievements.map((entry, index) => (
               <div
                 key={
                   competitionKeys[index] ?? `${editorId}-competition-${index}`
                 }
-                className="relative rounded-lg border border-item-border bg-card p-3"
+                className="relative py-4 first:pt-0 last:pb-0"
               >
                 <Button
                   type="button"

@@ -228,7 +228,7 @@ export function TutorExperiencesEditor({
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="flex min-w-0 flex-col gap-4 rounded-lg border border-item-border bg-item p-4">
+      <section className="flex min-w-0 flex-col gap-4">
         <div className="flex items-start gap-3">
           <IconBriefcase
             className="mt-0.5 size-5 shrink-0 text-muted"
@@ -262,11 +262,11 @@ export function TutorExperiencesEditor({
           </div>
         ) : null}
 
-        <div className="flex flex-col gap-4">
+        <div className="divide-y divide-item-border">
           {experienceEntries.map((entry, index) => (
             <div
               key={experienceKeys[index] ?? `${idPrefix}-entry-${index}`}
-              className="relative rounded-lg border border-item-border bg-card p-3"
+              className="relative py-4 first:pt-0 last:pb-0"
             >
               <Button
                 type="button"

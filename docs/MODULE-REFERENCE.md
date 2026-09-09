@@ -1009,7 +1009,11 @@ workflow does not change the RPC contracts.
 
 **Purpose:** Tutor profile management — create, update, submit for review, availability management, and payout summaries.
 
-The web tutor profile editor groups education, competition achievements, and experiences into one combined **Achievements & experience** section with one public preview; each subsection retains its own private proof-link list. Short bios are limited to 50 words, and the form recommends one Google Drive folder with the “Anyone with the link can view” setting for both achievement and experience evidence.
+The web tutor profile editor groups education, competition achievements, and experiences into one combined **Achievements & experience** section with consistent full-width, border-light subsections. Typography, whitespace, thin rules, and row-based entries establish hierarchy without nested cards; each subsection retains its own private proof-link list. Its live preview labels draft versus published-profile edit state and names the structured sections that differ from the current public profile. The tutor-facing photo card only presents the current/proposed photo, while audit history remains an admin review concern. Short bios are limited to 50 words, and the form recommends one Google Drive folder with the “Anyone with the link can view” setting for both achievement and experience evidence.
+
+Compact student and tutor profile-photo pickers use a native screen-reader-only file input instead of Selia's visible full-width Input. The dashboard shell therefore retains a single contained content scroller without document-level overflow.
+
+The authenticated dashboard shell is viewport-fixed. Its content pane exclusively owns vertical page scrolling and contains overscroll, so long tutor forms do not create a second document scrollbar; non-dashboard public and authentication routes continue using document scrolling.
 
 **Files:**
 

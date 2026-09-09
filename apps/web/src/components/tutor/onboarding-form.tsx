@@ -78,10 +78,6 @@ import {
   SubjectSelector,
   type TutorSubject,
 } from "./subject-taxonomy";
-import {
-  ProfilePhotoHistory,
-  type ProfilePhotoHistoryEntry,
-} from "./profile-photo-history";
 
 type Modality = "online" | "offline" | "both";
 type BankAccountOwnership = "self" | "trusted_person";
@@ -99,7 +95,6 @@ const TUTOR_STATUS_BADGES: Record<string, TutorStatusBadge> = {
   published: { label: "Published", variant: "success" },
   suspended: { label: "Suspended", variant: "danger" },
 };
-const EMPTY_PROFILE_HISTORY: ProfilePhotoHistoryEntry[] = [];
 
 interface OnboardingFormProps {
   accountUser: {
@@ -156,13 +151,16 @@ interface OnboardingFormProps {
     profileEditAdminNote: string | null;
     version: number;
   };
-  profileHistory?: ProfilePhotoHistoryEntry[];
 }
 
 function haveSameSubjectIds(left: readonly string[], right: readonly string[]) {
   if (left.length !== right.length) return false;
   const rightSet = new Set(right);
   return left.every((subjectId) => rightSet.has(subjectId));
+}
+
+function haveSameStructuredValue(left: unknown, right: unknown) {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 const TUTOR_FIELD_LABELS: Record<string, string> = {
@@ -438,11 +436,7 @@ function readServerFieldErrors(error: unknown) {
   return fieldErrors;
 }
 
-export function OnboardingForm({
-  accountUser,
-  profile,
-  profileHistory = EMPTY_PROFILE_HISTORY,
-}: OnboardingFormProps) {
+export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const pending = profile.pendingProfileChanges ?? {};
@@ -1041,6 +1035,23 @@ export function OnboardingForm({
   const hasProposedProfileImage =
     Boolean(selectedProfileImageValue) &&
     selectedProfileImageUrl !== currentProfileImageUrl;
+  const editedProfileSections = [
+    !haveSameStructuredValue(form.education, profile.education ?? [])
+      ? "Education"
+      : null,
+    !haveSameStructuredValue(
+      form.competitionAchievements,
+      profile.competitionAchievements ?? [],
+    )
+      ? "Competition achievements"
+      : null,
+    !haveSameStructuredValue(
+      form.experienceEntries,
+      profile.experienceEntries ?? [],
+    )
+      ? "Experience"
+      : null,
+  ].filter((label): label is string => label !== null);
 
   return (
     <div className="mx-auto flex w-full flex-col gap-6">
@@ -1160,7 +1171,7 @@ export function OnboardingForm({
               </CardInfoPreview>
             </CardTitle>
           </CardHeader>
-          <CardBody className="flex flex-wrap items-start gap-6">
+          <CardBody className="flex items-start gap-6">
             <div className="flex flex-col items-center gap-2 text-center">
               <Avatar size="lg" className="size-20!">
                 <AvatarImage
@@ -1182,12 +1193,6 @@ export function OnboardingForm({
                   ).toUpperCase()}
                 />
               </div>
-            </div>
-            <div className="basis-full">
-              <ProfilePhotoHistory
-                entries={profileHistory}
-                title="Photo & review history"
-              />
             </div>
           </CardBody>
         </Card>
@@ -1358,18 +1363,12 @@ export function OnboardingForm({
                     </FieldError>
                   </Field>
                 ) : null}
-                <div className="basis-full">
-                  <ProfilePhotoHistory
-                    entries={profileHistory}
-                    title="Photo & review history"
-                  />
-                </div>
               </CardBody>
             </Card>
 
             <Card className="min-w-0 xl:col-span-2">
               <CardHeader>
-                <IconBox variant="secondary-subtle">
+                <IconBox variant="tertiary-subtle">
                   <IconUser aria-hidden="true" />
                 </IconBox>
                 <CardTitle>
@@ -1841,7 +1840,7 @@ export function OnboardingForm({
                 errors={errors}
                 showPreview={false}
               />
-              <Field className="mt-6">
+              <Field className="mt-6 border-t border-card-separator pt-6">
                 <FieldLabel htmlFor="tutor-achievement-proofs">
                   Achievement proof links
                 </FieldLabel>
@@ -1896,7 +1895,7 @@ export function OnboardingForm({
                   </FieldError>
                 ) : null}
               </Field>
-              <div className="mt-8 border-t border-card-separator pt-8">
+              <div className="mt-6 border-t border-card-separator pt-6">
                 <TutorExperiencesEditor
                   experienceEntries={form.experienceEntries}
                   legacyText={form.experiences}
@@ -1968,11 +1967,33 @@ export function OnboardingForm({
                     </FieldError>
                   ) : null}
                 </Field>
-                <div className="mt-6 rounded-lg border border-item-border bg-accent p-4">
-                  <Text className="text-sm font-medium">Public preview</Text>
+                <div className="mt-6 border-t border-card-separator pt-6">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <Text className="text-sm font-medium">
+                      {isDraft ? "Draft preview" : "Changes preview"}
+                    </Text>
+                    <Badge
+                      variant={
+                        editedProfileSections.length > 0
+                          ? "warning"
+                          : "secondary"
+                      }
+                      size="sm"
+                      pill
+                    >
+                      {isDraft
+                        ? "Not public yet"
+                        : editedProfileSections.length > 0
+                          ? `${editedProfileSections.length} section${editedProfileSections.length === 1 ? "" : "s"} edited`
+                          : "No new changes"}
+                    </Badge>
+                  </div>
                   <Text className="mt-1 text-sm text-muted">
-                    Education, achievements, and experiences are shown together
-                    as students will see them on your profile.
+                    {isDraft
+                      ? "This updates live from the fields above and shows how students will see this part of your profile after approval."
+                      : editedProfileSections.length > 0
+                        ? `Previewing proposed changes to ${editedProfileSections.join(", ")}. They stay private until approved.`
+                        : "This matches the information currently visible to students."}
                   </Text>
                   <div className="mt-4">
                     <TutorAchievementsDisplay

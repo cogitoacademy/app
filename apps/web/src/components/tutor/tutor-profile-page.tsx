@@ -24,11 +24,6 @@ export function TutorProfilePage({
     isLoading,
     error,
   } = useQuery(orpc.tutor.getMyProfile.queryOptions());
-  const { data: profileHistory = [] } = useQuery({
-    ...orpc.tutor.getMyProfileHistory.queryOptions(),
-    enabled: Boolean(profile?.id),
-  });
-
   if (isLoading) {
     return (
       <div className="w-full shrink-0">
@@ -65,7 +60,6 @@ export function TutorProfilePage({
               ? profile.bankAccountOwnership
               : null,
         }}
-        profileHistory={profileHistory}
       />
     </div>
   );

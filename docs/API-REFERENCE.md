@@ -643,7 +643,7 @@ All routes are admin-only. Package `code` is the stable business key used by
 - **Auth:** Tutor
 - **Input:** None
 - **Output:** Up to 50 newest audit entries for the authenticated tutor profile, including action, actor identity (`id` and display name only), actor type, timestamps, and photo/review workflow details; account email is not returned
-- **Description:** Returns the profile history shown to the tutor. Published photo replacements remain proposals until an admin approves them.
+- **Description:** Returns tutor profile audit history for audit-capable surfaces. The focused tutor photo editor no longer embeds this history. Published photo replacements remain proposals until an admin approves them.
 
 ### `tutor.updateMyProfile`
 
