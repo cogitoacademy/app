@@ -13,6 +13,7 @@
 ### Task 1: Shared keyboard guard
 
 **Files:**
+
 - Create: `apps/web/src/hooks/use-keyboard-guard.ts`
 - Test: `apps/web/src/hooks/use-keyboard-guard.test.ts`
 
@@ -36,9 +37,21 @@ describe("isEditableTarget", () => {
 
 describe("shouldIgnoreKeydown", () => {
   test("ignores repeat and modifiers", () => {
-    const base = { repeat: true, metaKey: false, ctrlKey: false, altKey: false, defaultPrevented: false } as KeyboardEvent;
+    const base = {
+      repeat: true,
+      metaKey: false,
+      ctrlKey: false,
+      altKey: false,
+      defaultPrevented: false,
+    } as KeyboardEvent;
     expect(shouldIgnoreKeydown(base)).toBe(true);
-    const mod = { repeat: false, metaKey: true, ctrlKey: false, altKey: false, defaultPrevented: false } as KeyboardEvent;
+    const mod = {
+      repeat: false,
+      metaKey: true,
+      ctrlKey: false,
+      altKey: false,
+      defaultPrevented: false,
+    } as KeyboardEvent;
     expect(shouldIgnoreKeydown(mod)).toBe(true);
   });
 });
@@ -61,7 +74,12 @@ export function isEditableTarget(target: EventTarget | null): boolean {
   return false;
 }
 
-export function shouldIgnoreKeydown(event: Pick<KeyboardEvent, "repeat" | "metaKey" | "ctrlKey" | "altKey" | "defaultPrevented">): boolean {
+export function shouldIgnoreKeydown(
+  event: Pick<
+    KeyboardEvent,
+    "repeat" | "metaKey" | "ctrlKey" | "altKey" | "defaultPrevented"
+  >,
+): boolean {
   if (event.defaultPrevented) return true;
   if (event.repeat) return true;
   if (event.metaKey || event.ctrlKey || event.altKey) return true;
@@ -84,6 +102,7 @@ git commit -m "feat(web): add keyboard guard util"
 ### Task 2: Global `g x` nav hook
 
 **Files:**
+
 - Create: `apps/web/src/hooks/use-global-nav-hotkeys.ts`
 - Test: `apps/web/src/hooks/use-global-nav-hotkeys.test.ts` (pure map test)
 - Modify: `apps/web/src/routes/_app.tsx` (mount once)
@@ -131,12 +150,21 @@ export function useGlobalNavHotkeys(enabled = true) {
     if (!enabled) return;
     let armed = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const disarm = () => { armed = false; if (timer) clearTimeout(timer); };
+    const disarm = () => {
+      armed = false;
+      if (timer) clearTimeout(timer);
+    };
     const onKey = (e: KeyboardEvent) => {
-      if (shouldIgnoreKeydown(e) || isEditableTarget(e.target)) { disarm(); return; }
+      if (shouldIgnoreKeydown(e) || isEditableTarget(e.target)) {
+        disarm();
+        return;
+      }
       const k = e.key.toLowerCase();
       if (!armed) {
-        if (k === "g") { armed = true; timer = setTimeout(disarm, 800); }
+        if (k === "g") {
+          armed = true;
+          timer = setTimeout(disarm, 800);
+        }
         return;
       }
       const to = GLOBAL_NAV_MAP[k];
@@ -146,7 +174,10 @@ export function useGlobalNavHotkeys(enabled = true) {
       void navigate({ to });
     };
     window.addEventListener("keydown", onKey);
-    return () => { window.removeEventListener("keydown", onKey); if (timer) clearTimeout(timer); };
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      if (timer) clearTimeout(timer);
+    };
   }, [enabled, navigate]);
 }
 ```
@@ -170,6 +201,7 @@ git commit -m "feat(web): add g x global nav hotkeys"
 ### Task 3: Booking list j/k + Enter
 
 **Files:**
+
 - Modify: `apps/web/src/components/dashboard/pages/bookings-page.tsx`
 - Test: `apps/web/src/components/dashboard/pages/bookings-hotkeys.test.ts` (pure index math)
 
@@ -205,6 +237,7 @@ describe("moveIndex", () => {
 ### Task 4: Booking detail r/c/x/?
 
 **Files:**
+
 - Modify: `apps/web/src/components/booking/booking-detail-page.tsx`
 
 - [ ] **Step 1: Wire refs, no test (DOM behavior)** Add `rescheduleBtnRef`, `completeBtnRef`, `cancelBtnRef` passed to existing `BookingRescheduleAction` trigger / lifecycle buttons (only when eligible — reuse `canProposeBookingReschedule` / `canCancelBooking`). Keydown scoped to this page: `r` clicks reschedule, `c` clicks complete, `x` clicks cancel, `?` (shift+/) opens help. Guard editable/repeat/modifiers. Do nothing when corresponding action not eligible.
@@ -215,14 +248,27 @@ describe("moveIndex", () => {
 ### Task 5: Shortcuts help dialog
 
 **Files:**
+
 - Create: `apps/web/src/components/booking/shortcuts-help-dialog.tsx`
 
 ```tsx
 "use client";
-import { Dialog, DialogBody, DialogHeader, DialogPopup, DialogTitle } from "@cogito-app/ui/components/selia/dialog";
+import {
+  Dialog,
+  DialogBody,
+  DialogHeader,
+  DialogPopup,
+  DialogTitle,
+} from "@cogito-app/ui/components/selia/dialog";
 import { Kbd } from "@cogito-app/ui/components/selia/kbd";
 
-export function ShortcutsHelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+export function ShortcutsHelpDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
   const rows: Array<[string, string]> = [
     ["j / k", "Move between bookings"],
     ["Enter", "Open booking"],
@@ -236,9 +282,17 @@ export function ShortcutsHelpDialog({ open, onOpenChange }: { open: boolean; onO
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPopup>
-        <DialogHeader><DialogTitle>Keyboard shortcuts</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>Keyboard shortcuts</DialogTitle>
+        </DialogHeader>
         <DialogBody>
-          <ul>{rows.map(([k, d]) => (<li key={k}><Kbd>{k}</Kbd> {d}</li>))}</ul>
+          <ul>
+            {rows.map(([k, d]) => (
+              <li key={k}>
+                <Kbd>{k}</Kbd> {d}
+              </li>
+            ))}
+          </ul>
         </DialogBody>
       </DialogPopup>
     </Dialog>
@@ -253,6 +307,7 @@ export function ShortcutsHelpDialog({ open, onOpenChange }: { open: boolean; onO
 ### Task 6: Drawer Enter/Esc + focus audit
 
 **Files:**
+
 - Modify: `apps/web/src/components/booking/booking-reschedule-action.tsx`
 
 - [ ] **Step 1: Ensure form Enter submits only when valid (native submit, reason required), Esc closes, focus returns to trigger. No custom global Enter — rely on form.**
@@ -262,6 +317,7 @@ export function ShortcutsHelpDialog({ open, onOpenChange }: { open: boolean; onO
 ### Task 7: Docs + final verify
 
 **Files:**
+
 - Modify: `docs/CONTEXT.md`, `docs/RUNBOOK.md`
 
 - [ ] **Step 1: Add keymap table to CONTEXT + RUNBOOK smoke (keyboard-only list->detail->reschedule).**
