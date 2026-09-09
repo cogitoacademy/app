@@ -76,6 +76,7 @@ import { CogitoMarks } from "@/components/cogito-marks";
 import { InfoPreview } from "@/components/info-preview";
 import { TutorDrawer } from "@/components/tutor/tutor-drawer";
 import { getUserFacingError } from "@/lib/error-message";
+import { celebrate } from "@/lib/celebration";
 import { orpc } from "@/utils/orpc";
 import { getBookingPriceSummary } from "./booking-pricing";
 import {
@@ -255,6 +256,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
           description: "Your tutor can now review the request.",
           type: "success",
         });
+        celebrate("booking-submitted");
         void navigate({
           to: "/bookings/$bookingId",
           params: { bookingId: booking.id },
@@ -316,6 +318,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
       description: "Your tutor can now review the request.",
       type: "success",
     });
+    celebrate("booking-submitted");
     void navigate({
       to: "/bookings/$bookingId",
       params: { bookingId: booking.id },

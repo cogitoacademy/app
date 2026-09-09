@@ -402,8 +402,226 @@ html:has([data-testid="guide-page"]) {
   scroll-behavior: smooth;
 }
 
+@keyframes celebration-stage-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes celebration-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(1rem) scale(0.9);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-0.25rem) scale(1.02);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes celebration-check {
+  0% {
+    opacity: 0;
+    transform: scale(0.4) rotate(-18deg);
+  }
+  65% {
+    opacity: 1;
+    transform: scale(1.16) rotate(5deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+
+@keyframes celebration-particle {
+  0% {
+    opacity: 0;
+    transform: rotate(calc(var(--particle) * 30deg)) translateY(0) scale(0);
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(calc(var(--particle) * 30deg)) translateY(-10rem) scale(1);
+  }
+}
+
+@keyframes celebration-ring {
+  0% {
+    opacity: 0.7;
+    transform: scale(0.6);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.7);
+  }
+}
+
+@keyframes celebration-orbit {
+  from {
+    opacity: 0;
+    transform: rotate(0deg) scale(0.7);
+  }
+  30% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: rotate(180deg) scale(1);
+  }
+}
+
+@keyframes celebration-content-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.6rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes onboarding-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.celebration-stage {
+  animation: celebration-stage-in 180ms ease-out both;
+}
+.celebration-scrim {
+  background: color-mix(in oklch, var(--color-foreground) 24%, transparent);
+  backdrop-filter: blur(5px);
+}
+.celebration-card {
+  animation: celebration-card-in 520ms 40ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.celebration-visual {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 9rem;
+  height: 9rem;
+  margin: 0 auto 0.5rem;
+}
+.celebration-check {
+  position: relative;
+  z-index: 2;
+  animation: celebration-check 650ms 160ms cubic-bezier(0.34, 1.56, 0.64, 1)
+    both;
+}
+.celebration-ring {
+  position: absolute;
+  width: 6rem;
+  height: 6rem;
+  border: 1px solid color-mix(in oklch, var(--color-success) 65%, transparent);
+  border-radius: 999px;
+  animation: celebration-ring 1s 180ms ease-out both;
+}
+.celebration-ring-two {
+  animation-delay: 320ms;
+}
+.celebration-orbit {
+  position: absolute;
+  width: 8rem;
+  height: 3rem;
+  border: 1px solid color-mix(in oklch, var(--color-warning) 70%, transparent);
+  border-radius: 50%;
+  animation: celebration-orbit 1.2s 200ms ease-out both;
+}
+.celebration-checkmark {
+  position: absolute;
+  right: 1.25rem;
+  bottom: 1.4rem;
+  z-index: 3;
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  border: 3px solid var(--color-card);
+  border-radius: 999px;
+  background: var(--color-success);
+  color: var(--color-success-foreground);
+  animation: celebration-check 420ms 540ms cubic-bezier(0.34, 1.56, 0.64, 1)
+    both;
+}
+.celebration-confetti {
+  position: absolute;
+  inset: 50% 50% auto auto;
+  z-index: 1;
+}
+.celebration-confetti i {
+  position: absolute;
+  width: 0.35rem;
+  height: 0.9rem;
+  border-radius: 999px;
+  background: var(--color-success);
+  transform-origin: 50% 10rem;
+  animation: celebration-particle 800ms calc(var(--particle) * 24ms) ease-out
+    both;
+}
+.celebration-confetti i:nth-child(3n + 2) {
+  background: var(--color-warning);
+}
+.celebration-confetti i:nth-child(3n) {
+  background: var(--color-info);
+}
+.celebration-content > * {
+  animation: celebration-content-in 420ms 520ms cubic-bezier(0.16, 1, 0.3, 1)
+    both;
+}
+.celebration-content > :nth-child(2) {
+  animation-delay: 580ms;
+}
+.celebration-content > :nth-child(3) {
+  animation-delay: 650ms;
+}
+.celebration-content > :nth-child(4) {
+  animation-delay: 720ms;
+}
+.celebration-action {
+  animation: celebration-content-in 420ms 800ms cubic-bezier(0.16, 1, 0.3, 1)
+    both;
+}
+.onboarding-reveal > * {
+  animation: onboarding-reveal 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.onboarding-reveal > :nth-child(2) {
+  animation-delay: 70ms;
+}
+.onboarding-reveal > :nth-child(n + 3) {
+  animation-delay: 120ms;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html:has([data-testid="guide-page"]) {
     scroll-behavior: auto;
+  }
+  .celebration-stage,
+  .celebration-card,
+  .celebration-check,
+  .celebration-ring,
+  .celebration-orbit,
+  .celebration-checkmark,
+  .celebration-confetti i,
+  .celebration-content > *,
+  .celebration-action,
+  .onboarding-reveal > * {
+    animation: none;
   }
 }

@@ -9,6 +9,8 @@
 
 ## Completed (merged to main)
 
+| [ACTION-FEEDBACK-MOTION.md](completed/ACTION-FEEDBACK-MOTION.md) | working tree | **Completed locally 2026-09-09** — lightweight success celebrations for booking and tutor onboarding, with reduced-motion support |
+
 | [TUTOR-PROFILE-BOOKING-PREVIEW.md](completed/TUTOR-PROFILE-BOOKING-PREVIEW.md) | working tree | **Completed locally 2026-09-08** — reopened the published tutor profile from the booking form without losing booking state |
 
 | [COMPETITION-FIELD-COLORS.md](completed/COMPETITION-FIELD-COLORS.md) | working tree | — | **Completed locally 2026-09-08** — academy field palette imported as paired Selia tokens with reusable soft/solid mappings |

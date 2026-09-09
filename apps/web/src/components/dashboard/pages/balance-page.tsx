@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
@@ -38,6 +38,7 @@ import { BalanceWidget } from "@/components/dashboard/balance-widget";
 import { InfoPreview } from "@/components/info-preview";
 import { orpc } from "@/utils/orpc";
 import { getUserFacingError } from "@/lib/error-message";
+import { celebrate } from "@/lib/celebration";
 
 const LEDGER_LABELS: Record<string, string> = {
   credit: "Marks added",
@@ -73,6 +74,8 @@ export function BalancePage() {
   const [simulatedPaymentId, setSimulatedPaymentId] = useState<string | null>(
     null,
   );
+  const [paymentIdToTrack, setPaymentIdToTrack] = useState<string | null>(null);
+  const celebratedPaymentRef = useRef<string | null>(null);
 
   const { data: wallet, isLoading: walletLoading } = useQuery(
     orpc.wallet.get.queryOptions(),
@@ -92,10 +95,10 @@ export function BalancePage() {
   const simulatedPurchase = useQuery({
     ...orpc.payment.getPurchase.queryOptions({
       input: {
-        paymentId: simulatedPaymentId ?? "00000000-0000-0000-0000-000000000000",
+        paymentId: paymentIdToTrack ?? "00000000-0000-0000-0000-000000000000",
       },
     }),
-    enabled: simulatedPaymentId !== null,
+    enabled: paymentIdToTrack !== null,
     refetchInterval: (query) =>
       query.state.data?.status === "PENDING" ? 1_000 : false,
   });
@@ -103,6 +106,7 @@ export function BalancePage() {
   const purchase = useMutation(
     orpc.payment.createPurchase.mutationOptions({
       onSuccess: async (res) => {
+        setPaymentIdToTrack(res.paymentId);
         if (res.checkoutUrl) {
           setQrPayload(res.checkoutUrl);
         }
@@ -143,7 +147,11 @@ export function BalancePage() {
     void queryClient.invalidateQueries({
       queryKey: orpc.wallet.listLedger.key(),
     });
-  }, [queryClient, simulatedPurchase.data?.status]);
+    if (paymentIdToTrack && celebratedPaymentRef.current !== paymentIdToTrack) {
+      celebratedPaymentRef.current = paymentIdToTrack;
+      celebrate("topup-confirmed");
+    }
+  }, [paymentIdToTrack, queryClient, simulatedPurchase.data?.status]);
 
   const totalBalance = wallet?.totalBalance ?? 0;
   const heldBalance = wallet?.heldBalance ?? 0;
@@ -388,6 +396,7 @@ export function BalancePage() {
                       onClick={() => {
                         setQrPayload(null);
                         setSimulatedPaymentId(null);
+                        setPaymentIdToTrack(null);
                         purchase.mutate({ packageCode: pkg.code });
                       }}
                     >

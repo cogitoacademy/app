@@ -40,6 +40,7 @@ import { useEffect, useState } from "react";
 import { z } from "zod";
 
 import { getUserFacingError } from "@/lib/error-message";
+import { celebrate } from "@/lib/celebration";
 import { orpc } from "@/utils/orpc";
 
 const LEVELS = [
@@ -187,6 +188,7 @@ export function AchievementForm({
           description: "It\u2019ll appear on cogitoacademy.id once approved.",
           type: "success",
         });
+        if (!isAdmin) celebrate("achievement-submitted");
         form.reset(DEFAULT_VALUES);
         setSubjectInput("");
         setFormError(null);
@@ -214,6 +216,7 @@ export function AchievementForm({
           description: "Resubmitted for review.",
           type: "success",
         });
+        if (!isAdmin) celebrate("achievement-submitted");
         onOpenChange(false);
         onSuccess?.();
       },

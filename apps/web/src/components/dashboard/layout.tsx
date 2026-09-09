@@ -12,6 +12,7 @@ import { NotificationBell } from "../notification-bell";
 import { BalanceBadge } from "../balance-badge";
 import { Separator } from "@cogito-app/ui/components/selia/separator";
 import { SessionExpiryNotice } from "../session-expiry-notice";
+import { CelebrationOverlay } from "../celebration-overlay";
 
 export function Layout({
   children,
@@ -44,6 +45,7 @@ export function Layout({
 
   return (
     <>
+      <CelebrationOverlay />
       <a
         href="#main-content"
         className="fixed left-4 top-4 z-[60] -translate-y-24 rounded-md bg-background px-3 py-2 text-sm font-medium text-foreground ring ring-border shadow focus:translate-y-0 focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary motion-reduce:transition-none"
@@ -118,7 +120,7 @@ export function Layout({
             contentScrollMode === "contained"
               ? "overflow-hidden"
               : "overflow-y-auto overscroll-contain",
-            "xl:p-4 border-l border-t border-border xl:rounded-tl-4xl",
+            "xl:p-4 border-t border-border xl:rounded-tl-4xl",
           )}
         >
           <SessionExpiryNotice expiresAt={sessionExpiresAt} />
