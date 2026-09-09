@@ -359,9 +359,7 @@ function TutorTermsConsent({
           htmlFor="tutor-terms-of-service-accepted"
           className="text-sm font-medium leading-relaxed gap-1"
         >
-          <span>
-            I agree to the
-          </span>
+          <span>I agree to the</span>
           <Button
             type="button"
             variant="underline"
@@ -2005,9 +2003,7 @@ export function OnboardingForm({
               </div>
               <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end 2xl:shrink-0">
                 <TutorTermsConsent
-                  accepted={
-                    hasRecordedTutorTermsAcceptance || hasAcceptedTerms
-                  }
+                  accepted={hasRecordedTutorTermsAcceptance || hasAcceptedTerms}
                   disabled={hasRecordedTutorTermsAcceptance || isSubmitting}
                   error={errors.termsOfService}
                   onAcceptedChange={(accepted) => {

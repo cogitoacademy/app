@@ -18,7 +18,6 @@ export function LoginPage() {
         <ModeToggle />
       </div>
       <div className="mx-auto grid w-full grid-cols-1">
-
         <section
           aria-label={showSignIn ? "Sign in" : "Sign up"}
           className="flex min-w-0 items-center justify-center [&_[data-slot=card]]:max-w-md [&_[data-slot=card]]:w-full! flex-col"
