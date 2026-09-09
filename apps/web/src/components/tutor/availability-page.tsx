@@ -432,7 +432,7 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
         </Badge>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2 xl:items-start">
+      <div className="grid gap-4 2xl:grid-cols-[minmax(0,30fr)_minmax(0,25fr)] xl:items-start">
         <form onSubmit={saveWeekly}>
           <Card>
             <CardHeader>
@@ -455,7 +455,7 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
                 return (
                   <div
                     key={day}
-                    className="grid gap-3 py-4 sm:grid-cols-[8rem_1fr]"
+                    className="grid gap-3 py-4 sm:grid-cols-[7rem_1fr]"
                   >
                     <label className="flex items-center gap-3 self-start pt-2">
                       <Checkbox
