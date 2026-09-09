@@ -324,7 +324,7 @@ function GuideChapterNav({
       <Text className="mb-3 hidden text-xs font-semibold uppercase tracking-wider text-dimmed xl:block">
         In this guide
       </Text>
-      <ol className="-mx-4 flex snap-x gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0 xl:flex-col xl:overflow-visible xl:pb-0">
+      <ol className="-mx-4 flex snap-x snap-mandatory scroll-pl-4 gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0 xl:flex-col xl:scroll-pl-0 xl:overflow-visible xl:pb-0">
         {chapters.map((chapter, index) => {
           const isActive = activeChapterId === chapter.id;
           return (
