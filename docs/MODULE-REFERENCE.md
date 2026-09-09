@@ -2,6 +2,19 @@
 
 Last updated: 2026-09-09
 
+## Action feedback presentation (2026-09-09)
+
+`apps/web/src/lib/celebration.ts` owns the typed `cogito:celebrate` browser
+event. Booking creation emits `booking-submitted`, student achievement create
+and resubmit emits `achievement-submitted`, tutor onboarding emits
+`onboarding-submitted`, and the balance page emits `topup-confirmed` only after
+the tracked payment is `PAID` or `SETTLED`. `CelebrationOverlay`, mounted once
+in the authenticated layout, owns announcement, dismissal, and the 4.2-second
+lifetime. The shared CSS owns the centered stage, scrim, ring/orbit, icon,
+particle, content-stagger, and onboarding entrance keyframes, including their
+reduced-motion fallback. This is presentation-only and adds no service, domain
+event, or business rule.
+
 ## Dashboard greeting presentation (2026-09-08)
 
 `apps/web/src/components/dashboard/dashboard-greetings.ts` owns the four local

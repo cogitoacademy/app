@@ -2,6 +2,14 @@
 
 Last updated: 2026-09-09
 
+## Action celebration presentation (2026-09-09)
+
+Booking creation, student achievement submission, tutor review submission, and
+confirmed Marks top-ups now show a client-side success reveal after their
+existing mutations/status queries succeed. The feature consumes the same
+mutation results and payment status response and adds no RPC endpoint, input,
+output, response envelope, or persistence contract.
+
 ## Dashboard greeting presentation (2026-09-08)
 
 Student, tutor, and admin dashboard greetings are selected entirely in the web

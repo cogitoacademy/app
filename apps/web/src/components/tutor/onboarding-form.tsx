@@ -55,6 +55,7 @@ import {
 } from "@tabler/icons-react";
 
 import { getUserFacingError } from "@/lib/error-message";
+import { celebrate } from "@/lib/celebration";
 import { authClient } from "@/lib/auth-client";
 import { resolveProfileImageUrl } from "@/lib/profile-image-url";
 import { ProfileImagePicker } from "@/components/profile/profile-image-picker";
@@ -591,6 +592,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
           title: "Profile submitted for review!",
           type: "success",
         });
+        celebrate("onboarding-submitted");
         await Promise.all([
           queryClient.invalidateQueries({
             queryKey: orpc.tutor.getMyProfile.key(),
@@ -1054,7 +1056,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
   ].filter((label): label is string => label !== null);
 
   return (
-    <div className="mx-auto flex w-full flex-col gap-6">
+    <div className="onboarding-reveal mx-auto flex w-full flex-col gap-6">
       <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <Heading level={1} size="md">

@@ -2,6 +2,20 @@
 
 Last updated: 2026-09-09
 
+## Meaningful action celebrations (2026-09-09)
+
+Successful booking requests, student achievement submissions, tutor-profile
+review submissions, and confirmed Marks top-ups now emit a shared client-side
+celebration event. The authenticated layout keeps a centered, dismissible
+success moment mounted across route navigation, so confirmation is visible even
+when the successful mutation immediately opens another page. Top-ups celebrate
+only after the payment status is `PAID` or `SETTLED`, not when a QR checkout is
+merely created.
+Tutor onboarding content also enters with a short staggered reveal. All motion
+uses transform and opacity, stops after one pass, and becomes static when the
+browser requests reduced motion; no GIF, animation runtime, API, or stored state
+was added.
+
 ## Role- and time-aware dashboard greetings (2026-09-08)
 
 The student, tutor, and admin dashboards now share `DashboardWelcomeCard` and

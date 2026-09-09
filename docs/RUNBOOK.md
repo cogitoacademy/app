@@ -2,6 +2,21 @@
 
 Last updated: 2026-09-09
 
+## Action celebration smoke check (2026-09-09)
+
+Submit a valid booking request and confirm a centered success stage with the
+animated status visual remains visible while the booking detail route opens.
+Submit a student achievement and confirm the achievement stage; submit a valid
+tutor profile for review and confirm the profile-specific stage while the
+dashboard opens. Start a Marks
+checkout, complete it, and confirm the top-up reveal appears only after the
+payment status becomes `PAID` or `SETTLED` (not while the QR is merely shown).
+Each reveal must announce politely, dismiss from its close button, and disappear
+automatically. Enable the operating system's reduced motion preference and
+repeat: the confirmation must remain readable, with no card, icon, particle, or
+onboarding entrance animation. This feature adds no environment variable,
+asset, migration, or deployment-time configuration.
+
 ## Bulk date-override smoke check (2026-09-09)
 
 Open `/availability` as a tutor. In **Date overrides**, verify the Online,
