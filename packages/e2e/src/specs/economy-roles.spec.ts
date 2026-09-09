@@ -46,6 +46,13 @@ async function replaceNumberFieldValue(input: Locator, value: number) {
   await input.press("Tab");
 }
 
+async function startEconomyEditing(page: Page) {
+  await page
+    .getByRole("button", { name: "Edit Cogito take schedule", exact: true })
+    .click();
+  await expect(page.getByText("Editing", { exact: true })).toBeVisible();
+}
+
 test("student sees closed-loop Marks pricing and cannot open admin economy", async ({
   page,
 }) => {
@@ -62,7 +69,7 @@ test("student sees closed-loop Marks pricing and cannot open admin economy", asy
   await page.goto("/admin-economy");
   await page.waitForURL("/dashboard");
   await expect(
-    page.getByRole("heading", { name: /Hi, .+!/ }).first(),
+    page.getByRole("heading", { name: /\[seed\]/ }).first(),
   ).toBeVisible();
 });
 
@@ -74,7 +81,10 @@ test("tutor sees IDR honorarium setup without the old Marks cash-out copy", asyn
 
   await page.goto("/profile");
   await expect(
-    page.getByRole("heading", { name: "Your tutor profile", exact: true }),
+    page.getByRole("heading", {
+      name: "Keep your profile ready for students",
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(page.getByText("Base honorarium")).toBeVisible();
   await expectNumberFieldValue(
@@ -90,7 +100,10 @@ test("tutor sees IDR honorarium setup without the old Marks cash-out copy", asyn
   await page.goto("/onboarding");
   await page.waitForURL("/profile");
   await expect(
-    page.getByRole("heading", { name: "Your tutor profile", exact: true }),
+    page.getByRole("heading", {
+      name: "Keep your profile ready for students",
+      exact: true,
+    }),
   ).toBeVisible();
 });
 
@@ -102,9 +115,13 @@ test("admin can review and update the future-booking Cogito take schedule", asyn
 
   await page.goto("/admin-economy");
   await expect(
-    page.getByRole("heading", { name: "Economy settings", exact: true }).last(),
+    page.getByRole("heading", {
+      name: "Shape a sustainable booking economy",
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(page.getByText("Cogito take schedule")).toBeVisible();
+  await startEconomyEditing(page);
 
   const onlineBaseInput = page.locator("#online-cogito-base");
   const onlineIncrementInput = page.locator("#online-cogito-increment");
@@ -124,7 +141,9 @@ test("admin can review and update the future-booking Cogito take schedule", asyn
   try {
     await replaceNumberFieldValue(onlineBaseInput, updatedOnlineBase);
     await replaceNumberFieldValue(onlineIncrementInput, updatedOnlineIncrement);
-    await page.getByRole("button", { name: "Save take schedule" }).click();
+    await page
+      .getByRole("button", { name: "Save changes", exact: true })
+      .click();
     await expect(page.getByText("Economy settings saved")).toBeVisible();
     await expectNumberFieldValue(onlineBaseInput, updatedOnlineBase);
 
@@ -151,10 +170,12 @@ test("admin can review and update the future-booking Cogito take schedule", asyn
     // Always restore the test database, even when a notification assertion fails.
     await page.goto("/admin-economy");
     await expect(
-      page
-        .getByRole("heading", { name: "Economy settings", exact: true })
-        .last(),
+      page.getByRole("heading", {
+        name: "Shape a sustainable booking economy",
+        exact: true,
+      }),
     ).toBeVisible();
+    await startEconomyEditing(page);
     await replaceNumberFieldValue(
       page.locator("#online-cogito-base"),
       originalOnlineBase,
@@ -163,7 +184,9 @@ test("admin can review and update the future-booking Cogito take schedule", asyn
       page.locator("#online-cogito-increment"),
       originalOnlineIncrement,
     );
-    await page.getByRole("button", { name: "Save take schedule" }).click();
+    await page
+      .getByRole("button", { name: "Save changes", exact: true })
+      .click();
     await expect(page.getByText("Economy settings saved")).toBeVisible();
   }
 });
@@ -174,13 +197,17 @@ test("admin blocks a negative economy amount without persisting it", async ({
   await login(page, ADMIN_EMAIL, ADMIN_PASSWORD);
   await page.goto("/admin-economy");
   await expect(
-    page.getByRole("heading", { name: "Economy settings", exact: true }).last(),
+    page.getByRole("heading", {
+      name: "Shape a sustainable booking economy",
+      exact: true,
+    }),
   ).toBeVisible();
+  await startEconomyEditing(page);
 
   const onlineBaseInput = page.locator("#online-cogito-base");
   await expectNumberFieldValue(onlineBaseInput, 50_000);
   await replaceNumberFieldValue(onlineBaseInput, -5_000);
-  await page.getByRole("button", { name: "Save take schedule" }).click();
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
 
   await expect(
     page.getByText("All amounts must use Rp5,000 increments.", {

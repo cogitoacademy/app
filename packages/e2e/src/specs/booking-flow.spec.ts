@@ -141,7 +141,10 @@ async function openTutorBooking(browser: Browser, bookingId: string) {
   await login(page, TUTOR_EMAIL, TUTOR_PASSWORD);
   await page.goto("/bookings?tab=action");
   await expect(
-    page.getByRole("heading", { name: "Bookings", exact: true }).last(),
+    page.getByRole("heading", {
+      name: "Stay on top of every session",
+      exact: true,
+    }),
   ).toBeVisible();
   const reviewLink = await findBookingActionLink(
     page,

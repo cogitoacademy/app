@@ -331,6 +331,7 @@ export function EconomySettingsPage() {
                 <Button
                   variant="tertiary"
                   size="icon"
+                  aria-label="Edit Cogito take schedule"
                   onClick={startEditing}
                   disabled={settings.isPending || !settings.data}
                 >
