@@ -47,6 +47,13 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     findBookingWithParticipants: mock(async () => null),
     listBookingsByProposer: mock(async () => []),
     listBookingsForAccess: mock(async () => []),
+    countBookingsForAccess: mock(async () => ({
+      action: 0,
+      upcoming: 0,
+      recurring: 0,
+      history: 0,
+      all: 0,
+    })),
     findTutorProfile: mock(async () => null),
     findTutorSubjectTopic: mock(async () => null),
     findAvailabilitySlot: mock(async () => null),
@@ -693,6 +700,35 @@ describe("BookingService", () => {
         cursor: undefined,
         includeAll: false,
       });
+    });
+
+    test("forwards the server-side view and returns exact facet counts", async () => {
+      const counts = {
+        action: 2,
+        upcoming: 4,
+        recurring: 1,
+        history: 8,
+        all: 14,
+      };
+      const { service, repo } = createService({
+        repo: {
+          listBookingsForAccess: mock(async () => []),
+          countBookingsForAccess: mock(async () => counts),
+        },
+      });
+
+      const result = await service.listAccessible("student1", "student", {
+        view: "action",
+      });
+
+      expect(repo.listBookingsForAccess).toHaveBeenCalledWith("student1", {
+        states: undefined,
+        limit: 20,
+        cursor: undefined,
+        includeAll: false,
+        view: "action",
+      });
+      expect(result.counts).toEqual(counts);
     });
   });
 

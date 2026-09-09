@@ -182,7 +182,7 @@ export function TutorDrawer({
               className="size-full object-cover object-top"
             />
           ) : (
-            <div className="flex size-full items-center justify-center bg-accent">
+            <div className="flex size-full items-center justify-center bg-avatar h-[270px]">
               <Avatar size="lg" className="size-24!">
                 <AvatarFallback>{getInitials(tutorName)}</AvatarFallback>
               </Avatar>

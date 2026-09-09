@@ -225,7 +225,7 @@ export function TutorsPageContent() {
   return (
     <Stack
       direction="column"
-      spacing="lg"
+      spacing="md"
       className="w-full min-w-0 max-w-full"
     >
       <div>
@@ -238,8 +238,8 @@ export function TutorsPageContent() {
         </Text>
       </div>
 
-      <div className="flex w-full min-w-0 max-w-full flex-col gap-3 sm:flex-row sm:items-center">
-        <InputGroup className="flex-1">
+      <div className="flex w-full min-w-0 max-w-full items-center gap-3">
+        <InputGroup className="min-w-0 flex-1">
           <InputGroupAddon>
             <IconSearch className="size-4" />
           </InputGroupAddon>
@@ -251,25 +251,26 @@ export function TutorsPageContent() {
         </InputGroup>
         <Button
           variant={activeFilterCount > 0 ? "secondary" : "outline"}
-          className="w-full shrink-0 sm:w-auto"
+          className="size-9.5 shrink-0 p-0 sm:w-auto sm:px-4"
+          aria-label="Toggle tutor filters"
           aria-expanded={filtersOpen}
           aria-controls="tutor-discovery-filters"
           onClick={() => setFiltersOpen((open) => !open)}
         >
           <IconAdjustmentsHorizontal />
-          Filters
+          <span className="hidden sm:inline">Filters</span>
           {activeFilterCount > 0 ? (
             <Badge
               variant="primary"
               size="sm"
               pill
-              className="size-5 justify-center p-0 tabular-nums"
+              className="hidden size-5 justify-center p-0 tabular-nums sm:inline-flex"
             >
               {activeFilterCount}
             </Badge>
           ) : null}
           <IconChevronDown
-            className={`transition-transform duration-200 ease-out motion-reduce:transition-none ${filtersOpen ? "rotate-180" : ""}`}
+            className={`hidden transition-transform duration-200 ease-out motion-reduce:transition-none sm:block ${filtersOpen ? "rotate-180" : ""}`}
           />
         </Button>
       </div>
@@ -411,7 +412,7 @@ export function TutorsPageContent() {
         />
       ) : (
         <div
-          className="grid grid-cols-1 gap-4 xl:grid-cols-2"
+          className="grid grid-cols-1 gap-4 xl:grid-cols-2 mt-2"
           aria-busy={isFetching}
         >
           {tutors.map((tutor: PublishedTutor) => (

@@ -1,17 +1,15 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import {
   IconCalendarEvent,
+  IconCalendarPlus,
   IconChevronDown,
   IconInbox,
-  IconRefresh,
-  IconSearch,
 } from "@tabler/icons-react";
-import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
 import { Divider } from "@cogito-app/ui/components/selia/divider";
@@ -38,7 +36,6 @@ import {
 import { EmptyStateCard } from "@/components/empty-state";
 import Loader from "@/components/loader";
 import { useRole } from "@/hooks/use-role";
-import { useNow } from "@/hooks/use-now";
 import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
 
@@ -61,16 +58,24 @@ export function BookingsPage() {
     sort?: BookingSort;
   };
   const requestedTab = isBookingTab(search.tab) ? search.tab : undefined;
+  const [optimisticTab, setOptimisticTab] = useState<BookingTab | null>(null);
+  const tabNavigationId = useRef(0);
   const activeSort = isBookingSort(search.sort) ? search.sort : "recommended";
   const { role, isLoading: isRoleLoading } = useRole();
+  const activeTab =
+    optimisticTab ??
+    requestedTab ??
+    getDefaultBookingTab(isRoleLoading ? undefined : role);
   const bookingsQuery = useInfiniteQuery(
     orpc.booking.listMine.infiniteOptions({
       initialPageParam: null as string | null,
       input: (cursor) => ({
         limit: BOOKING_PAGE_SIZE,
+        view: activeTab,
         ...(cursor ? { cursor } : {}),
       }),
       getNextPageParam: (lastPage) => lastPage.nextCursor,
+      placeholderData: keepPreviousData,
     }),
   );
 
@@ -80,17 +85,16 @@ export function BookingsPage() {
         []) as BookingListItem[],
     [bookingsQuery.data?.pages],
   );
-  const now = useNow();
-  const tabCounts = useMemo(() => getTabCounts(bookings, now), [bookings, now]);
-  const activeTab =
-    requestedTab ??
-    getDefaultBookingTab(isRoleLoading ? undefined : role, tabCounts.action);
+  const tabCounts = bookingsQuery.data?.pages[0]?.counts ?? {
+    action: 0,
+    upcoming: 0,
+    recurring: 0,
+    history: 0,
+    all: 0,
+  };
   const visibleBookings = useMemo(
-    () =>
-      getBookingsForTab(bookings, activeTab, now).toSorted(
-        getBookingComparator(activeSort, activeTab),
-      ),
-    [activeSort, activeTab, bookings, now],
+    () => bookings.toSorted(getBookingComparator(activeSort, activeTab)),
+    [activeSort, activeTab, bookings],
   );
   const groups = useMemo(
     () => groupBookingsByMonth(visibleBookings),
@@ -98,9 +102,13 @@ export function BookingsPage() {
   );
 
   function selectTab(tab: BookingTab) {
+    const navigationId = ++tabNavigationId.current;
+    setOptimisticTab(tab);
     void navigate({
       to: "/bookings",
       search: (previous) => ({ ...previous, tab }),
+    }).finally(() => {
+      if (tabNavigationId.current === navigationId) setOptimisticTab(null);
     });
   }
 
@@ -117,51 +125,54 @@ export function BookingsPage() {
       : role === "admin"
         ? "Monitor every booking and open the detail view for operations."
         : "See your scheduled sessions, invitations, and booking history.";
-  const isLoading = bookingsQuery.isPending || isRoleLoading;
+  const isLoading =
+    bookingsQuery.isPending || bookingsQuery.isPlaceholderData || isRoleLoading;
   const hasLoadedPages = (bookingsQuery.data?.pages.length ?? 0) > 0;
   const isInitialError = bookingsQuery.isError && !hasLoadedPages;
 
   return (
     <Stack
       direction="column"
-      spacing="lg"
+      spacing="md"
       className="w-full min-w-0 max-w-full overflow-visible"
     >
       <div className="flex w-full min-w-0 max-w-full flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0 max-w-full">
-          <div className="flex items-center gap-2">
-            <Heading level={1} size="md">
-              Stay on top of every session
-            </Heading>
-            {bookingsQuery.isFetching &&
-            !bookingsQuery.isPending &&
-            !bookingsQuery.isFetchingNextPage ? (
-              <Badge variant="secondary" pill>
-                <IconRefresh className="animate-spin" /> Refreshing
-              </Badge>
-            ) : null}
-          </div>
+          <Heading level={1} size="md">
+            Stay on top of every session
+          </Heading>
           <Text className="max-w-full text-muted">{pageDescription}</Text>
         </div>
-        {role === "student" ? (
-          <Button
-            render={<Link to="/tutors" aria-label="Find a tutor" />}
-            nativeButton={false}
-            className="w-full min-w-0 max-w-full sm:w-auto sm:shrink-0 sm:self-auto"
-          >
-            <IconSearch /> Find a tutor
-          </Button>
-        ) : null}
+        <div className="flex w-full min-w-0 flex-wrap items-center justify-end gap-2 sm:w-auto sm:flex-nowrap">
+          {role === "student" ? (
+            <Button
+              render={<Link to="/tutors" aria-label="Find a tutor" />}
+              nativeButton={false}
+              className="w-fit max-[363.98px]:size-9.5 max-[363.98px]:px-0 sm:w-auto sm:shrink-0"
+            >
+              <IconCalendarPlus />
+              <span className="max-[363.98px]:sr-only">Book a session</span>
+            </Button>
+          ) : null}
+          <div className="max-w-full sm:hidden">
+            <BookingSortSelect
+              value={activeSort}
+              onChange={selectSort}
+              triggerClassName="w-40 max-w-full"
+            />
+          </div>
+        </div>
       </div>
 
       <div className="flex w-full min-w-0 max-w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <BookingTabBar
           activeTab={activeTab}
           counts={tabCounts}
-          hasMore={bookingsQuery.hasNextPage}
           onChange={selectTab}
         />
-        <BookingSortSelect value={activeSort} onChange={selectSort} />
+        <div className="hidden sm:block">
+          <BookingSortSelect value={activeSort} onChange={selectSort} />
+        </div>
       </div>
 
       {isLoading ? (
@@ -222,6 +233,7 @@ export function BookingsPage() {
               <Divider className="mb-3">
                 <Heading
                   id={`booking-group-${group.key}`}
+                  level={3}
                   size="sm"
                   className="text-muted"
                 >
@@ -274,49 +286,41 @@ export function BookingsPage() {
 function BookingTabBar({
   activeTab,
   counts,
-  hasMore,
   onChange,
 }: {
   activeTab: BookingTab;
   counts: Record<BookingTab, number>;
-  hasMore: boolean;
   onChange: (tab: BookingTab) => void;
 }) {
   return (
     <div className="w-full min-w-0 max-w-full overflow-visible pb-1">
-      <div className="w-full min-w-0 max-w-full overflow-visible rounded-full bg-accent/60 p-1 lg:w-fit">
+      <div className="w-full min-[520px]:w-fit min-w-0 max-w-full overflow-hidden rounded-full bg-tabs p-1 inset-shadow-xs inset-shadow-black/10 dark:inset-shadow-none">
         <div
           data-slot="booking-tab-scroller"
-          className="w-full min-w-0 max-w-full overflow-x-auto overflow-y-hidden overscroll-x-contain scrollbar-hidden lg:w-fit"
+          className="w-full min-w-0 max-w-full overflow-x-auto overflow-y-hidden overscroll-x-contain px-1 py-1 scrollbar-hidden"
           role="tablist"
           aria-label="Booking status"
         >
-          <div className="flex min-w-max whitespace-nowrap px-1 py-1">
-            {BOOKING_TABS.map((tab) => {
-              const selected = activeTab === tab.value;
-              return (
-                <button
-                  key={tab.value}
-                  type="button"
-                  role="tab"
-                  aria-selected={selected}
-                  className={cn(
-                    "rounded-full px-3 py-2 text-sm font-medium transition-colors",
-                    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
-                    selected
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted hover:bg-background/70 hover:text-foreground",
-                  )}
-                  onClick={() => onChange(tab.value)}
-                >
-                  {tab.label}
-                  <span className="ml-1.5 text-xs text-dimmed">
-                    {counts[tab.value]}
-                    {hasMore ? "+" : ""}
-                  </span>
-                </button>
-              );
-            })}
+          <div className="flex min-w-max items-center whitespace-nowrap">
+            {BOOKING_TABS.map((tab) => (
+              <button
+                key={tab.value}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab.value}
+                className={cn(
+                  "flex h-8 flex-none cursor-pointer items-center justify-center gap-2.5 rounded-full px-3 py-1 font-medium transition-colors",
+                  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+                  activeTab === tab.value
+                    ? "bg-tabs-accent text-foreground shadow ring ring-tabs-border inset-shadow-2xs inset-shadow-white/15 dark:inset-shadow-black/15"
+                    : "text-muted hover:text-foreground",
+                )}
+                onClick={() => onChange(tab.value)}
+              >
+                {tab.label}
+                <span className="text-xs text-dimmed">{counts[tab.value]}</span>
+              </button>
+            ))}
           </div>
         </div>
       </div>
@@ -327,9 +331,11 @@ function BookingTabBar({
 function BookingSortSelect({
   value,
   onChange,
+  triggerClassName = "w-full sm:w-44",
 }: {
   value: BookingSort;
   onChange: (sort: BookingSort) => void;
+  triggerClassName?: string;
 }) {
   return (
     <Select
@@ -338,7 +344,7 @@ function BookingSortSelect({
         if (isBookingSort(nextValue)) onChange(nextValue);
       }}
     >
-      <SelectTrigger className="w-full sm:w-44" aria-label="Sort bookings">
+      <SelectTrigger className={triggerClassName} aria-label="Sort bookings">
         <SelectValue />
       </SelectTrigger>
       <SelectPopup>
@@ -352,46 +358,8 @@ function BookingSortSelect({
   );
 }
 
-function getBookingsForTab(
-  bookings: BookingListItem[],
-  tab: BookingTab,
-  now: number,
-) {
-  return bookings.filter((booking) => {
-    const isFuture = new Date(booking.scheduledEndAt).getTime() >= now;
-    const isTerminal = TERMINAL_BOOKING_STATES.has(booking.currentState);
-    const isPending = PENDING_BOOKING_STATES.has(booking.currentState);
-
-    switch (tab) {
-      case "action":
-        return isPending;
-      case "upcoming":
-        return isFuture && !isTerminal && !isPending;
-      case "recurring":
-        return booking.type === "series" && !isTerminal;
-      case "history":
-        return isTerminal || (!isFuture && !isPending);
-      case "all":
-        return true;
-    }
-  });
-}
-
-function getTabCounts(bookings: BookingListItem[], now: number) {
-  return Object.fromEntries(
-    BOOKING_TABS.map(({ value }) => [
-      value,
-      getBookingsForTab(bookings, value, now).length,
-    ]),
-  ) as Record<BookingTab, number>;
-}
-
-function getDefaultBookingTab(
-  role: string | undefined,
-  pendingCount: number,
-): BookingTab {
+function getDefaultBookingTab(role: string | undefined): BookingTab {
   if (role === "admin") return "all";
-  if (pendingCount > 0) return "action";
   return "upcoming";
 }
 

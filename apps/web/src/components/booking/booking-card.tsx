@@ -135,7 +135,7 @@ export function BookingListCard({
         className,
       )}
     >
-      <div className="grid min-w-0 gap-4 p-4 md:grid-cols-[5.5rem_auto_minmax(0,1fr)_auto] md:items-center md:gap-5 md:p-5">
+      <div className="grid min-w-0 gap-3 p-4 md:grid-cols-[5.5rem_auto_minmax(0,1fr)_auto] md:items-center md:gap-5 md:p-5">
         <div className="flex min-w-0 items-center gap-3 md:gap-0">
           <DateTile date={date} />
           <div className="min-w-0 md:hidden">
@@ -147,11 +147,11 @@ export function BookingListCard({
           <BookingMeta booking={booking} location={location} />
         </div>
 
-        <div className="min-w-0">
+        <div className="min-w-0 flex flex-col gap-2">
           <Text className="truncate font-semibold md:text-lg" title={title}>
             {title}
           </Text>
-          <div className="mt-3 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
             <AvatarStack people={people} />
             {showFinancialInfo ? (
               <>
@@ -173,7 +173,7 @@ export function BookingListCard({
 
         <div
           className={cn(
-            "flex w-full min-w-0 max-w-full flex-col gap-2 md:w-auto md:self-stretch md:items-end md:gap-0",
+            "flex w-full min-w-0 max-w-full flex-col gap-3 md:w-auto md:self-stretch md:items-end md:gap-0",
             showStatus ? "md:justify-between" : "md:justify-center",
           )}
         >
@@ -545,7 +545,7 @@ function BookingFinancialInfo({
     );
   }
 
-  return <FinancialValue label="You pay" value={studentPay} />;
+  return <FinancialValue label="" value={studentPay} />;
 }
 
 function FinancialValue({ label, value }: { label: string; value: number }) {

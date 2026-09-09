@@ -13,7 +13,7 @@ export function LoginPage() {
   const { redirect } = useSearch({ from: "/login" });
 
   return (
-    <main className="relative min-h-svh w-full px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8 flex items-center">
+    <main className="relative min-h-svh w-full px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8 flex items-start sm:items-center">
       <div className="absolute right-4 top-4 z-30 sm:right-6 sm:top-6 lg:right-8 lg:top-8 hidden">
         <ModeToggle />
       </div>

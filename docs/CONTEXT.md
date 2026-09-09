@@ -2,6 +2,14 @@
 
 Last updated: 2026-09-09
 
+## Achievement summary presentation (2026-09-09)
+
+The student `/achievements` page renders Total, Approved, and Pending counts in
+one compact three-column Selia card at every viewport width. The page component
+and file use the correctly spelled `AchievementsPage` / `achievements-page.tsx`
+names. This is presentation-only and changes no RPC, schema, or persistence
+contract.
+
 ## Role- and time-aware dashboard greetings (2026-09-08)
 
 The student, tutor, and admin dashboards now share `DashboardWelcomeCard` and
@@ -377,11 +385,11 @@ Search results are replaced only after the submitted query completes, and
 wildcard characters are treated literally.
 
 The shared booking list consumes `booking.listMine` with cursor-based infinite
-loading in batches of 20. Loaded cards remain visible while **Load more
-bookings** fetches the next cursor, so large histories do not require an
-unbounded first response or replace the current screen. Tabs and sorting still
-apply client-side to the loaded pages; tab counts show `+` while more pages
-remain because they are lower bounds until the list is fully loaded.
+loading in batches of 20. Each tab is filtered server-side through the `view`
+input, and the response includes exact role-scoped facet counts. Changing tabs
+loads a fresh filtered first page; **Load more bookings** appends only that
+view's next cursor. Sorting remains client-side within the loaded filtered
+pages.
 
 Shared booking cards include a compact time indicator. Deadline-bound pending states use the server-provided `deadlineAt` to show `Respond in`, urgent, or overdue messaging; confirmed/scheduled bookings show Today, Starts in, Starting soon, or In progress when relevant. Terminal bookings show no time indicator. One shared client clock refreshes all visible cards every 30 seconds.
 In booking lists, this indicator sits after the role-appropriate financial summary (Marks for students/admins, IDR honorarium for tutors) with a vertical divider. Dashboard next-lesson cards hide their financial summary to keep the compact overview focused on people, timing, and the detail action.
@@ -466,6 +474,11 @@ Calendar/Meet event-title format (`Cogito - {Competition} | {Tutor} x
 long `+N` titles. This is a frontend presentation rule backed by the shared
 `booking-event-title` formatter and does not change the booking RPC contract.
 
+Recommended-tutor summaries keep their starting Marks price inline with subject
+metadata on wider layouts. On narrow screens, the price moves below the avatar
+so the content column remains available for the tutor name, modality, bio, and
+subject badges.
+
 The authenticated `/dashboard` route is role-specific. Students retain the learning-first dashboard (next lesson, Knowledge Bank eligibility, competition calendar, and tutor recommendations). Tutors see booking decisions, next lesson, upcoming sessions, availability, profile status, and payout totals. The tutor dashboard prioritizes a two-row action-first layout: welcome and teaching setup share the first row, while requests to review and next lesson share the second row before metrics and payout details. The payout details card keeps the main metrics compact and exposes the unpaid-honorarium and transfer-fee explanations through shared accessible `InfoPreview` popovers. Student and tutor dashboards share the same `DashboardWelcomeCard` visual, including its SVG illustration, minimum height, spacing, and CTA structure, while keeping role-specific copy and destinations. Both student and tutor next-lesson sections reuse the same `BookingListCard` composition as the shared booking list, including its date tile, participant metadata, role-appropriate financial treatment (Marks for students, IDR honorarium for tutors), status tooltip, and detail action; the compact next-lesson card hides financial details to keep the overview focused. Admins see escalated booking operations plus pending tutor-profile and achievement review queues, as well as a Business insights section backed by the admin-only `admin.getDashboardAnalytics` aggregate procedure. That section offers 7/30/90-day WIB booking and audience trends, a live booking-state portfolio, modality/category signals, and Marks-based summary KPIs. All roles share the role-aware `/bookings` list/detail surface; the page keeps the same layout while adapting people, Marks, status, and permitted actions to the viewer. The authenticated shell uses the profile image in the sidebar user avatar when available and falls back to initials. Its theme menu supports Light, Dark, and System, and pressing `D` outside editable fields toggles between the currently rendered light and dark themes; the explicit selection remains persisted by `next-themes`. Booking rows use the Cogito mark icon as the Marks prefix, keep time/location/tutor in the booking metadata column, show student participants (not the tutor) in the avatar stack, use the per-student amount for a single-session group's `You pay` value, place financial/status metadata beside participant avatars, and expose status explanations through hover/focus tooltips. These dashboards are frontend compositions of their relevant oRPC procedures, with the admin analytics read documented in `docs/API-REFERENCE.md`.
 
 The authenticated `/notifications` route is a focused inbox for durable in-app notifications. It uses cursor pagination, a category label badge, an exact date/time plus relative age, visible unread treatment, row selection, select-all for the currently loaded rows, and batch read/unread updates. Selected IDs are sent through the protected `notification.updateReadStatus` procedure, which scopes the database update to the authenticated user. The existing mark-all-read action and notification-bell unread count remain available. Bell items mark unread notifications as read and then navigate to the associated booking, balance, achievements, calendar, or notifications page; they no longer stop after changing read state. Retired economy rate-change rows are omitted from the inbox and unread count.
@@ -501,7 +514,7 @@ Competition Calendar and Knowledge Bank content are now delivered inside the aut
 
 The shared booking list sorts active and all rows by the nearest scheduled start while keeping past/cancelled history newest-first. It defaults to Upcoming for students, Pending for tutors when requests need review (otherwise Upcoming), and All for admins; an explicit `tab` query parameter overrides the role-aware default. Dashboard next-lesson cards use the nearest future booking that is neither terminal nor pending, matching the list's Upcoming semantics. The tutor review queue keeps a stable empty/loading card so the requests and next-lesson modules remain visible together even when no review request exists.
 
-On narrow screens, the rounded booking status-tab strip fills the available page width; only its inner tab list scrolls horizontally, with the native scrollbar hidden. Internal paint padding keeps selected-tab shadows and focus rings visible at either scroll edge, while shared empty-state cards preserve their rounded decorative glow and card shadow without widening the page. This is presentation-only and does not change the `booking.listMine` contract.
+The booking status switcher uses a page-local semantic button tablist styled with Selia's `tabs`, `tabs-accent`, and `tabs-border` tokens. The active state updates optimistically on click while the filtered content shows the normal loader until the server returns the selected view. On narrow screens, sorting moves into the wrapping header action row while the rounded tab strip directly precedes the booking content; only the inner list scrolls horizontally. On larger screens, sorting remains beside the tabs.
 
 ## Admin offline room workflow (2026-09-02)
 

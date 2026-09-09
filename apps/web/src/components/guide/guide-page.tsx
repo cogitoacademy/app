@@ -202,7 +202,7 @@ function GuidePageContent({ role, view }: { role?: string; view: GuideView }) {
               </Text>
             </div>
             <Button
-              variant="plain"
+              variant="tertiary"
               size="sm"
               className="shrink-0"
               onClick={() =>
@@ -324,7 +324,7 @@ function GuideChapterNav({
       <Text className="mb-3 hidden text-xs font-semibold uppercase tracking-wider text-dimmed xl:block">
         In this guide
       </Text>
-      <ol className="-mx-4 flex snap-x gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0 xl:flex-col xl:overflow-visible xl:pb-0">
+      <ol className="-mx-4 flex snap-x snap-mandatory scroll-pl-4 gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0 xl:flex-col xl:scroll-pl-0 xl:overflow-visible xl:pb-0">
         {chapters.map((chapter, index) => {
           const isActive = activeChapterId === chapter.id;
           return (
@@ -391,13 +391,13 @@ function GuideChapterSection({
           <ChapterIcon />
         </IconBox>
         <div className="min-w-0">
-          <Text className="text-xs font-semibold uppercase tracking-wider text-dimmed">
+          <Text className="text-xs font-semibold text-dimmed">
             Chapter {chapterNumber}
           </Text>
-          <Heading size="md" level={3} className="mt-1 text-balance">
+          <Heading size="sm" level={3} className="mt-1 text-balance">
             {chapter.title}
           </Heading>
-          <Text className="mt-1 max-w-3xl text-pretty text-muted">
+          <Text className="mt-1 max-w-3xl text-sm text-pretty text-muted">
             <GuideCopy text={chapter.description} />
           </Text>
         </div>

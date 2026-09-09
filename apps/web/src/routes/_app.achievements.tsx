@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { AchivementsPage } from "@/components/dashboard/pages/achivements-page";
+import { AchievementsPage } from "@/components/dashboard/pages/achievements-page";
 
 export const Route = createFileRoute("/_app/achievements")({
-  component: AchivementsPage,
+  component: AchievementsPage,
 });

@@ -2,6 +2,12 @@
 
 Last updated: 2026-09-09
 
+## Achievement summary UI note (2026-09-09)
+
+The student achievement summary was compacted into one three-column card and
+the page component typo was corrected. Achievement RPC paths, inputs, response
+envelopes, and outputs are unchanged.
+
 ## Dashboard greeting presentation (2026-09-08)
 
 Student, tutor, and admin dashboard greetings are selected entirely in the web
@@ -174,7 +180,7 @@ tables use the server-backed contracts documented below, while the admin
 booking queue and wallet ledger use cursor pagination. No URL search parameter
 is added for table pagination.
 
-Booking-list UI note: `/bookings` uses Needs action, Upcoming, Series, History, and All tabs. Students and tutors default to Needs action when a response is pending and Upcoming otherwise; admins default to All. URL-backed Recommended, Soonest, and Latest sorting is client-side; Recommended ranks pending, active, then terminal bookings, and History consolidates terminal outcomes. The web list consumes the existing `nextCursor` in batches of 20 through an infinite query and appends with **Load more bookings**; loaded cards remain visible during the next-page request. Tab counts are lower bounds and show `+` while more pages remain. The RPC contract is unchanged.
+Booking-list UI note: `/bookings` uses Needs action, Upcoming, Series, History, and All tabs. Admins default to All; students and tutors default to Upcoming unless the URL specifies another view. The selected tab is sent to `booking.listMine` as `view`, so every cursor page is filtered server-side and the returned role-scoped facet counts are exact. URL-backed Recommended, Soonest, and Latest sorting remains client-side within loaded filtered pages. Changing tabs immediately updates the selected control and shows the content loader while the new first page loads; **Load more bookings** appends the selected view's next cursor.
 
 Booking-card timing note: list rows already include the booking `deadlineAt` column. The web client uses it for pending response countdowns and uses scheduled start/end times for Today, Starts in, Starting soon, and In progress labels. It never derives response windows from `createdAt` and does not infer an Expired lifecycle state before the server transitions it.
 The list presentation places the timing chip after financial metadata with a divider; dashboard reuse hides the financial metadata. This remains presentation-only.
@@ -203,7 +209,7 @@ Auth signup hook. This is operational role initialization, not a new RPC or
 auth request/response field; other admins can still be managed through the
 existing admin role-management flow.
 
-The web dashboard mostly composes existing procedures: the shared booking list uses protected `booking.listMine` for student, tutor, and admin visibility (with admin seeing all bookings), while tutor discovery remains student-only (`tutors.listPublished`) and tutor/admin dashboards compose their remaining role-specific procedures. The admin dashboard's Business insights section additionally calls the admin-only `admin.getDashboardAnalytics` aggregate procedure for 7/30/90-day WIB metrics and a live booking-state portfolio. Student and tutor next-lesson sections derive the nearest future non-terminal, non-pending item client-side and reuse the booking-list card; the tutor dashboard's above-the-fold ordering of welcome/setup, review requests, and next lesson is presentation-only. Student and tutor welcome cards also share one frontend visual component with role-specific copy and links. On narrow screens, the rounded booking status-tab strip fills the available page width and only its inner tab list scrolls horizontally inside a scrollbar-hidden region; internal paint padding keeps selected-tab shadows and focus rings visible, while shared empty-state cards preserve their rounded glow and card shadow without widening the page. These are presentation-only details except for the documented admin analytics read.
+The web dashboard mostly composes existing procedures: the shared booking list uses protected `booking.listMine` for student, tutor, and admin visibility (with admin seeing all bookings), while tutor discovery remains student-only (`tutors.listPublished`) and tutor/admin dashboards compose their remaining role-specific procedures. The admin dashboard's Business insights section additionally calls the admin-only `admin.getDashboardAnalytics` aggregate procedure for 7/30/90-day WIB metrics and a live booking-state portfolio. Student and tutor next-lesson sections derive the nearest future non-terminal, non-pending item client-side and reuse the booking-list card; the tutor dashboard's above-the-fold ordering of welcome/setup, review requests, and next lesson is presentation-only. Student and tutor welcome cards also share one frontend visual component with role-specific copy and links. The booking status switcher is a page-local semantic button tablist using Selia color and elevation tokens, without the shared sliding indicator. On narrow screens, sorting appears in the wrapping header action row and the rounded tab strip directly precedes the content while its inner list remains horizontally scrollable. On larger screens, sorting remains beside the tabs. These are presentation-only details except for the documented admin analytics read.
 
 The authenticated `/guide` (`How Cogito Works`) route is frontend-only. Its typed journey content is bundled with the web app, is role-filtered in the route UI, and adds no RPC procedure, request input, response output, or persistence contract. The responsive Selia hero, sticky desktop/horizontal mobile chapter index, collapsible step cards, and bold timing callouts are presentation-only; the callouts restate existing 7-day, 12-hour, H-2, 15-minute, 24-hour, meeting-retry, and support-SLA rules.
 
@@ -972,9 +978,9 @@ group/group-series bookings. This does not add a response field or change the
 RPC contract.
 
 - **Auth:** Protected
-- **Input:** `{ cursor?, limit?, states? }`
-- **Output:** `{ items: Booking[], nextCursor }`
-- **Description:** Shared role-aware booking list. Students see bookings where they are proposer or participant, tutors see bookings assigned to them, and admins see all bookings. `states` can narrow the result for server-side consumers; the web list requests 20 items at a time, follows `nextCursor` for **Load more bookings**, and applies its Upcoming/Pending/Series/Past/Cancelled/All presentation filters client-side, defaults to Upcoming for students, Pending for tutors with pending requests (otherwise Upcoming), and All for admins, unless an explicit `tab` query parameter is present. It sorts Upcoming/Pending/Series/All by nearest scheduled start, while Past/Cancelled remain newest-first. Related user projections contain display identity only (`id`, `name`, `image`, `role`); internal meeting attendee email arrays are never part of this response. The web row presents Marks with the Cogito mark icon and keeps status explanations in the status-badge tooltip. On narrow screens, the rounded status-tab strip stays within the available page width while only its inner tab list scrolls horizontally without showing a native scrollbar; internal paint padding keeps selected-tab shadows and focus rings visible, and shared empty-state cards keep their rounded glow and card shadow visible without widening the page. Dashboards reuse the same read model for their next-lesson card; no dashboard-specific endpoint is required.
+- **Input:** `{ cursor?, limit?, states?, view? }`, where `view` is `action | upcoming | recurring | history | all`
+- **Output:** `{ items: Booking[], nextCursor, counts: { action, upcoming, recurring, history, all } }`
+- **Description:** Shared role-aware booking list. Students see bookings where they are proposer or participant, tutors see bookings assigned to them, and admins see all bookings. `states` can narrow results for server consumers; `view` applies the booking-list tab semantics server-side before cursor pagination. Counts are exact role-scoped facets across all accessible bookings, not only the current page. The web requests 20 items at a time and follows `nextCursor` for **Load more bookings**. Related user projections contain display identity only (`id`, `name`, `image`, `role`); internal meeting attendee email arrays are never part of this response. The web row presents Marks with the Cogito mark icon and keeps status explanations in the status-badge tooltip. Dashboards reuse the same read model for their next-lesson card; no dashboard-specific endpoint is required.
 
 ### `booking.cancel`
 
