@@ -481,8 +481,8 @@ function BookingQueue() {
                             <SlaStatus item={item} timezone={item.timezone} />
                           </TableCell>
                           <TableCell className="align-top whitespace-nowrap text-sm flex items-center">
-                            <CogitoMarks size={3} />
-                            {item.holdAmount} held
+                            <CogitoMarks value={item.holdAmount} size="3" />
+                            held
                           </TableCell>
                           <TableCell className="align-top px-3! py-4! sm:px-6!">
                             <div className="flex flex-col items-stretch gap-1.5">
