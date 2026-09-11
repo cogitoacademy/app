@@ -19,6 +19,7 @@ interface GoogleMeetingConfig {
   clientId?: string;
   clientSecret?: string;
   refreshToken?: string;
+  sendUpdates?: "none" | "all" | "externalOnly";
 }
 
 export function createMeetingModule(deps: {

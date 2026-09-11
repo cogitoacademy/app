@@ -728,6 +728,67 @@ describe("createGoogleMeetingProvider updateEvent/cancelEvent (OQ-05)", () => {
     expect(mockCalendarEventsUpdate).not.toHaveBeenCalled();
   });
 
+  test("respects an explicit sendUpdates=all config on insert/update/delete", async () => {
+    const allConfig = { ...config, sendUpdates: "all" as const };
+    mockCalendarEventsInsert.mockImplementationOnce(async () => ({
+      data: {
+        id: "evt_all",
+        conferenceData: {
+          entryPoints: [{ uri: "https://meet.google.com/all" }],
+        },
+      },
+    }));
+    const createdRow = {
+      id: "me_all",
+      bookingId: "b1",
+      provider: "google_meet",
+      externalEventId: "evt_all",
+      meetingUrl: "https://meet.google.com/all",
+      status: "created",
+      errorReason: null,
+    };
+    const returning = mock(async () => [createdRow]);
+    const values = mock(() => ({ returning }));
+    const insert = mock(() => ({ values }));
+    const liveRowAll = { ...createdRow };
+    const db = {
+      insert,
+      select: mock(() => ({
+        from: mock(() => ({
+          where: mock(() => ({
+            orderBy: mock(() => ({
+              limit: mock(async () => [liveRowAll]),
+            })),
+          })),
+        })),
+      })),
+      update: mock(() => ({
+        set: mock(() => ({ where: mock(async () => []) })),
+      })),
+    } as any;
+
+    const provider = createGoogleMeetingProvider(allConfig, db);
+    await provider.createEvent("b1");
+    expect(mockCalendarEventsInsert.mock.calls.at(-1)?.[0]?.sendUpdates).toBe(
+      "all",
+    );
+
+    mockCalendarEventsGet.mockImplementationOnce(async () => ({
+      data: { id: "evt_all" },
+    }));
+    await provider.updateEvent("b1", {
+      startAt: new Date("2030-02-01T08:00:00Z"),
+    });
+    expect(mockCalendarEventsUpdate.mock.calls.at(-1)?.[0]?.sendUpdates).toBe(
+      "all",
+    );
+
+    await provider.cancelEvent("b1");
+    expect(mockCalendarEventsDelete.mock.calls.at(-1)?.[0]?.sendUpdates).toBe(
+      "all",
+    );
+  });
+
   test("cancelEvent deletes the provider event and marks the row cancelled", async () => {
     const db = makeSelectDb(liveRow);
     const provider = createGoogleMeetingProvider(config, db);
@@ -1330,6 +1391,40 @@ describe("createGoogleMeetingProvider OAuth flows", () => {
     const updateUrl = new URL(updateUrls[0]!);
     expect(updateUrl.searchParams.get("sendUpdates")).toBe("none");
     expect(updateUrl.searchParams.get("conferenceDataVersion")).toBe("1");
+  });
+
+  test("OAuth insert honors an explicit sendUpdates=all config", async () => {
+    const allOauthConfig = { ...oauthConfig, sendUpdates: "all" as const };
+    let insertUrl = "";
+    globalThis.fetch = mock(async (input: unknown) => {
+      const url = String(input);
+      if (url === "https://oauth2.googleapis.com/token") {
+        return tokenResponse({ access_token: "t-all" });
+      }
+      insertUrl = url;
+      return tokenResponse({
+        id: "evt_all",
+        conferenceData: {
+          entryPoints: [
+            { entryPointType: "video", uri: "https://meet.google.com/all" },
+          ],
+        },
+      });
+    }) as typeof globalThis.fetch;
+    const db = makeInsertDb({
+      id: "me_all",
+      bookingId: "b1",
+      provider: "google_meet",
+      externalEventId: "evt_all",
+      meetingUrl: "https://meet.google.com/all",
+      status: "created",
+      errorReason: null,
+    }) as any;
+
+    const provider = createGoogleMeetingProvider(allOauthConfig, db);
+    await provider.createEvent("b1");
+
+    expect(new URL(insertUrl).searchParams.get("sendUpdates")).toBe("all");
   });
 
   test("cancelEvent deletes a live provider event via the OAuth API and marks the row cancelled", async () => {
