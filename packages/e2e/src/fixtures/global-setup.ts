@@ -24,6 +24,15 @@ async function globalSetup() {
   const testSeedEnv = {
     ...process.env,
     NODE_ENV: "test",
+    // Never hit the live Google Calendar from automated E2E, even if the
+    // ambient env carries prod Meet credentials.
+    GOOGLE_MEET_ENABLED: "false",
+    GOOGLE_MEET_REFRESH_TOKEN: "",
+    GOOGLE_MEET_CLIENT_ID: "",
+    GOOGLE_MEET_CLIENT_SECRET: "",
+    GOOGLE_CLIENT_EMAIL: "",
+    GOOGLE_PRIVATE_KEY: "",
+    GOOGLE_IMPERSONATED_USER: "",
     SEED_ADMIN_PASSWORD: process.env.SEED_ADMIN_PASSWORD ?? "AdminPassword123!",
     SEED_TUTOR_PASSWORD: process.env.SEED_TUTOR_PASSWORD ?? "Tutor123!",
     SEED_STUDENT_PASSWORD: process.env.SEED_STUDENT_PASSWORD ?? "Student123!",

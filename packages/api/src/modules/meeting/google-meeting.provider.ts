@@ -24,6 +24,7 @@ interface GoogleMeetingConfig {
   clientId?: string;
   clientSecret?: string;
   refreshToken?: string;
+  sendUpdates?: "none" | "all" | "externalOnly";
 }
 
 type GoogleCalendarEvent = calendar_v3.Schema$Event;
@@ -76,6 +77,8 @@ export function createGoogleMeetingProvider(
     config.authType === "service_account"
       ? google.calendar({ version: "v3", auth })
       : undefined;
+
+  const sendUpdates = config.sendUpdates ?? "none";
 
   function getMeetUrl(event: GoogleCalendarEvent): string | null {
     const meetEntry = event.conferenceData?.entryPoints?.find(
@@ -201,6 +204,13 @@ export function createGoogleMeetingProvider(
   }
 
   /**
+   * Cogito owns booking notifications (in-app + email via the notification
+   * module), so Calendar attendee emails default to suppressed
+   * (`GOOGLE_CALENDAR_SEND_UPDATES=none`): invites/cancellations to seed or
+   * undeliverable addresses otherwise spam the calendar owner's inbox with
+   * DSN bounces (e.g. `*@cogitoacademy.id` has no MX). Production sets `all`
+   * so real tutors/students also get Google invite/update/cancel emails.
+   *
    * Boot-time connectivity probe (P4.2/X3): verifies the configured credentials
    * can reach the Calendar API (calendarList.get). For the service-account
    * path this also surfaces misconfigured domain-wide delegation (events would
@@ -265,7 +275,7 @@ export function createGoogleMeetingProvider(
     const summary = details?.title?.trim() || `Cogito Booking ${bookingId}`;
     const description = details?.description?.trim();
     return fetchJson<GoogleCalendarEvent>(
-      `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events?conferenceDataVersion=1`,
+      `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events?conferenceDataVersion=1&sendUpdates=${sendUpdates}`,
       {
         method: "POST",
         headers: {
@@ -332,7 +342,7 @@ export function createGoogleMeetingProvider(
     const calendarId = encodeURIComponent(config.calendarId);
     const encodedEventId = encodeURIComponent(eventId);
     await fetchJson<unknown>(
-      `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodedEventId}`,
+      `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodedEventId}?sendUpdates=${sendUpdates}`,
       {
         method: "DELETE",
         headers: { authorization: `Bearer ${accessToken}` },
@@ -389,7 +399,7 @@ export function createGoogleMeetingProvider(
           const calendarId = encodeURIComponent(config.calendarId);
           const encodedEventId = encodeURIComponent(row.externalEventId!);
           await fetchJson<GoogleCalendarEvent>(
-            `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodedEventId}?sendUpdates=all&conferenceDataVersion=1`,
+            `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodedEventId}?sendUpdates=${sendUpdates}&conferenceDataVersion=1`,
             {
               method: "PUT",
               headers: {
@@ -430,7 +440,7 @@ export function createGoogleMeetingProvider(
               calendar!.events.update({
                 calendarId: config.calendarId,
                 eventId: row.externalEventId!,
-                sendUpdates: "all",
+                sendUpdates,
                 conferenceDataVersion: 1,
                 requestBody: {
                   ...current,
@@ -493,6 +503,7 @@ export function createGoogleMeetingProvider(
               calendar!.events.delete({
                 calendarId: config.calendarId,
                 eventId: row.externalEventId!,
+                sendUpdates,
               }),
             ).then(() => undefined),
             TIMEOUT_MS,
@@ -661,6 +672,7 @@ export function createGoogleMeetingProvider(
               Promise.resolve(
                 calendar!.events.insert({
                   calendarId: config.calendarId,
+                  sendUpdates,
                   requestBody: {
                     ...(details?.createConference === false
                       ? { id: offlineCalendarEventId(bookingId) }

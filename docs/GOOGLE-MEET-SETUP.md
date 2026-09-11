@@ -130,6 +130,8 @@ google_meet_probe_ok
 
 The probe calls the Calendar API during startup. A failed probe is logged as `google_meet_probe_failed` or `google_meet_boot_probe_failed`; the server continues with the manual/fallback provider so local development can continue, but online bookings will not reliably receive an automatic Meet link until the credential is fixed.
 
+Cogito always sends its own booking notifications (in-app + email). Google attendee emails follow `GOOGLE_CALENDAR_SEND_UPDATES`: `none` by default (dev/staging/seed-safe), `all` in production so real tutors/students also get Google invite/update/cancel emails. Never run seed/demo bookings (`*@cogitoacademy.id` has no MX) against a live calendar with updates enabled — cancelled events otherwise bounce DSN spam to the calendar owner. Automated E2E forces `GOOGLE_MEET_ENABLED=false` and blanks Meet credentials in `playwright.config.ts` + `global-setup.ts`.
+
 Then run the booking smoke test:
 
 1. Create or use a future online booking as a student.

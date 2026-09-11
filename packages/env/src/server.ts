@@ -102,6 +102,9 @@ const serverShape = {
   GOOGLE_MEET_CLIENT_SECRET: z.string().min(1).optional(),
   GOOGLE_MEET_REFRESH_TOKEN: z.string().min(1).optional(),
   GOOGLE_MEET_ENABLED: boolSchema(false),
+  GOOGLE_CALENDAR_SEND_UPDATES: z
+    .enum(["none", "all", "externalOnly"])
+    .default("none"),
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().default("noreply@cogitoacademy.id"),
   METRICS_TOKEN: z.string().optional(),

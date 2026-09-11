@@ -133,6 +133,7 @@ export interface GoogleMeetConfigInput {
   privateKey?: string;
   impersonatedUser?: string;
   calendarId?: string;
+  sendUpdates?: "none" | "all" | "externalOnly";
 }
 
 export function resolveGoogleMeetConfig(input: GoogleMeetConfigInput) {
@@ -146,6 +147,7 @@ export function resolveGoogleMeetConfig(input: GoogleMeetConfigInput) {
       clientSecret,
       refreshToken: input.refreshToken,
       calendarId: input.calendarId ?? "primary",
+      sendUpdates: input.sendUpdates ?? "none",
     };
   }
 
@@ -156,6 +158,7 @@ export function resolveGoogleMeetConfig(input: GoogleMeetConfigInput) {
       privateKey: input.privateKey,
       impersonatedUser: input.impersonatedUser,
       calendarId: input.calendarId ?? "primary",
+      sendUpdates: input.sendUpdates ?? "none",
     };
   }
 
@@ -247,6 +250,7 @@ function createServices() {
     privateKey: env.GOOGLE_PRIVATE_KEY,
     impersonatedUser: env.GOOGLE_IMPERSONATED_USER,
     calendarId: env.GOOGLE_CALENDAR_ID,
+    sendUpdates: env.GOOGLE_CALENDAR_SEND_UPDATES,
   });
 
   // Infrastructure modules
