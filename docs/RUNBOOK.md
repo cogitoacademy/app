@@ -1643,9 +1643,11 @@ The app defaults to dev-safe stand-ins (stub email, stub payments, manual Meet f
 | Google Meet | Manual link fallback | **Boot warning + fallback** — a failed probe is logged and online bookings fall back to manual/retry handling until credentials are fixed | Complete credential set + `GOOGLE_IMPERSONATED_USER` (SA mode) + successful boot probe (P4.2)                                                                |
 | R2          | Local `UPLOAD_DIR`   | **Silent** — prod without R2 writes to container-local disk, lost on redeploy; R2 set but `R2_PUBLIC_URL` unset → objects unreachable     | All `R2_*` + `R2_PUBLIC_URL` required in production/staging (P4.3)                                                                                           |
 
-> **Midtrans (2026-09-03):** the Midtrans Snap provider is implemented behind
+> **Midtrans (2026-09-03; Balance redirect handling 2026-09-12):** the Midtrans Snap provider is implemented behind
 > the same `PaymentProvider` port (`docs/MIDTRANS-MIGRATION.md`). Snap returns
-> a hosted `redirect_url`; the webhook `signature_key` is verified in the body
+> a hosted `redirect_url`; the Balance page detects the `https://` URL via
+> `isRedirectCheckoutUrl` and opens it in a new tab (QRIS payloads remain inline
+> QR); the webhook `signature_key` is verified in the body
 > (`SHA512(order_id + status_code + gross_amount + signature key)`); statuses
 > map `capture`→PAID (fraud `accept`), `settlement`→SETTLED, `pending`→PENDING,
 > `deny/cancel/failure`→FAILED, `expire`→EXPIRED, `refund/partial_refund`→

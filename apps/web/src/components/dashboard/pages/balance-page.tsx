@@ -37,6 +37,7 @@ import { CogitoMarks } from "@/components/cogito-marks";
 import { BalanceWidget } from "@/components/dashboard/balance-widget";
 import { InfoPreview } from "@/components/info-preview";
 import { orpc } from "@/utils/orpc";
+import { isRedirectCheckoutUrl } from "@/lib/checkout";
 import { getUserFacingError } from "@/lib/error-message";
 
 const LEDGER_LABELS: Record<string, string> = {
@@ -73,6 +74,10 @@ export function BalancePage() {
   const [simulatedPaymentId, setSimulatedPaymentId] = useState<string | null>(
     null,
   );
+  // Snap-style checkouts hand back a hosted https page, not a QR payload —
+  // those open in a new tab instead of rendering a QR code.
+  const isRedirectCheckout =
+    qrPayload !== null && isRedirectCheckoutUrl(qrPayload);
 
   const { data: wallet, isLoading: walletLoading } = useQuery(
     orpc.wallet.get.queryOptions(),
@@ -259,36 +264,69 @@ export function BalancePage() {
               Payment processing
             </Heading>
             <Text className="text-dimmed text-sm">
-              Checkout is controlled by the server payment configuration. If
-              this deployment is using Xendit Test Mode, use an approved UAT
-              account: test transactions do not charge real money and Marks are
-              credited only after verified Xendit confirmation.
+              Checkout is controlled by the server payment configuration. In
+              sandbox or test mode, use an approved demo account: test
+              transactions do not charge real money and Marks are credited only
+              after the payment provider confirms the payment.
             </Text>
           </div>
           {qrPayload ? (
             <Card className="mb-4 min-w-0 max-w-full">
               <CardHeader>
                 <CardTitle>
-                  Scan QRIS to pay
+                  {isRedirectCheckout
+                    ? "Complete your payment"
+                    : "Scan QRIS to pay"}
                   <CardInfoPreview>
                     <InfoPreview
-                      title="Scan QRIS to pay"
-                      description="Open your banking or e-wallet app, scan this code, and complete the payment. Your Marks are credited after Xendit confirms the payment."
+                      title={
+                        isRedirectCheckout
+                          ? "Complete your payment"
+                          : "Scan QRIS to pay"
+                      }
+                      description={
+                        isRedirectCheckout
+                          ? "Open the hosted payment page, choose a payment method, and complete the payment. Your Marks are credited automatically after the provider confirms it."
+                          : "Open your banking or e-wallet app, scan this code, and complete the payment. Your Marks are credited after Xendit confirms the payment."
+                      }
                     />
                   </CardInfoPreview>
                 </CardTitle>
               </CardHeader>
               <CardBody className="flex min-w-0 flex-col items-center gap-4">
-                <div className="w-full max-w-68 rounded-lg bg-background p-4 text-foreground">
-                  <QRCodeSVG
-                    value={qrPayload}
-                    size={240}
-                    level="M"
-                    bgColor="var(--color-background)"
-                    fgColor="var(--color-foreground)"
-                    className="h-auto w-full"
-                  />
-                </div>
+                {isRedirectCheckout ? (
+                  <>
+                    <Text className="text-dimmed text-center text-sm">
+                      You’re being handed off to our payment partner to pay
+                      securely. After paying, return to this page — your balance
+                      updates automatically once the payment is confirmed.
+                    </Text>
+                    <Button
+                      render={
+                        <a
+                          href={qrPayload}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label="Open payment page"
+                        />
+                      }
+                      nativeButton={false}
+                    >
+                      Open payment page
+                    </Button>
+                  </>
+                ) : (
+                  <div className="w-full max-w-68 rounded-lg bg-background p-4 text-foreground">
+                    <QRCodeSVG
+                      value={qrPayload}
+                      size={240}
+                      level="M"
+                      bgColor="var(--color-background)"
+                      fgColor="var(--color-foreground)"
+                      className="h-auto w-full"
+                    />
+                  </div>
+                )}
                 {purchase.data?.canSimulate ? (
                   <>
                     <Button

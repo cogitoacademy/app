@@ -246,8 +246,11 @@ of allowing a repository-root transient CLI to select a different revision.
 
 Production payment checkout defaults to Xendit QRIS. The provider sends
 QRIS-specific channel properties (`qr_string_type=DYNAMIC`, 48-hour expiry),
-and the Balance page renders the returned QR payload instead of treating it as
-a fetchable redirect URL. `XENDIT_DEFAULT_PAYMENT_METHOD` is declared in the
+and the Balance page renders the returned QR payload inline. When the payload
+is an `https://` URL (Midtrans Snap `redirect_url`, Xendit e-wallet redirect),
+the Balance page detects it via `isRedirectCheckoutUrl`
+(`apps/web/src/lib/checkout.ts`) and opens the hosted payment page in a new
+tab instead of rendering a QR code. `XENDIT_DEFAULT_PAYMENT_METHOD` is declared in the
 production examples and Coolify env synchronization list.
 A Midtrans Snap provider (`PAYMENT_PROVIDER=midtrans`) is implemented behind
 the same `PaymentProvider` port (2026-09-03, `docs/MIDTRANS-MIGRATION.md`):
