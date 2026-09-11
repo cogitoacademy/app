@@ -20,6 +20,7 @@ describe("Services conditional logic", () => {
       clientSecret: "secret",
       refreshToken: "refresh",
       calendarId: "primary",
+      sendUpdates: "none",
     });
   });
 
@@ -37,7 +38,19 @@ describe("Services conditional logic", () => {
       privateKey: "private-key",
       impersonatedUser: "tutor@example.com",
       calendarId: "calendar-1",
+      sendUpdates: "none",
     });
+  });
+
+  test("passes through an explicit calendar sendUpdates override", () => {
+    expect(
+      resolveGoogleMeetConfig({
+        googleClientId: "client",
+        googleClientSecret: "secret",
+        refreshToken: "refresh",
+        sendUpdates: "all",
+      }),
+    ).toMatchObject({ sendUpdates: "all" });
   });
 
   test("returns no Google Meet config when credentials are incomplete", () => {
