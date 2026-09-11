@@ -1697,6 +1697,8 @@ The short version for OAuth is:
 
 The provider's OAuth probe calls the Calendar API calendar-list endpoint, so a token created with only `https://www.googleapis.com/auth/calendar.events` may create events but still fail the startup probe. Re-authorize with `https://www.googleapis.com/auth/calendar` if the log reports insufficient scopes. A failed probe is logged loudly and the app keeps the manual/fallback provider available; it is not a successful production configuration.
 
+Calendar attendee emails are always suppressed (`sendUpdates=none` on create/update/delete) because Cogito sends its own booking notifications. Automated E2E additionally forces `GOOGLE_MEET_ENABLED=false` with blanked Meet credentials, so seeded runs use the manual fallback and never create live Calendar events for undeliverable `*@cogitoacademy.id` seed addresses.
+
 ### Resend domain verification (X2 / P4.1)
 
 The production env schema requires `RESEND_API_KEY` and a non-default `EMAIL_FROM` (the dev default `noreply@cogitoacademy.id` is rejected). Before enabling production email:

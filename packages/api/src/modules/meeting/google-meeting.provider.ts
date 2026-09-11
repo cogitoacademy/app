@@ -201,6 +201,13 @@ export function createGoogleMeetingProvider(
   }
 
   /**
+   * Cogito owns booking notifications (in-app + email via the notification
+   * module). Google Calendar attendee emails are therefore always suppressed
+   * with `sendUpdates=none`: Calendar invites/cancellations to seed or
+   * undeliverable addresses otherwise spam the calendar owner's inbox with
+   * DSN bounces (e.g. `*@cogitoacademy.id` has no MX). Real tutors/students
+   * still get meeting links through Cogito notifications.
+   *
    * Boot-time connectivity probe (P4.2/X3): verifies the configured credentials
    * can reach the Calendar API (calendarList.get). For the service-account
    * path this also surfaces misconfigured domain-wide delegation (events would
@@ -265,7 +272,7 @@ export function createGoogleMeetingProvider(
     const summary = details?.title?.trim() || `Cogito Booking ${bookingId}`;
     const description = details?.description?.trim();
     return fetchJson<GoogleCalendarEvent>(
-      `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events?conferenceDataVersion=1`,
+      `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events?conferenceDataVersion=1&sendUpdates=none`,
       {
         method: "POST",
         headers: {
@@ -332,7 +339,7 @@ export function createGoogleMeetingProvider(
     const calendarId = encodeURIComponent(config.calendarId);
     const encodedEventId = encodeURIComponent(eventId);
     await fetchJson<unknown>(
-      `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodedEventId}`,
+      `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodedEventId}?sendUpdates=none`,
       {
         method: "DELETE",
         headers: { authorization: `Bearer ${accessToken}` },
@@ -389,7 +396,7 @@ export function createGoogleMeetingProvider(
           const calendarId = encodeURIComponent(config.calendarId);
           const encodedEventId = encodeURIComponent(row.externalEventId!);
           await fetchJson<GoogleCalendarEvent>(
-            `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodedEventId}?sendUpdates=all&conferenceDataVersion=1`,
+            `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodedEventId}?sendUpdates=none&conferenceDataVersion=1`,
             {
               method: "PUT",
               headers: {
@@ -430,7 +437,7 @@ export function createGoogleMeetingProvider(
               calendar!.events.update({
                 calendarId: config.calendarId,
                 eventId: row.externalEventId!,
-                sendUpdates: "all",
+                sendUpdates: "none",
                 conferenceDataVersion: 1,
                 requestBody: {
                   ...current,
@@ -493,6 +500,7 @@ export function createGoogleMeetingProvider(
               calendar!.events.delete({
                 calendarId: config.calendarId,
                 eventId: row.externalEventId!,
+                sendUpdates: "none",
               }),
             ).then(() => undefined),
             TIMEOUT_MS,
@@ -661,6 +669,7 @@ export function createGoogleMeetingProvider(
               Promise.resolve(
                 calendar!.events.insert({
                   calendarId: config.calendarId,
+                  sendUpdates: "none",
                   requestBody: {
                     ...(details?.createConference === false
                       ? { id: offlineCalendarEventId(bookingId) }

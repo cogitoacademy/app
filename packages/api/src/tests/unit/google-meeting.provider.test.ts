@@ -188,6 +188,7 @@ describe("createGoogleMeetingProvider", () => {
     );
 
     const insertCall = mockCalendarEventsInsert.mock.calls.at(-1)?.[0];
+    expect(insertCall?.sendUpdates).toBe("none");
     expect(insertCall?.requestBody?.attendees).toEqual([
       { email: "tutor@example.com", displayName: "Tutor" },
       { email: "student@example.com" },
@@ -380,7 +381,7 @@ describe("createGoogleMeetingProvider", () => {
 
         if (
           url ===
-          "https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1"
+          "https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1&sendUpdates=none"
         ) {
           oauthRequestBody = JSON.parse(String(init?.body)) as Record<
             string,
@@ -683,7 +684,7 @@ describe("createGoogleMeetingProvider updateEvent/cancelEvent (OQ-05)", () => {
     const call = mockCalendarEventsUpdate.mock.calls.at(-1)?.[0];
     expect(call?.eventId).toBe("evt_123");
     expect(call?.calendarId).toBe("primary");
-    expect(call?.sendUpdates).toBe("all");
+    expect(call?.sendUpdates).toBe("none");
     expect(call?.conferenceDataVersion).toBe(1);
     expect(call?.requestBody?.summary).toBe(
       "Solo session with Tutor & Student",
@@ -736,6 +737,7 @@ describe("createGoogleMeetingProvider updateEvent/cancelEvent (OQ-05)", () => {
     expect(mockCalendarEventsDelete).toHaveBeenCalledTimes(1);
     const call = mockCalendarEventsDelete.mock.calls[0]?.[0];
     expect(call?.eventId).toBe("evt_123");
+    expect(call?.sendUpdates).toBe("none");
     expect(db.update).toHaveBeenCalledTimes(1);
     const setMock = db.update.mock.results[0]?.value?.set as ReturnType<
       typeof mock
@@ -765,7 +767,7 @@ describe("createGoogleMeetingProvider updateEvent/cancelEvent (OQ-05)", () => {
     expect(mockCalendarEventsUpdate.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
         eventId: liveRow.externalEventId,
-        sendUpdates: "all",
+        sendUpdates: "none",
         conferenceDataVersion: 1,
         requestBody: expect.objectContaining({
           status: "confirmed",
@@ -782,6 +784,9 @@ describe("createGoogleMeetingProvider updateEvent/cancelEvent (OQ-05)", () => {
     expect(mockCalendarEventsDelete).toHaveBeenCalledTimes(1);
     expect(mockCalendarEventsDelete.mock.calls[0]?.[0]?.eventId).toBe(
       liveRow.externalEventId,
+    );
+    expect(mockCalendarEventsDelete.mock.calls[0]?.[0]?.sendUpdates).toBe(
+      "none",
     );
   });
 
@@ -1104,7 +1109,8 @@ describe("createGoogleMeetingProvider OAuth flows", () => {
         tokenCalls++;
         return tokenResponse({ access_token: "t1" });
       }
-      if (url.includes("/events?conferenceDataVersion=1")) {
+      if (url.includes("/events?")) {
+        expect(url).toContain("sendUpdates=none");
         return tokenResponse({
           id: "evt_1",
           conferenceData: {
@@ -1322,12 +1328,13 @@ describe("createGoogleMeetingProvider OAuth flows", () => {
     expect(methods).toEqual(["GET", "PUT"]);
     expect(updateUrls).toHaveLength(1);
     const updateUrl = new URL(updateUrls[0]!);
-    expect(updateUrl.searchParams.get("sendUpdates")).toBe("all");
+    expect(updateUrl.searchParams.get("sendUpdates")).toBe("none");
     expect(updateUrl.searchParams.get("conferenceDataVersion")).toBe("1");
   });
 
   test("cancelEvent deletes a live provider event via the OAuth API and marks the row cancelled", async () => {
     const methods: string[] = [];
+    const deleteUrls: string[] = [];
     globalThis.fetch = mock(async (input: unknown, init?: RequestInit) => {
       const url = String(input);
       if (url === "https://oauth2.googleapis.com/token") {
@@ -1335,6 +1342,7 @@ describe("createGoogleMeetingProvider OAuth flows", () => {
       }
       if (url.includes("/events/evt_oauth2")) {
         methods.push(init?.method ?? "GET");
+        deleteUrls.push(url);
         return new Response("", { status: 200 });
       }
       throw new Error(`Unexpected fetch URL: ${url}`);
@@ -1372,6 +1380,9 @@ describe("createGoogleMeetingProvider OAuth flows", () => {
     await provider.cancelEvent("b1");
 
     expect(methods).toEqual(["DELETE"]);
+    expect(new URL(deleteUrls[0]!).searchParams.get("sendUpdates")).toBe(
+      "none",
+    );
     expect(update).toHaveBeenCalledTimes(1);
   });
 

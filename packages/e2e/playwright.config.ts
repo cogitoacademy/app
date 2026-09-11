@@ -58,6 +58,18 @@ export default defineConfig({
       timeout: 120_000,
       stderr: "pipe",
       stdout: "pipe",
+      // Automated E2E must never touch the real Google Calendar: leaked CI
+      // env (refresh token + enabled flag) would otherwise create/cancel live
+      // events for undeliverable seed attendees and spam DSN bounces.
+      env: {
+        GOOGLE_MEET_ENABLED: "false",
+        GOOGLE_MEET_REFRESH_TOKEN: "",
+        GOOGLE_MEET_CLIENT_ID: "",
+        GOOGLE_MEET_CLIENT_SECRET: "",
+        GOOGLE_CLIENT_EMAIL: "",
+        GOOGLE_PRIVATE_KEY: "",
+        GOOGLE_IMPERSONATED_USER: "",
+      },
     },
     {
       command: `bun --env-file=${resolvedEnvFile} run dev`,
