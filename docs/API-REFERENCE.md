@@ -903,7 +903,7 @@ The create/edit/correction form is presented as a bottom drawer on mobile and a 
 ### Midtrans (Snap) environment selection
 
 - `PAYMENT_PROVIDER=midtrans` selects the Midtrans Snap provider. `MIDTRANS_MODE` is required and must be `test` (Sandbox) or `live` (Production); the Server Key, created in the matching Midtrans dashboard mode, selects the actual environment. `MIDTRANS_SERVER_KEY`, `MIDTRANS_CLIENT_KEY`, and `MIDTRANS_MERCHANT_ID` are required (fail-loud env guard).
-- `checkoutUrl` carries the Snap `redirect_url` (hosted payment page) — the frontend checkout handling is unchanged (the field name and redirect semantics are the same as Xendit's e-wallet redirect).
+- `checkoutUrl` carries the Snap `redirect_url` (hosted payment page) — the Balance page detects the `https://` URL via `isRedirectCheckoutUrl` and opens it in a new tab instead of rendering a QR code (Xendit QRIS payloads remain inline QR).
 - `canSimulate` is **always false** in Midtrans mode: the Midtrans Sandbox has no simulation endpoint. Sandbox test payments use the Snap test cards (`4811 1111 1111 1114`, CVV `123`, OTP `112233`). `payment.simulatePurchase` returns `PAYMENT_SIMULATION_UNAVAILABLE` (403) in Midtrans mode.
 - `order_id` is the payment UUID (unique per repurchase attempt); webhooks and status lookups resolve it back to the stored provider reference.
 

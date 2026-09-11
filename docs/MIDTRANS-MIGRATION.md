@@ -131,9 +131,10 @@ the stub.
 2. In the Midtrans dashboard (Sandbox), confirm the Payment Notification URL
    is `https://api.cogitoacademy.id/webhooks/payments/midtrans`.
 3. Sign in with a verified student account and create a purchase. The Balance
-   page receives `checkoutUrl` = the Snap `redirect_url`; the frontend opens
-   the Snap hosted page (no frontend change required — the checkout URL
-   contract is unchanged).
+   page receives `checkoutUrl` = the Snap `redirect_url`; the frontend detects
+   the `https://` URL via `isRedirectCheckoutUrl` (`apps/web/src/lib/checkout.ts`)
+   and opens the Snap hosted page in a new tab instead of rendering a QR code
+   (QRIS payloads remain inline QR).
 4. Pay with the sandbox test card (`4811 1111 1111 1114`, CVV `123`, any
    future expiry, OTP `112233`) or a sandbox e-wallet/QRIS method.
 5. Confirm the webhook arrives at `/webhooks/payments/midtrans` with a valid
