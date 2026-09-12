@@ -965,15 +965,15 @@ emergency restore against the actual object list first.
 
 ### What alerts arrive
 
-| Alert                                                      | Source               | Meaning                                                           | Response                                                      |
-| ---------------------------------------------------------- | -------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------- |
-| Kuma: api /health down                                     | Kuma monitor         | API unreachable or `status != ok` (DB/Redis/scheduler degraded)   | `./ops.sh health`, `./ops.sh status`, check Coolify logs      |
-| Kuma: app down                                             | Kuma monitor         | Web app unreachable                                               | `curl -sI https://app.cogitoacademy.id`, Coolify web resource |
-| Kuma: cert expiring                                        | Kuma monitor         | TLS cert for `api.`/`app.` near expiry (monitors not yet created) | Traefik/Let's Encrypt renewal check                           |
-| Kuma: dlqDepth > 0                                         | Kuma keyword monitor | A **fresh** DLQ failure landed in the last 24h                    | `./ops.sh dlq` to see what failed                             |
-| Discord: "VPS disk at N%"                                  | disk watchdog        | Disk ≥ 85%                                                        | `./ops.sh disk`; plan cleanup                                 |
-| Discord: "CRITICAL: VPS disk still at N% after auto-prune" | disk watchdog        | Disk ≥ 92% **after** the prune ladder                             | Operator action required — see below                          |
-| Grafana: DLQFresh / DiskWarn / DiskCrit / ApiErrors / ProdOnStub / TestModeRestrictedSpike | Grafana alert rules | Same signals as above, evaluated from Prometheus/Loki (1m) | Same responses; Grafana is the second pair of eyes |
+| Alert                                                                                      | Source               | Meaning                                                           | Response                                                      |
+| ------------------------------------------------------------------------------------------ | -------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------- |
+| Kuma: api /health down                                                                     | Kuma monitor         | API unreachable or `status != ok` (DB/Redis/scheduler degraded)   | `./ops.sh health`, `./ops.sh status`, check Coolify logs      |
+| Kuma: app down                                                                             | Kuma monitor         | Web app unreachable                                               | `curl -sI https://app.cogitoacademy.id`, Coolify web resource |
+| Kuma: cert expiring                                                                        | Kuma monitor         | TLS cert for `api.`/`app.` near expiry (monitors not yet created) | Traefik/Let's Encrypt renewal check                           |
+| Kuma: dlqDepth > 0                                                                         | Kuma keyword monitor | A **fresh** DLQ failure landed in the last 24h                    | `./ops.sh dlq` to see what failed                             |
+| Discord: "VPS disk at N%"                                                                  | disk watchdog        | Disk ≥ 85%                                                        | `./ops.sh disk`; plan cleanup                                 |
+| Discord: "CRITICAL: VPS disk still at N% after auto-prune"                                 | disk watchdog        | Disk ≥ 92% **after** the prune ladder                             | Operator action required — see below                          |
+| Grafana: DLQFresh / DiskWarn / DiskCrit / ApiErrors / ProdOnStub / TestModeRestrictedSpike | Grafana alert rules  | Same signals as above, evaluated from Prometheus/Loki (1m)        | Same responses; Grafana is the second pair of eyes            |
 
 ### Observability stack (LIVE 2026-09-05 — Loki + Prometheus + tailnet Grafana)
 
@@ -1008,12 +1008,12 @@ COOLIFY_API_TOKEN | cut -d= -f2-)"` (tunnel up; exit 0 = no drift —
 - **Grafana access (tailnet-only):** `./infra/ops.sh grafana` (tunnel + URL
   in one command), or manually `ssh -L 3000:127.0.0.1:3000
 ubuntu@cogito-vps.tail674634.ts.net`, then `http://localhost:3000` (admin user `admin`;
-   password in the SOPS vault as `GRAFANA_ADMIN_PASSWORD`). The direct tailnet URL
-   `http://cogito-vps.tail674634.ts.net:3000` also resolves via MagicDNS with no
-   tunnel; `./infra/ops.sh trace` defaults `GRAFANA_URL` to it. Provisioned:
-   datasources (Loki default + Prometheus), 5 dashboards (App RED, Logs &
-   Traces, Infra, Delivery, Payment Logs), alert rules (DLQFresh/DiskWarn/DiskCrit/ApiErrors
-   + ProdOnStub/TestModeRestrictedSpike → `Discord-ops` contact point).
+  password in the SOPS vault as `GRAFANA_ADMIN_PASSWORD`). The direct tailnet URL
+  `http://cogito-vps.tail674634.ts.net:3000` also resolves via MagicDNS with no
+  tunnel; `./infra/ops.sh trace` defaults `GRAFANA_URL` to it. Provisioned:
+  datasources (Loki default + Prometheus), 5 dashboards (App RED, Logs &
+  Traces, Infra, Delivery, Payment Logs), alert rules (DLQFresh/DiskWarn/DiskCrit/ApiErrors
+  - ProdOnStub/TestModeRestrictedSpike → `Discord-ops` contact point).
 - **Grafana password rotation (2026-09-06 pattern):** `GRAFANA_ADMIN_PASSWORD`
   is SOPS-encrypted in `infra/secrets/prod.env` (never plaintext). Rotate by
   setting a fresh value in the vault, then applying live without needing the
@@ -1087,7 +1087,7 @@ io.containerd.snapshotter.v1`, `/var/lib/docker/image/` has no
   minute. Fix: bump `cadvisor_image` to `ghcr.io/google/cadvisor:v0.60.5`
   (upstream #3709, ≥v0.54), `./infra/apply.sh observability`, redeploy
   `cogito-alloy`, verify `with_name > 0` via `/api/v1/series`. Do NOT flip
-   the daemon back to the legacy snapshotter (restarts every container).
+  the daemon back to the legacy snapshotter (restarts every container).
 
 ### Payment Logs dashboard + Coolify env dedupe (Midtrans UAT gate, 2026-09-11)
 
@@ -1261,10 +1261,10 @@ the printed steps; nothing here was applied from a worker.
   the vault `METRICS_TOKEN` via a token file, 15s interval; node_exporter +
   cAdvisor), `infra/loki/loki-config.yml` (30d retention), `infra/alloy/config.alloy`
   (`loki.source.docker_logs` over the Docker socket — never file globs under
-   `/var/lib/docker`), Grafana datasources + 5 dashboards (App RED, Logs &
-   Traces with traceId/userId search, Infra with the 85%/92% disk lines,
-   Delivery with deploys/backups/DLQ/breakers, Payment Logs with the
-   provider boot line + test-mode gate stream).
+  `/var/lib/docker`), Grafana datasources + 5 dashboards (App RED, Logs &
+  Traces with traceId/userId search, Infra with the 85%/92% disk lines,
+  Delivery with deploys/backups/DLQ/breakers, Payment Logs with the
+  provider boot line + test-mode gate stream).
 - **Retention vars** (single tuning point in the playbook):
   `LOKI_RETENTION_DAYS=30`, `PROM_RETENTION_DAYS=15`. **Lean fallback** for a
   tight VPS (documented, not applied): scrape_interval `30s` in
@@ -1660,7 +1660,7 @@ Key environment variables (see `.env.example` for full list):
 | `XENDIT_SECRET_KEY`                                                                           | No       | Xendit API secret key (required when `PAYMENT_PROVIDER=xendit`); use a Test Mode key with Money-in / Payments **Write** permission while `XENDIT_MODE=test`                                                                                                                      |
 | `XENDIT_WEBHOOK_TOKEN`                                                                        | No       | Xendit webhook verification token                                                                                                                                                                                                                                                |
 | `XENDIT_MODE`                                                                                 | No       | Required when `PAYMENT_PROVIDER=xendit`: `test` for Xendit Test Mode or `live` for Live Mode. The matching Xendit API key selects the actual environment                                                                                                                         |
-| `XENDIT_TEST_ALLOWED_EMAILS`                                                                  | No       | Provider-agnostic test-mode UAT list: comma-separated verified student emails allowed to create purchases in test mode on production/staging (`XENDIT_MODE=test` or `MIDTRANS_MODE=test`); required there to prevent unrestricted sandbox-funded Marks                                                                                                   |
+| `XENDIT_TEST_ALLOWED_EMAILS`                                                                  | No       | Provider-agnostic test-mode UAT list: comma-separated verified student emails allowed to create purchases in test mode on production/staging (`XENDIT_MODE=test` or `MIDTRANS_MODE=test`); required there to prevent unrestricted sandbox-funded Marks                           |
 | `XENDIT_SUCCESS_REDIRECT_URL` / `XENDIT_FAILURE_REDIRECT_URL`                                 | No       | Required when `PAYMENT_PROVIDER=xendit` (P3.7)                                                                                                                                                                                                                                   |
 | `WEBHOOK_ALLOWED_IPS`                                                                         | No       | Webhook source IP allowlist (comma-separated). **Required in production/staging when `PAYMENT_PROVIDER=xendit`** (D2) — the env schema rejects boot with an empty allowlist so the endpoint is never open to every IP                                                            |
 | `SCHEDULER_ENABLED`                                                                           | No       | Starts the BullMQ worker + repeatable jobs (default false). **Required `true` in production/staging (D3)** — the env schema rejects boot with it false, since a prod server without the scheduler silently skips booking expiry, hold release, email dispatch and SLA escalation |
