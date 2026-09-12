@@ -21,9 +21,25 @@ const BREAKER_STATE_VALUE = {
 
 export type BreakerStateName = keyof typeof BREAKER_STATE_VALUE;
 
+export type MetricsPaymentProvider = "stub" | "xendit" | "midtrans";
+export type MetricsProviderMode = "test" | "live" | "none";
+
 export interface ExpositionInput {
   dlqDepth?: number;
   breakers?: Record<string, BreakerStateName>;
+  /**
+   * Active payment provider for the `app_info` gauge. Defaults to
+   * `process.env.PAYMENT_PROVIDER` (read at call time so tests can stub the
+   * env, like `GIT_SHA`), falling back to `"stub"` when unset/unknown.
+   */
+  provider?: MetricsPaymentProvider;
+  /**
+   * Active provider mode for the `app_info` gauge. Defaults to the matching
+   * `XENDIT_MODE`/`MIDTRANS_MODE` env var, or `"none"` when the mode env var
+   * is unset/unknown. Always `"none"` for the stub provider (which has no
+   * mode concept), even if a mode is passed explicitly.
+   */
+  providerMode?: MetricsProviderMode;
 }
 
 interface Series {
@@ -156,6 +172,41 @@ function requestLabels(entry: Series): string {
   return `path="${escapeLabelValue(entry.path)}",method="${escapeLabelValue(entry.method)}",status="${entry.status}",instance="single"`;
 }
 
+function isMetricsPaymentProvider(
+  value: unknown,
+): value is MetricsPaymentProvider {
+  return value === "stub" || value === "xendit" || value === "midtrans";
+}
+
+function isMetricsProviderMode(value: unknown): value is MetricsProviderMode {
+  return value === "test" || value === "live" || value === "none";
+}
+
+function resolveExpositionProvider(
+  explicit?: MetricsPaymentProvider,
+): MetricsPaymentProvider {
+  if (isMetricsPaymentProvider(explicit)) return explicit;
+  const fromEnv = process.env.PAYMENT_PROVIDER?.trim();
+  if (isMetricsPaymentProvider(fromEnv)) return fromEnv;
+  return "stub";
+}
+
+function resolveExpositionProviderMode(
+  provider: MetricsPaymentProvider,
+  explicit?: MetricsProviderMode,
+): MetricsProviderMode {
+  // The stub provider has no mode concept — the dashboards contract fixes
+  // provider_mode="none" whenever provider="stub".
+  if (provider === "stub") return "none";
+  if (isMetricsProviderMode(explicit)) return explicit;
+  const fromEnv =
+    provider === "xendit"
+      ? process.env.XENDIT_MODE?.trim()
+      : process.env.MIDTRANS_MODE?.trim();
+  if (isMetricsProviderMode(fromEnv) && fromEnv !== "none") return fromEnv;
+  return "none";
+}
+
 /**
  * Renders the Prometheus text exposition (version 0.0.4) for `GET /metrics`.
  *
@@ -164,8 +215,11 @@ function requestLabels(entry: Series): string {
  * (Redis-backed circuit-breaker states) are supplied by the route, which
  * reads them from the shared Redis. Either gauge section is omitted when its
  * input is absent so a bare `renderExposition()` still emits valid output.
- * `app_info{version}` (deploy SHA from `GIT_SHA`, `"dev"` fallback) is
- * always emitted so Prometheus can answer "which version is running".
+ * `app_info{version,provider,provider_mode}` (deploy SHA from `GIT_SHA`,
+ * `"dev"` fallback; provider from the explicit input or `PAYMENT_PROVIDER`;
+ * mode from the explicit input or `XENDIT_MODE`/`MIDTRANS_MODE`, `"none"`
+ * for stub) is always emitted so Prometheus can answer "which version and
+ * payment configuration is running".
  */
 export function renderExposition(input: ExpositionInput = {}): string {
   maybeCleanup(Date.now());
@@ -173,14 +227,23 @@ export function renderExposition(input: ExpositionInput = {}): string {
 
   // Deploy traceability: the running build SHA, so /metrics agrees with
   // /health `version` on which artifact is live (same source —
-  // process.env.GIT_SHA baked by the Dockerfile, "dev" when unset). Read at
-  // call time so tests can stub the env.
+  // process.env.GIT_SHA baked by the Dockerfile, "dev" when unset). Provider
+  // and mode are resolved the same way (explicit input wins, env fallback,
+  // safe defaults) so the /metrics caller needs no changes to label the
+  // active payment configuration. Read at call time so tests can stub env.
   const gitSha = process.env.GIT_SHA?.trim() || "dev";
+  const provider = resolveExpositionProvider(input.provider);
+  const providerMode = resolveExpositionProviderMode(
+    provider,
+    input.providerMode,
+  );
   lines.push(
     "# HELP app_info Application build info (version carries the deploy SHA).",
   );
   lines.push("# TYPE app_info gauge");
-  lines.push(`app_info{version="${escapeLabelValue(gitSha)}"} 1`);
+  lines.push(
+    `app_info{version="${escapeLabelValue(gitSha)}",provider="${provider}",provider_mode="${providerMode}"} 1`,
+  );
 
   lines.push(
     "# HELP http_requests_total Total HTTP requests by path, method and status.",
