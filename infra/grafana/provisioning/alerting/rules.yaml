@@ -591,3 +591,106 @@ groups:
         # KeepLast: firing alerts survive scrape gaps, only real data resolves.
         noDataState: KeepLast
         execErrState: Error
+
+      # --- Added 2026-09-11 (Midtrans UAT gate) — 2 new rules, existing 12
+      # untouched. Routing: default policy receiver Discord-ops (no new contact
+      # points), so no per-rule receiver. The stub rule is critical (prod
+      # taking no money is an outage); the gate-spike rule is warning with a
+      # 10m window so one curious user never pages anyone.
+      # Prod silently on stub: app_info{provider} comes from the backend
+      # worker's metric contract (version/provider/provider_mode, value 1).
+      - uid: prod-on-stub
+        title: ProdOnStub
+        condition: C
+        for: 5m
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: 'app_info{provider="stub"} == 1'
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: A
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: B
+              refId: C
+              type: threshold
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+        annotations:
+          summary: "API running the stub payment provider (no real checkout — verify PAYMENT_PROVIDER + redeploy)"
+        labels:
+          severity: critical
+        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
+        noDataState: KeepLast
+        execErrState: Error
+
+      # Burst of test-mode gate rejections: non-UAT purchases hitting the
+      # provider-agnostic allowlist (XENDIT_TEST_ALLOWED_EMAILS) on a
+      # test-mode domain. Usually an allowlist misconfig during UAT, not a
+      # provider outage — check the Payment Logs gate panel first.
+      - uid: test-mode-restricted-spike
+        title: TestModeRestrictedSpike
+        condition: C
+        for: 10m
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: loki
+            model:
+              expr: 'sum(count_over_time({service="cogito-api"} |= "PAYMENT_TEST_MODE_RESTRICTED" [10m])) > 10'
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: A
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: B
+              refId: C
+              type: threshold
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+        annotations:
+          summary: "Test-mode gate rejecting in a burst (>10 PAYMENT_TEST_MODE_RESTRICTED in 10m — check the UAT allowlist)"
+        labels:
+          severity: warning
+        # KeepLast: holds last state through Loki gaps; a quiet gate (empty
+        # vector) still needs the Payment Logs panel check (see comment above).
+        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
+        noDataState: KeepLast
+        execErrState: Error

@@ -1,0 +1,85 @@
+{
+  "uid": "cogito-payment-logs",
+  "title": "Payment Logs",
+  "description": "Payment operations without Explore: live provider/mode (app_info), boot line, traceId trail, test-mode gate stream. Home folder: Cogito — one folder holds boards and alert rules.",
+  "tags": ["cogito", "payments", "logs"],
+  "timezone": "Asia/Jakarta",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "traceId",
+        "label": "traceId",
+        "type": "textbox",
+        "current": { "text": "", "value": "" },
+        "query": ""
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Provider identity (app_info)",
+      "description": "Live payment provider/mode from the app_info{version,provider,provider_mode} gauge (DEPENDENCY — emitted by the API; value is always 1). Shows the NoData-safe text until the API exposes it.",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": { "noValue": "no app_info yet — backend dependency" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "app_info",
+          "legendFormat": "{{provider}}/{{provider_mode}} {{version}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Provider boot line",
+      "description": "Every API boot logs action=payment_provider_configured with the live provider and mode (e.g. provider=midtrans midtransMode=test). Missing after a deploy = the container never booted with the new env.",
+      "type": "logs",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service=\"cogito-api\"} |= \"payment_provider_configured\"",
+          "maxLines": 100
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Request trail (traceId)",
+      "type": "logs",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 20 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service=\"cogito-api\"} |= \"$traceId\"",
+          "maxLines": 200
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Test-mode gate (FORBIDDEN)",
+      "description": "Purchases rejected by the provider-agnostic test-mode UAT list (XENDIT_TEST_ALLOWED_EMAILS). A burst here during UAT = allowlist misconfig, not a provider outage.",
+      "type": "logs",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 32 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service=\"cogito-api\"} |= \"PAYMENT_TEST_MODE_RESTRICTED\"",
+          "maxLines": 100
+        }
+      ]
+    }
+  ]
+}
