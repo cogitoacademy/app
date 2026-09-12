@@ -255,6 +255,82 @@ describe("server environment schema", () => {
     expect(valid.success).toBe(true);
   });
 
+  test("production Midtrans Sandbox requires the shared UAT email allowlist", () => {
+    const prodTest = {
+      ...baseEnv(),
+      NODE_ENV: "production",
+      RESEND_API_KEY: "resend-key",
+      EMAIL_FROM: "verified@cogitoacademy.id",
+      SCHEDULER_ENABLED: true,
+      PAYMENT_PROVIDER: "midtrans",
+      MIDTRANS_SERVER_KEY: "SB-Mid-server-test",
+      MIDTRANS_CLIENT_KEY: "SB-Mid-client-test",
+      MIDTRANS_MERCHANT_ID: "G123456789",
+      MIDTRANS_MODE: "test",
+    };
+    const missing = serverEnvSchema.safeParse(prodTest);
+    expect(missing.success).toBe(false);
+    if (!missing.success) {
+      expect(
+        missing.error.issues.map((issue) => issue.path.join(".")),
+      ).toContain("XENDIT_TEST_ALLOWED_EMAILS");
+    }
+
+    const valid = serverEnvSchema.safeParse({
+      ...prodTest,
+      XENDIT_TEST_ALLOWED_EMAILS: "qa@cogitoacademy.id, owner@cogitoacademy.id",
+    });
+    expect(valid.success).toBe(true);
+  });
+
+  test("production Midtrans Sandbox rejects an invalid shared UAT allowlist", () => {
+    const prodTest = {
+      ...baseEnv(),
+      NODE_ENV: "production",
+      RESEND_API_KEY: "resend-key",
+      EMAIL_FROM: "verified@cogitoacademy.id",
+      SCHEDULER_ENABLED: true,
+      PAYMENT_PROVIDER: "midtrans",
+      MIDTRANS_SERVER_KEY: "SB-Mid-server-test",
+      MIDTRANS_CLIENT_KEY: "SB-Mid-client-test",
+      MIDTRANS_MERCHANT_ID: "G123456789",
+      MIDTRANS_MODE: "test",
+    };
+
+    const badEmail = serverEnvSchema.safeParse({
+      ...prodTest,
+      XENDIT_TEST_ALLOWED_EMAILS: "qa@cogitoacademy.id, not-an-email",
+    });
+    expect(badEmail.success).toBe(false);
+    if (!badEmail.success) {
+      expect(
+        badEmail.error.issues.map((issue) => issue.path.join(".")),
+      ).toContain("XENDIT_TEST_ALLOWED_EMAILS");
+    }
+
+    const emptyList = serverEnvSchema.safeParse({
+      ...prodTest,
+      XENDIT_TEST_ALLOWED_EMAILS: ", ,",
+    });
+    expect(emptyList.success).toBe(false);
+  });
+
+  test("production Midtrans Live does not require the shared UAT allowlist", () => {
+    const prodLive = {
+      ...baseEnv(),
+      NODE_ENV: "production",
+      RESEND_API_KEY: "resend-key",
+      EMAIL_FROM: "verified@cogitoacademy.id",
+      SCHEDULER_ENABLED: true,
+      PAYMENT_PROVIDER: "midtrans",
+      MIDTRANS_SERVER_KEY: "Mid-server-live",
+      MIDTRANS_CLIENT_KEY: "Mid-client-live",
+      MIDTRANS_MERCHANT_ID: "G123456789",
+      MIDTRANS_MODE: "live",
+    };
+    expect(serverEnvSchema.safeParse(prodLive).success).toBe(true);
+  });
+
   test("production Xendit Test Mode rejects an invalid XENDIT_TEST_ALLOWED_EMAILS list", () => {
     const prodTest = {
       ...baseEnv(),

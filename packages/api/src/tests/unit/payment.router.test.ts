@@ -148,6 +148,115 @@ describe("paymentHandler", () => {
     });
   });
 
+  describe("midtrans test-mode UAT gate", () => {
+    test("listed UAT email is allowed without advertising simulation", async () => {
+      const payment = {
+        createIntent: mock(async () => ({
+          id: "pay1",
+          status: "pending",
+        })),
+      };
+      const wallet = { getOrCreate: mock(async () => ({ id: "w1" })) };
+      const handler = createPaymentHandler(payment as any, wallet as any, {
+        providerMode: "test",
+        testAllowedEmails: ["qa@cogitoacademy.id"],
+        simulationEnabled: false,
+      });
+
+      const result = await handler.createPurchase({
+        context: {
+          session: { user: { id: "u1", email: "Qa@CogitoAcademy.ID" } },
+        } as any,
+        input: { packageCode: "basic" } as any,
+      });
+      expect(payment.createIntent).toHaveBeenCalledWith("u1", "w1", "basic");
+      expect(result).toEqual({
+        id: "pay1",
+        status: "pending",
+        canSimulate: false,
+      });
+    });
+
+    test("unlisted email is rejected with PAYMENT_TEST_MODE_RESTRICTED", async () => {
+      const payment = {
+        createIntent: mock(async () => ({
+          id: "pay1",
+          status: "pending",
+        })),
+      };
+      const wallet = { getOrCreate: mock(async () => ({ id: "w1" })) };
+      const handler = createPaymentHandler(payment as any, wallet as any, {
+        providerMode: "test",
+        testAllowedEmails: ["qa@cogitoacademy.id"],
+        simulationEnabled: false,
+      });
+
+      const promise = handler.createPurchase({
+        context: {
+          session: { user: { id: "u2", email: "random@example.com" } },
+        } as any,
+        input: { packageCode: "basic" } as any,
+      });
+      await expect(promise).rejects.toMatchObject({
+        code: "FORBIDDEN",
+        message: expect.stringContaining("approved UAT"),
+      });
+      expect(payment.createIntent).not.toHaveBeenCalled();
+    });
+
+    test("empty allowlist blocks everyone in test mode (fail closed)", async () => {
+      const payment = {
+        createIntent: mock(async () => ({
+          id: "pay1",
+          status: "pending",
+        })),
+      };
+      const wallet = { getOrCreate: mock(async () => ({ id: "w1" })) };
+      const handler = createPaymentHandler(payment as any, wallet as any, {
+        providerMode: "test",
+        testAllowedEmails: [],
+        simulationEnabled: false,
+      });
+
+      await expect(
+        handler.createPurchase({
+          context: {
+            session: { user: { id: "u1", email: "qa@cogitoacademy.id" } },
+          } as any,
+          input: { packageCode: "basic" } as any,
+        }),
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      expect(payment.createIntent).not.toHaveBeenCalled();
+    });
+
+    test("live mode allows any email (both providers unaffected)", async () => {
+      const payment = {
+        createIntent: mock(async () => ({
+          id: "pay1",
+          status: "pending",
+        })),
+      };
+      const wallet = { getOrCreate: mock(async () => ({ id: "w1" })) };
+      const handler = createPaymentHandler(payment as any, wallet as any, {
+        providerMode: "live",
+        simulationEnabled: false,
+      });
+
+      const result = await handler.createPurchase({
+        context: {
+          session: { user: { id: "u9", email: "anyone@example.com" } },
+        } as any,
+        input: { packageCode: "basic" } as any,
+      });
+      expect(payment.createIntent).toHaveBeenCalledWith("u9", "w1", "basic");
+      expect(result).toEqual({
+        id: "pay1",
+        status: "pending",
+        canSimulate: false,
+      });
+    });
+  });
+
   describe("simulatePurchase", () => {
     test("allows only the owning approved Test Mode account", async () => {
       const payment = {
