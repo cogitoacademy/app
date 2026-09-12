@@ -106,7 +106,11 @@ export default function SignInForm({
           tutorOnboardingStatus,
           redirectPath,
         });
-        toastManager.add({ title: "Sign in successful", type: "success" });
+        toastManager.add({
+          title: "Sign in successful",
+          type: "success",
+          timeout: 4000,
+        });
 
         if (sessionUser?.emailVerified !== true) {
           try {

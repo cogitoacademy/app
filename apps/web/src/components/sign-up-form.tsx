@@ -104,7 +104,11 @@ export default function SignUpForm({
           tutorOnboardingStatus,
           redirectPath,
         });
-        toastManager.add({ title: "Sign up successful", type: "success" });
+        toastManager.add({
+          title: "Sign up successful",
+          type: "success",
+          timeout: 4000,
+        });
 
         if (sessionUser && !sessionUser.emailVerified) {
           await navigate({
