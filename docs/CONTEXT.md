@@ -261,6 +261,9 @@ map `capture`→PAID / `settlement`→SETTLED / `pending`→PENDING /
 REFUNDED, and `order_id` is the payment UUID (unique per repurchase attempt).
 Midtrans Sandbox has no simulation endpoint, so `canSimulate` is false in
 Midtrans mode. Xendit remains the default and the rollback path.
+`XENDIT_TEST_ALLOWED_EMAILS` is the provider-agnostic test-mode UAT list: it
+gates test-mode purchases in Midtrans Sandbox mode exactly as in Xendit Test
+Mode, while the simulation action itself stays Xendit-Test-Mode-only.
 Approved UAT accounts also receive a Test Mode-only simulation action. The API
 validates payment ownership and mode and calls Xendit's official simulation
 endpoint. Marks are credited only after Xendit reports a successful status.
