@@ -73,6 +73,27 @@ describe("createPaymentModule provider selection (C4)", () => {
     expect(module.service).toBeDefined();
   });
 
+  test("midtrans module wires the shared UAT allowlist into the purchase gate", async () => {
+    const module = createPaymentModule({
+      ...base,
+      provider: "midtrans",
+      midtransConfig: {
+        serverKey: "SB-Mid-server-test",
+        merchantId: "G123456789",
+        mode: "test",
+        testAllowedEmails: ["qa@cogitoacademy.id"],
+      },
+    });
+    await expect(
+      module.handler.createPurchase({
+        context: {
+          session: { user: { id: "u1", email: "stranger@example.com" } },
+        } as any,
+        input: { packageCode: "starter" } as any,
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
   test("midtrans resolvePayment maps the payment UUID back to the stored provider reference", async () => {
     const record = {
       id: "550e8400-e29b-41d4-a716-446655440000",

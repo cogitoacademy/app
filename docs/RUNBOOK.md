@@ -965,15 +965,15 @@ emergency restore against the actual object list first.
 
 ### What alerts arrive
 
-| Alert                                                      | Source               | Meaning                                                           | Response                                                      |
-| ---------------------------------------------------------- | -------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------- |
-| Kuma: api /health down                                     | Kuma monitor         | API unreachable or `status != ok` (DB/Redis/scheduler degraded)   | `./ops.sh health`, `./ops.sh status`, check Coolify logs      |
-| Kuma: app down                                             | Kuma monitor         | Web app unreachable                                               | `curl -sI https://app.cogitoacademy.id`, Coolify web resource |
-| Kuma: cert expiring                                        | Kuma monitor         | TLS cert for `api.`/`app.` near expiry (monitors not yet created) | Traefik/Let's Encrypt renewal check                           |
-| Kuma: dlqDepth > 0                                         | Kuma keyword monitor | A **fresh** DLQ failure landed in the last 24h                    | `./ops.sh dlq` to see what failed                             |
-| Discord: "VPS disk at N%"                                  | disk watchdog        | Disk ≥ 85%                                                        | `./ops.sh disk`; plan cleanup                                 |
-| Discord: "CRITICAL: VPS disk still at N% after auto-prune" | disk watchdog        | Disk ≥ 92% **after** the prune ladder                             | Operator action required — see below                          |
-| Grafana: DLQFresh / DiskWarn / DiskCrit / ApiErrors        | Grafana alert rules  | Same signals as above, evaluated from Prometheus (1m)             | Same responses; Grafana is the second pair of eyes            |
+| Alert                                                                                      | Source               | Meaning                                                           | Response                                                      |
+| ------------------------------------------------------------------------------------------ | -------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------- |
+| Kuma: api /health down                                                                     | Kuma monitor         | API unreachable or `status != ok` (DB/Redis/scheduler degraded)   | `./ops.sh health`, `./ops.sh status`, check Coolify logs      |
+| Kuma: app down                                                                             | Kuma monitor         | Web app unreachable                                               | `curl -sI https://app.cogitoacademy.id`, Coolify web resource |
+| Kuma: cert expiring                                                                        | Kuma monitor         | TLS cert for `api.`/`app.` near expiry (monitors not yet created) | Traefik/Let's Encrypt renewal check                           |
+| Kuma: dlqDepth > 0                                                                         | Kuma keyword monitor | A **fresh** DLQ failure landed in the last 24h                    | `./ops.sh dlq` to see what failed                             |
+| Discord: "VPS disk at N%"                                                                  | disk watchdog        | Disk ≥ 85%                                                        | `./ops.sh disk`; plan cleanup                                 |
+| Discord: "CRITICAL: VPS disk still at N% after auto-prune"                                 | disk watchdog        | Disk ≥ 92% **after** the prune ladder                             | Operator action required — see below                          |
+| Grafana: DLQFresh / DiskWarn / DiskCrit / ApiErrors / ProdOnStub / TestModeRestrictedSpike | Grafana alert rules  | Same signals as above, evaluated from Prometheus/Loki (1m)        | Same responses; Grafana is the second pair of eyes            |
 
 ### Observability stack (LIVE 2026-09-05 — Loki + Prometheus + tailnet Grafana)
 
@@ -1011,9 +1011,9 @@ ubuntu@cogito-vps.tail674634.ts.net`, then `http://localhost:3000` (admin user `
   password in the SOPS vault as `GRAFANA_ADMIN_PASSWORD`). The direct tailnet URL
   `http://cogito-vps.tail674634.ts.net:3000` also resolves via MagicDNS with no
   tunnel; `./infra/ops.sh trace` defaults `GRAFANA_URL` to it. Provisioned:
-  datasources (Loki default + Prometheus), 4 dashboards (App RED, Logs &
-  Traces, Infra, Delivery), alert rules (DLQFresh/DiskWarn/DiskCrit/ApiErrors
-  → `Discord-ops` contact point).
+  datasources (Loki default + Prometheus), 5 dashboards (App RED, Logs &
+  Traces, Infra, Delivery, Payment Logs), alert rules (DLQFresh/DiskWarn/DiskCrit/ApiErrors
+  - ProdOnStub/TestModeRestrictedSpike → `Discord-ops` contact point).
 - **Grafana password rotation (2026-09-06 pattern):** `GRAFANA_ADMIN_PASSWORD`
   is SOPS-encrypted in `infra/secrets/prod.env` (never plaintext). Rotate by
   setting a fresh value in the vault, then applying live without needing the
@@ -1088,6 +1088,61 @@ io.containerd.snapshotter.v1`, `/var/lib/docker/image/` has no
   (upstream #3709, ≥v0.54), `./infra/apply.sh observability`, redeploy
   `cogito-alloy`, verify `with_name > 0` via `/api/v1/series`. Do NOT flip
   the daemon back to the legacy snapshotter (restarts every container).
+
+### Payment Logs dashboard + Coolify env dedupe (Midtrans UAT gate, 2026-09-11)
+
+Payment operations without Grafana Explore: open the provisioned **Payment
+Logs** board (Cogito folder, file
+`infra/grafana/provisioning/dashboards/payment-logs.json` — source of truth
+in git, `allowUiUpdates: false`). It answers, top to bottom: which
+provider/mode is live (`app_info` stat), did the boot line land, what
+happened to one request, who hit the test-mode gate.
+
+- **LogQL queries** (Loki datasource, also usable in Explore):
+  - Boot line: `{service="cogito-api"} |= "payment_provider_configured"`
+    (expect `provider=midtrans midtransMode=test` during sandbox UAT; the
+    secret never appears in logs).
+  - Request trail: `{service="cogito-api"} |= "<traceId>"` (same `traceId`
+    the board's textbox filters on; logs carry `userId`, never email).
+  - Test-mode gate stream: `{service="cogito-api"} |= "PAYMENT_TEST_MODE_RESTRICTED"`.
+  - Rejected-purchase stream: `{service="cogito-api"} |= "FORBIDDEN"`.
+- **Alerts behind the board** (same `cogito-1m` group, default policy →
+  `Discord-ops`): `ProdOnStub` (critical — `app_info{provider="stub"} == 1`
+  for 5m, prod taking no money is an outage) and
+  `TestModeRestrictedSpike` (warning — burst of gate rejections over 10m;
+  usually an allowlist misconfig during UAT, not a provider outage).
+- **CPU-transient rule:** brief ~80% CPU during deploys is normal (container
+  recreate + health polls, same class as the Kuma 503-flap absorbed by
+  `maxretries=2`); investigate only if sustained >5 min outside
+  deploy/backup windows.
+- **`XENDIT_TEST_ALLOWED_EMAILS` is the provider-agnostic test-mode UAT
+  list** (not Xendit-only): in `MIDTRANS_MODE=test` on production/staging it
+  gates `payment.createPurchase` to the approved verified student emails,
+  exactly as in Xendit Test Mode.
+
+### Coolify duplicate env row dedupe procedure
+
+Coolify permits two rows with the same key on one application, and
+`infra/ansible/tasks/env.yml` PATCHes the FIRST row matching a key — so a
+stale second row silently shadows the intended value after a restart, while
+normal applies stay green. The playbook now fails loud
+(`Fail loud on duplicate Coolify env rows`), naming the duplicated keys.
+Resolve manually — the playbook never deletes rows automatically (this
+Coolify build's DELETE endpoint semantics are unverified):
+
+1. Note the duplicated keys from the assert failure message.
+2. Coolify UI (tailnet) → the application (`cogito-api`) → Environment
+   Variables. Find every row with each duplicated key.
+3. Compare the values against the SOPS vault (`sops infra/secrets/prod.env`
+   — read-only compare, never paste secrets into chat/tickets). Keep the row
+   whose value matches the vault; delete the extra row(s) in the UI so
+   exactly one row per key remains.
+4. Re-run the playbook (tunnel up); the uniqueness assert must print
+   `Every declared env key occurs exactly once in the Coolify env list.`
+5. Redeploy/restart is NOT needed for the dedupe itself (no value changed),
+   but if the shadowed value was live, restart `cogito-api` via the normal
+   env-switch path and verify the boot line shows the intended
+   provider/mode.
 
 ### Drizzle Studio ownership (LIVE 2026-09-05 — `cogito-studio`)
 
@@ -1206,9 +1261,10 @@ the printed steps; nothing here was applied from a worker.
   the vault `METRICS_TOKEN` via a token file, 15s interval; node_exporter +
   cAdvisor), `infra/loki/loki-config.yml` (30d retention), `infra/alloy/config.alloy`
   (`loki.source.docker_logs` over the Docker socket — never file globs under
-  `/var/lib/docker`), Grafana datasources + 4 dashboards (App RED, Logs &
+  `/var/lib/docker`), Grafana datasources + 5 dashboards (App RED, Logs &
   Traces with traceId/userId search, Infra with the 85%/92% disk lines,
-  Delivery with deploys/backups/DLQ/breakers).
+  Delivery with deploys/backups/DLQ/breakers, Payment Logs with the
+  provider boot line + test-mode gate stream).
 - **Retention vars** (single tuning point in the playbook):
   `LOKI_RETENTION_DAYS=30`, `PROM_RETENTION_DAYS=15`. **Lean fallback** for a
   tight VPS (documented, not applied): scrape_interval `30s` in
@@ -1604,7 +1660,7 @@ Key environment variables (see `.env.example` for full list):
 | `XENDIT_SECRET_KEY`                                                                           | No       | Xendit API secret key (required when `PAYMENT_PROVIDER=xendit`); use a Test Mode key with Money-in / Payments **Write** permission while `XENDIT_MODE=test`                                                                                                                      |
 | `XENDIT_WEBHOOK_TOKEN`                                                                        | No       | Xendit webhook verification token                                                                                                                                                                                                                                                |
 | `XENDIT_MODE`                                                                                 | No       | Required when `PAYMENT_PROVIDER=xendit`: `test` for Xendit Test Mode or `live` for Live Mode. The matching Xendit API key selects the actual environment                                                                                                                         |
-| `XENDIT_TEST_ALLOWED_EMAILS`                                                                  | No       | Comma-separated verified student emails allowed to create purchases when `XENDIT_MODE=test` in production/staging; required there to prevent unrestricted sandbox-funded Marks                                                                                                   |
+| `XENDIT_TEST_ALLOWED_EMAILS`                                                                  | No       | Provider-agnostic test-mode UAT list: comma-separated verified student emails allowed to create purchases in test mode on production/staging (`XENDIT_MODE=test` or `MIDTRANS_MODE=test`); required there to prevent unrestricted sandbox-funded Marks                           |
 | `XENDIT_SUCCESS_REDIRECT_URL` / `XENDIT_FAILURE_REDIRECT_URL`                                 | No       | Required when `PAYMENT_PROVIDER=xendit` (P3.7)                                                                                                                                                                                                                                   |
 | `WEBHOOK_ALLOWED_IPS`                                                                         | No       | Webhook source IP allowlist (comma-separated). **Required in production/staging when `PAYMENT_PROVIDER=xendit`** (D2) — the env schema rejects boot with an empty allowlist so the endpoint is never open to every IP                                                            |
 | `SCHEDULER_ENABLED`                                                                           | No       | Starts the BullMQ worker + repeatable jobs (default false). **Required `true` in production/staging (D3)** — the env schema rejects boot with it false, since a prod server without the scheduler silently skips booking expiry, hold release, email dispatch and SLA escalation |

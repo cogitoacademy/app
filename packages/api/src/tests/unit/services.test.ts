@@ -117,6 +117,23 @@ describe("Services conditional logic", () => {
     ).toBeUndefined();
   });
 
+  test("normalizes the shared UAT allowlist for Midtrans", () => {
+    expect(
+      resolveMidtransConfig({
+        provider: "midtrans",
+        serverKey: "SB-Mid-server-test",
+        merchantId: "G123456789",
+        mode: "test",
+        testAllowedEmails: "QA@cogitoacademy.id, owner@cogitoacademy.id ",
+      }),
+    ).toEqual({
+      serverKey: "SB-Mid-server-test",
+      merchantId: "G123456789",
+      mode: "test",
+      testAllowedEmails: ["qa@cogitoacademy.id", "owner@cogitoacademy.id"],
+    });
+  });
+
   test("creates a provider refund delegate", async () => {
     const refund = async (
       paymentRequestId: string,

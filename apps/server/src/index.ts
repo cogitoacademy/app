@@ -108,6 +108,17 @@ if (env.PAYMENT_PROVIDER === "midtrans") {
     midtransMode: env.MIDTRANS_MODE,
   });
 }
+// The stub provider accepts no real money — warn (not info) so a rollout
+// that forgot to set PAYMENT_PROVIDER is visible in boot logs instead of
+// silently serving fake checkouts. Same non-secret shape as above; the stub
+// has no mode concept, so no mode field.
+if (env.PAYMENT_PROVIDER === "stub") {
+  log({
+    level: "warn",
+    action: "payment_provider_configured",
+    provider: "stub",
+  });
+}
 
 setAuthEmailSender(async ({ user, url }) => {
   if (!isProductionLike(env.NODE_ENV)) {

@@ -206,6 +206,11 @@ export interface MidtransConfigInput {
   merchantId?: string;
   mode?: MidtransMode;
   webhookSignatureKey?: string;
+  // Shared (provider-agnostic) test-mode UAT list, sourced from
+  // env.XENDIT_TEST_ALLOWED_EMAILS (no new env keys — see the field comment
+  // in packages/env/src/server.ts). CSV, normalized to trim + lowercase like
+  // resolveXenditConfig.
+  testAllowedEmails?: string;
 }
 
 export function resolveMidtransConfig(input: MidtransConfigInput) {
@@ -218,11 +223,22 @@ export function resolveMidtransConfig(input: MidtransConfigInput) {
     return undefined;
   }
 
-  return {
+  // Preserve the historical 4-key shape when no allowlist is configured so
+  // existing callers/tests pinning the exact object keep passing; the
+  // payment module treats a missing list as fail-closed in test mode.
+  const base = {
     serverKey: input.serverKey,
     merchantId: input.merchantId,
     mode: input.mode,
     webhookSignatureKey: input.webhookSignatureKey,
+  };
+  if (input.testAllowedEmails === undefined) return base;
+  return {
+    ...base,
+    testAllowedEmails: (input.testAllowedEmails ?? "")
+      .split(",")
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean),
   };
 }
 
@@ -381,6 +397,9 @@ function createServices() {
       merchantId: env.MIDTRANS_MERCHANT_ID,
       mode: env.MIDTRANS_MODE,
       webhookSignatureKey: env.MIDTRANS_WEBHOOK_SIGNATURE_KEY,
+      // The shared test-mode UAT list (XENDIT_TEST_ALLOWED_EMAILS) gates
+      // Midtrans Sandbox purchases too — see resolveMidtransConfig.
+      testAllowedEmails: env.XENDIT_TEST_ALLOWED_EMAILS,
     }),
     webhookSecret: env.PAYMENT_WEBHOOK_SECRET,
     notification: notification.service,

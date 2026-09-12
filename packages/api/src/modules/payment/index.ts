@@ -78,6 +78,10 @@ export function createPaymentModule(deps: {
     merchantId: string;
     mode: MidtransMode;
     webhookSignatureKey?: string;
+    // Shared (provider-agnostic) test-mode UAT list, resolved from
+    // env.XENDIT_TEST_ALLOWED_EMAILS by resolveMidtransConfig (trim +
+    // lowercase). Gates Midtrans Sandbox purchases like the Xendit path.
+    testAllowedEmails?: readonly string[];
   };
   webhookSecret: string;
   notification?: PaymentNotificationPort;
@@ -143,6 +147,16 @@ export function createPaymentModule(deps: {
     });
     providerName = "midtrans";
     providerMode = deps.midtransConfig!.mode;
+    // Midtrans Sandbox enforces the shared test-mode UAT allowlist (same
+    // trim + lowercase normalization as the resolve step) so approved UAT
+    // accounts can purchase while everyone else gets
+    // PAYMENT_TEST_MODE_RESTRICTED. A missing list stays undefined and the
+    // handler fails closed in test mode.
+    testAllowedEmails = deps
+      .midtransConfig!.testAllowedEmails?.map((email) =>
+        email.trim().toLowerCase(),
+      )
+      .filter(Boolean);
     // Midtrans sandbox has no simulation endpoint; test payments use the
     // sandbox test cards on the Snap page. simulationEnabled stays false.
   } else {

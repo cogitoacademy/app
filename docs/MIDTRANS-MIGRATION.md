@@ -98,6 +98,13 @@ entries so rollback is a flip, not a re-encrypt):
 | `MIDTRANS_CLIENT_KEY`            | `SB-Mid-client-…` | yes                 |
 | `MIDTRANS_MERCHANT_ID`           | `G…`              | yes                 |
 | `MIDTRANS_WEBHOOK_SIGNATURE_KEY` | (optional)        | no                  |
+| `XENDIT_TEST_ALLOWED_EMAILS`     | `uat-a@…,uat-b@…` | yes (in test mode)  |
+
+`XENDIT_TEST_ALLOWED_EMAILS` is the **provider-agnostic** test-mode UAT
+list (not Xendit-only): in `MIDTRANS_MODE=test` on a production/staging
+domain it gates `payment.createPurchase` to the approved verified student
+emails, exactly as it does in Xendit Test Mode. There is no separate
+Midtrans allowlist variable.
 
 The env schema fails boot when `PAYMENT_PROVIDER=midtrans` is missing any of
 the required `MIDTRANS_*` values — a half-swapped config cannot silently run

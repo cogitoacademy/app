@@ -906,6 +906,7 @@ The create/edit/correction form is presented as a bottom drawer on mobile and a 
 - `checkoutUrl` carries the Snap `redirect_url` (hosted payment page) — the Balance page detects the `https://` URL via `isRedirectCheckoutUrl` and opens it in a new tab instead of rendering a QR code (Xendit QRIS payloads remain inline QR).
 - `canSimulate` is **always false** in Midtrans mode: the Midtrans Sandbox has no simulation endpoint. Sandbox test payments use the Snap test cards (`4811 1111 1111 1114`, CVV `123`, OTP `112233`). `payment.simulatePurchase` returns `PAYMENT_SIMULATION_UNAVAILABLE` (403) in Midtrans mode.
 - `order_id` is the payment UUID (unique per repurchase attempt); webhooks and status lookups resolve it back to the stored provider reference.
+- `XENDIT_TEST_ALLOWED_EMAILS` is the provider-agnostic test-mode UAT list: in `MIDTRANS_MODE=test` on production/staging it gates `payment.createPurchase` to the approved verified student emails, exactly as in Xendit Test Mode (rejections surface as `PAYMENT_TEST_MODE_RESTRICTED`).
 
 ### `payment.simulatePurchase`
 
