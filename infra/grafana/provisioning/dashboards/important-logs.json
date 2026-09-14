@@ -1,0 +1,142 @@
+{
+  "uid": "cogito-important-logs",
+  "title": "Important Logs",
+  "description": "Replaces Payment Logs (deleted): routine triage without Explore — traceId/userId trails plus errors, bookings, webhooks, scheduler/DLQ and meetings streams. Home folder: Cogito — one folder holds boards and alert rules.",
+  "tags": ["cogito", "logs", "triage"],
+  "timezone": "Asia/Jakarta",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "traceId",
+        "label": "traceId",
+        "type": "textbox",
+        "current": { "text": "", "value": "" },
+        "query": ""
+      },
+      {
+        "name": "userId",
+        "label": "userId",
+        "type": "textbox",
+        "current": { "text": "", "value": "" },
+        "query": ""
+      },
+      {
+        "name": "action",
+        "label": "action",
+        "type": "textbox",
+        "current": { "text": "", "value": "" },
+        "query": ""
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request trail (traceId)",
+      "description": "Healthy is a full request chain for the pasted traceId, and on gaps or error lines copy that traceId into the Errors panel to find the failing RPC.",
+      "type": "logs",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service=\"cogito-api\"} |= \"$traceId\"",
+          "maxLines": 200
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "User trail (userId)",
+      "description": "Healthy is only expected booking and request lines for the pasted userId, and on error bursts filter further by traceId to isolate the failing request.",
+      "type": "logs",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 12 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service=\"cogito-api\"} |= \"$userId\"",
+          "maxLines": 200
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Errors (rpc_error / request_error)",
+      "description": "Healthy is zero lines, and on any hit open the traceId from the log line in the Request trail panel to find the failing path.",
+      "type": "logs",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service=\"cogito-api\"} |~ \"rpc_error|request_error\"",
+          "maxLines": 100
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Bookings (created + failures)",
+      "description": "Healthy is a steady booking_created stream with no failure lines, and on any expire_booking_failed or release_hold_failed or meeting_finalize_failed hit open its traceId to decide retry versus manual fix.",
+      "type": "logs",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 32 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service=\"cogito-api\"} |~ \"booking_created|expire_booking_failed|release_hold_failed|meeting_finalize_failed\"",
+          "maxLines": 100
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Webhooks",
+      "description": "Healthy is webhook_received lines with no failure actions, and on any signature or timestamp or missing_reference or dead_letter or processing_error hit verify the provider secret and replay the event from the dead-letter payload.",
+      "type": "logs",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 40 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service=\"cogito-api\"} |~ \"webhook_received|webhook_signature_failed|webhook_timestamp_rejected|webhook_missing_reference|webhook_dead_letter|webhook_processing_error\"",
+          "maxLines": 100
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Scheduler and DLQ",
+      "description": "Healthy is zero scheduler_job_failed and scheduler_dlq_job lines, and on any hit check the Delivery DLQ fresh depth then rerun or drain the named job.",
+      "type": "logs",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 48 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service=\"cogito-api\"} |~ \"scheduler_job_failed|scheduler_dlq_job\"",
+          "maxLines": 100
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Meetings (Meet failures + fallback)",
+      "description": "Healthy is zero google_meet_create_failed and meeting_failed_attempt and meeting_manual_fallback lines, and on any hit verify Google credentials and quota then confirm the manual fallback link reached the tutor and student.",
+      "type": "logs",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 56 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service=\"cogito-api\"} |~ \"google_meet_create_failed|meeting_failed_attempt|meeting_manual_fallback\"",
+          "maxLines": 100
+        }
+      ]
+    }
+  ]
+}
