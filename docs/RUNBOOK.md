@@ -1011,8 +1011,8 @@ ubuntu@cogito-vps.tail674634.ts.net`, then `http://localhost:3000` (admin user `
   password in the SOPS vault as `GRAFANA_ADMIN_PASSWORD`). The direct tailnet URL
   `http://cogito-vps.tail674634.ts.net:3000` also resolves via MagicDNS with no
   tunnel; `./infra/ops.sh trace` defaults `GRAFANA_URL` to it. Provisioned:
-  datasources (Loki default + Prometheus), 5 dashboards (App RED, Logs &
-  Traces, Infra, Delivery, Payment Logs), alert rules (DLQFresh/DiskWarn/DiskCrit/ApiErrors
+  datasources (Loki default + Prometheus), 6 dashboards (App RED, Logs &
+  Traces, Infra, Delivery, Saturation, Important Logs), 14 alert rules (DLQFresh/DiskWarn/DiskCrit/ApiErrors/TargetDown/CpuHigh/CpuCrit/MemHigh/MemCrit/DiskForecast/ContainerRestartBurst/BackupStale
   - ProdOnStub/TestModeRestrictedSpike → `Discord-ops` contact point).
 - **Grafana password rotation (2026-09-06 pattern):** `GRAFANA_ADMIN_PASSWORD`
   is SOPS-encrypted in `infra/secrets/prod.env` (never plaintext). Rotate by
@@ -1037,7 +1037,8 @@ sum(rate(http_requests_total[5m]))`, and `breaker_state or on() vector(0)`
   (capacity panels tolerate the freshness). Watch
   `scrape_duration_seconds{job="cadvisor"}` — if it rides the timeout,
   trim at the source with `--disable_metrics=disk,diskIO` (disk panels
-  already use node-exporter). The `TargetDown` alert (`up == 0`, warning)
+  already use node-exporter). The `TargetDown` alert (`count(up{job!="cogito-api-internal"} == 0) or vector(0)`, warning,
+  `cogito-api-internal` excluded — DOWN by design until the API joins `cogito-obs`)
   covers silently-failing scrapes.
 - **Memory-pressure incident (2026-09-07):** load 2.75 on 2 cores with
   `wa` up to 84% + ~690MB swap in/out = swap-thrash, not app burn (API sat at
@@ -1049,12 +1050,26 @@ sum(rate(http_requests_total[5m]))`, and `breaker_state or on() vector(0)`
   as `{service="cogito-backup",job="backup"}` (single-file read-only mount;
   within the A3 constraint). Watch post-apply: cAdvisor RSS <200m, swap
   trending down, `alloy` target UP.
-- **KeepLast alert semantics (2026-09-07):** all 12 rules use
-  `noDataState: KeepLast` — a firing alert now _survives_ scrape gaps and
+- **Normal (not KeepLast) alert semantics (2026-09-14, supersedes the 2026-09-07
+  KeepLast entry below):** all 14 rules use `noDataState: Normal` with
+  zero-safe queries — every query A returns a numeric vector when its
+  datasource is healthy (thresholds live in the C step, e.g. raw CPU % with
+  C `gt 80`), so healthy resolves via real data and only true gaps hit the
+  Normal fallback. Root cause fixed: the old in-query comparisons
+  (e.g. `... > 80`) returned an EMPTY vector when healthy, so healthy was
+  also NoData and KeepLast latched firing forever (CpuHigh kept firing at
+  28–45% CPU). Three never-fire bugs fixed along the way: TargetDown
+  (`up == 0` with C `> 0` could never fire — now a counted
+  `job!="cogito-api-internal"` expression), DiskForecast (negative `< 0`
+  value with C `> 0` — now `< bool 0` 0/1 mapping), BackupStale (empty
+  `< 1` with C `> 0` — now `sum(...) or vector(0)` with C `lt 1`).
+  Vanished-series/dead-scraper coverage comes from TargetDown + Kuma, not
+  from holding last state.
+- **KeepLast alert semantics (2026-09-07, SUPERSEDED 2026-09-14):** all 12 rules used
+  `noDataState: KeepLast` — a firing alert _survived_ scrape gaps and
   Prometheus restarts (the CpuCrit NoData-resolution incident must never
-  recur); only real data resolves. Side effect: an alert firing when its
-  datasource dies stays firing — check `/targets` first when an alert won't
-  clear.
+  recur); only real data resolves. Side effect (the 2026-09-14 latch):
+  an alert firing when healthy stayed firing — see the Normal entry above.
 - **rsyslog ufw.log suspend loop (2026-08-30..09-08, fixed):** rotated-away `ufw.log` was never recreated, so privilege-dropped rsyslog failed every UFW BLOCK write forever (49k+ suspend lines, 30MB syslog bloat). Fixed live (`syslog:adm 640`) + durable via host-hardening (`create 640 syslog adm` + ensure-file task; manual `harden` phase, excluded from auto-apply).
 - **Tailscale HTTPS (optional):** enabling HTTPS in the Tailscale admin console
   (DNS → Enable HTTPS) gives the same `cogito-vps.tail674634.ts.net` name a
@@ -1089,16 +1104,23 @@ io.containerd.snapshotter.v1`, `/var/lib/docker/image/` has no
   `cogito-alloy`, verify `with_name > 0` via `/api/v1/series`. Do NOT flip
   the daemon back to the legacy snapshotter (restarts every container).
 
-### Payment Logs dashboard + Coolify env dedupe (Midtrans UAT gate, 2026-09-11)
+### Important Logs dashboard (replaces Payment Logs, 2026-09-14)
 
-Payment operations without Grafana Explore: open the provisioned **Payment
+Routine triage without Grafana Explore: open the provisioned **Important
 Logs** board (Cogito folder, file
-`infra/grafana/provisioning/dashboards/payment-logs.json` — source of truth
-in git, `allowUiUpdates: false`). It answers, top to bottom: which
-provider/mode is live (`app_info` stat), did the boot line land, what
-happened to one request, who hit the test-mode gate.
+`infra/grafana/provisioning/dashboards/important-logs.json` — source of truth
+in git, `allowUiUpdates: false`). Seven Loki panels, top to bottom: request
+trail (`traceId` textbox), user trail (`userId` textbox), errors
+(`rpc_error`/`request_error`), bookings (created + failures), webhooks,
+scheduler/DLQ, meetings (Meet failures + manual fallback). Each panel states
+what healthy looks like. The old **Payment Logs** board
+(`payment-logs.json`, provider identity/boot line/test-mode gate) is deleted
+from git — manually DELETE it once in Grafana (`DELETE
+/api/dashboards/uid/cogito-payment-logs`; `disableDeletion: true` means the
+provisioned copy otherwise lingers as stale).
 
-- **LogQL queries** (Loki datasource, also usable in Explore):
+- **Payment LogQL queries** (Loki datasource, usable in Explore or ad-hoc —
+  the payment panels are gone but the log lines remain):
   - Boot line: `{service="cogito-api"} |= "payment_provider_configured"`
     (expect `provider=midtrans midtransMode=test` during sandbox UAT; the
     secret never appears in logs).
@@ -1261,10 +1283,10 @@ the printed steps; nothing here was applied from a worker.
   the vault `METRICS_TOKEN` via a token file, 15s interval; node_exporter +
   cAdvisor), `infra/loki/loki-config.yml` (30d retention), `infra/alloy/config.alloy`
   (`loki.source.docker_logs` over the Docker socket — never file globs under
-  `/var/lib/docker`), Grafana datasources + 5 dashboards (App RED, Logs &
+  `/var/lib/docker`), Grafana datasources + 6 dashboards (App RED, Logs &
   Traces with traceId/userId search, Infra with the 85%/92% disk lines,
-  Delivery with deploys/backups/DLQ/breakers, Payment Logs with the
-  provider boot line + test-mode gate stream).
+  Delivery with deploys/backups/DLQ/breakers, Saturation with burn-rate math,
+  Important Logs with traceId/userId trails + errors/bookings/webhooks/scheduler/meetings).
 - **Retention vars** (single tuning point in the playbook):
   `LOKI_RETENTION_DAYS=30`, `PROM_RETENTION_DAYS=15`. **Lean fallback** for a
   tight VPS (documented, not applied): scrape_interval `30s` in

@@ -3,7 +3,7 @@
 # Declared by infra/ansible/observability.yml (mounted read-only into
 # `cogito-grafana` at /etc/grafana/provisioning/dashboards/). The JSON
 # files beside this one are the provisioned dashboards: App RED, Logs &
-# Traces, Infra, Delivery, Payment Logs. UI edits are disabled (allowUiUpdates: false) so
+# Traces, Infra, Delivery, Important Logs. UI edits are disabled (allowUiUpdates: false) so
 # the files stay the source of truth; iterate in git, not in the UI.
 apiVersion: 1
 
