@@ -1029,7 +1029,7 @@ async function findCompletedBookingsByTutor(
 
 async function findLatestPaidTutorPayout(conn: DbOrTx, tutorId: string) {
   const [row] = await conn
-    .select()
+    .select({ ...getTableColumns(tutorPayout) })
     .from(tutorPayout)
     .where(eq(tutorPayout.tutorId, tutorId))
     .orderBy(desc(tutorPayout.cutoffAt))

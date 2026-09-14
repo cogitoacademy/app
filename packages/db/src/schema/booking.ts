@@ -74,7 +74,12 @@ export const booking = pgTable(
       withTimezone: true,
     }).notNull(),
     completedAt: timestamp("completed_at", { withTimezone: true }),
-    timezone: text("timezone").notNull().default("Asia/Jakarta"), // TODO(production-readiness): use timezone in deadline calculations instead of server time
+    // Booking display timezone (IANA name, default Asia/Jakarta/WIB). Deadlines
+    // (deadlineAt) are absolute timestamptz instants computed from the server
+    // clock (Date.now() + response window); comparisons are timezone-agnostic
+    // so no per-booking conversion is needed. This field is presentation-only
+    // for WIB countdown/display.
+    timezone: text("timezone").notNull().default("Asia/Jakarta"),
     roomId: text("room_id"),
     priceSnapshot: jsonb("price_snapshot").$type<{
       perStudent: number;
@@ -142,10 +147,9 @@ export const booking = pgTable(
       table.proposerId,
       table.currentState,
     ),
-    index("booking_state_deadline_idx").on(
-      table.currentState,
-      table.deadlineAt,
-    ),
+    // Expiry sweep index (kept name: referenced by the DEFERRED-OPS EXPLAIN
+    // inventory). The duplicate booking_state_deadline_idx on the same
+    // (current_state, deadline_at) columns was dropped in 0044.
     index("idx_booking_status_deadline").on(
       table.currentState,
       table.deadlineAt,

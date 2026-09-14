@@ -1,4 +1,4 @@
-import { eq, and, lt, asc, desc } from "drizzle-orm";
+import { eq, and, lt, asc, desc, getTableColumns } from "drizzle-orm";
 import {
   supportTicket,
   booking,
@@ -55,7 +55,7 @@ async function listByReporter(
     conditions.push(eq(supportTicket.status, input.status));
   }
   return conn
-    .select()
+    .select({ ...getTableColumns(supportTicket) })
     .from(supportTicket)
     .where(and(...conditions))
     .orderBy(desc(supportTicket.createdAt))
@@ -71,7 +71,7 @@ async function adminList(
     conditions.push(eq(supportTicket.status, input.status));
   }
   return conn
-    .select()
+    .select({ ...getTableColumns(supportTicket) })
     .from(supportTicket)
     .where(and(...conditions))
     .orderBy(asc(supportTicket.slaDeadline), asc(supportTicket.createdAt))
@@ -84,7 +84,7 @@ async function findById(
   id: string,
 ): Promise<SupportTicketRow | null> {
   const [ticket] = await conn
-    .select()
+    .select({ ...getTableColumns(supportTicket) })
     .from(supportTicket)
     .where(eq(supportTicket.id, id))
     .limit(1);
@@ -114,7 +114,7 @@ async function findBookingForReporter(
   userId: string,
 ): Promise<typeof booking.$inferSelect | null> {
   const [b] = await conn
-    .select()
+    .select({ ...getTableColumns(booking) })
     .from(booking)
     .where(eq(booking.id, bookingId))
     .limit(1);
@@ -142,7 +142,7 @@ async function findBookingForReporter(
  */
 async function listPastSla(conn: DbOrTx): Promise<SupportTicketRow[]> {
   return conn
-    .select()
+    .select({ ...getTableColumns(supportTicket) })
     .from(supportTicket)
     .where(
       and(
