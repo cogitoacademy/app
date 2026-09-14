@@ -1293,8 +1293,8 @@ the printed steps; nothing here was applied from a worker.
   (`loki.source.docker_logs` over the Docker socket — never file globs under
   `/var/lib/docker`), Grafana datasources + 6 dashboards (App RED, Logs &
   Traces with traceId/userId search, Infra with the 85%/92% disk lines,
-   Delivery with deploys/backups/DLQ/breakers, Saturation with burn-rate math,
-   Important Logs with traceId/userId trails + errors/bookings/webhooks/scheduler/meetings/payments).
+  Delivery with deploys/backups/DLQ/breakers, Saturation with burn-rate math,
+  Important Logs with traceId/userId trails + errors/bookings/webhooks/scheduler/meetings/payments).
 - **Retention vars** (single tuning point in the playbook):
   `LOKI_RETENTION_DAYS=30`, `PROM_RETENTION_DAYS=15`. **Lean fallback** for a
   tight VPS (documented, not applied): scrape_interval `30s` in
