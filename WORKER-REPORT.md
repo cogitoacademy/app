@@ -80,7 +80,8 @@ Scope respected: only `packages/api/src/lib/metrics.ts`, per-module `*.repo.ts` 
 - `6148c5de` `fix(db): drop duplicate booking state-deadline index, document WIB timezone semantics`
 - `031119ef` `refactor(metrics): inject provider/mode/version from route caller, stop reading env in exposition`
 - `0de2f717` `refactor(api): explicit column lists for repo leaf queries`
-- (this report) `docs: add worker report for backend hygiene wave`
+- `cf020a06` `docs: add worker report for backend hygiene wave`
+- `1c1c1d90` `chore(db): format 0044 snapshot` (lefthook oxfmt normalization of the generated snapshot)
 
 ## Verification evidence
 - `bun run lint`: 0 errors; the only `metrics.ts` warnings (`no-array-sort`, `no-underscore-dangle`)
