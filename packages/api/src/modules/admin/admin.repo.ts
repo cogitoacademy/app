@@ -4,6 +4,7 @@ import {
   count,
   desc,
   eq,
+  getTableColumns,
   gte,
   ilike,
   lte,
@@ -44,7 +45,7 @@ export async function listUsers(
   offset: number,
 ): Promise<UserRow[]> {
   return conn
-    .select()
+    .select({ ...getTableColumns(user) })
     .from(user)
     .orderBy(desc(user.createdAt))
     .limit(limit)
@@ -238,7 +239,7 @@ export async function getById(
   userId: string,
 ): Promise<UserRow | null> {
   const [row] = await conn
-    .select()
+    .select({ ...getTableColumns(user) })
     .from(user)
     .where(eq(user.id, userId))
     .limit(1);

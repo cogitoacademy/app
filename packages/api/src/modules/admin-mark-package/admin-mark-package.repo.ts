@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, getTableColumns } from "drizzle-orm";
 import { markPackage } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
 
@@ -20,7 +20,7 @@ export interface UpdateMarkPackageValues {
 
 export async function listAll(conn: DbOrTx): Promise<MarkPackageRow[]> {
   return conn
-    .select()
+    .select({ ...getTableColumns(markPackage) })
     .from(markPackage)
     .orderBy(asc(markPackage.marks), asc(markPackage.code));
 }
@@ -30,7 +30,7 @@ export async function getById(
   id: string,
 ): Promise<MarkPackageRow | null> {
   const [row] = await conn
-    .select()
+    .select({ ...getTableColumns(markPackage) })
     .from(markPackage)
     .where(eq(markPackage.id, id))
     .limit(1);

@@ -79,7 +79,7 @@ async function listByUserId(
   }
 
   const query = conn
-    .select()
+    .select({ ...getTableColumns(achievement) })
     .from(achievement)
     .where(and(...conditions))
     .orderBy(desc(achievement.createdAt));
@@ -172,7 +172,7 @@ async function insert(conn: DbOrTx, params: InsertAchievementParams) {
  */
 async function findByIdForUser(conn: DbOrTx, id: string, userId: string) {
   const [existing] = await conn
-    .select()
+    .select({ ...getTableColumns(achievement) })
     .from(achievement)
     .where(and(eq(achievement.id, id), eq(achievement.userId, userId)))
     .limit(1);
@@ -322,7 +322,7 @@ async function adminList(conn: DbOrTx, input: AdminListInput) {
  */
 async function getById(conn: DbOrTx, id: string) {
   const [existing] = await conn
-    .select()
+    .select({ ...getTableColumns(achievement) })
     .from(achievement)
     .where(eq(achievement.id, id))
     .limit(1);

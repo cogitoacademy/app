@@ -77,7 +77,7 @@ export interface ListOverridesQueryOptions {
  */
 export async function findBookingById(conn: DbOrTx, bookingId: string) {
   const [row] = await conn
-    .select()
+    .select({ ...getTableColumns(booking) })
     .from(booking)
     .where(eq(booking.id, bookingId))
     .limit(1);
@@ -138,7 +138,7 @@ export async function listBookingsByState(
   // through the authoritative SLA calculator before filtering.
 
   return conn
-    .select()
+    .select({ ...getTableColumns(booking) })
     .from(booking)
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(URGENCY_RANK_EXPR, asc(booking.scheduledStartAt), asc(booking.id))
@@ -154,7 +154,7 @@ export async function listBookingsByState(
  */
 export async function getStateHistory(conn: DbOrTx, bookingId: string) {
   return conn
-    .select()
+    .select({ ...getTableColumns(bookingStateHistory) })
     .from(bookingStateHistory)
     .where(eq(bookingStateHistory.bookingId, bookingId))
     .orderBy(asc(bookingStateHistory.createdAt));
@@ -249,7 +249,7 @@ export async function findParticipantsByBookingId(
   bookingId: string,
 ) {
   return conn
-    .select()
+    .select({ ...getTableColumns(bookingParticipant) })
     .from(bookingParticipant)
     .where(eq(bookingParticipant.bookingId, bookingId));
 }
@@ -279,7 +279,7 @@ export async function cancelSession(conn: DbOrTx, sessionId: string) {
  */
 export async function findPaymentById(conn: DbOrTx, paymentId: string) {
   const [row] = await conn
-    .select()
+    .select({ ...getTableColumns(paymentRecord) })
     .from(paymentRecord)
     .where(eq(paymentRecord.id, paymentId))
     .limit(1);
@@ -300,7 +300,7 @@ export async function listCreditStatePaymentsForUser(
   userId: string,
 ) {
   return conn
-    .select()
+    .select({ ...getTableColumns(paymentRecord) })
     .from(paymentRecord)
     .where(
       and(

@@ -1,4 +1,13 @@
-import { eq, desc, sql, and, gte, lte, inArray } from "drizzle-orm";
+import {
+  eq,
+  desc,
+  sql,
+  and,
+  gte,
+  lte,
+  inArray,
+  getTableColumns,
+} from "drizzle-orm";
 import { wallet, ledgerEntry, markPackage } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
@@ -295,7 +304,7 @@ export async function findLedgerEntries(
     conditions.push(lte(ledgerEntry.createdAt, new Date(opts.dateTo)));
   }
   return conn
-    .select()
+    .select({ ...getTableColumns(ledgerEntry) })
     .from(ledgerEntry)
     .where(and(...conditions))
     .orderBy(desc(ledgerEntry.createdAt), desc(ledgerEntry.id))
@@ -309,7 +318,10 @@ export async function findLedgerEntries(
  * @returns the active package rows
  */
 export async function listActivePackages(conn: DbOrTx) {
-  return conn.select().from(markPackage).where(eq(markPackage.isActive, true));
+  return conn
+    .select({ ...getTableColumns(markPackage) })
+    .from(markPackage)
+    .where(eq(markPackage.isActive, true));
 }
 
 /**

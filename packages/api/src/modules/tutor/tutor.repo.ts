@@ -1,4 +1,14 @@
-import { eq, and, gte, sql, asc, desc, inArray, isNotNull } from "drizzle-orm";
+import {
+  eq,
+  and,
+  gte,
+  sql,
+  asc,
+  desc,
+  inArray,
+  isNotNull,
+  getTableColumns,
+} from "drizzle-orm";
 import {
   user,
   tutorProfile,
@@ -244,7 +254,7 @@ export async function listAvailability(
     conditions.push(gte(availabilitySlot.startDate, opts.from));
   }
   return conn
-    .select()
+    .select({ ...getTableColumns(availabilitySlot) })
     .from(availabilitySlot)
     .where(and(...conditions));
 }
