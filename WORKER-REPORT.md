@@ -47,8 +47,7 @@ Prometheus app_info stat + existing Discord-ops alerts).
 
 ## Commits
 
-- (to be filled at commit time; Conventional Commits, pushed to
-  `origin/w/docs-ops-important-logs`)
+- `4965fbc8` docs(obs): restore payment panels on Important Logs board + rewrite UAT-GATE plan (pushed to `origin/w/docs-ops-important-logs`)
 
 ## Verification evidence
 
