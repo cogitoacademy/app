@@ -24,11 +24,11 @@ Two compounding defects in `infra/grafana/provisioning/alerting/rules.yaml`:
 
 Latent never-fire bugs found while fixing (same file):
 
-| Rule | Bug | Fix |
-|---|---|---|
-| TargetDown | `up == 0` yields value 0, `0 > 0` false — could never fire; also no job filter so the by-design-DOWN internal job fired it permanently | `count(up{job!="cogito-api-internal"} == 0) or vector(0)`, C `gt 0` |
-| DiskForecast | negative forecast vs C `gt 0` — never fired | `< bool 0` 0/1 mapping + `or vector(0)` |
-| BackupStale | `count<1` empty when zero lines, and C was `gt 0` | `sum(...) or vector(0)`, C `lt 1` |
+| Rule         | Bug                                                                                                                                    | Fix                                                                 |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| TargetDown   | `up == 0` yields value 0, `0 > 0` false — could never fire; also no job filter so the by-design-DOWN internal job fired it permanently | `count(up{job!="cogito-api-internal"} == 0) or vector(0)`, C `gt 0` |
+| DiskForecast | negative forecast vs C `gt 0` — never fired                                                                                            | `< bool 0` 0/1 mapping + `or vector(0)`                             |
+| BackupStale  | `count<1` empty when zero lines, and C was `gt 0`                                                                                      | `sum(...) or vector(0)`, C `lt 1`                                   |
 
 ## Change
 

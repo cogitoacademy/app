@@ -1008,12 +1008,12 @@ COOLIFY_API_TOKEN | cut -d= -f2-)"` (tunnel up; exit 0 = no drift —
 - **Grafana access (tailnet-only):** `./infra/ops.sh grafana` (tunnel + URL
   in one command), or manually `ssh -L 3000:127.0.0.1:3000
 ubuntu@cogito-vps.tail674634.ts.net`, then `http://localhost:3000` (admin user `admin`;
-   password in the SOPS vault as `GRAFANA_ADMIN_PASSWORD`). The direct tailnet URL
-   `http://cogito-vps.tail674634.ts.net:3000` also resolves via MagicDNS with no
-   tunnel; `./infra/ops.sh trace` defaults `GRAFANA_URL` to it. Provisioned:
-   datasources (Loki default + Prometheus), 6 dashboards (App RED, Logs &
-   Traces, Infra, Delivery, Saturation, Important Logs), 14 alert rules (DLQFresh/DiskWarn/DiskCrit/ApiErrors/TargetDown/CpuHigh/CpuCrit/MemHigh/MemCrit/DiskForecast/ContainerRestartBurst/BackupStale
-   - ProdOnStub/TestModeRestrictedSpike → `Discord-ops` contact point).
+  password in the SOPS vault as `GRAFANA_ADMIN_PASSWORD`). The direct tailnet URL
+  `http://cogito-vps.tail674634.ts.net:3000` also resolves via MagicDNS with no
+  tunnel; `./infra/ops.sh trace` defaults `GRAFANA_URL` to it. Provisioned:
+  datasources (Loki default + Prometheus), 6 dashboards (App RED, Logs &
+  Traces, Infra, Delivery, Saturation, Important Logs), 14 alert rules (DLQFresh/DiskWarn/DiskCrit/ApiErrors/TargetDown/CpuHigh/CpuCrit/MemHigh/MemCrit/DiskForecast/ContainerRestartBurst/BackupStale
+  - ProdOnStub/TestModeRestrictedSpike → `Discord-ops` contact point).
 - **Grafana password rotation (2026-09-06 pattern):** `GRAFANA_ADMIN_PASSWORD`
   is SOPS-encrypted in `infra/secrets/prod.env` (never plaintext). Rotate by
   setting a fresh value in the vault, then applying live without needing the
@@ -1037,9 +1037,9 @@ sum(rate(http_requests_total[5m]))`, and `breaker_state or on() vector(0)`
   (capacity panels tolerate the freshness). Watch
   `scrape_duration_seconds{job="cadvisor"}` — if it rides the timeout,
   trim at the source with `--disable_metrics=disk,diskIO` (disk panels
-   already use node-exporter). The `TargetDown` alert (`count(up{job!="cogito-api-internal"} == 0) or vector(0)`, warning,
-   `cogito-api-internal` excluded — DOWN by design until the API joins `cogito-obs`)
-   covers silently-failing scrapes.
+  already use node-exporter). The `TargetDown` alert (`count(up{job!="cogito-api-internal"} == 0) or vector(0)`, warning,
+  `cogito-api-internal` excluded — DOWN by design until the API joins `cogito-obs`)
+  covers silently-failing scrapes.
 - **Memory-pressure incident (2026-09-07):** load 2.75 on 2 cores with
   `wa` up to 84% + ~690MB swap in/out = swap-thrash, not app burn (API sat at
   0.5% CPU / 177MB). cAdvisor OOM-cycled on its 128m cgroup (dmesg
@@ -1283,10 +1283,10 @@ the printed steps; nothing here was applied from a worker.
   the vault `METRICS_TOKEN` via a token file, 15s interval; node_exporter +
   cAdvisor), `infra/loki/loki-config.yml` (30d retention), `infra/alloy/config.alloy`
   (`loki.source.docker_logs` over the Docker socket — never file globs under
-   `/var/lib/docker`), Grafana datasources + 6 dashboards (App RED, Logs &
-   Traces with traceId/userId search, Infra with the 85%/92% disk lines,
-   Delivery with deploys/backups/DLQ/breakers, Saturation with burn-rate math,
-   Important Logs with traceId/userId trails + errors/bookings/webhooks/scheduler/meetings).
+  `/var/lib/docker`), Grafana datasources + 6 dashboards (App RED, Logs &
+  Traces with traceId/userId search, Infra with the 85%/92% disk lines,
+  Delivery with deploys/backups/DLQ/breakers, Saturation with burn-rate math,
+  Important Logs with traceId/userId trails + errors/bookings/webhooks/scheduler/meetings).
 - **Retention vars** (single tuning point in the playbook):
   `LOKI_RETENTION_DAYS=30`, `PROM_RETENTION_DAYS=15`. **Lean fallback** for a
   tight VPS (documented, not applied): scrape_interval `30s` in

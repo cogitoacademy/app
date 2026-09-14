@@ -356,7 +356,7 @@ groups:
               to: 0
             datasourceUid: prometheus
             model:
-              expr: '100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)'
+              expr: "100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)"
               refId: A
           - refId: B
             relativeTimeRange:
@@ -401,7 +401,7 @@ groups:
               to: 0
             datasourceUid: prometheus
             model:
-              expr: '100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)'
+              expr: "100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)"
               refId: A
           - refId: B
             relativeTimeRange:
