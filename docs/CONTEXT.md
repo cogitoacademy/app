@@ -19,8 +19,9 @@ TargetDown (`0 > 0`), DiskForecast (negative forecast vs `> 0`), BackupStale
 (`lt 1` with `or vector(0)`). The payment-only **Payment Logs** board is
 replaced by the general-purpose **Important Logs** board
 (`infra/grafana/provisioning/dashboards/important-logs.json`: traceId/userId
-trails, errors, bookings, webhooks, scheduler/DLQ, meetings — all `action=`
-strings grep-verified); delete the stale board once in Grafana
+trails, errors, bookings, webhooks, scheduler/DLQ, meetings, plus payment
+boot-line / test-gate / provider-stat panels — all `action=` strings
+grep-verified); delete the stale standalone board once in Grafana
 (`disableDeletion: true` keeps the provisioned copy). No app code, RPC,
 schema, or persistence contract changed. See
 `docs/plans/completed/OBS-ALERT-LATCH-IMPORTANT-LOGS.md` and RUNBOOK →
