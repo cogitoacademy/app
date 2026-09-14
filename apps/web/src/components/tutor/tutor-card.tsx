@@ -118,7 +118,7 @@ export function TutorSummary({
           </span>
         ) : null}
       </ItemMedia>
-      <ItemContent className="min-w-0 flex-1">
+      <ItemContent className="min-w-0 flex-1 gap-1">
         <div className="flex flex-wrap items-center gap-2">
           <ItemTitle>{tutorName}</ItemTitle>
           {tutor.modality && (
@@ -130,7 +130,7 @@ export function TutorSummary({
             </Badge>
           )}
         </div>
-        <ItemDescription className="line-clamp-1">
+        <ItemDescription className="line-clamp-1 text-sm">
           {tutor.shortBio ?? "A verified Cogito tutor ready to help you learn."}
         </ItemDescription>
         <ItemMeta className="flex w-fit max-w-full min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden">

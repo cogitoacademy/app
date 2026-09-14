@@ -8,7 +8,7 @@ export const toastManager = BaseToast.createToastManager();
 
 export function Toast() {
   return (
-    <BaseToast.Provider toastManager={toastManager}>
+    <BaseToast.Provider toastManager={toastManager} timeout={5000} limit={3}>
       <StackedToasts />
     </BaseToast.Provider>
   );
@@ -19,7 +19,7 @@ function StackedToasts() {
 
   return (
     <BaseToast.Portal>
-      <BaseToast.Viewport className="fixed top-2 z-[1000] right-0 left-0 mx-2 md:top-4 md:mx-auto flex">
+      <BaseToast.Viewport className="fixed top-2 md:top-4 z-[1000] left-1/2 -translate-x-1/2 w-sm max-w-[calc(100%-1rem)] flex flex-col">
         {toasts.map((toast) => (
           <BaseToast.Root
             key={toast.id}
@@ -64,14 +64,14 @@ function ToastContent({ toast }: { toast: ToastObject<object> }) {
       className={cn(
         "overflow-hidden transition-opacity data-behind:pointer-events-none data-behind:opacity-0",
         "data-expanded:opacity-100 data-expanded:pointer-events-auto",
-        "flex gap-x-2.5 gap-y-0.5 items-center",
+        "flex gap-x-2.5 gap-y-0.5 items-start",
       )}
     >
       {toast.type && (
         <ToastIcon type={toast.type}>{icons[toast.type]}</ToastIcon>
       )}
-      <div className="w-full flex justify-between flex-col md:flex-row items-start">
-        <div>
+      <div className="w-full min-w-0 flex justify-between flex-col md:flex-row items-start gap-2">
+        <div className="min-w-0">
           <BaseToast.Title
             data-slot="toast-title"
             className="text-foreground font-medium"
@@ -92,6 +92,26 @@ function ToastContent({ toast }: { toast: ToastObject<object> }) {
           )}
         />
       </div>
+      <BaseToast.Close
+        data-slot="toast-close"
+        aria-label="Dismiss notification"
+        className="shrink-0 self-start rounded-sm p-1 text-dimmed transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="size-4"
+          aria-hidden="true"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </svg>
+      </BaseToast.Close>
     </BaseToast.Content>
   );
 }

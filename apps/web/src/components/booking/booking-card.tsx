@@ -545,7 +545,7 @@ function BookingFinancialInfo({
     );
   }
 
-  return <FinancialValue label="" value={studentPay} />;
+  return <FinancialValue label="You pay" value={studentPay} />;
 }
 
 function FinancialValue({ label, value }: { label: string; value: number }) {
