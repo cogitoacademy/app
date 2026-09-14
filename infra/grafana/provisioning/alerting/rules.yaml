@@ -24,7 +24,7 @@ groups:
               to: 0
             datasourceUid: prometheus
             model:
-              expr: "dlq_fresh_depth > 0"
+              expr: "dlq_fresh_depth or vector(0)"
               refId: A
           - refId: B
             relativeTimeRange:
@@ -54,8 +54,8 @@ groups:
           summary: "Fresh DLQ failure landed (24h window)"
         labels:
           severity: critical
-        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
-        noDataState: KeepLast
+        # NoDataState: Normal — absent depth series means no DLQ backlog (healthy); `or vector(0)` already yields 0 via real data.
+        noDataState: Normal
         execErrState: Error
 
       - uid: disk-warn
@@ -69,7 +69,7 @@ groups:
               to: 0
             datasourceUid: prometheus
             model:
-              expr: '100 * (1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) > 85'
+              expr: '100 * (1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})'
               refId: A
           - refId: B
             relativeTimeRange:
@@ -93,14 +93,14 @@ groups:
               conditions:
                 - evaluator:
                     params:
-                      - 0
+                      - 85
                     type: gt
         annotations:
           summary: "VPS disk >= 85% (watchdog warn line)"
         labels:
           severity: warning
-        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
-        noDataState: KeepLast
+        # NoDataState: Normal — usage % always present when node-exporter healthy; gap -> Normal, TargetDown covers exporter death.
+        noDataState: Normal
         execErrState: Error
 
       - uid: disk-crit
@@ -114,7 +114,7 @@ groups:
               to: 0
             datasourceUid: prometheus
             model:
-              expr: '100 * (1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) > 92'
+              expr: '100 * (1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})'
               refId: A
           - refId: B
             relativeTimeRange:
@@ -138,14 +138,14 @@ groups:
               conditions:
                 - evaluator:
                     params:
-                      - 0
+                      - 92
                     type: gt
         annotations:
           summary: "VPS disk >= 92% (watchdog auto-prunes)"
         labels:
           severity: critical
-        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
-        noDataState: KeepLast
+        # NoDataState: Normal — usage % always present when node-exporter healthy; gap -> Normal, TargetDown covers exporter death.
+        noDataState: Normal
         execErrState: Error
 
       - uid: api-errors
@@ -159,7 +159,7 @@ groups:
               to: 0
             datasourceUid: prometheus
             model:
-              expr: '(sum(rate(http_requests_total{status=~"5.."}[5m])) or vector(0)) / sum(rate(http_requests_total[5m])) > 0.01'
+              expr: '((sum(rate(http_requests_total{status=~"5.."}[5m])) or vector(0)) / sum(rate(http_requests_total[5m]))) or vector(0)'
               refId: A
           - refId: B
             relativeTimeRange:
@@ -183,21 +183,22 @@ groups:
               conditions:
                 - evaluator:
                     params:
-                      - 0
+                      - 0.01
                     type: gt
         annotations:
           summary: "API 5xx ratio above 1% (deploy canary)"
         labels:
           severity: warning
-        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
-        noDataState: KeepLast
+        # NoDataState: Normal — no traffic/errors yields 0 via `or vector(0)` (healthy); gap -> Normal, TargetDown covers scraper death.
+        noDataState: Normal
         execErrState: Error
 
       # Catches a silently-failing scrape (2026-09-07: the cadvisor target
-      # went down and nothing fired — no rule watched `up`). Vanished
-      # targets (series absent, not 0) evaluate to NoData → KeepLast (hold last
-      # state, never silent-OK); Kuma
-      # and the watchdog cover host/API independently.
+      # went down and nothing fired — no rule watched `up`). Counts down
+      # targets excluding cogito-api-internal (DOWN by design — app container
+      # not on cogito-obs net; public job is truth). Vanished targets (series
+      # absent, not 0) fall back to Normal — Kuma and the watchdog cover
+      # host/API independently.
       - uid: target-down
         title: TargetDown
         condition: C
@@ -209,7 +210,7 @@ groups:
               to: 0
             datasourceUid: prometheus
             model:
-              expr: "up == 0"
+              expr: 'count(up{job!="cogito-api-internal"} == 0) or vector(0)'
               refId: A
           - refId: B
             relativeTimeRange:
@@ -239,8 +240,8 @@ groups:
           summary: "Prometheus scrape target down (up == 0 for 5m)"
         labels:
           severity: warning
-        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
-        noDataState: KeepLast
+        # NoDataState: Normal — all-up yields 0 via real data; cogito-api-internal excluded by design (DOWN, public job is truth); gap -> Normal, Kuma covers host/API.
+        noDataState: Normal
         execErrState: Error
 
       # --- Added 2026-09-07 (obs saturation pass) — 7 new rules, existing 5
@@ -248,9 +249,11 @@ groups:
       # no new contact points), so no per-rule receiver. for-windows absorb the
       # ~60s Grafana-restart/cAdvisor-60s-scrape gaps: warn rules 10m, crit 5m
       # (matching the existing disk warn/crit pattern), slow-burn rules 30m.
-      # KeepLast on every rule (2026-09-07 incident: CpuCrit resolved on NoData
-      # after a Prometheus restart — firing alerts now survive gaps; only real
-      # data resolves. TargetDown + Kuma cover dead scrapers independently) —
+      # NoData is Normal on every rule below (2026-09-14 fix: the old blanket
+      # hold-last-state with in-query comparisons latched firing forever — healthy
+      # was an empty vector (NoData), so firing could never resolve; thresholds now live
+      # in the C step and each A always returns data when healthy, so healthy
+      # resolves via real data and only true gaps hit the Normal fallback) —
       # each rule carries a comment on what its NoData means.
       - uid: cpu-high
         title: CpuHigh
@@ -263,7 +266,7 @@ groups:
               to: 0
             datasourceUid: prometheus
             model:
-              expr: '100 * (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m]))) > 80'
+              expr: '100 * (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])))'
               refId: A
           - refId: B
             relativeTimeRange:
@@ -287,16 +290,14 @@ groups:
               conditions:
                 - evaluator:
                     params:
-                      - 0
+                      - 80
                     type: gt
         annotations:
           summary: "VPS CPU above 80% for 10m (sustained load — check Infra CPU-by-mode for steal/iowait)"
         labels:
           severity: warning
-        # KeepLast: a gap holds the last state instead of resolving;
-        # node-exporter death still surfaces via TargetDown.
-        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
-        noDataState: KeepLast
+        # NoDataState: Normal — CPU % always present when node-exporter healthy (28% -> Normal via real data); gap -> Normal, TargetDown covers exporter death.
+        noDataState: Normal
         execErrState: Error
 
       - uid: cpu-crit
@@ -310,7 +311,7 @@ groups:
               to: 0
             datasourceUid: prometheus
             model:
-              expr: '100 * (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m]))) > 90'
+              expr: '100 * (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])))'
               refId: A
           - refId: B
             relativeTimeRange:
@@ -334,15 +335,14 @@ groups:
               conditions:
                 - evaluator:
                     params:
-                      - 0
+                      - 90
                     type: gt
         annotations:
           summary: "VPS CPU above 90% for 5m (saturation — shed load or scale before latency collapses)"
         labels:
           severity: critical
-        # KeepLast: same rationale as CpuHigh.
-        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
-        noDataState: KeepLast
+        # NoDataState: Normal — same rationale as CpuHigh; gap -> Normal, TargetDown covers exporter death.
+        noDataState: Normal
         execErrState: Error
 
       - uid: mem-high
@@ -356,7 +356,7 @@ groups:
               to: 0
             datasourceUid: prometheus
             model:
-              expr: "100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 85"
+              expr: '100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)'
               refId: A
           - refId: B
             relativeTimeRange:
@@ -380,15 +380,14 @@ groups:
               conditions:
                 - evaluator:
                     params:
-                      - 0
+                      - 85
                     type: gt
         annotations:
           summary: "VPS memory above 85% for 10m (check Saturation mem-drain + Infra swap panels for leak vs growth)"
         labels:
           severity: warning
-        # KeepLast: gap holds last state; node-exporter death surfaces via TargetDown.
-        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
-        noDataState: KeepLast
+        # NoDataState: Normal — mem % always present when node-exporter healthy; gap -> Normal, TargetDown covers exporter death.
+        noDataState: Normal
         execErrState: Error
 
       - uid: mem-crit
@@ -402,7 +401,7 @@ groups:
               to: 0
             datasourceUid: prometheus
             model:
-              expr: "100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 90"
+              expr: '100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)'
               refId: A
           - refId: B
             relativeTimeRange:
@@ -426,15 +425,14 @@ groups:
               conditions:
                 - evaluator:
                     params:
-                      - 0
+                      - 90
                     type: gt
         annotations:
           summary: "VPS memory above 90% for 5m (OOM risk — act before the kernel chooses victims)"
         labels:
           severity: critical
-        # KeepLast: same rationale as MemHigh.
-        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
-        noDataState: KeepLast
+        # NoDataState: Normal — same rationale as MemHigh; gap -> Normal, TargetDown covers exporter death.
+        noDataState: Normal
         execErrState: Error
 
       - uid: disk-forecast
@@ -448,7 +446,7 @@ groups:
               to: 0
             datasourceUid: prometheus
             model:
-              expr: 'predict_linear(node_filesystem_avail_bytes{mountpoint="/"}[6h], 24*3600) < 0'
+              expr: '(predict_linear(node_filesystem_avail_bytes{mountpoint="/"}[6h], 24*3600) < bool 0) or vector(0)'
               refId: A
           - refId: B
             relativeTimeRange:
@@ -478,11 +476,8 @@ groups:
           summary: "Rootfs trending to full within 24h (6h linear fit — pairs with Infra panel 7; check Saturation burn-rate before acting)"
         labels:
           severity: warning
-        # KeepLast: a fresh Prometheus (retention gap) has <6h of samples and
-        # yields NoData rather than a forecast — holds Normal until samples
-        # exist; DiskWarn/DiskCrit cover the absolute thresholds independently.
-        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
-        noDataState: KeepLast
+        # NoDataState: Normal — <6h samples (fresh Prometheus) yields empty -> Normal fallback until a fit exists; DiskWarn/DiskCrit cover absolute thresholds independently.
+        noDataState: Normal
         execErrState: Error
 
       # Kube-style container restarts do NOT exist in cAdvisor — this watches
@@ -502,7 +497,7 @@ groups:
               to: 0
             datasourceUid: prometheus
             model:
-              expr: 'sum by (container_label_coolify_resourceName) (changes(container_start_time_seconds{container_label_coolify_resourceName=~".+"}[15m])) > 2'
+              expr: '(sum by (container_label_coolify_resourceName) (changes(container_start_time_seconds{container_label_coolify_resourceName=~".+"}[15m]))) or vector(0)'
               refId: A
           - refId: B
             relativeTimeRange:
@@ -526,16 +521,14 @@ groups:
               conditions:
                 - evaluator:
                     params:
-                      - 0
+                      - 2
                     type: gt
         annotations:
           summary: "Container restarting in a burst (>2 start-time changes in 15m for one Coolify resource — crashloop or redeploy flap)"
         labels:
           severity: warning
-        # KeepLast: holds last state through gaps; the healthy case (no restarts =
-        # empty vector) still needs the P9 series verification (see comment above).
-        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
-        noDataState: KeepLast
+        # NoDataState: Normal — zero restarts yields 0 via real data/`or`; empty (trimmed/unverified series) falls back to Normal — verify series per comment above.
+        noDataState: Normal
         execErrState: Error
 
       # Fires when ZERO nightly-backup success lines land in Loki over the
@@ -556,7 +549,7 @@ groups:
               to: 0
             datasourceUid: loki
             model:
-              expr: 'count_over_time({service=~".+"} |= "==> Done: uploaded" [25h]) < 1'
+              expr: 'sum(count_over_time({service=~".+"} |= "==> Done: uploaded" [25h])) or vector(0)'
               refId: A
           - refId: B
             relativeTimeRange:
@@ -580,16 +573,14 @@ groups:
               conditions:
                 - evaluator:
                     params:
-                      - 0
-                    type: gt
+                      - 1
+                    type: lt
         annotations:
           summary: "No nightly-backup success heartbeat in Loki for 25h (verify R2 object + /var/log/cogito-backup.log on the VPS — see comment)"
         labels:
           severity: warning
-        # KeepLast: holds last state; until the shipping flows, confirm
-        # {service="cogito-backup"} lines in Explore post-apply (see caveat above).
-        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
-        noDataState: KeepLast
+        # NoDataState: Normal — fresh heartbeat (count>=1) is Normal via real data, 0 lines fires via `lt 1`; empty Loki gap falls back to Normal — confirm {service="cogito-backup"} lines in Explore post-apply.
+        noDataState: Normal
         execErrState: Error
 
       # --- Added 2026-09-11 (Midtrans UAT gate) — 2 new rules, existing 12
@@ -610,7 +601,7 @@ groups:
               to: 0
             datasourceUid: prometheus
             model:
-              expr: 'app_info{provider="stub"} == 1'
+              expr: '(app_info{provider="stub"} == 1) or vector(0)'
               refId: A
           - refId: B
             relativeTimeRange:
@@ -640,14 +631,15 @@ groups:
           summary: "API running the stub payment provider (no real checkout — verify PAYMENT_PROVIDER + redeploy)"
         labels:
           severity: critical
-        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
-        noDataState: KeepLast
+        # NoDataState: Normal — non-stub/absent series yields 0 via `or vector(0)` (healthy); stub=1 fires; app down falls back to Normal, TargetDown covers it.
+        noDataState: Normal
         execErrState: Error
 
       # Burst of test-mode gate rejections: non-UAT purchases hitting the
       # provider-agnostic allowlist (XENDIT_TEST_ALLOWED_EMAILS) on a
       # test-mode domain. Usually an allowlist misconfig during UAT, not a
-      # provider outage — check the Payment Logs gate panel first.
+      # provider outage — query PAYMENT_TEST_MODE_RESTRICTED in Explore first
+      # (the payment-only board is retired; see the Important Logs board).
       - uid: test-mode-restricted-spike
         title: TestModeRestrictedSpike
         condition: C
@@ -659,7 +651,7 @@ groups:
               to: 0
             datasourceUid: loki
             model:
-              expr: 'sum(count_over_time({service="cogito-api"} |= "PAYMENT_TEST_MODE_RESTRICTED" [10m])) > 10'
+              expr: '(sum(count_over_time({service="cogito-api"} |= "PAYMENT_TEST_MODE_RESTRICTED" [10m]))) or vector(0)'
               refId: A
           - refId: B
             relativeTimeRange:
@@ -683,14 +675,12 @@ groups:
               conditions:
                 - evaluator:
                     params:
-                      - 0
+                      - 10
                     type: gt
         annotations:
           summary: "Test-mode gate rejecting in a burst (>10 PAYMENT_TEST_MODE_RESTRICTED in 10m — check the UAT allowlist)"
         labels:
           severity: warning
-        # KeepLast: holds last state through Loki gaps; a quiet gate (empty
-        # vector) still needs the Payment Logs panel check (see comment above).
-        # KeepLast: firing alerts survive scrape gaps, only real data resolves.
-        noDataState: KeepLast
+        # NoDataState: Normal — quiet gate (0 lines) yields 0 via `or vector(0)` (healthy); Loki gap falls back to Normal — query PAYMENT_TEST_MODE_RESTRICTED in Explore (payment board retired).
+        noDataState: Normal
         execErrState: Error
