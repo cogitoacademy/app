@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, sql, getTableColumns } from "drizzle-orm";
 import { economyConfig } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
 import {
@@ -9,7 +9,7 @@ import {
 
 export async function getOrCreate(conn: DbOrTx) {
   const [existing] = await conn
-    .select()
+    .select({ ...getTableColumns(economyConfig) })
     .from(economyConfig)
     .where(eq(economyConfig.id, ECONOMY_CONFIG_ID))
     .limit(1);
@@ -21,7 +21,7 @@ export async function getOrCreate(conn: DbOrTx) {
     .onConflictDoNothing({ target: economyConfig.id });
 
   const [created] = await conn
-    .select()
+    .select({ ...getTableColumns(economyConfig) })
     .from(economyConfig)
     .where(eq(economyConfig.id, ECONOMY_CONFIG_ID))
     .limit(1);

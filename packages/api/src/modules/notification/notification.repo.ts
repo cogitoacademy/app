@@ -10,6 +10,7 @@ import {
   sql,
   like,
   not,
+  getTableColumns,
 } from "drizzle-orm";
 import {
   notification,
@@ -175,7 +176,7 @@ const MAX_DISPATCH_ATTEMPTS = 3;
  */
 export async function listPendingDispatches(conn: DbOrTx, limit = 50) {
   return conn
-    .select()
+    .select({ ...getTableColumns(notificationDispatch) })
     .from(notificationDispatch)
     .where(
       or(
@@ -246,7 +247,7 @@ export async function incrementDispatchAttempts(
  */
 export async function findNotificationById(conn: DbOrTx, id: string) {
   const [row] = await conn
-    .select()
+    .select({ ...getTableColumns(notification) })
     .from(notification)
     .where(eq(notification.id, id))
     .limit(1);
@@ -288,7 +289,7 @@ export async function listNotifications(
   }
 
   const rows = await conn
-    .select()
+    .select({ ...getTableColumns(notification) })
     .from(notification)
     .where(and(...conditions))
     .orderBy(desc(notification.createdAt))

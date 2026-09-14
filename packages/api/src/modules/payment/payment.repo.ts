@@ -1,4 +1,4 @@
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray, getTableColumns } from "drizzle-orm";
 import { paymentRecord, markPackage } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
@@ -15,7 +15,7 @@ export type PaymentRepo = ReturnType<typeof createPaymentRepo>;
  */
 export async function findPackageByCode(conn: DbOrTx, code: string) {
   const [pkg] = await conn
-    .select()
+    .select({ ...getTableColumns(markPackage) })
     .from(markPackage)
     .where(eq(markPackage.code, code))
     .limit(1);
@@ -34,7 +34,7 @@ export async function findPaymentByProviderReference(
   providerReference: string,
 ) {
   const [record] = await conn
-    .select()
+    .select({ ...getTableColumns(paymentRecord) })
     .from(paymentRecord)
     .where(eq(paymentRecord.providerReference, providerReference))
     .limit(1);
@@ -55,7 +55,7 @@ export async function findLatestPaymentByUserAndPackage(
   provider: string,
 ) {
   const [record] = await conn
-    .select()
+    .select({ ...getTableColumns(paymentRecord) })
     .from(paymentRecord)
     .where(
       and(
@@ -78,7 +78,7 @@ export async function findLatestPaymentByUserAndPackage(
  */
 export async function findPaymentById(conn: DbOrTx, id: string) {
   const [record] = await conn
-    .select()
+    .select({ ...getTableColumns(paymentRecord) })
     .from(paymentRecord)
     .where(eq(paymentRecord.id, id))
     .limit(1);
@@ -97,7 +97,7 @@ export async function findPaymentByProviderEventId(
   providerEventId: string,
 ) {
   const [record] = await conn
-    .select()
+    .select({ ...getTableColumns(paymentRecord) })
     .from(paymentRecord)
     .where(eq(paymentRecord.providerEventId, providerEventId))
     .limit(1);

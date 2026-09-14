@@ -85,89 +85,77 @@ describe("metrics exposition", () => {
     expect(out).toContain('path="/weird\\"path"');
   });
 
-  test("app_info carries the deploy SHA, falling back to dev", () => {
-    const previous = process.env.GIT_SHA;
-    try {
-      delete process.env.GIT_SHA;
-      const fallback = renderExposition();
-      expect(fallback).toContain("# HELP app_info");
-      expect(fallback).toContain("# TYPE app_info gauge");
-      expect(fallback).toContain(
-        'app_info{version="dev",provider="stub",provider_mode="none"} 1',
-      );
-      process.env.GIT_SHA = "abc123def";
-      expect(renderExposition()).toContain(
-        'app_info{version="abc123def",provider="stub",provider_mode="none"} 1',
-      );
-    } finally {
-      if (previous === undefined) delete process.env.GIT_SHA;
-      else process.env.GIT_SHA = previous;
-    }
+  test("app_info carries the injected version, falling back to dev", () => {
+    const fallback = renderExposition();
+    expect(fallback).toContain("# HELP app_info");
+    expect(fallback).toContain("# TYPE app_info gauge");
+    expect(fallback).toContain(
+      'app_info{version="dev",provider="stub",provider_mode="none"} 1',
+    );
+    expect(renderExposition({ version: "abc123def" })).toContain(
+      'app_info{version="abc123def",provider="stub",provider_mode="none"} 1',
+    );
+    // Blank versions fall back to dev (same safe default as the route caller).
+    expect(renderExposition({ version: "  " })).toContain(
+      'app_info{version="dev",provider="stub",provider_mode="none"} 1',
+    );
   });
 
-  test("app_info labels the active payment provider and mode", () => {
-    const previous = process.env.GIT_SHA;
-    try {
-      process.env.GIT_SHA = "abc123def";
-      expect(
-        renderExposition({ provider: "midtrans", providerMode: "test" }),
-      ).toContain(
-        'app_info{version="abc123def",provider="midtrans",provider_mode="test"} 1',
-      );
-      expect(
-        renderExposition({ provider: "xendit", providerMode: "live" }),
-      ).toContain(
-        'app_info{version="abc123def",provider="xendit",provider_mode="live"} 1',
-      );
-      expect(
-        renderExposition({ provider: "stub", providerMode: "none" }),
-      ).toContain(
-        'app_info{version="abc123def",provider="stub",provider_mode="none"} 1',
-      );
-      // The stub provider has no mode concept: an explicitly passed mode is
-      // ignored so the dashboards contract (stub ⇒ none) always holds.
-      expect(
-        renderExposition({ provider: "stub", providerMode: "test" }),
-      ).toContain(
-        'app_info{version="abc123def",provider="stub",provider_mode="none"} 1',
-      );
-    } finally {
-      if (previous === undefined) delete process.env.GIT_SHA;
-      else process.env.GIT_SHA = previous;
-    }
+  test("app_info labels the injected payment provider and mode", () => {
+    expect(
+      renderExposition({
+        version: "abc123def",
+        provider: "midtrans",
+        providerMode: "test",
+      }),
+    ).toContain(
+      'app_info{version="abc123def",provider="midtrans",provider_mode="test"} 1',
+    );
+    expect(
+      renderExposition({
+        version: "abc123def",
+        provider: "xendit",
+        providerMode: "live",
+      }),
+    ).toContain(
+      'app_info{version="abc123def",provider="xendit",provider_mode="live"} 1',
+    );
+    expect(
+      renderExposition({
+        version: "abc123def",
+        provider: "stub",
+        providerMode: "none",
+      }),
+    ).toContain(
+      'app_info{version="abc123def",provider="stub",provider_mode="none"} 1',
+    );
+    // The stub provider has no mode concept: an explicitly passed mode is
+    // ignored so the dashboards contract (stub ⇒ none) always holds.
+    expect(
+      renderExposition({
+        version: "abc123def",
+        provider: "stub",
+        providerMode: "test",
+      }),
+    ).toContain(
+      'app_info{version="abc123def",provider="stub",provider_mode="none"} 1',
+    );
   });
 
-  test("app_info resolves provider and mode from the environment by default", () => {
-    const previous = {
-      GIT_SHA: process.env.GIT_SHA,
-      PAYMENT_PROVIDER: process.env.PAYMENT_PROVIDER,
-      XENDIT_MODE: process.env.XENDIT_MODE,
-      MIDTRANS_MODE: process.env.MIDTRANS_MODE,
-    };
-    try {
-      process.env.GIT_SHA = "abc123def";
-      process.env.PAYMENT_PROVIDER = "midtrans";
-      process.env.MIDTRANS_MODE = "test";
-      delete process.env.XENDIT_MODE;
-      expect(renderExposition()).toContain(
-        'app_info{version="abc123def",provider="midtrans",provider_mode="test"} 1',
-      );
-      process.env.PAYMENT_PROVIDER = "xendit";
-      process.env.XENDIT_MODE = "live";
-      delete process.env.MIDTRANS_MODE;
-      expect(renderExposition()).toContain(
-        'app_info{version="abc123def",provider="xendit",provider_mode="live"} 1',
-      );
-      process.env.PAYMENT_PROVIDER = "stub";
-      delete process.env.XENDIT_MODE;
-      expect(renderExposition()).toContain(
-        'app_info{version="abc123def",provider="stub",provider_mode="none"} 1',
-      );
-    } finally {
-      for (const [key, value] of Object.entries(previous)) {
-        if (value === undefined) delete process.env[key];
-        else process.env[key] = value;
-      }
-    }
+  test("app_info defaults to stub/none without injection (env-free)", () => {
+    // The exposition no longer reads process env; the route caller injects
+    // provider/mode/version from validated env. Bare calls use safe defaults.
+    expect(renderExposition()).toContain(
+      'app_info{version="dev",provider="stub",provider_mode="none"} 1',
+    );
+    expect(
+      renderExposition({ provider: "midtrans", providerMode: "test" }),
+    ).toContain('provider="midtrans",provider_mode="test"');
+    expect(
+      renderExposition({ provider: "xendit", providerMode: "live" }),
+    ).toContain('provider="xendit",provider_mode="live"');
+    expect(renderExposition({ provider: "stub" })).toContain(
+      'provider="stub",provider_mode="none"',
+    );
   });
 });

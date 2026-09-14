@@ -1,4 +1,14 @@
-import { eq, and, gt, lt, ne, desc, asc, inArray } from "drizzle-orm";
+import {
+  eq,
+  and,
+  gt,
+  lt,
+  ne,
+  desc,
+  asc,
+  inArray,
+  getTableColumns,
+} from "drizzle-orm";
 import { booking, room, roomBooking } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
 import { ROOM_BOOKING_STATUS } from "../../shared/constants";
@@ -16,7 +26,10 @@ export async function findActiveRooms(
   conn: DbOrTx,
   options?: { limit: number; offset: number },
 ) {
-  const query = conn.select().from(room).where(eq(room.isActive, true));
+  const query = conn
+    .select({ ...getTableColumns(room) })
+    .from(room)
+    .where(eq(room.isActive, true));
   if (!options) return query;
 
   return query
@@ -182,7 +195,7 @@ export async function findRoomBookings(
     conditions.push(ne(roomBooking.bookingId, excludeBookingId));
   }
   return conn
-    .select()
+    .select({ ...getTableColumns(roomBooking) })
     .from(roomBooking)
     .where(and(...conditions))
     .limit(1);
@@ -217,7 +230,7 @@ export async function findRoomBookingsForUpdate(
     conditions.push(ne(roomBooking.bookingId, excludeBookingId));
   }
   return conn
-    .select()
+    .select({ ...getTableColumns(roomBooking) })
     .from(roomBooking)
     .where(and(...conditions))
     .for("update")

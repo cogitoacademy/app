@@ -47,13 +47,32 @@ export function registerHealthMetricsRoutes(app: Elysia) {
       // series come from the in-process `recordRequest` telemetry; the gauges
       // are read from the shared Redis (fresh DLQ depth, -1 when unknown, and
       // per-breaker states). Bearer gating above is unchanged.
+      // app_info labels are injected from validated env (plus the Dockerfile-
+      // baked GIT_SHA with "dev" fallback) so the metrics lib stays env-free.
       const redis = getRedisClient();
       const dlqDepth = await checkDlqHealth(redis);
       const breakers = await checkCircuitBreakers(redis);
-      return new Response(renderExposition({ dlqDepth, breakers }), {
-        status: 200,
-        headers: { "Content-Type": "text/plain; version=0.0.4" },
-      });
+      const provider = env.PAYMENT_PROVIDER;
+      const providerMode =
+        provider === "xendit"
+          ? (env.XENDIT_MODE ?? "none")
+          : provider === "midtrans"
+            ? (env.MIDTRANS_MODE ?? "none")
+            : "none";
+      const version = process.env.GIT_SHA?.trim() || "dev";
+      return new Response(
+        renderExposition({
+          dlqDepth,
+          breakers,
+          provider,
+          providerMode,
+          version,
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "text/plain; version=0.0.4" },
+        },
+      );
     })
     .get("/", () => "OK");
 }

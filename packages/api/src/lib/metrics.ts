@@ -28,16 +28,20 @@ export interface ExpositionInput {
   dlqDepth?: number;
   breakers?: Record<string, BreakerStateName>;
   /**
-   * Active payment provider for the `app_info` gauge. Defaults to
-   * `process.env.PAYMENT_PROVIDER` (read at call time so tests can stub the
-   * env, like `GIT_SHA`), falling back to `"stub"` when unset/unknown.
+   * Deploy SHA for the `app_info` gauge. Supplied by the route caller
+   * (validated-env layer); defaults to `"dev"` when unset/blank.
+   */
+  version?: string;
+  /**
+   * Active payment provider for the `app_info` gauge. Supplied by the route
+   * caller from validated env; unknown values fall back to `"stub"`.
    */
   provider?: MetricsPaymentProvider;
   /**
-   * Active provider mode for the `app_info` gauge. Defaults to the matching
-   * `XENDIT_MODE`/`MIDTRANS_MODE` env var, or `"none"` when the mode env var
-   * is unset/unknown. Always `"none"` for the stub provider (which has no
-   * mode concept), even if a mode is passed explicitly.
+   * Active provider mode for the `app_info` gauge. Supplied by the route
+   * caller from validated env. Always `"none"` for the stub provider (which
+   * has no mode concept), even if a mode is passed explicitly; unknown
+   * values fall back to `"none"`.
    */
   providerMode?: MetricsProviderMode;
 }
@@ -182,12 +186,15 @@ function isMetricsProviderMode(value: unknown): value is MetricsProviderMode {
   return value === "test" || value === "live" || value === "none";
 }
 
+function resolveExpositionVersion(explicit?: string): string {
+  const trimmed = explicit?.trim();
+  return trimmed ? trimmed : "dev";
+}
+
 function resolveExpositionProvider(
   explicit?: MetricsPaymentProvider,
 ): MetricsPaymentProvider {
   if (isMetricsPaymentProvider(explicit)) return explicit;
-  const fromEnv = process.env.PAYMENT_PROVIDER?.trim();
-  if (isMetricsPaymentProvider(fromEnv)) return fromEnv;
   return "stub";
 }
 
@@ -198,12 +205,7 @@ function resolveExpositionProviderMode(
   // The stub provider has no mode concept — the dashboards contract fixes
   // provider_mode="none" whenever provider="stub".
   if (provider === "stub") return "none";
-  if (isMetricsProviderMode(explicit)) return explicit;
-  const fromEnv =
-    provider === "xendit"
-      ? process.env.XENDIT_MODE?.trim()
-      : process.env.MIDTRANS_MODE?.trim();
-  if (isMetricsProviderMode(fromEnv) && fromEnv !== "none") return fromEnv;
+  if (isMetricsProviderMode(explicit) && explicit !== "none") return explicit;
   return "none";
 }
 
@@ -215,23 +217,22 @@ function resolveExpositionProviderMode(
  * (Redis-backed circuit-breaker states) are supplied by the route, which
  * reads them from the shared Redis. Either gauge section is omitted when its
  * input is absent so a bare `renderExposition()` still emits valid output.
- * `app_info{version,provider,provider_mode}` (deploy SHA from `GIT_SHA`,
- * `"dev"` fallback; provider from the explicit input or `PAYMENT_PROVIDER`;
- * mode from the explicit input or `XENDIT_MODE`/`MIDTRANS_MODE`, `"none"`
- * for stub) is always emitted so Prometheus can answer "which version and
- * payment configuration is running".
+ * `app_info{version,provider,provider_mode}` (deploy SHA, `"dev"` fallback;
+ * provider/mode from the explicit input, `"stub"`/`"none"` fallbacks;
+ * `"none"` for stub) is always emitted so Prometheus can answer "which
+ * version and payment configuration is running". This module reads no
+ * environment itself — the route caller injects version/provider/mode from
+ * validated env so exposition stays pure and testable.
  */
 export function renderExposition(input: ExpositionInput = {}): string {
   maybeCleanup(Date.now());
   const lines: string[] = [];
 
   // Deploy traceability: the running build SHA, so /metrics agrees with
-  // /health `version` on which artifact is live (same source —
-  // process.env.GIT_SHA baked by the Dockerfile, "dev" when unset). Provider
-  // and mode are resolved the same way (explicit input wins, env fallback,
-  // safe defaults) so the /metrics caller needs no changes to label the
-  // active payment configuration. Read at call time so tests can stub env.
-  const gitSha = process.env.GIT_SHA?.trim() || "dev";
+  // /health `version` on which artifact is live. Version/provider/mode are
+  // injected by the caller (validated env) with safe defaults; unknown
+  // provider/mode values fall back to "stub"/"none" for backward compat.
+  const gitSha = resolveExpositionVersion(input.version);
   const provider = resolveExpositionProvider(input.provider);
   const providerMode = resolveExpositionProviderMode(
     provider,
