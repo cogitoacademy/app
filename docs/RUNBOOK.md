@@ -1050,12 +1050,17 @@ sum(rate(http_requests_total[5m]))`, and `breaker_state or on() vector(0)`
   as `{service="cogito-backup",job="backup"}` (single-file read-only mount;
   within the A3 constraint). Watch post-apply: cAdvisor RSS <200m, swap
   trending down, `alloy` target UP.
-- **Normal (not KeepLast) alert semantics (2026-09-14, supersedes the 2026-09-07
-  KeepLast entry below):** all 14 rules use `noDataState: Normal` with
+- **OK (not KeepLast) alert semantics (2026-09-14, supersedes the 2026-09-07
+  KeepLast entry below):** all 14 rules use `noDataState: OK` (= Normal state)
+  with
   zero-safe queries — every query A returns a numeric vector when its
   datasource is healthy (thresholds live in the C step, e.g. raw CPU % with
   C `gt 80`), so healthy resolves via real data and only true gaps hit the
-  Normal fallback. Root cause fixed: the old in-query comparisons
+  OK fallback. File-provisioning enum is `NoData`/`Alerting`/`OK`
+  (+`KeepLast`) — `Normal` is NOT a valid value and crash-loops Grafana on
+  boot with `unknown NoData state option Normal` (verified live 2026-09-14;
+  the first version of this fix used it and took Grafana down until
+  corrected to `OK`). Root cause fixed: the old in-query comparisons
   (e.g. `... > 80`) returned an EMPTY vector when healthy, so healthy was
   also NoData and KeepLast latched firing forever (CpuHigh kept firing at
   28–45% CPU). Three never-fire bugs fixed along the way: TargetDown

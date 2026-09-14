@@ -34,8 +34,11 @@ Latent never-fire bugs found while fixing (same file):
 
 - `rules.yaml`: all 14 queries zero-safe (`or vector(0)` idiom, matching the
   dashboard panels), thresholds moved to the C step (raw CPU/Mem/Disk %,
-  5xx ratio, restart count, heartbeat count), `noDataState: Normal` on all
-  14 with a per-rule WHY comment. Uids/titles/for-windows/severities/
+  5xx ratio, restart count, heartbeat count), `noDataState: OK` (= Normal
+  state) on all
+  14 with a per-rule WHY comment. File-provisioning enum is
+  `NoData`/`Alerting`/`OK` — `Normal` is invalid and crash-loops Grafana on
+  boot (hit live 2026-09-14, corrected same day). Uids/titles/for-windows/severities/
   summaries/datasources unchanged; no per-rule receiver (default
   Discord-ops). `for` windows (5m/10m/30m) still absorb the ~60s
   restart/cAdvisor gaps; TargetDown + Kuma cover dead scrapers.
@@ -51,8 +54,9 @@ Latent never-fire bugs found while fixing (same file):
 
 - `python3 -c yaml.safe_load` → 14 rules, thresholds
   (85/92 disk, 0.01 errors, 80/90 CPU, 85/90 mem, 2 restarts, lt 1 backup,
-  10 gate) all Normal; uid/title/for/severity/summary/datasource identical
-  to HEAD.
+  10 gate) all OK; uid/title/for/severity/summary/datasource identical
+  to HEAD. Live-boot acceptance after merge: Grafana container stays up,
+  provisioning logs show no rule-parse errors, all 14 rules evaluate.
 - `python3 -m json.tool important-logs.json` → OK; `git status` scope =
   rules.yaml, dashboards.yml, payment-logs.json (D),
   important-logs.json (new), RUNBOOK, CONTEXT, this plan.

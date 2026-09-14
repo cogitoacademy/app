@@ -54,8 +54,8 @@ groups:
           summary: "Fresh DLQ failure landed (24h window)"
         labels:
           severity: critical
-        # NoDataState: Normal — absent depth series means no DLQ backlog (healthy); `or vector(0)` already yields 0 via real data.
-        noDataState: Normal
+        # NoDataState: OK (= Normal state) — absent depth series means no DLQ backlog (healthy); `or vector(0)` already yields 0 via real data.
+        noDataState: OK
         execErrState: Error
 
       - uid: disk-warn
@@ -99,8 +99,8 @@ groups:
           summary: "VPS disk >= 85% (watchdog warn line)"
         labels:
           severity: warning
-        # NoDataState: Normal — usage % always present when node-exporter healthy; gap -> Normal, TargetDown covers exporter death.
-        noDataState: Normal
+        # NoDataState: OK (= Normal state) — usage % always present when node-exporter healthy; gap -> Normal, TargetDown covers exporter death.
+        noDataState: OK
         execErrState: Error
 
       - uid: disk-crit
@@ -144,8 +144,8 @@ groups:
           summary: "VPS disk >= 92% (watchdog auto-prunes)"
         labels:
           severity: critical
-        # NoDataState: Normal — usage % always present when node-exporter healthy; gap -> Normal, TargetDown covers exporter death.
-        noDataState: Normal
+        # NoDataState: OK (= Normal state) — usage % always present when node-exporter healthy; gap -> Normal, TargetDown covers exporter death.
+        noDataState: OK
         execErrState: Error
 
       - uid: api-errors
@@ -189,8 +189,8 @@ groups:
           summary: "API 5xx ratio above 1% (deploy canary)"
         labels:
           severity: warning
-        # NoDataState: Normal — no traffic/errors yields 0 via `or vector(0)` (healthy); gap -> Normal, TargetDown covers scraper death.
-        noDataState: Normal
+        # NoDataState: OK (= Normal state) — no traffic/errors yields 0 via `or vector(0)` (healthy); gap -> Normal, TargetDown covers scraper death.
+        noDataState: OK
         execErrState: Error
 
       # Catches a silently-failing scrape (2026-09-07: the cadvisor target
@@ -240,8 +240,8 @@ groups:
           summary: "Prometheus scrape target down (up == 0 for 5m)"
         labels:
           severity: warning
-        # NoDataState: Normal — all-up yields 0 via real data; cogito-api-internal excluded by design (DOWN, public job is truth); gap -> Normal, Kuma covers host/API.
-        noDataState: Normal
+        # NoDataState: OK (= Normal state) — all-up yields 0 via real data; cogito-api-internal excluded by design (DOWN, public job is truth); gap -> Normal, Kuma covers host/API.
+        noDataState: OK
         execErrState: Error
 
       # --- Added 2026-09-07 (obs saturation pass) — 7 new rules, existing 5
@@ -249,12 +249,15 @@ groups:
       # no new contact points), so no per-rule receiver. for-windows absorb the
       # ~60s Grafana-restart/cAdvisor-60s-scrape gaps: warn rules 10m, crit 5m
       # (matching the existing disk warn/crit pattern), slow-burn rules 30m.
-      # NoData is Normal on every rule below (2026-09-14 fix: the old blanket
-      # hold-last-state with in-query comparisons latched firing forever — healthy
-      # was an empty vector (NoData), so firing could never resolve; thresholds now live
-      # in the C step and each A always returns data when healthy, so healthy
-      # resolves via real data and only true gaps hit the Normal fallback) —
-      # each rule carries a comment on what its NoData means.
+      # NoData maps to OK (= Normal state) on every rule below (2026-09-14 fix:
+      # the old blanket hold-last-state with in-query comparisons latched firing
+      # forever — healthy was an empty vector (NoData), so firing could never
+      # resolve; thresholds now live in the C step and each A always returns data
+      # when healthy, so healthy resolves via real data and only true gaps hit the
+      # OK fallback. Valid file-provisioning values are NoData/Alerting/OK
+      # (+KeepLast) — `Normal` is NOT valid and crash-loops Grafana on boot
+      # (verified live 2026-09-14) — each rule carries a comment on what its
+      # NoData means.
       - uid: cpu-high
         title: CpuHigh
         condition: C
@@ -296,8 +299,8 @@ groups:
           summary: "VPS CPU above 80% for 10m (sustained load — check Infra CPU-by-mode for steal/iowait)"
         labels:
           severity: warning
-        # NoDataState: Normal — CPU % always present when node-exporter healthy (28% -> Normal via real data); gap -> Normal, TargetDown covers exporter death.
-        noDataState: Normal
+        # NoDataState: OK (= Normal state) — CPU % always present when node-exporter healthy (28% -> Normal via real data); gap -> Normal, TargetDown covers exporter death.
+        noDataState: OK
         execErrState: Error
 
       - uid: cpu-crit
@@ -341,8 +344,8 @@ groups:
           summary: "VPS CPU above 90% for 5m (saturation — shed load or scale before latency collapses)"
         labels:
           severity: critical
-        # NoDataState: Normal — same rationale as CpuHigh; gap -> Normal, TargetDown covers exporter death.
-        noDataState: Normal
+        # NoDataState: OK (= Normal state) — same rationale as CpuHigh; gap -> Normal, TargetDown covers exporter death.
+        noDataState: OK
         execErrState: Error
 
       - uid: mem-high
@@ -386,8 +389,8 @@ groups:
           summary: "VPS memory above 85% for 10m (check Saturation mem-drain + Infra swap panels for leak vs growth)"
         labels:
           severity: warning
-        # NoDataState: Normal — mem % always present when node-exporter healthy; gap -> Normal, TargetDown covers exporter death.
-        noDataState: Normal
+        # NoDataState: OK (= Normal state) — mem % always present when node-exporter healthy; gap -> Normal, TargetDown covers exporter death.
+        noDataState: OK
         execErrState: Error
 
       - uid: mem-crit
@@ -431,8 +434,8 @@ groups:
           summary: "VPS memory above 90% for 5m (OOM risk — act before the kernel chooses victims)"
         labels:
           severity: critical
-        # NoDataState: Normal — same rationale as MemHigh; gap -> Normal, TargetDown covers exporter death.
-        noDataState: Normal
+        # NoDataState: OK (= Normal state) — same rationale as MemHigh; gap -> Normal, TargetDown covers exporter death.
+        noDataState: OK
         execErrState: Error
 
       - uid: disk-forecast
@@ -476,8 +479,8 @@ groups:
           summary: "Rootfs trending to full within 24h (6h linear fit — pairs with Infra panel 7; check Saturation burn-rate before acting)"
         labels:
           severity: warning
-        # NoDataState: Normal — <6h samples (fresh Prometheus) yields empty -> Normal fallback until a fit exists; DiskWarn/DiskCrit cover absolute thresholds independently.
-        noDataState: Normal
+        # NoDataState: OK (= Normal state) — <6h samples (fresh Prometheus) yields empty -> Normal fallback until a fit exists; DiskWarn/DiskCrit cover absolute thresholds independently.
+        noDataState: OK
         execErrState: Error
 
       # Kube-style container restarts do NOT exist in cAdvisor — this watches
@@ -527,8 +530,8 @@ groups:
           summary: "Container restarting in a burst (>2 start-time changes in 15m for one Coolify resource — crashloop or redeploy flap)"
         labels:
           severity: warning
-        # NoDataState: Normal — zero restarts yields 0 via real data/`or`; empty (trimmed/unverified series) falls back to Normal — verify series per comment above.
-        noDataState: Normal
+        # NoDataState: OK (= Normal state) — zero restarts yields 0 via real data/`or`; empty (trimmed/unverified series) falls back to Normal — verify series per comment above.
+        noDataState: OK
         execErrState: Error
 
       # Fires when ZERO nightly-backup success lines land in Loki over the
@@ -579,8 +582,8 @@ groups:
           summary: "No nightly-backup success heartbeat in Loki for 25h (verify R2 object + /var/log/cogito-backup.log on the VPS — see comment)"
         labels:
           severity: warning
-        # NoDataState: Normal — fresh heartbeat (count>=1) is Normal via real data, 0 lines fires via `lt 1`; empty Loki gap falls back to Normal — confirm {service="cogito-backup"} lines in Explore post-apply.
-        noDataState: Normal
+        # NoDataState: OK (= Normal state) — fresh heartbeat (count>=1) is Normal via real data, 0 lines fires via `lt 1`; empty Loki gap falls back to Normal — confirm {service="cogito-backup"} lines in Explore post-apply.
+        noDataState: OK
         execErrState: Error
 
       # --- Added 2026-09-11 (Midtrans UAT gate) — 2 new rules, existing 12
@@ -631,8 +634,8 @@ groups:
           summary: "API running the stub payment provider (no real checkout — verify PAYMENT_PROVIDER + redeploy)"
         labels:
           severity: critical
-        # NoDataState: Normal — non-stub/absent series yields 0 via `or vector(0)` (healthy); stub=1 fires; app down falls back to Normal, TargetDown covers it.
-        noDataState: Normal
+        # NoDataState: OK (= Normal state) — non-stub/absent series yields 0 via `or vector(0)` (healthy); stub=1 fires; app down falls back to Normal, TargetDown covers it.
+        noDataState: OK
         execErrState: Error
 
       # Burst of test-mode gate rejections: non-UAT purchases hitting the
@@ -681,6 +684,6 @@ groups:
           summary: "Test-mode gate rejecting in a burst (>10 PAYMENT_TEST_MODE_RESTRICTED in 10m — check the UAT allowlist)"
         labels:
           severity: warning
-        # NoDataState: Normal — quiet gate (0 lines) yields 0 via `or vector(0)` (healthy); Loki gap falls back to Normal — query PAYMENT_TEST_MODE_RESTRICTED in Explore (payment board retired).
-        noDataState: Normal
+        # NoDataState: OK (= Normal state) — quiet gate (0 lines) yields 0 via `or vector(0)` (healthy); Loki gap falls back to Normal — query PAYMENT_TEST_MODE_RESTRICTED in Explore (payment board retired).
+        noDataState: OK
         execErrState: Error
