@@ -1,11 +1,11 @@
 # Midtrans UAT Gate — Important Logs Payment Panels + Env-Uniqueness Guard
 
-| Field   | Value                                                                                                            |
-| ------- | ---------------------------------------------------------------------------------------------------------------- |
+| Field   | Value                                                                                                                                         |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | Status  | **Completed (merged #252, 2026-09-14)** — 10-panel Important Logs board with payment panels live in git; operator live-verify carries forward |
-| Branch  | main (merged #252)                                                                                                                                                 |
-| Workers | 1 (docs-ops: Important Logs payment panels, plan rewrite, surgical docs)                                         |
-| Entry   | Operator commands live in [INFRA-PLAYBOOK.md](../../INFRA-PLAYBOOK.md); detail in [RUNBOOK.md](../../RUNBOOK.md) |
+| Branch  | main (merged #252)                                                                                                                            |
+| Workers | 1 (docs-ops: Important Logs payment panels, plan rewrite, surgical docs)                                                                      |
+| Entry   | Operator commands live in [INFRA-PLAYBOOK.md](../../INFRA-PLAYBOOK.md); detail in [RUNBOOK.md](../../RUNBOOK.md)                              |
 
 One sentence: extend the provisioned **Important Logs** board with three
 payment panels, record the already-merged alert + env-guard evidence, and
