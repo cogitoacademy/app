@@ -5,8 +5,7 @@
 | Plan                                                  | Branch                      | PR  | Status                                                                                                                                                                                                                                                                                           |
 | ----------------------------------------------------- | --------------------------- | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | [DEFERRED-OPS-TASKS.md](active/DEFERRED-OPS-TASKS.md) | main (post-merge)           | —   | Code gaps 1.1–1.8 done; §2 Redis sessions done (R1, 2026-09-05); §3 EXPLAIN/smoke executed, p95 post-deploy; §4 ops pending                                                                                                                                                                      |
-| [DEPLOYMENT-PLAN.md](active/DEPLOYMENT-PLAN.md)       | main (merged #115–#118)     | —   | **APPLIED + VERIFIED 2026-09-01** — infra applied 08-31; CD green end-to-end (sha-verified), Phase 2 env wiring operator-confirmed, ACL pasted; Phase 4 closed 2026-09-05 (Kuma wired, rotation verified, PLG declared). Remaining: Phase 5 drills (next operator session), Xendit Live Mode E2E |
-| [MIDTRANS-UAT-GATE.md](active/MIDTRANS-UAT-GATE.md)   | `w/docs-ops-important-logs` | —   | **Active (2026-09-14)** — Important Logs payment panels (boot line, test-gate/FORBIDDEN stream, app_info stat) + T3/T4 evidence recorded (payment alerts + env uniqueness guard already merged); backend metric contract owned by sibling worker                                                 |
+| [DEPLOYMENT-PLAN.md](active/DEPLOYMENT-PLAN.md)       | main (merged #115–#118)     | —   | **APPLIED + VERIFIED 2026-09-01** — infra applied 08-31; CD green end-to-end (sha-verified), Phase 2 env wiring operator-confirmed, ACL pasted; Phase 4 closed 2026-09-05 (Kuma wired, rotation verified, PLG declared). Remaining: Phase 5 drills (next operator session), payment-provider Live Mode E2E (Midtrans) |
 
 ## Completed (merged to main)
 
@@ -20,6 +19,8 @@
 | [CPU-MEMORY-PRESSURE-WAVE.md](completed/CPU-MEMORY-PRESSURE-WAVE.md) | w/cpu-memory-pressure-wave (merged platform/alerts) | #228 | **Completed 2026-09-07** — swap-thrash relief (cAdvisor 256m + disk trim, Alloy self-scrape, backup-log shipping), KeepLast on all 12 rules, swap panel |
 | [BOOKING-HONORARIUM-SERIES-RESCHEDULE.md](completed/BOOKING-HONORARIUM-SERIES-RESCHEDULE.md) | `fix/booking-honorarium-series-reschedule` | #230 | **Completed 2026-09-07** — series honorarium totals + per-session series reschedule (frontend-only, backend verified) |
 | [OBS-ALERT-LATCH-IMPORTANT-LOGS.md](completed/OBS-ALERT-LATCH-IMPORTANT-LOGS.md) | `fix/obs-alert-latch-important-logs` | #249 | **Completed 2026-09-14** — un-latched all 14 Grafana alerts (zero-safe queries, Normal NoData, internal-job exclusion, 3 never-fire fixes) + replaced Payment Logs board with Important Logs |
+
+| [MIDTRANS-UAT-GATE.md](completed/MIDTRANS-UAT-GATE.md) | main (merged #252) | #252 | **Completed 2026-09-14** — Important Logs payment panels (boot line, test-gate/FORBIDDEN stream, app_info stat) + rewritten plan; payment alerts + env uniqueness guard recorded as already-merged evidence |
 
 | [BOOKING-NUMBERS.md](completed/BOOKING-NUMBERS.md) | working tree | **Completed locally 2026-09-04** — immutable `#N` booking references, admin queue display, and exact search |
 
