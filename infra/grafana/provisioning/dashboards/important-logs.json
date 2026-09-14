@@ -1,7 +1,7 @@
 {
   "uid": "cogito-important-logs",
   "title": "Important Logs",
-  "description": "Replaces Payment Logs (deleted): routine triage without Explore — traceId/userId trails plus errors, bookings, webhooks, scheduler/DLQ and meetings streams. Home folder: Cogito — one folder holds boards and alert rules.",
+  "description": "Routine triage without Explore — traceId/userId trails plus errors, bookings, webhooks, scheduler/DLQ, meetings and payment panels (boot line, test-mode gate, provider stat). Home folder: Cogito — one folder holds boards and alert rules.",
   "tags": ["cogito", "logs", "triage"],
   "timezone": "Asia/Jakarta",
   "schemaVersion": 39,
@@ -135,6 +135,54 @@
           "refId": "A",
           "expr": "{service=\"cogito-api\"} |~ \"google_meet_create_failed|meeting_failed_attempt|meeting_manual_fallback\"",
           "maxLines": 100
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Payment boot line (provider configured)",
+      "description": "Healthy is one payment_provider_configured line per API boot with the live provider and mode, and on a missing line after a deploy verify the container booted with the new env.",
+      "type": "logs",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 64 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service=\"cogito-api\"} |= \"payment_provider_configured\"",
+          "maxLines": 100
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Payment gate (TEST_MODE_RESTRICTED + FORBIDDEN)",
+      "description": "Healthy is zero lines, and on any hit open the userId from the log line in the User trail panel to confirm the UAT allowlist entry.",
+      "type": "logs",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 72 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service=\"cogito-api\"} |~ \"PAYMENT_TEST_MODE_RESTRICTED|FORBIDDEN\"",
+          "maxLines": 100
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Payment provider (app_info)",
+      "description": "Healthy is the live provider and mode from the app_info gauge, and on stub in production treat it as an outage and check PAYMENT_PROVIDER plus the ProdOnStub alert.",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 80 },
+      "fieldConfig": {
+        "defaults": { "noValue": "no app_info yet — backend dependency" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "app_info",
+          "legendFormat": "{{provider}}/{{provider_mode}} {{version}}"
         }
       ]
     }

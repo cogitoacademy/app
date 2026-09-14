@@ -6,6 +6,7 @@
 | ----------------------------------------------------- | ----------------------- | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | [DEFERRED-OPS-TASKS.md](active/DEFERRED-OPS-TASKS.md) | main (post-merge)       | —   | Code gaps 1.1–1.8 done; §2 Redis sessions done (R1, 2026-09-05); §3 EXPLAIN/smoke executed, p95 post-deploy; §4 ops pending                                                                                                                                                                      |
 | [DEPLOYMENT-PLAN.md](active/DEPLOYMENT-PLAN.md)       | main (merged #115–#118) | —   | **APPLIED + VERIFIED 2026-09-01** — infra applied 08-31; CD green end-to-end (sha-verified), Phase 2 env wiring operator-confirmed, ACL pasted; Phase 4 closed 2026-09-05 (Kuma wired, rotation verified, PLG declared). Remaining: Phase 5 drills (next operator session), Xendit Live Mode E2E |
+| [MIDTRANS-UAT-GATE.md](active/MIDTRANS-UAT-GATE.md)   | `w/docs-ops-important-logs` | — | **Active (2026-09-14)** — Important Logs payment panels (boot line, test-gate/FORBIDDEN stream, app_info stat) + T3/T4 evidence recorded (payment alerts + env uniqueness guard already merged); backend metric contract owned by sibling worker |
 
 ## Completed (merged to main)
 

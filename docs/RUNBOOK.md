@@ -1109,23 +1109,26 @@ io.containerd.snapshotter.v1`, `/var/lib/docker/image/` has no
   `cogito-alloy`, verify `with_name > 0` via `/api/v1/series`. Do NOT flip
   the daemon back to the legacy snapshotter (restarts every container).
 
-### Important Logs dashboard (replaces Payment Logs, 2026-09-14)
+### Important Logs dashboard (replaces Payment Logs, 2026-09-14; payment panels restored 2026-09-14)
 
 Routine triage without Grafana Explore: open the provisioned **Important
 Logs** board (Cogito folder, file
 `infra/grafana/provisioning/dashboards/important-logs.json` — source of truth
-in git, `allowUiUpdates: false`). Seven Loki panels, top to bottom: request
+in git, `allowUiUpdates: false`). Ten panels, top to bottom: request
 trail (`traceId` textbox), user trail (`userId` textbox), errors
 (`rpc_error`/`request_error`), bookings (created + failures), webhooks,
-scheduler/DLQ, meetings (Meet failures + manual fallback). Each panel states
-what healthy looks like. The old **Payment Logs** board
-(`payment-logs.json`, provider identity/boot line/test-mode gate) is deleted
-from git — manually DELETE it once in Grafana (`DELETE
+scheduler/DLQ, meetings (Meet failures + manual fallback), payment boot line
+(`payment_provider_configured`), payment gate (`PAYMENT_TEST_MODE_RESTRICTED`/
+`FORBIDDEN`), payment provider stat (`app_info`). Each panel states
+what healthy looks like. The standalone **Payment Logs** board
+(`payment-logs.json`) stays deleted from git — its payment observability now
+lives as panels 8–10 on this board; manually DELETE the old board once in
+Grafana if it still lingers (`DELETE
 /api/dashboards/uid/cogito-payment-logs`; `disableDeletion: true` means the
 provisioned copy otherwise lingers as stale).
 
-- **Payment LogQL queries** (Loki datasource, usable in Explore or ad-hoc —
-  the payment panels are gone but the log lines remain):
+- **Payment LogQL queries** (same exprs as board panels 8–9, usable in Explore
+  or ad-hoc):
   - Boot line: `{service="cogito-api"} |= "payment_provider_configured"`
     (expect `provider=midtrans midtransMode=test` during sandbox UAT; the
     secret never appears in logs).
@@ -1290,8 +1293,8 @@ the printed steps; nothing here was applied from a worker.
   (`loki.source.docker_logs` over the Docker socket — never file globs under
   `/var/lib/docker`), Grafana datasources + 6 dashboards (App RED, Logs &
   Traces with traceId/userId search, Infra with the 85%/92% disk lines,
-  Delivery with deploys/backups/DLQ/breakers, Saturation with burn-rate math,
-  Important Logs with traceId/userId trails + errors/bookings/webhooks/scheduler/meetings).
+   Delivery with deploys/backups/DLQ/breakers, Saturation with burn-rate math,
+   Important Logs with traceId/userId trails + errors/bookings/webhooks/scheduler/meetings/payments).
 - **Retention vars** (single tuning point in the playbook):
   `LOKI_RETENTION_DAYS=30`, `PROM_RETENTION_DAYS=15`. **Lean fallback** for a
   tight VPS (documented, not applied): scrape_interval `30s` in

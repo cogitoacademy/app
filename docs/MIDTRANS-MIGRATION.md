@@ -124,7 +124,9 @@ the stub.
    defense-in-depth allowlist. An empty allowlist = signature-only gating.
 5. Redeploy. Verify the boot log shows
    `action=payment_provider_configured provider=midtrans midtransMode=test`
-   (the secret must never appear in logs).
+   (the secret must never appear in logs) — also visible on the Important
+   Logs board payment panels
+   (`infra/grafana/provisioning/dashboards/important-logs.json`).
 
 ---
 
