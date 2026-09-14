@@ -18,6 +18,7 @@
 | [INFRA-RELIABILITY-WAVE.md](completed/INFRA-RELIABILITY-WAVE.md) | w/infra-reliability-wave (merged prod/obs/docs) | #226 | **Completed 2026-09-07** — studio gateway, verify truth, resource bounds, sops regex, drift truth, app_info gauge, 4 board updates + saturation board, 7 new alerts, docs sync |
 | [CPU-MEMORY-PRESSURE-WAVE.md](completed/CPU-MEMORY-PRESSURE-WAVE.md) | w/cpu-memory-pressure-wave (merged platform/alerts) | #228 | **Completed 2026-09-07** — swap-thrash relief (cAdvisor 256m + disk trim, Alloy self-scrape, backup-log shipping), KeepLast on all 12 rules, swap panel |
 | [BOOKING-HONORARIUM-SERIES-RESCHEDULE.md](completed/BOOKING-HONORARIUM-SERIES-RESCHEDULE.md) | `fix/booking-honorarium-series-reschedule` | #230 | **Completed 2026-09-07** — series honorarium totals + per-session series reschedule (frontend-only, backend verified) |
+| [OBS-ALERT-LATCH-IMPORTANT-LOGS.md](completed/OBS-ALERT-LATCH-IMPORTANT-LOGS.md) | `fix/obs-alert-latch-important-logs` | #249 | **Completed 2026-09-14** — un-latched all 14 Grafana alerts (zero-safe queries, Normal NoData, internal-job exclusion, 3 never-fire fixes) + replaced Payment Logs board with Important Logs |
 
 | [BOOKING-NUMBERS.md](completed/BOOKING-NUMBERS.md) | working tree | **Completed locally 2026-09-04** — immutable `#N` booking references, admin queue display, and exact search |
 

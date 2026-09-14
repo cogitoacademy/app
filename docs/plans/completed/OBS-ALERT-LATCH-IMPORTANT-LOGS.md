@@ -72,7 +72,7 @@ Latent never-fire bugs found while fixing (same file):
 
 ## Status
 
-Shipped in `fix/obs-alert-latch-important-logs` (this wave). Incidental
+**Completed (merged #249, 2026-09-14).** Incidental
 finding carried forward: `logs-traces.json` panel 3
 (`|= "rpc_error" or "request_error"`) is invalid LogQL — fix to
 `|~ "rpc_error|request_error"` in a follow-up (left untouched: out of scope).
