@@ -1,0 +1,1 @@
+DROP INDEX "booking_state_deadline_idx";
