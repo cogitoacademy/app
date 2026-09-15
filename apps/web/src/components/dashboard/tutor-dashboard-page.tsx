@@ -2,13 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import {
-  IconArrowRight,
-  IconCalendarCheck,
-  IconClock,
-  IconCoins,
-  IconInbox,
-} from "@tabler/icons-react";
+import { IconArrowRight, IconInbox } from "@tabler/icons-react";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
@@ -18,8 +12,6 @@ import {
   CardHeaderAction,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
-import { Heading } from "@cogito-app/ui/components/selia/heading";
-import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 
@@ -47,7 +39,6 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
   const bookings = useQuery(
     orpc.booking.listMine.queryOptions({ input: { limit: 100 } }),
   );
-  const availability = useQuery(orpc.tutor.listAvailability.queryOptions());
   const profile = useQuery(orpc.tutor.getMyProfile.queryOptions());
   const payouts = useQuery(orpc.tutor.getMyPayouts.queryOptions({ input: {} }));
 
@@ -88,54 +79,13 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
           reviewCount={reviewQueue.length}
         />
 
-        <div className="grid gap-4 sm:grid-cols-2 h-full">
-          <MetricCard
-            icon={<IconInbox />}
-            label="Needs review"
-            value={bookings.isPending ? "—" : String(reviewQueue.length)}
-            tone={reviewQueue.length > 0 ? "warning-subtle" : "primary-subtle"}
-          />
-          <MetricCard
-            icon={<IconCalendarCheck />}
-            label="Upcoming sessions"
-            value={bookings.isPending ? "—" : String(upcoming.length)}
-            tone="info-subtle"
-          />
-          <MetricCard
-            icon={<IconClock />}
-            label="Availability slots"
-            value={
-              availability.isPending
-                ? "—"
-                : String(availability.data?.length ?? 0)
-            }
-            tone="tertiary-subtle"
-          />
-          <MetricCard
-            icon={<IconCoins />}
-            label="Honorarium awaiting payout"
-            value={
-              payouts.isPending
-                ? "—"
-                : "Rp" + pendingHonorarium.toLocaleString("id-ID")
-            }
-            tone="success-subtle"
-          />
-        </div>
-      </div>
-
-      <NextLessonSection
-        booking={nextBooking}
-        isLoading={bookings.isPending}
-        viewerRole="tutor"
-      />
-
-      <div className="grid items-start gap-4 lg:grid-cols-2">
         <ReviewRequestsCard
           isLoading={bookings.isPending}
           reviewQueue={reviewQueue}
         />
+      </div>
 
+      <div className="grid items-start gap-4 lg:grid-cols-2">
         <Card className="min-w-0">
           <CardHeader className="py-4">
             <CardTitle>Payout details</CardTitle>
@@ -203,6 +153,12 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
             </div>
           </CardBody>
         </Card>
+
+        <NextLessonSection
+          booking={nextBooking}
+          isLoading={bookings.isPending}
+          viewerRole="tutor"
+        />
       </div>
     </Stack>
   );
@@ -223,11 +179,9 @@ function ReviewRequestsCard({
             variant="plain"
             size="xs"
             nativeButton={false}
-            render={
-              <Link to="/bookings" aria-label="View all tutor bookings" />
-            }
+            render={<Link to="/bookings" aria-label="See all tutor bookings" />}
           >
-            View all <IconArrowRight />
+            See all <IconArrowRight />
           </Button>
         </CardHeaderAction>
       </CardHeader>
@@ -254,37 +208,6 @@ function ReviewRequestsCard({
             className="rounded-lg"
           />
         )}
-      </CardBody>
-    </Card>
-  );
-}
-
-function MetricCard({
-  icon,
-  label,
-  value,
-  tone,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  tone:
-    | "warning-subtle"
-    | "primary-subtle"
-    | "secondary-subtle"
-    | "info-subtle"
-    | "tertiary-subtle"
-    | "success-subtle";
-}) {
-  return (
-    <Card className="h-full">
-      <CardBody className="flex flex-col h-full items-stretch justify-between p-5">
-        <div className="flex items-center gap-4 self-start">
-          <IconBox variant={tone}>{icon}</IconBox>
-          <Text className="text-muted">{label}</Text>
-        </div>
-
-        <Heading className="self-end text-right">{value}</Heading>
       </CardBody>
     </Card>
   );

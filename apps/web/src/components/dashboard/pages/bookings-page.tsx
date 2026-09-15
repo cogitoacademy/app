@@ -309,7 +309,7 @@ function BookingTabBar({
                 role="tab"
                 aria-selected={activeTab === tab.value}
                 className={cn(
-                  "flex h-8 flex-none cursor-pointer items-center justify-center gap-2.5 rounded-full px-3 py-1 font-medium transition-colors",
+                  "flex h-8 flex-none cursor-pointer items-center justify-center gap-2.5 rounded-full px-3 py-1 font-medium transition-colors text-sm xl:text-base",
                   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
                   activeTab === tab.value
                     ? "bg-tabs-accent text-foreground shadow ring ring-tabs-border inset-shadow-2xs inset-shadow-white/15 dark:inset-shadow-black/15"
