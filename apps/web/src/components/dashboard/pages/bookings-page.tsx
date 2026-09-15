@@ -297,7 +297,7 @@ function BookingTabBar({
       <div className="w-full min-[520px]:w-fit min-w-0 max-w-full overflow-hidden rounded-full bg-tabs p-1 inset-shadow-xs inset-shadow-black/10 dark:inset-shadow-none">
         <div
           data-slot="booking-tab-scroller"
-          className="w-full min-w-0 max-w-full overflow-x-auto overflow-y-hidden overscroll-x-contain px-1 py-1 scrollbar-hidden"
+          className="w-full min-w-0 max-w-full overflow-x-auto overflow-y-hidden overscroll-x-contain p-px scrollbar-hidden"
           role="tablist"
           aria-label="Booking status"
         >

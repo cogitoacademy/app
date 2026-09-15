@@ -204,7 +204,7 @@ function ReviewRequestsCard({
             title="No requests to review"
             description="New student requests will appear here."
             size="compact"
-            tone="secondary"
+            tone="warning"
             className="rounded-lg"
           />
         )}
