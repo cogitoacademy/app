@@ -40,8 +40,10 @@ export function DashboardWelcomeCard({
       <LearningOrbitIllustration />
       <CardBody className="relative z-1 flex h-full flex-col items-start justify-between gap-8 p-6">
         <div>
-          <Heading className="max-w-sm text-3xl">{greeting.title}</Heading>
-          <Text className="mt-2 max-w-sm text-muted">
+          <Heading className="max-w-sm text-2xl md:text-3xl">
+            {greeting.title}
+          </Heading>
+          <Text className="mt-2 max-w-sm text-sm md:text-base text-muted">
             {greeting.description}
           </Text>
         </div>

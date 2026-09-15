@@ -6,6 +6,7 @@ import {
   IconLayoutSidebarLeftCollapse,
   IconLayoutSidebarLeftExpand,
 } from "@tabler/icons-react";
+import { useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { ModeToggle } from "../mode-toggle";
 import { NotificationBell } from "../notification-bell";
@@ -31,12 +32,34 @@ export function Layout({
   const [sidebarOpen, setSidebarOpen] = useState(
     () => window.innerWidth >= 1280,
   );
+  const router = useRouter();
 
   useEffect(() => {
     const updateSidebar = () => setSidebarOpen(window.innerWidth >= 1280);
     window.addEventListener("resize", updateSidebar);
     return () => window.removeEventListener("resize", updateSidebar);
   }, []);
+
+  // Close overlay sidebar on mobile on every navigation (Link clicks +
+  // programmatic navigate()). Closes at navigation start so the slide-out
+  // plays while the next route loads; history commit stays as safety net.
+  // setState runs in subscription callbacks, not the effect body.
+  useEffect(() => {
+    const closeOnMobile = () => {
+      if (window.innerWidth < 1280) {
+        setSidebarOpen(false);
+      }
+    };
+    const unsubscribeBeforeNavigate = router.subscribe(
+      "onBeforeNavigate",
+      closeOnMobile,
+    );
+    const unsubscribeHistory = router.history.subscribe(closeOnMobile);
+    return () => {
+      unsubscribeBeforeNavigate();
+      unsubscribeHistory();
+    };
+  }, [router]);
 
   function toggleSidebar() {
     setSidebarOpen((open) => !open);
@@ -62,8 +85,8 @@ export function Layout({
       <div
         id="app-sidebar"
         className={cn(
-          "fixed top-0 z-50 h-dvh w-full max-w-72 transition-[left] duration-200 motion-reduce:transition-none *:h-full md:w-72",
-          sidebarOpen ? "left-0" : "-left-full",
+          "fixed top-0 left-0 z-50 h-dvh w-full max-w-72 transition-transform duration-200 motion-reduce:transition-none *:h-full md:w-72",
+          sidebarOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
         {sidebar}
@@ -118,7 +141,7 @@ export function Layout({
             contentScrollMode === "contained"
               ? "overflow-hidden"
               : "overflow-y-auto overscroll-contain",
-            "xl:p-4 border-l border-t border-border xl:rounded-tl-4xl",
+            "xl:p-4 xl:border-l border-t border-border xl:rounded-tl-4xl",
           )}
         >
           <SessionExpiryNotice expiresAt={sessionExpiresAt} />

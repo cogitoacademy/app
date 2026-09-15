@@ -20,7 +20,7 @@ export function LoginPage() {
           alt="Cogito Academy"
           width={256}
           height={64}
-          className="h-auto w-36 object-contain sm:w-32"
+          className="h-auto w-36 object-contain sm:w-32 dark:brightness-0 dark:invert"
         />
         <div className="hidden">
           <ModeToggle />
