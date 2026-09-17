@@ -532,7 +532,10 @@ function RouteComponent() {
                                 src={profile.user?.image ?? undefined}
                               />
                               <AvatarFallback>
-                                {profile.user?.name?.trim().slice(0, 2).toUpperCase() || "TU"}
+                                {profile.user?.name
+                                  ?.trim()
+                                  .slice(0, 2)
+                                  .toUpperCase() || "TU"}
                               </AvatarFallback>
                             </Avatar>
                             <div className="min-w-0">
