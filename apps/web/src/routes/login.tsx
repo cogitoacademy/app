@@ -6,4 +6,11 @@ import { validateLoginSearch } from "./-login-search";
 export const Route = createFileRoute("/login")({
   component: LoginPage,
   validateSearch: validateLoginSearch,
+  head: () => ({
+    meta: [
+      {
+        title: "Sign in — Cogito Academy",
+      },
+    ],
+  }),
 });

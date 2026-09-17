@@ -25,17 +25,98 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
   head: () => ({
     meta: [
       {
-        title: "Cogito Digital",
+        title: "Cogito Academy",
       },
       {
         name: "description",
-        content: "cogito-app is a web application",
+        content:
+          "Cogito Academy — find expert tutors, book lessons, and track achievements.",
+      },
+      {
+        name: "theme-color",
+        content: "#F97316",
+      },
+      {
+        name: "robots",
+        content: "index, follow",
+      },
+      {
+        property: "og:type",
+        content: "website",
+      },
+      {
+        property: "og:site_name",
+        content: "Cogito Academy",
+      },
+      {
+        property: "og:url",
+        content: "https://app.cogitoacademy.id/",
+      },
+      {
+        property: "og:title",
+        content: "Cogito Academy",
+      },
+      {
+        property: "og:description",
+        content: "Find expert tutors, book lessons, and track achievements.",
+      },
+      {
+        property: "og:image",
+        content: "https://app.cogitoacademy.id/og-image.png",
+      },
+      {
+        property: "og:image:width",
+        content: "1200",
+      },
+      {
+        property: "og:image:height",
+        content: "630",
+      },
+      {
+        name: "twitter:card",
+        content: "summary_large_image",
+      },
+      {
+        name: "twitter:title",
+        content: "Cogito Academy",
+      },
+      {
+        name: "twitter:description",
+        content: "Find expert tutors, book lessons, and track achievements.",
+      },
+      {
+        name: "twitter:image",
+        content: "https://app.cogitoacademy.id/og-image.png",
       },
     ],
     links: [
       {
         rel: "icon",
-        href: "/c of cogito.png",
+        type: "image/svg+xml",
+        href: "/favicon.svg",
+      },
+      {
+        rel: "icon",
+        type: "image/png",
+        sizes: "96x96",
+        href: "/favicon-96x96.png",
+      },
+      {
+        rel: "icon",
+        type: "image/x-icon",
+        href: "/favicon.ico",
+      },
+      {
+        rel: "apple-touch-icon",
+        href: "/apple-touch-icon.png",
+      },
+      {
+        rel: "manifest",
+        href: "/site.webmanifest",
+      },
+      {
+        rel: "canonical",
+        href: "https://app.cogitoacademy.id/",
       },
     ],
   }),

@@ -6,6 +6,13 @@ import { AdminBookingDetailPage } from "@/components/admin/admin-operations-page
 export const Route = createFileRoute(
   "/_app/admin-operations_/bookings/$bookingId",
 )({
+  head: () => ({
+    meta: [
+      {
+        title: "Booking detail — Cogito Academy",
+      },
+    ],
+  }),
   component: AdminBookingDetailRoute,
   beforeLoad: ({ context }) => {
     const user = context.session.data?.user as CogitoUser | undefined;

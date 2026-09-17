@@ -4,6 +4,13 @@ import type { CogitoUser } from "@cogito-app/auth";
 import { BookingDetailPage } from "@/components/booking/booking-detail-page";
 
 export const Route = createFileRoute("/_app/bookings_/$bookingId")({
+  head: () => ({
+    meta: [
+      {
+        title: "Booking detail — Cogito Academy",
+      },
+    ],
+  }),
   component: BookingDetailRoute,
 });
 

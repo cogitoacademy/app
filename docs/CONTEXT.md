@@ -434,6 +434,13 @@ and CORS origin are `https://app.cogitoacademy.id`. The production frontend
 image must be built with `VITE_SERVER_URL=https://api.cogitoacademy.id`; the
 static nginx image does not proxy `/rpc` to the API.
 
+Frontend SEO/prod surface: the favicon set lives in `apps/web/public/`
+(`favicon.svg`/`.ico`, PNGs, `site.webmanifest`); the root head (`__root.tsx` plus the
+`index.html` baseline) carries description, OG/Twitter, theme-color, and
+robots meta; `/robots.txt`, `/sitemap.xml`, and `/llms.txt` are served static.
+nginx sends HSTS + CSP, never caches HTML (stale asset hashes), and caches
+hashed `/assets/` immutable for a year.
+
 The PostgreSQL service currently runs as Coolify's private `postgres:16-alpine`
 container and does not serve TLS. Production-like API deployments therefore set
 `DB_SSL_ENABLED=false`; `DB_SSL_REJECT_UNAUTHORIZED` only controls certificate

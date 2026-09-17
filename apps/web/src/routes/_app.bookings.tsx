@@ -4,6 +4,13 @@ import { z } from "zod";
 import { BookingsPage } from "@/components/dashboard/pages/bookings-page";
 
 export const Route = createFileRoute("/_app/bookings")({
+  head: () => ({
+    meta: [
+      {
+        title: "Bookings — Cogito Academy",
+      },
+    ],
+  }),
   validateSearch: z.object({
     tab: z
       .enum(["action", "upcoming", "recurring", "history", "all"])
