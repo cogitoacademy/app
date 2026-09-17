@@ -9,6 +9,7 @@ import {
   subMonths,
 } from "date-fns";
 import {
+  IconAdjustmentsHorizontal,
   IconArrowLeft,
   IconArrowRight,
   IconCalendarCheck,
@@ -17,6 +18,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 
+import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
@@ -26,9 +28,13 @@ import {
 } from "@cogito-app/ui/components/selia/card";
 import {
   Menu,
+  MenuCheckboxItem,
+  MenuGroupLabel,
+  MenuItem,
   MenuPopup,
   MenuRadioGroup,
   MenuRadioItem,
+  MenuSeparator,
   MenuTrigger,
 } from "@cogito-app/ui/components/selia/menu";
 import { cn } from "@cogito-app/ui/lib/utils";
@@ -36,7 +42,14 @@ import { cn } from "@cogito-app/ui/lib/utils";
 import { CalendarAgendaView } from "./calendar-agenda-view";
 import { CalendarDetailsDrawer } from "./calendar-details-drawer";
 import { CalendarMonthView } from "./calendar-month-view";
-import { AGENDA_DAYS_TO_SHOW, EVENT_GAP, EVENT_HEIGHT } from "./calendar-utils";
+import {
+  AGENDA_DAYS_TO_SHOW,
+  EVENT_GAP,
+  EVENT_HEIGHT,
+  competitionTypeOptions,
+  filterEventsByCompetitionType,
+  getCategoryLabel,
+} from "./calendar-utils";
 import type { CalendarCompetition, CalendarView } from "./calendar-types";
 
 const EMPTY_EVENTS: CalendarCompetition[] = [];
@@ -58,6 +71,9 @@ export function CompetitionCalendar({
   const [view, setView] = useState<CalendarView>(initialView);
   const [selectedEvent, setSelectedEvent] =
     useState<CalendarCompetition | null>(null);
+  const [selectedTypes, setSelectedTypes] = useState<ReadonlySet<string>>(
+    () => new Set(competitionTypeOptions),
+  );
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -79,10 +95,10 @@ export function CompetitionCalendar({
 
   const sortedEvents = useMemo(
     () =>
-      events.toSorted(
+      filterEventsByCompetitionType(events, selectedTypes).toSorted(
         (left, right) => left.start.getTime() - right.start.getTime(),
       ),
-    [events],
+    [events, selectedTypes],
   );
 
   const viewTitle = useMemo(() => {
@@ -120,6 +136,28 @@ export function CompetitionCalendar({
 
   function handleViewChange(value: string) {
     if (value === "month" || value === "agenda") setView(value);
+  }
+
+  const isFiltered = selectedTypes.size < competitionTypeOptions.length;
+
+  const filterLabel = isFiltered
+    ? `Filter by competition type, ${selectedTypes.size} of ${competitionTypeOptions.length} types shown`
+    : "Filter by competition type";
+
+  function handleTypeToggle(value: string, checked: boolean) {
+    setSelectedTypes((prev) => {
+      const next = new Set(prev);
+      if (checked) {
+        next.add(value);
+      } else {
+        next.delete(value);
+      }
+      return next;
+    });
+  }
+
+  function handleResetTypes() {
+    setSelectedTypes(new Set(competitionTypeOptions));
   }
 
   const calendarStyle = {
@@ -182,7 +220,54 @@ export function CompetitionCalendar({
             </CardTitle>
           </div>
 
-          <div className="ml-auto">
+          <div className="relative ml-auto">
+            <Menu>
+              <MenuTrigger
+                render={
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    aria-label={filterLabel}
+                    className="w-fit"
+                  />
+                }
+              >
+                <IconAdjustmentsHorizontal />
+                <span className="max-[479px]:sr-only">Filter</span>
+                <IconChevronDown className="hidden min-[366px]:block" />
+              </MenuTrigger>
+              <MenuPopup align="end" size="compact">
+                <MenuGroupLabel>Competition type</MenuGroupLabel>
+                {competitionTypeOptions.map((value) => (
+                  <MenuCheckboxItem
+                    key={value}
+                    checked={selectedTypes.has(value)}
+                    onCheckedChange={(checked) =>
+                      handleTypeToggle(value, checked === true)
+                    }
+                  >
+                    {getCategoryLabel(value)}
+                  </MenuCheckboxItem>
+                ))}
+                <MenuSeparator />
+                <MenuItem onClick={handleResetTypes} disabled={!isFiltered}>
+                  Reset
+                </MenuItem>
+              </MenuPopup>
+            </Menu>
+            {isFiltered ? (
+              <Badge
+                variant="primary"
+                size="sm"
+                pill
+                className="absolute -top-2 -right-2 px-1 text-[10px] tabular-nums"
+              >
+                {`${selectedTypes.size}/${competitionTypeOptions.length}`}
+              </Badge>
+            ) : null}
+          </div>
+
+          <div>
             <Menu>
               <MenuTrigger
                 render={

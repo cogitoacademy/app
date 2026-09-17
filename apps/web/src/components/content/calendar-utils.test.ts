@@ -7,10 +7,7 @@ import {
 } from "./calendar-utils";
 import type { CalendarCompetition } from "./calendar-types";
 
-function makeEvent(
-  id: string,
-  coreCategories: string[],
-): CalendarCompetition {
+function makeEvent(id: string, coreCategories: string[]): CalendarCompetition {
   return {
     id,
     title: id,
