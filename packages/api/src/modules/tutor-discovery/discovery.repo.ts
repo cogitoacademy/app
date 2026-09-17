@@ -38,7 +38,6 @@ const subjectCategoryFilterParentId = sql.raw(
 
 export interface ListPublishedInput {
   search?: string;
-  expertise?: string;
   categoryId?: string;
   subjectId?: string;
   categoryIds?: string[];
@@ -63,10 +62,10 @@ function sqlValueList(values: readonly string[]) {
 }
 
 /**
- * Lists published tutor profiles with search/expertise/modality filters and pagination.
+ * Lists published tutor profiles with search/subject/modality filters and pagination.
  *
  * @param conn - the database connection or active transaction
- * @param input - the list options (search, expertise, modality, limit, offset)
+ * @param input - the list options (search, subject filters, modality, limit, offset)
  * @returns the matching profiles with their user, newest published first
  */
 async function listPublished(conn: DbOrTx, input: ListPublishedInput) {
@@ -92,8 +91,6 @@ async function listPublished(conn: DbOrTx, input: ListPublishedInput) {
             and lower(${user.name}) like lower(${q}) escape '\\'
         )
         or lower(${tutorProfile.shortBio}) like lower(${q}) escape '\\'
-        or lower(${tutorProfile.credentialsSummary}) like lower(${q}) escape '\\'
-        or lower(coalesce(${tutorProfile.expertise}::text, '')) like lower(${q}) escape '\\'
         or exists (
           select 1
           from ${tutorProfileSubjectFilterTable}
@@ -104,12 +101,6 @@ async function listPublished(conn: DbOrTx, input: ListPublishedInput) {
             and lower(${subjectCategoryFilterName}) like lower(${q}) escape '\\'
         )
       )`,
-    );
-  }
-
-  if (input.expertise) {
-    conditions.push(
-      sql`${tutorProfile.expertise} @> ${JSON.stringify([input.expertise])}::jsonb`,
     );
   }
 

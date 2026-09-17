@@ -92,7 +92,6 @@ export function createInviteService(deps: {
       const profile = await inviteRepo.insertTutorProfile(tx, {
         userId,
         inviteId: invite!.id,
-        displayName: invite!.displayName,
       });
 
       await inviteRepo.updateUserRole(tx, userId, USER_ROLE.TUTOR);

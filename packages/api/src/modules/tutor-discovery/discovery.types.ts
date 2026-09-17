@@ -11,7 +11,6 @@ const filterIds = z
 export const listPublishedInput = z
   .object({
     search: z.string().max(200).optional(),
-    expertise: z.string().max(255).optional(),
     categoryId: z.string().min(1).max(100).optional(),
     subjectId: z.string().min(1).max(100).optional(),
     categoryIds: filterIds,

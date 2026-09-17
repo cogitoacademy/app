@@ -17,7 +17,6 @@ export function countTutorShortBioWords(value: string) {
 
 export const updateMyProfileInput = z.object({
   version: z.number().int(),
-  displayName: z.string().min(1).max(255).optional(),
   shortBio: z
     .string()
     .max(2000)
@@ -26,16 +25,12 @@ export const updateMyProfileInput = z.object({
       { message: `Use ${MAX_TUTOR_SHORT_BIO_WORDS} words or fewer.` },
     )
     .optional(),
-  achievements: z.string().max(5000).optional(),
-  experiences: z.string().max(5000).optional(),
   achievementProofUrls: z.array(externalHttpUrl).max(20).optional(),
   experienceProofUrls: z.array(externalHttpUrl).max(20).optional(),
   profileImageUrl: profileImageUrl.optional(),
-  credentialsSummary: z.string().max(2000).optional(),
   education: tutorEducationInput.optional(),
   competitionAchievements: tutorCompetitionAchievementsInput.optional(),
   experienceEntries: tutorExperienceEntriesInput.optional(),
-  expertise: z.array(z.string().max(255)).max(20).optional(),
   subjectIds: z
     .array(z.string().min(1).max(100))
     .min(1)

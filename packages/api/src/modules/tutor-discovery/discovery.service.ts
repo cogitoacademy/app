@@ -38,13 +38,9 @@ export interface ProfileProjection {
   userId: string;
   displayName: string | null;
   shortBio: string | null;
-  credentialsSummary: string | null;
-  achievements: string | null;
-  experiences: string | null;
   education: TutorProfileRow["education"];
   competitionAchievements: TutorProfileRow["competitionAchievements"];
   experienceEntries: TutorProfileRow["experienceEntries"];
-  expertise: string[];
   subjects: NormalizedTutorSubject[];
   modality: string | null;
   prices: Record<string, number> | null;
@@ -61,13 +57,9 @@ export function buildProjection(profile: ProfileWithUser): ProfileProjection {
     // role's visible name from the canonical auth user record.
     displayName: profile.user?.name ?? null,
     shortBio: profile.shortBio,
-    credentialsSummary: profile.credentialsSummary,
-    achievements: profile.achievements,
-    experiences: profile.experiences,
     education: profile.education ?? [],
     competitionAchievements: profile.competitionAchievements ?? [],
     experienceEntries: profile.experienceEntries ?? [],
-    expertise: profile.expertise ?? [],
     subjects: toNormalizedTutorSubjects(profile.subjects),
     modality: profile.modality,
     prices: profile.prices,
@@ -155,7 +147,6 @@ export function createDiscoveryService(deps: {
 
   async function listPublished(opts?: {
     search?: string;
-    expertise?: string;
     categoryId?: string;
     subjectId?: string;
     categoryIds?: string[];
@@ -166,7 +157,6 @@ export function createDiscoveryService(deps: {
   }) {
     const profiles = await repo.listPublished({
       search: opts?.search,
-      expertise: opts?.expertise,
       categoryId: opts?.categoryId,
       subjectId: opts?.subjectId,
       categoryIds: opts?.categoryIds,

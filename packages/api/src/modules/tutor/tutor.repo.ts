@@ -26,18 +26,13 @@ import type {
 
 export interface UpdateProfileInput {
   version: number;
-  displayName?: string;
   shortBio?: string;
-  achievements?: string;
-  experiences?: string;
   achievementProofUrls?: string[];
   experienceProofUrls?: string[];
   profileImageUrl?: string;
-  credentialsSummary?: string;
   education?: TutorEducationEntry[];
   competitionAchievements?: TutorCompetitionAchievement[];
   experienceEntries?: TutorExperienceEntry[];
-  expertise?: string[];
   subjectIds?: string[];
   modality?: "online" | "offline" | "both";
   baseRatesIdr?: Partial<{ online: number; offline: number }>;
@@ -126,8 +121,7 @@ export async function updateProfileImage(
 
 /**
  * Finds active specializations by id. Parent categories are deliberately
- * excluded so arbitrary expertise strings or mother ids cannot be persisted
- * as tutor selections.
+ * excluded so mother ids cannot be persisted as tutor selections.
  */
 export async function listActiveChildSubjects(
   conn: DbOrTx,

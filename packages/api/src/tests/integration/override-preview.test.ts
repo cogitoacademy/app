@@ -91,13 +91,9 @@ describe("Admin override preview (G10)", () => {
       .values({
         userId: tutorId,
         inviteId: invite!.id,
-        displayName: "G10 Tutor",
         shortBio: "Bio",
-        credentialsSummary: "Creds",
-        expertise: ["Mathematics"],
         modality: "online",
         prices: { "1": 50, "2": 45, "3": 40, "4": 35, "5": 30, "6": 28 },
-        availabilitySummary: "Flexible",
         onboardingStatus: "published",
         publishedAt: new Date(),
       })

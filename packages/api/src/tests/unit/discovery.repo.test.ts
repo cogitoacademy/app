@@ -66,14 +66,14 @@ describe("DiscoveryRepo", () => {
       expect(callArg.where).toBeDefined();
     });
 
-    test("filters by expertise", async () => {
-      const profiles = [{ id: "tp1", expertise: ["algebra"] }];
+    test("filters by subject ids", async () => {
+      const profiles = [{ id: "tp1" }];
       const findMany = mock(async () => profiles);
       const conn = makeConn(findMany);
       const repo = createDiscoveryRepo(conn);
 
       const result = await repo.listPublished({
-        expertise: "algebra",
+        subjectIds: ["subject-1"],
         limit: 20,
         offset: 0,
       });
@@ -112,7 +112,7 @@ describe("DiscoveryRepo", () => {
       const result = await repo.listPublished({
         modality: "online",
         search: "math",
-        expertise: "algebra",
+        subjectIds: ["subject-1"],
         limit: 20,
         offset: 0,
       });
