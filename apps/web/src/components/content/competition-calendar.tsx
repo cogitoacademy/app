@@ -34,7 +34,7 @@ import {
 import { cn } from "@cogito-app/ui/lib/utils";
 
 import { CalendarAgendaView } from "./calendar-agenda-view";
-import { CalendarDetailsDialog } from "./calendar-details-dialog";
+import { CalendarDetailsDrawer } from "./calendar-details-drawer";
 import { CalendarMonthView } from "./calendar-month-view";
 import { AGENDA_DAYS_TO_SHOW, EVENT_GAP, EVENT_HEIGHT } from "./calendar-utils";
 import type { CalendarCompetition, CalendarView } from "./calendar-types";
@@ -229,7 +229,7 @@ export function CompetitionCalendar({
         </CardBody>
       </Card>
 
-      <CalendarDetailsDialog
+      <CalendarDetailsDrawer
         event={selectedEvent}
         open={selectedEvent !== null}
         onClose={() => setSelectedEvent(null)}

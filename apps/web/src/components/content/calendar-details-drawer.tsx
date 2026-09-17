@@ -2,19 +2,20 @@
 
 import { format } from "date-fns";
 import { IconArrowRight, IconExternalLink } from "@tabler/icons-react";
+import { useEffect, useState } from "react";
 
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
-  Dialog,
-  DialogBody,
-  DialogClose,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogPopup,
-  DialogTitle,
-} from "@cogito-app/ui/components/selia/dialog";
+  Drawer,
+  DrawerBody,
+  DrawerClose,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerPopup,
+  DrawerTitle,
+} from "@cogito-app/ui/components/selia/drawer";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Text } from "@cogito-app/ui/components/selia/text";
 
@@ -113,7 +114,7 @@ function InfoCards({ event }: { event: CalendarCompetition }) {
   );
 }
 
-export function CalendarDetailsDialog({
+export function CalendarDetailsDrawer({
   event,
   open,
   onClose,
@@ -122,24 +123,39 @@ export function CalendarDetailsDialog({
   open: boolean;
   onClose: () => void;
 }) {
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 640px)");
+    const updateViewport = () => setIsDesktop(mediaQuery.matches);
+
+    updateViewport();
+    mediaQuery.addEventListener("change", updateViewport);
+    return () => mediaQuery.removeEventListener("change", updateViewport);
+  }, []);
+
   if (!event) return null;
 
   return (
-    <Dialog
+    <Drawer
       open={open}
       onOpenChange={(nextOpen) => {
         if (!nextOpen) onClose();
       }}
+      swipeDirection={isDesktop ? "right" : "down"}
     >
-      <DialogPopup className="max-w-2xl p-0">
-        <DialogHeader className="items-start border-b border-dialog-border">
+      <DrawerPopup
+        direction={isDesktop ? "right" : "bottom"}
+        className={isDesktop ? "w-full max-w-lg" : undefined}
+      >
+        <DrawerHeader className="items-start border-b border-drawer-border">
           <div className="min-w-0 flex-1">
-            <DialogTitle className="text-2xl font-bold tracking-tight">
+            <DrawerTitle className="text-2xl font-bold tracking-tight">
               {event.title}
-            </DialogTitle>
-            <DialogDescription className="sr-only">
+            </DrawerTitle>
+            <DrawerDescription className="sr-only">
               Competition details and information
-            </DialogDescription>
+            </DrawerDescription>
             <div className="mt-3 sm:hidden">
               <CategoryBadges event={event} />
             </div>
@@ -147,9 +163,9 @@ export function CalendarDetailsDialog({
           <div className="hidden shrink-0 sm:block">
             <CategoryBadges event={event} />
           </div>
-        </DialogHeader>
+        </DrawerHeader>
 
-        <DialogBody className="space-y-4">
+        <DrawerBody className="space-y-4">
           <InfoCards event={event} />
 
           {event.description ? (
@@ -162,10 +178,10 @@ export function CalendarDetailsDialog({
               </Text>
             </div>
           ) : null}
-        </DialogBody>
+        </DrawerBody>
 
-        <DialogFooter className="flex-col items-stretch gap-3 sm:flex-row sm:items-center">
-          <DialogClose className="order-last sm:order-first">Close</DialogClose>
+        <DrawerFooter className="flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+          <DrawerClose className="order-last sm:order-first">Close</DrawerClose>
           <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2">
             {event.socialMediaLink ? (
               <Button
@@ -210,8 +226,8 @@ export function CalendarDetailsDialog({
               </Button>
             )}
           </div>
-        </DialogFooter>
-      </DialogPopup>
-    </Dialog>
+        </DrawerFooter>
+      </DrawerPopup>
+    </Drawer>
   );
 }
