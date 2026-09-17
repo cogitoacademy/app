@@ -164,3 +164,23 @@ export function formatCompetitionDates(event: CalendarCompetition) {
 
   return `${format(event.start, "d MMM yyyy")} – ${format(event.end, "d MMM yyyy")}`;
 }
+
+export const competitionTypeOptions = [
+  "mun",
+  "olimpiade",
+  "wsc",
+  "kti",
+  "debat",
+  "business",
+  "pidato",
+] as const;
+
+export function filterEventsByCompetitionType(
+  events: CalendarCompetition[],
+  selected: ReadonlySet<string>,
+): CalendarCompetition[] {
+  if (selected.size >= competitionTypeOptions.length) return events;
+  return events.filter((event) =>
+    event.categories.some((category) => selected.has(category.coreCategory)),
+  );
+}
