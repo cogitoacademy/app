@@ -9,7 +9,7 @@ export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
       {
-        title: "Sign in — Cogito Academy",
+        title: "Sign in · Cogito Academy",
       },
     ],
   }),

@@ -6,7 +6,7 @@ export const Route = createFileRoute("/verify-email")({
   head: () => ({
     meta: [
       {
-        title: "Verify email — Cogito Academy",
+        title: "Verify email · Cogito Academy",
       },
     ],
   }),

@@ -20,7 +20,7 @@ export const Route = createFileRoute("/reset-password")({
   head: () => ({
     meta: [
       {
-        title: "Reset password — Cogito Academy",
+        title: "Reset password · Cogito Academy",
       },
     ],
   }),

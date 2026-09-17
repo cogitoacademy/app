@@ -6,7 +6,7 @@ export const Route = createFileRoute("/_app/calendar")({
   head: () => ({
     meta: [
       {
-        title: "Competition calendar — Cogito Academy",
+        title: "Competition calendar · Cogito Academy",
       },
     ],
   }),
