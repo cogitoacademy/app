@@ -193,7 +193,9 @@ describe("Booking solo flow", () => {
       })
       .where(eq(booking.id, bookingId));
 
-    const updated = await tutorClient.tutorActions.completeSession({ feedback: TEST_COMPLETION_FEEDBACK, bookingId,
+    const updated = await tutorClient.tutorActions.completeSession({
+      feedback: TEST_COMPLETION_FEEDBACK,
+      bookingId,
     });
     expect(updated.currentState).toBe("completed");
   });

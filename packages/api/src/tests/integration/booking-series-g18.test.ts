@@ -168,7 +168,9 @@ describe("Series session completion (G18)", () => {
 
   test("attempt to complete a future session → rejected", async () => {
     await expect(
-      tutorClient.tutorActions.completeSession({ feedback: TEST_COMPLETION_FEEDBACK, bookingId,
+      tutorClient.tutorActions.completeSession({
+        feedback: TEST_COMPLETION_FEEDBACK,
+        bookingId,
         sessionId: sessionIds[0]!,
       }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
@@ -180,7 +182,9 @@ describe("Series session completion (G18)", () => {
       .set({ scheduledStartAt: new Date(Date.now() - 3600_000) })
       .where(eq(bookingSession.id, sessionIds[0]!));
 
-    const result = await tutorClient.tutorActions.completeSession({ feedback: TEST_COMPLETION_FEEDBACK, bookingId,
+    const result = await tutorClient.tutorActions.completeSession({
+      feedback: TEST_COMPLETION_FEEDBACK,
+      bookingId,
       sessionId: sessionIds[0]!,
     });
     expect(result.currentState).toBe("scheduled");
@@ -210,7 +214,9 @@ describe("Series session completion (G18)", () => {
 
   test("double-completing session 1 → rejected", async () => {
     await expect(
-      tutorClient.tutorActions.completeSession({ feedback: TEST_COMPLETION_FEEDBACK, bookingId,
+      tutorClient.tutorActions.completeSession({
+        feedback: TEST_COMPLETION_FEEDBACK,
+        bookingId,
         sessionId: sessionIds[0]!,
       }),
     ).rejects.toMatchObject({ code: "CONFLICT" });
@@ -222,13 +228,17 @@ describe("Series session completion (G18)", () => {
       .set({ scheduledStartAt: new Date(Date.now() - 3600_000) })
       .where(eq(bookingSession.seriesBookingId, bookingId));
 
-    const r2 = await tutorClient.tutorActions.completeSession({ feedback: TEST_COMPLETION_FEEDBACK, bookingId,
+    const r2 = await tutorClient.tutorActions.completeSession({
+      feedback: TEST_COMPLETION_FEEDBACK,
+      bookingId,
       sessionId: sessionIds[1]!,
     });
     expect(r2.currentState).toBe("scheduled");
     expect(r2.holdAmount).toBe(perSession);
 
-    const r3 = await tutorClient.tutorActions.completeSession({ feedback: TEST_COMPLETION_FEEDBACK, bookingId,
+    const r3 = await tutorClient.tutorActions.completeSession({
+      feedback: TEST_COMPLETION_FEEDBACK,
+      bookingId,
       sessionId: sessionIds[2]!,
     });
     expect(r3.currentState).toBe("completed");

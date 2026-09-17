@@ -467,7 +467,9 @@ describe("Booking group series flow (FR-20)", () => {
     }
 
     for (const s of sessions) {
-      await tutorClient.tutorActions.completeSession({ feedback: TEST_COMPLETION_FEEDBACK, bookingId,
+      await tutorClient.tutorActions.completeSession({
+        feedback: TEST_COMPLETION_FEEDBACK,
+        bookingId,
         sessionId: s.id,
       });
     }

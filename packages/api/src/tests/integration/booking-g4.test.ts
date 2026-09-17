@@ -286,7 +286,9 @@ describe("G4: group repricing on headcount change", () => {
       .set({ scheduledStartAt: new Date(Date.now() - 30 * 60_000) })
       .where(eq(bookingTable.id, bookingId));
 
-    const completed = await tutorClient.tutorActions.completeSession({ feedback: TEST_COMPLETION_FEEDBACK, bookingId,
+    const completed = await tutorClient.tutorActions.completeSession({
+      feedback: TEST_COMPLETION_FEEDBACK,
+      bookingId,
     });
     expect(completed.currentState).toBe("completed");
 

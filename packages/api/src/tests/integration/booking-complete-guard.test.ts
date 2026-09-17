@@ -161,7 +161,10 @@ describe("completeSession start-time guard (C3)", () => {
     expect(accepted.holdAmount).toBeGreaterThan(0);
 
     await expect(
-      tutorAClient.tutorActions.completeSession({ feedback: TEST_COMPLETION_FEEDBACK, bookingId: b.id }),
+      tutorAClient.tutorActions.completeSession({
+        feedback: TEST_COMPLETION_FEEDBACK,
+        bookingId: b.id,
+      }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
 
     const [row] = await db
@@ -200,7 +203,9 @@ describe("completeSession start-time guard (C3)", () => {
       .set({ scheduledStartAt: new Date(Date.now() - 5 * 60_000) })
       .where(eq(bookingTable.id, b.id));
 
-    const completed = await tutorAClient.tutorActions.completeSession({ feedback: TEST_COMPLETION_FEEDBACK, bookingId: b.id,
+    const completed = await tutorAClient.tutorActions.completeSession({
+      feedback: TEST_COMPLETION_FEEDBACK,
+      bookingId: b.id,
     });
     expect(completed.currentState).toBe("completed");
 
@@ -238,7 +243,9 @@ describe("completeSession start-time guard (C3)", () => {
       .set({ scheduledStartAt: new Date(Date.now() - 15 * 60_000) })
       .where(eq(bookingTable.id, b.id));
 
-    const completed = await tutorAClient.tutorActions.completeSession({ feedback: TEST_COMPLETION_FEEDBACK, bookingId: b.id,
+    const completed = await tutorAClient.tutorActions.completeSession({
+      feedback: TEST_COMPLETION_FEEDBACK,
+      bookingId: b.id,
     });
     expect(completed.currentState).toBe("completed");
 
@@ -278,7 +285,10 @@ describe("completeSession start-time guard (C3)", () => {
     expect(accepted.holdAmount).toBeGreaterThan(0);
 
     await expect(
-      tutorAClient.tutorActions.completeSession({ feedback: TEST_COMPLETION_FEEDBACK, bookingId: b.id }),
+      tutorAClient.tutorActions.completeSession({
+        feedback: TEST_COMPLETION_FEEDBACK,
+        bookingId: b.id,
+      }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
 
     const [row] = await db
@@ -303,7 +313,9 @@ describe("completeSession start-time guard (C3)", () => {
       .set({ scheduledStartAt: new Date(Date.now() - 30 * 60_000) })
       .where(eq(bookingTable.id, groupId));
 
-    const completed = await tutorAClient.tutorActions.completeSession({ feedback: TEST_COMPLETION_FEEDBACK, bookingId: groupId,
+    const completed = await tutorAClient.tutorActions.completeSession({
+      feedback: TEST_COMPLETION_FEEDBACK,
+      bookingId: groupId,
     });
     expect(completed.currentState).toBe("completed");
 
@@ -355,7 +367,9 @@ describe("completeSession start-time guard (C3)", () => {
     });
 
     await expect(
-      tutorAClient.tutorActions.completeSession({ feedback: TEST_COMPLETION_FEEDBACK, bookingId: b.id,
+      tutorAClient.tutorActions.completeSession({
+        feedback: TEST_COMPLETION_FEEDBACK,
+        bookingId: b.id,
         sessionId: listed[0]!.id,
       }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
@@ -374,13 +388,19 @@ describe("completeSession start-time guard (C3)", () => {
     );
 
     await expect(
-      tutorBClient.tutorActions.completeSession({ feedback: TEST_COMPLETION_FEEDBACK, bookingId: soloLateId }),
+      tutorBClient.tutorActions.completeSession({
+        feedback: TEST_COMPLETION_FEEDBACK,
+        bookingId: soloLateId,
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   test("completing a non-SCHEDULED booking is still rejected (state check enforced)", async () => {
     await expect(
-      tutorAClient.tutorActions.completeSession({ feedback: TEST_COMPLETION_FEEDBACK, bookingId: soloLateId }),
+      tutorAClient.tutorActions.completeSession({
+        feedback: TEST_COMPLETION_FEEDBACK,
+        bookingId: soloLateId,
+      }),
     ).rejects.toMatchObject({ code: "CONFLICT" });
   });
 });

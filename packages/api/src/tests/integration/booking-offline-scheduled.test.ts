@@ -245,7 +245,9 @@ describe("B1/U12: offline bookings do not auto-NO_SHOW at session start", () => 
     expect(row.holdAmount).toBe(50);
     expect(row.deadlineAt!.getTime()).toBeGreaterThan(now);
 
-    const completed = await tutorClient.tutorActions.completeSession({ feedback: TEST_COMPLETION_FEEDBACK, bookingId: b.id,
+    const completed = await tutorClient.tutorActions.completeSession({
+      feedback: TEST_COMPLETION_FEEDBACK,
+      bookingId: b.id,
     });
     expect(completed.currentState).toBe(BOOKING_STATE.COMPLETED);
   });

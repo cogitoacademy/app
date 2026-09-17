@@ -167,7 +167,9 @@ describe("G7: session notes with sanitization", () => {
       .set({ scheduledStartAt: new Date(Date.now() - 30 * 60_000) })
       .where(eq(bookingTable.id, bookingId));
 
-    const updated = await tutorClient.tutorActions.completeSession({ feedback: TEST_COMPLETION_FEEDBACK, bookingId,
+    const updated = await tutorClient.tutorActions.completeSession({
+      feedback: TEST_COMPLETION_FEEDBACK,
+      bookingId,
     });
     expect(updated.currentState).toBe("completed");
   });
