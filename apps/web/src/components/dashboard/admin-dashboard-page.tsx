@@ -63,91 +63,48 @@ export function AdminDashboardPage({ adminName }: { adminName: string }) {
   const achievementCount = achievementStats.data?.pending ?? 0;
   return (
     <Stack direction="column" spacing="lg">
-      <DashboardWelcomeCard
-        name={adminName}
-        viewerRole="admin"
-        priorityCount={priorityItems.length + tutorCount + achievementCount}
-      />
+      <div className="grid lg:grid-cols-2 gap-4">
+        <DashboardWelcomeCard
+          name={adminName}
+          viewerRole="admin"
+          priorityCount={priorityItems.length + tutorCount + achievementCount}
+        />
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Metric
-          icon={<IconAlertTriangle />}
-          label="Escalated operations"
-          value={escalations.isPending ? "—" : String(priorityItems.length)}
-          tone={priorityItems.length ? "danger-subtle" : "tertiary-subtle"}
-        />
-        <Metric
-          icon={<IconUserCheck />}
-          label="Tutor reviews"
-          value={tutors.isPending ? "—" : String(tutorCount)}
-          tone="warning-subtle"
-        />
-        <Metric
-          icon={<IconCertificate />}
-          label="Achievement reviews"
-          value={achievementStats.isPending ? "—" : String(achievementCount)}
-          tone="info-subtle"
-        />
-      </div>
-
-      <Card>
-        <CardBody className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-3">
-            <IconBox variant="secondary-subtle">
-              <IconWallet />
-            </IconBox>
-            <div className="min-w-0">
-              <Heading size="sm">Tutor payouts</Heading>
-              <Text className="text-sm text-muted">
-                Verify accounts, review unpaid honorarium, and record transfers.
-              </Text>
+        <Card>
+          <CardBody className="flex flex-wrap h-full justify-between gap-4">
+            <div className="flex min-w-0 items-start gap-3">
+              <IconBox variant="tertiary">
+                <IconWallet />
+              </IconBox>
+              <div className="min-w-0">
+                <Heading size="sm">Tutor payouts</Heading>
+                <Text className="text-sm text-muted">
+                  Verify accounts, review unpaid honorarium, and record
+                  transfers.
+                </Text>
+              </div>
             </div>
-          </div>
-          <Button
-            size="sm"
-            variant="secondary"
-            nativeButton={false}
-            render={
-              <Link to="/admin-tutor-payouts" aria-label="Open tutor payouts" />
-            }
-          >
-            Open payouts
-          </Button>
-        </CardBody>
-      </Card>
+            <Button
+              size="sm"
+              className="self-end"
+              variant="secondary"
+              nativeButton={false}
+              render={
+                <Link
+                  to="/admin-tutor-payouts"
+                  aria-label="Open tutor payouts"
+                />
+              }
+            >
+              Open payouts
+            </Button>
+          </CardBody>
+        </Card>
+      </div>
 
       <Suspense fallback={<Loader />}>
         <AdminAnalytics />
       </Suspense>
     </Stack>
-  );
-}
-
-function Metric({
-  icon,
-  label,
-  value,
-  tone,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  tone:
-    | "danger-subtle"
-    | "secondary-subtle"
-    | "tertiary-subtle"
-    | "warning-subtle"
-    | "info-subtle";
-}) {
-  return (
-    <Card>
-      <CardBody className="flex items-center gap-4 p-3">
-        <IconBox variant={tone}>{icon}</IconBox>
-        <div>
-          <Text className="text-sm text-muted">{label}</Text>
-          <Heading size="sm">{value}</Heading>
-        </div>
-      </CardBody>
-    </Card>
   );
 }

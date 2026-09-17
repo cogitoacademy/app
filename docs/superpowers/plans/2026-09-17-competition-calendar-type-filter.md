@@ -28,6 +28,7 @@
 ### Task 1: Filter helper + options export (TDD)
 
 **Files:**
+
 - Modify: `apps/web/src/components/content/calendar-utils.ts`
 - Create: `apps/web/src/components/content/calendar-utils.test.ts`
 
@@ -45,10 +46,7 @@ import {
 } from "./calendar-utils";
 import type { CalendarCompetition } from "./calendar-types";
 
-function makeEvent(
-  id: string,
-  coreCategories: string[],
-): CalendarCompetition {
+function makeEvent(id: string, coreCategories: string[]): CalendarCompetition {
   return {
     id,
     title: id,
@@ -172,6 +170,7 @@ rtk git commit -m "feat(calendar): add competition type filter helper"
 ### Task 2: Toolbar filter UI in CompetitionCalendar
 
 **Files:**
+
 - Modify: `apps/web/src/components/content/competition-calendar.tsx`
 
 - [ ] **Step 1: Read the file**
@@ -372,6 +371,7 @@ rtk git commit -m "feat(calendar): add competition type filter to toolbar"
 ### Task 3: Docs follow code (AGENTS.md rule 11)
 
 **Files:**
+
 - Modify: `docs/CONTEXT.md`
 
 - [ ] **Step 1: Read then extend the calendar bullet**

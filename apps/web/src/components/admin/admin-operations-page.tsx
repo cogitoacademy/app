@@ -567,7 +567,7 @@ function BookingQueue({
                           <TableCell className="align-top">
                             <SlaStatus item={item} timezone={item.timezone} />
                           </TableCell>
-                          <TableCell className="align-top whitespace-nowrap text-sm flex items-center">
+                          <TableCell className="align-top whitespace-nowrap text-sm flex items-center gap-1">
                             <CogitoMarks value={item.holdAmount} size="3" />
                             held
                           </TableCell>
