@@ -29,6 +29,7 @@ import {
 import {
   Menu,
   MenuCheckboxItem,
+  MenuGroup,
   MenuGroupLabel,
   MenuItem,
   MenuPopup,
@@ -220,7 +221,7 @@ export function CompetitionCalendar({
             </CardTitle>
           </div>
 
-          <div className="relative ml-auto">
+          <div className="relative ml-auto flex gap-2">
             <Menu>
               <MenuTrigger
                 render={
@@ -237,18 +238,20 @@ export function CompetitionCalendar({
                 <IconChevronDown className="hidden min-[366px]:block" />
               </MenuTrigger>
               <MenuPopup align="end" size="compact">
-                <MenuGroupLabel>Competition type</MenuGroupLabel>
-                {competitionTypeOptions.map((value) => (
-                  <MenuCheckboxItem
-                    key={value}
-                    checked={selectedTypes.has(value)}
-                    onCheckedChange={(checked) =>
-                      handleTypeToggle(value, checked === true)
-                    }
-                  >
-                    {getCategoryLabel(value)}
-                  </MenuCheckboxItem>
-                ))}
+                <MenuGroup>
+                  <MenuGroupLabel>Competition type</MenuGroupLabel>
+                  {competitionTypeOptions.map((value) => (
+                    <MenuCheckboxItem
+                      key={value}
+                      checked={selectedTypes.has(value)}
+                      onCheckedChange={(checked) =>
+                        handleTypeToggle(value, checked === true)
+                      }
+                    >
+                      {getCategoryLabel(value)}
+                    </MenuCheckboxItem>
+                  ))}
+                </MenuGroup>
                 <MenuSeparator />
                 <MenuItem onClick={handleResetTypes} disabled={!isFiltered}>
                   Reset
@@ -265,9 +268,6 @@ export function CompetitionCalendar({
                 {`${selectedTypes.size}/${competitionTypeOptions.length}`}
               </Badge>
             ) : null}
-          </div>
-
-          <div>
             <Menu>
               <MenuTrigger
                 render={
