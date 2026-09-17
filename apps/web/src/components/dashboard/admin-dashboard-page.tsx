@@ -1,12 +1,15 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import {
   IconAlertTriangle,
   IconCertificate,
   IconUserCheck,
+  IconWallet,
 } from "@tabler/icons-react";
 import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
+import { Button } from "@cogito-app/ui/components/selia/button";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
@@ -86,6 +89,32 @@ export function AdminDashboardPage({ adminName }: { adminName: string }) {
           tone="info-subtle"
         />
       </div>
+
+      <Card>
+        <CardBody className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <IconBox variant="secondary-subtle">
+              <IconWallet />
+            </IconBox>
+            <div className="min-w-0">
+              <Heading size="sm">Tutor payouts</Heading>
+              <Text className="text-sm text-muted">
+                Verify accounts, review unpaid honorarium, and record transfers.
+              </Text>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant="secondary"
+            nativeButton={false}
+            render={
+              <Link to="/admin-tutor-payouts" aria-label="Open tutor payouts" />
+            }
+          >
+            Open payouts
+          </Button>
+        </CardBody>
+      </Card>
 
       <Suspense fallback={<Loader />}>
         <AdminAnalytics />

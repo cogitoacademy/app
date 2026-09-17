@@ -43,6 +43,7 @@ import {
   IconUser,
   IconUserSquare,
   IconUsersGroup,
+  IconWallet,
 } from "@tabler/icons-react";
 import { authClient } from "@/lib/auth-client";
 import { WhatsAppSupportDialog } from "@/components/whatsapp-support-dialog";
@@ -74,6 +75,7 @@ const adminNavItems = [
   { to: "/admin-operations", label: "Operations", icon: IconSettings },
   { to: "/bookings", label: "Bookings", icon: IconCalendarEvent },
   { to: "/admin-tutors", label: "Tutors", icon: IconUsersGroup },
+  { to: "/admin-tutor-payouts", label: "Tutor payouts", icon: IconWallet },
   { to: "/admin-economy", label: "Economy", icon: IconAdjustments },
   {
     to: "/admin-achievements",

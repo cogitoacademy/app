@@ -7,7 +7,7 @@ import {
   RoomBookingStateError,
 } from "./room.errors";
 import type { RoomRepo } from "./room.repo";
-import type { CreateRoomInput } from "./room.types";
+import type { CreateRoomInput, UpdateRoomInput } from "./room.types";
 import {
   NOTIFICATION_CATEGORY,
   NOTIFICATION_SEVERITY,
@@ -80,6 +80,29 @@ export function createRoomService(
 
   async function createRoom(input: CreateRoomInput) {
     return repo.insertRoom(db, input);
+  }
+
+  async function updateRoom(input: UpdateRoomInput) {
+    const current = await repo.findRoomRecordById(db, input.id);
+    if (!current) throw new RoomNotFoundError(input.id);
+
+    const updated = await repo.updateRoom(db, input.id, {
+      name: input.name,
+      location: input.location,
+      capacity: input.capacity,
+    });
+    if (!updated) throw new RoomNotFoundError(input.id);
+    return updated;
+  }
+
+  async function deactivateRoom(roomId: string) {
+    const current = await repo.findRoomRecordById(db, roomId);
+    if (!current) throw new RoomNotFoundError(roomId);
+    if (!current.isActive) return current;
+
+    const updated = await repo.deactivateRoom(db, roomId);
+    if (!updated) throw new RoomNotFoundError(roomId);
+    return updated;
   }
 
   async function checkAvailability(
@@ -466,6 +489,8 @@ export function createRoomService(
     listActive,
     listPendingApprovals,
     createRoom,
+    updateRoom,
+    deactivateRoom,
     checkAvailability,
     requestRoomForBooking,
     assignRoom,

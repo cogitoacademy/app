@@ -66,6 +66,7 @@ describe("guide content", () => {
       "/availability",
       "/admin",
       "/admin-tutors",
+      "/admin-tutor-payouts",
       "/admin-operations",
       "/admin-achievements",
       "/admin-economy",

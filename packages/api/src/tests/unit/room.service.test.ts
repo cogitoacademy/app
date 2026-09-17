@@ -22,6 +22,9 @@ function makeRepo(overrides: Partial<RoomRepo> = {}): RoomRepo {
     ),
     insertRoom: mock(async (_conn: any, _values: any) => ({})),
     findRoomById: mock(async (_conn: any, _roomId: string) => null),
+    findRoomRecordById: mock(async (_conn: any, _roomId: string) => null),
+    updateRoom: mock(async (_conn: any, _roomId: string, _values: any) => null),
+    deactivateRoom: mock(async (_conn: any, _roomId: string) => null),
     findRoomBookings: mock(async (_conn: any) => []),
     findRoomBookingsForUpdate: mock(async (_conn: any) => []),
     insertRoomBooking: mock(async (_conn: any, _values: any) => ({})),
@@ -135,6 +138,95 @@ describe("createRoomService", () => {
         capacity: 10,
       });
       expect(result).toEqual(room);
+    });
+  });
+
+  describe("updateRoom", () => {
+    test("updates an existing room's details", async () => {
+      const updated = makeRoom({
+        name: "Room B",
+        location: "Building 2",
+        capacity: 12,
+      });
+      const repo = makeRepo({
+        findRoomRecordById: mock(async () => makeRoom()),
+        updateRoom: mock(async (_conn, roomId, values) => {
+          expect(roomId).toBe("room1");
+          expect(values).toEqual({
+            name: "Room B",
+            location: "Building 2",
+            capacity: 12,
+          });
+          return updated;
+        }),
+      });
+
+      const service = createRoomService(repo, makeDb());
+      await expect(
+        service.updateRoom({
+          id: "room1",
+          name: "Room B",
+          location: "Building 2",
+          capacity: 12,
+        }),
+      ).resolves.toEqual(updated);
+    });
+
+    test("throws when the room does not exist", async () => {
+      const repo = makeRepo({
+        findRoomRecordById: mock(async () => null),
+      });
+      const service = createRoomService(repo, makeDb());
+
+      await expect(
+        service.updateRoom({
+          id: "missing",
+          name: "Room B",
+          location: "Building 2",
+          capacity: 12,
+        }),
+      ).rejects.toThrow("Room not found");
+      expect(repo.updateRoom).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("deactivateRoom", () => {
+    test("soft-deactivates an active room", async () => {
+      const updated = makeRoom({ isActive: false });
+      const repo = makeRepo({
+        findRoomRecordById: mock(async () => makeRoom()),
+        deactivateRoom: mock(async (_conn, roomId) => {
+          expect(roomId).toBe("room1");
+          return updated;
+        }),
+      });
+      const service = createRoomService(repo, makeDb());
+
+      await expect(service.deactivateRoom("room1")).resolves.toEqual(updated);
+    });
+
+    test("is idempotent for an already inactive room", async () => {
+      const inactive = makeRoom({ isActive: false });
+      const deactivate = mock(async () => null);
+      const repo = makeRepo({
+        findRoomRecordById: mock(async () => inactive),
+        deactivateRoom: deactivate,
+      });
+      const service = createRoomService(repo, makeDb());
+
+      await expect(service.deactivateRoom("room1")).resolves.toEqual(inactive);
+      expect(deactivate).not.toHaveBeenCalled();
+    });
+
+    test("throws when the room does not exist", async () => {
+      const repo = makeRepo({
+        findRoomRecordById: mock(async () => null),
+      });
+      const service = createRoomService(repo, makeDb());
+
+      await expect(service.deactivateRoom("missing")).rejects.toThrow(
+        "Room not found",
+      );
     });
   });
 

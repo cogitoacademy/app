@@ -1680,6 +1680,8 @@ type AdminUserSearchResult = Awaited<
   ReturnType<typeof client.admin.searchUsers>
 >[number];
 
+type ActiveRoom = Awaited<ReturnType<typeof client.room.list>>[number];
+
 type PendingRoomApproval = Awaited<
   ReturnType<typeof client.room.listPendingApprovals>
 >[number];
@@ -1687,6 +1689,10 @@ type PendingRoomApproval = Awaited<
 function RoomOperations() {
   const queryClient = useQueryClient();
   const [createRoomOpen, setCreateRoomOpen] = useState(false);
+  const [editingRoom, setEditingRoom] = useState<ActiveRoom | null>(null);
+  const [roomToDeactivate, setRoomToDeactivate] = useState<ActiveRoom | null>(
+    null,
+  );
   const [pendingPage, setPendingPage] = useState(0);
   const [cancelApproval, setCancelApproval] =
     useState<PendingRoomApproval | null>(null);
@@ -1701,6 +1707,9 @@ function RoomOperations() {
   });
   const invalidateRoomQueries = () => {
     void Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: orpc.room.list.key(),
+      }),
       queryClient.invalidateQueries({
         queryKey: orpc.room.listPendingApprovals.key(),
       }),
@@ -1719,6 +1728,34 @@ function RoomOperations() {
         invalidateRoomQueries();
       },
       onError: (error: Error) => showError("Room could not be assigned", error),
+    }),
+  );
+  const updateRoom = useMutation(
+    orpc.room.update.mutationOptions({
+      onSuccess: () => {
+        setEditingRoom(null);
+        toastManager.add({
+          title: "Room details updated",
+          type: "success",
+        });
+        invalidateRoomQueries();
+      },
+      onError: (error: Error) => showError("Room could not be updated", error),
+    }),
+  );
+  const deactivateRoom = useMutation(
+    orpc.room.deactivate.mutationOptions({
+      onSuccess: () => {
+        setRoomToDeactivate(null);
+        toastManager.add({
+          title: "Room deactivated",
+          description: "The room is no longer available for new bookings.",
+          type: "success",
+        });
+        invalidateRoomQueries();
+      },
+      onError: (error: Error) =>
+        showError("Room could not be deactivated", error),
     }),
   );
   const cancel = useMutation(
@@ -1747,7 +1784,12 @@ function RoomOperations() {
   return (
     <>
       <Stack direction="column" spacing="md">
-        <RoomCatalog onAddRoom={() => setCreateRoomOpen(true)} />
+        <RoomCatalog
+          onAddRoom={() => setCreateRoomOpen(true)}
+          onEditRoom={setEditingRoom}
+          onDeactivateRoom={setRoomToDeactivate}
+          isActionPending={updateRoom.isPending || deactivateRoom.isPending}
+        />
         <PendingRoomApprovals
           items={(pendingQuery.data ?? []).slice(0, ROOM_APPROVAL_PAGE_SIZE)}
           isPending={pendingQuery.isPending}
@@ -1763,7 +1805,12 @@ function RoomOperations() {
           onRefresh={() => void pendingQuery.refetch()}
           onAssignRequested={assignRequested}
           onCancel={setCancelApproval}
-          isActionPending={assign.isPending || cancel.isPending}
+          isActionPending={
+            assign.isPending ||
+            cancel.isPending ||
+            updateRoom.isPending ||
+            deactivateRoom.isPending
+          }
           page={pendingPage}
           pageSize={ROOM_APPROVAL_PAGE_SIZE}
           hasNext={(pendingQuery.data?.length ?? 0) > ROOM_APPROVAL_PAGE_SIZE}
@@ -1777,6 +1824,36 @@ function RoomOperations() {
       <CreateRoomDialog
         open={createRoomOpen}
         onOpenChange={setCreateRoomOpen}
+      />
+      <EditRoomDialog
+        key={editingRoom?.id ?? "closed"}
+        room={editingRoom}
+        open={editingRoom !== null}
+        onOpenChange={(open) => {
+          if (!open && !updateRoom.isPending) setEditingRoom(null);
+        }}
+        onSave={(input) => updateRoom.mutate(input)}
+        pending={updateRoom.isPending}
+      />
+      <ConfirmationDialog
+        open={roomToDeactivate !== null}
+        onOpenChange={(open) => {
+          if (!open && !deactivateRoom.isPending) setRoomToDeactivate(null);
+        }}
+        title="Deactivate this room?"
+        description={
+          roomToDeactivate
+            ? `This will remove ${roomToDeactivate.name} from new offline-booking assignments. Existing bookings remain assigned to it.`
+            : "This will remove the room from new offline-booking assignments."
+        }
+        confirmLabel="Deactivate room"
+        confirmVariant="danger"
+        pending={deactivateRoom.isPending}
+        onConfirm={() => {
+          if (roomToDeactivate) {
+            deactivateRoom.mutate({ id: roomToDeactivate.id });
+          }
+        }}
       />
       <ConfirmationDialog
         open={cancelApproval !== null}
@@ -1802,7 +1879,17 @@ function RoomOperations() {
   );
 }
 
-function RoomCatalog({ onAddRoom }: { onAddRoom: () => void }) {
+function RoomCatalog({
+  onAddRoom,
+  onEditRoom,
+  onDeactivateRoom,
+  isActionPending,
+}: {
+  onAddRoom: () => void;
+  onEditRoom: (room: ActiveRoom) => void;
+  onDeactivateRoom: (room: ActiveRoom) => void;
+  isActionPending: boolean;
+}) {
   const [page, setPage] = useState(0);
   const roomsQuery = useQuery({
     ...orpc.room.list.queryOptions({
@@ -1901,6 +1988,7 @@ function RoomCatalog({ onAddRoom }: { onAddRoom: () => void }) {
                     <TableHead>Room</TableHead>
                     <TableHead>Location</TableHead>
                     <TableHead>Capacity</TableHead>
+                    <TableHead className="w-48 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1911,6 +1999,26 @@ function RoomCatalog({ onAddRoom }: { onAddRoom: () => void }) {
                       </TableCell>
                       <TableCell>{room.location}</TableCell>
                       <TableCell>{room.capacity} seats</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex flex-wrap justify-end gap-1">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => onEditRoom(room)}
+                            disabled={isActionPending}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            onClick={() => onDeactivateRoom(room)}
+                            disabled={isActionPending}
+                          >
+                            Deactivate
+                          </Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -2088,6 +2196,148 @@ function CreateRoomDialog({
             disabled={create.isPending}
           >
             <IconPlus /> Add room
+          </Button>
+        </DialogFooter>
+      </DialogPopup>
+    </Dialog>
+  );
+}
+
+function EditRoomDialog({
+  room,
+  open,
+  onOpenChange,
+  onSave,
+  pending,
+}: {
+  room: ActiveRoom | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSave: (input: {
+    id: string;
+    name: string;
+    location: string;
+    capacity: number;
+  }) => void;
+  pending: boolean;
+}) {
+  const [name, setName] = useState(() => room?.name ?? "");
+  const [location, setLocation] = useState(() => room?.location ?? "");
+  const [capacity, setCapacity] = useState<number | null>(
+    () => room?.capacity ?? null,
+  );
+  const [formError, setFormError] = useState<string | null>(null);
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!room) return;
+
+    const trimmedName = name.trim();
+    const trimmedLocation = location.trim();
+    if (!trimmedName) {
+      setFormError("Enter a room name.");
+      return;
+    }
+    if (!trimmedLocation) {
+      setFormError("Enter a room location.");
+      return;
+    }
+    if (capacity === null || !Number.isSafeInteger(capacity) || capacity < 1) {
+      setFormError("Capacity must be a whole number greater than zero.");
+      return;
+    }
+    if (trimmedName.length > 255 || trimmedLocation.length > 255) {
+      setFormError("Room name and location must be 255 characters or fewer.");
+      return;
+    }
+
+    setFormError(null);
+    onSave({
+      id: room.id,
+      name: trimmedName,
+      location: trimmedLocation,
+      capacity,
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogPopup className="max-w-lg">
+        <DialogHeader className="flex-col items-start gap-1.5">
+          <DialogTitle>Edit room details</DialogTitle>
+          <DialogDescription>
+            Update the room name, location, or learner capacity.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogBody className="min-h-0">
+          {formError ? (
+            <Text className="mb-4 text-danger" role="alert">
+              {formError}
+            </Text>
+          ) : null}
+          <form id="edit-room-form" onSubmit={submit}>
+            <Stack direction="column" spacing="md">
+              <Field>
+                <FieldLabel htmlFor="edit-room-name">Room name</FieldLabel>
+                <Input
+                  id="edit-room-name"
+                  name="name"
+                  value={name}
+                  maxLength={255}
+                  required
+                  onChange={(event) => setName(event.target.value)}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="edit-room-location">Location</FieldLabel>
+                <Input
+                  id="edit-room-location"
+                  name="location"
+                  value={location}
+                  maxLength={255}
+                  required
+                  onChange={(event) => setLocation(event.target.value)}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="edit-room-capacity">Capacity</FieldLabel>
+                <NumberField
+                  id="edit-room-capacity"
+                  value={capacity}
+                  min={1}
+                  step={1}
+                  allowOutOfRange
+                  inputProps={{
+                    name: "capacity",
+                    inputMode: "numeric",
+                    required: true,
+                  }}
+                  onValueChange={setCapacity}
+                />
+                <FieldDescription>
+                  Enter the maximum number of learners this room can hold.
+                </FieldDescription>
+              </Field>
+            </Stack>
+          </form>
+        </DialogBody>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => onOpenChange(false)}
+            disabled={pending}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            form="edit-room-form"
+            progress={pending}
+            disabled={pending || !room}
+          >
+            Save changes
           </Button>
         </DialogFooter>
       </DialogPopup>

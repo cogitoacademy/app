@@ -5,6 +5,9 @@ import {
   findPendingRoomApprovals,
   insertRoom,
   findRoomById,
+  findRoomRecordById,
+  updateRoom,
+  deactivateRoom,
   findRoomBookings,
   insertRoomBooking,
   findRequestedRoomBookingByBookingId,
@@ -138,6 +141,53 @@ describe("findRoomById", () => {
     const result = await findRoomById(conn, "missing");
 
     expect(result).toBeNull();
+  });
+});
+
+describe("findRoomRecordById", () => {
+  test("returns a room regardless of active state", async () => {
+    const roomRow = { id: "r1", name: "Room A", isActive: false };
+    const conn = { ...makeQueryConn(roomRow) } as any;
+
+    await expect(findRoomRecordById(conn, "r1")).resolves.toEqual(roomRow);
+  });
+});
+
+describe("room detail mutations", () => {
+  function makeUpdateConn(returned: any[] = []) {
+    const returning = mock(async () => returned);
+    const where = mock(() => ({ returning }));
+    const set = mock(() => ({ where }));
+    const update = mock(() => ({ set }));
+    return { update, set, where, returning };
+  }
+
+  test("updates room details", async () => {
+    const updated = {
+      id: "r1",
+      name: "Room B",
+      location: "Building 2",
+      capacity: 12,
+      isActive: true,
+    };
+    const conn = makeUpdateConn([updated]);
+
+    await expect(
+      updateRoom(conn as any, "r1", {
+        name: "Room B",
+        location: "Building 2",
+        capacity: 12,
+      }),
+    ).resolves.toEqual(updated);
+    expect(conn.update).toHaveBeenCalledTimes(1);
+  });
+
+  test("soft-deactivates a room", async () => {
+    const updated = { id: "r1", isActive: false };
+    const conn = makeUpdateConn([updated]);
+
+    await expect(deactivateRoom(conn as any, "r1")).resolves.toEqual(updated);
+    expect(conn.set).toHaveBeenCalledWith({ isActive: false });
   });
 });
 
@@ -277,11 +327,17 @@ describe("createRoomRepo", () => {
     expect(r).toHaveProperty("findBookingStateById");
     expect(r).toHaveProperty("insertRoom");
     expect(r).toHaveProperty("findRoomById");
+    expect(r).toHaveProperty("findRoomRecordById");
+    expect(r).toHaveProperty("updateRoom");
+    expect(r).toHaveProperty("deactivateRoom");
     expect(r).toHaveProperty("findRoomBookings");
     expect(r).toHaveProperty("insertRoomBooking");
     expect(typeof r.findActiveRooms).toBe("function");
     expect(typeof r.insertRoom).toBe("function");
     expect(typeof r.findRoomById).toBe("function");
+    expect(typeof r.findRoomRecordById).toBe("function");
+    expect(typeof r.updateRoom).toBe("function");
+    expect(typeof r.deactivateRoom).toBe("function");
     expect(typeof r.findRoomBookings).toBe("function");
     expect(typeof r.insertRoomBooking).toBe("function");
   });

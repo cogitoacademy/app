@@ -168,6 +168,41 @@ export async function findRoomById(conn: DbOrTx, roomId: string) {
 }
 
 /**
+ * Finds a room regardless of active state for admin catalog maintenance.
+ * Assignment callers should continue using `findRoomById`, which only returns
+ * rooms that can be used for new offline bookings.
+ */
+export async function findRoomRecordById(conn: DbOrTx, roomId: string) {
+  return conn.query.room.findFirst({
+    where: eq(room.id, roomId),
+  });
+}
+
+/** Updates the editable details of a room. */
+export async function updateRoom(
+  conn: DbOrTx,
+  roomId: string,
+  values: { name: string; location: string; capacity: number },
+) {
+  const [row] = await conn
+    .update(room)
+    .set(values)
+    .where(eq(room.id, roomId))
+    .returning();
+  return row ?? null;
+}
+
+/** Soft-deactivates a room while preserving historical room assignments. */
+export async function deactivateRoom(conn: DbOrTx, roomId: string) {
+  const [row] = await conn
+    .update(room)
+    .set({ isActive: false })
+    .where(eq(room.id, roomId))
+    .returning();
+  return row ?? null;
+}
+
+/**
  * Finds a confirmed room booking overlapping the given window, optionally excluding a booking.
  *
  * @param conn - the database connection or active transaction
@@ -368,6 +403,9 @@ export function createRoomRepo() {
     findBookingStateById,
     insertRoom,
     findRoomById,
+    findRoomRecordById,
+    updateRoom,
+    deactivateRoom,
     findRoomBookings,
     findRoomBookingsForUpdate,
     insertRoomBooking,

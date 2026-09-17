@@ -25,6 +25,17 @@ export const createRoomInput = z.object({
   capacity: z.number().int().min(1),
 });
 
+export const updateRoomInput = z.object({
+  id: z.string().trim().min(1).max(100),
+  name: z.string().min(1).max(255),
+  location: z.string().min(1).max(255),
+  capacity: z.number().int().min(1),
+});
+
+export const deactivateRoomInput = z.object({
+  id: z.string().trim().min(1).max(100),
+});
+
 export const assignRoomInput = z
   .object({
     bookingId: z.string().min(1).max(100),
@@ -62,6 +73,8 @@ export const cancelRoomInput = z.object({
 });
 
 export type CreateRoomInput = z.infer<typeof createRoomInput>;
+export type UpdateRoomInput = z.infer<typeof updateRoomInput>;
+export type DeactivateRoomInput = z.infer<typeof deactivateRoomInput>;
 export type ListPendingRoomApprovalsInput = z.infer<
   typeof listPendingRoomApprovalsInput
 >;
