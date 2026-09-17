@@ -63,14 +63,14 @@ export function CalendarEventItem({
       type="button"
       aria-label={`View details for ${event.title}`}
       className={cn(
-        "flex w-full flex-col gap-2 rounded-xl border-l-4 p-4 text-left outline-none transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+        "flex w-full flex-col gap-2 rounded-r-xl border-l-4 p-4 text-left outline-none transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
         eventClass,
         isEventInPast && "opacity-70",
       )}
       onClick={onClick}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+        <div className="min-w-0 *:text-foreground">
           <div className="truncate text-base font-semibold sm:text-lg">
             {event.title}
           </div>
@@ -94,7 +94,7 @@ export function CalendarEventItem({
         </div>
         <IconArrowUpRight className="size-5 shrink-0" aria-hidden="true" />
       </div>
-      <Text className="text-sm text-current/75">
+      <Text className="text-sm text-current/75 text-foreground">
         {formatCompetitionDates(event)}
       </Text>
     </button>
