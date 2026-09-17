@@ -152,7 +152,7 @@ function GuidePageContent({ role, view }: { role?: string; view: GuideView }) {
 
   return (
     <main
-      className="mx-auto w-full max-w-7xl space-y-6 pb-12 sm:space-y-8 sm:pb-16"
+      className="mx-auto w-full max-w-7xl space-y-4 pb-12 sm:pb-16"
       data-testid="guide-page"
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -347,7 +347,7 @@ function GuideChapterNav({
               >
                 <ItemMedia
                   className={cn(
-                    "flex size-7 items-center justify-center rounded font-mono text-xs tabular-nums",
+                    "flex size-7 items-center justify-center rounded text-xs tabular-nums",
                     isActive
                       ? "bg-primary text-primary-foreground"
                       : "bg-accent text-muted",
