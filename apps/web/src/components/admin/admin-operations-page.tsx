@@ -50,6 +50,7 @@ import {
 import {
   Field,
   FieldDescription,
+  FieldError,
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
@@ -1123,6 +1124,13 @@ function OverrideDialog({
         showError("Override could not be applied", error),
     }),
   );
+  const previewHint = preview
+    ? null
+    : !reason.trim()
+      ? "Reason required — fill it to unlock Preview."
+      : marksAction !== "none" && participantIds.length === 0
+        ? "Select at least one participant to unlock Preview."
+        : "Run Preview first — Apply unlocks after a successful preview.";
 
   return (
     <Dialog
@@ -1190,7 +1198,9 @@ function OverrideDialog({
             </Field>
           </div>
           <Field>
-            <FieldLabel htmlFor="override-reason">Reason</FieldLabel>
+            <FieldLabel htmlFor="override-reason">
+              Reason <span className="text-danger">*</span>
+            </FieldLabel>
             <Textarea
               id="override-reason"
               value={reason}
@@ -1202,7 +1212,15 @@ function OverrideDialog({
             />
           </Field>
           <Field>
-            <FieldLabel>Affected participants</FieldLabel>
+            <FieldLabel>
+              {marksAction !== "none" ? (
+                <>
+                  Affected participants <span className="text-danger">*</span>
+                </>
+              ) : (
+                "Affected participants (optional)"
+              )}
+            </FieldLabel>
             <Select
               multiple
               value={participantIds}
@@ -1267,6 +1285,11 @@ function OverrideDialog({
               Choose who should receive the override notification or Marks
               adjustment. User IDs are handled automatically.
             </FieldDescription>
+            {marksAction !== "none" && participantIds.length === 0 ? (
+              <FieldError>
+                Select at least one participant when a Marks action is selected.
+              </FieldError>
+            ) : null}
             {participantQuery.isError ? (
               <Button
                 type="button"
@@ -1279,7 +1302,9 @@ function OverrideDialog({
             ) : null}
           </Field>
           <Field>
-            <FieldLabel htmlFor="user-note">User-visible note</FieldLabel>
+            <FieldLabel htmlFor="user-note">
+              User-visible note (optional)
+            </FieldLabel>
             <Input
               id="user-note"
               value={userNote}
@@ -1288,7 +1313,9 @@ function OverrideDialog({
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor="internal-note">Internal admin note</FieldLabel>
+            <FieldLabel htmlFor="internal-note">
+              Internal admin note (optional)
+            </FieldLabel>
             <Input
               id="internal-note"
               value={internalNote}
@@ -1320,6 +1347,9 @@ function OverrideDialog({
               </CardBody>
             </Card>
           ) : null}
+          {previewHint ? (
+            <Text className="text-sm text-muted">{previewHint}</Text>
+          ) : null}
         </DialogBody>
         <DialogFooter>
           <Button variant="secondary" onClick={handleClose}>
@@ -1329,7 +1359,11 @@ function OverrideDialog({
             variant="outline"
             onClick={() => previewMutation.mutate(buildInput())}
             progress={previewMutation.isPending}
-            disabled={!reason.trim() || previewMutation.isPending}
+            disabled={
+              !reason.trim() ||
+              (marksAction !== "none" && participantIds.length === 0) ||
+              previewMutation.isPending
+            }
           >
             Preview
           </Button>
