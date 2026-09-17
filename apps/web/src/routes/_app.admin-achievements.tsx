@@ -7,7 +7,7 @@ export const Route = createFileRoute("/_app/admin-achievements")({
   head: () => ({
     meta: [
       {
-        title: "Achievement reviews — Cogito Academy",
+        title: "Achievement reviews · Cogito Academy",
       },
     ],
   }),
