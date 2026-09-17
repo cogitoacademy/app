@@ -17,19 +17,19 @@ Product facts should be read with the status labels below:
 
 ## 1. Product at a glance
 
-| Item | Product information |
-| --- | --- |
-| Product name | Cogito / Cogito Academy |
-| Primary market | Indonesia |
-| Product type | Two-sided academic competition tutoring and coaching platform |
-| Primary users | Students, tutors, and administrators |
-| Main session | One 90-minute tutoring or coaching session |
-| Session formats | Solo, group of 2–6 students, one-time, or series of 2–4 sessions |
-| Modalities | Online and offline, subject to tutor settings and room availability |
-| Student payment unit | Marks, a closed-loop in-platform learning credit |
-| Tutor compensation | IDR honorarium; tutors do not receive or convert student Marks |
-| Tutor discovery | Published tutor profiles, competition categories, specializations, modality, pricing, and availability |
-| Operational model | Booking request, tutor review, student or participant confirmation, session delivery, completion, and payout processing |
+| Item                 | Product information                                                                                                     |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Product name         | Cogito / Cogito Academy                                                                                                 |
+| Primary market       | Indonesia                                                                                                               |
+| Product type         | Two-sided academic competition tutoring and coaching platform                                                           |
+| Primary users        | Students, tutors, and administrators                                                                                    |
+| Main session         | One 90-minute tutoring or coaching session                                                                              |
+| Session formats      | Solo, group of 2–6 students, one-time, or series of 2–4 sessions                                                        |
+| Modalities           | Online and offline, subject to tutor settings and room availability                                                     |
+| Student payment unit | Marks, a closed-loop in-platform learning credit                                                                        |
+| Tutor compensation   | IDR honorarium; tutors do not receive or convert student Marks                                                          |
+| Tutor discovery      | Published tutor profiles, competition categories, specializations, modality, pricing, and availability                  |
+| Operational model    | Booking request, tutor review, student or participant confirmation, session delivery, completion, and payout processing |
 
 ### What Cogito does
 
@@ -52,7 +52,7 @@ The product is best described as a structured, reviewed, and bookable marketplac
 
 ### Core product loop
 
-~~~text
+```text
 Tutor expertise
   → reviewed tutor profile
   → competition/specialization discovery
@@ -62,7 +62,7 @@ Tutor expertise
   → online or offline session
   → completion and attendance
   → IDR tutor honorarium processing
-~~~
+```
 
 ---
 
@@ -132,77 +132,77 @@ The web application uses role-aware navigation. The same authenticated route may
 
 ### Public and authentication routes
 
-| Route | Purpose |
-| --- | --- |
-| / | Product landing or entry page |
-| /login | Email/password and Google sign-in entry |
-| /verify-email | Email verification flow |
-| /forgot-password | Password-reset request |
-| /reset-password | Password-reset completion |
-| /invite | Tutor invitation claim entry |
-| /auth/callback | Frontend OAuth callback |
+| Route            | Purpose                                 |
+| ---------------- | --------------------------------------- |
+| /                | Product landing or entry page           |
+| /login           | Email/password and Google sign-in entry |
+| /verify-email    | Email verification flow                 |
+| /forgot-password | Password-reset request                  |
+| /reset-password  | Password-reset completion               |
+| /invite          | Tutor invitation claim entry            |
+| /auth/callback   | Frontend OAuth callback                 |
 
 ### Shared authenticated routes
 
-| Route | Purpose |
-| --- | --- |
-| /dashboard | Role-aware dashboard |
-| /bookings | Booking list for the current role |
-| /bookings/:bookingId | Booking detail and available actions |
-| /guide | How Cogito Works role-aware journey guide |
-| /calendar | Competition Calendar |
-| /knowledge-bank | Knowledge Bank resource library |
-| /notifications | In-app notifications |
-| /profile | Current user's profile or tutor profile |
+| Route                | Purpose                                   |
+| -------------------- | ----------------------------------------- |
+| /dashboard           | Role-aware dashboard                      |
+| /bookings            | Booking list for the current role         |
+| /bookings/:bookingId | Booking detail and available actions      |
+| /guide               | How Cogito Works role-aware journey guide |
+| /calendar            | Competition Calendar                      |
+| /knowledge-bank      | Knowledge Bank resource library           |
+| /notifications       | In-app notifications                      |
+| /profile             | Current user's profile or tutor profile   |
 
 ### Student routes
 
-| Route | Purpose |
-| --- | --- |
-| /tutors | Search and filter published tutors |
-| /tutors/:tutorId/book | Select specialization, modality, date, format, and booking details |
-| /balance | Marks balance, package purchase, wallet ledger, and eligibility information |
-| /achievements | Student achievement submission and status |
+| Route                 | Purpose                                                                     |
+| --------------------- | --------------------------------------------------------------------------- |
+| /tutors               | Search and filter published tutors                                          |
+| /tutors/:tutorId/book | Select specialization, modality, date, format, and booking details          |
+| /balance              | Marks balance, package purchase, wallet ledger, and eligibility information |
+| /achievements         | Student achievement submission and status                                   |
 
 Student navigation:
 
-~~~text
+```text
 Dashboard → Tutors → My Bookings → Balance → Achievements
-~~~
+```
 
 ### Tutor routes
 
-| Route | Purpose |
-| --- | --- |
-| /dashboard | Tutor setup, review requests, next sessions, profile status, and honorarium summary |
-| /bookings | Tutor booking list and review actions |
-| /availability | Weekly availability, date overrides, modality, and conflict management |
-| /profile | Tutor profile, specializations, pricing, payout, and onboarding edits |
-| /onboarding | Compatibility entry or redirect for tutor onboarding |
+| Route         | Purpose                                                                             |
+| ------------- | ----------------------------------------------------------------------------------- |
+| /dashboard    | Tutor setup, review requests, next sessions, profile status, and honorarium summary |
+| /bookings     | Tutor booking list and review actions                                               |
+| /availability | Weekly availability, date overrides, modality, and conflict management              |
+| /profile      | Tutor profile, specializations, pricing, payout, and onboarding edits               |
+| /onboarding   | Compatibility entry or redirect for tutor onboarding                                |
 
 Tutor navigation:
 
-~~~text
+```text
 Dashboard → Bookings → Availability → Tutor Profile
-~~~
+```
 
 ### Admin routes
 
-| Route | Purpose |
-| --- | --- |
-| /admin | Admin dashboard and business insights |
-| /admin-operations | Operational queues and exception handling |
-| /admin-operations/bookings/:bookingId | Admin booking detail and overrides |
-| /bookings | Admin-visible all-bookings view |
-| /admin-tutors | Invitations, tutor profiles, review, publication, and moderation |
-| /admin-economy | Marks packages and economic configuration |
-| /admin-achievements | Student achievement moderation |
+| Route                                 | Purpose                                                          |
+| ------------------------------------- | ---------------------------------------------------------------- |
+| /admin                                | Admin dashboard and business insights                            |
+| /admin-operations                     | Operational queues and exception handling                        |
+| /admin-operations/bookings/:bookingId | Admin booking detail and overrides                               |
+| /bookings                             | Admin-visible all-bookings view                                  |
+| /admin-tutors                         | Invitations, tutor profiles, review, publication, and moderation |
+| /admin-economy                        | Marks packages and economic configuration                        |
+| /admin-achievements                   | Student achievement moderation                                   |
 
 Admin navigation:
 
-~~~text
+```text
 Dashboard → Operations → Bookings → Tutors → Economy → Achievements
-~~~
+```
 
 ### Shared resources
 
@@ -224,23 +224,23 @@ Yes. The active web taxonomy contains **7 parent competition categories and 33 s
 
 For the example in the question:
 
-~~~text
+```text
 Model United Nations → Writing
-~~~
+```
 
 This is the specialization label that appears as **Writing** under the **Model United Nations** parent category. Product copy can call it “MUN Writing” when clarity is useful, but the canonical product hierarchy is the parent category plus the child specialization.
 
 ### Active taxonomy
 
-| Parent category | Active specializations |
-| --- | --- |
-| Model United Nations | Research; Writing; Speech; Negotiation |
-| World Scholar’s Cup | Writing; Debate; Subjects |
-| Essay & Writing | Academic Essay; Creative Writing; Scientific Research; College Application Essay; Journalistic Writing |
-| Debate | British Parliamentary; Asian Parliamentary; World Schools (WSDC); Bahasa Indonesia (LDBI) |
-| Business | Business Model Canvas; Business Plan; Business Case |
-| Olympiad | Mathematics (SMP); Natural Sciences (SMP); Social Sciences (SMP); Mathematics; Physics; Chemistry; Biology; Informatics; Astronomy; Earth Sciences; Economics; Geography |
-| Public Speaking | Persuasive Speech; Storytelling |
+| Parent category      | Active specializations                                                                                                                                                   |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Model United Nations | Research; Writing; Speech; Negotiation                                                                                                                                   |
+| World Scholar’s Cup  | Writing; Debate; Subjects                                                                                                                                                |
+| Essay & Writing      | Academic Essay; Creative Writing; Scientific Research; College Application Essay; Journalistic Writing                                                                   |
+| Debate               | British Parliamentary; Asian Parliamentary; World Schools (WSDC); Bahasa Indonesia (LDBI)                                                                                |
+| Business             | Business Model Canvas; Business Plan; Business Case                                                                                                                      |
+| Olympiad             | Mathematics (SMP); Natural Sciences (SMP); Social Sciences (SMP); Mathematics; Physics; Chemistry; Biology; Informatics; Astronomy; Earth Sciences; Economics; Geography |
+| Public Speaking      | Persuasive Speech; Storytelling                                                                                                                                          |
 
 ### Taxonomy behavior in the web product
 
@@ -330,12 +330,12 @@ The tutor supplies payout details that are required for payout processing but ar
 
 The tutor-facing experience separates saving a draft from submitting for review.
 
-~~~text
+```text
 Draft
   → Pending review
   → Approved but unpublished
   → Published
-~~~
+```
 
 Other paths include:
 
@@ -570,7 +570,7 @@ Rules:
 
 The normal lifecycle is:
 
-~~~text
+```text
 Student submits request
   → Marks are held
   → Awaiting tutor review
@@ -582,7 +582,7 @@ Student submits request
   → Session delivered
   → Completed
   → Held Marks are deducted
-~~~
+```
 
 Other outcomes include:
 
@@ -631,23 +631,23 @@ The tutor or booking proposer can propose a different time in eligible pre-termi
 
 #### Online branch
 
-~~~text
+```text
 Confirmed online booking
   → Google Meet and calendar creation attempt
   → Scheduled when meeting metadata is ready
   → Retry or manual-link recovery if provider creation fails
   → Session
-~~~
+```
 
 #### Offline branch
 
-~~~text
+```text
 Confirmed offline booking
   → Awaiting admin room approval
   → Room assigned or relocated
   → Scheduled
   → Session
-~~~
+```
 
 If a room cannot be provided, admin operations may cancel the booking and apply the documented Marks handling. An offline booking is not proof that a physical room is already secured until the room state is confirmed.
 
@@ -793,21 +793,21 @@ The current guide displays a support operating target of 30 minutes during Monda
 
 The product exposes the following important booking states or equivalent operational meanings:
 
-| State or meaning | Product interpretation |
-| --- | --- |
-| awaiting_tutor_review | Student request is waiting for tutor action |
-| awaiting_participant_confirmation | A group participant must accept |
-| awaiting_reconfirmation | Headcount, price, or schedule changed and participants must reconfirm |
-| confirmed | Required acceptance exists; meeting or room scheduling remains |
-| awaiting_admin_room_approval | Offline booking is waiting for room operations |
-| reschedule_proposed | A schedule proposal is pending |
-| scheduled | Meeting or room data is ready for the session |
-| completed | Session delivery is complete and payout basis exists |
-| declined | Tutor declined the request |
-| cancelled | Booking ended under a normal cancellation path |
-| late_cancelled | Booking ended after the late-cancellation cutoff with applicable forfeiture |
-| expired | A response, confirmation, or group-funding deadline elapsed |
-| no_show | A participant or tutor attendance issue was recorded or resolved |
+| State or meaning                  | Product interpretation                                                      |
+| --------------------------------- | --------------------------------------------------------------------------- |
+| awaiting_tutor_review             | Student request is waiting for tutor action                                 |
+| awaiting_participant_confirmation | A group participant must accept                                             |
+| awaiting_reconfirmation           | Headcount, price, or schedule changed and participants must reconfirm       |
+| confirmed                         | Required acceptance exists; meeting or room scheduling remains              |
+| awaiting_admin_room_approval      | Offline booking is waiting for room operations                              |
+| reschedule_proposed               | A schedule proposal is pending                                              |
+| scheduled                         | Meeting or room data is ready for the session                               |
+| completed                         | Session delivery is complete and payout basis exists                        |
+| declined                          | Tutor declined the request                                                  |
+| cancelled                         | Booking ended under a normal cancellation path                              |
+| late_cancelled                    | Booking ended after the late-cancellation cutoff with applicable forfeiture |
+| expired                           | A response, confirmation, or group-funding deadline elapsed                 |
+| no_show                           | A participant or tutor attendance issue was recorded or resolved            |
 
 ### State principles
 
@@ -844,15 +844,15 @@ The booking or session record can include:
 
 Canonical event title:
 
-~~~text
+```text
 Cogito - {Competition} | {Tutor} x {Student}
-~~~
+```
 
 Group title:
 
-~~~text
+```text
 Cogito - {Competition} | {Tutor} x {Student} & Friends
-~~~
+```
 
 The description includes tutor, student or participants, session topic, Session Notes, and the booking link where applicable.
 
@@ -877,12 +877,12 @@ The regulatory framing in the economics architecture is a product-design rationa
 
 ### 9.2 Reference student packages
 
-| Package | Marks | Price per Mark | Total price | Reference spread |
-| --- | ---: | ---: | ---: | ---: |
-| Starter Pack | 50 | Rp6,250 | Rp312,500 | Rp62,500, or 20.0% |
-| Learner Pack | 120 | Rp5,750 | Rp690,000 | Rp90,000, or 13.0% |
-| Explorer Pack | 200 | Rp5,350 | Rp1,070,000 | Rp70,000, or 6.5% |
-| Pioneer Pack | 400 | Rp5,000 | Rp2,000,000 | Rp0 volume baseline |
+| Package       | Marks | Price per Mark | Total price |    Reference spread |
+| ------------- | ----: | -------------: | ----------: | ------------------: |
+| Starter Pack  |    50 |        Rp6,250 |   Rp312,500 |  Rp62,500, or 20.0% |
+| Learner Pack  |   120 |        Rp5,750 |   Rp690,000 |  Rp90,000, or 13.0% |
+| Explorer Pack |   200 |        Rp5,350 | Rp1,070,000 |   Rp70,000, or 6.5% |
+| Pioneer Pack  |   400 |        Rp5,000 | Rp2,000,000 | Rp0 volume baseline |
 
 These are current reference package values and must be reconfirmed before publication.
 
@@ -890,10 +890,10 @@ These are current reference package values and must be reconfirmed before public
 
 Class size is capped at 1 through 6 students.
 
-~~~text
+```text
 Online tutor honorarium  = tutor base rate + (N − 1) × Rp30,000
 Offline tutor honorarium = tutor base rate + (N − 1) × Rp40,000
-~~~
+```
 
 The tutor sets the base rate in IDR, in Rp5,000 increments, subject to the current floor of Rp50,000.
 
@@ -908,21 +908,21 @@ The actual tutor profile can use a different valid base rate.
 
 The reference platform take schedule is:
 
-~~~text
+```text
 Online Cogito take  = Rp50,000 + (N − 1) × Rp20,000
 Offline Cogito take = Rp90,000 + (N − 1) × Rp40,000
-~~~
+```
 
 The admin can configure the take schedule for future bookings. This is why public material should distinguish current reference economics from immutable product behavior.
 
 ### 9.5 Conversion and rounding
 
-~~~text
+```text
 Total IDR          = tutor honorarium + Cogito take
 Total Marks        = ceiling(Total IDR ÷ Rp5,000)
 Marks per student  = ceiling(Total Marks ÷ N)
 Actual pooled Marks = Marks per student × N
-~~~
+```
 
 The student-facing group price is rounded up per student. Therefore, the actual pooled Marks can be higher than the exact computational total.
 
@@ -931,26 +931,26 @@ The student-facing group price is rounded up per student. Therefore, the actual 
 Reference tutor base: Rp175,000. Reference Cogito take: Rp50,000 plus Rp20,000 per additional student.
 
 | Students | Tutor honorarium | Cogito take | Total IDR | Total Marks | Marks per student | Actual pooled Marks |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 1 | Rp175,000 | Rp50,000 | Rp225,000 | 45 | 45 | 45 |
-| 2 | Rp205,000 | Rp70,000 | Rp275,000 | 55 | 28 | 56 |
-| 3 | Rp235,000 | Rp90,000 | Rp325,000 | 65 | 22 | 66 |
-| 4 | Rp265,000 | Rp110,000 | Rp375,000 | 75 | 19 | 76 |
-| 5 | Rp295,000 | Rp130,000 | Rp425,000 | 85 | 17 | 85 |
-| 6 | Rp325,000 | Rp150,000 | Rp475,000 | 95 | 16 | 96 |
+| -------: | ---------------: | ----------: | --------: | ----------: | ----------------: | ------------------: |
+|        1 |        Rp175,000 |    Rp50,000 | Rp225,000 |          45 |                45 |                  45 |
+|        2 |        Rp205,000 |    Rp70,000 | Rp275,000 |          55 |                28 |                  56 |
+|        3 |        Rp235,000 |    Rp90,000 | Rp325,000 |          65 |                22 |                  66 |
+|        4 |        Rp265,000 |   Rp110,000 | Rp375,000 |          75 |                19 |                  76 |
+|        5 |        Rp295,000 |   Rp130,000 | Rp425,000 |          85 |                17 |                  85 |
+|        6 |        Rp325,000 |   Rp150,000 | Rp475,000 |          95 |                16 |                  96 |
 
 ### 9.7 Illustrative offline baseline
 
 Reference tutor base: Rp225,000. Reference Cogito take: Rp90,000 plus Rp40,000 per additional student.
 
 | Students | Tutor honorarium | Cogito take | Total IDR | Total Marks | Marks per student | Actual pooled Marks |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 1 | Rp225,000 | Rp90,000 | Rp315,000 | 63 | 63 | 63 |
-| 2 | Rp265,000 | Rp130,000 | Rp395,000 | 79 | 40 | 80 |
-| 3 | Rp305,000 | Rp170,000 | Rp475,000 | 95 | 32 | 96 |
-| 4 | Rp345,000 | Rp210,000 | Rp555,000 | 111 | 28 | 112 |
-| 5 | Rp385,000 | Rp250,000 | Rp635,000 | 127 | 26 | 130 |
-| 6 | Rp425,000 | Rp290,000 | Rp715,000 | 143 | 24 | 144 |
+| -------: | ---------------: | ----------: | --------: | ----------: | ----------------: | ------------------: |
+|        1 |        Rp225,000 |    Rp90,000 | Rp315,000 |          63 |                63 |                  63 |
+|        2 |        Rp265,000 |   Rp130,000 | Rp395,000 |          79 |                40 |                  80 |
+|        3 |        Rp305,000 |   Rp170,000 | Rp475,000 |          95 |                32 |                  96 |
+|        4 |        Rp345,000 |   Rp210,000 | Rp555,000 |         111 |                28 |                 112 |
+|        5 |        Rp385,000 |   Rp250,000 | Rp635,000 |         127 |                26 |                 130 |
+|        6 |        Rp425,000 |   Rp290,000 | Rp715,000 |         143 |                24 |                 144 |
 
 ### 9.8 Extreme examples in the reference architecture
 
