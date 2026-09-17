@@ -32,9 +32,12 @@ frontend placement descriptions below.
 All database-backed web tables now request bounded pages from the API. The
 offset-backed achievement and room procedures accept `limit` and `offset`; the
 admin booking queue and wallet ledger use their existing cursor contracts; and
-the admin tutor tables retain their existing offset contract. Table UIs request
-one sentinel row (`pageSize + 1`) where needed to determine `hasNext`, render
-only the requested page size, keep the current page visible while fetching, and
+the admin tutor tables retain their existing offset contract. Manage Tutors
+keeps independent invitation/profile pagination, while the dedicated
+`/admin-tutor-payouts` workspace requests ten tutor profiles per page and loads
+the pending payout summary for each visible tutor. Table UIs request one
+sentinel row (`pageSize + 1`) where needed to determine `hasNext`, render only
+the requested page size, keep the current page visible while fetching, and
 reset the page when filters or the selected wallet change. Fixed schedule and
 pricing reference tables are intentionally not paginated because they render a
 small, finite configuration matrix rather than a database collection.
@@ -163,7 +166,7 @@ never forces horizontal overflow.
 
 ## Tutor profile drawers (2026-08-31)
 
-The student tutor-discovery drawer opens as a swipe-down bottom sheet below the `sm` breakpoint and a right-side drawer at `sm` and above. It and the admin tutor-review drawer keep their header/action regions outside the scroll container while `Drawer.Content` owns the single vertical scroll region for long profile content. The body may overscroll locally, but that motion is contained and cannot move the fixed regions. This is client-side presentation only; no RPC path, request envelope, response shape, schema, or persistence contract changed.
+The student tutor-discovery drawer opens as a swipe-down bottom sheet below the `sm` breakpoint and a right-side drawer at `sm` and above. Its header/action regions stay outside the scroll container while `Drawer.Content` owns the single vertical scroll region for long profile content. The admin tutor review page keeps its review actions visible in the page layout while its content remains usable at narrow widths. This is client-side presentation only; no RPC path, request envelope, response shape, schema, or persistence contract changed.
 
 The create-booking surface at `/tutors/:tutorId/book` reuses that same drawer
 through a **View tutor profile** action beside the booking heading. Closing it
@@ -491,7 +494,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Admin
 - **Input:** `{ tutorId }`
 - **Output:** `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr, lastPaidAt }`
-- **Description:** Returns the unpaid tutor honorarium since the latest admin-paid cutoff. The cutoff advances only when `admin.markTutorPayoutPaid` succeeds; no calendar-week reset is applied.
+- **Description:** Returns the unpaid tutor honorarium since the latest admin-paid cutoff. The cutoff advances only when `admin.markTutorPayoutPaid` succeeds; no calendar-week reset is applied. The admin `/admin-tutor-payouts` workspace uses this summary to show the unpaid amount and completed sessions before transfer.
 
 ### `admin.markTutorPayoutPaid`
 
@@ -608,14 +611,14 @@ All routes are admin-only. Package `code` is the stable business key used by
 - **Auth:** Admin
 - **Input:** `{ status?, limit?, offset? }` (`limit` default 50)
 - **Output:** `{ items: TutorProfile[], total, limit, offset }`
-- **Description:** The admin review UI resolves pending `subjectIds` through the active specialization taxonomy and displays category/specialization labels; the procedure continues to return the pending change payload unchanged.
+- **Description:** The Manage Tutors review UI resolves pending `subjectIds` through the active specialization taxonomy and displays category/specialization labels; the procedure continues to return the pending change payload unchanged. The separate `/admin-tutor-payouts` workspace reuses the profile list for payout-account readiness and operational transfer review.
 
 ### `adminTutor.listTutorProfileHistory`
 
 - **Auth:** Admin
 - **Input:** `{ tutorProfileId }`
 - **Output:** Up to 50 newest audit entries for the tutor profile, including action, actor, timestamps, state snapshots, and photo workflow details
-- **Description:** Returns the review/photo history shown in the admin tutor drawer. Admin-uploaded edited assets are applied to the canonical `user.image` only by an approve/publish action; requesting changes never changes the current public photo.
+- **Description:** Returns the review/photo history shown on the admin tutor review page. Admin-uploaded edited assets are applied to the canonical `user.image` only by an approve/publish action; requesting changes never changes the current public photo.
 
 ### `adminTutor.reviewTutorProfile`
 
@@ -1203,6 +1206,20 @@ RPC contract.
 - **Input:** `{ name, location, capacity }`
 - **Output:** `{ room }`
 - **Frontend:** Admin → Operations → Room approvals → Active rooms → Add room. The form trims name/location, validates a positive whole-number capacity, and refreshes the active-room list after creation.
+
+### `room.update`
+
+- **Auth:** Admin
+- **Input:** `{ id, name, location, capacity }`
+- **Output:** `{ room }`
+- **Description:** Updates an active or inactive room's name, location, and learner capacity. The admin Room approvals catalog uses this to edit room details and refreshes active-room selectors after success.
+
+### `room.deactivate`
+
+- **Auth:** Admin
+- **Input:** `{ id }`
+- **Output:** `{ room }`
+- **Description:** Soft-deactivates a room so it is removed from new offline-booking selectors while historical room assignments remain intact. Repeating the request for an already inactive room is idempotent.
 
 ### `room.assign`
 

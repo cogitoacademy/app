@@ -19,11 +19,23 @@ import {
 function makeProfile(overrides: Record<string, unknown> = {}) {
   return {
     id: "tp1",
-    displayName: "Dr. Smith",
     shortBio: "Experienced tutor",
-    credentialsSummary: "PhD in Math",
-    achievements: "National mathematics medalist (2025)",
-    experiences: "Mathematics tutor (2024–2025)",
+    competitionAchievements: [
+      {
+        competitionName: "National Mathematics Olympiad",
+        year: 2025,
+        awards: ["Gold Medal"],
+      },
+    ],
+    experienceEntries: [
+      {
+        role: "Mathematics Tutor",
+        organization: "Cogito Academy",
+        startYear: 2024,
+        endYear: null,
+        description: "Guided students through olympiad preparation.",
+      },
+    ],
     user: {
       name: "Dr. Smith",
       image: "https://example.com/profile-photo.jpg",
@@ -38,7 +50,6 @@ function makeProfile(overrides: Record<string, unknown> = {}) {
     termsOfServiceAcceptedAt: new Date("2026-09-01T00:00:00Z"),
     termsOfServiceVersion: "2026-09",
     prices: { "1": 50 },
-    expertise: ["math"],
     subjects: [
       {
         subject: {
@@ -96,7 +107,7 @@ describe("Tutor Service", () => {
       expect(() =>
         validateUpdateInput(
           makeProfile({ onboardingStatus: "draft" }),
-          { displayName: "New Name" },
+          { shortBio: "New bio" },
           mockPricingPort,
         ),
       ).not.toThrow();
@@ -106,7 +117,7 @@ describe("Tutor Service", () => {
       expect(() =>
         validateUpdateInput(
           makeProfile({ onboardingStatus: "changes_requested" }),
-          { displayName: "Updated" },
+          { shortBio: "Updated bio" },
           mockPricingPort,
         ),
       ).not.toThrow();
@@ -114,7 +125,7 @@ describe("Tutor Service", () => {
 
     test("throws TutorProfileNotFoundError for null profile", () => {
       expect(() =>
-        validateUpdateInput(null, { displayName: "X" }, mockPricingPort),
+        validateUpdateInput(null, { shortBio: "X" }, mockPricingPort),
       ).toThrow(TutorProfileNotFoundError);
     });
 
@@ -122,7 +133,7 @@ describe("Tutor Service", () => {
       expect(() =>
         validateUpdateInput(
           makeProfile({ onboardingStatus: "published" }),
-          { displayName: "X" },
+          { shortBio: "X" },
           mockPricingPort,
         ),
       ).not.toThrow();
@@ -142,7 +153,7 @@ describe("Tutor Service", () => {
       expect(() =>
         validateUpdateInput(
           makeProfile({ onboardingStatus: "draft" }),
-          { displayName: "New Name" },
+          { shortBio: "New bio" },
           failPricingPort,
         ),
       ).not.toThrow();
@@ -200,11 +211,10 @@ describe("Tutor Service", () => {
       ).toThrow(TutorProfileIncompleteError);
     });
 
-    test("accepts a structured competition achievement without legacy text", () => {
+    test("accepts a structured competition achievement", () => {
       expect(() =>
         validateSubmitForReview(
           makeProfile({
-            achievements: null,
             competitionAchievements: [
               {
                 competitionName: "Harvard Model United Nations",
@@ -218,20 +228,19 @@ describe("Tutor Service", () => {
       ).not.toThrow();
     });
 
-    test("requires an achievement when legacy and structured values are empty", () => {
+    test("requires an achievement when structured values are empty", () => {
       expect(() =>
         validateSubmitForReview(
-          makeProfile({ achievements: null, competitionAchievements: [] }),
+          makeProfile({ competitionAchievements: [] }),
           mockPricingPort,
         ),
       ).toThrow(TutorProfileIncompleteError);
     });
 
-    test("accepts structured experiences without legacy text", () => {
+    test("accepts structured experiences", () => {
       expect(() =>
         validateSubmitForReview(
           makeProfile({
-            experiences: null,
             experienceEntries: [
               {
                 role: "Mathematics Tutor",
@@ -247,10 +256,10 @@ describe("Tutor Service", () => {
       ).not.toThrow();
     });
 
-    test("requires an experience when legacy and structured values are empty", () => {
+    test("requires an experience when structured values are empty", () => {
       expect(() =>
         validateSubmitForReview(
-          makeProfile({ experiences: null, experienceEntries: [] }),
+          makeProfile({ experienceEntries: [] }),
           mockPricingPort,
         ),
       ).toThrow(TutorProfileIncompleteError);
@@ -431,7 +440,7 @@ describe("Tutor Service", () => {
       const deps = makeDeps();
       const service = createTutorService(deps as any);
       const result = await service.updateMyProfile("u1", {
-        displayName: "New Name",
+        shortBio: "New bio",
         version: 1,
       });
       expect(result.id).toBe("tp1");
@@ -551,7 +560,7 @@ describe("Tutor Service", () => {
       });
       const service = createTutorService(deps as any);
       await expect(
-        service.updateMyProfile("u1", { displayName: "New", version: 5 }),
+        service.updateMyProfile("u1", { shortBio: "New", version: 5 }),
       ).rejects.toThrow(OptimisticLockError);
     });
 

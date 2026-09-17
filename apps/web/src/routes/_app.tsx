@@ -24,6 +24,7 @@ const routeTitles: Record<string, string> = {
   "/availability": "Availability",
   "/notifications": "Notifications",
   "/admin-tutors": "Manage Tutors",
+  "/admin-tutor-payouts": "Tutor Payouts",
   "/admin-achievements": "Achievement Moderation",
   "/admin-operations": "Operations",
   "/admin-economy": "Economy Settings",

@@ -42,37 +42,24 @@ export function useSubjectTaxonomy() {
 
 export function groupTutorSubjects(
   subjects: TutorSubject[] | null | undefined,
-  expertise: string[] | null | undefined,
 ): SubjectGroup[] {
-  if (subjects && subjects.length > 0) {
-    const groups = new Map<string, SubjectGroup>();
+  if (!subjects || subjects.length === 0) return [];
+  const groups = new Map<string, SubjectGroup>();
 
-    for (const subject of subjects) {
-      const parentKey = subject.parent.id || subject.parent.slug;
-      const group = groups.get(parentKey) ?? {
-        parent: subject.parent,
-        children: [],
-      };
+  for (const subject of subjects) {
+    const parentKey = subject.parent.id || subject.parent.slug;
+    const group = groups.get(parentKey) ?? {
+      parent: subject.parent,
+      children: [],
+    };
 
-      if (!group.children.some((child) => child.id === subject.id)) {
-        group.children.push(subject);
-      }
-      groups.set(parentKey, group);
+    if (!group.children.some((child) => child.id === subject.id)) {
+      group.children.push(subject);
     }
-
-    return [...groups.values()];
+    groups.set(parentKey, group);
   }
 
-  return (expertise ?? []).map((name, index) => ({
-    parent: null,
-    children: [
-      {
-        id: `legacy-${index}-${name}`,
-        slug: name,
-        name,
-      },
-    ],
-  }));
+  return [...groups.values()];
 }
 
 type SubjectSelectorProps = {

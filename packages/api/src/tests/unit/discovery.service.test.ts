@@ -14,17 +14,10 @@ function makeProfile(
 ): ProfileWithUser {
   return {
     id: "tp1",
-    displayName: "Dr. Smith",
     shortBio: "Experienced tutor",
-    credentialsSummary: "PhD Math",
-    achievements: "National medalist",
-    experiences: "Math tutor",
     experienceEntries: [],
-    expertise: ["algebra", "calculus"],
     modality: "online",
     prices: { "1": 50, "2": 40 },
-    availabilitySummary: "Weekdays",
-    proofUrls: ["https://proof.example.com/cert.pdf"],
     publishedAt: new Date("2025-01-01"),
     userId: "u1",
     onboardingStatus: "published",
@@ -56,15 +49,9 @@ describe("Discovery Service", () => {
       expect(result.userId).toBe("u1");
       expect(result.displayName).toBe("Dr. Smith");
       expect(result.shortBio).toBe("Experienced tutor");
-      expect(result.credentialsSummary).toBe("PhD Math");
-      expect(result.achievements).toBe("National medalist");
-      expect(result.experiences).toBe("Math tutor");
       expect(result.experienceEntries).toEqual([]);
-      expect(result.expertise).toEqual(["algebra", "calculus"]);
       expect(result.modality).toBe("online");
       expect(result.prices).toEqual({ "1": 50, "2": 40 });
-      expect(result).not.toHaveProperty("availabilitySummary");
-      expect(result).not.toHaveProperty("proofUrls");
       expect(result.publishedAt).toEqual(new Date("2025-01-01"));
     });
 
@@ -76,25 +63,9 @@ describe("Discovery Service", () => {
       });
     });
 
-    test("uses canonical user name instead of legacy tutor display name", () => {
-      const result = buildProjection(
-        makeProfile({
-          displayName: "Legacy Profile Name",
-          user: { name: "Canonical User Name", image: null },
-        }),
-      );
-      expect(result.displayName).toBe("Canonical User Name");
-      expect(result.user?.name).toBe("Canonical User Name");
-    });
-
     test("returns null user when user is null", () => {
       const result = buildProjection(makeProfile({ user: null }));
       expect(result.user).toBeNull();
-    });
-
-    test("defaults expertise to empty array when null", () => {
-      const result = buildProjection(makeProfile({ expertise: null as any }));
-      expect(result.expertise).toEqual([]);
     });
 
     test("maps structured experiences to the public projection", () => {
@@ -123,7 +94,7 @@ describe("Discovery Service", () => {
 
       expect(listPublished).toHaveBeenCalledWith({
         search: "math",
-        expertise: undefined,
+
         categoryId: undefined,
         subjectId: undefined,
         categoryIds: undefined,
@@ -145,7 +116,7 @@ describe("Discovery Service", () => {
 
       expect(listPublished).toHaveBeenCalledWith({
         search: undefined,
-        expertise: undefined,
+
         categoryId: undefined,
         subjectId: undefined,
         categoryIds: undefined,
@@ -168,7 +139,7 @@ describe("Discovery Service", () => {
 
       expect(listPublished).toHaveBeenCalledWith({
         search: undefined,
-        expertise: undefined,
+
         categoryId: undefined,
         subjectId: undefined,
         categoryIds: ["category-1", "category-2"],

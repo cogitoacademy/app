@@ -4,6 +4,8 @@ import { mapRoomError } from "./room.errors";
 import type { RoomService } from "./room.service";
 import type {
   CreateRoomInput,
+  UpdateRoomInput,
+  DeactivateRoomInput,
   ListRoomsInput,
   ListPendingRoomApprovalsInput,
   AssignRoomInput,
@@ -53,6 +55,26 @@ export function createRoomHandler(room: RoomService) {
       input: CreateRoomInput;
     }) => {
       return withDomainMap(() => room.createRoom(input), mapRoomError);
+    },
+
+    update: async ({
+      context: _context,
+      input,
+    }: {
+      context: Context;
+      input: UpdateRoomInput;
+    }) => {
+      return withDomainMap(() => room.updateRoom(input), mapRoomError);
+    },
+
+    deactivate: async ({
+      context: _context,
+      input,
+    }: {
+      context: Context;
+      input: DeactivateRoomInput;
+    }) => {
+      return withDomainMap(() => room.deactivateRoom(input.id), mapRoomError);
     },
 
     assign: async ({

@@ -91,13 +91,9 @@ describe("Tutor discovery", () => {
       .values({
         userId: tutorId,
         inviteId: invite!.id,
-        displayName: "Prof Discovery",
         shortBio: "Bio",
-        credentialsSummary: "Credentials",
-        expertise: ["Mathematics"],
         modality: "both",
         prices: { "1": 50, "2": 45, "3": 40, "4": 35, "5": 30, "6": 28 },
-        availabilitySummary: "Weekdays evenings",
         onboardingStatus: "published",
         publishedAt: new Date(),
       })
@@ -199,7 +195,9 @@ describe("Tutor discovery", () => {
     const tutor = tutors.find((t) => t.id === profileId);
     expect(tutor).toBeDefined();
     expect(tutor!.displayName).toBe("Prof Discovery");
-    expect(tutor!.expertise).toContain("Mathematics");
+    expect(
+      tutor!.subjects.some((subject) => subject.id === TAXONOMY.research),
+    ).toBe(true);
     expect(tutor!.modality).toBe("both");
     expect(tutor!.prices).toBeDefined();
   });
@@ -285,7 +283,6 @@ describe("Tutor discovery", () => {
       .values({
         userId: draftUserId,
         inviteId: draftInvite!.id,
-        displayName: "Draft Tutor",
         onboardingStatus: "draft",
       })
       .returning();

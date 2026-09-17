@@ -6,6 +6,8 @@ function makeRoomService() {
     listActive: mock(async () => [{ id: "r1" }]),
     listPendingApprovals: mock(async () => [{ bookingId: "b1" }]),
     createRoom: mock(async () => ({ id: "r1" })),
+    updateRoom: mock(async () => ({ id: "r1", name: "Room B" })),
+    deactivateRoom: mock(async () => ({ id: "r1", isActive: false })),
     assignRoom: mock(async () => ({
       id: "rb1",
       bookingId: "b1",
@@ -116,6 +118,42 @@ describe("roomHandler", () => {
         bookingId: "b1",
         roomId: "r1",
       });
+    });
+  });
+
+  describe("update", () => {
+    test("calls room.updateRoom with the complete input", async () => {
+      const roomService = makeRoomService();
+      const handler = createRoomHandler(roomService as any);
+      const input = {
+        id: "r1",
+        name: "Room B",
+        location: "Floor 2",
+        capacity: 12,
+      };
+
+      const result = await handler.update({
+        context: { session: { user: { id: "u1" } } } as any,
+        input,
+      });
+
+      expect(roomService.updateRoom).toHaveBeenCalledWith(input);
+      expect(result).toEqual({ id: "r1", name: "Room B" });
+    });
+  });
+
+  describe("deactivate", () => {
+    test("calls room.deactivateRoom with the room id", async () => {
+      const roomService = makeRoomService();
+      const handler = createRoomHandler(roomService as any);
+
+      const result = await handler.deactivate({
+        context: { session: { user: { id: "u1" } } } as any,
+        input: { id: "r1" },
+      });
+
+      expect(roomService.deactivateRoom).toHaveBeenCalledWith("r1");
+      expect(result).toEqual({ id: "r1", isActive: false });
     });
   });
 });

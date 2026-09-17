@@ -57,13 +57,9 @@ type TutorDrawerProps = {
     userId: string;
     displayName: string | null;
     shortBio: string | null;
-    credentialsSummary: string | null;
-    achievements: string | null;
-    experiences: string | null;
     education: TutorEducationEntry[] | null;
     competitionAchievements: TutorCompetitionAchievement[] | null;
     experienceEntries: TutorExperienceEntry[] | null;
-    expertise: string[];
     subjects?: TutorSubject[] | null;
     modality: string | null;
     prices: Record<string, number> | null;
@@ -139,10 +135,7 @@ export function TutorDrawer({
     selectedTutor.prices,
     selectedTutor.modality,
   );
-  const subjectGroups = groupTutorSubjects(
-    selectedTutor.subjects,
-    selectedTutor.expertise,
-  );
+  const subjectGroups = groupTutorSubjects(selectedTutor.subjects);
   const subjectLabels = subjectGroups.flatMap((group) =>
     group.children.map((subject) => ({
       id: subject.id,
@@ -153,14 +146,9 @@ export function TutorDrawer({
   const heroSubjects = subjectLabels.slice(0, 3);
   const hasEducation = Boolean(selectedTutor.education?.length);
   const hasAchievements = Boolean(
-    selectedTutor.competitionAchievements?.length ||
-    selectedTutor.achievements?.trim() ||
-    selectedTutor.credentialsSummary?.trim(),
+    selectedTutor.competitionAchievements?.length,
   );
-  const hasExperiences = Boolean(
-    selectedTutor.experienceEntries?.length ||
-    selectedTutor.experiences?.trim(),
-  );
+  const hasExperiences = Boolean(selectedTutor.experienceEntries?.length);
   const hasProfileHighlights =
     hasEducation || hasAchievements || hasExperiences;
 
@@ -290,11 +278,6 @@ export function TutorDrawer({
                       competitionAchievements={
                         selectedTutor.competitionAchievements
                       }
-                      legacyAchievementText={
-                        selectedTutor.achievements?.trim()
-                          ? selectedTutor.achievements
-                          : selectedTutor.credentialsSummary
-                      }
                       idPrefix="tutor-drawer-achievements"
                     />
                   </CardBody>
@@ -307,7 +290,6 @@ export function TutorDrawer({
                     <TutorAchievementsDisplay
                       className="flex flex-col"
                       experienceEntries={selectedTutor.experienceEntries}
-                      legacyExperienceText={selectedTutor.experiences}
                       idPrefix="tutor-drawer-experiences"
                     />
                   </CardBody>

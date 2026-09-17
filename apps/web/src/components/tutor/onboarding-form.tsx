@@ -104,18 +104,13 @@ interface OnboardingFormProps {
   };
   profile: {
     id: string;
-    displayName: string | null;
     shortBio: string | null;
-    credentialsSummary: string | null;
-    achievements: string | null;
-    experiences: string | null;
     achievementProofUrls: string[] | null;
     experienceProofUrls: string[] | null;
     user?: { image: string | null } | null;
     education: TutorEducationEntry[] | null;
     competitionAchievements: TutorCompetitionAchievement[] | null;
     experienceEntries: TutorExperienceEntry[] | null;
-    expertise: string[];
     subjects?: TutorSubject[] | null;
     modality: string | null;
     baseRatesIdr: Partial<{ online: number; offline: number }> | null;
@@ -131,17 +126,12 @@ interface OnboardingFormProps {
     onboardingStatus: string;
     adminReviewNote: string | null;
     pendingProfileChanges: Partial<{
-      displayName: string;
-      achievements: string;
-      experiences: string;
       achievementProofUrls: string[];
       experienceProofUrls: string[];
       profileImageUrl: string;
-      credentialsSummary: string;
       education: TutorEducationEntry[];
       competitionAchievements: TutorCompetitionAchievement[];
       experienceEntries: TutorExperienceEntry[];
-      expertise: string[];
       subjectIds: string[];
       modality: Modality;
       baseRatesIdr: Partial<{ online: number; offline: number }>;
@@ -455,12 +445,6 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     [];
   const [form, setForm] = useState({
     shortBio: profile.shortBio ?? "",
-    achievements:
-      pending.achievements ??
-      profile.achievements ??
-      profile.credentialsSummary ??
-      "",
-    experiences: pending.experiences ?? profile.experiences ?? "",
     achievementProofUrls:
       pending.achievementProofUrls ?? profile.achievementProofUrls ?? [],
     experienceProofUrls:
@@ -472,7 +456,6 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       pending.competitionAchievements ?? profile.competitionAchievements ?? [],
     experienceEntries:
       pending.experienceEntries ?? profile.experienceEntries ?? [],
-    expertise: pending.expertise ?? profile.expertise ?? [],
     subjectIds: initialSubjectIds,
     modality: (pending.modality ?? profile.modality ?? "") as Modality | "",
     baseRatesIdr: pending.baseRatesIdr ??
@@ -623,15 +606,12 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     const payload: {
       version: number;
       shortBio?: string;
-      achievements?: string;
-      experiences?: string;
       achievementProofUrls?: string[];
       experienceProofUrls?: string[];
       profileImageUrl?: string;
       education?: TutorEducationEntry[];
       competitionAchievements?: TutorCompetitionAchievement[];
       experienceEntries?: TutorExperienceEntry[];
-      expertise?: string[];
       subjectIds?: string[];
       modality?: Modality;
       baseRatesIdr?: Partial<{ online: number; offline: number }>;
@@ -644,8 +624,6 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       prices?: Record<string, number>;
     } = { version: profile.version };
     const shortBio = form.shortBio.trim();
-    const achievements = form.achievements.trim();
-    const experiences = form.experiences.trim();
     const profileImageUrl = form.profileImageUrl.trim();
     const education = form.education.map((entry) => ({
       university: entry.university.trim(),
@@ -671,15 +649,12 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     const bankAccountOpeningCity = form.bankAccountOpeningCity.trim();
 
     payload.shortBio = shortBio;
-    payload.achievements = achievements;
-    payload.experiences = experiences;
     payload.achievementProofUrls = form.achievementProofUrls;
     payload.experienceProofUrls = form.experienceProofUrls;
     if (profileImageUrl) payload.profileImageUrl = profileImageUrl;
     payload.education = education;
     payload.competitionAchievements = competitionAchievements;
     payload.experienceEntries = experienceEntries;
-    if (form.expertise.length > 0) payload.expertise = form.expertise;
     if (
       form.subjectIds.length > 0 &&
       !haveSameSubjectIds(form.subjectIds, initialSubjectIds)
@@ -723,8 +698,6 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     }
     const shortBio = form.shortBio.trim();
     const shortBioWordCount = countTutorShortBioWords(form.shortBio);
-    const achievements = form.achievements.trim();
-    const experiences = form.experiences.trim();
     const profileImageUrl = form.profileImageUrl.trim();
     const bankName = form.bankName.trim();
     const bankAccountNumber = form.bankAccountNumber.replaceAll(/\D/g, "");
@@ -738,32 +711,15 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     if (form.shortBio.length > 2_000) {
       addError("shortBio", "Use 2,000 characters or fewer.");
     }
-    if (form.achievements.length > 5_000) {
-      addError("achievements", "Use 5,000 characters or fewer.");
-    }
-    if (form.experiences.length > 5_000) {
-      addError("experiences", "Use 5,000 characters or fewer.");
-    }
 
-    if (
-      requireComplete &&
-      !achievements &&
-      form.competitionAchievements.length === 0
-    ) {
+    if (requireComplete && form.competitionAchievements.length === 0) {
       addError(
         "competitionAchievements",
-        "Add at least one competition achievement or achievement summary.",
+        "Add at least one competition achievement.",
       );
     }
-    if (
-      requireComplete &&
-      !experiences &&
-      form.experienceEntries.length === 0
-    ) {
-      addError(
-        "experienceEntries",
-        "Add at least one experience entry or experience summary.",
-      );
+    if (requireComplete && form.experienceEntries.length === 0) {
+      addError("experienceEntries", "Add at least one experience entry.");
     }
     if (requireComplete && !profileImageUrl) {
       addError("profileImageUrl", "Upload a profile photo.");
@@ -1063,8 +1019,8 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
               : "Keep your profile ready for students"}
           </Heading>
           <Text className="text-muted">
-            Give students a clear picture of your expertise, teaching format,
-            and availability.
+            Give students a clear picture of your specializations, teaching
+            format, and availability.
           </Text>
         </div>
         <div className="flex flex-wrap gap-2 md:justify-end">
@@ -1898,7 +1854,6 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
               <div className="mt-6 border-t border-card-separator pt-6">
                 <TutorExperiencesEditor
                   experienceEntries={form.experienceEntries}
-                  legacyText={form.experiences}
                   onExperienceEntriesChange={(
                     experienceEntries,
                     changedField,

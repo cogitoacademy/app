@@ -81,13 +81,9 @@ describe("Booking invite withdrawal", () => {
     await db.insert(tutorProfile).values({
       userId: tutorId,
       inviteId: invite!.id,
-      displayName: "Tutor Withdraw",
       shortBio: "Group invite test tutor",
-      credentialsSummary: "Credentials",
-      expertise: ["Mathematics"],
       modality: "both",
       prices: { "1": 50, "2": 45, "3": 40 },
-      availabilitySummary: "Flexible",
       onboardingStatus: "published",
       publishedAt: new Date(),
     });

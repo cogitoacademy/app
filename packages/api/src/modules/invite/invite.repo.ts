@@ -6,7 +6,6 @@ import { INVITE_STATUS, ONBOARDING_STATUS } from "../../shared/constants";
 export interface InsertTutorProfileParams {
   userId: string;
   inviteId: string;
-  displayName: string;
 }
 
 /**
@@ -91,7 +90,7 @@ export async function getUserRoleById(conn: DbOrTx, userId: string) {
  * Creates a draft tutor profile for an accepted invitee.
  *
  * @param conn - the database connection or active transaction
- * @param params - the initial profile fields (userId, inviteId, displayName)
+ * @param params - the initial profile fields (userId, inviteId)
  * @returns the created tutor profile
  */
 export async function insertTutorProfile(
@@ -103,9 +102,6 @@ export async function insertTutorProfile(
     .values({
       userId: params.userId,
       inviteId: params.inviteId,
-      displayName: params.displayName,
-      expertise: [],
-      proofUrls: [],
       onboardingStatus: ONBOARDING_STATUS.DRAFT,
     })
     .returning();

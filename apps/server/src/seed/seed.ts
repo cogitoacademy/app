@@ -359,11 +359,8 @@ async function seed() {
       .values({
         userId: tutorUser.id,
         inviteId: invite!.id,
-        displayName: `${SEED_DISPLAY_TAG} Tutor`,
         shortBio:
           "Competition mentor for the Cogito verification environment. This profile contains review-only demonstration data.",
-        credentialsSummary:
-          "Experienced competition mentor with structured teaching and olympiad preparation experience.",
         education: [
           {
             university: "Cogito Review University",
@@ -387,11 +384,9 @@ async function seed() {
               "Guides students through problem solving, practice sessions, and competition preparation.",
           },
         ],
-        expertise: ["Mathematics", "Competition preparation"],
         modality: "both",
         baseRatesIdr: { online: 175_000, offline: 225_000 },
         prices: { "1": 50, "2": 45, "3": 40, "4": 35, "5": 30, "6": 28 },
-        availabilitySummary: "Weekdays 16:00–20:00 WIB",
         onboardingStatus: "published",
         publishedAt: new Date(),
       })
@@ -403,11 +398,8 @@ async function seed() {
     await db
       .update(tutorProfile)
       .set({
-        displayName: `${SEED_DISPLAY_TAG} Tutor`,
         shortBio:
           "Competition mentor for the Cogito verification environment. This profile contains review-only demonstration data.",
-        credentialsSummary:
-          "Experienced competition mentor with structured teaching and olympiad preparation experience.",
         education: [
           {
             university: "Cogito Review University",
@@ -431,10 +423,8 @@ async function seed() {
               "Guides students through problem solving, practice sessions, and competition preparation.",
           },
         ],
-        expertise: ["Mathematics", "Competition preparation"],
         modality: "both",
         baseRatesIdr: { online: 175_000, offline: 225_000 },
-        availabilitySummary: "Weekdays 10:00–12:00 WIB",
         onboardingStatus: "published",
         publishedAt: existingProfile[0].publishedAt ?? new Date(),
       })

@@ -57,6 +57,7 @@ export type GuideRoute =
   | "/availability"
   | "/admin"
   | "/admin-tutors"
+  | "/admin-tutor-payouts"
   | "/admin-operations"
   | "/admin-achievements"
   | "/admin-economy";
@@ -128,17 +129,17 @@ export const GUIDE_VIEW_META: Record<
   student: {
     label: "Student journey",
     shortLabel: "Student",
-    description: "From finding a tutor to finishing a learning session.",
+    description: "Find a tutor, book a lesson, and see what happens next.",
   },
   tutor: {
     label: "Tutor journey",
     shortLabel: "Tutor",
-    description: "From profile review to teaching and getting paid.",
+    description: "Set up your profile, teach sessions, and track your payout.",
   },
   admin: {
     label: "Admin operations",
     shortLabel: "Admin",
-    description: "The queues and decisions that keep every session moving.",
+    description: "See what needs attention and take the next action.",
   },
 };
 
@@ -221,7 +222,7 @@ const sharedSessionBranches: GuideBranch[] = [
     title: "The online meeting needs a retry",
     trigger: "Google Meet creation fails after the booking is confirmed.",
     outcome:
-      "The booking remains confirmed while the scheduler retries every **5 minutes**, for up to **3 attempts**. The assigned tutor or an admin can add a manual link when needed.",
+      "The booking stays confirmed while Cogito tries again every **5 minutes**, for up to **3 attempts**. The tutor or an admin can add a manual link when needed.",
     variant: "warning",
     cta: { label: "Check booking status", to: "/bookings" },
   },
@@ -230,7 +231,7 @@ const sharedSessionBranches: GuideBranch[] = [
     trigger:
       "Attendance is not confirmed after the **15-minute** lateness window.",
     outcome:
-      "The session is flagged for admin review. If the tutor is absent past **15 minutes**, affected students' held Marks are released according to the no-show policy. A participant can submit a support report from the booking detail.",
+      "The session is sent to the admin for review. If the tutor is absent past **15 minutes**, the affected students' held Marks are returned according to the no-show policy. Anyone in the booking can send a support report from the booking details.",
     variant: "danger",
     cta: { label: "Open booking detail", to: "/bookings" },
   },
@@ -295,7 +296,7 @@ const studentContent: GuideContent = {
           id: "student-discover",
           title: "Find a tutor",
           summary:
-            "Browse published tutors by specialization, expertise, and session format, then inspect their availability.",
+            "Browse published tutors by specialization and session format, then inspect their availability.",
           actor: "You",
           icon: IconSearch,
           details: [
@@ -714,31 +715,29 @@ const tutorContent: GuideContent = {
 
 const adminContent: GuideContent = {
   label: "Admin guide",
-  title: "Keep every session moving.",
+  title: "One clear place for every admin task.",
   description:
-    "Review tutors, resolve booking exceptions, and close the loop on support and Marks.",
+    "See what needs attention, understand the next step, and open the right page.",
   highlights: [
     {
-      label: "Primary view",
-      value: "All bookings",
-      description:
-        "See the complete lifecycle and intervene when a queue needs it.",
+      label: "Your work list",
+      value: "Next actions",
+      description: "Start with the items that need a decision from you.",
       icon: IconRoute,
       variant: "primary",
     },
     {
-      label: "Operations",
-      value: "Exceptions",
-      description:
-        "Prioritize rooms, attendance, support, and meeting fallbacks.",
+      label: "Daily operations",
+      value: "Bookings + rooms",
+      description: "Keep sessions on schedule and make offline room decisions.",
       icon: IconAlertTriangle,
       variant: "warning",
     },
     {
-      label: "Governance",
-      value: "Review + rules",
+      label: "Quality checks",
+      value: "Tutors + achievements",
       description:
-        "Moderate profiles and achievements, and manage Marks settings.",
+        "Keep tutor profiles and student records accurate and useful.",
       icon: IconAdjustments,
       variant: "info",
     },
@@ -746,23 +745,22 @@ const adminContent: GuideContent = {
   chapters: [
     {
       id: "admin-tutors",
-      title: "Bring trusted tutors into the marketplace",
+      title: "Manage tutors",
       description:
-        "Invite tutors, inspect their profile, and make the publishing decision that controls discovery.",
+        "Invite tutors, review their profiles, and keep the public directory accurate.",
       icon: IconUsersGroup,
       steps: [
         {
           id: "admin-invite",
           title: "Invite and support tutor account setup",
           summary:
-            "Create an invite, verify its delivery state, and help the tutor claim the right account.",
+            "Create an invite, check its status, and help the tutor start with the right account.",
           actor: "Admin",
           icon: IconMail,
           details: [
-            "Invites store a digest, not plaintext secrets; a pending invite can be safely rotated.",
-            "An invite link expires after **7 days**, is single-use, and cannot be accepted after revocation.",
-            "The invite form preflights the normalized email and shows existing account methods and role.",
-            "If delivery fails, the current usable link can be copied for manual handoff.",
+            "An invite link expires after **7 days**, can be used once, and stops working when revoked.",
+            "Before sending, check that the email belongs to the intended tutor.",
+            "If the email does not arrive, copy the current link and send it manually.",
           ],
           statuses: [
             { label: "Invited", variant: "info" },
@@ -775,13 +773,13 @@ const adminContent: GuideContent = {
           id: "admin-review-tutor",
           title: "Review and publish tutor profiles",
           summary:
-            "Check profile completeness, specializations, pricing, proof, and review feedback before making a tutor discoverable.",
+            "Check the tutor's profile, subjects, prices, and proof before students can find them.",
           actor: "Admin",
           icon: IconShieldCheck,
           details: [
-            "Approve a profile for publication, request changes, or suspend an already published profile.",
-            "A published profile remains visible while non-trust-sensitive edits are handled according to review status.",
-            "Changes requested send the tutor back to an editable workflow.",
+            "Approve a profile, ask for changes, or suspend a published profile when needed.",
+            "If you ask for changes, the tutor can edit the profile and send it for review again.",
+            "Important edits can wait for review while the current public profile stays visible.",
           ],
           statuses: [
             { label: "Pending review", variant: "warning" },
@@ -795,25 +793,53 @@ const adminContent: GuideContent = {
       ],
     },
     {
-      id: "admin-bookings",
-      title: "Operate the booking lifecycle",
+      id: "admin-payouts",
+      title: "Run tutor payouts",
       description:
-        "Read the shared booking state machine, then act only when a participant, room, meeting, or attendance exception needs intervention.",
+        "Review unpaid honorarium, confirm payout details, and record completed transfers.",
+      icon: IconWallet,
+      steps: [
+        {
+          id: "admin-payouts",
+          title: "Pay tutors and track what is still owed",
+          summary:
+            "Use the dedicated payout workspace to see unpaid honorarium and complete each tutor transfer.",
+          actor: "Admin",
+          icon: IconWallet,
+          details: [
+            "The Unpaid amount column shows each tutor's unpaid honorarium and the completed sessions it includes.",
+            "Open a tutor payout to verify the destination account, transfer the net amount, then choose **Mark as paid**.",
+            "The unpaid amount covers completed sessions since that tutor's last recorded payment; it does not reset automatically each week.",
+            "If payout details are incomplete, ask the tutor to finish them before transferring money.",
+          ],
+          statuses: [
+            { label: "Unpaid", variant: "warning" },
+            { label: "Up to date", variant: "success" },
+          ],
+          cta: { label: "Open tutor payouts", to: "/admin-tutor-payouts" },
+        },
+      ],
+    },
+    {
+      id: "admin-bookings",
+      title: "Keep bookings moving",
+      description:
+        "Check each booking's current step and take action when a person, room, meeting, or attendance issue needs help.",
       icon: IconCalendarEvent,
       steps: [
         {
           id: "admin-booking-queue",
           title: "Monitor booking states and participants",
           summary:
-            "Use the all-bookings view and state history to understand who has acted and what the next action is.",
+            "Use the booking list and timeline to see who has acted and what should happen next.",
           actor: "Admin",
           icon: IconRoute,
           details: [
-            "Review awaiting tutor review, participant confirmation, reconfirmation, confirmed, scheduled, and reschedule-proposed bookings.",
-            "Terminal outcomes include declined, cancelled, late-cancelled, no-show, expired, and completed.",
-            "The transition timeline shows actor, reason, timestamp, and the destination status.",
-            "Each waiting booking step has a **12-hour** response window unless the session starts sooner. Expired or failed scheduling holds return within **12 hours** of the event.",
-            "Student self-service cancellation and reschedule close at **H-2 (2 hours before start)**; later exceptions require an auditable admin override.",
+            "Look for requests waiting on the tutor, students, a final confirmation, a room, or a new time.",
+            "The timeline shows the person who acted, the reason, the time, and the new status.",
+            "Waiting steps allow **12 hours** for a response unless the session starts sooner.",
+            "Students can cancel or change a booking themselves until **H-2 (2 hours before start)**. Later changes need an admin exception.",
+            "When an exception needs a Marks decision, the override form explains the choices in plain language: return held Marks, add Marks, or remove Marks.",
           ],
           statuses: [
             { label: "Needs attention", variant: "warning" },
@@ -824,15 +850,16 @@ const adminContent: GuideContent = {
         },
         {
           id: "admin-room",
-          title: "Resolve offline room requests",
+          title: "Approve offline rooms",
           summary:
-            "Assign a suitable room, relocate the booking, or cancel when no room can be provided.",
+            "Choose a suitable room, change room details, move a booking, or cancel when no room fits.",
           actor: "Admin",
           icon: IconMapPin,
           details: [
-            "Offline bookings can wait in the room approval queue after participant confirmation. Admin has **12 hours** to approve the room, capped at session start if it is sooner.",
-            "Assigning a room schedules the booking and notifies the participants.",
-            "Relocation preserves the booking while replacing the room; cancellation closes the room path when no option is available.",
+            "Offline bookings appear in the room approval queue after participants confirm. You have **12 hours** to decide, or until the session starts if that is sooner.",
+            "In Active rooms, choose **Edit** next to a room to change its name, location, or capacity. Use **Deactivate** to take an unused room out of new bookings while keeping its history; **Add room** creates a new room.",
+            "Assigning a room schedules the booking and tells the participants. Relocation keeps the booking while changing the room.",
+            "If no room works, cancel the room booking with a reason so the participants and Marks rules stay clear.",
           ],
           statuses: [
             { label: "Awaiting room approval", variant: "warning" },
@@ -856,13 +883,12 @@ const adminContent: GuideContent = {
           id: "admin-meeting",
           title: "Keep online access available",
           summary:
-            "Watch failed meeting creation retries and add a manual link when the provider cannot recover in time.",
+            "Check online access and add a meeting link when automatic setup needs help.",
           actor: "Cogito and Admin",
           icon: IconVideo,
           details: [
-            "A failed Google Meet attempt leaves the booking confirmed for scheduled retry.",
-            "The scheduler retries failed meetings every **5 minutes**, for up to **3 attempts**.",
-            "A tutor or admin manual link is the fallback when a participant needs access before provider recovery.",
+            "If automatic meeting setup fails, the booking stays confirmed while Cogito tries again every **5 minutes**, for up to **3 attempts**.",
+            "A tutor or admin can add a manual link when participants need access sooner.",
           ],
           statuses: [
             { label: "Confirmed, retrying", variant: "warning" },
@@ -884,14 +910,14 @@ const adminContent: GuideContent = {
           id: "admin-lateness",
           title: "Review lateness and no-show reports",
           summary:
-            "Investigate reports after the **15-minute** tolerance window, keep the participant informed, and resolve the operational outcome.",
+            "Check reports after the **15-minute** waiting period, keep participants informed, and record the outcome.",
           actor: "Admin",
           icon: IconAlertTriangle,
           details: [
-            "A lateness report is time-gated until **15 minutes** after the scheduled start.",
-            "The scheduler flags bookings where tutor attendance is still unknown.",
-            "For booking exceptions and emergency overrides, the support SLA is **30 minutes** during business hours (Monday to Saturday, **09:00 to 21:00 WIB**) and **4 hours** outside business hours.",
-            "Support tickets escalate after their SLA deadline and keep the escalation status in the operations queue.",
+            "A lateness report can be sent **15 minutes** after the scheduled start.",
+            "Cogito flags bookings where tutor attendance is still unknown.",
+            "Support should be handled within **30 minutes** during business hours (Monday to Saturday, **09:00 to 21:00 WIB**) and within **4 hours** outside business hours.",
+            "Late tickets are marked as escalated in the operations queue so they are easy to find.",
           ],
           statuses: [
             { label: "Open support ticket", variant: "warning" },
@@ -920,22 +946,22 @@ const adminContent: GuideContent = {
     },
     {
       id: "admin-governance",
-      title: "Moderate learning signals and Marks rules",
+      title: "Review learning records and pricing",
       description:
-        "Keep student achievements trustworthy and ensure future booking economics follow the active configuration.",
+        "Keep student achievements accurate and make sure new bookings use the right pricing rules.",
       icon: IconAdjustments,
       steps: [
         {
           id: "admin-achievements",
           title: "Review student achievements",
           summary:
-            "Approve or reject submitted competitions, certifications, and awards with clear feedback.",
+            "Check submitted competitions, certifications, and awards, then make a clear decision.",
           actor: "Admin",
           icon: IconAward,
           details: [
-            "Students own the submission workflow; admins own the review decision.",
-            "A rejection should include a useful note so the student knows what to improve.",
-            "Approved achievements can contribute to the student's visible learning record.",
+            "Students submit their own achievements; admins approve or reject them.",
+            "If you reject one, add a useful note so the student knows what to improve.",
+            "Approved achievements can appear in the student's learning record.",
           ],
           statuses: [
             { label: "Pending review", variant: "warning" },
@@ -948,13 +974,13 @@ const adminContent: GuideContent = {
           id: "admin-economy",
           title: "Manage Marks and pricing rules",
           summary:
-            "Review the active economy configuration and understand that existing booking snapshots remain unchanged.",
+            "Review the current pricing setup and know which bookings it will affect.",
           actor: "Admin",
           icon: IconCoins,
           details: [
-            "Economy settings define future pricing floors, tutor honoraria, and the Cogito take schedule.",
-            "Valid changes use the configured IDR minimum and increment rules.",
-            "Existing bookings keep their stored snapshots; new bookings and repricing use the active version.",
+            "These settings control prices, tutor honorarium, and Cogito's share for future bookings.",
+            "Changes must follow the allowed IDR minimums and increments.",
+            "Existing bookings keep the amount they already showed; new bookings use the updated settings.",
           ],
           statuses: [{ label: "Active configuration", variant: "info" }],
           cta: { label: "Open economy settings", to: "/admin-economy" },

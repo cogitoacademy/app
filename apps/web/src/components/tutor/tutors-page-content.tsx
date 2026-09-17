@@ -46,13 +46,9 @@ type PublishedTutor = {
   userId: string;
   displayName: string | null;
   shortBio: string | null;
-  credentialsSummary: string | null;
-  achievements: string | null;
-  experiences: string | null;
   education: TutorEducationEntry[] | null;
   competitionAchievements: TutorCompetitionAchievement[] | null;
   experienceEntries: TutorExperienceEntry[] | null;
-  expertise: string[];
   subjects?: TutorSubject[] | null;
   modality: string | null;
   prices: Record<string, number> | null;

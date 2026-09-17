@@ -68,13 +68,9 @@ async function createPublishedTutor(email: string, ts: number) {
     .values({
       userId: tutorId,
       inviteId: invite!.id,
-      displayName: "Prof G4",
       shortBio: "Bio",
-      credentialsSummary: "Creds",
-      expertise: ["Mathematics"],
       modality: "both",
       prices: { "1": 50, "2": 45, "3": 35, "4": 28, "5": 25, "6": 22 },
-      availabilitySummary: "Flexible",
       onboardingStatus: "published",
       publishedAt: new Date(),
     })

@@ -195,13 +195,14 @@ Dashboard → Bookings → Availability → Tutor Profile
 | /admin-operations/bookings/:bookingId | Admin booking detail and overrides                               |
 | /bookings                             | Admin-visible all-bookings view                                  |
 | /admin-tutors                         | Invitations, tutor profiles, review, publication, and moderation |
+| /admin-tutor-payouts                  | Operational tutor honorarium review and payout recording         |
 | /admin-economy                        | Marks packages and economic configuration                        |
 | /admin-achievements                   | Student achievement moderation                                   |
 
 Admin navigation:
 
 ```text
-Dashboard → Operations → Bookings → Tutors → Economy → Achievements
+Dashboard → Operations → Bookings → Tutors → Tutor payouts → Economy → Achievements
 ```
 
 ### Shared resources
@@ -721,6 +722,12 @@ The admin tutor workspace covers:
 - reviewing published-profile edits;
 - approving or rejecting pending edits;
 - recording admin notes and audit events.
+
+Operational tutor payout processing is intentionally separate at
+`/admin-tutor-payouts`. It reviews unpaid honorarium, completed sessions,
+private payout details, transfer fee/net calculations, and records **Mark as
+paid** after confirmation. Manage Tutors remains focused on invitations and
+profile review.
 
 ### 7.3 Booking operations
 
