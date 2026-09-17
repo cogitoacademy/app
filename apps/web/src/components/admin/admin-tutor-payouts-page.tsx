@@ -43,13 +43,7 @@ import {
   TableHeader,
   TableRow,
 } from "@cogito-app/ui/components/selia/table";
-import {
-  IconCoins,
-  IconInbox,
-  IconRefresh,
-  IconWallet,
-  IconX,
-} from "@tabler/icons-react";
+import { IconCoins, IconInbox, IconRefresh, IconX } from "@tabler/icons-react";
 
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { EmptyState } from "@/components/empty-state";
@@ -226,11 +220,12 @@ export function AdminTutorPayoutsPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Heading level={1} size="md">
-            Tutor payouts
+            Operational Payout
           </Heading>
           <Text className="mt-1 max-w-2xl text-muted">
-            Review unpaid honorarium, verify destination accounts, and record
-            completed transfers.
+            Unpaid honorarium covers completed sessions since each tutor's last
+            recorded payment. It does not reset automatically on a calendar
+            week.
           </Text>
         </div>
         <Button
@@ -243,22 +238,6 @@ export function AdminTutorPayoutsPage() {
           Refresh
         </Button>
       </div>
-
-      <Card>
-        <CardBody className="flex items-start gap-3">
-          <div className="mt-0.5 rounded-full bg-secondary-subtle p-2 text-secondary-foreground">
-            <IconWallet className="size-4" />
-          </div>
-          <div>
-            <Text className="font-medium">Operational payout workspace</Text>
-            <Text className="mt-1 text-sm text-muted">
-              Unpaid honorarium covers completed sessions since each
-              tutor&apos;s last recorded payment. It does not reset
-              automatically on a calendar week.
-            </Text>
-          </div>
-        </CardBody>
-      </Card>
 
       <Card id="admin-tutor-payouts" className="scroll-mt-4">
         <CardHeader>
@@ -315,7 +294,7 @@ export function AdminTutorPayoutsPage() {
                             {profile.user?.email ?? "No email"}
                           </Text>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="whitespace-nowrap">
                           {!profile.user?.id || payoutQuery?.isError ? (
                             <Text className="text-sm text-muted">
                               Not available
@@ -335,7 +314,7 @@ export function AdminTutorPayoutsPage() {
                             <Badge variant="success">Up to date</Badge>
                           )}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="whitespace-nowrap">
                           {!profile.user?.id ||
                           payoutQuery?.isError ||
                           payoutQuery?.isPending ? (
@@ -347,7 +326,7 @@ export function AdminTutorPayoutsPage() {
                             </Text>
                           )}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="whitespace-nowrap">
                           {profile.bankName?.trim() &&
                           profile.bankAccountNumber?.trim() ? (
                             <div>

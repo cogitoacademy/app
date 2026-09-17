@@ -2015,8 +2015,8 @@ function RoomCatalog({
           </>
         ) : (
           <>
-            <TableContainer className="w-[calc(100%+3rem)]!">
-              <Table>
+            <TableContainer className="w-[calc(100%+3rem)]! min-w-0">
+              <Table className="min-w-[40rem]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Room</TableHead>
@@ -2028,13 +2028,17 @@ function RoomCatalog({
                 <TableBody>
                   {visibleRooms.map((room) => (
                     <TableRow key={room.id}>
-                      <TableCell>
+                      <TableCell className="whitespace-nowrap">
                         <Text className="font-medium">{room.name}</Text>
                       </TableCell>
-                      <TableCell>{room.location}</TableCell>
-                      <TableCell>{room.capacity} seats</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex flex-wrap justify-end gap-1">
+                      <TableCell className="whitespace-nowrap">
+                        {room.location}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {room.capacity} seats
+                      </TableCell>
+                      <TableCell className="text-right whitespace-nowrap">
+                        <div className="flex justify-end gap-1">
                           <Button
                             size="sm"
                             variant="secondary"
