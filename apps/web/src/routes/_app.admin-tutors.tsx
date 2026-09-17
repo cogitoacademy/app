@@ -21,6 +21,11 @@ import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@cogito-app/ui/components/selia/avatar";
+import {
   Menu,
   MenuItem,
   MenuPopup,
@@ -521,12 +526,24 @@ function RouteComponent() {
                     return (
                       <TableRow key={profile.id}>
                         <TableCell>
-                          <Text className="font-medium">
-                            {profile.user?.name ?? "Tutor"}
-                          </Text>
-                          <Text className="text-sm text-muted">
-                            {profile.user?.email ?? "No email"}
-                          </Text>
+                          <div className="flex min-w-48 items-center gap-3">
+                            <Avatar size="sm">
+                              <AvatarImage
+                                src={profile.user?.image ?? undefined}
+                              />
+                              <AvatarFallback>
+                                {profile.user?.name?.trim().slice(0, 2).toUpperCase() || "TU"}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <Text className="truncate font-medium">
+                                {profile.user?.name ?? "Tutor"}
+                              </Text>
+                              <Text className="truncate text-sm text-muted">
+                                {profile.user?.email ?? "No email"}
+                              </Text>
+                            </div>
+                          </div>
                         </TableCell>
                         <TableCell>
                           <Badge variant={status?.variant ?? "secondary"}>
@@ -543,7 +560,7 @@ function RouteComponent() {
                             {new Date(profile.updatedAt).toLocaleString()}
                           </Text>
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right px-3! sm:px-6!">
                           <Button
                             size="sm"
                             variant="secondary"
