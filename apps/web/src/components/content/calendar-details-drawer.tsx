@@ -12,7 +12,6 @@ import {
   DrawerClose,
   DrawerDescription,
   DrawerFooter,
-  DrawerHeader,
   DrawerPopup,
   DrawerTitle,
 } from "@cogito-app/ui/components/selia/drawer";
@@ -67,50 +66,135 @@ function InfoCards({ event }: { event: CalendarCompetition }) {
     : null;
 
   return (
-    <div className="mt-1 grid grid-cols-1 gap-4 sm:grid-cols-2">
-      <div className="rounded-lg bg-accent/30 p-4 sm:hidden">
-        <div className="space-y-1">
-          {educationLevels ? (
-            <InfoLine label="Competition Level" value={educationLevels} />
-          ) : null}
-          {scale ? <InfoLine label="Scale" value={scale} /> : null}
-          {event.organizer ? (
-            <InfoLine label="Organizer" value={event.organizer} />
-          ) : null}
-          {event.location ? (
-            <InfoLine label="Location" value={event.location} />
-          ) : null}
-          <InfoLine label="Competition Timeline" value={timeline} />
-          {registrationDeadline ? (
-            <InfoLine label="Close Registration" value={registrationDeadline} />
-          ) : null}
-        </div>
+    <div className="mt-1 grid grid-cols-2 gap-4">
+      <div className="space-y-1">
+        {educationLevels ? (
+          <InfoLine label="Competition Level" value={educationLevels} />
+        ) : null}
+        {scale ? <InfoLine label="Scale" value={scale} /> : null}
+        {event.organizer ? (
+          <InfoLine label="Organizer" value={event.organizer} />
+        ) : null}
       </div>
 
-      <div className="hidden rounded-lg bg-accent/30 p-4 sm:block">
-        <div className="space-y-1">
-          {educationLevels ? (
-            <InfoLine label="Competition Level" value={educationLevels} />
-          ) : null}
-          {scale ? <InfoLine label="Scale" value={scale} /> : null}
-          {event.organizer ? (
-            <InfoLine label="Organizer" value={event.organizer} />
-          ) : null}
-        </div>
-      </div>
-
-      <div className="hidden rounded-lg bg-accent/30 p-4 sm:block">
-        <div className="space-y-1">
-          {event.location ? (
-            <InfoLine label="Location" value={event.location} />
-          ) : null}
-          <InfoLine label="Event Date" value={timeline} />
-          {registrationDeadline ? (
-            <InfoLine label="Close Registration" value={registrationDeadline} />
-          ) : null}
-        </div>
+      <div className="space-y-1">
+        {event.location ? (
+          <InfoLine label="Location" value={event.location} />
+        ) : null}
+        <InfoLine label="Event Date" value={timeline} />
+        {registrationDeadline ? (
+          <InfoLine label="Close Registration" value={registrationDeadline} />
+        ) : null}
       </div>
     </div>
+  );
+}
+
+function EventLinks({ event }: { event: CalendarCompetition }) {
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      {event.socialMediaLink ? (
+        <Button
+          variant="outline"
+          block
+          nativeButton={false}
+          render={
+            <a
+              href={event.socialMediaLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Open social media post"
+            />
+          }
+        >
+          Social Media Post <IconExternalLink />
+        </Button>
+      ) : (
+        <Button variant="outline" block disabled>
+          Social Media Post
+        </Button>
+      )}
+      {event.registrationLink ? (
+        <Button
+          variant="primary"
+          block
+          nativeButton={false}
+          render={
+            <a
+              href={event.registrationLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Open registration link"
+            />
+          }
+        >
+          Registration Link <IconArrowRight />
+        </Button>
+      ) : (
+        <Button variant="primary" block disabled>
+          Registration Link <IconArrowRight />
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function EventDetailsContent({ event }: { event: CalendarCompetition }) {
+  const [entered, setEntered] = useState(false);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setEntered(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  const revealTone =
+    "transition-all duration-300 motion-reduce:transition-none";
+  const revealState = entered
+    ? "opacity-100 translate-y-0"
+    : "pointer-events-none opacity-0 translate-y-2";
+
+  return (
+    <DrawerBody className="space-y-4">
+      <div>
+        <DrawerTitle className="text-2xl font-bold tracking-tight">
+          {event.title}
+        </DrawerTitle>
+        <DrawerDescription className="sr-only">
+          Competition details and information
+        </DrawerDescription>
+        <div className="mt-3">
+          <CategoryBadges event={event} />
+        </div>
+      </div>
+
+      <div
+        className={`${revealTone} ${revealState}`}
+        style={{ transitionDelay: "0ms" }}
+      >
+        <InfoCards event={event} />
+      </div>
+
+      {event.description ? (
+        <div
+          className={`rounded-lg bg-accent/30 p-4 ${revealTone} ${revealState}`}
+          style={{ transitionDelay: "75ms" }}
+        >
+          <Heading size="sm" className="text-sm">
+            Description
+          </Heading>
+          <Text className="mt-1 whitespace-pre-line text-sm text-muted">
+            {event.description}
+          </Text>
+        </div>
+      ) : null}
+
+      <div
+        className={`${revealTone} ${revealState}`}
+        style={{ transitionDelay: "150ms" }}
+      >
+        <EventLinks event={event} />
+      </div>
+    </DrawerBody>
   );
 }
 
@@ -124,6 +208,12 @@ export function CalendarDetailsDrawer({
   onClose: () => void;
 }) {
   const [isDesktop, setIsDesktop] = useState(false);
+  const [visibleEvent, setVisibleEvent] = useState<CalendarCompetition | null>(
+    event,
+  );
+  if (event !== null && event !== visibleEvent) {
+    setVisibleEvent(event);
+  }
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(min-width: 640px)");
@@ -134,7 +224,7 @@ export function CalendarDetailsDrawer({
     return () => mediaQuery.removeEventListener("change", updateViewport);
   }, []);
 
-  if (!event) return null;
+  if (!visibleEvent) return null;
 
   return (
     <Drawer
@@ -148,84 +238,10 @@ export function CalendarDetailsDrawer({
         direction={isDesktop ? "right" : "bottom"}
         className={isDesktop ? "w-full max-w-lg" : undefined}
       >
-        <DrawerHeader className="items-start border-b border-drawer-border">
-          <div className="min-w-0 flex-1">
-            <DrawerTitle className="text-2xl font-bold tracking-tight">
-              {event.title}
-            </DrawerTitle>
-            <DrawerDescription className="sr-only">
-              Competition details and information
-            </DrawerDescription>
-            <div className="mt-3 sm:hidden">
-              <CategoryBadges event={event} />
-            </div>
-          </div>
-          <div className="hidden shrink-0 sm:block">
-            <CategoryBadges event={event} />
-          </div>
-        </DrawerHeader>
+        <EventDetailsContent key={visibleEvent.id} event={visibleEvent} />
 
-        <DrawerBody className="space-y-4">
-          <InfoCards event={event} />
-
-          {event.description ? (
-            <div className="rounded-lg bg-accent/30 p-4">
-              <Heading size="sm" className="text-sm">
-                Description
-              </Heading>
-              <Text className="mt-1 whitespace-pre-line text-sm text-muted">
-                {event.description}
-              </Text>
-            </div>
-          ) : null}
-        </DrawerBody>
-
-        <DrawerFooter className="flex-col items-stretch gap-3 sm:flex-row sm:items-center">
-          <DrawerClose className="order-last sm:order-first">Close</DrawerClose>
-          <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2">
-            {event.socialMediaLink ? (
-              <Button
-                variant="outline"
-                block
-                nativeButton={false}
-                render={
-                  <a
-                    href={event.socialMediaLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label="Open social media post"
-                  />
-                }
-              >
-                Social Media Post <IconExternalLink />
-              </Button>
-            ) : (
-              <Button variant="outline" block disabled>
-                Social Media Post
-              </Button>
-            )}
-            {event.registrationLink ? (
-              <Button
-                variant="primary"
-                block
-                nativeButton={false}
-                render={
-                  <a
-                    href={event.registrationLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label="Open registration link"
-                  />
-                }
-              >
-                Registration Link <IconArrowRight />
-              </Button>
-            ) : (
-              <Button variant="primary" block disabled>
-                Registration Link <IconArrowRight />
-              </Button>
-            )}
-          </div>
+        <DrawerFooter>
+          <DrawerClose>Close</DrawerClose>
         </DrawerFooter>
       </DrawerPopup>
     </Drawer>
