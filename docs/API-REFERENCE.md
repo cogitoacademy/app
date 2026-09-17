@@ -1159,10 +1159,18 @@ RPC contract.
 
 - **RPC path:** `/rpc/tutorActions/completeSession`
 - **Auth:** Tutor
-- **Input:** `{ bookingId, sessionId? }` (`sessionId` required for series child sessions)
+- **Input:** `{ bookingId, sessionId?, feedback: { discussion: string[1..30], strengths: string[1..30], improvements: string[1..30] } }` (`sessionId` required for series child sessions; each bullet 1–1000 chars)
 - **Output:** `{ booking }`
-- **Description:** Marks a scheduled session completed and deducts held Marks
-- **Frontend note:** Cancel and complete actions are confirmed with in-app Selia dialogs; mutation feedback is emitted through the global toast layer and does not change this RPC contract.
+- **Description:** Marks a scheduled session completed and deducts held Marks. Requires session discussion, identified strengths, and points of improvement; saves one `session_completion_feedback` row atomically (per booking for solo/group, per session for series). Missing/empty feedback returns `BOOKING_COMPLETION_FEEDBACK_REQUIRED` (400).
+- **Frontend note:** Cancel uses Selia confirmation dialog; complete uses `CompleteSessionDialog` popup with 3 bullet-list sections (Enter = new bullet). Mutation feedback is emitted through the global toast layer and does not change this RPC contract.
+
+### `booking.listCompletionFeedback`
+
+- **RPC path:** `/rpc/booking/listCompletionFeedback`
+- **Auth:** Protected (student/tutor with booking access, admin bypass)
+- **Input:** `{ bookingId }`
+- **Output:** `SessionCompletionFeedback[]` (`{ id, bookingId, sessionId|null, authorId, discussion[], strengths[], improvements[], createdAt }`)
+- **Description:** Lists required completion feedback for payout review. Student and admin read after completion; series shows per-session rows.
 
 ### `tutorActions.markAttendance`
 

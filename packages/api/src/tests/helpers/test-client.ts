@@ -114,6 +114,7 @@ const TRUNCATE_TABLES = [
   "booking_reschedule_proposal",
   "booking_session",
   "session_note",
+  "session_completion_feedback",
   "booking",
   "notification_dispatch",
   "notification",

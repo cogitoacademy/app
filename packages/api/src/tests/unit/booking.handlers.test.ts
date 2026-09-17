@@ -1,3 +1,4 @@
+import { TEST_COMPLETION_FEEDBACK } from "../helpers/completion-feedback";
 import { describe, test, expect, mock, beforeEach } from "bun:test";
 import {
   createBookingHandler,
@@ -581,14 +582,23 @@ describe("tutorActionsHandler", () => {
       const booking = makeBookingService();
       const handler = createTutorActionsHandler(booking as any);
       const context = makeContext("t1");
-      const input = { bookingId: "b1", sessionId: "s1" };
+      const input = {
+        bookingId: "b1",
+        sessionId: "s1",
+        feedback: TEST_COMPLETION_FEEDBACK,
+      };
 
       const result = await handler.completeSession({
         context: context as any,
         input: input as any,
       });
 
-      expect(booking.completeSession).toHaveBeenCalledWith("b1", "t1", "s1");
+      expect(booking.completeSession).toHaveBeenCalledWith(
+        "b1",
+        "t1",
+        "s1",
+        TEST_COMPLETION_FEEDBACK,
+      );
       expect(result).toEqual({ id: "b1", currentState: "completed" });
     });
   });

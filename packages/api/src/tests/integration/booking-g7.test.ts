@@ -1,3 +1,4 @@
+import { TEST_COMPLETION_FEEDBACK } from "../helpers/completion-feedback";
 import { describe, test, expect, beforeAll } from "bun:test";
 import { eq } from "drizzle-orm";
 import { db } from "@cogito-app/db";
@@ -166,8 +167,7 @@ describe("G7: session notes with sanitization", () => {
       .set({ scheduledStartAt: new Date(Date.now() - 30 * 60_000) })
       .where(eq(bookingTable.id, bookingId));
 
-    const updated = await tutorClient.tutorActions.completeSession({
-      bookingId,
+    const updated = await tutorClient.tutorActions.completeSession({ feedback: TEST_COMPLETION_FEEDBACK, bookingId,
     });
     expect(updated.currentState).toBe("completed");
   });

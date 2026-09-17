@@ -1,6 +1,10 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-09-14
+Last updated: 2026-09-17
+
+## Session completion feedback (2026-09-17)
+
+Tutor `completeSession` now requires 3 bullet-list sections (Session discussion, Identified strengths, Points of improvement; Enter = new bullet). Backend stores one `session_completion_feedback` row atomically per completion (per session for series) and exposes `booking.listCompletionFeedback` to student/tutor/admin. Booking detail shows a Session feedback card for all roles; admin payout drawer points to it as payout consideration. Migration `0046_session_completion_feedback.sql`.
 
 ## Observability alert-latch fix + Important Logs board (2026-09-14)
 
@@ -832,6 +836,8 @@ when set to false.
 ### `bookingRescheduleProposal` (booking.ts) — tutor-proposed reschedule; status pending/accepted/rejected/expired
 
 ### `sessionNote` (booking.ts) — notes on completed sessions (author_id + booking_id)
+
+### `sessionCompletionFeedback` (booking.ts) — required tutor feedback at completion (booking_id + nullable session_id for series, author_id, discussion[]/strengths[]/improvements[] jsonb). One row per solo/group booking or per series session; read by student/tutor/admin for payout review.
 
 ### `room` (booking.ts) — offline rooms, is_active flag
 

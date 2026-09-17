@@ -1,3 +1,4 @@
+import { TEST_COMPLETION_FEEDBACK } from "../helpers/completion-feedback";
 import { describe, test, expect, beforeAll } from "bun:test";
 import { eq } from "drizzle-orm";
 import { db } from "@cogito-app/db";
@@ -466,8 +467,7 @@ describe("Booking group series flow (FR-20)", () => {
     }
 
     for (const s of sessions) {
-      await tutorClient.tutorActions.completeSession({
-        bookingId,
+      await tutorClient.tutorActions.completeSession({ feedback: TEST_COMPLETION_FEEDBACK, bookingId,
         sessionId: s.id,
       });
     }

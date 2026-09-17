@@ -22,6 +22,7 @@ import {
   withdrawInput,
   proposeRescheduleInput,
   completeSessionInput,
+  listCompletionFeedbackInput,
   setMeetingLinkInput,
   markAttendanceInput,
   markParticipantNoShowInput,
@@ -149,6 +150,18 @@ export function createBookingRouter(handler: BookingHandler) {
       })
       .input(getSessionNotesInput)
       .handler(handler.getSessionNotes),
+
+    listCompletionFeedback: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/booking/completion-feedback/list",
+        tags: ["Bookings"],
+        summary: "List completion feedback",
+        description:
+          "Student, tutor, or admin reads required completion feedback (discussion, strengths, improvements) for payout review",
+      })
+      .input(listCompletionFeedbackInput)
+      .handler(handler.listCompletionFeedback),
 
     createGroup: verifiedStudentProcedure
       .route({
@@ -320,7 +333,8 @@ export function createTutorActionsRouter(handler: TutorActionsHandler) {
         path: "/tutor/booking/complete",
         tags: ["Tutor", "Bookings"],
         summary: "Complete session",
-        description: "Tutor marks a scheduled session as completed",
+        description:
+          "Tutor marks a scheduled session as completed with required feedback (discussion, strengths, improvements)",
       })
       .input(completeSessionInput)
       .handler(handler.completeSession),

@@ -130,9 +130,29 @@ export const proposeRescheduleInput = z.object({
   reason: z.string().trim().min(1).max(2000),
 });
 
+const feedbackBullets = z
+  .array(z.string().trim().min(1).max(1000))
+  .min(1)
+  .max(30)
+  .transform((items) => items.map((s) => s.trim()).filter(Boolean))
+  .refine((items) => items.length > 0, {
+    message: "At least one bullet required",
+  });
+
+export const completionFeedbackInput = z.object({
+  discussion: feedbackBullets,
+  strengths: feedbackBullets,
+  improvements: feedbackBullets,
+});
+
 export const completeSessionInput = z.object({
   bookingId: z.string().max(100),
   sessionId: z.string().max(100).optional(),
+  feedback: completionFeedbackInput,
+});
+
+export const listCompletionFeedbackInput = z.object({
+  bookingId: z.string().max(100),
 });
 
 export const setMeetingLinkInput = bookingActionInput.extend({
