@@ -29,6 +29,7 @@ function makeBookingService() {
     cancelSession: mock(async () => ({ cancelled: true, sessionId: "s1" })),
     addSessionNote: mock(async () => ({ id: "n1", content: "note" })),
     getSessionNotes: mock(async () => [{ id: "n1", content: "note" }]),
+    listCompletionFeedback: mock(async () => [{ id: "f1" }]),
     createGroup: mock(async () => ({ id: "bg1" })),
     createSeries: mock(async () => ({ id: "bs1" })),
     confirmInvite: mock(async () => ({ id: "b1", currentState: "confirmed" })),
@@ -479,6 +480,26 @@ describe("bookingHandler", () => {
 
       expect(booking.getSessionNotes).toHaveBeenCalledWith("u1", "b1");
       expect(result).toEqual([{ id: "n1", content: "note" }]);
+    });
+  });
+
+  describe("listCompletionFeedback", () => {
+    test("passes booking id, user id, and role to the booking service", async () => {
+      const booking = makeBookingService();
+      const handler = createBookingHandler(booking as any);
+      const context = makeContext("student1");
+
+      const result = await handler.listCompletionFeedback({
+        context: context as any,
+        input: { bookingId: "b1" } as any,
+      });
+
+      expect(booking.listCompletionFeedback).toHaveBeenCalledWith(
+        "b1",
+        "student1",
+        undefined,
+      );
+      expect(result).toEqual([{ id: "f1" }]);
     });
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, test, beforeAll } from "bun:test";
 import { db } from "@cogito-app/db";
-import { booking } from "@cogito-app/db/schema";
+import { booking, bookingSession } from "@cogito-app/db/schema";
 
 import { resetDatabase } from "../helpers/test-client";
 import { createTestUser } from "../helpers/factories";
@@ -247,5 +247,57 @@ describe("booking repo (real DB)", () => {
     for (const id of ids) {
       expect(seen).toContain(id);
     }
+  });
+
+  test("completion feedback lookups support booking and session scopes", async () => {
+    const b = await repo.insertBooking(
+      db,
+      makeBooking({
+        type: "series",
+        tutorId,
+        proposerId,
+        currentState: "completed",
+      }),
+    );
+    const start = new Date(Date.now() + 2 * 3600_000);
+    const [session] = await db
+      .insert(bookingSession)
+      .values({
+        seriesBookingId: b.id,
+        scheduledStartAt: start,
+        scheduledEndAt: new Date(start.getTime() + 3600_000),
+      })
+      .returning();
+
+    const bookingFeedback = await repo.insertCompletionFeedback(db, {
+      bookingId: b.id,
+      sessionId: null,
+      authorId: tutorId,
+      discussion: ["booking"],
+      strengths: ["strength"],
+      improvements: ["improvement"],
+    });
+    const sessionFeedback = await repo.insertCompletionFeedback(db, {
+      bookingId: b.id,
+      sessionId: session!.id,
+      authorId: tutorId,
+      discussion: ["session"],
+      strengths: ["strength"],
+      improvements: ["improvement"],
+    });
+
+    expect(await repo.findCompletionFeedback(db, b.id, null)).toMatchObject({
+      id: bookingFeedback.id,
+      sessionId: null,
+    });
+    expect(
+      await repo.findCompletionFeedback(db, b.id, session!.id),
+    ).toMatchObject({
+      id: sessionFeedback.id,
+      sessionId: session!.id,
+    });
+    expect(await repo.listCompletionFeedbackByBooking(db, b.id)).toHaveLength(
+      2,
+    );
   });
 });

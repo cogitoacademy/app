@@ -290,4 +290,17 @@ describe("Series session completion (G18)", () => {
       );
     expect(finalNotifs.length).toBe(1);
   });
+
+  test("completion feedback can be listed for the booking", async () => {
+    const feedback = await studentClient.booking.listCompletionFeedback({
+      bookingId,
+    });
+
+    expect(feedback).toHaveLength(3);
+    expect(new Set(feedback.map((row) => row.sessionId))).toEqual(
+      new Set(sessionIds),
+    );
+    expect(feedback.every((row) => row.bookingId === bookingId)).toBe(true);
+    expect(feedback.every((row) => row.authorId === tutorId)).toBe(true);
+  });
 });

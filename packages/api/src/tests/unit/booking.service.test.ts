@@ -30,6 +30,7 @@ import {
   BookingSeriesNoOptOutError,
   BookingAcceptanceDeadlinePassedError,
   BookingCancellationDeadlinePassedError,
+  BookingCompletionFeedbackRequiredError,
 } from "../../modules/booking/booking.errors";
 
 function makeDb() {
@@ -2173,6 +2174,20 @@ describe("BookingService", () => {
   });
 
   describe("completeSession", () => {
+    test("requires completion feedback before completing a scheduled booking", async () => {
+      const { service } = createService({
+        repo: {
+          findBookingById: mock(async () =>
+            makeBooking({ currentState: "scheduled" }),
+          ),
+        },
+      });
+
+      await expect(service.completeSession("b1", "tutor1")).rejects.toThrow(
+        BookingCompletionFeedbackRequiredError,
+      );
+    });
+
     test("throws BookingNotFoundError when booking does not exist", async () => {
       const { service } = createService({
         repo: { findBookingById: mock(async () => null) },
