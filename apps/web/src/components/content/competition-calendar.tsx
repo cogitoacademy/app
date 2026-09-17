@@ -142,8 +142,8 @@ export function CompetitionCalendar({
   const isFiltered = selectedTypes.size < competitionTypeOptions.length;
 
   const filterLabel = isFiltered
-    ? `Filter by competition type, ${selectedTypes.size} of ${competitionTypeOptions.length} types shown`
-    : "Filter by competition type";
+    ? `Calendar options, ${view} view, ${selectedTypes.size} of ${competitionTypeOptions.length} types shown`
+    : `Calendar options, ${view} view`;
 
   function handleTypeToggle(value: string, checked: boolean) {
     setSelectedTypes((prev) => {
@@ -239,6 +239,14 @@ export function CompetitionCalendar({
               </MenuTrigger>
               <MenuPopup align="end" size="compact">
                 <MenuGroup>
+                  <MenuGroupLabel>View</MenuGroupLabel>
+                  <MenuRadioGroup value={view} onValueChange={handleViewChange}>
+                    <MenuRadioItem value="month">Month</MenuRadioItem>
+                    <MenuRadioItem value="agenda">Agenda</MenuRadioItem>
+                  </MenuRadioGroup>
+                </MenuGroup>
+                <MenuSeparator />
+                <MenuGroup>
                   <MenuGroupLabel>Competition type</MenuGroupLabel>
                   {competitionTypeOptions.map((value) => (
                     <MenuCheckboxItem
@@ -268,32 +276,6 @@ export function CompetitionCalendar({
                 {`${selectedTypes.size}/${competitionTypeOptions.length}`}
               </Badge>
             ) : null}
-            <Menu>
-              <MenuTrigger
-                render={
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    aria-label="Change calendar view"
-                    className="w-fit"
-                  />
-                }
-              >
-                <span className="max-[479px]:sr-only">
-                  {view === "month" ? "Month" : "Agenda"}
-                </span>
-                <span className="hidden max-[479px]:inline" aria-hidden="true">
-                  {view === "month" ? "M" : "A"}
-                </span>
-                <IconChevronDown className="hidden min-[366px]:block" />
-              </MenuTrigger>
-              <MenuPopup align="end" size="compact">
-                <MenuRadioGroup value={view} onValueChange={handleViewChange}>
-                  <MenuRadioItem value="month">Month</MenuRadioItem>
-                  <MenuRadioItem value="agenda">Agenda</MenuRadioItem>
-                </MenuRadioGroup>
-              </MenuPopup>
-            </Menu>
           </div>
         </CardHeader>
 
