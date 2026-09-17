@@ -48,9 +48,9 @@ export function getCategoryBadgeClass(coreCategory?: string) {
 
 export function getBorderRadiusClass(isFirstDay: boolean, isLastDay: boolean) {
   if (isFirstDay && isLastDay) return "rounded";
-  if (isFirstDay) return "rounded-l-sm rounded-r-none";
+  if (isFirstDay) return "rounded-r-none";
   if (isLastDay) return "rounded-r-sm rounded-l-none";
-  return "rounded-none";
+  return "rounded-sm";
 }
 
 export function isMultiDayEvent(event: CalendarCompetition) {
@@ -111,48 +111,6 @@ export function getAgendaEventsForDay(
   return getAllEventsForDay(events, day);
 }
 
-export function getEventLanesForWeek(
-  events: CalendarCompetition[],
-  week: Date[],
-) {
-  const weekEvents = new Map<string, CalendarCompetition>();
-
-  for (const day of week) {
-    for (const event of getAllEventsForDay(events, day)) {
-      weekEvents.set(event.id, event);
-    }
-  }
-
-  const orderedEvents = [...weekEvents.values()].toSorted((left, right) => {
-    const startDifference =
-      new Date(left.start).getTime() - new Date(right.start).getTime();
-    if (startDifference !== 0) return startDifference;
-
-    const endDifference =
-      new Date(right.end).getTime() - new Date(left.end).getTime();
-    if (endDifference !== 0) return endDifference;
-
-    return left.id.localeCompare(right.id);
-  });
-
-  const laneEndTimes: number[] = [];
-  const eventLanes = new Map<string, number>();
-
-  for (const event of orderedEvents) {
-    const eventStart = startOfDay(new Date(event.start)).getTime();
-    const eventEnd = endOfDay(new Date(event.end)).getTime();
-    const availableLane = laneEndTimes.findIndex(
-      (laneEnd) => laneEnd < eventStart,
-    );
-    const lane = availableLane === -1 ? laneEndTimes.length : availableLane;
-
-    laneEndTimes[lane] = eventEnd;
-    eventLanes.set(event.id, lane);
-  }
-
-  return eventLanes;
-}
-
 export function formatCompetitionDates(event: CalendarCompetition) {
   if (isSameDay(event.start, event.end)) {
     return format(event.start, "d MMMM yyyy");
@@ -183,4 +141,18 @@ export function filterEventsByCompetitionType(
   return events.filter((event) =>
     event.categories.some((category) => selected.has(category.coreCategory)),
   );
+}
+
+export function sortDayEvents(
+  events: CalendarCompetition[],
+): CalendarCompetition[] {
+  return [...events].toSorted((left, right) => {
+    const leftIsMultiDay = isMultiDayEvent(left);
+    const rightIsMultiDay = isMultiDayEvent(right);
+
+    if (leftIsMultiDay && !rightIsMultiDay) return -1;
+    if (!leftIsMultiDay && rightIsMultiDay) return 1;
+
+    return new Date(left.start).getTime() - new Date(right.start).getTime();
+  });
 }

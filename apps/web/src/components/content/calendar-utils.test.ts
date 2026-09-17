@@ -4,6 +4,7 @@ import {
   competitionTypeOptions,
   filterEventsByCompetitionType,
   getCategoryLabel,
+  sortDayEvents,
 } from "./calendar-utils";
 import type { CalendarCompetition } from "./calendar-types";
 
@@ -79,5 +80,70 @@ describe("filterEventsByCompetitionType", () => {
   test("empty selection matches nothing", () => {
     const events = [makeEvent("a", ["mun"])];
     expect(filterEventsByCompetitionType(events, new Set())).toEqual([]);
+  });
+});
+
+describe("sortDayEvents", () => {
+  function makeDatedEvent(
+    id: string,
+    start: string,
+    end: string,
+  ): CalendarCompetition {
+    return {
+      ...makeEvent(id, ["mun"]),
+      start: new Date(start),
+      end: new Date(end),
+    };
+  }
+
+  test("puts multi-day events before single-day ones", () => {
+    const single = makeDatedEvent(
+      "single",
+      "2026-08-01T09:00:00+07:00",
+      "2026-08-01T10:30:00+07:00",
+    );
+    const multi = makeDatedEvent(
+      "multi",
+      "2026-07-31T09:00:00+07:00",
+      "2026-08-02T10:30:00+07:00",
+    );
+    expect(sortDayEvents([single, multi]).map((event) => event.id)).toEqual([
+      "multi",
+      "single",
+    ]);
+  });
+
+  test("orders same-day events by start time", () => {
+    const late = makeDatedEvent(
+      "late",
+      "2026-08-01T14:00:00+07:00",
+      "2026-08-01T15:30:00+07:00",
+    );
+    const early = makeDatedEvent(
+      "early",
+      "2026-08-01T09:00:00+07:00",
+      "2026-08-01T10:30:00+07:00",
+    );
+    expect(sortDayEvents([late, early]).map((event) => event.id)).toEqual([
+      "early",
+      "late",
+    ]);
+  });
+
+  test("does not mutate the input array", () => {
+    const events = [
+      makeDatedEvent(
+        "b",
+        "2026-08-01T14:00:00+07:00",
+        "2026-08-01T15:30:00+07:00",
+      ),
+      makeDatedEvent(
+        "a",
+        "2026-08-01T09:00:00+07:00",
+        "2026-08-01T10:30:00+07:00",
+      ),
+    ];
+    sortDayEvents(events);
+    expect(events.map((event) => event.id)).toEqual(["b", "a"]);
   });
 });
