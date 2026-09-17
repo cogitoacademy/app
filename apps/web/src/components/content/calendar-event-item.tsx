@@ -45,7 +45,7 @@ export function CalendarEventItem({
           eventClass,
           getBorderRadiusClass(isFirstDay, isLastDay),
           isFirstDay && "border-l-4",
-          isEventInPast && "opacity-70",
+          isEventInPast && "opacity-100",
         )}
         onClick={onClick}
       >

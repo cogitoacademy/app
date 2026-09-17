@@ -50,7 +50,7 @@ export function getBorderRadiusClass(isFirstDay: boolean, isLastDay: boolean) {
   if (isFirstDay && isLastDay) return "rounded";
   if (isFirstDay) return "rounded-r-none";
   if (isLastDay) return "rounded-r-sm rounded-l-none";
-  return "rounded-sm";
+  return "rounded-none";
 }
 
 export function isMultiDayEvent(event: CalendarCompetition) {
