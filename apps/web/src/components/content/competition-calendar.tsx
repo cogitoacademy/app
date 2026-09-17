@@ -20,6 +20,7 @@ import type { CSSProperties } from "react";
 
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
+import { Kbd } from "@cogito-app/ui/components/selia/kbd";
 import {
   Card,
   CardBody,
@@ -241,8 +242,12 @@ export function CompetitionCalendar({
                 <MenuGroup>
                   <MenuGroupLabel>View</MenuGroupLabel>
                   <MenuRadioGroup value={view} onValueChange={handleViewChange}>
-                    <MenuRadioItem value="month">Month</MenuRadioItem>
-                    <MenuRadioItem value="agenda">Agenda</MenuRadioItem>
+                    <MenuRadioItem value="month">
+                      Month <Kbd className="ml-auto">M</Kbd>
+                    </MenuRadioItem>
+                    <MenuRadioItem value="agenda">
+                      Agenda <Kbd className="ml-auto">A</Kbd>
+                    </MenuRadioItem>
                   </MenuRadioGroup>
                 </MenuGroup>
                 <MenuSeparator />
