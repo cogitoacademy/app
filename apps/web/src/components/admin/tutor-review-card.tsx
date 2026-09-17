@@ -9,12 +9,12 @@ import {
 } from "@cogito-app/ui/components/selia/avatar";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
+import { Chip } from "@cogito-app/ui/components/selia/chip";
 import {
   Card,
   CardBody,
   CardFooter,
   CardHeader,
-  CardHeaderAction,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import {
@@ -33,6 +33,18 @@ import {
 } from "@cogito-app/ui/components/selia/field";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Input } from "@cogito-app/ui/components/selia/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+} from "@cogito-app/ui/components/selia/input-group";
+import {
+  Item,
+  ItemAction,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from "@cogito-app/ui/components/selia/item";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import {
   Table,
@@ -44,10 +56,16 @@ import {
 } from "@cogito-app/ui/components/selia/table";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
-import { IconAlertTriangle, IconMail } from "@tabler/icons-react";
+import {
+  IconAlertTriangle,
+  IconChevronDown,
+  IconInbox,
+  IconSearch,
+} from "@tabler/icons-react";
 
 import { getUserFacingError } from "@/lib/error-message";
 import { CogitoMarks } from "@/components/cogito-marks";
+import { EmptyState } from "@/components/empty-state";
 import { getCompetitionFieldClass } from "@/lib/competition-colors";
 import { resolveProfileImageUrl } from "@/lib/profile-image-url";
 import { cn } from "@cogito-app/ui/lib/utils";
@@ -64,6 +82,17 @@ import {
   type TutorExperienceEntry,
 } from "@/components/tutor/tutor-experiences";
 import { ProfilePhotoHistory } from "@/components/tutor/profile-photo-history";
+import {
+  buildTutorReviewDiffs,
+  filterTutorReviewDiffs,
+  getTutorReviewDiffStatus,
+  isTutorReviewValueEmpty,
+  summarizeTutorReviewDiffs,
+  TUTOR_REVIEW_DIFF_FILTERS,
+  type TutorReviewDiff,
+  type TutorReviewDiffFilter,
+  type TutorReviewDiffStatus,
+} from "@/components/admin/tutor-review-diff";
 
 const FLOOR_ONLINE: Record<string, number> = {
   "1": 42,
@@ -296,6 +325,7 @@ const PENDING_FIELD_LABELS: Record<string, string> = {
   subjectIds: "Specializations",
   baseRatesIdr: "Base rates",
   displayName: "Display name",
+  shortBio: "Short bio",
   credentialsSummary: "Credentials summary",
   achievements: "Achievements (text)",
   experiences: "Experiences (text)",
@@ -315,6 +345,149 @@ function formatPendingField(field: string) {
   return PENDING_FIELD_LABELS[field] ?? field.replace(/([A-Z])/g, " $1").trim();
 }
 
+const DIFF_STATUS_META: Record<
+  TutorReviewDiffStatus,
+  {
+    label: string;
+    symbol: string;
+    variant: "secondary" | "success" | "warning" | "danger";
+  }
+> = {
+  added: { label: "Added", symbol: "+", variant: "success" },
+  modified: { label: "Changed", symbol: "~", variant: "warning" },
+  removed: { label: "Removed", symbol: "−", variant: "danger" },
+  filled: { label: "Filled", symbol: "✓", variant: "secondary" },
+  empty: { label: "Empty", symbol: "○", variant: "secondary" },
+};
+
+const DIFF_FILTER_LABELS: Record<TutorReviewDiffFilter, string> = {
+  all: "All",
+  added: "Added",
+  modified: "Changed",
+  removed: "Removed",
+  empty: "Empty",
+};
+
+const REVIEW_SECTION_FIELDS = {
+  profile: ["shortBio", "displayName", "name"],
+  teaching: ["modality", "subjectIds", "expertise"],
+  credentials: [
+    "education",
+    "competitionAchievements",
+    "experienceEntries",
+    "credentialsSummary",
+    "achievements",
+    "experiences",
+  ],
+  proofs: ["achievementProofUrls", "experienceProofUrls", "proofUrls"],
+  marks: ["prices", "baseRatesIdr"],
+  photo: ["profileImageUrl"],
+  payout: [
+    "bankName",
+    "bankAccountNumber",
+    "bankAccountHolderName",
+    "bankAccountOpeningCity",
+    "bankAccountOwnership",
+  ],
+} as const;
+
+const REVIEW_SECTION_TITLES: Record<
+  keyof typeof REVIEW_SECTION_FIELDS,
+  string
+> = {
+  profile: "Profile",
+  teaching: "Teaching setup",
+  credentials: "Credentials",
+  proofs: "Proofs",
+  marks: "Marks per student",
+  photo: "Profile photo",
+  payout: "Payout account",
+};
+
+type ReviewSectionStatus = "changes" | "empty" | undefined;
+
+function isActualTutorReviewChange(status: TutorReviewDiffStatus) {
+  return status === "added" || status === "modified" || status === "removed";
+}
+
+function getReviewSectionStatus(
+  fields: readonly string[],
+  diffs: readonly TutorReviewDiff[],
+  isEmpty: boolean,
+): ReviewSectionStatus {
+  if (
+    diffs.some(
+      (diff) =>
+        fields.includes(diff.field) && isActualTutorReviewChange(diff.status),
+    )
+  ) {
+    return "changes";
+  }
+  return isEmpty ? "empty" : undefined;
+}
+
+function sectionMatchesReviewFilters(
+  title: string,
+  fields: readonly string[],
+  status: ReviewSectionStatus,
+  diffs: readonly TutorReviewDiff[],
+  filter: TutorReviewDiffFilter,
+  search: string,
+) {
+  const query = search.trim().toLowerCase();
+  const sectionDiffs = diffs.filter((diff) => fields.includes(diff.field));
+  const sectionSearchText = [
+    title,
+    ...fields.map(formatPendingField),
+    ...sectionDiffs.map((diff) => diff.label),
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  if (query && !sectionSearchText.includes(query)) return false;
+  if (filter === "all") return true;
+  if (filter === "empty") {
+    return (
+      status === "empty" || sectionDiffs.some((diff) => diff.status === "empty")
+    );
+  }
+  return sectionDiffs.some((diff) => diff.status === filter);
+}
+
+function DiffStatusBadge({ status }: { status: TutorReviewDiffStatus }) {
+  const meta = DIFF_STATUS_META[status];
+  return (
+    <Badge
+      variant={meta.variant}
+      size="sm"
+      pill
+      aria-label={`${meta.symbol} ${meta.label}`}
+    >
+      <span aria-hidden="true">{meta.symbol}</span>
+      {meta.label}
+    </Badge>
+  );
+}
+
+function ReviewEmptyState({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <EmptyState
+      icon={<IconInbox aria-hidden="true" />}
+      title={title}
+      description={description}
+      tone="secondary"
+      size="inline"
+      className="rounded-lg"
+    />
+  );
+}
+
 function isPricesRecord(value: unknown): value is Record<string, number> {
   if (!isRecord(value)) return false;
   return Object.entries(value).every(
@@ -330,9 +503,9 @@ function SpecBadges({ items }: { items: SpecializationItem[] }) {
   }
   return (
     <div className="flex min-w-0 flex-wrap gap-1.5">
-      {items.map(({ label, field }, index) => (
+      {items.map(({ label, field }) => (
         <Badge
-          key={`${label}-${index}`}
+          key={`${field ?? "specialization"}-${label}`}
           variant="secondary"
           className={cn(
             "h-auto min-h-5.5 max-w-full whitespace-normal break-words py-0.5",
@@ -428,7 +601,7 @@ function plainText(value: unknown): string {
 
 type PendingPair = { current: ReactNode; proposed: ReactNode };
 
-function PendingChangePair({
+function renderPendingChangePair({
   field,
   current,
   proposed,
@@ -589,6 +762,159 @@ function PendingChangePair({
   };
 }
 
+function formatPendingValueSummary(field: string, value: unknown): string {
+  if (isTutorReviewValueEmpty(value)) return "Empty";
+
+  if (field === "subjectIds" && Array.isArray(value)) {
+    const count = value.length;
+    return `${count} specialization${count === 1 ? "" : "s"}`;
+  }
+
+  if (
+    field === "education" ||
+    field === "competitionAchievements" ||
+    field === "experienceEntries"
+  ) {
+    const count = Array.isArray(value) ? value.length : 0;
+    const label =
+      field === "education"
+        ? "education entr"
+        : field === "competitionAchievements"
+          ? "achievement entr"
+          : "experience entr";
+    return `${count} ${label}${count === 1 ? "y" : "ies"}`;
+  }
+
+  if (
+    field === "achievementProofUrls" ||
+    field === "experienceProofUrls" ||
+    field === "proofUrls"
+  ) {
+    const count = Array.isArray(value) ? value.length : 0;
+    return `${count} proof link${count === 1 ? "" : "s"}`;
+  }
+
+  if (field === "prices" && isRecord(value)) {
+    const count = Object.keys(value).length;
+    return `${count} group-size price${count === 1 ? "" : "s"}`;
+  }
+
+  if (field === "baseRatesIdr") return formatBaseRates(value) ?? "Empty";
+  if (field === "modality") return modalityLabel(value);
+
+  const summary = plainText(value).replace(/\s+/g, " ").trim();
+  return summary.length > 120 ? `${summary.slice(0, 117)}…` : summary;
+}
+
+function PendingChangeRow({
+  diff,
+  expanded,
+  onToggle,
+  currentSpecializations,
+  subjectLabels,
+  subjectFieldSlugs,
+  idPrefix,
+}: {
+  diff: TutorReviewDiff;
+  expanded: boolean;
+  onToggle: () => void;
+  currentSpecializations: SpecializationItem[];
+  subjectLabels: ReadonlyMap<string, string>;
+  subjectFieldSlugs?: ReadonlyMap<string, string>;
+  idPrefix: string;
+}) {
+  const pair = renderPendingChangePair({
+    field: diff.field,
+    current: diff.current,
+    proposed: diff.proposed,
+    currentSpecializations,
+    subjectLabels,
+    subjectFieldSlugs,
+    idPrefix,
+  });
+  const detailsId = `${idPrefix}-details`;
+  const meta = DIFF_STATUS_META[diff.status];
+  const currentSummary = formatPendingValueSummary(diff.field, diff.current);
+  const proposedSummary = formatPendingValueSummary(diff.field, diff.proposed);
+
+  return (
+    <Item
+      variant="outline"
+      direction="column"
+      size="sm"
+      className="overflow-hidden gap-0! p-0!"
+    >
+      <button
+        type="button"
+        aria-expanded={expanded}
+        aria-controls={detailsId}
+        onClick={onToggle}
+        className="flex min-w-0 items-start gap-3 p-3 text-left focus-visible:z-1 focus-visible:outline-0 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+      >
+        <ItemMedia className="pt-0.5">
+          <span
+            aria-hidden="true"
+            className="flex size-8 items-center justify-center rounded-full border border-border bg-background font-mono text-sm font-semibold"
+          >
+            {meta.symbol}
+          </span>
+        </ItemMedia>
+        <ItemContent className="min-w-0 flex-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <ItemTitle className="text-sm">{diff.label}</ItemTitle>
+            <DiffStatusBadge status={diff.status} />
+          </div>
+          <ItemDescription className="min-w-0 max-w-full truncate text-sm">
+            <span>{currentSummary}</span>
+            <span aria-hidden="true" className="mx-1.5 text-dimmed">
+              →
+            </span>
+            <span className="font-medium text-foreground">
+              {proposedSummary}
+            </span>
+          </ItemDescription>
+        </ItemContent>
+        <ItemAction className="shrink-0 pt-1">
+          <IconChevronDown
+            aria-hidden="true"
+            className={cn("size-4 text-dimmed", expanded && "rotate-180")}
+          />
+          <span className="sr-only">
+            {expanded ? `Collapse ${diff.label}` : `Expand ${diff.label}`}
+          </span>
+        </ItemAction>
+      </button>
+      <div
+        id={detailsId}
+        hidden={!expanded}
+        className="border-t border-item-border bg-background p-3"
+      >
+        {diff.status === "empty" ? (
+          <ReviewEmptyState
+            title="No value submitted"
+            description="This field is empty in both the current profile and the proposal."
+          />
+        ) : (
+          <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+            <div className="min-w-0 rounded-lg border border-item-border bg-item p-3">
+              <Text className="text-xs font-semibold uppercase tracking-wide text-muted">
+                Current
+              </Text>
+              <div className="mt-2 min-w-0">{pair.current}</div>
+            </div>
+            <div className="min-w-0 rounded-lg border border-warning-border/60 bg-warning/5 p-3">
+              <Text className="text-xs font-semibold uppercase tracking-wide text-warning">
+                Proposed
+              </Text>
+              <div className="mt-2 min-w-0">{pair.proposed}</div>
+            </div>
+          </div>
+        )}
+      </div>
+    </Item>
+  );
+}
+
 export function TutorReviewCard({
   profile,
   subjectLabels,
@@ -607,6 +933,11 @@ export function TutorReviewCard({
   const [adminNote, setAdminNote] = useState("");
   const [profileImageUrl, setProfileImageUrl] = useState("");
   const [isUploadingProfilePhoto, setIsUploadingProfilePhoto] = useState(false);
+  const [diffFilter, setDiffFilter] = useState<TutorReviewDiffFilter>("all");
+  const [diffSearch, setDiffSearch] = useState("");
+  const [expandedDiffFields, setExpandedDiffFields] = useState<Set<string>>(
+    () => new Set(),
+  );
   const reviewMutation = useMutation(
     orpc.adminTutor.reviewTutorProfile.mutationOptions({
       onSuccess: () => {
@@ -817,36 +1148,14 @@ export function TutorReviewCard({
   );
   const reviewAction = reviewMutation.variables?.action;
   const isPending = reviewMutation.isPending;
+  const currentProfileImageUrl = profile.user?.image ?? null;
   const pendingProfileImageUrl = readProfileImageUrl(
     profile.pendingProfileChanges?.profileImageUrl,
   );
-  const currentProfileImageUrl = profile.user?.image ?? null;
   const pendingChangesWithoutPhoto = Object.entries(
     profile.pendingProfileChanges ?? {},
   ).filter(([field]) => field !== "profileImageUrl");
-  function readCurrentPendingValue(field: string): unknown {
-    switch (field) {
-      case "achievementProofUrls":
-        return profile.achievementProofUrls;
-      case "experienceProofUrls":
-        return profile.experienceProofUrls;
-      case "education":
-        return profile.education;
-      case "competitionAchievements":
-        return profile.competitionAchievements;
-      case "experienceEntries":
-        return profile.experienceEntries;
-      case "modality":
-        return profile.modality;
-      case "baseRatesIdr":
-        return profile.baseRatesIdr;
-      case "prices":
-        return profile.prices;
-      default:
-        return undefined;
-    }
-  }
-  const specializationItems: SpecializationItem[] = (profile.subjects ?? [])
+  const currentSpecializationItems = (profile.subjects ?? [])
     .map((entry) => ({
       id: entry.subject.id,
       label: entry.subject.parent?.name
@@ -857,11 +1166,64 @@ export function TutorReviewCard({
     .filter(
       (item, index, all) =>
         all.findIndex((other) => other.id === item.id) === index,
-    )
-    .map(({ label, field }) => ({ label, field }));
+    );
+  const currentSubjectIds = currentSpecializationItems.map((item) => item.id);
+  const specializationItems: SpecializationItem[] =
+    currentSpecializationItems.map(({ label, field }) => ({ label, field }));
+  const currentPendingValues: Record<string, unknown> = {
+    name: profile.user?.name,
+    displayName: profile.user?.name,
+    shortBio: profile.shortBio,
+    subjectIds: currentSubjectIds,
+    achievementProofUrls: profile.achievementProofUrls,
+    experienceProofUrls: profile.experienceProofUrls,
+    education: profile.education,
+    competitionAchievements: profile.competitionAchievements,
+    experienceEntries: profile.experienceEntries,
+    modality: profile.modality,
+    baseRatesIdr: profile.baseRatesIdr,
+    prices: profile.prices,
+    bankName: profile.bankName,
+    bankAccountNumber: profile.bankAccountNumber,
+    bankAccountHolderName: profile.bankAccountHolderName,
+    bankAccountOpeningCity: profile.bankAccountOpeningCity,
+    bankAccountOwnership: profile.bankAccountOwnership,
+    profileImageUrl: currentProfileImageUrl,
+  };
+  function readCurrentPendingValue(field: string): unknown {
+    const [rootField, ...path] = field.split(".");
+    let value = currentPendingValues[rootField];
+    for (const pathPart of path) {
+      if (!isRecord(value)) return undefined;
+      value = value[pathPart];
+    }
+    return value;
+  }
+  const diffEntries = buildTutorReviewDiffs(
+    pendingChangesWithoutPhoto,
+    readCurrentPendingValue,
+    formatPendingField,
+  );
+  const diffSummary = summarizeTutorReviewDiffs(diffEntries);
+  const filteredDiffEntries = filterTutorReviewDiffs(
+    diffEntries,
+    diffFilter,
+    diffSearch,
+  );
+  function toggleDiffField(field: string) {
+    setExpandedDiffFields((current) => {
+      const next = new Set(current);
+      if (next.has(field)) next.delete(field);
+      else next.add(field);
+      return next;
+    });
+  }
   const hasEducation = Boolean(profile.education?.length);
   const hasAchievements = Boolean(profile.competitionAchievements?.length);
   const hasExperiences = Boolean(profile.experienceEntries?.length);
+  const hasTeachingSetup =
+    !isTutorReviewValueEmpty(profile.modality) ||
+    specializationItems.length > 0;
   const proofRows: Array<{ label: string; url: string }> = [
     ...(profile.achievementProofUrls ?? []).map((url) => ({
       label: "Achievement",
@@ -893,12 +1255,66 @@ export function TutorReviewCard({
         }
       : null,
   ].filter((row): row is { label: string; value: string } => row !== null);
+  const sectionStatuses = {
+    profile: getReviewSectionStatus(
+      REVIEW_SECTION_FIELDS.profile,
+      diffEntries,
+      isTutorReviewValueEmpty(profile.shortBio),
+    ),
+    teaching: getReviewSectionStatus(
+      REVIEW_SECTION_FIELDS.teaching,
+      diffEntries,
+      !hasTeachingSetup,
+    ),
+    credentials: getReviewSectionStatus(
+      REVIEW_SECTION_FIELDS.credentials,
+      diffEntries,
+      !hasEducation && !hasAchievements && !hasExperiences,
+    ),
+    proofs: getReviewSectionStatus(
+      REVIEW_SECTION_FIELDS.proofs,
+      diffEntries,
+      proofRows.length === 0,
+    ),
+    marks: getReviewSectionStatus(
+      REVIEW_SECTION_FIELDS.marks,
+      diffEntries,
+      priceEntries.length === 0,
+    ),
+    photo:
+      pendingProfileImageUrl &&
+      isActualTutorReviewChange(
+        getTutorReviewDiffStatus(
+          currentProfileImageUrl,
+          pendingProfileImageUrl,
+          "profileImageUrl",
+        ),
+      )
+        ? "changes"
+        : !currentProfileImageUrl && !pendingProfileImageUrl
+          ? "empty"
+          : undefined,
+    payout: getReviewSectionStatus(
+      REVIEW_SECTION_FIELDS.payout,
+      diffEntries,
+      payoutRows.length === 0,
+    ),
+  } satisfies Record<keyof typeof REVIEW_SECTION_FIELDS, ReviewSectionStatus>;
+  const showSectionStatus = (key: keyof typeof REVIEW_SECTION_FIELDS) =>
+    sectionMatchesReviewFilters(
+      REVIEW_SECTION_TITLES[key],
+      REVIEW_SECTION_FIELDS[key],
+      sectionStatuses[key],
+      diffEntries,
+      diffFilter,
+      diffSearch,
+    );
 
   return (
     <>
       <Card className="flex min-w-0 flex-col overflow-hidden">
-        <CardHeader className="items-start">
-          <div className="flex min-w-0 items-start gap-3.5">
+        <CardHeader>
+          <div className="flex min-w-0 gap-3.5">
             <Avatar className="shrink-0">
               <AvatarImage
                 src={resolveProfileImageUrl(currentProfileImageUrl)}
@@ -906,73 +1322,129 @@ export function TutorReviewCard({
               />
               <AvatarFallback>{getInitials(profile.user?.name)}</AvatarFallback>
             </Avatar>
-            <div className="min-w-0">
+            <div className="flex min-w-0 flex-col items-start justify-center">
               <CardTitle className="truncate">
                 {profile.user?.name ?? "Unnamed tutor"}
               </CardTitle>
               {profile.user ? (
                 <div className="mt-1 flex items-center gap-1.5 text-muted">
-                  <IconMail className="size-3.5 shrink-0" />
                   <Text className="truncate text-sm">{profile.user.email}</Text>
                 </div>
               ) : null}
             </div>
           </div>
-          <CardHeaderAction>
-            <Badge variant={badge.variant}>{badge.label}</Badge>
-          </CardHeaderAction>
+          <Badge variant={badge.variant} className="shrink-0">
+            {badge.label}
+          </Badge>
         </CardHeader>
 
         <CardBody className="flex-1">
           <Stack direction="column" spacing="md" className="m-0!">
-            {pendingChangesWithoutPhoto.length > 0 ? (
+            {diffEntries.length > 0 ? (
               <section className="rounded-lg border border-warning-border bg-warning/10 p-3">
-                <Text className="text-xs font-semibold uppercase tracking-wide text-warning">
-                  Proposed profile changes
-                </Text>
-                <div className="mt-2 overflow-hidden rounded-lg border border-warning-border/60 bg-background">
-                  <Table className="text-sm">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="py-2!">Field</TableHead>
-                        <TableHead className="py-2!">Current</TableHead>
-                        <TableHead className="py-2!">Proposed</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {pendingChangesWithoutPhoto.map(([field, value]) => {
-                        const pair = PendingChangePair({
-                          field,
-                          current: readCurrentPendingValue(field),
-                          proposed: value,
-                          currentSpecializations: specializationItems,
-                          subjectLabels,
-                          subjectFieldSlugs,
-                          idPrefix: `admin-${profile.id}-pending-${field}`,
-                        });
-                        return (
-                          <TableRow key={field}>
-                            <TableCell className="py-2! align-top whitespace-nowrap text-muted capitalize">
-                              {formatPendingField(field)}
-                            </TableCell>
-                            <TableCell className="py-2! align-top">
-                              {pair.current}
-                            </TableCell>
-                            <TableCell className="py-2! align-top">
-                              {pair.proposed}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <Text className="text-xs font-semibold uppercase tracking-wide text-warning">
+                      Proposed profile changes
+                    </Text>
+                    <Text className="mt-1 text-sm text-muted">
+                      Tutor profile <span aria-hidden="true">→</span> review
+                    </Text>
+                  </div>
+                  <div
+                    className="flex flex-wrap gap-1.5"
+                    aria-label={`${diffSummary.added} added, ${diffSummary.modified} changed, ${diffSummary.removed} removed, ${diffSummary.empty} empty`}
+                    aria-live="polite"
+                  >
+                    <Badge variant="success" size="sm" pill>
+                      +{diffSummary.added}
+                    </Badge>
+                    <Badge variant="warning" size="sm" pill>
+                      ~{diffSummary.modified}
+                    </Badge>
+                    <Badge variant="danger" size="sm" pill>
+                      −{diffSummary.removed}
+                    </Badge>
+                    <Badge variant="secondary" size="sm" pill>
+                      ○{diffSummary.empty}
+                    </Badge>
+                  </div>
                 </div>
-                {profile.profileEditAdminNote ? (
-                  <Text className="mt-2 text-sm">
-                    {profile.profileEditAdminNote}
-                  </Text>
-                ) : null}
+                <Text className="sr-only" aria-live="polite">
+                  {diffSummary.added} added, {diffSummary.modified} changed,{" "}
+                  {diffSummary.removed} removed, {diffSummary.empty} empty,{" "}
+                  {diffSummary.filled} already filled.
+                </Text>
+                <div className="mt-3 grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                  <InputGroup className="min-w-0">
+                    <InputGroupAddon>
+                      <IconSearch aria-hidden="true" />
+                    </InputGroupAddon>
+                    <Input
+                      aria-label="Search proposed changes"
+                      value={diffSearch}
+                      onChange={(event) => setDiffSearch(event.target.value)}
+                      placeholder="Search fields"
+                    />
+                  </InputGroup>
+                  <div
+                    className="flex flex-wrap items-center gap-1.5"
+                    role="group"
+                    aria-label="Filter proposed changes"
+                  >
+                    {TUTOR_REVIEW_DIFF_FILTERS.map((filter) => (
+                      <Chip
+                        key={filter}
+                        variant={diffFilter === filter ? "primary" : "outline"}
+                        size="sm"
+                        render={
+                          <button
+                            type="button"
+                            aria-label={DIFF_FILTER_LABELS[filter]}
+                          />
+                        }
+                        aria-pressed={diffFilter === filter}
+                        onClick={() => setDiffFilter(filter)}
+                        className="cursor-pointer justify-center border-0 focus-visible:outline-0 focus-visible:ring-2 focus-visible:ring-primary"
+                      >
+                        {DIFF_FILTER_LABELS[filter]}
+                      </Chip>
+                    ))}
+                  </div>
+                </div>
+                <div className="mt-3 flex min-w-0 flex-col gap-2">
+                  {filteredDiffEntries.length > 0 ? (
+                    filteredDiffEntries.map((diff) => (
+                      <PendingChangeRow
+                        key={diff.field}
+                        diff={diff}
+                        expanded={expandedDiffFields.has(diff.field)}
+                        onToggle={() => toggleDiffField(diff.field)}
+                        currentSpecializations={specializationItems}
+                        subjectLabels={subjectLabels}
+                        subjectFieldSlugs={subjectFieldSlugs}
+                        idPrefix={`admin-${profile.id}-pending-${diff.field}`}
+                      />
+                    ))
+                  ) : (
+                    <ReviewEmptyState
+                      title="No matching changes"
+                      description="Try another field name or status filter."
+                    />
+                  )}
+                </div>
               </section>
+            ) : null}
+
+            {profile.profileEditAdminNote ? (
+              <div className="rounded-lg border border-warning-border bg-warning/10 p-3">
+                <Text className="text-xs font-semibold uppercase tracking-wide text-warning">
+                  Tutor review note
+                </Text>
+                <Text className="mt-1 text-sm">
+                  {profile.profileEditAdminNote}
+                </Text>
+              </div>
             ) : null}
 
             {profile.adminReviewNote ? (
@@ -984,64 +1456,83 @@ export function TutorReviewCard({
               </div>
             ) : null}
 
-            <ReviewSection title="Profile">
-              <Text
-                className={
-                  profile.shortBio
-                    ? "leading-relaxed text-muted"
-                    : "italic text-dimmed"
-                }
-              >
-                {profile.shortBio ?? "No tutor introduction provided."}
-              </Text>
+            <ReviewSection
+              title="Profile"
+              status={sectionStatuses.profile}
+              showStatus={showSectionStatus("profile")}
+            >
+              {isTutorReviewValueEmpty(profile.shortBio) ? (
+                <ReviewEmptyState
+                  title="No introduction provided"
+                  description="The tutor has not added a short profile introduction yet."
+                />
+              ) : (
+                <Text className="leading-relaxed text-muted">
+                  {profile.shortBio?.trim()}
+                </Text>
+              )}
             </ReviewSection>
 
-            <ReviewSection title="Teaching setup">
-              <div className="overflow-hidden rounded-lg border border-item-border">
-                <Table className="text-sm">
-                  <TableBody>
-                    <TableRow>
-                      <TableCell className="py-2! align-top whitespace-nowrap text-muted">
-                        Teaching mode
-                      </TableCell>
-                      <TableCell className="py-2!">
-                        {profile.modality ? (
-                          <Badge
-                            variant={
-                              MODALITY_VARIANTS[profile.modality] ?? "secondary"
-                            }
-                          >
-                            {MODALITY_LABELS[profile.modality] ??
-                              profile.modality}
-                          </Badge>
-                        ) : (
-                          <Text className="text-sm italic text-dimmed">
-                            Not specified
-                          </Text>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="py-2! align-top whitespace-nowrap text-muted">
-                        Specializations
-                      </TableCell>
-                      <TableCell className="py-2!">
-                        {specializationItems.length ? (
-                          <SpecBadges items={specializationItems} />
-                        ) : (
-                          <Text className="text-sm italic text-dimmed">
-                            No specializations listed.
-                          </Text>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </div>
+            <ReviewSection
+              title="Teaching setup"
+              status={sectionStatuses.teaching}
+              showStatus={showSectionStatus("teaching")}
+            >
+              {!hasTeachingSetup ? (
+                <ReviewEmptyState
+                  title="No teaching setup provided"
+                  description="Teaching mode and specializations have not been set yet."
+                />
+              ) : (
+                <div className="overflow-hidden rounded-lg border border-item-border">
+                  <Table className="text-sm">
+                    <TableBody>
+                      <TableRow>
+                        <TableCell className="py-2! align-top whitespace-nowrap text-muted">
+                          Teaching mode
+                        </TableCell>
+                        <TableCell className="py-2!">
+                          {profile.modality ? (
+                            <Badge
+                              variant={
+                                MODALITY_VARIANTS[profile.modality] ??
+                                "secondary"
+                              }
+                            >
+                              {MODALITY_LABELS[profile.modality] ??
+                                profile.modality}
+                            </Badge>
+                          ) : (
+                            <Text className="text-sm italic text-dimmed">
+                              Not specified
+                            </Text>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="py-2! align-top whitespace-nowrap text-muted">
+                          Specializations
+                        </TableCell>
+                        <TableCell className="py-2!">
+                          {specializationItems.length ? (
+                            <SpecBadges items={specializationItems} />
+                          ) : (
+                            <Text className="text-sm italic text-dimmed">
+                              No specializations listed.
+                            </Text>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </ReviewSection>
 
             <ReviewSection
               title="Credentials"
+              status={sectionStatuses.credentials}
+              showStatus={showSectionStatus("credentials")}
               action={
                 <Button
                   type="button"
@@ -1092,14 +1583,19 @@ export function TutorReviewCard({
                   ) : null}
                 </div>
               ) : (
-                <Text className="text-sm italic text-dimmed">
-                  No education, achievements, or experiences provided.
-                </Text>
+                <ReviewEmptyState
+                  title="No credentials provided"
+                  description="Education, achievements, and experience entries are empty."
+                />
               )}
             </ReviewSection>
 
-            {proofRows.length > 0 ? (
-              <ReviewSection title="Proofs">
+            <ReviewSection
+              title="Proofs"
+              status={sectionStatuses.proofs}
+              showStatus={showSectionStatus("proofs")}
+            >
+              {proofRows.length > 0 ? (
                 <div className="overflow-hidden rounded-lg border border-item-border">
                   <Table className="text-sm">
                     <TableHeader>
@@ -1129,10 +1625,19 @@ export function TutorReviewCard({
                     </TableBody>
                   </Table>
                 </div>
-              </ReviewSection>
-            ) : null}
+              ) : (
+                <ReviewEmptyState
+                  title="No proof links provided"
+                  description="Achievement and experience evidence links are empty."
+                />
+              )}
+            </ReviewSection>
 
-            <ReviewSection title="Marks per student">
+            <ReviewSection
+              title="Marks per student"
+              status={sectionStatuses.marks}
+              showStatus={showSectionStatus("marks")}
+            >
               {priceEntries.length ? (
                 <div className="overflow-hidden rounded-lg border border-item-border">
                   <Table className="text-sm">
@@ -1176,9 +1681,10 @@ export function TutorReviewCard({
                   </Table>
                 </div>
               ) : (
-                <Text className="text-sm italic text-dimmed">
-                  No price list provided.
-                </Text>
+                <ReviewEmptyState
+                  title="No price list provided"
+                  description="The tutor has not added a Marks price list yet."
+                />
               )}
               {priceEntries.some(([size, price]) => {
                 const floor = floorPrices[size];
@@ -1192,24 +1698,35 @@ export function TutorReviewCard({
               ) : null}
             </ReviewSection>
 
-            <ReviewSection title="Profile photo">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <PhotoReviewPanel
-                  label="Current photo"
-                  description="Visible to students now"
-                  imageUrl={currentProfileImageUrl}
-                  fallback={getInitials(profile.user?.name)}
-                />
-                {pendingProfileImageUrl ? (
+            <ReviewSection
+              title="Profile photo"
+              status={sectionStatuses.photo}
+              showStatus={showSectionStatus("photo")}
+            >
+              {currentProfileImageUrl || pendingProfileImageUrl ? (
+                <div className="grid gap-3 sm:grid-cols-2">
                   <PhotoReviewPanel
-                    label="Proposed photo"
-                    description="Applies only after approval"
-                    imageUrl={pendingProfileImageUrl}
+                    label="Current photo"
+                    description="Visible to students now"
+                    imageUrl={currentProfileImageUrl}
                     fallback={getInitials(profile.user?.name)}
-                    proposed
                   />
-                ) : null}
-              </div>
+                  {pendingProfileImageUrl ? (
+                    <PhotoReviewPanel
+                      label="Proposed photo"
+                      description="Applies only after approval"
+                      imageUrl={pendingProfileImageUrl}
+                      fallback={getInitials(profile.user?.name)}
+                      proposed
+                    />
+                  ) : null}
+                </div>
+              ) : (
+                <ReviewEmptyState
+                  title="No profile photo provided"
+                  description="The tutor has not submitted a profile photo yet."
+                />
+              )}
               <div className="mt-4 grid gap-3">
                 <Field>
                   <FieldLabel htmlFor={`admin-${profile.id}-edited-photo`}>
@@ -1260,8 +1777,12 @@ export function TutorReviewCard({
               </div>
             </ReviewSection>
 
-            {payoutRows.length > 0 ? (
-              <ReviewSection title="Payout account">
+            <ReviewSection
+              title="Payout account"
+              status={sectionStatuses.payout}
+              showStatus={showSectionStatus("payout")}
+            >
+              {payoutRows.length > 0 ? (
                 <div className="overflow-hidden rounded-lg border border-item-border">
                   <Table className="text-sm">
                     <TableBody>
@@ -1278,8 +1799,13 @@ export function TutorReviewCard({
                     </TableBody>
                   </Table>
                 </div>
-              </ReviewSection>
-            ) : null}
+              ) : (
+                <ReviewEmptyState
+                  title="No payout account provided"
+                  description="Private transfer details have not been added yet."
+                />
+              )}
+            </ReviewSection>
             <ProfilePhotoHistory
               entries={profileHistory}
               title="Review history"
@@ -1500,15 +2026,30 @@ function ReviewSection({
   title,
   action,
   children,
+  status,
+  showStatus = true,
 }: {
   title: string;
   action?: ReactNode;
   children: ReactNode;
+  status?: ReviewSectionStatus;
+  showStatus?: boolean;
 }) {
   return (
     <section>
       <div className="mb-2 flex items-center justify-between gap-3">
-        <Heading size="sm">{title}</Heading>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <Heading size="sm">{title}</Heading>
+          {status && showStatus ? (
+            <Badge
+              variant={status === "changes" ? "warning" : "secondary"}
+              size="sm"
+              pill
+            >
+              {status === "changes" ? "~ Changes" : "Empty"}
+            </Badge>
+          ) : null}
+        </div>
         {action}
       </div>
       {children}

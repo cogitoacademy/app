@@ -611,7 +611,7 @@ All routes are admin-only. Package `code` is the stable business key used by
 - **Auth:** Admin
 - **Input:** `{ status?, limit?, offset? }` (`limit` default 50)
 - **Output:** `{ items: TutorProfile[], total, limit, offset }`
-- **Description:** The Manage Tutors review UI resolves pending `subjectIds` through the active specialization taxonomy and displays category/specialization labels; the procedure continues to return the pending change payload unchanged. The separate `/admin-tutor-payouts` workspace reuses the profile list for payout-account readiness and operational transfer review.
+- **Description:** The Manage Tutors review UI resolves pending `subjectIds` through the active specialization taxonomy and displays category/specialization labels; the procedure continues to return the pending change payload unchanged. The focused review card derives presentation-only added/changed/removed/filled/empty states from current and pending values, exposes summary counts plus search/status filters, and renders expandable current/proposed rows while keeping `profileImageUrl` in the separate photo comparison. The separate `/admin-tutor-payouts` workspace reuses the profile list for payout-account readiness and operational transfer review.
 
 ### `adminTutor.listTutorProfileHistory`
 

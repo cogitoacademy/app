@@ -475,6 +475,7 @@ payment package codes stable.
 - The Manage Tutors invitation table maps `invited` to a warning badge, `accepted` to success, and `expired`/`revoked` to danger; unknown status values use the secondary fallback
 - Approving published profile edits validates and applies pending `subjectIds` to the normalized tutor-subject join table in the same transaction as the profile update
 - The admin tutor review card maps pending `subjectIds` to active category/specialization labels and wraps long pending values; this is presentation-only and does not change the admin API payload
+- The focused admin tutor review card derives normalized added/changed/removed/filled/empty statuses, shows summary counts with composable search/status filters, expands each pending field into current/proposed panes, and marks each profile section as changed or empty when applicable; profile photos remain in the dedicated side-by-side comparison
 - Structured achievement corrections are limited to 2 education entries and 5 competition entries; a stale `version` returns `OPTIMISTIC_LOCK` and no audit record is written.
 
 ---
