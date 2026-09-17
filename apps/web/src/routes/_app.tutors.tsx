@@ -4,6 +4,13 @@ import type { CogitoUser } from "@cogito-app/auth";
 import { TutorsPage } from "@/components/dashboard/pages/tutors-page";
 
 export const Route = createFileRoute("/_app/tutors")({
+  head: () => ({
+    meta: [
+      {
+        title: "Find tutors — Cogito Academy",
+      },
+    ],
+  }),
   component: TutorsPage,
   beforeLoad: ({ context }) => {
     const user = context.session?.data?.user as CogitoUser | undefined;

@@ -10,6 +10,13 @@ import {
 } from "@/components/guide/guide-content";
 
 export const Route = createFileRoute("/_app/guide")({
+  head: () => ({
+    meta: [
+      {
+        title: "How Cogito Works — Cogito Academy",
+      },
+    ],
+  }),
   validateSearch: z.object({
     view: z.enum(GUIDE_VIEWS).optional(),
   }),

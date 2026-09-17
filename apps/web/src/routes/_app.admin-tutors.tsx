@@ -118,6 +118,13 @@ const INVITE_STATUS_BADGES: Record<
 };
 
 export const Route = createFileRoute("/_app/admin-tutors")({
+  head: () => ({
+    meta: [
+      {
+        title: "Manage tutors — Cogito Academy",
+      },
+    ],
+  }),
   component: RouteComponent,
   beforeLoad: async ({ context }) => {
     const user = context.session?.data?.user as CogitoUser | undefined;

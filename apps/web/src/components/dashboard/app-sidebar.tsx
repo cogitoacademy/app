@@ -160,7 +160,7 @@ export function AppSidebar({
         <SidebarLogo>
           {/* <IconBox variant="secondary">
             <img
-              src="/c of cogito.png"
+              src="/cogito-c-mark.png"
               alt="logo"
               className="relative z-1 size-6"
             />

@@ -4,6 +4,13 @@ import type { CogitoUser } from "@cogito-app/auth";
 import { AchievementModerationPage } from "@/components/admin/achievement-moderation-page";
 
 export const Route = createFileRoute("/_app/admin-achievements")({
+  head: () => ({
+    meta: [
+      {
+        title: "Achievement reviews — Cogito Academy",
+      },
+    ],
+  }),
   component: AchievementModerationPage,
   beforeLoad: async ({ context }) => {
     const user = context.session?.data?.user as CogitoUser | undefined;
