@@ -747,7 +747,7 @@ The web tutor profile editor groups education, competition achievements, and exp
 - **Auth:** Public
 - **Input:** None
 - **Output:** `{ items: [{ id, slug, name, description?, children: [{ id, slug, name, description? }] }] }`
-- **Description:** Returns the seven active competition categories and their 33 selectable specializations used by tutor onboarding and student filters. The UIs submit specialization/category IDs for persistence or filtering but display category and specialization names to users. The compatibility procedure and response keys retain `subject`/`subjects` naming.
+- **Description:** Returns the seven active competition categories and their 34 selectable specializations used by tutor onboarding and student filters, including Law Debate under Debate. The UIs submit specialization/category IDs for persistence or filtering but display category and specialization names to users. The compatibility procedure and response keys retain `subject`/`subjects` naming.
 
 ### `tutors.listPublished`
 

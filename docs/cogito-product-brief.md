@@ -221,7 +221,7 @@ The older /tutor-bookings route is a compatibility redirect to /bookings, not a 
 
 ### Is there information about competition types and sub-classifications?
 
-Yes. The active web taxonomy contains **7 parent competition categories and 33 selectable specializations**.
+Yes. The active web taxonomy contains **7 parent competition categories and 34 selectable specializations**.
 
 For the example in the question:
 
@@ -238,7 +238,7 @@ This is the specialization label that appears as **Writing** under the **Model U
 | Model United Nations | Research; Writing; Speech; Negotiation                                                                                                                                   |
 | World Scholar’s Cup  | Writing; Debate; Subjects                                                                                                                                                |
 | Essay & Writing      | Academic Essay; Creative Writing; Scientific Research; College Application Essay; Journalistic Writing                                                                   |
-| Debate               | British Parliamentary; Asian Parliamentary; World Schools (WSDC); Bahasa Indonesia (LDBI)                                                                                |
+| Debate               | British Parliamentary; Asian Parliamentary; World Schools (WSDC); Bahasa Indonesia (LDBI); Law Debate                                                                      |
 | Business             | Business Model Canvas; Business Plan; Business Case                                                                                                                      |
 | Olympiad             | Mathematics (SMP); Natural Sciences (SMP); Social Sciences (SMP); Mathematics; Physics; Chemistry; Biology; Informatics; Astronomy; Earth Sciences; Economics; Geography |
 | Public Speaking      | Persuasive Speech; Storytelling                                                                                                                                          |
@@ -1170,7 +1170,7 @@ Primary repository sources:
 3. docs/API-REFERENCE.md — web/API behavior, role scope, inputs, outputs, and payout/economy details.
 4. docs/marks-economy-architecture.md — Marks model, package reference values, pricing formulas, and regulatory rationale.
 5. docs/booking-scheduling-and-reschedule-spec.md — 90-minute sessions, availability windows, specializations, booking topics, reschedule negotiation, and calendar metadata.
-6. packages/db/src/migrations/0029_competition_taxonomy.sql — active 7-category, 33-specialization taxonomy.
+6. packages/db/src/migrations/0029_competition_taxonomy.sql and 0047_debate_law_specialization.sql — active 7-category, 34-specialization taxonomy.
 7. packages/db/src/migrations/0041_seed_mark_packages.sql — current seeded Marks package values.
 8. packages/api/src/modules/economy/economy.types.ts — economy configuration shapes and limits.
 9. packages/api/src/modules/economy/pricing.service.ts — pricing and Marks calculation behavior.

@@ -1119,7 +1119,7 @@ The authenticated dashboard shell is viewport-fixed. Its content pane exclusivel
 **Business Rules:**
 
 - Categories are the seven competition areas: Model United Nations, World Scholar’s Cup, Essay & Writing, Debate, Business, Olympiad, and Public Speaking
-- The current catalog contains 33 selectable specializations in the exact order defined by `0029_competition_taxonomy.sql`
+- The current catalog contains 34 selectable specializations in the exact order defined by `0029_competition_taxonomy.sql` plus `0047_debate_law_specialization.sql`; Debate ends with Law Debate
 - Only active specialization rows are selectable by tutors; archived legacy rows remain readable for existing profiles and are not offered for new selection
 - Tutors may select at most 7 active specializations; the web selector communicates the cap and disables additional choices, while the API validates the same limit
 - The legacy `expertise` JSON remains for compatibility with existing rows and clients, but normalized `subjectIds` drives new onboarding and discovery filters
