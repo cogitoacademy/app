@@ -57,6 +57,7 @@ import { client, orpc } from "@/utils/orpc";
 
 const NON_BCA_TRANSFER_FEE_IDR = 2_500;
 const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
+const QUICK_RANGE_DAYS = [7, 30, 90] as const;
 
 type PayoutReportRow = Awaited<
   ReturnType<typeof client.admin.getTutorPayoutReport>
@@ -73,10 +74,14 @@ function formatDate(value: Date | string | null) {
   if (!value) return "—";
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat("id-ID", {
+  return new Intl.DateTimeFormat("en-GB", {
     dateStyle: "medium",
     timeZone: "Asia/Jakarta",
   }).format(date);
+}
+
+function formatDateKey(value: string) {
+  return formatDate(new Date(value + "T00:00:00+07:00"));
 }
 
 function toWibDateKey(value: Date) {
@@ -115,7 +120,7 @@ function getTransferFee(profileBankName: string | null, gross: number) {
 }
 
 function statusLabel(row: PayoutReportRow) {
-  return row.status === "paid" ? "Sudah ditransfer" : "Belum ditransfer";
+  return row.status === "paid" ? "Transferred" : "Not transferred";
 }
 
 function statusVariant(row: PayoutReportRow) {
@@ -139,15 +144,15 @@ function csvCell(value: string | number | null) {
 
 function buildPayoutCsv(rows: PayoutReportRow[]) {
   const headers = [
-    "Nama tutor",
+    "Tutor name",
     "Bank",
-    "Nomor rekening",
-    "Atas nama rekening",
-    "Jumlah honorarium asli",
-    "Potongan",
-    "Jumlah yang ditransfer",
-    "Status transfer dari kita",
-    "Tanggal transfer",
+    "Account number",
+    "Account holder",
+    "Gross honorarium",
+    "Deduction",
+    "Transfer amount",
+    "Transfer status",
+    "Transfer date",
   ];
   const body = rows.map((row) => [
     row.tutorName,
@@ -306,9 +311,9 @@ export function AdminTutorPayoutsPage() {
 
   const dateRangeError =
     !draftFrom || !draftTo
-      ? "Pilih tanggal awal dan akhir."
+      ? "Select both a start and end date."
       : draftFrom > draftTo
-        ? "Tanggal awal tidak boleh setelah tanggal akhir."
+        ? "The start date cannot be after the end date."
         : null;
 
   function applyDateRange() {
@@ -356,12 +361,11 @@ export function AdminTutorPayoutsPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Heading level={1} size="md">
-            Operational Payout
+            Tutor Payouts
           </Heading>
           <Text className="mt-1 max-w-3xl text-muted">
-            Pilih rentang tanggal untuk melihat histori transfer. Saldo unpaid
-            saat ini tetap ditampilkan supaya tidak ada kewajiban pembayaran
-            yang terlewat.
+            Track outstanding honorarium, transfer history, and tutor bank
+            details in one place.
           </Text>
         </div>
         <Button
@@ -376,12 +380,18 @@ export function AdminTutorPayoutsPage() {
       </div>
 
       <Card>
-        <CardBody className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+        <CardHeader>
+          <div>
+            <CardTitle>Payout filters</CardTitle>
+            <Text className="mt-1 text-sm text-muted">
+              Refine the history period, transfer status, and sort order.
+            </Text>
+          </div>
+        </CardHeader>
+        <CardBody className="space-y-5">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <Field>
-              <FieldLabel htmlFor="payout-report-from">
-                Tanggal mulai
-              </FieldLabel>
+              <FieldLabel htmlFor="payout-report-from">Start date</FieldLabel>
               <Input
                 id="payout-report-from"
                 type="date"
@@ -390,7 +400,7 @@ export function AdminTutorPayoutsPage() {
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="payout-report-to">Tanggal akhir</FieldLabel>
+              <FieldLabel htmlFor="payout-report-to">End date</FieldLabel>
               <Input
                 id="payout-report-to"
                 type="date"
@@ -398,44 +408,98 @@ export function AdminTutorPayoutsPage() {
                 onChange={(event) => setDraftTo(event.target.value)}
               />
             </Field>
-            <Button
-              variant="secondary"
-              disabled={Boolean(dateRangeError)}
-              onClick={applyDateRange}
-            >
-              Apply range
-            </Button>
-          </div>
-          {dateRangeError ? (
-            <Text className="text-sm text-danger">{dateRangeError}</Text>
-          ) : null}
-          <div className="flex flex-wrap items-center gap-2">
-            <Text className="text-sm text-muted">Quick range:</Text>
-            {[7, 30, 90].map((days) => (
-              <Button
-                key={days}
-                size="sm"
-                variant="plain"
-                onClick={() => setQuickRange(days)}
+            <Field>
+              <FieldLabel>Transfer status</FieldLabel>
+              <Select
+                value={statusFilter}
+                onValueChange={(value) =>
+                  setStatusFilter(value as StatusFilter)
+                }
               >
-                {days} days
-              </Button>
-            ))}
+                <SelectTrigger>
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectPopup>
+                  <SelectList>
+                    <SelectItem value="pending">Not transferred</SelectItem>
+                    <SelectItem value="paid">Transferred</SelectItem>
+                    <SelectItem value="all">All statuses</SelectItem>
+                  </SelectList>
+                </SelectPopup>
+              </Select>
+            </Field>
+            <Field>
+              <FieldLabel>Sort by</FieldLabel>
+              <Select
+                value={sortOption}
+                onValueChange={(value) => setSortOption(value as SortOption)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select sort order" />
+                </SelectTrigger>
+                <SelectPopup>
+                  <SelectList>
+                    <SelectItem value="needs_payment">
+                      Payment priority
+                    </SelectItem>
+                    <SelectItem value="amount_desc">Highest amount</SelectItem>
+                    <SelectItem value="name">Tutor name</SelectItem>
+                    <SelectItem value="latest">Latest transfer</SelectItem>
+                  </SelectList>
+                </SelectPopup>
+              </Select>
+            </Field>
           </div>
-          <Text className="text-sm text-muted">
-            Paid rows use tanggal transfer. Unpaid rows show the tutor&apos;s
-            current outstanding balance sejak payout terakhir.
-          </Text>
+
+          <div className="flex flex-col gap-4 border-t border-card-separator pt-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="space-y-2">
+              <Text className="text-xs font-semibold uppercase tracking-wide text-dimmed">
+                Quick ranges
+              </Text>
+              <div className="flex flex-wrap gap-2">
+                {QUICK_RANGE_DAYS.map((days) => (
+                  <Button
+                    key={days}
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setQuickRange(days)}
+                  >
+                    {days} days
+                  </Button>
+                ))}
+              </div>
+            </div>
+            <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center lg:justify-end">
+              {dateRangeError ? (
+                <Text className="text-sm text-danger">{dateRangeError}</Text>
+              ) : (
+                <Text className="max-w-xl text-sm text-muted">
+                  History follows the transfer date. Outstanding balances stay
+                  visible from the tutor&apos;s latest payout onward.
+                </Text>
+              )}
+              <Button
+                className="shrink-0"
+                disabled={Boolean(dateRangeError)}
+                onClick={applyDateRange}
+              >
+                Apply date range
+              </Button>
+            </div>
+          </div>
         </CardBody>
       </Card>
 
       <Card id="admin-tutor-payouts" className="scroll-mt-4">
         <CardHeader>
           <div>
-            <CardTitle>Unpaid and transferred tutor honorarium</CardTitle>
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle>Tutor payout list</CardTitle>
+              <Badge variant="secondary">{visibleRows.length} records</Badge>
+            </div>
             <Text className="mt-1 text-sm text-muted">
-              {appliedRange.from} → {appliedRange.to} · {visibleRows.length}{" "}
-              row(s) shown
+              Period: {formatDateKey(appliedRange.from)} to{" "}
+              {formatDateKey(appliedRange.to)}
             </Text>
           </div>
           <CardHeaderAction>
@@ -450,140 +514,106 @@ export function AdminTutorPayoutsPage() {
             </Button>
           </CardHeaderAction>
         </CardHeader>
-        <CardBody aria-busy={reportQuery.isFetching} className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field>
-              <FieldLabel>Status transfer</FieldLabel>
-              <Select
-                value={statusFilter}
-                onValueChange={(value) =>
-                  setStatusFilter(value as StatusFilter)
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Pilih status" />
-                </SelectTrigger>
-                <SelectPopup>
-                  <SelectList>
-                    <SelectItem value="pending">Belum ditransfer</SelectItem>
-                    <SelectItem value="paid">Sudah ditransfer</SelectItem>
-                    <SelectItem value="all">Semua</SelectItem>
-                  </SelectList>
-                </SelectPopup>
-              </Select>
-            </Field>
-            <Field>
-              <FieldLabel>Urutkan</FieldLabel>
-              <Select
-                value={sortOption}
-                onValueChange={(value) => setSortOption(value as SortOption)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Pilih urutan" />
-                </SelectTrigger>
-                <SelectPopup>
-                  <SelectList>
-                    <SelectItem value="needs_payment">
-                      Yang perlu dibayar dulu
-                    </SelectItem>
-                    <SelectItem value="amount_desc">
-                      Nominal terbesar
-                    </SelectItem>
-                    <SelectItem value="name">Nama tutor</SelectItem>
-                    <SelectItem value="latest">Transfer terbaru</SelectItem>
-                  </SelectList>
-                </SelectPopup>
-              </Select>
-            </Field>
-          </div>
-
+        <CardBody aria-busy={reportQuery.isFetching} className="p-0!">
           {reportQuery.isError ? (
-            <Text className="text-sm text-danger">
-              Payout report could not be loaded. Refresh and try again.
-            </Text>
+            <div className="p-6">
+              <Text className="text-sm text-danger">
+                The payout report could not be loaded. Refresh and try again.
+              </Text>
+            </div>
           ) : reportQuery.isPending ? (
-            <Text className="text-sm text-muted">Loading payout report…</Text>
+            <div className="p-6">
+              <Text className="text-sm text-muted">Loading payout report…</Text>
+            </div>
           ) : visibleRows.length === 0 ? (
-            <EmptyState
-              icon={<IconInbox />}
-              title="No payout rows"
-              description="Tidak ada transfer atau saldo unpaid yang cocok dengan filter ini."
-              tone="secondary"
-              className="rounded-lg"
-            />
+            <div className="p-6">
+              <EmptyState
+                icon={<IconInbox />}
+                title="No payout records"
+                description="No transfers or outstanding honorarium match the current filters."
+                tone="secondary"
+                className="rounded-lg"
+              />
+            </div>
           ) : (
-            <TableContainer className="w-[calc(100%+3rem)]!">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Tutor</TableHead>
-                    <TableHead>Bank</TableHead>
-                    <TableHead>No. rekening</TableHead>
-                    <TableHead>Atas nama</TableHead>
-                    <TableHead>Honorarium asli</TableHead>
-                    <TableHead>Potongan</TableHead>
-                    <TableHead>Ditransfer</TableHead>
-                    <TableHead>Status transfer</TableHead>
-                    <TableHead>Tanggal transfer</TableHead>
-                    <TableHead className="w-24 text-right">Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {visibleRows.map((row) => (
-                    <TableRow key={row.id}>
-                      <TableCell>
-                        <Text className="whitespace-nowrap font-medium">
-                          {row.tutorName}
-                        </Text>
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        {row.bankName || "—"}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap font-mono text-sm">
-                        {row.bankAccountNumber || "—"}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        {row.bankAccountHolderName || "—"}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        {formatIdr(row.grossHonorariumIdr)}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        {row.transferFeeIdr > 0
-                          ? "−" + formatIdr(row.transferFeeIdr)
-                          : formatIdr(0)}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap font-medium">
-                        {formatIdr(row.netHonorariumIdr)}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        <Badge variant={statusVariant(row)}>
-                          {statusLabel(row)}
-                        </Badge>
-                        {row.status === "pending" &&
-                        !row.payoutAccountComplete ? (
-                          <Text className="mt-1 text-xs text-warning">
-                            Rekening belum lengkap
-                          </Text>
-                        ) : null}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        {formatDate(row.paidAt)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => setSelectedRow(row)}
-                        >
-                          Open
-                        </Button>
-                      </TableCell>
+            <div className="overflow-hidden rounded-b-xl">
+              <TableContainer>
+                <Table className="min-w-[1280px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Tutor</TableHead>
+                      <TableHead>Bank</TableHead>
+                      <TableHead>Account number</TableHead>
+                      <TableHead>Account holder</TableHead>
+                      <TableHead className="text-right">
+                        Gross honorarium
+                      </TableHead>
+                      <TableHead className="text-right">Deduction</TableHead>
+                      <TableHead className="text-right">
+                        Transfer amount
+                      </TableHead>
+                      <TableHead>Transfer status</TableHead>
+                      <TableHead>Transfer date</TableHead>
+                      <TableHead className="w-24 text-right">Action</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                  </TableHeader>
+                  <TableBody>
+                    {visibleRows.map((row) => (
+                      <TableRow key={row.id}>
+                        <TableCell>
+                          <Text className="whitespace-nowrap font-medium">
+                            {row.tutorName}
+                          </Text>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {row.bankName || "—"}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap font-mono text-sm">
+                          {row.bankAccountNumber || "—"}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {row.bankAccountHolderName || "—"}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-right tabular-nums">
+                          {formatIdr(row.grossHonorariumIdr)}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-right tabular-nums">
+                          {row.transferFeeIdr > 0
+                            ? "−" + formatIdr(row.transferFeeIdr)
+                            : formatIdr(0)}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-right font-semibold tabular-nums">
+                          {formatIdr(row.netHonorariumIdr)}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <Badge variant={statusVariant(row)}>
+                            {statusLabel(row)}
+                          </Badge>
+                          {row.status === "pending" &&
+                          !row.payoutAccountComplete ? (
+                            <Text className="mt-1 text-xs text-warning">
+                              Account details incomplete
+                            </Text>
+                          ) : null}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {formatDate(row.paidAt)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => setSelectedRow(row)}
+                          >
+                            Details
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </div>
           )}
         </CardBody>
       </Card>
