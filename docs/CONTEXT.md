@@ -2,6 +2,15 @@
 
 Last updated: 2026-09-18
 
+## Offline Calendar room metadata (2026-09-18)
+
+Offline booking Calendar events now prepend the assigned room metadata to the
+description: `Site: {room.location}` followed by `Room: {room.name}`, then the
+existing tutor/student, session-topic, Session Notes, and booking-link content.
+The same description is sent through the Google Calendar API when an existing
+offline event is refreshed during room assignment or relocation; no database
+column or public RPC response changed.
+
 ## Competition Calendar agenda list (2026-09-18)
 
 The authenticated calendar's 30-day Agenda is a flat list rather than a
@@ -799,7 +808,7 @@ Routers access handlers via `context.services.{module}.{method}`. Other modules 
 - **Redis:** Shared instance for sessions, idempotency, rate limiting, circuit breaker state, BullMQ persistence (after production readiness)
 - **Scheduler:** BullMQ with Redis persistence for booking expiry, hold release, email dispatch
 - **Email:** Resend (production) / stub (development) via EmailService
-- **Meeting/Calendar:** Online bookings use Google Meet (production) / manual link fallback via CircuitBreaker. When an offline booking receives a room and becomes `scheduled`, the provider creates a normal Google Calendar event without conference data or a Meet URL. Offline events carry the assigned room name/location and the same attendees, title, description, schedule, and booking deep link as online events. Assignment/relocation sync runs best-effort after the room transaction commits; repeat syncs reuse the live provider row. Accepted online reschedules update the event in place with conference-data support retained and Google attendee emails gated by `GOOGLE_CALENDAR_SEND_UPDATES` (`none` by default, `all` in production; Cogito notifications always fire), so seed/dev runs never spam attendees or bounce DSNs to undeliverable seed addresses. Automated E2E forces `GOOGLE_MEET_ENABLED=false`, so seeded runs use the manual fallback and never touch the live calendar. Reschedules update the event, and terminal booking paths delete it through the shared lifecycle hooks. Booking creation selects one active tutor competition specialization and snapshots its category/specialization metadata in `booking.session_topic`. Calendar titles use `Cogito - {Competition} | {Tutor} x {Student}` for solo bookings and append `& Friends` for groups; MUN/WSC use their standard abbreviations. Descriptions list tutor/students, `Session Topic: {category} - {specialization}`, Session Notes (including reference links), and `/bookings/{bookingId}`. `learning_goal` remains the Session Notes compatibility carrier; file uploads are deferred. OAuth refresh-token and service-account setup is documented in [`docs/GOOGLE-MEET-SETUP.md`](GOOGLE-MEET-SETUP.md).
+- **Meeting/Calendar:** Online bookings use Google Meet (production) / manual link fallback via CircuitBreaker. When an offline booking receives a room and becomes `scheduled`, the provider creates a normal Google Calendar event without conference data or a Meet URL. Offline events carry the assigned room name/location and the same attendees, title, description, schedule, and booking deep link as online events; their description starts with `Site: {room.location}` and `Room: {room.name}`. Assignment/relocation sync runs best-effort after the room transaction commits; repeat syncs reuse the live provider row and refresh its room metadata. Accepted online reschedules update the event in place with conference-data support retained and Google attendee emails gated by `GOOGLE_CALENDAR_SEND_UPDATES` (`none` by default, `all` in production; Cogito notifications always fire), so seed/dev runs never spam attendees or bounce DSNs to undeliverable seed addresses. Automated E2E forces `GOOGLE_MEET_ENABLED=false`, so seeded runs use the manual fallback and never touch the live calendar. Reschedules update the event, and terminal booking paths delete it through the shared lifecycle hooks. Booking creation selects one active tutor competition specialization and snapshots its category/specialization metadata in `booking.session_topic`. Calendar titles use `Cogito - {Competition} | {Tutor} x {Student}` for solo bookings and append `& Friends` for groups; MUN/WSC use their standard abbreviations. Descriptions list tutor/students, `Session Topic: {category} - {specialization}`, Session Notes (including reference links), and `/bookings/{bookingId}`. `learning_goal` remains the Session Notes compatibility carrier; file uploads are deferred. OAuth refresh-token and service-account setup is documented in [`docs/GOOGLE-MEET-SETUP.md`](GOOGLE-MEET-SETUP.md).
 - **Deployment:** Coolify on the OVH VPS; production API and web images are pulled from GHCR
 - **Database TLS:** Controlled by `DB_SSL_ENABLED`; Coolify's bundled PostgreSQL is non-TLS, while external managed databases may require it
 

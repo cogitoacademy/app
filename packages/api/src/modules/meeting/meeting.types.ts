@@ -51,7 +51,12 @@ export interface MeetingPort {
    */
   updateEvent(
     bookingId: string,
-    changes: { startAt?: Date; endAt?: Date; location?: string },
+    changes: {
+      startAt?: Date;
+      endAt?: Date;
+      location?: string;
+      description?: string;
+    },
   ): Promise<void>;
   /**
    * Deletes the provider-side event when the booking reaches a terminal state

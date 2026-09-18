@@ -2,6 +2,14 @@
 
 Last updated: 2026-09-18
 
+## Offline Calendar room metadata (2026-09-18)
+
+When `room.assign` or `room.relocate` syncs an offline booking to Google
+Calendar, the event description begins with `Site: {room.location}` and
+`Room: {room.name}`. The existing booking metadata follows those two lines.
+This is provider-side metadata only; no RPC input, output, or response envelope
+changed.
+
 ## Competition Calendar agenda list (2026-09-18)
 
 The authenticated 30-day agenda now renders a flat list: each overlapping
@@ -1242,7 +1250,7 @@ RPC contract.
 - **Auth:** Admin
 - **Input:** `{ bookingId, roomId, startAt, endAt }`
 - **Output:** `{ roomBooking }`
-- **Description:** Confirms a room for an offline booking and transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED`; it may also assign a new room to an already `SCHEDULED` offline booking after its prior room was removed. After commit, it best-effort creates or refreshes a normal Google Calendar event with the room/location and no Meet conference; provider failure never rolls back scheduling, and repeated sync reuses the live event. A scheduled booking with an active room must use relocation instead. Notifies tutor + confirmed students (G14, #46). The admin UI invokes this from the Room approvals queue or the booking detail room controls; `bookingId` and `roomId` remain internal identifiers in the RPC input.
+- **Description:** Confirms a room for an offline booking and transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED`; it may also assign a new room to an already `SCHEDULED` offline booking after its prior room was removed. After commit, it best-effort creates or refreshes a normal Google Calendar event with the room/location, a description headed by `Site: {room.location}` and `Room: {room.name}`, and no Meet conference; provider failure never rolls back scheduling, and repeated sync reuses the live event. A scheduled booking with an active room must use relocation instead. Notifies tutor + confirmed students (G14, #46). The admin UI invokes this from the Room approvals queue or the booking detail room controls; `bookingId` and `roomId` remain internal identifiers in the RPC input.
 
 ### `room.checkAvailability`
 
@@ -1253,7 +1261,7 @@ RPC contract.
 
 ### `room.relocate`
 
-The successful mutation also best-effort updates the existing offline Calendar event's room/location and schedule after commit. It never adds conference data or a Meet URL.
+The successful mutation also best-effort updates the existing offline Calendar event's room/location, description heading, and schedule after commit. It never adds conference data or a Meet URL.
 
 - **Auth:** Admin
 - **Input:** `{ bookingId, roomId, startAt, endAt }`

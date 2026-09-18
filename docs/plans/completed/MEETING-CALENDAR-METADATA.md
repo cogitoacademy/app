@@ -1,6 +1,6 @@
 # Google Calendar Event Metadata
 
-Status: Completed (2026-08-29; offline lifecycle extension 2026-09-03; online reschedule sync fix 2026-09-05)
+Status: Completed (2026-08-29; offline lifecycle extension 2026-09-03; online reschedule sync fix 2026-09-05; offline room description heading 2026-09-18)
 
 ## Outcome
 
@@ -49,6 +49,20 @@ support on both OAuth and service-account paths. An accepted online
 reschedule therefore propagates the new slot to guest calendars while keeping
 the existing Google Meet conference attached to the event.
 
+## Offline room description heading (2026-09-18)
+
+Offline Calendar descriptions now begin with:
+
+```text
+Site: {room.location}
+Room: {room.name}
+```
+
+The existing booking metadata follows unchanged. Assignment and relocation
+refreshes send the same description through both Google Calendar update paths,
+so a reused event receives the current room metadata without creating a
+duplicate event.
+
 ## Verification
 
 - `google-meeting.provider.test.ts`: service-account and OAuth request payloads
@@ -57,4 +71,8 @@ the existing Google Meet conference attached to the event.
   Session Notes (including a reference link), and booking deep link to the
   meeting port.
 - `booking-event-title.test.ts`: solo, group, and legacy-booking title parity.
+- `booking.service.test.ts`: offline Calendar metadata starts with Site/Room
+  and refreshes it on room sync.
+- `google-meeting.provider.test.ts`: provider updates include the description
+  on offline relocation.
 - Workspace type-check completed successfully.

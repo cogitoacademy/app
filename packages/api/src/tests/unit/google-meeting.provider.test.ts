@@ -270,6 +270,9 @@ describe("createGoogleMeetingProvider", () => {
       (call) => call[0]?.requestBody?.summary === details.title,
     );
     expect(offlineCalls).toHaveLength(1);
+    expect(offlineCalls[0]?.[0]?.requestBody?.description).toBe(
+      details.description,
+    );
     expect(offlineCalls[0]?.[0]?.requestBody?.location).toBe(details.location);
     expect(offlineCalls[0]?.[0]?.requestBody?.id).toMatch(/^cogito[0-9a-f]+$/);
     expect(offlineCalls[0]?.[0]?.requestBody?.conferenceData).toBeUndefined();
@@ -709,10 +712,14 @@ describe("createGoogleMeetingProvider updateEvent/cancelEvent (OQ-05)", () => {
 
     await provider.updateEvent("b1", {
       location: "Room B — North Campus",
+      description: "Site: North Campus\nRoom: Room B\n\nSession details",
     });
 
     const call = mockCalendarEventsUpdate.mock.calls.at(-1)?.[0];
     expect(call?.requestBody?.location).toBe("Room B — North Campus");
+    expect(call?.requestBody?.description).toBe(
+      "Site: North Campus\nRoom: Room B\n\nSession details",
+    );
     expect(call?.requestBody?.conferenceData).toBeUndefined();
   });
 
