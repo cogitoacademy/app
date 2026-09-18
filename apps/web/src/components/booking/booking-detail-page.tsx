@@ -1601,6 +1601,7 @@ function MeetingStatusPopover({
         <Button
           variant="outline"
           size="xs"
+          className="whitespace-nowrap"
           onClick={onSetManualLink}
           progress={manualLinkPending}
           disabled={manualLinkPending}
