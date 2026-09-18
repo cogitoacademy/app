@@ -252,17 +252,17 @@ form composition before checking the API or database.
 
 For a complete draft or `changes_requested` tutor, verify the sticky profile
 action area shows one **I agree to the Tutor Terms of Service** checkbox and a
-**Read terms** action. The checkbox must expose an inline error and receive
-focus when **Submit for review** is pressed while it is unchecked. **Read
-terms** opens the bilingual Indonesian/English document in Indonesian-then-
-English order; closing it preserves the checkbox state, and the dialog has no
-second acceptance checkbox or submit action. At narrow widths, confirm the
-consent copy wraps naturally and the save/submit buttons stack without
-horizontal overflow. Check the agreement, submit, and verify the profile moves
-to `pending_review`. Reload the tutor profile and submit again after a
-revision; the checkbox should remain checked/disabled, the read-only action
-should still work, and the acceptance timestamp/version should remain
-unchanged.
+**Read terms** action. While the tutor has not accepted the terms, **Submit
+for review** must be disabled while **Save draft** remains available. Check
+the agreement and verify the review action becomes enabled; submit and verify
+the profile moves to `pending_review`. **Read terms** opens the bilingual
+Indonesian/English document in Indonesian-then-English order; closing it
+preserves the checkbox state, and the dialog has no second acceptance checkbox
+or submit action. At narrow widths, confirm the consent copy wraps naturally
+and the save/submit buttons stack without horizontal overflow. Reload the tutor
+profile and submit again after a revision; the checkbox should remain
+checked/disabled, the read-only action should still work, and the acceptance
+timestamp/version should remain unchanged.
 
 For Google sign-in, start from `https://app.cogitoacademy.id/login` in an incognito/clean browser and confirm the provider callback is `https://api.cogitoacademy.id/api/auth/callback/google`, followed by the frontend route `/auth/callback` and the role-appropriate destination. The Google authorization URL must contain `prompt=consent`; record the Google permission screen in the verification video and click **Show all services** so every requested identity scope is fully expanded and readable before accepting. In DevTools, the initial auth response must set `better-auth.state` with `Secure`, `HttpOnly`, and `SameSite=Lax`; the callback request must include that cookie and its `state` query parameter. Keep the Google Cloud OAuth client configured with the frontend origin `https://app.cogitoacademy.id` and the API redirect URI `https://api.cogitoacademy.id/api/auth/callback/google`. This login flow requests identity scopes only. For the separate Calendar scope used by automatic Meet creation, use the dedicated Meet OAuth client and the consent/refresh-token procedure in `docs/GOOGLE-MEET-SETUP.md`; do not add Calendar access to every user's login.
 

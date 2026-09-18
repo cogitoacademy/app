@@ -180,7 +180,8 @@ The tutor profile action area presents one bilingual consent checkbox labeled
 **I agree to the Tutor Terms of Service**. The adjacent **Read terms** action
 opens the Indonesian/English document in a read-only dialog. Saving a draft
 remains available without accepting the terms; the tutor must check the
-agreement box before the client sends `tutor.submitForReview`.
+agreement box before the client sends `tutor.submitForReview`, and the
+review-submit button remains disabled until that box is checked.
 
 Acceptance is enforced server-side and recorded once on `tutor_profile` with
 `termsOfServiceAcceptedAt` and `termsOfServiceVersion` (`2026-09`). The

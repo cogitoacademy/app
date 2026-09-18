@@ -484,6 +484,8 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
   const requiresTutorTermsAcceptance =
     profile.onboardingStatus !== "published" &&
     !hasRecordedTutorTermsAcceptance;
+  const isTutorTermsBlockingSubmit =
+    requiresTutorTermsAcceptance && !hasAcceptedTerms;
   const savedNameRef = useRef(accountUser.name.trim());
 
   const nameMutation = useMutation({
@@ -812,7 +814,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
         "Please confirm the transfer-account responsibility statement.",
       );
     }
-    if (requireComplete && requiresTutorTermsAcceptance && !hasAcceptedTerms) {
+    if (requireComplete && isTutorTermsBlockingSubmit) {
       addError(
         "termsOfService",
         "Agree to the Tutor Terms of Service before submitting.",
@@ -2018,7 +2020,8 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                     disabled={
                       nameMutation.isPending ||
                       updateMutation.isPending ||
-                      submitMutation.isPending
+                      submitMutation.isPending ||
+                      isTutorTermsBlockingSubmit
                     }
                     onClick={handleSubmitForReview}
                   >
