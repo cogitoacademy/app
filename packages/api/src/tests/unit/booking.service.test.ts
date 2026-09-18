@@ -97,6 +97,8 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     completeSession: mock(async () => {}),
     findCompletedBookingsByTutor: mock(async () => []),
     findLatestPaidTutorPayout: mock(async () => null),
+    listTutorPayoutProfiles: mock(async () => []),
+    listTutorPayoutRecords: mock(async () => []),
     insertTutorPayout: mock(async () => ({})),
     updateSessionSchedule: mock(async () => {}),
     cancelSession: mock(async () => {}),
@@ -704,6 +706,11 @@ describe("BookingService", () => {
         limit: 20,
         cursor: undefined,
         includeAll: false,
+        includeCompletionActions: true,
+      });
+      expect(repo.countBookingsForAccess).toHaveBeenCalledWith("tutor1", {
+        includeAll: false,
+        includeCompletionActions: true,
       });
     });
 
@@ -7911,6 +7918,105 @@ describe("BookingService additional coverage paths", () => {
       "tutor1",
       new Date(cutoffAt.getTime() + 1),
       undefined,
+      "completedAt",
+    );
+  });
+
+  test("builds a report with paid batches and current unpaid rows", async () => {
+    const cutoffAt = new Date("2026-08-01T00:00:00Z");
+    const completed = makeBooking({
+      currentState: "completed",
+      completedAt: new Date("2026-07-01T00:00:00Z"),
+      priceSnapshot: {
+        baseline: 50,
+        cogitoTake: 10,
+        tutorShare: 40,
+        tutorHonorariumIdr: 200_000,
+      },
+    });
+    const findCompletedBookingsByTutor = mock(
+      async (_conn: unknown, tutorId: string) =>
+        tutorId === "tutor1" ? [completed] : [],
+    );
+    const listTutorPayoutProfiles = mock(async () => [
+      {
+        tutorId: "tutor1",
+        tutorName: "Ada Tutor",
+        bankName: "BCA",
+        bankAccountNumber: "00123",
+        bankAccountHolderName: "Ada Tutor",
+        bankAccountOpeningCity: "Jakarta",
+        bankAccountOwnership: "self",
+        bankTransferDisclaimerAccepted: true,
+      },
+      {
+        tutorId: "tutor2",
+        tutorName: "Budi Tutor",
+        bankName: "BRI",
+        bankAccountNumber: "00456",
+        bankAccountHolderName: "Budi Tutor",
+        bankAccountOpeningCity: "Bandung",
+        bankAccountOwnership: "self",
+        bankTransferDisclaimerAccepted: true,
+      },
+    ]);
+    const listTutorPayoutRecords = mock(async () => [
+      {
+        id: "paid-1",
+        tutorId: "tutor2",
+        tutorName: "Budi Tutor",
+        bankName: "BRI",
+        bankAccountNumber: null,
+        bankAccountHolderName: null,
+        profileBankAccountNumber: "00456",
+        profileBankAccountHolderName: "Budi Tutor",
+        profileBankAccountOpeningCity: "Bandung",
+        profileBankAccountOwnership: "self",
+        grossHonorariumIdr: 300_000,
+        transferFeeIdr: 2_500,
+        netHonorariumIdr: 297_500,
+        status: "paid",
+        paidAt: new Date("2026-08-10T00:00:00Z"),
+      },
+    ]);
+    const { service } = createService({
+      repo: {
+        listTutorPayoutProfiles,
+        listTutorPayoutRecords,
+        findCompletedBookingsByTutor,
+        findLatestPaidTutorPayout: mock(async (tutorId: string) =>
+          tutorId === "tutor2" ? { cutoffAt, paidAt: cutoffAt } : null,
+        ),
+      },
+    });
+
+    const rows = await service.getTutorPayoutReport({
+      dateFrom: new Date("2026-08-15T00:00:00Z"),
+      dateTo: new Date("2026-08-31T23:59:59Z"),
+    });
+    expect(rows).toHaveLength(2);
+    expect(rows).toContainEqual(
+      expect.objectContaining({
+        id: "paid-1",
+        status: "paid",
+        bankAccountNumber: "00456",
+        netHonorariumIdr: 297_500,
+      }),
+    );
+    expect(rows).toContainEqual(
+      expect.objectContaining({
+        id: "pending:tutor1",
+        status: "pending",
+        grossHonorariumIdr: 200_000,
+        transferFeeIdr: 0,
+        payoutAccountComplete: true,
+      }),
+    );
+    expect(findCompletedBookingsByTutor).toHaveBeenCalledWith(
+      expect.anything(),
+      "tutor1",
+      undefined,
+      expect.any(Date),
       "completedAt",
     );
   });

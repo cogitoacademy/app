@@ -128,20 +128,31 @@ function bookingCursorCondition(cursor: string): SQL<unknown> {
 function bookingViewCondition(
   view: BookingListView | undefined,
   now: Date,
+  opts: { completionCondition?: SQL<unknown> } = {},
 ): SQL<unknown> | undefined {
   if (!view || view === "all") return undefined;
   const pending = inArray(booking.currentState, [...BOOKING_ACTION_STATES]);
   const terminal = inArray(booking.currentState, [...TERMINAL_BOOKING_STATES]);
+  const actionRequired = opts.completionCondition
+    ? or(pending, opts.completionCondition)!
+    : pending;
 
   switch (view) {
     case "action":
-      return pending;
+      return actionRequired;
     case "upcoming":
-      return and(gte(booking.scheduledEndAt, now), not(terminal), not(pending));
+      return and(
+        gte(booking.scheduledEndAt, now),
+        not(terminal),
+        not(actionRequired),
+      );
     case "recurring":
       return and(eq(booking.type, "series"), not(terminal));
     case "history":
-      return or(terminal, and(lt(booking.scheduledEndAt, now), not(pending)));
+      return or(
+        terminal,
+        and(lt(booking.scheduledEndAt, now), not(actionRequired)),
+      );
   }
 }
 
@@ -1097,6 +1108,66 @@ async function findLatestPaidTutorPayout(conn: DbOrTx, tutorId: string) {
   return row ?? null;
 }
 
+/**
+ * Returns the private tutor/account fields needed by the admin payout report.
+ * The query deliberately selects only payout-relevant profile data.
+ */
+async function listTutorPayoutProfiles(conn: DbOrTx) {
+  return conn
+    .select({
+      tutorId: tutorProfile.userId,
+      tutorName: user.name,
+      bankName: tutorProfile.bankName,
+      bankAccountNumber: tutorProfile.bankAccountNumber,
+      bankAccountHolderName: tutorProfile.bankAccountHolderName,
+      bankAccountOpeningCity: tutorProfile.bankAccountOpeningCity,
+      bankAccountOwnership: tutorProfile.bankAccountOwnership,
+      bankTransferDisclaimerAccepted:
+        tutorProfile.bankTransferDisclaimerAccepted,
+    })
+    .from(tutorProfile)
+    .innerJoin(user, eq(tutorProfile.userId, user.id))
+    .orderBy(desc(tutorProfile.createdAt));
+}
+
+/**
+ * Lists immutable payout batches by transfer date and joins the current
+ * profile only as a fallback for legacy rows that predate account snapshots.
+ */
+async function listTutorPayoutRecords(
+  conn: DbOrTx,
+  dateFrom?: Date,
+  dateTo?: Date,
+) {
+  const conditions: SQL[] = [eq(tutorPayout.status, "paid")];
+  if (dateFrom) conditions.push(gte(tutorPayout.paidAt, dateFrom));
+  if (dateTo) conditions.push(lte(tutorPayout.paidAt, dateTo));
+
+  return conn
+    .select({
+      id: tutorPayout.id,
+      tutorId: tutorPayout.tutorId,
+      tutorName: user.name,
+      bankName: tutorPayout.bankName,
+      bankAccountNumber: tutorPayout.bankAccountNumber,
+      bankAccountHolderName: tutorPayout.bankAccountHolderName,
+      profileBankAccountNumber: tutorProfile.bankAccountNumber,
+      profileBankAccountHolderName: tutorProfile.bankAccountHolderName,
+      profileBankAccountOpeningCity: tutorProfile.bankAccountOpeningCity,
+      profileBankAccountOwnership: tutorProfile.bankAccountOwnership,
+      grossHonorariumIdr: tutorPayout.grossHonorariumIdr,
+      transferFeeIdr: tutorPayout.transferFeeIdr,
+      netHonorariumIdr: tutorPayout.netHonorariumIdr,
+      status: tutorPayout.status,
+      paidAt: tutorPayout.paidAt,
+    })
+    .from(tutorPayout)
+    .innerJoin(user, eq(tutorPayout.tutorId, user.id))
+    .leftJoin(tutorProfile, eq(tutorPayout.tutorId, tutorProfile.userId))
+    .where(and(...conditions))
+    .orderBy(desc(tutorPayout.paidAt), desc(tutorPayout.id));
+}
+
 async function insertTutorPayout(
   conn: DbOrTx,
   input: typeof tutorPayout.$inferInsert,
@@ -1154,6 +1225,27 @@ async function updateBookingVersioned(
 }
 
 export function createBookingRepo(db: DbType) {
+  function tutorCompletionCondition(now: Date): SQL<unknown> {
+    const endedSeriesSession = db
+      .select({ id: bookingSession.id })
+      .from(bookingSession)
+      .where(
+        and(
+          eq(bookingSession.seriesBookingId, booking.id),
+          eq(bookingSession.currentState, "scheduled"),
+          lte(bookingSession.scheduledEndAt, now),
+        ),
+      );
+
+    return and(
+      eq(booking.currentState, "scheduled"),
+      or(
+        and(ne(booking.type, "series"), lte(booking.scheduledEndAt, now)),
+        and(eq(booking.type, "series"), exists(endedSeriesSession)),
+      ),
+    )!;
+  }
+
   /**
    * Finds a booking with participants, state history, meeting, and room bookings eager-loaded.
    *
@@ -1278,6 +1370,7 @@ export function createBookingRepo(db: DbType) {
       limit: number;
       cursor?: string;
       includeAll?: boolean;
+      includeCompletionActions?: boolean;
       view?: BookingListView;
     },
   ) {
@@ -1303,7 +1396,11 @@ export function createBookingRepo(db: DbType) {
     if (opts.states?.length) {
       conditions.push(inArray(booking.currentState, opts.states));
     }
-    const viewCondition = bookingViewCondition(opts.view, new Date());
+    const now = new Date();
+    const viewOptions = opts.includeCompletionActions
+      ? { completionCondition: tutorCompletionCondition(now) }
+      : {};
+    const viewCondition = bookingViewCondition(opts.view, now, viewOptions);
     if (viewCondition) conditions.push(viewCondition);
     if (opts.cursor) {
       conditions.push(bookingCursorCondition(opts.cursor));
@@ -1326,7 +1423,7 @@ export function createBookingRepo(db: DbType) {
 
   async function countBookingsForAccess(
     userId: string,
-    opts: { includeAll?: boolean },
+    opts: { includeAll?: boolean; includeCompletionActions?: boolean },
   ) {
     const conditions = [];
     if (!opts.includeAll) {
@@ -1349,12 +1446,15 @@ export function createBookingRepo(db: DbType) {
     }
     const where = conditions.length > 0 ? and(...conditions) : undefined;
     const now = new Date();
+    const viewOptions = opts.includeCompletionActions
+      ? { completionCondition: tutorCompletionCondition(now) }
+      : {};
     const [counts] = await db
       .select({
-        action: sql<number>`count(*) filter (where ${bookingViewCondition("action", now)})`,
-        upcoming: sql<number>`count(*) filter (where ${bookingViewCondition("upcoming", now)})`,
-        recurring: sql<number>`count(*) filter (where ${bookingViewCondition("recurring", now)})`,
-        history: sql<number>`count(*) filter (where ${bookingViewCondition("history", now)})`,
+        action: sql<number>`count(*) filter (where ${bookingViewCondition("action", now, viewOptions)})`,
+        upcoming: sql<number>`count(*) filter (where ${bookingViewCondition("upcoming", now, viewOptions)})`,
+        recurring: sql<number>`count(*) filter (where ${bookingViewCondition("recurring", now, viewOptions)})`,
+        history: sql<number>`count(*) filter (where ${bookingViewCondition("history", now, viewOptions)})`,
         all: sql<number>`count(*)`,
       })
       .from(booking)
@@ -1421,6 +1521,8 @@ export function createBookingRepo(db: DbType) {
     cancelAllSessions,
     findCompletedBookingsByTutor,
     findLatestPaidTutorPayout,
+    listTutorPayoutProfiles,
+    listTutorPayoutRecords,
     insertTutorPayout,
   };
 }

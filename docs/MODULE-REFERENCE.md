@@ -9,7 +9,12 @@ exception to the 35-Mark gate. Grants are keyed to the student user, have one
 future expiry timestamp, and are evaluated on every eligibility/file request;
 no scheduler is needed to revoke expired access. Admin create/update/remove
 operations are audit-logged, and removing a grant deletes only the live
-exception while preserving the audit record.
+exception while preserving the audit record. The web form searches the bounded
+admin `admin.searchUsers` identity projection and accepts the email only after
+an operator selects a student result. Expiry entry composes the shared Selia
+calendar with the cross-browser minute time picker; new grants default to
+23:59 local time thirty days from today. Its table uses a padded filter region
+and an overflow-contained data region so wide rows remain inside the Selia card.
 
 ## Competition Calendar agenda list (2026-09-18)
 
@@ -59,7 +64,9 @@ Data-table pagination is owned by the module that reads the collection. The
 achievement and room repositories apply `limit`/`offset` directly to their
 ordered SQL queries; admin booking and ledger repositories continue to expose
 cursor pages; and admin tutor lists keep their offset pages. Manage Tutors and
-Tutor Payouts own independent page state for their respective collections. Web
+Tutor Payouts own independent page state for their respective collections. Its
+custom date range uses the shared Selia `DatePicker`, not native browser date
+inputs. Web
 components render a bounded page plus a one-row sentinel where needed, use
 `keepPreviousData` during transitions, and reset pagination after filter or
 selection changes. Aggregate achievement counts come from dedicated stats
@@ -176,15 +183,20 @@ pending honorarium summary for its operational table.
 
 The shared booking list uses Needs action, Upcoming, Series, History, and All tabs. Admins default to All; students and tutors default to Upcoming unless an explicit URL tab is present. The page sends the selected view to `booking.listMine`; repository predicates apply the tab semantics before cursor pagination, and a separate role-scoped aggregate returns exact counts for every tab. Changing views loads a new first page, while **Load more bookings** appends the selected view's cursor. Recommended, Soonest, and Latest sorting remains client-side within the loaded filtered pages.
 
+For tutors, Needs action also includes a `scheduled` single/group booking after
+its scheduled end and a `series` parent when any scheduled child session has
+ended. This is a correlated `booking_session` existence check, so a series can
+surface one ended session while a later session remains upcoming. Students and
+admins retain the pending-decision action predicate; completion tasks are not
+exposed as student actions.
+
 `BookingListCard` derives one contextual time chip from server facts: pending states read `deadlineAt`, confirmed/scheduled states read the scheduled window, and terminal states render none. A module-level external clock store updates all mounted cards from one 30-second interval rather than allocating one timer per row.
 The reusable card exposes `showFinancialInfo`; booking lists keep it enabled and place the time chip after it, while dashboard next-lesson cards disable it.
 
-The authenticated sidebar reuses `booking.listMine` with the shared
-`BOOKING_ACTION_STATES` tuple and shows a compact `99+`-capped badge beside
-`/bookings` when role-visible pending rows exist. The tuple is shared with the
-booking list/card presentation so the badge and **Needs action** tab remain
-aligned. This is frontend presentation only; the booking service, repository,
-event keys, and lifecycle rules are unchanged.
+The authenticated sidebar requests `booking.listMine` with `view: "action"` and
+shows a compact `99+`-capped badge beside `/bookings` when role-visible action
+rows exist. It therefore includes tutor completion tasks as well as pending
+decisions and stays aligned with the server-filtered **Needs action** tab.
 
 Tutor invitations use the shared email provider: create sends once, **Generate & copy link** only rotates the token, and the separate **Send again** procedure rotates then explicitly delivers through Resend. Delivery failure does not roll back the valid invite.
 
@@ -323,6 +335,7 @@ Knowledge Bank access by email when the student should not currently need the
 - Create and update require a strictly future ISO datetime. Expired rows stay visible to admins but never bypass the threshold.
 - Removal is a hard delete of the live grant; audit history remains in `audit_log`.
 - The admin UI lives at `/admin-knowledge-bank` and supports active/expired/all filtering, edit, and confirmation-gated removal.
+- The create dialog searches by student name or email through `admin.searchUsers`, requires a selected student result, and uses a Selia date picker plus minute time control instead of native `datetime-local`; new grants default to 23:59 local time thirty days out.
 
 **Dependencies:** `AdminKnowledgeBankRepo`, `AuditPort`
 
@@ -387,9 +400,11 @@ publication, and moderation. `/admin-tutor-payouts` is the separate operational
 payout workspace: it lists unpaid tutor honorarium, shows the completed sessions
 included in each unpaid amount, verifies private destination-account details,
 calculates bank transfer fees and net transfer amount, and records a completed
-transfer through **Mark as paid**. The unpaid amount advances from the latest
-recorded completion-time cutoff; it does not reset automatically each calendar
-week.
+transfer through **Mark as paid**. It also exposes a date-window report that
+combines paid transfer batches with current unpaid balances, supports status and
+sorting views, and downloads the active result set as a CSV compatible with
+Excel/Google Sheets. The unpaid amount advances from the latest recorded
+completion-time cutoff; it does not reset automatically each calendar week.
 
 **Files:**
 
@@ -1137,7 +1152,7 @@ The authenticated dashboard shell is viewport-fixed. Its content pane exclusivel
 - A one-off slot deactivates a conflicting recurring occurrence, making date overrides authoritative without changing other weeks
 - The tutor date-override editor applies one `online`, `offline`, or `both` modality and up to four time ranges to as many as 14 selected dates. The generated slots commit atomically so a conflict never leaves a partially saved batch.
 - `submitForReview` can only be called from `draft`/`changes_requested` status
-- A complete first tutor submission requires bilingual Terms of Service acceptance; the profile action area owns one **I agree to the Tutor Terms of Service** checkbox and opens the document through a read-only **Read terms** action. The acceptance timestamp/version is immutable after the first write and is not included in public tutor discovery. After acceptance the checkbox is checked/disabled and **Review Tutor Terms** remains available; the consent row and action controls wrap responsively without changing the service contract
+- A complete first tutor submission requires bilingual Terms of Service acceptance; the profile action area owns one **I agree to the Tutor Terms of Service** checkbox and opens the document through a read-only **Read terms** action. **Submit for review** and **Submit changes for review** remain disabled until the checkbox is checked, while draft/profile saving remains available. The acceptance timestamp/version is immutable after the first write and is not included in public tutor discovery. After acceptance the checkbox is checked/disabled and **Review Tutor Terms** remains available; the consent row and action controls wrap responsively without changing the service contract
 - Profile updates use optimistic locking (`version`)
 - New tutor pricing is stored as IDR base honoraria by modality (`baseRatesIdr`) and validated against the active economy minimum and Rp5,000 increments; published tutors may change these rates at any time, new bookings use the new rate, and existing booking snapshots remain authoritative for payout. The legacy Marks map remains readable during migration
 - The tutor profile editor at `/profile` renders selected modalities in one combined six-row IDR group-size matrix using the same table structure as the student discovery drawer; this is presentation-only. The legacy `/onboarding` path redirects to `/profile` for tutors.
@@ -1285,7 +1300,9 @@ Tutor financial presentation is denominated in IDR and must not expose Marks. Th
 The admin operational payout workflow lives at `/admin-tutor-payouts`, separate
 from Manage Tutors profile review. It reuses tutor profiles for account
 readiness, reads the pending completion-time summary, and records the current
-unpaid honorarium only after the operator confirms the net transfer.
+unpaid honorarium only after the operator confirms the net transfer. Paid payout
+rows snapshot the account number and account-holder name at transfer time; old
+rows without those snapshots use the current profile as a display fallback.
 
 Numeric Marks amounts in the web UI are rendered through `apps/web/src/components/cogito-marks.tsx`. The component owns the Cogito mark-symbol prefix, supported icon sizes, whitespace behavior, and accessible `value + Marks` label; feature components should not duplicate that markup.
 

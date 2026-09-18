@@ -13,6 +13,11 @@ Status: **Complete locally (2026-09-18)**
   expired grant automatically returns the student to the normal 35-Mark rule.
 - Added the `/admin-knowledge-bank` Selia admin page with search, status
   filters, add/edit dialogs, expiry display, and confirmation-gated removal.
+- Updated the add dialog to select a student from the admin identity search,
+  compose the shared Selia calendar with the cross-browser minute time picker,
+  and default new expiries to 23:59 thirty days from today in local time.
+- Kept the grant table within its card and confined narrow-screen horizontal
+  scrolling to the table region below the padded filters.
 - Updated architecture, API, module, runbook, and Marks-economy documentation.
 
 ## Verification

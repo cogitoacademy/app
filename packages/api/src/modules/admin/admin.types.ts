@@ -34,6 +34,13 @@ export const adminGetTutorPayoutsInput = z.object({
   dateTo: z.string().max(100).optional(),
 });
 
+export const adminGetTutorPayoutReportInput = z
+  .object({
+    dateFrom: z.string().max(100).optional(),
+    dateTo: z.string().max(100).optional(),
+  })
+  .optional();
+
 export const adminMarkTutorPayoutPaidInput = z.object({
   tutorId: z.string().max(100),
 });

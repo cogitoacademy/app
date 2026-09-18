@@ -20,6 +20,17 @@ function makeSelectConn(rows: any[] = []) {
   return { select, ...chain };
 }
 
+function makeJoinSelectConn(rows: any[] = []) {
+  const chain: any = {};
+  const promise = Promise.resolve(rows);
+  for (const method of ["from", "innerJoin", "leftJoin", "where", "orderBy"]) {
+    chain[method] = mock(() => promise);
+    (promise as any)[method] = chain[method];
+  }
+  const select = mock(() => promise);
+  return { select, ...chain };
+}
+
 function makeUpdateConn(returningRows: any[] = []) {
   const returning = mock(() => Promise.resolve(returningRows));
   const where = mock(() => ({ returning }));
@@ -109,6 +120,47 @@ describe("createBookingRepo", () => {
     await expect(
       repo.insertTutorPayout(conn, { tutorId: "t1" } as any),
     ).resolves.toBe(row);
+  });
+
+  test("returns the latest paid payout or null when none exists", async () => {
+    const row = { id: "p1", tutorId: "t1", status: "paid" };
+    const repo = createBookingRepo({} as any);
+
+    await expect(
+      repo.findLatestPaidTutorPayout(makeSelectConn([row]) as any, "t1"),
+    ).resolves.toEqual(row);
+    await expect(
+      repo.findLatestPaidTutorPayout(makeSelectConn() as any, "t1"),
+    ).resolves.toBeNull();
+  });
+
+  test("lists payout profiles and paid records with optional date bounds", async () => {
+    const profiles = [{ tutorId: "t1", tutorName: "Tutor One" }];
+    const profileConn = makeJoinSelectConn(profiles) as any;
+    const repo = createBookingRepo({} as any);
+
+    await expect(repo.listTutorPayoutProfiles(profileConn)).resolves.toEqual(
+      profiles,
+    );
+    expect(profileConn.innerJoin).toHaveBeenCalledTimes(1);
+    expect(profileConn.orderBy).toHaveBeenCalledTimes(1);
+
+    const records = [{ id: "p1", tutorId: "t1", status: "paid" }];
+    const recordConn = makeJoinSelectConn(records) as any;
+    const dateFrom = new Date("2026-08-01T00:00:00.000Z");
+    const dateTo = new Date("2026-08-31T23:59:59.999Z");
+
+    await expect(
+      repo.listTutorPayoutRecords(recordConn, dateFrom, dateTo),
+    ).resolves.toEqual(records);
+    expect(recordConn.innerJoin).toHaveBeenCalledTimes(1);
+    expect(recordConn.leftJoin).toHaveBeenCalledTimes(1);
+    expect(recordConn.where).toHaveBeenCalledTimes(1);
+
+    const unboundedConn = makeJoinSelectConn(records) as any;
+    await expect(repo.listTutorPayoutRecords(unboundedConn)).resolves.toEqual(
+      records,
+    );
   });
 
   test("returns object with all repo methods", () => {
@@ -1007,5 +1059,74 @@ describe("createBookingRepo additional query paths", () => {
     ).resolves.toEqual(rows);
     expect(select).not.toHaveBeenCalled();
     expect(findMany.mock.calls[0]?.[0].where).toBeUndefined();
+  });
+
+  test("counts bookings for a viewer with participant access filters", async () => {
+    const nestedWhere = mock(() => ({}));
+    const nestedFrom = mock(() => ({ where: nestedWhere }));
+    const countWhere = mock(async () => [
+      { action: 1, upcoming: 2, recurring: 3, history: 4, all: 5 },
+    ]);
+    const countFrom = mock(() => ({ where: countWhere }));
+    const select = mock()
+      .mockImplementationOnce(() => ({ from: nestedFrom }))
+      .mockImplementationOnce(() => ({ from: countFrom }));
+    const repo = createBookingRepo({ select } as any);
+
+    await expect(
+      repo.countBookingsForAccess("student-1", { includeAll: false }),
+    ).resolves.toEqual({
+      action: 1,
+      upcoming: 2,
+      recurring: 3,
+      history: 4,
+      all: 5,
+    });
+    expect(select).toHaveBeenCalledTimes(2);
+    expect(nestedWhere).toHaveBeenCalledTimes(1);
+    expect(countWhere).toHaveBeenCalledTimes(1);
+  });
+
+  test("adds ended tutor completion sessions to the booking view and counts", async () => {
+    const rows = [{ id: "booking-1" }];
+    const nestedWhere = mock(() => ({}));
+    const nestedFrom = mock(() => ({ where: nestedWhere }));
+    const countWhere = mock(async () => [
+      { action: 1, upcoming: 2, recurring: 3, history: 4, all: 5 },
+    ]);
+    const countFrom = mock(() => ({ where: countWhere }));
+    const select = mock()
+      .mockImplementationOnce(() => ({ from: nestedFrom }))
+      .mockImplementationOnce(() => ({ from: nestedFrom }))
+      .mockImplementationOnce(() => ({ from: countFrom }));
+    const findMany = mock(async () => rows);
+    const repo = createBookingRepo({
+      select,
+      query: { booking: { findMany } },
+    } as any);
+
+    await expect(
+      repo.listBookingsForAccess("tutor-1", {
+        limit: 10,
+        includeAll: true,
+        includeCompletionActions: true,
+        view: "action",
+      }),
+    ).resolves.toEqual(rows);
+    await expect(
+      repo.countBookingsForAccess("tutor-1", {
+        includeAll: true,
+        includeCompletionActions: true,
+      }),
+    ).resolves.toEqual({
+      action: 1,
+      upcoming: 2,
+      recurring: 3,
+      history: 4,
+      all: 5,
+    });
+    expect(select).toHaveBeenCalledTimes(3);
+    expect(nestedWhere).toHaveBeenCalledTimes(2);
+    expect(countWhere).toHaveBeenCalledTimes(1);
   });
 });

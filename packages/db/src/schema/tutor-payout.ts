@@ -27,6 +27,12 @@ export const tutorPayout = pgTable(
     transferFeeIdr: integer("transfer_fee_idr").notNull().default(0),
     netHonorariumIdr: integer("net_honorarium_idr").notNull(),
     bankName: text("bank_name").notNull(),
+    // Keep the destination details that were verified at transfer time. These
+    // are nullable for payout rows created before account-detail snapshots
+    // were added; report consumers can fall back to the current tutor profile
+    // for those legacy rows.
+    bankAccountNumber: text("bank_account_number"),
+    bankAccountHolderName: text("bank_account_holder_name"),
     status: text("status").notNull().default("paid"),
     paidAt: timestamp("paid_at", { withTimezone: true }).notNull(),
     paidBy: text("paid_by")

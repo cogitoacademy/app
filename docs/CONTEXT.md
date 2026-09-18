@@ -10,7 +10,14 @@ grant with an admin-selected future expiry and note. The wallet/content gate
 checks that expiry on every request, so expired grants immediately fall back to
 the normal Marks rule without a cleanup scheduler. Admins can edit or remove a
 grant; create/update/remove actions are audit-logged, while removal deletes
-only the live exception.
+only the live exception. The create dialog resolves students through the
+admin-only `admin.searchUsers` lookup and requires selecting a student result,
+so operators do not have to enter an email address blindly. Its expiry control
+uses the shared Selia calendar plus the cross-browser minute time picker; new
+grants default to 30 days from today at 23:59 in the operator's local timezone.
+The grant table is contained by its Selia card: filters keep normal card
+padding, while wide columns scroll horizontally inside the card at narrow
+viewports.
 
 ## Offline Calendar room metadata (2026-09-18)
 
@@ -37,6 +44,19 @@ Tutor `completeSession` now requires 3 bullet-list sections (Session discussion,
 ## Session notes API compatibility and booking feedback UI (2026-09-18)
 
 The completed-booking Session notes card is no longer rendered in the web UI because the product surface now uses read-only Student notes plus tutor-authored Session feedback. The former rich-text editor, toolbar, preview, Add note control, and client-side note renderer were removed. The protected `addSessionNote` and `getSessionNotes` procedures remain available for API compatibility and legacy data; the web client does not query or render them.
+
+## Tutor completion queue in Needs action (2026-09-18)
+
+The shared booking list now treats an ended `scheduled` booking as a tutor
+action. For a single or group booking, the row enters **Needs action** when
+`scheduledEndAt` has passed and remains there until the tutor completes it. For
+a series, the same rule is evaluated per `booking_session`, so a parent series
+appears when any scheduled child session has ended, even if a later session is
+still upcoming. This completion predicate is tutor-only; students do not see a
+false completion task. The server applies the same predicate to action,
+upcoming, history, and facet counts, and the sidebar badge requests the action
+view so it stays in sync. No RPC input, response shape, schema, or lifecycle
+transition changed.
 
 ## Observability alert-latch fix + Important Logs board (2026-09-14)
 
@@ -126,7 +146,8 @@ when it needs to discover `hasNext`, keeps previous rows visible through
 `keepPreviousData`, scrolls the owning card back into view after navigation, and
 resets pagination when filters or the selected wallet change. Tutor Payouts
 requests ten tutor profiles per page and loads the pending summary for each
-visible tutor.
+visible tutor. Its custom report range uses the shared Selia date picker; the
+web app does not rely on browser-native date controls.
 
 Achievement status cards use dedicated `achievement.stats` and
 `achievement.adminStats` aggregates, so counts do not describe only the
@@ -244,13 +265,11 @@ is frontend-only and changes no API, schema, or persistence contract.
 ## Sidebar booking-action badge (2026-09-04)
 
 The authenticated sidebar now shows a compact count badge beside the shared
-`/bookings` navigation item when the role-visible booking list contains rows in
-the same pending states used by the **Needs action** tab. The badge uses the
-existing protected `booking.listMine` read with those states, displays `99+`
-when the result exceeds the compact limit, and stays hidden while the count is
-zero or still loading. The state tuple is shared by the sidebar, booking list,
-and booking cards. This is frontend-only; no RPC, schema, persistence, or
-booking lifecycle rule changed.
+`/bookings` navigation item when the role-visible `booking.listMine` action view
+contains rows. That view includes pending decisions and, for tutors, scheduled
+sessions whose end time has passed and still need completion. The badge uses
+the server-side action predicate, displays `99+` when the result exceeds the
+compact limit, and stays hidden while the count is zero or still loading.
 
 ## Sidebar logo contrast (2026-09-04)
 
@@ -371,7 +390,9 @@ The tutor profile action area presents one bilingual consent checkbox labeled
 opens the Indonesian/English Terms of Service from
 `apps/web/src/components/tutor/tutor-terms-of-service.tsx` in a read-only
 dialog. Draft saves do not require consent, and closing the dialog leaves the
-profile's checkbox state unchanged.
+profile's checkbox state unchanged. While the tutor has not accepted the
+terms, both **Submit for review** and **Submit changes for review** stay
+disabled until the tutor checks the agreement.
 
 The server accepts `acceptTerms?: boolean` on `tutor.submitForReview`, enforces
 acceptance when the tutor profile has no prior consent, and writes
@@ -589,7 +610,7 @@ Competition Calendar and Knowledge Bank content are now delivered inside the aut
 - Knowledge Bank list responses never expose Sanity asset URLs. `GET /content/knowledge-bank/:resourceId/file` rechecks the student/tutor/admin role and wallet threshold, with the threshold bypassed for tutors and admins or while a student's admin grant is unexpired, fetches the published Sanity asset server-side, and streams it with private/no-store cache headers. The proxy is hardened (`apps/server/src/content-proxy.ts`): host allowlist (`cdn.sanity.io` / `*.sanity.io` — anything else is a 502 before any fetch), a 10s `AbortController` timeout, and a 5MB cap enforced on `content-length` and on the streamed body; the route is rate-limited 30/min per IP (`content` kind, `rate-limit-paths.ts`).
 - The academy landing site remains bilingual. Its calendar and Knowledge Bank navigation uses app-login CTAs with an internal redirect target; the old localized URLs remain compatibility redirects rather than public content pages.
 
-The shared booking list sorts active and all rows by the nearest scheduled start while keeping past/cancelled history newest-first. It defaults to Upcoming for students, Pending for tutors when requests need review (otherwise Upcoming), and All for admins; an explicit `tab` query parameter overrides the role-aware default. Dashboard next-lesson cards use the nearest future booking that is neither terminal nor pending, matching the list's Upcoming semantics. The tutor review queue keeps a stable empty/loading card so the requests and next-lesson modules remain visible together even when no review request exists.
+The shared booking list sorts active and all rows by the nearest scheduled start while keeping past/cancelled history newest-first. It defaults to Upcoming for students and tutors and All for admins; an explicit `tab` query parameter overrides the role-aware default. Needs action includes pending decisions for every role plus ended scheduled sessions requiring tutor completion. For series, an ended child session is enough to surface the parent while later sessions remain upcoming. Dashboard next-lesson cards use the nearest future booking that is neither terminal nor pending, matching the list's Upcoming semantics. The tutor review queue keeps a stable empty/loading card so the requests and next-lesson modules remain visible together even when no review request exists.
 
 The booking status switcher uses a page-local semantic button tablist styled with Selia's `tabs`, `tabs-accent`, and `tabs-border` tokens. The active state updates optimistically on click while the filtered content shows the normal loader until the server returns the selected view. On narrow screens, sorting moves into the wrapping header action row while the rounded tab strip directly precedes the booking content; only the inner list scrolls horizontally. On larger screens, sorting remains beside the tabs.
 
@@ -926,7 +947,7 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 The tutor `/profile` editor presents education, competition achievements, and experiences in one combined **Achievements & experience** card with a single public preview; each subsection keeps its own private proof-link field. Short bios are limited to 50 words, and the proof-link guidance recommends one Google Drive folder shared with “Anyone with the link can view” for both achievement and experience evidence.
 
 - `getMyProfile`, `updateMyProfile`, `submitForReview`
-- The first complete `submitForReview` requires the bilingual Terms of Service checkbox exposed in the profile action area; **Read terms** opens the read-only document, the server records the acceptance timestamp/version once, and later `changes_requested` resubmissions proceed without a second prompt.
+- The first complete `submitForReview` requires the bilingual Terms of Service checkbox exposed in the profile action area; **Read terms** opens the read-only document, **Submit for review** and **Submit changes for review** remain disabled until the checkbox is checked, the server records the acceptance timestamp/version once, and later `changes_requested` resubmissions proceed without a second prompt.
 - Tutor profiles store structured `education` (maximum 2 entries), one structured achievement section backed by `competitionAchievements` (maximum 5 entries, each with comma-separated award titles), and one structured experience section backed by `experienceEntries` (maximum 5 role/organization/year/description entries); the web editor previews the normalized format and the public discovery drawer renders it without year grouping dots. The award editor keeps an in-progress comma visible while the next title is being typed, and experience text fields preserve punctuation.
 - The tutor profile editor separates **Save draft**/**Save profile changes** from **Submit for review**. Draft saving does not require the complete onboarding set, while malformed values are shown with field-level errors, a validation summary, and focus on the first invalid control; submission applies the complete required-field gate. Published tutors remain editable while profile changes are under review: saving updates the pending proposal, and submitting validates and queues the latest version.
 - The admin tutor index derives its displayed status from both onboarding and edit-review state: a published tutor with submitted pending changes is labeled **Edit review**, while an edit returned by admin is labeled **Revision requested**, so admins can identify work requiring attention before opening the full-page review workspace.
@@ -1214,7 +1235,7 @@ Backend is ready for user role management, tutor invite/review, structured tutor
 
 The focused admin tutor review card now derives presentation-only added/changed/removed/filled/empty states from normalized current and pending values. Its summary counts support composable field search and status chips, each pending field expands into current/proposed panes, and Profile, Teaching setup, Credentials, Proofs, Marks, Photo, and Payout sections expose changed or empty badges where applicable. Profile photos remain in the existing side-by-side current/proposed panel; no RPC, schema, or persistence contract changed.
 
-The admin override queue, wallet/ledger view, override preview, room assignment → scheduled transition + notifications, room availability/approval backend (G8–G10, G13–G14), and the read-only all-bookings view at `/bookings` have landed. The admin workspace is now available at `/admin`; its operations queue provides category/urgency/SLA filters, exact booking-number search, OQ-04 business-hours deadlines, escalation status/channel, and report context. Queue rows display the immutable human-readable booking reference (`#N`) while retaining the UUID behind the detail link, and each row links to the admin-only `/admin-operations/bookings/:bookingId` page, where the full participant read model, per-wallet balances, booking-scoped ledger entries, meeting fallback, state history, and override action remain available in a refresh-safe layout. The override form loads the booking roster and presents affected participants as a name/avatar/role multi-select; selected user IDs are serialized automatically for the unchanged preview/apply contract. The queue table uses stable column widths, top-aligned content, readable body text, and non-wrapping status badges. On narrow viewports, the monitor card remains constrained to the content viewport and only the table container scrolls horizontally. The **Room approvals** tab now includes the active-room catalog and Add/Edit/Deactivate room controls backed by `room.create`, `room.update`, and `room.deactivate`; deactivation is a soft removal that preserves historical assignments while preventing new selections. Its `room.listPendingApprovals` section remains the cross-booking queue; requested rooms can be assigned inline, while **Choose room** / **Choose another** opens the admin-only booking detail Offline room card for context-aware assignment or relocation. No admin room flow requires typing a booking UUID. The separate `/admin-tutor-payouts` workspace owns operational tutor payouts: it lists unpaid honorarium and completed sessions, verifies private destination-account details, calculates the transfer fee/net amount, and records a confirmed transfer through **Mark as paid**. Manage Tutors remains focused on invitations and profile review. F1/F2/F11/F12 are closed. Backend U-item sub-gaps are tracked in `docs/plans/active/PRD-GAPS-PHASE3.md` (all closed; U9 closed by REVIEW-FIXES-4 P2.8). The admin economy UI was browser-verified for role denial, valid future-booking snapshot updates, and invalid negative amounts; no UI access bypass was found.
+The admin override queue, wallet/ledger view, override preview, room assignment → scheduled transition + notifications, room availability/approval backend (G8–G10, G13–G14), and the read-only all-bookings view at `/bookings` have landed. The admin workspace is now available at `/admin`; its operations queue provides category/urgency/SLA filters, exact booking-number search, OQ-04 business-hours deadlines, escalation status/channel, and report context. Queue rows display the immutable human-readable booking reference (`#N`) while retaining the UUID behind the detail link, and each row links to the admin-only `/admin-operations/bookings/:bookingId` page, where the full participant read model, per-wallet balances, booking-scoped ledger entries, meeting fallback, state history, and override action remain available in a refresh-safe layout. The override form loads the booking roster and presents affected participants as a name/avatar/role multi-select; selected user IDs are serialized automatically for the unchanged preview/apply contract. The queue table uses stable column widths, top-aligned content, readable body text, and non-wrapping status badges. On narrow viewports, the monitor card remains constrained to the content viewport and only the table container scrolls horizontally. The **Room approvals** tab now includes the active-room catalog and Add/Edit/Deactivate room controls backed by `room.create`, `room.update`, and `room.deactivate`; deactivation is a soft removal that preserves historical assignments while preventing new selections. Its `room.listPendingApprovals` section remains the cross-booking queue; requested rooms can be assigned inline, while **Choose room** / **Choose another** opens the admin-only booking detail Offline room card for context-aware assignment or relocation. No admin room flow requires typing a booking UUID. The separate `/admin-tutor-payouts` workspace owns operational tutor payouts: its default view shows tutors who need payment, status filters and sorting expose paid history, a date window controls paid transfer history while current unpaid balances remain visible, and the filtered result can be downloaded as a CSV sheet with tutor name, bank/account details, gross/fee/net, transfer status, and transfer date. Paid rows snapshot the account number and account holder at transfer time. Manage Tutors remains focused on invitations and profile review. F1/F2/F11/F12 are closed. Backend U-item sub-gaps are tracked in `docs/plans/active/PRD-GAPS-PHASE3.md` (all closed; U9 closed by REVIEW-FIXES-4 P2.8). The admin economy UI was browser-verified for role denial, valid future-booking snapshot updates, and invalid negative amounts; no UI access bypass was found.
 
 ### Backend Gap Groups
 

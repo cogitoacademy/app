@@ -137,9 +137,64 @@ const OVERRIDE_LIST_CATEGORIES = [
 ] as const;
 type OverrideCategory = (typeof OVERRIDE_CATEGORIES)[number];
 type MarksAction = (typeof MARKS_ACTIONS)[number];
+type MarksActionOption = MarksAction | "none";
 type Urgency = "all" | "high" | "medium" | "low";
 type OverrideCategoryFilter = "all" | (typeof OVERRIDE_LIST_CATEGORIES)[number];
 type SlaFilter = "all" | "escalated";
+
+const MARKS_ACTION_COPY: Record<
+  MarksActionOption,
+  { label: string; description: string }
+> = {
+  none: {
+    label: "Leave Marks unchanged",
+    description:
+      "Update the booking status only. The participant's wallet stays exactly as it is.",
+  },
+  release_holds: {
+    label: "Return held Marks",
+    description:
+      "Return the Marks reserved for this booking to the participant's available balance. No extra Marks are added.",
+  },
+  compensate_credit: {
+    label: "Return held Marks + add compensation",
+    description:
+      "Return the reserved Marks and add an equal amount as extra compensation.",
+  },
+  compensate_deduct: {
+    label: "Deduct held Marks as a penalty",
+    description:
+      "Consume the reserved Marks as a penalty. The participant does not receive a refund.",
+  },
+};
+const MARKS_ACTION_OPTIONS = ["none", ...MARKS_ACTIONS] as const;
+
+function MarksActionInfo() {
+  return (
+    <InfoPreview
+      title="How Marks handling works"
+      description="Choose the wallet outcome that matches the correction you want to make."
+      label="About Marks handling"
+    >
+      <div className="space-y-2.5">
+        {MARKS_ACTION_OPTIONS.map((value) => (
+          <div key={value} className="space-y-0.5">
+            <Text className="text-sm font-medium">
+              {MARKS_ACTION_COPY[value].label}
+            </Text>
+            <Text className="text-xs leading-relaxed text-muted">
+              {MARKS_ACTION_COPY[value].description}
+            </Text>
+          </div>
+        ))}
+        <Text className="pt-1 text-xs leading-relaxed text-muted">
+          These actions apply to the currently held Marks of the selected
+          participant(s).
+        </Text>
+      </div>
+    </InfoPreview>
+  );
+}
 
 const BOOKING_QUEUE_PAGE_SIZE = 10;
 const LEDGER_PAGE_SIZE = 10;
@@ -971,10 +1026,10 @@ function AdminWalletImpactCard({
           }
         />
         <AdminMetricRow
-          label="Latest Marks action"
+          label="Latest Marks outcome"
           value={
             typeof metadata?.marksAction === "string"
-              ? humanize(metadata.marksAction)
+              ? getMarksActionLabel(metadata.marksAction)
               : "No override action"
           }
         />
@@ -1232,7 +1287,7 @@ function OverrideDialog({
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-4">
             <Field>
               <FieldLabel>Category</FieldLabel>
               <Select
@@ -1257,12 +1312,17 @@ function OverrideDialog({
               </Select>
             </Field>
             <Field>
-              <FieldLabel>Marks action</FieldLabel>
+              <div className="flex items-center gap-2">
+                <FieldLabel>
+                  How should the participant's Marks be handled?
+                </FieldLabel>
+                <MarksActionInfo />
+              </div>
               <Select
                 value={marksAction}
                 onValueChange={(value) => {
                   setMarksAction(
-                    getSelectItemValue(value) as MarksAction | "none",
+                    getSelectItemValue(value) as MarksActionOption,
                   );
                   setPreview(null);
                 }}
@@ -1272,10 +1332,12 @@ function OverrideDialog({
                 </SelectTrigger>
                 <SelectPopup>
                   <SelectList>
-                    <SelectItem value="none">No Marks change</SelectItem>
+                    <SelectItem value="none">
+                      {MARKS_ACTION_COPY.none.label}
+                    </SelectItem>
                     {MARKS_ACTIONS.map((value) => (
                       <SelectItem key={value} value={value}>
-                        {humanize(value)}
+                        {MARKS_ACTION_COPY[value].label}
                       </SelectItem>
                     ))}
                   </SelectList>
@@ -1368,8 +1430,9 @@ function OverrideDialog({
               </SelectPopup>
             </Select>
             <FieldDescription>
-              Choose who should receive the override notification or Marks
-              adjustment. User IDs are handled automatically.
+              Choose who should receive the override notification. If a Marks
+              option is selected, the adjustment applies only to these
+              participants. User IDs are handled automatically.
             </FieldDescription>
             {marksAction !== "none" && participantIds.length === 0 ? (
               <FieldError>
@@ -1418,10 +1481,11 @@ function OverrideDialog({
                   {getBookingStateLabel(preview.projectedState)}
                 </Text>
                 <Text className="text-muted">
-                  {preview.perParticipantImpact.length} wallet impact(s) ·{" "}
+                  {preview.perParticipantImpact.length} participant wallet
+                  change(s) ·{" "}
                   {preview.marksAction
-                    ? humanize(preview.marksAction)
-                    : "No Marks change"}
+                    ? getMarksActionLabel(preview.marksAction)
+                    : MARKS_ACTION_COPY.none.label}
                 </Text>
                 {preview.perParticipantImpact.map((impact) => (
                   <Text key={impact.userId} className="text-sm">
@@ -2735,6 +2799,11 @@ function getUrgencyLabel(state: string) {
   }
   if (["confirmed", "scheduled"].includes(state)) return "Medium";
   return "Low";
+}
+function getMarksActionLabel(value: string) {
+  return (
+    MARKS_ACTION_COPY[value as MarksActionOption]?.label ?? humanize(value)
+  );
 }
 function humanize(value: string) {
   return value

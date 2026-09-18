@@ -9,7 +9,12 @@ from `/admin-knowledge-bank`. The grant bypasses the student 35-Mark threshold
 until `expiresAt`; the eligibility check evaluates the timestamp on every
 request, so the student automatically needs the normal minimum Marks again
 after expiry. Admins can edit the expiry/note or remove the grant. Removing the
-live row does not remove its audit-log history.
+live row does not remove its audit-log history. The web create dialog uses the
+admin-only `admin.searchUsers` identity lookup to select the student before
+sending the email to `adminKnowledgeBank.create`; its calendar and minute time
+controls are browser-independent, and new grants default to 23:59 thirty days
+out in the operator's local timezone. The table containment and narrow-screen
+horizontal scrolling are frontend-only and do not change any RPC contract.
 
 ## Offline Calendar room metadata (2026-09-18)
 
@@ -107,10 +112,13 @@ in the Cogito orange accent.
 
 ## Sidebar booking-action badge (2026-09-04)
 
-The authenticated sidebar reuses `booking.listMine` with the existing pending
-booking states to show the role-visible count beside `/bookings`. It caps the
-display at `99+` when another cursor remains. No new RPC path, request input,
-response output, schema, or persistence contract was added.
+The authenticated sidebar reuses `booking.listMine` with `view: "action"` to
+show the role-visible count beside `/bookings`. The action view includes
+pending booking decisions and tutor-owned scheduled sessions whose end time
+has passed and still require `completeSession`; series bookings use ended child
+sessions. It caps the display at `99+` when another cursor remains. No new RPC
+path, request input, response output, schema, or persistence contract was
+added.
 
 ## Sidebar logo contrast (2026-09-04)
 
@@ -176,7 +184,8 @@ The tutor profile action area presents one bilingual consent checkbox labeled
 **I agree to the Tutor Terms of Service**. The adjacent **Read terms** action
 opens the Indonesian/English document in a read-only dialog. Saving a draft
 remains available without accepting the terms; the tutor must check the
-agreement box before the client sends `tutor.submitForReview`.
+agreement box before the client sends `tutor.submitForReview`, and the
+review-submit actions remain disabled until that box is checked.
 
 Acceptance is enforced server-side and recorded once on `tutor_profile` with
 `termsOfServiceAcceptedAt` and `termsOfServiceVersion` (`2026-09`). The
@@ -247,7 +256,7 @@ The authenticated shell's Light/Dark/System theme menu and its `D` keyboard shor
 
 The shared empty-state presentation is also frontend-only. Empty collections, filtered no-match results, and embedded no-data sections are rendered by `apps/web/src/components/empty-state.tsx` with density and tone variants; this changes no RPC procedure, request input, response output, or persistence contract.
 
-The browser-native control refactor is presentation-only: Selia `Textarea`, `NumberField`, `DatePicker`, and minute-level time controls do not add or change an RPC procedure, input schema, output shape, or persistence contract. Shared text-entry controls use an explicit 16px font size below the `lg` breakpoint to prevent mobile focus zoom, then use the tokenized `text-base` size from `lg` upward. The availability range separator is visual only; time suggestions may render wider than their compact input, and modality triggers preserve their icon-label row without changing the weekly range payload. Portal-based date and select popups render above dialog layers so modal forms remain interactive.
+The browser-native control refactor is presentation-only: Selia `Textarea`, `NumberField`, `DatePicker`, and minute-level time controls do not add or change an RPC procedure, input schema, output shape, or persistence contract. This includes the Tutor Payouts custom report range, whose start/end values still map to the existing ISO date filters. Shared text-entry controls use an explicit 16px font size below the `lg` breakpoint to prevent mobile focus zoom, then use the tokenized `text-base` size from `lg` upward. The availability range separator is visual only; time suggestions may render wider than their compact input, and modality triggers preserve their icon-label row without changing the weekly range payload. Portal-based date and select popups render above dialog layers so modal forms remain interactive.
 
 ## Authenticated Editorial Content (`content.*`)
 
@@ -480,7 +489,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Admin
 - **Input:** `{ query, limit? }` (`query` is trimmed and must contain at least 2 characters; `limit` defaults to 10 and is capped at 20)
 - **Output:** `UserSearchResult[]` where each result is `{ id, name, email, image, role }`
-- **Description:** Case-insensitive partial lookup for admin support workflows. Matches `name`, `email`, or `id`; exact email/ID matches are ranked first. Wildcard characters are treated literally. The wallet lookup UI uses the selected result's `id` with `admin.getWallet` and `admin.listLedgerEntries`.
+- **Description:** Case-insensitive partial lookup for admin support workflows. Matches `name`, `email`, or `id`; exact email/ID matches are ranked first. Wildcard characters are treated literally. The wallet lookup UI uses the selected result's `id` with `admin.getWallet` and `admin.listLedgerEntries`; the Knowledge Bank access form filters the same bounded result set to students and uses the selected email for a grant.
 
 ### `admin.setRole`
 
@@ -514,6 +523,14 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Errors:** `INVALID_LEDGER_FILTER` (400) — invalid date
 - **Description:** Internal tutor payout reporting from completed bookings in the requested date range. With no date filters this is an all-time report; use `admin.getPendingTutorPayouts` for the unpaid amount after the latest admin-paid cutoff. `totalMarks` reports the internal split basis (`priceSnapshot.baseline`), so `totalMarks === cogitoTake + tutorPayout`; per-student rounding surpluses (`actualMarksPooled ≥ baseline`) are not included.
 
+### `admin.getTutorPayoutReport`
+
+- **RPC path:** `/rpc/admin/payouts/tutor/report`
+- **Auth:** Admin
+- **Input:** `{ dateFrom?, dateTo? }` (ISO datetimes; both are optional)
+- **Output:** `TutorPayoutReportRow[]`, where each row contains `{ id, tutorId, tutorName, bankName, bankAccountNumber, bankAccountHolderName, bankAccountOpeningCity, bankAccountOwnership, grossHonorariumIdr, transferFeeIdr, netHonorariumIdr, status, paidAt, payoutAccountComplete }`; `status` is `paid` or `pending`.
+- **Description:** Returns immutable paid payout batches whose `paidAt` falls in the requested date window plus each tutor's current unpaid balance after the latest paid cutoff. The date window limits paid transfer history; current unpaid balances remain visible even when the outstanding completion is older than the selected window. Legacy paid rows without stored account snapshots fall back to the current tutor profile for account number and account-holder display.
+
 ### `admin.getPendingTutorPayouts`
 
 - **Auth:** Admin
@@ -525,7 +542,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 - **Auth:** Admin
 - **Input:** `{ tutorId }`
-- **Output:** `{ id, tutorId, grossHonorariumIdr, transferFeeIdr, netHonorariumIdr, bankName, paidAt }`
+- **Output:** `{ id, tutorId, grossHonorariumIdr, transferFeeIdr, netHonorariumIdr, bankName, bankAccountNumber, bankAccountHolderName, paidAt }`
 - **Errors:** `TUTOR_PAYOUT_NOT_AVAILABLE` (400) when no unpaid honorarium exists or payout account details are incomplete
 - **Description:** Atomically records an immutable paid payout at the current completion-time cutoff. Exact conventional `BCA` has no transfer fee; all other bank names deduct Rp2,500 once from the payout. The application records the payment and audit trail but does not execute the bank transfer.
 
@@ -564,7 +581,7 @@ is checked at read time rather than by a scheduled cleanup job.
 - **Input:** `{ email, expiresAt, note? }`; `expiresAt` is an ISO datetime in the future and `note` is limited to 500 characters
 - **Output:** `KnowledgeBankAccessView`
 - **Errors:** `STUDENT_NOT_FOUND` (404), `TARGET_USER_NOT_STUDENT` (400), `KNOWLEDGE_BANK_ACCESS_GRANT_ALREADY_EXISTS` (409), `INVALID_KNOWLEDGE_BANK_ACCESS_EXPIRY` (400)
-- **Description:** Finds the account case-insensitively by email and creates a temporary Knowledge Bank exception only for a student. Creation is audit-logged.
+- **Description:** Finds the account case-insensitively by email and creates a temporary Knowledge Bank exception only for a student. The admin web form normally supplies this email from a selected `admin.searchUsers` result. Creation is audit-logged.
 
 ### `adminKnowledgeBank.update`
 
@@ -1049,7 +1066,7 @@ RPC contract.
 - **Auth:** Protected
 - **Input:** `{ cursor?, limit?, states?, view? }`, where `view` is `action | upcoming | recurring | history | all`
 - **Output:** `{ items: Booking[], nextCursor, counts: { action, upcoming, recurring, history, all } }`
-- **Description:** Shared role-aware booking list. Students see bookings where they are proposer or participant, tutors see bookings assigned to them, and admins see all bookings. `states` can narrow results for server consumers; `view` applies the booking-list tab semantics server-side before cursor pagination. Counts are exact role-scoped facets across all accessible bookings, not only the current page. The web requests 20 items at a time and follows `nextCursor` for **Load more bookings**. Related user projections contain display identity only (`id`, `name`, `image`, `role`); internal meeting attendee email arrays are never part of this response. The web row presents Marks with the Cogito mark icon and keeps status explanations in the status-badge tooltip. Dashboards reuse the same read model for their next-lesson card; no dashboard-specific endpoint is required.
+- **Description:** Shared role-aware booking list. Students see bookings where they are proposer or participant, tutors see bookings assigned to them, and admins see all bookings. `states` can narrow results for server consumers; `view` applies the booking-list tab semantics server-side before cursor pagination. The `action` view includes pending booking decisions for all roles and, for tutors only, `scheduled` single/group bookings whose `scheduledEndAt` has passed plus series bookings with at least one ended scheduled child session. Those completion tasks are excluded from the tutor's `upcoming` and `history` facets until completed. Counts are exact role-scoped facets across all accessible bookings, not only the current page. The web requests 20 items at a time and follows `nextCursor` for **Load more bookings**. Related user projections contain display identity only (`id`, `name`, `image`, `role`); internal meeting attendee email arrays are never part of this response. The web row presents Marks with the Cogito mark icon and keeps status explanations in the status-badge tooltip. Dashboards reuse the same read model for their next-lesson card; no dashboard-specific endpoint is required.
 
 ### `booking.cancel`
 

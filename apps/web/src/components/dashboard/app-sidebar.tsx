@@ -48,12 +48,11 @@ import {
 } from "@tabler/icons-react";
 import { authClient } from "@/lib/auth-client";
 import { WhatsAppSupportDialog } from "@/components/whatsapp-support-dialog";
-import { BOOKING_ACTION_STATES } from "@/components/booking/booking-ui";
 import { orpc } from "@/utils/orpc";
 
 const BOOKING_ACTION_QUERY_INPUT = {
   limit: 100,
-  states: [...BOOKING_ACTION_STATES],
+  view: "action" as const,
 };
 
 const studentNavItems = [

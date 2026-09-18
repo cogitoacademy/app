@@ -77,6 +77,7 @@ import type {
   BookingNotificationPort,
   BookingMeetingPort,
   BookingRoomPort,
+  TutorPayoutReportRow,
 } from "./index";
 import {
   formatBookingEventTitle,
@@ -770,10 +771,12 @@ export function createBookingService(deps: {
         limit,
         cursor: opts.cursor,
         includeAll: userRole === "admin",
+        ...(userRole === "tutor" ? { includeCompletionActions: true } : {}),
         ...(opts.view ? { view: opts.view } : {}),
       }),
       repo.countBookingsForAccess(userId, {
         includeAll: userRole === "admin",
+        ...(userRole === "tutor" ? { includeCompletionActions: true } : {}),
       }),
     ]);
     const items = rows.slice(0, limit);
@@ -3819,6 +3822,132 @@ export function createBookingService(deps: {
     };
   }
 
+  function normalizeOptionalText(value: string | null | undefined) {
+    const normalized = value?.trim();
+    return normalized || null;
+  }
+
+  function hasCompletePayoutDetails(profile: {
+    bankName: string | null;
+    bankAccountNumber: string | null;
+    bankAccountHolderName: string | null;
+    bankAccountOpeningCity: string | null;
+    bankAccountOwnership: string | null;
+    bankTransferDisclaimerAccepted: boolean;
+  }) {
+    return Boolean(
+      profile.bankName?.trim() &&
+      profile.bankAccountNumber?.trim() &&
+      profile.bankAccountHolderName?.trim() &&
+      profile.bankAccountOpeningCity?.trim() &&
+      profile.bankAccountOwnership &&
+      profile.bankTransferDisclaimerAccepted,
+    );
+  }
+
+  /**
+   * Builds the admin report as immutable paid batches plus the current unpaid
+   * balance for each tutor. Paid rows use transfer date for the date window;
+   * pending rows use completed-session date while respecting each tutor's last
+   * paid cutoff.
+   */
+  async function getTutorPayoutReport(input: {
+    dateFrom?: Date;
+    dateTo?: Date;
+  }): Promise<TutorPayoutReportRow[]> {
+    const dateTo = input.dateTo ?? new Date();
+    const [profiles, paidRows] = await Promise.all([
+      repo.listTutorPayoutProfiles(db),
+      repo.listTutorPayoutRecords(db, input.dateFrom, dateTo),
+    ]);
+
+    const pendingRows: Array<TutorPayoutReportRow | null> = await mapLimit(
+      profiles,
+      5,
+      async (profile) => {
+        const lastPaid = await repo.findLatestPaidTutorPayout(
+          db,
+          profile.tutorId,
+        );
+        const lastPaidCutoff = lastPaid
+          ? new Date(lastPaid.cutoffAt.getTime() + 1)
+          : undefined;
+        // Current unpaid balances must never disappear just because the admin
+        // selected a shorter historical window. The date window limits paid
+        // transfer history; outstanding work is always operationally relevant.
+        const pendingFrom = lastPaidCutoff;
+        const result = await aggregateTutorPayouts(db, {
+          tutorId: profile.tutorId,
+          dateFrom: pendingFrom,
+          dateTo,
+          dateBasis: "completedAt",
+        });
+
+        if (result.completedSessions === 0 || result.tutorPayoutIdr <= 0) {
+          return null;
+        }
+
+        const bankName = normalizeOptionalText(profile.bankName);
+        const grossHonorariumIdr = result.tutorPayoutIdr;
+        const transferFeeIdr = bankName
+          ? getTutorPayoutTransferFeeIdr(bankName)
+          : 0;
+
+        return {
+          id: `pending:${profile.tutorId}`,
+          tutorId: profile.tutorId,
+          tutorName: profile.tutorName,
+          bankName,
+          bankAccountNumber: normalizeOptionalText(profile.bankAccountNumber),
+          bankAccountHolderName: normalizeOptionalText(
+            profile.bankAccountHolderName,
+          ),
+          bankAccountOpeningCity: normalizeOptionalText(
+            profile.bankAccountOpeningCity,
+          ),
+          bankAccountOwnership: profile.bankAccountOwnership ?? null,
+          grossHonorariumIdr,
+          transferFeeIdr,
+          netHonorariumIdr: Math.max(0, grossHonorariumIdr - transferFeeIdr),
+          status: "pending" as const,
+          paidAt: null,
+          payoutAccountComplete: hasCompletePayoutDetails(profile),
+        } satisfies TutorPayoutReportRow;
+      },
+    );
+
+    const paidReportRows = paidRows.map(
+      (row) =>
+        ({
+          id: row.id,
+          tutorId: row.tutorId,
+          tutorName: row.tutorName,
+          bankName: normalizeOptionalText(row.bankName),
+          bankAccountNumber:
+            normalizeOptionalText(row.bankAccountNumber) ??
+            normalizeOptionalText(row.profileBankAccountNumber),
+          bankAccountHolderName:
+            normalizeOptionalText(row.bankAccountHolderName) ??
+            normalizeOptionalText(row.profileBankAccountHolderName),
+          bankAccountOpeningCity: normalizeOptionalText(
+            row.profileBankAccountOpeningCity,
+          ),
+          bankAccountOwnership: row.profileBankAccountOwnership ?? null,
+          grossHonorariumIdr: row.grossHonorariumIdr,
+          transferFeeIdr: row.transferFeeIdr,
+          netHonorariumIdr: row.netHonorariumIdr,
+          status: "paid" as const,
+          paidAt: row.paidAt,
+          payoutAccountComplete: true,
+        }) satisfies TutorPayoutReportRow,
+    );
+
+    return [
+      ...paidReportRows,
+      ...pendingRows.filter((row): row is TutorPayoutReportRow => row !== null),
+    ];
+  }
+
   async function getTutorPayouts(input: {
     tutorId: string;
     dateFrom?: Date;
@@ -3876,6 +4005,8 @@ export function createBookingService(deps: {
         transferFeeIdr,
         netHonorariumIdr: Math.max(0, result.tutorPayoutIdr - transferFeeIdr),
         bankName,
+        bankAccountNumber: profile.bankAccountNumber.trim(),
+        bankAccountHolderName: profile.bankAccountHolderName.trim(),
         status: "paid",
         paidAt,
         paidBy: adminId,
@@ -3887,6 +4018,8 @@ export function createBookingService(deps: {
         transferFeeIdr: row.transferFeeIdr,
         netHonorariumIdr: row.netHonorariumIdr,
         bankName: row.bankName,
+        bankAccountNumber: profile.bankAccountNumber.trim(),
+        bankAccountHolderName: profile.bankAccountHolderName.trim(),
         paidAt: row.paidAt,
       };
     });
@@ -4755,6 +4888,7 @@ export function createBookingService(deps: {
     getSessionNotes,
     listCompletionFeedback,
     listSessions,
+    getTutorPayoutReport,
     getTutorPayouts,
     getPendingTutorPayouts,
     markTutorPayoutPaid,

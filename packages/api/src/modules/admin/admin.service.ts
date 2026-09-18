@@ -169,6 +169,11 @@ export interface GetTutorPayoutsInput {
   dateTo?: string;
 }
 
+export interface GetTutorPayoutReportInput {
+  dateFrom?: string;
+  dateTo?: string;
+}
+
 export interface UpdateEconomySettingsInput {
   expectedVersion: number;
   onlineCogitoBaseIdr: number;
@@ -393,6 +398,22 @@ export function createAdminService(deps: {
     });
   }
 
+  async function getTutorPayoutReport(input: GetTutorPayoutReportInput = {}) {
+    if (!payout.getTutorPayoutReport) {
+      throw new TutorPayoutNotAvailableError("report");
+    }
+    const dateFrom = input.dateFrom
+      ? assertValidDateFilter(input.dateFrom, "dateFrom")
+      : undefined;
+    const dateTo = input.dateTo
+      ? assertValidDateFilter(input.dateTo, "dateTo")
+      : undefined;
+    if (dateFrom && dateTo && dateFrom > dateTo) {
+      throw new InvalidLedgerFilterError("dateFrom must be before dateTo");
+    }
+    return payout.getTutorPayoutReport({ dateFrom, dateTo });
+  }
+
   async function getPendingTutorPayouts(input: { tutorId: string }) {
     if (!payout.getPendingTutorPayouts) {
       throw new TutorPayoutNotAvailableError(input.tutorId);
@@ -498,6 +519,7 @@ export function createAdminService(deps: {
     getWallet,
     listLedgerEntries,
     getTutorPayouts,
+    getTutorPayoutReport,
     getPendingTutorPayouts,
     markTutorPayoutPaid,
     getEconomySettings,

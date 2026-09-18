@@ -4,20 +4,24 @@ Last updated: 2026-09-18
 
 ## Temporary Knowledge Bank access grants (2026-09-18)
 
-Deploy the API/web build together with migration
-`0048_knowledge_bank_access_grant.sql`. After the migration, an admin can open
-`/admin-knowledge-bank`, enter an existing student's email, choose a future
-expiry, and optionally add an operator note. Active and expired grants remain
-visible in the table. **Edit** can extend or shorten a future expiry; **Remove**
-immediately restores the normal student Marks gate. Expiry is enforced on each
-Knowledge Bank metadata and file request, so no scheduler or manual cleanup is
-required.
+Deploy the API/web build together with migrations
+`0048_knowledge_bank_access_grant.sql` and `0049_abandoned_vertigo.sql`. After
+the migrations, an admin can open
+`/admin-knowledge-bank`, type at least two characters of an existing student's
+name or email, select the matching student result, choose a future expiry, and
+optionally add an operator note. New grants default to 30 days out at 23:59 in
+the operator's local time. Active and expired grants remain visible in the
+table. **Edit** can extend or shorten a future expiry; **Remove** immediately
+restores the normal student Marks gate. Expiry is enforced on each Knowledge
+Bank metadata and file request, so no scheduler or manual cleanup is required.
+At narrow viewport widths, confirm the grant columns scroll horizontally
+inside the card without causing page-level overflow or clipping the filters.
 
 For a production smoke check, use a student below 35 total Marks: create a
-one-hour grant, refresh `/knowledge-bank`, open a PDF, then verify an expired
-grant locks both metadata and PDF access again. Remove the test grant after
-verification. The API records create/update/remove audit events under
-`knowledge_bank_access_grant`.
+grant from the selected search result, refresh `/knowledge-bank`, open a PDF,
+then verify an expired grant locks both metadata and PDF access again. Remove
+the test grant after verification. The API records create/update/remove audit
+events under `knowledge_bank_access_grant`.
 
 ## Competition Calendar agenda list (2026-09-18)
 
@@ -175,6 +179,14 @@ Started-session cancellation check: open a scheduled booking as its student befo
 
 Booking-list smoke check: verify Needs action, Upcoming, Series, History, and All. Students and tutors default to Upcoming; admins default to All. Each selection must immediately update the active tab, show the content loader, and return only server-filtered rows for that view. Tab counts must remain exact before and after **Load more bookings** appends the next cursor. Recommended, Soonest, and Latest order the loaded filtered rows, `?tab=`/`?sort=` preserve choices, and History contains every terminal outcome.
 
+For tutor coverage, use a scheduled booking whose `scheduledEndAt` is in the
+past but whose state is still `scheduled`. It must appear in Needs action and
+the sidebar badge, must not appear in tutor Upcoming or History, and must not
+appear as a completion task in the student's Needs action view. For a series,
+end one child session while leaving a later child scheduled and verify the
+parent appears in the tutor action view. After **Complete session**, verify the
+row leaves Needs action and the facet count refreshes.
+
 Timing-chip check: pending rows with `deadlineAt` show Respond in, switch to warning within three hours and danger within 30 minutes, then say Response overdue without pretending the state is Expired. Confirmed/scheduled rows show Today, Starts in within three hours, Starting soon within 30 minutes, and In progress between start and end. Completed, declined, cancelled, expired, and other terminal rows show no chip. Leave the page open and confirm labels refresh without reloading.
 On `/bookings`, verify the timing chip follows the role-appropriate financial summary (IDR Honorarium for tutors; Earns/Total or You pay for student/admin views) and has a vertical divider on its left. On student and tutor dashboards, verify the shared next-lesson card hides You pay/Earns/Total while retaining the timing chip.
 
@@ -250,17 +262,19 @@ form composition before checking the API or database.
 
 For a complete draft or `changes_requested` tutor, verify the sticky profile
 action area shows one **I agree to the Tutor Terms of Service** checkbox and a
-**Read terms** action. The checkbox must expose an inline error and receive
-focus when **Submit for review** is pressed while it is unchecked. **Read
-terms** opens the bilingual Indonesian/English document in Indonesian-then-
-English order; closing it preserves the checkbox state, and the dialog has no
-second acceptance checkbox or submit action. At narrow widths, confirm the
-consent copy wraps naturally and the save/submit buttons stack without
-horizontal overflow. Check the agreement, submit, and verify the profile moves
-to `pending_review`. Reload the tutor profile and submit again after a
-revision; the checkbox should remain checked/disabled, the read-only action
-should still work, and the acceptance timestamp/version should remain
-unchanged.
+**Read terms** action. While the tutor has not accepted the terms, the
+applicable review action—**Submit for review** for onboarding or **Submit
+changes for review** for a published tutor—must be disabled while the save
+action remains available. Check the agreement and verify the review action
+becomes enabled; submit and verify the profile moves to `pending_review` (or
+queues the published profile edit). **Read terms** opens the bilingual
+Indonesian/English document in Indonesian-then-English order; closing it
+preserves the checkbox state, and the dialog has no second acceptance checkbox
+or submit action. At narrow widths, confirm the consent copy wraps naturally
+and the save/submit buttons stack without horizontal overflow. Reload the tutor
+profile and submit again after a revision; the checkbox should remain
+checked/disabled, the read-only action should still work, and the acceptance
+timestamp/version should remain unchanged.
 
 For Google sign-in, start from `https://app.cogitoacademy.id/login` in an incognito/clean browser and confirm the provider callback is `https://api.cogitoacademy.id/api/auth/callback/google`, followed by the frontend route `/auth/callback` and the role-appropriate destination. The Google authorization URL must contain `prompt=consent`; record the Google permission screen in the verification video and click **Show all services** so every requested identity scope is fully expanded and readable before accepting. In DevTools, the initial auth response must set `better-auth.state` with `Secure`, `HttpOnly`, and `SameSite=Lax`; the callback request must include that cookie and its `state` query parameter. Keep the Google Cloud OAuth client configured with the frontend origin `https://app.cogitoacademy.id` and the API redirect URI `https://api.cogitoacademy.id/api/auth/callback/google`. This login flow requests identity scopes only. For the separate Calendar scope used by automatic Meet creation, use the dedicated Meet OAuth client and the consent/refresh-token procedure in `docs/GOOGLE-MEET-SETUP.md`; do not add Calendar access to every user's login.
 
@@ -271,7 +285,7 @@ After a web deployment, sign in once as each supported role and open `/dashboard
 - Student: learning welcome, next lesson, Knowledge Bank/calendar, and tutor recommendations. Confirm the welcome card shows the SVG illustration and shared spacing/sizing used by the tutor dashboard. If a booking exists, confirm the next-lesson card matches the booking-list date tile, participant metadata, Marks display, status tooltip, and detail action.
 - Tutor: the first dashboard row shows the same SVG welcome card visual plus teaching setup, and the next visible row shows requests to review plus next lesson before metrics/payout; actions link to `/bookings`, `/availability`, and `/profile`. Verify the review card keeps its empty/loading slot when there are no requests, and that the Payout details info icons open their respective unpaid-honorarium and transfer-fee explanations and remain keyboard accessible. When a tutor submits the initial profile form, confirm the app redirects to `/dashboard` and the browser Back button does not return to the form. A later login for that tutor must also land on `/dashboard`; a `draft` or `changes_requested` tutor must land on `/profile` so the profile can be completed or corrected. Opening the legacy `/onboarding` URL should land on `/profile`.
 - Admin: a normal login must land on `/dashboard`; open the admin workspace and verify the compact escalated-operation, tutor-review, and achievement-review counts above Business insights. Use the sidebar to open `/admin-operations`, `/admin-tutors`, `/admin-achievements`, and `/admin-economy`. In `/admin-operations`, verify category, urgency, and SLA-status filters; open a queue item and confirm its reported reason/source, affected-user count, OQ-04 deadline, time-since-report, escalated badge, and WhatsApp escalation action. Clicking the escalation action must show the confirmation modal; Cancel keeps the admin page in place, while Continue opens the Cogito support conversation at `+62 881-0119-90195` in a new tab. In the Wallet lookup tab, search a partial name and an email, select the intended user from the bounded identity results, and confirm the selected name/email/role, total/held/available Marks, and latest ledger entries load; verify a changed search does not leave the previous user's wallet visible. Confirm the hydrated participant wallet/booking-ledger cards and state-history timeline load, then use **Open override** to reach the existing preview/apply flow. In the override dialog, confirm the booking roster appears as a name/avatar/role multi-select, selected participants are summarized without requiring manual IDs, and Preview/Apply still succeed. In `/admin-economy`, verify the active schedule loads, edits persist after reload, and the preview updates.
-- In `/admin-tutor-payouts`, verify the operational table shows each tutor's unpaid honorarium, completed sessions, account readiness, and an **Open** action. Open an unpaid tutor, verify the full private destination account plus gross/fee/net breakdown, review session feedback in booking detail as payout consideration, confirm the transfer dialog, and check that **Mark as paid** refreshes the unpaid amount. A tutor with incomplete payout details must not be payable. The page must remain horizontally usable at a narrow viewport.
+- In `/admin-tutor-payouts`, verify the default operational table shows tutors who need payment with the tutor name, bank, account number, account holder, gross honorarium, fee, net transfer, transfer status, transfer date, and an **Open** action. Check the date range controls and 7/30/90-day shortcuts; paid rows are filtered by transfer date while current unpaid balances remain visible. Switch between unpaid, paid, and all statuses, verify sorting by payment priority/amount/name/latest transfer, and download the filtered result as a CSV that opens in Excel or Google Sheets. Open an unpaid tutor, verify the full private destination account plus gross/fee/net breakdown, confirm the transfer dialog, and check that **Mark as paid** refreshes the report. A tutor with incomplete payout details must not be payable. The page must remain horizontally usable at a narrow viewport.
 - Complete-session feedback: as tutor, open a scheduled booking past end time and verify the booking detail shows the read-only Student notes. Click **Complete session**, fill Session discussion / Strengths observed / Areas for improvement (each textarea line is one bullet and Enter adds another), confirm disabled until all 3 have ≥1 bullet, submit and verify success toast + booking completed. Confirm the same detail page refreshes and shows Session feedback directly below Student notes in the Session overview, with all 3 bullet sections (per-session rows for series). As student/admin, open the completed booking and verify the Student notes and Session feedback are both visible.
 - In the admin dashboard's **Business insights** section, verify the default 30-day view loads KPI cards, booking activity, current booking portfolio, audience growth, session-format mix, and top categories. Switch to 7 and 90 days and confirm the charts reload with continuous WIB date labels; verify zero-data periods show an intentional empty state, the retry state is actionable, and the dashboard remains usable while analytics loads. Confirm the note distinguishes Marks-based platform take from cash revenue; the dashboard intentionally keeps only the compact queue counts above analytics, while actionable queues remain on their dedicated admin routes.
 - In the Operations → Room approvals tab, verify the Active rooms catalog loads. Use **Add room**, enter a name, location, and positive whole-number capacity, submit, and confirm the new room appears in the list and in the Offline room selector. Use **Edit** to change the name, location, or capacity and confirm the active catalog and room selectors refresh. Use **Deactivate**, confirm the danger dialog, and verify the room disappears from the active catalog and new selectors while existing assignments remain intact. Confirm blank names/locations and invalid capacity stay in the dialog without an RPC request. Then verify the pending offline room-approval queue loads. Use **Assign** for a requested room. Use **Choose another** (or **Choose room** when the original request conflicted) to open the admin booking detail; confirm the Offline room card shows the booking schedule without a UUID/date-time form, lets the admin select a target room, and calls **Assign room** or **Relocate room**. Confirm **Cancel** opens a confirmation dialog explaining the booking/hold impact, then refreshes the queue after confirmation.
@@ -447,7 +461,7 @@ consent, in notifications, or in audit records.
 
 ### Form-control smoke check
 
-On availability/profile/admin forms, verify dates use the Selia date picker, times use the 24-hour minute control, multiline fields use Selia Textarea, and IDR amounts use Selia NumberField. Focus each text-entry field at a narrow viewport and confirm its rendered font is 16px or larger so the browser does not zoom the page. On `/availability`, confirm both weekly time fields stay compact and equal in width with a centered dash between them, while focusing a time field allows its suggestions to extend beyond the field when needed; confirm the modality trigger keeps its icon and label on one row. At desktop width, verify Calendar preview appears below Date override, its seven-day strip selects only dates with windows, and the selected-day panel shows time, weekly/override source, and modality. Clicking a window's trash action must open a confirmation dialog; cancelling preserves the window and confirming removes it with success/error feedback. On the calendar, verify month/year dropdowns open as Selia selects and retain the selected value. No app-level raw date, time, number, select, or textarea control should appear, and the browser console should remain free of runtime errors.
+On availability/profile/admin forms, verify dates use the Selia date picker, times use the 24-hour minute control, multiline fields use Selia Textarea, and IDR amounts use Selia NumberField. On `/admin-tutor-payouts`, verify both custom-range fields open the Selia calendar, the start date cannot move after the end date, and the end date cannot move before the start date. Focus each text-entry field at a narrow viewport and confirm its rendered font is 16px or larger so the browser does not zoom the page. On `/availability`, confirm both weekly time fields stay compact and equal in width with a centered dash between them, while focusing a time field allows its suggestions to extend beyond the field when needed; confirm the modality trigger keeps its icon and label on one row. At desktop width, verify Calendar preview appears below Date override, its seven-day strip selects only dates with windows, and the selected-day panel shows time, weekly/override source, and modality. Clicking a window's trash action must open a confirmation dialog; cancelling preserves the window and confirming removes it with success/error feedback. On the calendar, verify month/year dropdowns open as Selia selects and retain the selected value. No app-level raw date, time, number, select, or textarea control should appear, and the browser console should remain free of runtime errors.
 
 ### Achievement form smoke check
 
