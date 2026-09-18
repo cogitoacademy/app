@@ -73,7 +73,12 @@ export interface BookingMeetingPort {
   ): Promise<MeetingEvent>;
   updateEvent(
     bookingId: string,
-    changes: { startAt?: Date; endAt?: Date; location?: string },
+    changes: {
+      startAt?: Date;
+      endAt?: Date;
+      location?: string;
+      description?: string;
+    },
   ): Promise<void>;
   cancelEvent(bookingId: string): Promise<void>;
   setManualLink(

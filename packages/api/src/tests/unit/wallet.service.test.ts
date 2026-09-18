@@ -581,6 +581,56 @@ describe("WalletService", () => {
       expect(result.eligible).toBe(true);
       expect(result.balance).toBe(40);
     });
+
+    test("grants a student temporary access without a wallet threshold", async () => {
+      const repo = makeRepo({
+        getByUserId: mock(async () =>
+          makeWallet({
+            totalBalance: 0,
+            heldBalance: 0,
+            availableBalance: 0,
+          }),
+        ),
+      });
+      const expiresAt = new Date(Date.now() + 60_000);
+      const knowledgeBankAccess = {
+        getActiveByUserId: mock(async () => ({ expiresAt })),
+      };
+      const service = createWalletService(
+        repo as any,
+        makeDb(),
+        knowledgeBankAccess,
+      );
+
+      await expect(
+        service.knowledgeBankEligible("user1", "student"),
+      ).resolves.toEqual({
+        eligible: true,
+        balance: 0,
+        threshold: 35,
+        overrideExpiresAt: expiresAt.toISOString(),
+      });
+      expect(knowledgeBankAccess.getActiveByUserId).toHaveBeenCalledWith(
+        "user1",
+      );
+    });
+
+    test("does not check temporary grants for tutors or admins", async () => {
+      const repo = makeRepo({ getByUserId: mock(async () => null) });
+      const knowledgeBankAccess = {
+        getActiveByUserId: mock(async () => ({
+          expiresAt: new Date(Date.now() + 60_000),
+        })),
+      };
+      const service = createWalletService(
+        repo as any,
+        makeDb(),
+        knowledgeBankAccess,
+      );
+
+      await service.knowledgeBankEligible("user1", "admin");
+      expect(knowledgeBankAccess.getActiveByUserId).not.toHaveBeenCalled();
+    });
   });
 
   describe("listActivePackages", () => {

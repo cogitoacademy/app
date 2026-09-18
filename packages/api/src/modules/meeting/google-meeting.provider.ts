@@ -375,9 +375,19 @@ export function createGoogleMeetingProvider(
 
   async function updateEvent(
     bookingId: string,
-    changes: { startAt?: Date; endAt?: Date; location?: string },
+    changes: {
+      startAt?: Date;
+      endAt?: Date;
+      location?: string;
+      description?: string;
+    },
   ): Promise<void> {
-    if (!changes.startAt && !changes.endAt && changes.location === undefined)
+    if (
+      !changes.startAt &&
+      !changes.endAt &&
+      changes.location === undefined &&
+      changes.description === undefined
+    )
       return;
     const startedAt = Date.now();
     const row = await findLiveProviderEvent(bookingId);
@@ -417,6 +427,9 @@ export function createGoogleMeetingProvider(
                 ...(changes.location !== undefined
                   ? { location: changes.location }
                   : {}),
+                ...(changes.description !== undefined
+                  ? { description: changes.description }
+                  : {}),
               }),
             },
             TIMEOUT_MS,
@@ -452,6 +465,9 @@ export function createGoogleMeetingProvider(
                     : {}),
                   ...(changes.location !== undefined
                     ? { location: changes.location }
+                    : {}),
+                  ...(changes.description !== undefined
+                    ? { description: changes.description }
                     : {}),
                 },
               }),

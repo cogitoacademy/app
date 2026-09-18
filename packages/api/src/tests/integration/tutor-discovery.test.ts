@@ -151,6 +151,7 @@ describe("Tutor discovery", () => {
           "Asian Parliamentary",
           "World Schools (WSDC)",
           "Bahasa Indonesia (LDBI)",
+          "Law Debate",
         ],
       },
       {
@@ -185,7 +186,7 @@ describe("Tutor discovery", () => {
         (total, category) => total + category.children.length,
         0,
       ),
-    ).toBe(33);
+    ).toBe(34);
   });
 
   test("TC-07: list published tutors shows required fields", async () => {

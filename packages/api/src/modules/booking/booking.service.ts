@@ -3951,6 +3951,13 @@ export function createBookingService(deps: {
         .map((part) => part.trim())
         .filter(Boolean)
         .join(" — ");
+      const meetingDetails = buildMeetingEventDetails(b, users);
+      const description = [
+        `Site: ${assignedRoom.location.trim()}`,
+        `Room: ${assignedRoom.name.trim()}`,
+        "",
+        meetingDetails.description,
+      ].join("\n");
       const event = await meeting.createEvent(
         bookingId,
         schedule.startAt,
@@ -3958,7 +3965,8 @@ export function createBookingService(deps: {
         users.map((user) => ({ email: user.email, name: user.name })),
         undefined,
         {
-          ...buildMeetingEventDetails(b, users),
+          ...meetingDetails,
+          description,
           location,
           createConference: false,
         },
@@ -3968,6 +3976,7 @@ export function createBookingService(deps: {
           startAt: schedule.startAt,
           endAt: schedule.endAt,
           location,
+          description,
         });
       }
     } catch (error) {

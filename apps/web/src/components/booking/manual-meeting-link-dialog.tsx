@@ -99,7 +99,7 @@ function ManualMeetingLinkDialogContent({
     <DialogPopup className="sm:max-w-lg">
       <form className="contents" onSubmit={submit}>
         <DialogHeader className="flex-col items-start gap-1">
-          <DialogTitle>
+          <DialogTitle className="*:whitespace-nowrap">
             {initialUrl ? "Replace meeting link" : "Add meeting link"}
           </DialogTitle>
           <DialogDescription>

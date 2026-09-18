@@ -1,12 +1,14 @@
 "use client";
 
-import { addDays, format, isToday } from "date-fns";
 import { IconCalendarEvent } from "@tabler/icons-react";
 import { useMemo, type MouseEvent } from "react";
 
 import { EmptyState } from "@/components/empty-state";
 import { CalendarEventItem } from "./calendar-event-item";
-import { AGENDA_DAYS_TO_SHOW, getAgendaEventsForDay } from "./calendar-utils";
+import {
+  AGENDA_DAYS_TO_SHOW,
+  getAgendaEventsForPeriod,
+} from "./calendar-utils";
 import type { CalendarCompetition } from "./calendar-types";
 
 export function CalendarAgendaView({
@@ -18,22 +20,14 @@ export function CalendarAgendaView({
   events: CalendarCompetition[];
   onEventSelect: (event: CalendarCompetition) => void;
 }) {
-  const days = useMemo(
-    () =>
-      Array.from({ length: AGENDA_DAYS_TO_SHOW }, (_, index) =>
-        addDays(new Date(currentDate), index),
-      ),
-    [currentDate],
-  );
-
-  const hasEvents = useMemo(
-    () => days.some((day) => getAgendaEventsForDay(events, day).length > 0),
-    [days, events],
+  const agendaEvents = useMemo(
+    () => getAgendaEventsForPeriod(events, currentDate, AGENDA_DAYS_TO_SHOW),
+    [currentDate, events],
   );
 
   return (
     <div className="border-t border-border/70 px-4">
-      {!hasEvents ? (
+      {agendaEvents.length === 0 ? (
         <EmptyState
           icon={<IconCalendarEvent />}
           title="No events in this period"
@@ -42,38 +36,20 @@ export function CalendarAgendaView({
           tone="secondary"
         />
       ) : (
-        days.map((day) => {
-          const dayEvents = getAgendaEventsForDay(events, day);
-
-          if (dayEvents.length === 0) return null;
-
-          return (
-            <div
-              key={day.toISOString()}
-              className="relative my-6 border-t border-border/70"
-            >
-              <span
-                className="absolute -top-3 left-0 flex h-6 items-center bg-card pe-4 text-[10px] text-muted sm:text-xs"
-                data-today={isToday(day) || undefined}
-              >
-                {format(day, "d MMM, EEEE")}
-              </span>
-              <div className="mt-6 space-y-2">
-                {dayEvents.map((event) => (
-                  <CalendarEventItem
-                    key={event.id}
-                    event={event}
-                    view="agenda"
-                    onClick={(clickEvent: MouseEvent<HTMLButtonElement>) => {
-                      clickEvent.stopPropagation();
-                      onEventSelect(event);
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-          );
-        })
+        <ul className="space-y-2 py-6">
+          {agendaEvents.map((event) => (
+            <li key={event.id}>
+              <CalendarEventItem
+                event={event}
+                view="agenda"
+                onClick={(clickEvent: MouseEvent<HTMLButtonElement>) => {
+                  clickEvent.stopPropagation();
+                  onEventSelect(event);
+                }}
+              />
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

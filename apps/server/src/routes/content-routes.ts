@@ -5,7 +5,7 @@ import type { Elysia } from "elysia";
 
 /**
  * /content/knowledge-bank/:resourceId/file — streams a published Sanity
- * asset server-side behind the role + wallet-threshold gate. Hardened proxy:
+ * asset server-side behind the role + Knowledge Bank access gate. Hardened proxy:
  * host allowlist (cdn.sanity.io / *.sanity.io), 10s timeout, 5MB cap
  * (content-length pre-check + streamed byte counter).
  */
@@ -37,7 +37,10 @@ export function registerContentRoutes(app: Elysia) {
       );
       if (!access.eligible) {
         set.status = 403;
-        return { error: "Knowledge Bank access requires 35 Marks" };
+        return {
+          error:
+            "Knowledge Bank access requires 35 Marks or an active admin grant",
+        };
       }
 
       const file = await context.services.content.getStudentResourceFile(

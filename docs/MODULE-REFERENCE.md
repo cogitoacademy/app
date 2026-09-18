@@ -1,6 +1,24 @@
 # Cogito Module Reference
 
-Last updated: 2026-09-09
+Last updated: 2026-09-18
+
+## Temporary Knowledge Bank access grants (2026-09-18)
+
+The admin Knowledge Bank access workspace grants a named student a temporary
+exception to the 35-Mark gate. Grants are keyed to the student user, have one
+future expiry timestamp, and are evaluated on every eligibility/file request;
+no scheduler is needed to revoke expired access. Admin create/update/remove
+operations are audit-logged, and removing a grant deletes only the live
+exception while preserving the audit record.
+
+## Competition Calendar agenda list (2026-09-18)
+
+The web calendar derives its agenda projection locally from the protected
+`content.listCompetitions` result. For the selected 30-day period it keeps
+competitions that overlap the period, de-duplicates by competition id, and
+sorts by the first event date before rendering one flat list item per
+competition. Multi-day date ranges remain visible in the item and the details
+drawer. No service, repository, event key, or business rule changed.
 
 ## Achievement summary presentation (2026-09-09)
 
@@ -259,7 +277,7 @@ Editorial content integration is also read-only: Sanity remains the source of tr
 - `listStudentResources()` — returns resource metadata without asset URLs
 - `getStudentResourceFile(resourceId)` — resolves the published asset URL and file metadata for the already-authorized proxy
 
-The calendar frontend consumes `listCompetitions()` as a read-only projection. It mirrors the academy's month/agenda interaction model (multi-day spans, overflow popup, 30-day agenda, and event-details modal) while using Cogito App Selia components, design tokens, and Tabler icons. Its authenticated route is viewport-contained: the calendar card body owns vertical scrolling, while the month grid owns horizontal scrolling so the page shell and calendar toolbar do not scroll with the grid. The month view always keeps the standard grid visible, including for an event-free selected month; the page-level empty state remains reserved for a response with no competitions at all. The Knowledge Bank frontend is available at the authenticated `/knowledge-bank` route and renders resource category slugs as mapped or title-cased labels while keeping raw slugs for filtering. Admins get `Edit resources` (`studentResource`) and `Edit competitions` (`competition`) buttons on the Knowledge Bank and calendar pages; both open the matching document-type list in Sanity Studio in a new tab.
+The calendar frontend consumes `listCompetitions()` as a read-only projection. It mirrors the academy's month interaction model (multi-day spans and overflow popup) and uses a flat 30-day agenda list that renders each overlapping competition once in first-event-date order, plus an event-details modal, while using Cogito App Selia components, design tokens, and Tabler icons. Its authenticated route is viewport-contained: the calendar card body owns vertical scrolling, while the month grid owns horizontal scrolling so the page shell and calendar toolbar do not scroll with the grid. The month view always keeps the standard grid visible, including for an event-free selected month; the page-level empty state remains reserved for a response with no competitions at all. The Knowledge Bank frontend is available at the authenticated `/knowledge-bank` route and renders resource category slugs as mapped or title-cased labels while keeping raw slugs for filtering. Admins get `Edit resources` (`studentResource`) and `Edit competitions` (`competition`) buttons on the Knowledge Bank and calendar pages; both open the matching document-type list in Sanity Studio in a new tab.
 
 When the page-level no-competition state is rendered, its calendar glyph uses
 the Cogito orange token; this accent is scoped to the Competition Calendar and
@@ -269,8 +287,47 @@ does not change the shared empty-state tone defaults.
 
 - Sanity is queried with `perspective: "published"`; the API token, if used, stays server-side.
 - Competition Calendar requires an authenticated session but is not Marks-gated.
-- Knowledge Bank is available to students, tutors, and admins through `wallet.knowledgeBankEligible`. Students must meet the existing 35-Mark total-balance rule, including held Marks; tutors and admins bypass that wallet threshold.
+- Knowledge Bank is available to students, tutors, and admins through `wallet.knowledgeBankEligible`. Students must meet the existing 35-Mark total-balance rule, including held Marks, unless an active admin grant exists; tutors and admins bypass that wallet threshold. An active grant exposes its expiry through `overrideExpiresAt` and is checked on every request.
 - Resource files are streamed through the app with private/no-store headers. Raw Sanity asset URLs are never returned by the list procedure.
+
+---
+
+## Admin Knowledge Bank Access Module
+
+**Purpose:** Give admins a controlled, auditable way to grant a student temporary
+Knowledge Bank access by email when the student should not currently need the
+35-Mark threshold.
+
+**Files:**
+
+- `admin-knowledge-bank.types.ts` — list/create/update/remove input schemas
+- `admin-knowledge-bank.errors.ts` — student, role, duplicate, expiry, and missing-grant domain errors
+- `admin-knowledge-bank.repo.ts` — grant CRUD, case-insensitive student email lookup, active-expiry query, and status/search listing
+- `admin-knowledge-bank.service.ts` — future-expiry validation, one-grant-per-student rule, audit events, and view mapping
+- `admin-knowledge-bank.handler.ts` — session-admin delegation and domain-error mapping
+- `admin-knowledge-bank.router.ts` — admin-only list/create/update/remove routes
+- `index.ts` — module factory and the `KnowledgeBankAccessPort` consumed by Wallet
+
+**Service Methods:**
+
+- `list(input)` — returns active, expired, or all grants with optional student name/email search
+- `create(adminId, input)` — resolves a student by email, creates a future-dated grant, and records `knowledge_bank_access_grant_created`
+- `update(adminId, input)` — changes expiry/note and records before/after state in `knowledge_bank_access_grant_updated`
+- `remove(adminId, id)` — deletes the live exception and records `knowledge_bank_access_grant_removed`
+- `getActiveByUserId(userId, now?)` — returns only an unexpired grant for the wallet/content access gate
+
+**Business Rules:**
+
+- Only users whose current role is `student` may receive a grant; lookup is case-insensitive by email.
+- A student can have one live grant. The unique `user_id` index and duplicate-error mapping protect concurrent creates.
+- Create and update require a strictly future ISO datetime. Expired rows stay visible to admins but never bypass the threshold.
+- Removal is a hard delete of the live grant; audit history remains in `audit_log`.
+- The admin UI lives at `/admin-knowledge-bank` and supports active/expired/all filtering, edit, and confirmation-gated removal.
+
+**Dependencies:** `AdminKnowledgeBankRepo`, `AuditPort`
+
+**Consumer:** Wallet uses the exported `KnowledgeBankAccessPort` to apply the
+active-grant override to `knowledgeBankEligible`.
 
 ---
 
@@ -590,8 +647,8 @@ The Participants fieldset owns the derived Solo/Group badge; summaries represent
 - `cancelSession(userId, sessionId)` — Student cancels an individual series session only before that session starts; pre-H2 releases its hold, a pre-start post-H2 cancellation forfeits it, and at/after start the call throws `BOOKING_CANCELLATION_DEADLINE_PASSED`.
 - `proposeReschedule(actorId, actorRole, bookingId, sessionId, start, reason)` — Shared service used by the student-proposer and tutor RPC routes; requires a non-blank reason and proposes a fixed 90-minute replacement for one session
 - `acceptReschedule(actorId, bookingId, proposalId?)` / `rejectReschedule(...)` — Records a required tutor/student vote against the active, unexpired proposal under a booking advisory lock; `proposalId` prevents stale UI actions from deciding a superseded proposal. Final acceptance additionally locks the tutor and rechecks booking overlap, target-series ownership/state, and sibling-session overlap before applying the schedule. Only unanimous acceptance applies the schedule, then the booking returns to its pre-proposal state; any rejection keeps the old schedule and also returns to that state. For booking-level offline proposals, the confirmed room assignment is synchronized with the new time on acceptance and restored to the original time on rejection/expiry. A missing or conflicting room returns the booking to `awaiting_admin_room_approval`, and the rollback path uses `roomPort.resyncRoomBookingToSchedule` so the room never stays blocked for the wrong window.
-- `addSessionNote(userId, bookingId, content)` — Adds a server-sanitized HTML note to a completed session; the web editor emits only the supported paragraph/heading/emphasis/list/link markup
-- `getSessionNotes(userId, bookingId)` — Lists every party's notes for a completed session; the web client applies a DOMPurify allow-list before rendering
+- `addSessionNote(userId, bookingId, content)` — Adds a server-sanitized HTML note to a completed session for protected API clients; the web UI no longer exposes the rich-text editor or mutation control
+- `getSessionNotes(userId, bookingId)` — Lists every party's legacy notes for a completed session for protected API compatibility; the web client no longer queries or renders the Session notes card
 - `markTutorAttendance(bookingId, tutorId, attendance)` — Marks tutor present/late; allowed only within `[scheduledStartAt ± 15 min]` (LATENESS_TOLERANCE_MS). Marking suppresses the lateness flag — unmarked sessions are surfaced to the admin queue (`tutor_lateness_pending`), never auto-cancelled. **F8:** the attendance row is inserted with `role='tutor'` and `confirmationState=confirmed`; `findConfirmedParticipants` excludes `role='tutor'` so the tutor row never inflates group repricing headcounts, hold recomputation, or no-show forfeit math
 - `markParticipantNoShow(bookingId, tutorId, participantUserId, sessionId?)` — Marks a participant as no-show 15 minutes after the session starts (U5/TC-30); a series `sessionId` is first required to belong to `bookingId`, preventing cross-booking wallet/attendance mutation. It forfeits the target's (per-session) hold and notifies them. Solo transitions to `no_show`; group stays live with only the target's hold forfeited and `holdAmount` recomputed (C1); series sessions keep their state so other participants are unaffected
 - `listSessions(bookingId, userId)` — Lists sessions for a series booking
@@ -726,8 +783,8 @@ chat directory.
 
 **Service Methods:**
 
-- `createEvent(bookingId, scheduledStartAt?, scheduledEndAt?, attendees?, conn?, details?)` — Creates a Google Calendar event with optional title/description/location metadata. `details.createConference` defaults to true for the unchanged online Meet flow; offline scheduling passes false, producing no conference data or Meet URL. Repeated offline creation reuses the live provider row.
-- `updateEvent(bookingId, changes)` — Best-effort updates provider-side start/end and/or physical location while preserving the rest of the event resource. Updates use `conferenceDataVersion=1` so the existing online Meet conference survives the full-resource update, with attendee emails controlled by `GOOGLE_CALENDAR_SEND_UPDATES` (`none` by default, `all` in production) (OQ-05, #46). Cogito always sends its own booking notifications; Calendar attendee emails stay suppressed outside production to avoid duplicate mail and DSN bounces to undeliverable seed addresses.
+- `createEvent(bookingId, scheduledStartAt?, scheduledEndAt?, attendees?, conn?, details?)` — Creates a Google Calendar event with optional title/description/location metadata. `details.createConference` defaults to true for the unchanged online Meet flow; offline scheduling passes false, producing no conference data or Meet URL. Offline descriptions start with `Site: {room.location}` and `Room: {room.name}`. Repeated offline creation reuses the live provider row.
+- `updateEvent(bookingId, changes)` — Best-effort updates provider-side start/end, physical location, and/or description while preserving the rest of the event resource. Updates use `conferenceDataVersion=1` so the existing online Meet conference survives the full-resource update, with attendee emails controlled by `GOOGLE_CALENDAR_SEND_UPDATES` (`none` by default, `all` in production) (OQ-05, #46). Cogito always sends its own booking notifications; Calendar attendee emails stay suppressed outside production to avoid duplicate mail and DSN bounces to undeliverable seed addresses.
 - `cancelEvent(bookingId)` — Idempotently cancels the Google event on terminal online or offline booking states (cancel/late-cancel/decline/expire; best-effort via circuit breaker) (#46)
 - `probe()` — Boot-time connectivity probe (P4.2/X3): `calendarList.get` with a 10s timeout, logs loudly on failure (wired into the server bootstrap so a broken Google Meet swap is visible at boot, not only at the first booking; the server keeps manual fallback available)
 - Falls back to manual link URL format when circuit breaker is open
@@ -738,7 +795,7 @@ chat directory.
 - OAuth refresh-token mode uses `GOOGLE_MEET_CLIENT_ID`, `GOOGLE_MEET_CLIENT_SECRET`, and `GOOGLE_MEET_REFRESH_TOKEN` to call Google Calendar API v3; `GOOGLE_CALENDAR_ID` defaults to `primary`. When the dedicated client variables are absent, the resolver falls back to `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, but the Calendar refresh token is still required.
 - Service-account mode uses `GOOGLE_CLIENT_EMAIL`, `GOOGLE_PRIVATE_KEY`, and `GOOGLE_IMPERSONATED_USER`; the impersonated user is required for Workspace domain-wide delegation. `GOOGLE_MEET_ENABLED=true` requires either the complete OAuth set or the complete service-account set.
 - OAuth setup and token rotation instructions live in [`docs/GOOGLE-MEET-SETUP.md`](GOOGLE-MEET-SETUP.md).
-- Booking creation validates `subjectId` against the tutor's active specializations and stores an immutable category/specialization snapshot in `booking.session_topic`. Scheduling uses `Cogito - {Competition} | {Tutor} x {Student}` and appends `& Friends` for group/group-series events; MUN/WSC use abbreviations. Descriptions include Session Topic, all resolved students, Session Notes/reference links, and the booking deep link. The metadata reaches service-account and OAuth paths; `learning_goal` remains the Session Notes compatibility carrier.
+- Booking creation validates `subjectId` against the tutor's active specializations and stores an immutable category/specialization snapshot in `booking.session_topic`. Scheduling uses `Cogito - {Competition} | {Tutor} x {Student}` and appends `& Friends` for group/group-series events; MUN/WSC use abbreviations. Descriptions include Session Topic, all resolved students, Session Notes/reference links, and the booking deep link; offline descriptions prepend the assigned Site and Room. The metadata reaches service-account and OAuth paths; `learning_goal` remains the Session Notes compatibility carrier.
 - Circuit breaker: 5 failures → open for 60 seconds
 - On failure, creates a `meetingEvent` record with `status: "failed"` and `errorReason`; the booking scheduler retries failed Google attempts every 5 minutes up to the configured retry budget
 - Manual-link entry updates the newest meeting-attempt row, matching the booking read model's newest-row selection after multiple provider attempts
@@ -944,9 +1001,9 @@ contracts.
 - `createRoom({ name, location, capacity })` — Creates a room
 - `updateRoom({ id, name, location, capacity })` — Updates an active or inactive room's editable catalog details
 - `deactivateRoom(id)` — Soft-deactivates a room so it cannot be selected for new offline bookings while historical assignments remain intact; repeated deactivation is a no-op
-- `assignRoom(bookingId, roomId, startAt, endAt)` — Confirms a room for a booking with conflict check; transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED`, then best-effort creates/refreshes its non-Meet Calendar event after commit, and notifies tutor + confirmed students (#46, G14). **F22 state guard:** the booking must be `AWAITING_ADMIN_ROOM_APPROVAL` (or `RESCHEDULE_PROPOSED`, the H3 pre-assignment carve-out) — any other state throws `ROOM_BOOKING_STATE` before the roomBooking row is inserted (no orphan CONFIRMED rows)
+- `assignRoom(bookingId, roomId, startAt, endAt)` — Confirms a room for a booking with conflict check; transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED`, then best-effort creates/refreshes its non-Meet Calendar event after commit, including the `Site: {location}` / `Room: {name}` description heading, and notifies tutor + confirmed students (#46, G14). **F22 state guard:** the booking must be `AWAITING_ADMIN_ROOM_APPROVAL` (or `RESCHEDULE_PROPOSED`, the H3 pre-assignment carve-out) — any other state throws `ROOM_BOOKING_STATE` before the roomBooking row is inserted (no orphan CONFIRMED rows)
 - `checkAvailability(roomId, startAt, endAt)` — Returns whether the room is free for the slot
-- `relocateRoom(bookingId, roomId, startAt, endAt, actorId?)` — Moves a booking to a different room, freeing the previous one; transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED` (mirroring `assignRoom`, safe no-op otherwise), then best-effort refreshes the non-Meet Calendar location after commit, and notifies tutor + confirmed students (#46, H3/REVIEW-FIXES-4 P2.6). **F22 state guard:** allowed from `AWAITING_ADMIN_ROOM_APPROVAL`/`SCHEDULED`/`RESCHEDULE_PROPOSED` only
+- `relocateRoom(bookingId, roomId, startAt, endAt, actorId?)` — Moves a booking to a different room, freeing the previous one; transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED` (mirroring `assignRoom`, safe no-op otherwise), then best-effort refreshes the non-Meet Calendar location and Site/Room description heading after commit, and notifies tutor + confirmed students (#46, H3/REVIEW-FIXES-4 P2.6). **F22 state guard:** allowed from `AWAITING_ADMIN_ROOM_APPROVAL`/`SCHEDULED`/`RESCHEDULE_PROPOSED` only
 - `cancelRoomBooking(bookingId, actorId?)` — Cancels the booking's room assignment; while awaiting approval it also delegates the booking cancellation/hold release/audit through `RoomBookingPort`, including the no-requested-room conflict case; notifies tutor + confirmed students (#46)
 - `syncRoomBookingScheduleForBooking(bookingId, startAt, endAt)` — Updates the active confirmed room assignment when the target window is free; returns `missing` without an active assignment or `conflict` after cancelling the assignment when another confirmed room booking overlaps
 - `resyncRoomBookingToSchedule(conn, bookingId, { startAt, endAt })` — **N3:** moves a booking's confirmed roomBooking row back to a schedule (no-op when the times already match or no confirmed row exists). Called by the booking module when a reschedule proposal is rejected or expires so a pre-assigned room cannot remain blocked for the cancelled proposal window
@@ -1110,7 +1167,7 @@ The authenticated dashboard shell is viewport-fixed. Its content pane exclusivel
 **Business Rules:**
 
 - Categories are the seven competition areas: Model United Nations, World Scholar’s Cup, Essay & Writing, Debate, Business, Olympiad, and Public Speaking
-- The current catalog contains 33 selectable specializations in the exact order defined by `0029_competition_taxonomy.sql`
+- The current catalog contains 34 selectable specializations in the exact order defined by `0029_competition_taxonomy.sql` plus `0047_debate_law_specialization.sql`; Debate ends with Law Debate
 - Only active specialization rows are selectable by tutors; archived legacy rows remain readable for existing profiles and are not offered for new selection
 - Tutors may select at most 7 active specializations; the web selector communicates the cap and disables additional choices, while the API validates the same limit
 - The legacy `expertise` JSON remains for compatibility with existing rows and clients, but normalized `subjectIds` drives new onboarding and discovery filters

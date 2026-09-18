@@ -1,14 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { IconAlertTriangle, IconMessage, IconNotes } from "@tabler/icons-react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { IconAlertTriangle } from "@tabler/icons-react";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
-  CardFooter,
   CardHeader,
   CardInfoPreview,
   CardTitle,
@@ -22,11 +21,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@cogito-app/ui/components/selia/dialog";
-import {
-  Field,
-  FieldDescription,
-  FieldLabel,
-} from "@cogito-app/ui/components/selia/field";
+import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import {
   getSelectItemValue,
@@ -41,11 +36,8 @@ import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
-import { EmptyState } from "@/components/empty-state";
 import { InfoPreview } from "@/components/info-preview";
 import { formatBookingDate, formatBookingTimeRange } from "./booking-ui";
-import { SessionNoteEditor } from "./session-note-editor";
-import { sanitizeSessionNoteHtml } from "./session-note-sanitizer";
 import { getUserFacingError } from "@/lib/error-message";
 import { useNow } from "@/hooks/use-now";
 import { orpc } from "@/utils/orpc";
@@ -164,12 +156,10 @@ export function getBookingLifecycleContext({
 
 export function BookingLifecycleActions({
   bookingId,
-  viewerId,
   viewerRole,
   currentState,
   bookingType,
   scheduledStartAt,
-  timezone,
   participantRole,
   participantState,
   isBookingProposer,
@@ -180,27 +170,19 @@ export function BookingLifecycleActions({
   section = "all",
 }: {
   bookingId: string;
-  viewerId: string;
   viewerRole: string;
   currentState: string;
   bookingType: string;
   scheduledStartAt: string | Date;
-  timezone?: string;
   participantRole?: string;
   participantState?: string;
   isBookingProposer?: boolean;
   pendingInvitees?: { userId: string; name: string }[];
-  perStudentMarks?: number;
-  proposedStartAt?: string | Date;
-  proposedEndAt?: string | Date;
   activeProposalId?: string;
-  isRescheduleProposer?: boolean;
   viewerRescheduleDecision?: "pending" | "accepted" | "rejected";
-  rescheduleReason?: string;
   onBookingChanged: () => void;
   section?: "all" | "actions" | "supplementary";
 }) {
-  const queryClient = useQueryClient();
   const showActions = section !== "supplementary";
   const showSupplementary = section !== "actions";
   const [dialog, setDialog] = useState<DialogKind>(null);
@@ -213,12 +195,10 @@ export function BookingLifecycleActions({
     userId: string;
     name: string;
   } | null>(null);
-  const [note, setNote] = useState("");
   const invitees = pendingInvitees ?? [];
   const now = useNow();
 
   const isStudent = viewerRole === "student";
-  const isCompleted = currentState === "completed";
   const canDecideReschedule =
     currentState === "reschedule_proposed" &&
     Boolean(activeProposalId) &&
@@ -247,22 +227,12 @@ export function BookingLifecycleActions({
     ["confirmed", "reconfirmed"].includes(participantState ?? "") &&
     participantState !== "reconfirmed";
 
-  const notesQuery = useQuery({
-    ...orpc.booking.getSessionNotes.queryOptions({ input: { bookingId } }),
-    enabled: showSupplementary && isCompleted,
-  });
   const ticketsQuery = useQuery({
     ...orpc.support.listTickets.queryOptions({ input: { limit: 50 } }),
     enabled: showSupplementary && isStudent,
   });
   const bookingTickets =
     ticketsQuery.data?.filter((ticket) => ticket.bookingId === bookingId) ?? [];
-
-  function refreshNotes() {
-    void queryClient.invalidateQueries({
-      queryKey: orpc.booking.getSessionNotes.queryKey({ input: { bookingId } }),
-    });
-  }
 
   const report = useMutation(
     orpc.support.createTicket.mutationOptions({
@@ -297,17 +267,6 @@ export function BookingLifecycleActions({
       },
       onError: (error: Error) =>
         showMutationError("Reschedule could not be rejected", error),
-    }),
-  );
-  const addNote = useMutation(
-    orpc.booking.addSessionNote.mutationOptions({
-      onSuccess: () => {
-        setNote("");
-        toastManager.add({ title: "Session note added", type: "success" });
-        refreshNotes();
-      },
-      onError: (error: Error) =>
-        showMutationError("Session note could not be added", error),
     }),
   );
   const confirmInvite = useMutation(
@@ -475,92 +434,6 @@ export function BookingLifecycleActions({
             </>
           ) : null}
         </>
-      ) : null}
-
-      {showSupplementary && isCompleted ? (
-        <Card>
-          <CardHeader>
-            <IconBox variant="info-subtle">
-              <IconNotes />
-            </IconBox>
-            <CardTitle>
-              Session notes
-              <CardInfoPreview>
-                <InfoPreview
-                  title="Session notes"
-                  description="Notes are shared with the student and tutor after completion."
-                  label="About session notes"
-                />
-              </CardInfoPreview>
-            </CardTitle>
-          </CardHeader>
-          <CardBody className="space-y-4">
-            {notesQuery.isPending ? (
-              <Text className="text-muted">Loading session notes...</Text>
-            ) : notesQuery.isError ? (
-              <Text className="text-danger">
-                Session notes could not be loaded.
-              </Text>
-            ) : notesQuery.data.length > 0 ? (
-              notesQuery.data.map((item) => (
-                <div
-                  key={item.id}
-                  className="rounded-lg border border-border p-4"
-                >
-                  <div className="mb-2 flex items-center justify-between gap-3">
-                    <Text className="text-xs font-medium text-muted">
-                      {item.authorId === viewerId
-                        ? "Your note"
-                        : "Other participant's note"}
-                    </Text>
-                  </div>
-                  <div
-                    className="space-y-2 text-sm [&_a]:text-info [&_a]:underline [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5"
-                    dangerouslySetInnerHTML={{
-                      __html: sanitizeSessionNoteHtml(item.content),
-                    }}
-                  />
-                  <Text className="mt-3 text-xs text-muted">
-                    {formatBookingDate(item.createdAt, timezone)}
-                  </Text>
-                </div>
-              ))
-            ) : (
-              <EmptyState
-                icon={<IconNotes />}
-                title="No session notes yet"
-                description="Add a note to keep useful context for the next session."
-                size="inline"
-                className="rounded-lg border border-item-border"
-              />
-            )}
-            <Field>
-              <FieldLabel htmlFor="session-note">Add a note</FieldLabel>
-              <SessionNoteEditor
-                id="session-note"
-                value={note}
-                maxLength={10_000}
-                onChange={setNote}
-                disabled={addNote.isPending}
-              />
-              <FieldDescription>
-                Notes are shared with the student and tutor after completion.
-              </FieldDescription>
-            </Field>
-          </CardBody>
-          <CardFooter className="justify-end">
-            <Button
-              size="sm"
-              onClick={() =>
-                addNote.mutate({ bookingId, content: note.trim() })
-              }
-              progress={addNote.isPending}
-              disabled={!note.trim() || addNote.isPending}
-            >
-              <IconMessage /> Add note
-            </Button>
-          </CardFooter>
-        </Card>
       ) : null}
 
       {showSupplementary && bookingTickets.length > 0 ? (

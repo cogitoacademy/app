@@ -40,4 +40,5 @@ export type ContentAccess = {
   eligible: boolean;
   balance: number;
   threshold: number;
+  overrideExpiresAt?: string;
 };

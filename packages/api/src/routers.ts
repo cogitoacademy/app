@@ -5,6 +5,7 @@ import { createAuthRouter } from "./modules/auth/auth.router";
 import { createAdminRouter } from "./modules/admin/admin.router";
 import { createAdminTutorRouter } from "./modules/admin-tutor/admin-tutor.router";
 import { createAdminMarkPackageRouter } from "./modules/admin-mark-package/admin-mark-package.router";
+import { createAdminKnowledgeBankRouter } from "./modules/admin-knowledge-bank/admin-knowledge-bank.router";
 import { createTutorRouter } from "./modules/tutor/tutor.router";
 import { createDiscoveryRouter } from "./modules/tutor-discovery/discovery.router";
 import { createInviteRouter } from "./modules/invite/invite.router";
@@ -30,6 +31,9 @@ const adminRouter = createAdminRouter(handlers.admin);
 const adminTutorRouter = createAdminTutorRouter(handlers.adminTutor);
 const adminMarkPackageRouter = createAdminMarkPackageRouter(
   handlers.adminMarkPackage,
+);
+const adminKnowledgeBankRouter = createAdminKnowledgeBankRouter(
+  handlers.adminKnowledgeBank,
 );
 const tutorRouter = createTutorRouter(handlers.tutor);
 const discoveryRouter = createDiscoveryRouter(handlers.discovery);
@@ -64,6 +68,7 @@ export const appRouter = {
   admin: adminRouter,
   adminTutor: adminTutorRouter,
   adminMarkPackage: adminMarkPackageRouter,
+  adminKnowledgeBank: adminKnowledgeBankRouter,
   tutor: tutorRouter,
   tutors: discoveryRouter,
   invite: inviteRouter,

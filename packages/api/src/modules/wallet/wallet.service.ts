@@ -8,6 +8,7 @@ import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
 import type { WalletRepo, AtomicResult } from "./wallet.repo";
 import { WalletNotFoundError, InsufficientBalanceError } from "./wallet.errors";
+import type { KnowledgeBankAccessPort } from "../admin-knowledge-bank";
 
 export type EntryType =
   | "credit"
@@ -109,6 +110,7 @@ export interface WalletPort {
     eligible: boolean;
     balance: number;
     threshold: number;
+    overrideExpiresAt?: string;
   }>;
   listActivePackages(): Promise<
     {
@@ -133,7 +135,11 @@ export type WalletService = ReturnType<typeof createWalletService>;
  * @param db - the database connection used for standalone (non-transaction) operations
  * @returns a WalletPort with hold/release/deduct/credit/compensate and read operations
  */
-export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
+export function createWalletService(
+  repo: WalletRepo,
+  db: DbType,
+  knowledgeBankAccess?: KnowledgeBankAccessPort,
+): WalletPort {
   async function runInTx<T>(conn: DbOrTx, fn: (tx: DbOrTx) => Promise<T>) {
     if (conn === db) return db.transaction(fn);
     return fn(conn);
@@ -423,10 +429,11 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
   /**
    * Checks whether a user can access the Knowledge Bank.
    *
-   * Students must meet the 35-Mark threshold. Tutors and admins have access
-   * as part of their roles and are not subject to the student wallet
-   * threshold. Held Marks count toward student eligibility, so the student
-   * check uses `totalBalance`, not the available balance (U13).
+   * Students must meet the 35-Mark threshold unless an active admin grant
+   * exists. Tutors and admins have access as part of their roles and are not
+   * subject to the student wallet threshold. Held Marks count toward student
+   * eligibility, so the student check uses `totalBalance`, not the available
+   * balance (U13).
    *
    * @param userId - the user to check
    * @param viewerRole - the authenticated viewer role, when available
@@ -439,6 +446,19 @@ export function createWalletService(repo: WalletRepo, db: DbType): WalletPort {
       viewerRole === USER_ROLE.TUTOR || viewerRole === USER_ROLE.ADMIN;
     const isStudent =
       viewerRole === undefined || viewerRole === USER_ROLE.STUDENT;
+    const grant =
+      isStudent && knowledgeBankAccess
+        ? await knowledgeBankAccess.getActiveByUserId(userId)
+        : null;
+
+    if (grant) {
+      return {
+        eligible: true,
+        balance,
+        threshold: KNOWLEDGE_BANK_THRESHOLD,
+        overrideExpiresAt: grant.expiresAt.toISOString(),
+      };
+    }
 
     if (!w) {
       return {

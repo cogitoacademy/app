@@ -36,6 +36,7 @@ import {
   IconHome,
   IconLibrary,
   IconLogout,
+  IconShieldCheck,
   IconRoute,
   IconSelector,
   IconSettings,
@@ -77,6 +78,11 @@ const adminNavItems = [
   { to: "/admin-tutors", label: "Tutors", icon: IconUsersGroup },
   { to: "/admin-tutor-payouts", label: "Tutor payouts", icon: IconWallet },
   { to: "/admin-economy", label: "Economy", icon: IconAdjustments },
+  {
+    to: "/admin-knowledge-bank",
+    label: "Knowledge access",
+    icon: IconShieldCheck,
+  },
   {
     to: "/admin-achievements",
     label: "Achievements",

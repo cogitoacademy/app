@@ -1,6 +1,31 @@
 # Cogito API Reference
 
-Last updated: 2026-09-09
+Last updated: 2026-09-18
+
+## Temporary Knowledge Bank access grants (2026-09-18)
+
+Admins can grant a specific student temporary Knowledge Bank access by email
+from `/admin-knowledge-bank`. The grant bypasses the student 35-Mark threshold
+until `expiresAt`; the eligibility check evaluates the timestamp on every
+request, so the student automatically needs the normal minimum Marks again
+after expiry. Admins can edit the expiry/note or remove the grant. Removing the
+live row does not remove its audit-log history.
+
+## Offline Calendar room metadata (2026-09-18)
+
+When `room.assign` or `room.relocate` syncs an offline booking to Google
+Calendar, the event description begins with `Site: {room.location}` and
+`Room: {room.name}`. The existing booking metadata follows those two lines.
+This is provider-side metadata only; no RPC input, output, or response envelope
+changed.
+
+## Competition Calendar agenda list (2026-09-18)
+
+The authenticated 30-day agenda now renders a flat list: each overlapping
+competition appears once, including multi-day competitions, ordered by its
+first event date. The displayed event date remains the full competition range.
+This is frontend-only; `content.listCompetitions` keeps the same path, input,
+output, authentication, and response envelope.
 
 ## Achievement summary UI note (2026-09-09)
 
@@ -233,21 +258,21 @@ Sanity is queried only by the API server. The browser receives normalized conten
 - **Auth:** Protected
 - **Input:** None
 - **Output:** `[{ id, title, description, location, categories: [{ id, name, coreCategory }], educationLevels, startDate, endDate, scale, organizer, registrationDeadline, registrationLink, socialMediaLink }]`
-- **Description:** Returns published competition calendar entries with English projections for every authenticated role. The app route is `GET /calendar` in the SPA; the read-only UI presents the data in month and 30-day agenda views and opens a responsive details modal without changing this API contract. The route uses a contained viewport layout so the calendar body handles vertical scrolling and the month grid handles horizontal scrolling. The month view keeps the normal grid visible when the selected month has no events; the page-level empty state still applies when no competitions are returned at all and keeps its calendar glyph in the Cogito orange accent.
+- **Description:** Returns published competition calendar entries with English projections for every authenticated role. The app route is `GET /calendar` in the SPA; the read-only UI presents the data in month and flat 30-day agenda-list views and opens a responsive details modal without changing this API contract. The agenda list includes each competition overlapping the selected period once and orders entries by first event date. The route uses a contained viewport layout so the calendar body handles vertical scrolling and the month grid handles horizontal scrolling. The month view keeps the normal grid visible when the selected month has no events; the page-level empty state still applies when no competitions are returned at all and keeps its calendar glyph in the Cogito orange accent.
 
 ### `content.listStudentResources`
 
 - **Auth:** Protected (student, tutor, or admin)
 - **Input:** None
-- **Output:** `{ items: [{ id, title, description, category }], access: { eligible, balance, threshold } }`
-- **Description:** Returns published Knowledge Bank metadata for the authenticated `/knowledge-bank` app route. Students must meet the 35-Mark total-balance threshold (held Marks count toward eligibility); below the threshold, `items` is empty and the access state explains the lock. Tutors and admins are eligible regardless of wallet balance. `category` remains the Sanity slug in the API response; the web UI maps known slugs and title-cases hyphenated or underscored slugs for display while retaining the raw value for filtering.
+- **Output:** `{ items: [{ id, title, description, category }], access: { eligible, balance, threshold, overrideExpiresAt? } }`
+- **Description:** Returns published Knowledge Bank metadata for the authenticated `/knowledge-bank` app route. Students must meet the 35-Mark total-balance threshold (held Marks count toward eligibility), unless they have an active admin grant; below both conditions, `items` is empty and the access state explains the lock. Tutors and admins are eligible regardless of wallet balance. `overrideExpiresAt` is returned only while a student grant is active. `category` remains the Sanity slug in the API response; the web UI maps known slugs and title-cases hyphenated or underscored slugs for display while retaining the raw value for filtering.
 
 ### `GET /content/knowledge-bank/:resourceId/file`
 
-- **Auth:** Student with current total balance at or above the threshold, Tutor, or Admin
+- **Auth:** Student with current total balance at or above the threshold or an active admin grant, Tutor, or Admin
 - **Input:** `resourceId` path parameter
 - **Output:** Streamed Sanity file, normally `application/pdf`
-- **Description:** Revalidates the student/tutor/admin role and Knowledge Bank eligibility, resolves the asset server-side, and streams it with `Cache-Control: private, no-store`. Tutors and admins bypass the student wallet threshold. This is an Elysia file route, not an oRPC procedure.
+- **Description:** Revalidates the student/tutor/admin role and Knowledge Bank eligibility, resolves the asset server-side, and streams it with `Cache-Control: private, no-store`. Tutors and admins bypass the student wallet threshold; students with an unexpired admin grant bypass it until the stored expiry timestamp. This is an Elysia file route, not an oRPC procedure.
 
 ### Verification
 
@@ -519,6 +544,46 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Errors:** `ECONOMY_CONFIG_CONFLICT` (409) when `expectedVersion` is stale; validation errors (400) for unsupported values
 - **Description:** Updates the active Cogito take schedule, records an audit event, and affects only future bookings and new repricing snapshots. Existing booking snapshots remain unchanged. The update does not notify tutors; their IDR honorarium settings and the student-facing Marks preview remain separate concerns. Saving identical values is a no-op and creates no new audit event or notification.
 
+## Admin Knowledge Bank Access (`adminKnowledgeBank.*`)
+
+All routes are admin-only. Each student has at most one live grant; the expiry
+is checked at read time rather than by a scheduled cleanup job.
+
+### `adminKnowledgeBank.list`
+
+- **RPC path:** `/rpc/admin/knowledge-bank/access/list`
+- **Auth:** Admin
+- **Input:** `{ search?, status?: "all" | "active" | "expired" }`
+- **Output:** `KnowledgeBankAccessView[]`, where each item is `{ id, userId, studentName, studentEmail, expiresAt, note, createdAt, updatedAt, status }`
+- **Description:** Lists temporary student grants, optionally filtering by student name/email and active/expired status. The admin page is `/admin-knowledge-bank`.
+
+### `adminKnowledgeBank.create`
+
+- **RPC path:** `/rpc/admin/knowledge-bank/access/create`
+- **Auth:** Admin
+- **Input:** `{ email, expiresAt, note? }`; `expiresAt` is an ISO datetime in the future and `note` is limited to 500 characters
+- **Output:** `KnowledgeBankAccessView`
+- **Errors:** `STUDENT_NOT_FOUND` (404), `TARGET_USER_NOT_STUDENT` (400), `KNOWLEDGE_BANK_ACCESS_GRANT_ALREADY_EXISTS` (409), `INVALID_KNOWLEDGE_BANK_ACCESS_EXPIRY` (400)
+- **Description:** Finds the account case-insensitively by email and creates a temporary Knowledge Bank exception only for a student. Creation is audit-logged.
+
+### `adminKnowledgeBank.update`
+
+- **RPC path:** `/rpc/admin/knowledge-bank/access/update`
+- **Auth:** Admin
+- **Input:** `{ id, expiresAt, note? }`; `expiresAt` must remain in the future
+- **Output:** `KnowledgeBankAccessView`
+- **Errors:** `KNOWLEDGE_BANK_ACCESS_GRANT_NOT_FOUND` (404), `INVALID_KNOWLEDGE_BANK_ACCESS_EXPIRY` (400)
+- **Description:** Changes the expiry and note while keeping the student identity fixed. The before/after values are audit-logged.
+
+### `adminKnowledgeBank.remove`
+
+- **RPC path:** `/rpc/admin/knowledge-bank/access/remove`
+- **Auth:** Admin
+- **Input:** `{ id }`
+- **Output:** `null`
+- **Errors:** `KNOWLEDGE_BANK_ACCESS_GRANT_NOT_FOUND` (404)
+- **Description:** Removes the live exception immediately. The removal is audit-logged so the historical decision remains available to operators.
+
 ---
 
 ## Admin Mark Packages (`adminMarkPackage.*`)
@@ -739,7 +804,7 @@ The web tutor profile editor groups education, competition achievements, and exp
 - **Auth:** Public
 - **Input:** None
 - **Output:** `{ items: [{ id, slug, name, description?, children: [{ id, slug, name, description? }] }] }`
-- **Description:** Returns the seven active competition categories and their 33 selectable specializations used by tutor onboarding and student filters. The UIs submit specialization/category IDs for persistence or filtering but display category and specialization names to users. The compatibility procedure and response keys retain `subject`/`subjects` naming.
+- **Description:** Returns the seven active competition categories and their 34 selectable specializations used by tutor onboarding and student filters, including Law Debate under Debate. The UIs submit specialization/category IDs for persistence or filtering but display category and specialization names to users. The compatibility procedure and response keys retain `subject`/`subjects` naming.
 
 ### `tutors.listPublished`
 
@@ -1036,14 +1101,14 @@ RPC contract.
 - **Auth:** Protected (tutor or student party)
 - **Input:** `{ bookingId, content }` (`content` max 10,000 chars, sanitized)
 - **Output:** `{ note }`
-- **Description:** Adds a note to a completed session. The web editor sends allow-listed HTML for paragraphs/headings, emphasis, lists, and links; the API sanitizer remains authoritative before persistence.
+- **Description:** Adds a note to a completed session for protected API clients. The completed-booking web UI no longer exposes this mutation; the API sanitizer remains authoritative before persistence.
 
 ### `booking.getSessionNotes`
 
 - **Auth:** Protected (tutor or student party)
 - **Input:** `{ bookingId }`
 - **Output:** `{ items: SessionNote[] }`
-- **Description:** Returns all notes for the completed booking so both parties can read the shared session record. The web client applies a DOMPurify allow-list before rendering note HTML.
+- **Description:** Returns all legacy notes for the completed booking so protected API clients can read the shared session record. The procedure remains available for API compatibility; the web client no longer queries or renders a Session notes card.
 
 ### `booking.createGroup`
 
@@ -1161,8 +1226,8 @@ RPC contract.
 - **Auth:** Tutor
 - **Input:** `{ bookingId, sessionId?, feedback: { discussion: string[1..30], strengths: string[1..30], improvements: string[1..30] } }` (`sessionId` required for series child sessions; each bullet 1–1000 chars)
 - **Output:** `{ booking }`
-- **Description:** Marks a scheduled session completed and deducts held Marks. Requires session discussion, identified strengths, and points of improvement; saves one `session_completion_feedback` row atomically (per booking for solo/group, per session for series). Missing/empty feedback returns `BOOKING_COMPLETION_FEEDBACK_REQUIRED` (400).
-- **Frontend note:** Cancel uses Selia confirmation dialog; complete uses `CompleteSessionDialog` popup with 3 bullet-list sections (Enter = new bullet). Mutation feedback is emitted through the global toast layer and does not change this RPC contract.
+- **Description:** Marks a scheduled session completed and deducts held Marks. Requires session discussion, strengths observed, and areas for improvement; saves one `session_completion_feedback` row atomically (per booking for solo/group, per session for series). Missing/empty feedback returns `BOOKING_COMPLETION_FEEDBACK_REQUIRED` (400).
+- **Frontend note:** Cancel uses Selia confirmation dialog; complete uses `CompleteSessionDialog` for three textarea-backed tutor feedback sections (each line is a bullet and Enter adds another). Booking detail shows read-only Student notes with Session feedback directly beneath it in the same Session overview block after completion. Mutation feedback is emitted through the global toast layer and does not change this RPC contract.
 
 ### `booking.listCompletionFeedback`
 
@@ -1234,7 +1299,7 @@ RPC contract.
 - **Auth:** Admin
 - **Input:** `{ bookingId, roomId, startAt, endAt }`
 - **Output:** `{ roomBooking }`
-- **Description:** Confirms a room for an offline booking and transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED`; it may also assign a new room to an already `SCHEDULED` offline booking after its prior room was removed. After commit, it best-effort creates or refreshes a normal Google Calendar event with the room/location and no Meet conference; provider failure never rolls back scheduling, and repeated sync reuses the live event. A scheduled booking with an active room must use relocation instead. Notifies tutor + confirmed students (G14, #46). The admin UI invokes this from the Room approvals queue or the booking detail room controls; `bookingId` and `roomId` remain internal identifiers in the RPC input.
+- **Description:** Confirms a room for an offline booking and transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED`; it may also assign a new room to an already `SCHEDULED` offline booking after its prior room was removed. After commit, it best-effort creates or refreshes a normal Google Calendar event with the room/location, a description headed by `Site: {room.location}` and `Room: {room.name}`, and no Meet conference; provider failure never rolls back scheduling, and repeated sync reuses the live event. A scheduled booking with an active room must use relocation instead. Notifies tutor + confirmed students (G14, #46). The admin UI invokes this from the Room approvals queue or the booking detail room controls; `bookingId` and `roomId` remain internal identifiers in the RPC input.
 
 ### `room.checkAvailability`
 
@@ -1245,7 +1310,7 @@ RPC contract.
 
 ### `room.relocate`
 
-The successful mutation also best-effort updates the existing offline Calendar event's room/location and schedule after commit. It never adds conference data or a Meet URL.
+The successful mutation also best-effort updates the existing offline Calendar event's room/location, description heading, and schedule after commit. It never adds conference data or a Meet URL.
 
 - **Auth:** Admin
 - **Input:** `{ bookingId, roomId, startAt, endAt }`

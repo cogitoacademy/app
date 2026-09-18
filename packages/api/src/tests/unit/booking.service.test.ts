@@ -8827,6 +8827,9 @@ describe("BookingService coverage paths", () => {
       ]),
       undefined,
       expect.objectContaining({
+        description: expect.stringMatching(
+          /^Site: Main Campus\nRoom: Room A\n\n/,
+        ),
         location: "Room A — Main Campus",
         createConference: false,
       }),
@@ -8835,6 +8838,9 @@ describe("BookingService coverage paths", () => {
       startAt: schedule.startAt,
       endAt: schedule.endAt,
       location: "Room A — Main Campus",
+      description: expect.stringMatching(
+        /^Site: Main Campus\nRoom: Room A\n\n/,
+      ),
     });
   });
 
