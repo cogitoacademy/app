@@ -451,41 +451,41 @@ export function AdminTutorPayoutsPage() {
             </Field>
           </div>
 
-          <div className="flex flex-col gap-4 border-t border-card-separator pt-5 lg:flex-row lg:items-end lg:justify-between">
-            <div className="space-y-2">
-              <Text className="text-xs font-semibold uppercase tracking-wide text-dimmed">
-                Quick ranges
-              </Text>
-              <div className="flex flex-wrap gap-2">
-                {QUICK_RANGE_DAYS.map((days) => (
-                  <Button
-                    key={days}
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => setQuickRange(days)}
-                  >
-                    {days} days
-                  </Button>
-                ))}
-              </div>
-            </div>
-            <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center lg:justify-end">
-              {dateRangeError ? (
-                <Text className="text-sm text-danger">{dateRangeError}</Text>
-              ) : (
-                <Text className="max-w-xl text-sm text-muted">
-                  History follows the transfer date. Outstanding balances stay
-                  visible from the tutor&apos;s latest payout onward.
+          <div className="border-t border-card-separator pt-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div className="space-y-2">
+                <Text className="text-xs font-semibold uppercase tracking-wide text-dimmed">
+                  Quick ranges
                 </Text>
-              )}
+                <div className="flex flex-wrap gap-2">
+                  {QUICK_RANGE_DAYS.map((days) => (
+                    <Button
+                      key={days}
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setQuickRange(days)}
+                    >
+                      {days} days
+                    </Button>
+                  ))}
+                </div>
+              </div>
               <Button
-                className="shrink-0"
+                className="w-full shrink-0 sm:w-auto"
                 disabled={Boolean(dateRangeError)}
                 onClick={applyDateRange}
               >
                 Apply date range
               </Button>
             </div>
+            {dateRangeError ? (
+              <Text className="mt-4 text-sm text-danger">{dateRangeError}</Text>
+            ) : (
+              <Text className="mt-4 rounded-lg bg-item px-3 py-2 text-sm text-muted">
+                The date range filters completed transfers. Outstanding balances
+                are always shown.
+              </Text>
+            )}
           </div>
         </CardBody>
       </Card>
