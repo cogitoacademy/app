@@ -238,7 +238,7 @@ This is the specialization label that appears as **Writing** under the **Model U
 | Model United Nations | Research; Writing; Speech; Negotiation                                                                                                                                   |
 | World Scholar’s Cup  | Writing; Debate; Subjects                                                                                                                                                |
 | Essay & Writing      | Academic Essay; Creative Writing; Scientific Research; College Application Essay; Journalistic Writing                                                                   |
-| Debate               | British Parliamentary; Asian Parliamentary; World Schools (WSDC); Bahasa Indonesia (LDBI); Law Debate                                                                      |
+| Debate               | British Parliamentary; Asian Parliamentary; World Schools (WSDC); Bahasa Indonesia (LDBI); Law Debate                                                                    |
 | Business             | Business Model Canvas; Business Plan; Business Case                                                                                                                      |
 | Olympiad             | Mathematics (SMP); Natural Sciences (SMP); Social Sciences (SMP); Mathematics; Physics; Chemistry; Biology; Informatics; Astronomy; Earth Sciences; Economics; Geography |
 | Public Speaking      | Persuasive Speech; Storytelling                                                                                                                                          |
