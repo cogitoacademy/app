@@ -82,3 +82,12 @@ midtrans_secret.txt
 
 # worktree-local bun install cache (never committed)
 .bun-cache/
+
+# LaTeX byproducts from the PRD build (`make prd-pdf` / prd-pdf workflow).
+# The generated docs/prd.pdf IS committed; only the intermediates are ignored.
+docs/*.aux
+docs/*.fls
+docs/*.fdb_latexmk
+docs/*.toc
+docs/*.out
+docs/*.synctex.gz

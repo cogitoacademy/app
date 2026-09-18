@@ -1,7 +1,7 @@
 .PHONY: dev dev-web dev-server build install lint format check typecheck \
        test test-api test-e2e test-e2e-ui test-coverage test-coverage-html \
        db-push db-studio db-generate db-migrate db-start db-stop db-down \
-       seed seed-packages clean help
+       seed seed-packages prd-pdf clean help
 
 .DEFAULT_GOAL := help
 
@@ -96,6 +96,11 @@ seed:            ## Seed the database
 
 seed-packages:   ## Seed packages data
 		bun run seed-packages
+
+# ── Docs ────────────────────────────────────────────────────────────────────
+
+prd-pdf:         ## Build docs/prd.pdf from docs/prd.tex (requires MacTeX / TeX Live)
+		cd docs && latexmk -pdf -interaction=nonstopmode -halt-on-error prd.tex
 
 # ── Clean ─────────────────────────────────────────────────────────────────────────
 

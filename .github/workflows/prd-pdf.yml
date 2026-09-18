@@ -1,0 +1,71 @@
+name: PRD PDF
+
+# Builds docs/prd.tex into docs/prd.pdf so the PRD is openable directly
+# from the GitHub file browser.
+#
+# - Pull requests touching the PRD verify the build and expose the PDF as
+#   a workflow artifact for review.
+# - Pushes to main additionally commit the regenerated docs/prd.pdf back
+#   to main (via GITHUB_TOKEN, which does not re-trigger workflows, and
+#   the push trigger below excludes *.pdf anyway, so no loop).
+# - Regenerate locally with `make prd-pdf` (requires MacTeX / TeX Live).
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/prd.tex
+      - docs/diagrams/**
+      - .github/workflows/prd-pdf.yml
+  pull_request:
+    branches: [main, staging]
+    paths:
+      - docs/prd.tex
+      - docs/diagrams/**
+      - .github/workflows/prd-pdf.yml
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build PRD PDF
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install LaTeX
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            latexmk lmodern \
+            texlive-latex-recommended texlive-latex-extra \
+            texlive-fonts-recommended
+
+      - name: Build docs/prd.pdf
+        working-directory: docs
+        run: latexmk -pdf -interaction=nonstopmode -halt-on-error prd.tex
+
+      - name: Upload PRD PDF artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: prd-pdf
+          path: docs/prd.pdf
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Commit regenerated PDF (main only)
+        if: ${{ github.event_name == 'push' }}
+        uses: stefanzweifel/git-auto-commit-action@v7
+        env:
+          LEFTHOOK: "0"
+        with:
+          commit_message: "docs(prd): regenerate PDF [skip ci]"
+          file_pattern: docs/prd.pdf
+          commit_user_name: cogito-bot
+          commit_user_email: bot@cogitoacademy.id
+          commit_author: cogito-bot <bot@cogitoacademy.id>
