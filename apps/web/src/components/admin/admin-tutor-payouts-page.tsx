@@ -566,6 +566,11 @@ export function AdminTutorPayoutsPage() {
                         transfer deduction. BCA Syariah, blu (BCA Digital), and
                         other banks deduct Rp2.500 once per payout.
                       </Text>
+                      <Text className="mt-3 text-sm text-muted">
+                        Review session feedback (discussion, strengths,
+                        improvements) in booking detail as payout consideration
+                        before marking paid.
+                      </Text>
                       {!hasCompletePayoutDetails(selectedProfile) ? (
                         <Text className="mt-3 text-sm text-warning">
                           The tutor must complete and confirm all payout account

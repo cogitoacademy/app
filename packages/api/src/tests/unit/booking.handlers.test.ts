@@ -1,3 +1,4 @@
+import { TEST_COMPLETION_FEEDBACK } from "../helpers/completion-feedback";
 import { describe, test, expect, mock, beforeEach } from "bun:test";
 import {
   createBookingHandler,
@@ -28,6 +29,7 @@ function makeBookingService() {
     cancelSession: mock(async () => ({ cancelled: true, sessionId: "s1" })),
     addSessionNote: mock(async () => ({ id: "n1", content: "note" })),
     getSessionNotes: mock(async () => [{ id: "n1", content: "note" }]),
+    listCompletionFeedback: mock(async () => [{ id: "f1" }]),
     createGroup: mock(async () => ({ id: "bg1" })),
     createSeries: mock(async () => ({ id: "bs1" })),
     confirmInvite: mock(async () => ({ id: "b1", currentState: "confirmed" })),
@@ -480,6 +482,26 @@ describe("bookingHandler", () => {
       expect(result).toEqual([{ id: "n1", content: "note" }]);
     });
   });
+
+  describe("listCompletionFeedback", () => {
+    test("passes booking id, user id, and role to the booking service", async () => {
+      const booking = makeBookingService();
+      const handler = createBookingHandler(booking as any);
+      const context = makeContext("student1");
+
+      const result = await handler.listCompletionFeedback({
+        context: context as any,
+        input: { bookingId: "b1" } as any,
+      });
+
+      expect(booking.listCompletionFeedback).toHaveBeenCalledWith(
+        "b1",
+        "student1",
+        undefined,
+      );
+      expect(result).toEqual([{ id: "f1" }]);
+    });
+  });
 });
 
 describe("tutorActionsHandler", () => {
@@ -581,14 +603,23 @@ describe("tutorActionsHandler", () => {
       const booking = makeBookingService();
       const handler = createTutorActionsHandler(booking as any);
       const context = makeContext("t1");
-      const input = { bookingId: "b1", sessionId: "s1" };
+      const input = {
+        bookingId: "b1",
+        sessionId: "s1",
+        feedback: TEST_COMPLETION_FEEDBACK,
+      };
 
       const result = await handler.completeSession({
         context: context as any,
         input: input as any,
       });
 
-      expect(booking.completeSession).toHaveBeenCalledWith("b1", "t1", "s1");
+      expect(booking.completeSession).toHaveBeenCalledWith(
+        "b1",
+        "t1",
+        "s1",
+        TEST_COMPLETION_FEEDBACK,
+      );
       expect(result).toEqual({ id: "b1", currentState: "completed" });
     });
   });

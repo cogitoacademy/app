@@ -165,6 +165,19 @@ The onboarding selector stores normalized IDs for persistence and renders all cu
 
 The admin tutor review card now resolves proposed `subjectIds` through the active taxonomy and renders category/specialization labels as wrapping badges instead of exposing raw UUIDs. Other pending values also wrap safely on narrow cards. This is presentation-only; the `adminTutor.listTutorProfiles` and `adminTutor.reviewTutorProfile` contracts are unchanged.
 
+### Tutor review diff design follow-up (2026-09-17)
+
+The focused admin tutor review card now presents a BranchDiff-style summary for
+pending profile fields. It derives normalized added, changed, removed, filled,
+and empty states; exposes summary counts with composable search/status chips;
+and renders each pending field as an accessible expandable Selia item with
+current/proposed panes. Profile, teaching setup, credentials, proofs, Marks,
+photo, and payout sections remain visible with changed or empty badges and
+inline empty states. The profile photo keeps its existing side-by-side panel.
+Pure status/filter logic is covered by web unit tests. This is presentation-only;
+the admin tutor RPCs, request/response payloads, schema, and persistence
+contracts are unchanged.
+
 ### Achievement list table follow-up (2026-09-02)
 
 The student `/achievements` list and admin `/admin-achievements` moderation queue now use compact minimum-width Selia tables instead of card grids. Rows expose core identity/status/date information and a shared responsive detail drawer contains consistently labeled metadata, proof/documentation image previews with original-link fallbacks, moderator notes, and the relevant student or admin actions. It opens as a bottom sheet on mobile and from the right at the `sm` breakpoint and above. The table containers scroll horizontally when the viewport is narrower than the column minimums, without changing any RPC, schema, or persistence contract.

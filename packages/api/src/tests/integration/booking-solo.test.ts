@@ -1,3 +1,4 @@
+import { TEST_COMPLETION_FEEDBACK } from "../helpers/completion-feedback";
 import { describe, test, expect, beforeAll } from "bun:test";
 import { eq } from "drizzle-orm";
 import { db } from "@cogito-app/db";
@@ -193,6 +194,7 @@ describe("Booking solo flow", () => {
       .where(eq(booking.id, bookingId));
 
     const updated = await tutorClient.tutorActions.completeSession({
+      feedback: TEST_COMPLETION_FEEDBACK,
       bookingId,
     });
     expect(updated.currentState).toBe("completed");

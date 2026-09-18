@@ -1,3 +1,4 @@
+import { TEST_COMPLETION_FEEDBACK } from "../helpers/completion-feedback";
 import { describe, test, expect, beforeAll } from "bun:test";
 import { eq, like } from "drizzle-orm";
 import { db } from "@cogito-app/db";
@@ -286,6 +287,7 @@ describe("G4: group repricing on headcount change", () => {
       .where(eq(bookingTable.id, bookingId));
 
     const completed = await tutorClient.tutorActions.completeSession({
+      feedback: TEST_COMPLETION_FEEDBACK,
       bookingId,
     });
     expect(completed.currentState).toBe("completed");

@@ -1,3 +1,4 @@
+import { TEST_COMPLETION_FEEDBACK } from "../helpers/completion-feedback";
 import { describe, test, expect, beforeAll } from "bun:test";
 import { eq } from "drizzle-orm";
 import { db } from "@cogito-app/db";
@@ -245,6 +246,7 @@ describe("B1/U12: offline bookings do not auto-NO_SHOW at session start", () => 
     expect(row.deadlineAt!.getTime()).toBeGreaterThan(now);
 
     const completed = await tutorClient.tutorActions.completeSession({
+      feedback: TEST_COMPLETION_FEEDBACK,
       bookingId: b.id,
     });
     expect(completed.currentState).toBe(BOOKING_STATE.COMPLETED);

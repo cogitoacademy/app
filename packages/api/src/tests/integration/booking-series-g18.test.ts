@@ -1,3 +1,4 @@
+import { TEST_COMPLETION_FEEDBACK } from "../helpers/completion-feedback";
 import { describe, test, expect, beforeAll } from "bun:test";
 import { eq } from "drizzle-orm";
 import { db } from "@cogito-app/db";
@@ -168,6 +169,7 @@ describe("Series session completion (G18)", () => {
   test("attempt to complete a future session → rejected", async () => {
     await expect(
       tutorClient.tutorActions.completeSession({
+        feedback: TEST_COMPLETION_FEEDBACK,
         bookingId,
         sessionId: sessionIds[0]!,
       }),
@@ -181,6 +183,7 @@ describe("Series session completion (G18)", () => {
       .where(eq(bookingSession.id, sessionIds[0]!));
 
     const result = await tutorClient.tutorActions.completeSession({
+      feedback: TEST_COMPLETION_FEEDBACK,
       bookingId,
       sessionId: sessionIds[0]!,
     });
@@ -212,6 +215,7 @@ describe("Series session completion (G18)", () => {
   test("double-completing session 1 → rejected", async () => {
     await expect(
       tutorClient.tutorActions.completeSession({
+        feedback: TEST_COMPLETION_FEEDBACK,
         bookingId,
         sessionId: sessionIds[0]!,
       }),
@@ -225,6 +229,7 @@ describe("Series session completion (G18)", () => {
       .where(eq(bookingSession.seriesBookingId, bookingId));
 
     const r2 = await tutorClient.tutorActions.completeSession({
+      feedback: TEST_COMPLETION_FEEDBACK,
       bookingId,
       sessionId: sessionIds[1]!,
     });
@@ -232,6 +237,7 @@ describe("Series session completion (G18)", () => {
     expect(r2.holdAmount).toBe(perSession);
 
     const r3 = await tutorClient.tutorActions.completeSession({
+      feedback: TEST_COMPLETION_FEEDBACK,
       bookingId,
       sessionId: sessionIds[2]!,
     });
@@ -283,5 +289,18 @@ describe("Series session completion (G18)", () => {
         ),
       );
     expect(finalNotifs.length).toBe(1);
+  });
+
+  test("completion feedback can be listed for the booking", async () => {
+    const feedback = await studentClient.booking.listCompletionFeedback({
+      bookingId,
+    });
+
+    expect(feedback).toHaveLength(3);
+    expect(new Set(feedback.map((row) => row.sessionId))).toEqual(
+      new Set(sessionIds),
+    );
+    expect(feedback.every((row) => row.bookingId === bookingId)).toBe(true);
+    expect(feedback.every((row) => row.authorId === tutorId)).toBe(true);
   });
 });

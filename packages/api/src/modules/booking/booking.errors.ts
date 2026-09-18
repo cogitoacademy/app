@@ -289,6 +289,17 @@ export class BookingSeriesNoOptOutError extends DomainError {
   }
 }
 
+export class BookingCompletionFeedbackRequiredError extends DomainError {
+  readonly domain = "booking";
+  constructor(id: string) {
+    super(
+      "BOOKING_COMPLETION_FEEDBACK_REQUIRED",
+      "Session discussion, strengths, and points of improvement are required to complete the session",
+      { id },
+    );
+  }
+}
+
 export function mapBookingError(
   err: DomainError,
 ): ORPCError<string, undefined> {
@@ -349,5 +360,7 @@ export function mapBookingError(
   if (err instanceof BookingCancelledError) return badRequest(err.message, err);
   if (err instanceof BookingSeriesNoOptOutError)
     return conflict(err.message, err);
+  if (err instanceof BookingCompletionFeedbackRequiredError)
+    return badRequest(err.message, err);
   return internalServerError(err.message, err);
 }

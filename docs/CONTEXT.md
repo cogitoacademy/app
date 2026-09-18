@@ -1,6 +1,10 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-09-14
+Last updated: 2026-09-17
+
+## Session completion feedback (2026-09-17)
+
+Tutor `completeSession` now requires 3 bullet-list sections (Session discussion, Identified strengths, Points of improvement; Enter = new bullet). Backend stores one `session_completion_feedback` row atomically per completion (per session for series) and exposes `booking.listCompletionFeedback` to student/tutor/admin. Booking detail shows a Session feedback card for all roles; admin payout drawer points to it as payout consideration. Migration `0046_session_completion_feedback.sql`.
 
 ## Observability alert-latch fix + Important Logs board (2026-09-14)
 
@@ -833,6 +837,8 @@ when set to false.
 
 ### `sessionNote` (booking.ts) — notes on completed sessions (author_id + booking_id)
 
+### `sessionCompletionFeedback` (booking.ts) — required tutor feedback at completion (booking_id + nullable session_id for series, author_id, discussion[]/strengths[]/improvements[] jsonb). One row per solo/group booking or per series session; read by student/tutor/admin for payout review.
+
 ### `room` (booking.ts) — offline rooms, is_active flag
 
 ### `roomBooking` (booking.ts) — room assignment with status requested/confirmed/relocated/cancelled
@@ -1163,6 +1169,8 @@ The primary Tutor E2E flow has been manually verified with seeded accounts, incl
 ### Admin
 
 Backend is ready for user role management, tutor invite/review, structured tutor achievement editing, achievement moderation and public achievement surfacing, the full booking operations console (queue/override preview/refund), room list/create/update/deactivate/assign/relocate, wallet/ledger lookup, tutor payouts, refund corrections, the active economy schedule, and manual meeting-link fallback for eligible online bookings. Admin wallet lookup resolves visible user identity through `admin.searchUsers` (name/email/ID) before reading the selected wallet and ledger. The /admin-economy screen lets admins edit the four Cogito take fields in Rp5,000 increments with optimistic versioning; updates are audit-logged and apply only to future/new repricing snapshots. The admin tutor review card resolves pending `subjectIds` through the active normalized taxonomy and renders readable category/specialization labels with wrapping values; it also lets admins correct structured education and competition entries through the version-checked `adminTutor.updateTutorAchievements` procedure, with an audit event for each save.
+
+The focused admin tutor review card now derives presentation-only added/changed/removed/filled/empty states from normalized current and pending values. Its summary counts support composable field search and status chips, each pending field expands into current/proposed panes, and Profile, Teaching setup, Credentials, Proofs, Marks, Photo, and Payout sections expose changed or empty badges where applicable. Profile photos remain in the existing side-by-side current/proposed panel; no RPC, schema, or persistence contract changed.
 
 The admin override queue, wallet/ledger view, override preview, room assignment → scheduled transition + notifications, room availability/approval backend (G8–G10, G13–G14), and the read-only all-bookings view at `/bookings` have landed. The admin workspace is now available at `/admin`; its operations queue provides category/urgency/SLA filters, exact booking-number search, OQ-04 business-hours deadlines, escalation status/channel, and report context. Queue rows display the immutable human-readable booking reference (`#N`) while retaining the UUID behind the detail link, and each row links to the admin-only `/admin-operations/bookings/:bookingId` page, where the full participant read model, per-wallet balances, booking-scoped ledger entries, meeting fallback, state history, and override action remain available in a refresh-safe layout. The override form loads the booking roster and presents affected participants as a name/avatar/role multi-select; selected user IDs are serialized automatically for the unchanged preview/apply contract. The queue table uses stable column widths, top-aligned content, readable body text, and non-wrapping status badges. On narrow viewports, the monitor card remains constrained to the content viewport and only the table container scrolls horizontally. The **Room approvals** tab now includes the active-room catalog and Add/Edit/Deactivate room controls backed by `room.create`, `room.update`, and `room.deactivate`; deactivation is a soft removal that preserves historical assignments while preventing new selections. Its `room.listPendingApprovals` section remains the cross-booking queue; requested rooms can be assigned inline, while **Choose room** / **Choose another** opens the admin-only booking detail Offline room card for context-aware assignment or relocation. No admin room flow requires typing a booking UUID. The separate `/admin-tutor-payouts` workspace owns operational tutor payouts: it lists unpaid honorarium and completed sessions, verifies private destination-account details, calculates the transfer fee/net amount, and records a confirmed transfer through **Mark as paid**. Manage Tutors remains focused on invitations and profile review. F1/F2/F11/F12 are closed. Backend U-item sub-gaps are tracked in `docs/plans/active/PRD-GAPS-PHASE3.md` (all closed; U9 closed by REVIEW-FIXES-4 P2.8). The admin economy UI was browser-verified for role denial, valid future-booking snapshot updates, and invalid negative amounts; no UI access bypass was found.
 

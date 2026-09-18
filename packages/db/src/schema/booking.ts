@@ -356,6 +356,35 @@ export const sessionNote = pgTable(
   ],
 );
 
+export const sessionCompletionFeedback = pgTable(
+  "session_completion_feedback",
+  {
+    id: uuidPrimaryKey,
+    bookingId: text("booking_id")
+      .notNull()
+      .references(() => booking.id, { onDelete: "cascade" }),
+    sessionId: text("session_id").references(() => bookingSession.id, {
+      onDelete: "cascade",
+    }),
+    authorId: text("author_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    discussion: jsonb("discussion").$type<string[]>().notNull(),
+    strengths: jsonb("strengths").$type<string[]>().notNull(),
+    improvements: jsonb("improvements").$type<string[]>().notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("session_feedback_bookingId_idx").on(table.bookingId),
+    index("session_feedback_sessionId_idx").on(table.sessionId),
+    index("session_feedback_authorId_idx").on(table.authorId),
+  ],
+);
+
 export const room = pgTable(
   "room",
   {
@@ -537,3 +566,21 @@ export const sessionNoteRelations = relations(sessionNote, ({ one }) => ({
     references: [user.id],
   }),
 }));
+
+export const sessionCompletionFeedbackRelations = relations(
+  sessionCompletionFeedback,
+  ({ one }) => ({
+    booking: one(booking, {
+      fields: [sessionCompletionFeedback.bookingId],
+      references: [booking.id],
+    }),
+    session: one(bookingSession, {
+      fields: [sessionCompletionFeedback.sessionId],
+      references: [bookingSession.id],
+    }),
+    author: one(user, {
+      fields: [sessionCompletionFeedback.authorId],
+      references: [user.id],
+    }),
+  }),
+);
