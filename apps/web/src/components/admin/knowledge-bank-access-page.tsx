@@ -383,7 +383,7 @@ export function KnowledgeBankAccessPage() {
           </Button>
         </div>
 
-        <Card>
+        <Card className="w-full min-w-0 max-w-full overflow-hidden">
           <CardHeader>
             <IconBox variant="info-subtle">
               <IconShieldCheck />
@@ -394,8 +394,8 @@ export function KnowledgeBankAccessPage() {
               35-Mark requirement.
             </CardDescription>
           </CardHeader>
-          <CardBody>
-            <div className="mb-5 flex flex-col gap-3 sm:flex-row">
+          <CardBody className="min-w-0 max-w-full p-0!">
+            <div className="flex flex-col gap-3 p-6 sm:flex-row">
               <div className="relative min-w-0 flex-1">
                 <IconSearch className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
                 <Input
@@ -436,7 +436,7 @@ export function KnowledgeBankAccessPage() {
             </div>
 
             {visibleGrants.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-item-border px-6 py-12 text-center">
+              <div className="mx-6 mb-6 rounded-lg border border-dashed border-item-border px-6 py-12 text-center">
                 <IconMail className="mx-auto size-8 text-muted" />
                 <Text className="mt-3 font-medium">
                   {search ? "No matching students" : "No access grants yet"}
@@ -448,80 +448,82 @@ export function KnowledgeBankAccessPage() {
                 </Text>
               </div>
             ) : (
-              <TableContainer>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Student</TableHead>
-                      <TableHead>Access until</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Note</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {visibleGrants.map((grant) => (
-                      <TableRow key={grant.id}>
-                        <TableCell>
-                          <div className="min-w-48">
-                            <Text className="font-medium">
-                              {grant.studentName}
-                            </Text>
-                            <Text className="mt-0.5 text-sm text-muted">
-                              {grant.studentEmail}
-                            </Text>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Text className="flex items-center gap-2 whitespace-nowrap text-sm">
-                            <IconClock className="size-4 text-muted" />
-                            {formatDateTime(grant.expiresAt)}
-                          </Text>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              grant.status === "active"
-                                ? "success"
-                                : "secondary"
-                            }
-                          >
-                            {grant.status === "active" ? "Active" : "Expired"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Text className="max-w-56 text-sm text-muted">
-                            {grant.note || "—"}
-                          </Text>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex justify-end gap-1">
-                            <Button
-                              variant="plain"
-                              size="sm-icon"
-                              onClick={() => openEdit(grant)}
-                              aria-label={`Edit access for ${grant.studentEmail}`}
-                              title="Edit access"
-                            >
-                              <IconEdit />
-                            </Button>
-                            <Button
-                              variant="plain"
-                              size="sm-icon"
-                              onClick={() => setRemoveTarget(grant)}
-                              aria-label={`Remove access for ${grant.studentEmail}`}
-                              title="Remove access"
-                              className="text-danger"
-                            >
-                              <IconTrash />
-                            </Button>
-                          </div>
-                        </TableCell>
+              <div className="min-w-0 max-w-full overflow-hidden">
+                <TableContainer className="min-w-0">
+                  <Table className="min-w-[48rem]">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Student</TableHead>
+                        <TableHead>Access until</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Note</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+                    </TableHeader>
+                    <TableBody>
+                      {visibleGrants.map((grant) => (
+                        <TableRow key={grant.id}>
+                          <TableCell>
+                            <div className="min-w-48">
+                              <Text className="font-medium">
+                                {grant.studentName}
+                              </Text>
+                              <Text className="mt-0.5 text-sm text-muted">
+                                {grant.studentEmail}
+                              </Text>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Text className="flex items-center gap-2 whitespace-nowrap text-sm">
+                              <IconClock className="size-4 text-muted" />
+                              {formatDateTime(grant.expiresAt)}
+                            </Text>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                grant.status === "active"
+                                  ? "success"
+                                  : "secondary"
+                              }
+                            >
+                              {grant.status === "active" ? "Active" : "Expired"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Text className="max-w-56 text-sm text-muted">
+                              {grant.note || "—"}
+                            </Text>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex justify-end gap-1">
+                              <Button
+                                variant="plain"
+                                size="sm-icon"
+                                onClick={() => openEdit(grant)}
+                                aria-label={`Edit access for ${grant.studentEmail}`}
+                                title="Edit access"
+                              >
+                                <IconEdit />
+                              </Button>
+                              <Button
+                                variant="plain"
+                                size="sm-icon"
+                                onClick={() => setRemoveTarget(grant)}
+                                aria-label={`Remove access for ${grant.studentEmail}`}
+                                title="Remove access"
+                                className="text-danger"
+                              >
+                                <IconTrash />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </div>
             )}
           </CardBody>
         </Card>

@@ -13,7 +13,8 @@ exception while preserving the audit record. The web form searches the bounded
 admin `admin.searchUsers` identity projection and accepts the email only after
 an operator selects a student result. Expiry entry composes the shared Selia
 calendar with the cross-browser minute time picker; new grants default to
-23:59 local time thirty days from today.
+23:59 local time thirty days from today. Its table uses a padded filter region
+and an overflow-contained data region so wide rows remain inside the Selia card.
 
 ## Competition Calendar agenda list (2026-09-18)
 

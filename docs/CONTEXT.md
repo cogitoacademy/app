@@ -15,6 +15,9 @@ admin-only `admin.searchUsers` lookup and requires selecting a student result,
 so operators do not have to enter an email address blindly. Its expiry control
 uses the shared Selia calendar plus the cross-browser minute time picker; new
 grants default to 30 days from today at 23:59 in the operator's local timezone.
+The grant table is contained by its Selia card: filters keep normal card
+padding, while wide columns scroll horizontally inside the card at narrow
+viewports.
 
 ## Offline Calendar room metadata (2026-09-18)
 

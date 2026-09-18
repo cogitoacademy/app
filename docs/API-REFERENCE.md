@@ -13,7 +13,8 @@ live row does not remove its audit-log history. The web create dialog uses the
 admin-only `admin.searchUsers` identity lookup to select the student before
 sending the email to `adminKnowledgeBank.create`; its calendar and minute time
 controls are browser-independent, and new grants default to 23:59 thirty days
-out in the operator's local timezone.
+out in the operator's local timezone. The table containment and narrow-screen
+horizontal scrolling are frontend-only and do not change any RPC contract.
 
 ## Offline Calendar room metadata (2026-09-18)
 

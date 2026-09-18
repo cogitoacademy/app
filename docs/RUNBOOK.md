@@ -14,6 +14,8 @@ the operator's local time. Active and expired grants remain visible in the
 table. **Edit** can extend or shorten a future expiry; **Remove** immediately
 restores the normal student Marks gate. Expiry is enforced on each Knowledge
 Bank metadata and file request, so no scheduler or manual cleanup is required.
+At narrow viewport widths, confirm the grant columns scroll horizontally
+inside the card without causing page-level overflow or clipping the filters.
 
 For a production smoke check, use a student below 35 total Marks: create a
 grant from the selected search result, refresh `/knowledge-bank`, open a PDF,

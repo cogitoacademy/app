@@ -16,6 +16,8 @@ Status: **Complete locally (2026-09-18)**
 - Updated the add dialog to select a student from the admin identity search,
   compose the shared Selia calendar with the cross-browser minute time picker,
   and default new expiries to 23:59 thirty days from today in local time.
+- Kept the grant table within its card and confined narrow-screen horizontal
+  scrolling to the table region below the padded filters.
 - Updated architecture, API, module, runbook, and Marks-economy documentation.
 
 ## Verification
