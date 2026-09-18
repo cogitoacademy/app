@@ -227,6 +227,14 @@ The page-level no-competition state keeps its calendar glyph in the Cogito
 orange token. The accent is scoped to this page and does not alter shared
 empty-state defaults or the `content.listCompetitions` contract.
 
+### Competition Calendar agenda deduplication follow-up (2026-09-18)
+
+The 30-day Agenda now renders a flat list instead of grouping entries by each
+covered day. Every overlapping competition appears once, including multi-day
+competitions, ordered by its first event date while retaining the full date
+range in the event card. This is presentation-only; the `content.listCompetitions`
+contract and the Competition Calendar's month view remain unchanged.
+
 ### Theme shortcut follow-up (2026-08-26)
 
 The authenticated shell's existing Light/Dark/System menu now also responds to `D`. Outside editable fields, the shortcut toggles between the currently rendered light and dark modes, including when the saved preference is System; repeated keydown events and modifier-key combinations are ignored. `next-themes` continues to own preference persistence. This is frontend-only and adds no API, schema, or persistence contract.

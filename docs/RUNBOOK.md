@@ -1,6 +1,14 @@
 # Cogito Runbook
 
-Last updated: 2026-09-09
+Last updated: 2026-09-18
+
+## Competition Calendar agenda list (2026-09-18)
+
+In the `/calendar` smoke check, Agenda should show a flat list for the
+selected 30-day period. A multi-day competition must appear once, its full
+date range should remain visible, and entries should be ordered by the first
+day of the competition. This is a frontend-only check; no environment,
+migration, job, or deployment configuration is required.
 
 ## Bulk date-override smoke check (2026-09-09)
 
@@ -259,7 +267,7 @@ From any authenticated shell page, press `D` once and verify the UI switches bet
 
 ### Competition Calendar smoke check
 
-As an authenticated user, open `/calendar` and confirm published Sanity competitions render in the month grid. Verify today, outside-month days, multi-day spans, and the `+N more` overflow popup; select an event from either the grid or popup and confirm the responsive details modal shows categories, level, scale, organizer, location, timeline, registration deadline, description, and the available external-link actions. Navigate to a month with no events and confirm the normal weekday headings, date cells, outside-month cells, and month navigation remain visible instead of an empty-state replacement. On a short viewport, verify the page heading and calendar toolbar remain in place while only the calendar body scrolls vertically; on a narrow viewport, verify only the month grid scrolls horizontally. Switch to **Agenda**, confirm the 30-day grouped list and rich event cards, use `M`/`A` to switch views, and verify previous/next period plus **Today** navigation. The calendar remains read-only and the browser console should remain free of runtime errors.
+As an authenticated user, open `/calendar` and confirm published Sanity competitions render in the month grid. Verify today, outside-month days, multi-day spans, and the `+N more` overflow popup; select an event from either the grid or popup and confirm the responsive details modal shows categories, level, scale, organizer, location, timeline, registration deadline, description, and the available external-link actions. Navigate to a month with no events and confirm the normal weekday headings, date cells, outside-month cells, and month navigation remain visible instead of an empty-state replacement. On a short viewport, verify the page heading and calendar toolbar remain in place while only the calendar body scrolls vertically; on a narrow viewport, verify only the month grid scrolls horizontally. Switch to **Agenda**, confirm the flat 30-day list and rich event cards, verify that each multi-day competition appears once with its full date range, and confirm the list is ordered by each competition's first day. Use `M`/`A` to switch views, and verify previous/next period plus **Today** navigation. The calendar remains read-only and the browser console should remain free of runtime errors.
 If the API returns no competitions at all, verify the page-level empty state still shows the calendar glyph in Cogito orange.
 
 The route selects the dashboard from the authenticated session role. A tutor or admin must never receive student-only wallet or booking queries from this page.

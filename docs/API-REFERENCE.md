@@ -1,6 +1,14 @@
 # Cogito API Reference
 
-Last updated: 2026-09-09
+Last updated: 2026-09-18
+
+## Competition Calendar agenda list (2026-09-18)
+
+The authenticated 30-day agenda now renders a flat list: each overlapping
+competition appears once, including multi-day competitions, ordered by its
+first event date. The displayed event date remains the full competition range.
+This is frontend-only; `content.listCompetitions` keeps the same path, input,
+output, authentication, and response envelope.
 
 ## Achievement summary UI note (2026-09-09)
 
@@ -233,7 +241,7 @@ Sanity is queried only by the API server. The browser receives normalized conten
 - **Auth:** Protected
 - **Input:** None
 - **Output:** `[{ id, title, description, location, categories: [{ id, name, coreCategory }], educationLevels, startDate, endDate, scale, organizer, registrationDeadline, registrationLink, socialMediaLink }]`
-- **Description:** Returns published competition calendar entries with English projections for every authenticated role. The app route is `GET /calendar` in the SPA; the read-only UI presents the data in month and 30-day agenda views and opens a responsive details modal without changing this API contract. The route uses a contained viewport layout so the calendar body handles vertical scrolling and the month grid handles horizontal scrolling. The month view keeps the normal grid visible when the selected month has no events; the page-level empty state still applies when no competitions are returned at all and keeps its calendar glyph in the Cogito orange accent.
+- **Description:** Returns published competition calendar entries with English projections for every authenticated role. The app route is `GET /calendar` in the SPA; the read-only UI presents the data in month and flat 30-day agenda-list views and opens a responsive details modal without changing this API contract. The agenda list includes each competition overlapping the selected period once and orders entries by first event date. The route uses a contained viewport layout so the calendar body handles vertical scrolling and the month grid handles horizontal scrolling. The month view keeps the normal grid visible when the selected month has no events; the page-level empty state still applies when no competitions are returned at all and keeps its calendar glyph in the Cogito orange accent.
 
 ### `content.listStudentResources`
 

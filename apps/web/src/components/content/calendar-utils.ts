@@ -1,6 +1,9 @@
 import {
+  addDays,
   endOfDay,
   format,
+  isAfter,
+  isBefore,
   isSameDay,
   isWithinInterval,
   startOfDay,
@@ -104,11 +107,34 @@ export function getAllEventsForDay(events: CalendarCompetition[], day: Date) {
     );
 }
 
-export function getAgendaEventsForDay(
+export function getAgendaEventsForPeriod(
   events: CalendarCompetition[],
-  day: Date,
+  currentDate: Date,
+  daysToShow = AGENDA_DAYS_TO_SHOW,
 ) {
-  return getAllEventsForDay(events, day);
+  const periodStart = startOfDay(currentDate);
+  const periodEnd = endOfDay(addDays(periodStart, daysToShow - 1));
+  const uniqueEvents = new Map<string, CalendarCompetition>();
+
+  for (const event of events) {
+    const eventStart = new Date(event.start);
+    const eventEnd = new Date(event.end);
+
+    if (
+      isBefore(eventEnd, periodStart) ||
+      isAfter(eventStart, periodEnd) ||
+      uniqueEvents.has(event.id)
+    ) {
+      continue;
+    }
+
+    uniqueEvents.set(event.id, event);
+  }
+
+  return [...uniqueEvents.values()].toSorted(
+    (left, right) =>
+      new Date(left.start).getTime() - new Date(right.start).getTime(),
+  );
 }
 
 export function formatCompetitionDates(event: CalendarCompetition) {

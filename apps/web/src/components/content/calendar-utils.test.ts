@@ -4,6 +4,7 @@ import {
   competitionTypeOptions,
   filterEventsByCompetitionType,
   getCategoryLabel,
+  getAgendaEventsForPeriod,
   sortDayEvents,
 } from "./calendar-utils";
 import type { CalendarCompetition } from "./calendar-types";
@@ -145,5 +146,56 @@ describe("sortDayEvents", () => {
     ];
     sortDayEvents(events);
     expect(events.map((event) => event.id)).toEqual(["b", "a"]);
+  });
+});
+
+describe("getAgendaEventsForPeriod", () => {
+  function makeDatedEvent(
+    id: string,
+    start: string,
+    end: string,
+  ): CalendarCompetition {
+    return {
+      ...makeEvent(id, ["mun"]),
+      start: new Date(start),
+      end: new Date(end),
+    };
+  }
+
+  test("returns each overlapping competition once in first-day order", () => {
+    const currentDate = new Date("2026-10-01T12:00:00+07:00");
+    const later = makeDatedEvent(
+      "later",
+      "2026-10-10T09:00:00+07:00",
+      "2026-10-12T17:00:00+07:00",
+    );
+    const ongoing = makeDatedEvent(
+      "ongoing",
+      "2026-09-30T09:00:00+07:00",
+      "2026-10-03T17:00:00+07:00",
+    );
+    const outside = makeDatedEvent(
+      "outside",
+      "2026-09-20T09:00:00+07:00",
+      "2026-09-29T17:00:00+07:00",
+    );
+
+    const result = getAgendaEventsForPeriod(
+      [later, ongoing, ongoing, outside],
+      currentDate,
+    );
+
+    expect(result.map((event) => event.id)).toEqual(["ongoing", "later"]);
+  });
+
+  test("does not include events that start after the agenda period", () => {
+    const currentDate = new Date("2026-10-01T12:00:00+07:00");
+    const afterPeriod = makeDatedEvent(
+      "after-period",
+      "2026-11-01T09:00:00+07:00",
+      "2026-11-02T17:00:00+07:00",
+    );
+
+    expect(getAgendaEventsForPeriod([afterPeriod], currentDate)).toEqual([]);
   });
 });
