@@ -2,12 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import {
-  IconAlertTriangle,
-  IconCertificate,
-  IconUserCheck,
-  IconWallet,
-} from "@tabler/icons-react";
+import { IconWallet } from "@tabler/icons-react";
 import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
