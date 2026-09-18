@@ -167,6 +167,34 @@ const MARKS_ACTION_COPY: Record<
       "Consume the reserved Marks as a penalty. The participant does not receive a refund.",
   },
 };
+const MARKS_ACTION_OPTIONS = ["none", ...MARKS_ACTIONS] as const;
+
+function MarksActionInfo() {
+  return (
+    <InfoPreview
+      title="How Marks handling works"
+      description="Choose the wallet outcome that matches the correction you want to make."
+      label="About Marks handling"
+    >
+      <div className="space-y-2.5">
+        {MARKS_ACTION_OPTIONS.map((value) => (
+          <div key={value} className="space-y-0.5">
+            <Text className="text-sm font-medium">
+              {MARKS_ACTION_COPY[value].label}
+            </Text>
+            <Text className="text-xs leading-relaxed text-muted">
+              {MARKS_ACTION_COPY[value].description}
+            </Text>
+          </div>
+        ))}
+        <Text className="pt-1 text-xs leading-relaxed text-muted">
+          These actions apply to the currently held Marks of the selected
+          participant(s).
+        </Text>
+      </div>
+    </InfoPreview>
+  );
+}
 
 const BOOKING_QUEUE_PAGE_SIZE = 10;
 const LEDGER_PAGE_SIZE = 10;
@@ -1259,7 +1287,7 @@ function OverrideDialog({
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-4">
             <Field>
               <FieldLabel>Category</FieldLabel>
               <Select
@@ -1284,9 +1312,12 @@ function OverrideDialog({
               </Select>
             </Field>
             <Field>
-              <FieldLabel>
-                How should the participant's Marks be handled?
-              </FieldLabel>
+              <div className="flex items-center gap-2">
+                <FieldLabel>
+                  How should the participant's Marks be handled?
+                </FieldLabel>
+                <MarksActionInfo />
+              </div>
               <Select
                 value={marksAction}
                 onValueChange={(value) => {
@@ -1312,10 +1343,6 @@ function OverrideDialog({
                   </SelectList>
                 </SelectPopup>
               </Select>
-              <FieldDescription>
-                {MARKS_ACTION_COPY[marksAction].description} This applies to the
-                currently held Marks of the selected participant(s).
-              </FieldDescription>
             </Field>
           </div>
           <Field>
