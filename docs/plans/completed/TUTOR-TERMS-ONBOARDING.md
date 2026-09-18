@@ -17,8 +17,8 @@ review.
   duplicating the consent control, and the checkbox remains checked/disabled
   after the server records acceptance. Non-editable profiles retain a
   **Review Tutor Terms** action for read-only review.
-- Kept the review-submit action disabled while first-submit consent is missing;
-  draft saving remains available and checking the agreement enables submission
+- Kept the review-submit actions disabled while the tutor has not accepted the
+  terms; saving remains available and checking the agreement enables submission
   immediately.
 - Added `acceptTerms?: boolean` to `tutor.submitForReview` and enforced the
   requirement in the service, including `TUTOR_TERMS_NOT_ACCEPTED` for direct

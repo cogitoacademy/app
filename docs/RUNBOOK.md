@@ -252,10 +252,12 @@ form composition before checking the API or database.
 
 For a complete draft or `changes_requested` tutor, verify the sticky profile
 action area shows one **I agree to the Tutor Terms of Service** checkbox and a
-**Read terms** action. While the tutor has not accepted the terms, **Submit
-for review** must be disabled while **Save draft** remains available. Check
-the agreement and verify the review action becomes enabled; submit and verify
-the profile moves to `pending_review`. **Read terms** opens the bilingual
+**Read terms** action. While the tutor has not accepted the terms, the
+applicable review action—**Submit for review** for onboarding or **Submit
+changes for review** for a published tutor—must be disabled while the save
+action remains available. Check the agreement and verify the review action
+becomes enabled; submit and verify the profile moves to `pending_review` (or
+queues the published profile edit). **Read terms** opens the bilingual
 Indonesian/English document in Indonesian-then-English order; closing it
 preserves the checkbox state, and the dialog has no second acceptance checkbox
 or submit action. At narrow widths, confirm the consent copy wraps naturally

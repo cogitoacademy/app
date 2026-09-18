@@ -375,9 +375,9 @@ The tutor profile action area presents one bilingual consent checkbox labeled
 opens the Indonesian/English Terms of Service from
 `apps/web/src/components/tutor/tutor-terms-of-service.tsx` in a read-only
 dialog. Draft saves do not require consent, and closing the dialog leaves the
-profile's checkbox state unchanged. While first-submit consent is still
-required, the review-submit button stays disabled until the tutor checks the
-agreement.
+profile's checkbox state unchanged. While the tutor has not accepted the
+terms, both **Submit for review** and **Submit changes for review** stay
+disabled until the tutor checks the agreement.
 
 The server accepts `acceptTerms?: boolean` on `tutor.submitForReview`, enforces
 acceptance when the tutor profile has no prior consent, and writes
@@ -932,7 +932,7 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 The tutor `/profile` editor presents education, competition achievements, and experiences in one combined **Achievements & experience** card with a single public preview; each subsection keeps its own private proof-link field. Short bios are limited to 50 words, and the proof-link guidance recommends one Google Drive folder shared with “Anyone with the link can view” for both achievement and experience evidence.
 
 - `getMyProfile`, `updateMyProfile`, `submitForReview`
-- The first complete `submitForReview` requires the bilingual Terms of Service checkbox exposed in the profile action area; **Read terms** opens the read-only document, the review-submit button remains disabled until the checkbox is checked, the server records the acceptance timestamp/version once, and later `changes_requested` resubmissions proceed without a second prompt.
+- The first complete `submitForReview` requires the bilingual Terms of Service checkbox exposed in the profile action area; **Read terms** opens the read-only document, **Submit for review** and **Submit changes for review** remain disabled until the checkbox is checked, the server records the acceptance timestamp/version once, and later `changes_requested` resubmissions proceed without a second prompt.
 - Tutor profiles store structured `education` (maximum 2 entries), one structured achievement section backed by `competitionAchievements` (maximum 5 entries, each with comma-separated award titles), and one structured experience section backed by `experienceEntries` (maximum 5 role/organization/year/description entries); the web editor previews the normalized format and the public discovery drawer renders it without year grouping dots. The award editor keeps an in-progress comma visible while the next title is being typed, and experience text fields preserve punctuation.
 - The tutor profile editor separates **Save draft**/**Save profile changes** from **Submit for review**. Draft saving does not require the complete onboarding set, while malformed values are shown with field-level errors, a validation summary, and focus on the first invalid control; submission applies the complete required-field gate. Published tutors remain editable while profile changes are under review: saving updates the pending proposal, and submitting validates and queues the latest version.
 - The admin tutor index derives its displayed status from both onboarding and edit-review state: a published tutor with submitted pending changes is labeled **Edit review**, while an edit returned by admin is labeled **Revision requested**, so admins can identify work requiring attention before opening the full-page review workspace.

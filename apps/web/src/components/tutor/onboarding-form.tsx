@@ -485,7 +485,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     profile.onboardingStatus !== "published" &&
     !hasRecordedTutorTermsAcceptance;
   const isTutorTermsBlockingSubmit =
-    requiresTutorTermsAcceptance && !hasAcceptedTerms;
+    !hasRecordedTutorTermsAcceptance && !hasAcceptedTerms;
   const savedNameRef = useRef(accountUser.name.trim());
 
   const nameMutation = useMutation({
