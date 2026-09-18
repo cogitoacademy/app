@@ -40,9 +40,11 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 import { EmptyStateCard } from "@/components/empty-state";
 import { CogitoMarks } from "@/components/cogito-marks";
 import Loader from "@/components/loader";
+import { useRole } from "@/hooks/use-role";
 import { serverUrl } from "@/lib/server-url";
 import { orpc } from "@/utils/orpc";
 import { getCategoryLabel } from "./knowledge-bank-utils";
+import { SanityStudioEditButton } from "./sanity-studio-button";
 
 type Resource = {
   id: string;
@@ -62,6 +64,8 @@ export function KnowledgeBankPage() {
     null,
   );
   const resources = useQuery(orpc.content.listStudentResources.queryOptions());
+  const { role, isLoading: isRoleLoading } = useRole();
+  const isAdmin = !isRoleLoading && role === "admin";
 
   const resourceItems = resources.data?.items;
   const items = useMemo(
@@ -140,14 +144,22 @@ export function KnowledgeBankPage() {
   return (
     <>
       <Stack direction="column" spacing="lg">
-        <div>
-          <div className="flex items-center gap-2">
-            <Heading>Learn from curated resources</Heading>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <Heading>Learn from curated resources</Heading>
+            </div>
+            <Text className="mt-1 max-w-2xl text-muted">
+              Find focused materials to strengthen your academic and competition
+              preparation.
+            </Text>
           </div>
-          <Text className="mt-1 max-w-2xl text-muted">
-            Find focused materials to strengthen your academic and competition
-            preparation.
-          </Text>
+          {isAdmin ? (
+            <SanityStudioEditButton
+              type="studentResource"
+              label="Edit resources"
+            />
+          ) : null}
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row">

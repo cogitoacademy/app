@@ -9,6 +9,7 @@ import {
   subMonths,
 } from "date-fns";
 import {
+  IconAdjustmentsHorizontal,
   IconArrowLeft,
   IconArrowRight,
   IconCalendarCheck,
@@ -17,7 +18,9 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 
+import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
+import { Kbd } from "@cogito-app/ui/components/selia/kbd";
 import {
   Card,
   CardBody,
@@ -26,17 +29,29 @@ import {
 } from "@cogito-app/ui/components/selia/card";
 import {
   Menu,
+  MenuCheckboxItem,
+  MenuGroup,
+  MenuGroupLabel,
+  MenuItem,
   MenuPopup,
   MenuRadioGroup,
   MenuRadioItem,
+  MenuSeparator,
   MenuTrigger,
 } from "@cogito-app/ui/components/selia/menu";
 import { cn } from "@cogito-app/ui/lib/utils";
 
 import { CalendarAgendaView } from "./calendar-agenda-view";
-import { CalendarDetailsDialog } from "./calendar-details-dialog";
+import { CalendarDetailsDrawer } from "./calendar-details-drawer";
 import { CalendarMonthView } from "./calendar-month-view";
-import { AGENDA_DAYS_TO_SHOW, EVENT_GAP, EVENT_HEIGHT } from "./calendar-utils";
+import {
+  AGENDA_DAYS_TO_SHOW,
+  EVENT_GAP,
+  EVENT_HEIGHT,
+  competitionTypeOptions,
+  filterEventsByCompetitionType,
+  getCategoryLabel,
+} from "./calendar-utils";
 import type { CalendarCompetition, CalendarView } from "./calendar-types";
 
 const EMPTY_EVENTS: CalendarCompetition[] = [];
@@ -58,6 +73,9 @@ export function CompetitionCalendar({
   const [view, setView] = useState<CalendarView>(initialView);
   const [selectedEvent, setSelectedEvent] =
     useState<CalendarCompetition | null>(null);
+  const [selectedTypes, setSelectedTypes] = useState<ReadonlySet<string>>(
+    () => new Set(competitionTypeOptions),
+  );
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -79,10 +97,10 @@ export function CompetitionCalendar({
 
   const sortedEvents = useMemo(
     () =>
-      events.toSorted(
+      filterEventsByCompetitionType(events, selectedTypes).toSorted(
         (left, right) => left.start.getTime() - right.start.getTime(),
       ),
-    [events],
+    [events, selectedTypes],
   );
 
   const viewTitle = useMemo(() => {
@@ -120,6 +138,28 @@ export function CompetitionCalendar({
 
   function handleViewChange(value: string) {
     if (value === "month" || value === "agenda") setView(value);
+  }
+
+  const isFiltered = selectedTypes.size < competitionTypeOptions.length;
+
+  const filterLabel = isFiltered
+    ? `Calendar options, ${view} view, ${selectedTypes.size} of ${competitionTypeOptions.length} types shown`
+    : `Calendar options, ${view} view`;
+
+  function handleTypeToggle(value: string, checked: boolean) {
+    setSelectedTypes((prev) => {
+      const next = new Set(prev);
+      if (checked) {
+        next.add(value);
+      } else {
+        next.delete(value);
+      }
+      return next;
+    });
+  }
+
+  function handleResetTypes() {
+    setSelectedTypes(new Set(competitionTypeOptions));
   }
 
   const calendarStyle = {
@@ -182,33 +222,65 @@ export function CompetitionCalendar({
             </CardTitle>
           </div>
 
-          <div className="ml-auto">
+          <div className="relative ml-auto flex gap-2">
             <Menu>
               <MenuTrigger
                 render={
                   <Button
                     variant="secondary"
                     size="sm"
-                    aria-label="Change calendar view"
+                    aria-label={filterLabel}
                     className="w-fit"
                   />
                 }
               >
-                <span className="max-[479px]:sr-only">
-                  {view === "month" ? "Month" : "Agenda"}
-                </span>
-                <span className="hidden max-[479px]:inline" aria-hidden="true">
-                  {view === "month" ? "M" : "A"}
-                </span>
+                <IconAdjustmentsHorizontal />
+                <span className="max-[479px]:sr-only">Filter</span>
                 <IconChevronDown className="hidden min-[366px]:block" />
               </MenuTrigger>
               <MenuPopup align="end" size="compact">
-                <MenuRadioGroup value={view} onValueChange={handleViewChange}>
-                  <MenuRadioItem value="month">Month</MenuRadioItem>
-                  <MenuRadioItem value="agenda">Agenda</MenuRadioItem>
-                </MenuRadioGroup>
+                <MenuGroup>
+                  <MenuGroupLabel>View</MenuGroupLabel>
+                  <MenuRadioGroup value={view} onValueChange={handleViewChange}>
+                    <MenuRadioItem value="month">
+                      Month <Kbd className="ml-auto">M</Kbd>
+                    </MenuRadioItem>
+                    <MenuRadioItem value="agenda">
+                      Agenda <Kbd className="ml-auto">A</Kbd>
+                    </MenuRadioItem>
+                  </MenuRadioGroup>
+                </MenuGroup>
+                <MenuSeparator />
+                <MenuGroup>
+                  <MenuGroupLabel>Competition type</MenuGroupLabel>
+                  {competitionTypeOptions.map((value) => (
+                    <MenuCheckboxItem
+                      key={value}
+                      checked={selectedTypes.has(value)}
+                      onCheckedChange={(checked) =>
+                        handleTypeToggle(value, checked === true)
+                      }
+                    >
+                      {getCategoryLabel(value)}
+                    </MenuCheckboxItem>
+                  ))}
+                </MenuGroup>
+                <MenuSeparator />
+                <MenuItem onClick={handleResetTypes} disabled={!isFiltered}>
+                  Reset
+                </MenuItem>
               </MenuPopup>
             </Menu>
+            {isFiltered ? (
+              <Badge
+                variant="primary"
+                size="sm"
+                pill
+                className="absolute -top-2 -right-2 px-1 text-[10px] tabular-nums"
+              >
+                {`${selectedTypes.size}/${competitionTypeOptions.length}`}
+              </Badge>
+            ) : null}
           </div>
         </CardHeader>
 
@@ -229,7 +301,7 @@ export function CompetitionCalendar({
         </CardBody>
       </Card>
 
-      <CalendarDetailsDialog
+      <CalendarDetailsDrawer
         event={selectedEvent}
         open={selectedEvent !== null}
         onClose={() => setSelectedEvent(null)}

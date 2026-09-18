@@ -43,9 +43,16 @@ describe("admin-booking.errors", () => {
       const err = new TerminalStateOverrideError("bk_1", "completed");
       expect(err.code).toBe("TERMINAL_STATE_OVERRIDE");
       expect(err.domain).toBe("admin-booking");
-      expect(err.message).toBe("Cannot override a booking in terminal state");
+      expect(err.message).toBe(
+        "This booking is already completed and can no longer be overridden. Final bookings are locked — check state history or use a wallet correction if Marks need fixing.",
+      );
       expect(err.details).toEqual({ id: "bk_1", status: "completed" });
       expect(err.name).toBe("TerminalStateOverrideError");
+    });
+    it("should humanize underscored statuses", () => {
+      const err = new TerminalStateOverrideError("bk_1", "late_cancelled");
+      expect(err.message).toContain("already late cancelled");
+      expect(err.message).not.toContain("terminal state");
     });
   });
   describe("InvalidRefundStateError", () => {

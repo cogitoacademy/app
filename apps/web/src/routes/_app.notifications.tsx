@@ -6,7 +6,7 @@ export const Route = createFileRoute("/_app/notifications")({
   head: () => ({
     meta: [
       {
-        title: "Notifications — Cogito Academy",
+        title: "Notifications · Cogito Academy",
       },
     ],
   }),

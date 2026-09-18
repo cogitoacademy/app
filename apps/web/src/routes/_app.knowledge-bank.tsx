@@ -8,7 +8,7 @@ export const Route = createFileRoute("/_app/knowledge-bank")({
   head: () => ({
     meta: [
       {
-        title: "Knowledge Bank — Cogito Academy",
+        title: "Knowledge Bank · Cogito Academy",
       },
     ],
   }),

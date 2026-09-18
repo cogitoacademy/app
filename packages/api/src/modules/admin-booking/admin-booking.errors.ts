@@ -19,9 +19,10 @@ export class BookingNotFoundError extends DomainError {
 export class TerminalStateOverrideError extends DomainError {
   readonly domain = "admin-booking";
   constructor(id: string, status: string) {
+    const humanStatus = status.replaceAll("_", " ");
     super(
       "TERMINAL_STATE_OVERRIDE",
-      "Cannot override a booking in terminal state",
+      `This booking is already ${humanStatus} and can no longer be overridden. Final bookings are locked — check state history or use a wallet correction if Marks need fixing.`,
       { id, status },
     );
   }

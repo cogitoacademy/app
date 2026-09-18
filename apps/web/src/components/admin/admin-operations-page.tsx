@@ -10,11 +10,13 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import {
+  IconAdjustmentsHorizontal,
   IconAlertTriangle,
   IconArrowLeft,
   IconBuilding,
   IconCalendarEvent,
   IconCheck,
+  IconChevronDown,
   IconClock,
   IconCoins,
   IconPlus,
@@ -50,6 +52,7 @@ import {
 import {
   Field,
   FieldDescription,
+  FieldError,
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
@@ -144,6 +147,16 @@ const ROOM_PAGE_SIZE = 10;
 const ROOM_APPROVAL_PAGE_SIZE = 10;
 
 export function AdminOperationsPage() {
+  const [tab, setTab] = useState("queue");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [bookingSearch, setBookingSearch] = useState("");
+  const [category, setCategory] = useState<OverrideCategoryFilter>("all");
+  const [urgency, setUrgency] = useState<Urgency>("all");
+  const [slaFilter, setSlaFilter] = useState<SlaFilter>("all");
+  const activeQueueFilterCount =
+    (category !== "all" ? 1 : 0) +
+    (urgency !== "all" ? 1 : 0) +
+    (slaFilter !== "all" ? 1 : 0);
   return (
     <Stack
       direction="column"
@@ -159,20 +172,67 @@ export function AdminOperationsPage() {
           from one workspace.
         </Text>
       </div>
-      <Tabs defaultValue="queue" className="min-w-0 max-w-full">
-        <TabsList>
-          <TabsItem value="queue">
-            <IconCalendarEvent /> Booking queue
-          </TabsItem>
-          <TabsItem value="wallet">
-            <IconCoins /> Wallet lookup
-          </TabsItem>
-          <TabsItem value="rooms">
-            <IconBuilding /> Room approvals
-          </TabsItem>
-        </TabsList>
+      <Tabs value={tab} onValueChange={setTab} className="min-w-0 max-w-full">
+        <div className="flex w-full min-w-0 max-w-full items-center gap-2 sm:justify-between">
+          <TabsList className="min-w-0 flex-1 max-w-full overflow-x-auto overscroll-x-contain scrollbar-hidden sm:w-fit sm:flex-none">
+            <TabsItem
+              value="queue"
+              className="flex-none whitespace-nowrap text-sm sm:text-base"
+            >
+              <IconCalendarEvent /> Booking queue
+            </TabsItem>
+            <TabsItem
+              value="wallet"
+              className="flex-none whitespace-nowrap text-sm sm:text-base"
+            >
+              <IconCoins /> Wallet lookup
+            </TabsItem>
+            <TabsItem
+              value="rooms"
+              className="flex-none whitespace-nowrap text-sm sm:text-base"
+            >
+              <IconBuilding /> Room approvals
+            </TabsItem>
+          </TabsList>
+          {tab === "queue" ? (
+            <Button
+              variant={activeQueueFilterCount > 0 ? "secondary" : "outline"}
+              className="size-9.5 shrink-0 p-0 sm:w-auto sm:px-4"
+              aria-label="Toggle booking queue filters"
+              aria-expanded={filtersOpen}
+              aria-controls="booking-queue-filters"
+              onClick={() => setFiltersOpen((open) => !open)}
+            >
+              <IconAdjustmentsHorizontal />
+              <span className="hidden sm:inline">Filters</span>
+              {activeQueueFilterCount > 0 ? (
+                <Badge
+                  variant="primary"
+                  size="sm"
+                  pill
+                  className="hidden size-5 justify-center p-0 tabular-nums sm:inline-flex"
+                >
+                  {activeQueueFilterCount}
+                </Badge>
+              ) : null}
+              <IconChevronDown
+                className={`hidden transition-transform duration-200 ease-out motion-reduce:transition-none sm:block ${filtersOpen ? "rotate-180" : ""}`}
+              />
+            </Button>
+          ) : null}
+        </div>
         <TabsPanel value="queue" className="min-w-0 max-w-full">
-          <BookingQueue />
+          <BookingQueue
+            bookingSearch={bookingSearch}
+            onBookingSearchChange={setBookingSearch}
+            category={category}
+            onCategoryChange={setCategory}
+            urgency={urgency}
+            onUrgencyChange={setUrgency}
+            slaFilter={slaFilter}
+            onSlaFilterChange={setSlaFilter}
+            filtersOpen={filtersOpen}
+          />
         </TabsPanel>
         <TabsPanel value="wallet">
           <WalletLookup />
@@ -185,12 +245,28 @@ export function AdminOperationsPage() {
   );
 }
 
-function BookingQueue() {
+function BookingQueue({
+  bookingSearch,
+  onBookingSearchChange,
+  category,
+  onCategoryChange,
+  urgency,
+  onUrgencyChange,
+  slaFilter,
+  onSlaFilterChange,
+  filtersOpen,
+}: {
+  bookingSearch: string;
+  onBookingSearchChange: (value: string) => void;
+  category: OverrideCategoryFilter;
+  onCategoryChange: (value: OverrideCategoryFilter) => void;
+  urgency: Urgency;
+  onUrgencyChange: (value: Urgency) => void;
+  slaFilter: SlaFilter;
+  onSlaFilterChange: (value: SlaFilter) => void;
+  filtersOpen: boolean;
+}) {
   const queryClient = useQueryClient();
-  const [bookingSearch, setBookingSearch] = useState("");
-  const [category, setCategory] = useState<OverrideCategoryFilter>("all");
-  const [urgency, setUrgency] = useState<Urgency>("all");
-  const [slaFilter, setSlaFilter] = useState<SlaFilter>("all");
   const [page, setPage] = useState(0);
   const [pageCursors, setPageCursors] = useState<Array<string | undefined>>([
     undefined,
@@ -233,93 +309,104 @@ function BookingQueue() {
       spacing="md"
       className="w-full min-w-0 max-w-full"
     >
-      <Card>
-        <CardBody className="flex flex-wrap items-end gap-3">
-          <Field className="min-w-56">
-            <FieldLabel htmlFor="booking-number-search">
-              Booking number
-            </FieldLabel>
-            <Input
-              id="booking-number-search"
-              type="search"
-              value={bookingSearch}
-              onChange={(event) => {
-                setBookingSearch(event.target.value);
-                resetPage();
-              }}
-              placeholder="#12 or 12"
-            />
-          </Field>
-          <Field className="min-w-56">
-            <FieldLabel>Override category</FieldLabel>
-            <Select
-              value={category}
-              onValueChange={(value) => {
-                setCategory(
-                  getSelectItemValue(value) as OverrideCategoryFilter,
-                );
-                resetPage();
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectPopup>
-                <SelectList>
-                  <SelectItem value="all">All categories</SelectItem>
-                  {OVERRIDE_LIST_CATEGORIES.map((value) => (
-                    <SelectItem key={value} value={value}>
-                      {humanize(value)}
-                    </SelectItem>
-                  ))}
-                </SelectList>
-              </SelectPopup>
-            </Select>
-          </Field>
-          <Field className="min-w-48">
-            <FieldLabel>Urgency</FieldLabel>
-            <Select
-              value={urgency}
-              onValueChange={(value) => {
-                setUrgency(getSelectItemValue(value) as Urgency);
-                resetPage();
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectPopup>
-                <SelectList>
-                  <SelectItem value="all">All urgency levels</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="low">Low</SelectItem>
-                </SelectList>
-              </SelectPopup>
-            </Select>
-          </Field>
-          <Field className="min-w-48">
-            <FieldLabel>SLA status</FieldLabel>
-            <Select
-              value={slaFilter}
-              onValueChange={(value) => {
-                setSlaFilter(getSelectItemValue(value) as SlaFilter);
-                resetPage();
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectPopup>
-                <SelectList>
-                  <SelectItem value="all">All SLA statuses</SelectItem>
-                  <SelectItem value="escalated">Escalated only</SelectItem>
-                </SelectList>
-              </SelectPopup>
-            </Select>
-          </Field>
-        </CardBody>
-      </Card>
+      <div
+        id="booking-queue-filters"
+        aria-hidden={!filtersOpen}
+        className={`grid w-full min-w-0 max-w-full transition-[grid-template-rows,opacity,margin] duration-300 ease-out motion-reduce:transition-none ${filtersOpen ? "grid-rows-[1fr] opacity-100" : "-mb-4 grid-rows-[0fr] opacity-0"}`}
+      >
+        <div
+          className="z-0 min-h-0 w-full min-w-0 max-w-full"
+          inert={!filtersOpen}
+        >
+          <Card>
+            <CardBody className="flex flex-wrap items-end gap-3">
+              <Field className="min-w-56">
+                <FieldLabel htmlFor="booking-number-search">
+                  Booking number
+                </FieldLabel>
+                <Input
+                  id="booking-number-search"
+                  type="search"
+                  value={bookingSearch}
+                  onChange={(event) => {
+                    onBookingSearchChange(event.target.value);
+                    resetPage();
+                  }}
+                  placeholder="#12 or 12"
+                />
+              </Field>
+              <Field className="min-w-56">
+                <FieldLabel>Override category</FieldLabel>
+                <Select
+                  value={category}
+                  onValueChange={(value) => {
+                    onCategoryChange(
+                      getSelectItemValue(value) as OverrideCategoryFilter,
+                    );
+                    resetPage();
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectPopup>
+                    <SelectList>
+                      <SelectItem value="all">All categories</SelectItem>
+                      {OVERRIDE_LIST_CATEGORIES.map((value) => (
+                        <SelectItem key={value} value={value}>
+                          {humanize(value)}
+                        </SelectItem>
+                      ))}
+                    </SelectList>
+                  </SelectPopup>
+                </Select>
+              </Field>
+              <Field className="min-w-48">
+                <FieldLabel>Urgency</FieldLabel>
+                <Select
+                  value={urgency}
+                  onValueChange={(value) => {
+                    onUrgencyChange(getSelectItemValue(value) as Urgency);
+                    resetPage();
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectPopup>
+                    <SelectList>
+                      <SelectItem value="all">All urgency levels</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="low">Low</SelectItem>
+                    </SelectList>
+                  </SelectPopup>
+                </Select>
+              </Field>
+              <Field className="min-w-48">
+                <FieldLabel>SLA status</FieldLabel>
+                <Select
+                  value={slaFilter}
+                  onValueChange={(value) => {
+                    onSlaFilterChange(getSelectItemValue(value) as SlaFilter);
+                    resetPage();
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectPopup>
+                    <SelectList>
+                      <SelectItem value="all">All SLA statuses</SelectItem>
+                      <SelectItem value="escalated">Escalated only</SelectItem>
+                    </SelectList>
+                  </SelectPopup>
+                </Select>
+              </Field>
+            </CardBody>
+          </Card>
+        </div>
+      </div>
       {queueQuery.isPending ? (
         <LoadingCard />
       ) : queueQuery.isError ? (
@@ -480,7 +567,7 @@ function BookingQueue() {
                           <TableCell className="align-top">
                             <SlaStatus item={item} timezone={item.timezone} />
                           </TableCell>
-                          <TableCell className="align-top whitespace-nowrap text-sm flex items-center">
+                          <TableCell className="align-top whitespace-nowrap text-sm flex items-center gap-1">
                             <CogitoMarks value={item.holdAmount} size="3" />
                             held
                           </TableCell>
@@ -1123,6 +1210,13 @@ function OverrideDialog({
         showError("Override could not be applied", error),
     }),
   );
+  const previewHint = preview
+    ? null
+    : !reason.trim()
+      ? "Reason required — fill it to unlock Preview."
+      : marksAction !== "none" && participantIds.length === 0
+        ? "Select at least one participant to unlock Preview."
+        : "Run Preview first — Apply unlocks after a successful preview.";
 
   return (
     <Dialog
@@ -1190,7 +1284,9 @@ function OverrideDialog({
             </Field>
           </div>
           <Field>
-            <FieldLabel htmlFor="override-reason">Reason</FieldLabel>
+            <FieldLabel htmlFor="override-reason">
+              Reason <span className="text-danger">*</span>
+            </FieldLabel>
             <Textarea
               id="override-reason"
               value={reason}
@@ -1202,7 +1298,15 @@ function OverrideDialog({
             />
           </Field>
           <Field>
-            <FieldLabel>Affected participants</FieldLabel>
+            <FieldLabel>
+              {marksAction !== "none" ? (
+                <>
+                  Affected participants <span className="text-danger">*</span>
+                </>
+              ) : (
+                "Affected participants (optional)"
+              )}
+            </FieldLabel>
             <Select
               multiple
               value={participantIds}
@@ -1267,6 +1371,11 @@ function OverrideDialog({
               Choose who should receive the override notification or Marks
               adjustment. User IDs are handled automatically.
             </FieldDescription>
+            {marksAction !== "none" && participantIds.length === 0 ? (
+              <FieldError>
+                Select at least one participant when a Marks action is selected.
+              </FieldError>
+            ) : null}
             {participantQuery.isError ? (
               <Button
                 type="button"
@@ -1279,7 +1388,9 @@ function OverrideDialog({
             ) : null}
           </Field>
           <Field>
-            <FieldLabel htmlFor="user-note">User-visible note</FieldLabel>
+            <FieldLabel htmlFor="user-note">
+              User-visible note (optional)
+            </FieldLabel>
             <Input
               id="user-note"
               value={userNote}
@@ -1288,7 +1399,9 @@ function OverrideDialog({
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor="internal-note">Internal admin note</FieldLabel>
+            <FieldLabel htmlFor="internal-note">
+              Internal admin note (optional)
+            </FieldLabel>
             <Input
               id="internal-note"
               value={internalNote}
@@ -1320,6 +1433,9 @@ function OverrideDialog({
               </CardBody>
             </Card>
           ) : null}
+          {previewHint ? (
+            <Text className="text-sm text-muted">{previewHint}</Text>
+          ) : null}
         </DialogBody>
         <DialogFooter>
           <Button variant="secondary" onClick={handleClose}>
@@ -1329,7 +1445,11 @@ function OverrideDialog({
             variant="outline"
             onClick={() => previewMutation.mutate(buildInput())}
             progress={previewMutation.isPending}
-            disabled={!reason.trim() || previewMutation.isPending}
+            disabled={
+              !reason.trim() ||
+              (marksAction !== "none" && participantIds.length === 0) ||
+              previewMutation.isPending
+            }
           >
             Preview
           </Button>
@@ -1904,7 +2024,7 @@ function RoomCatalog({
   const visibleRooms = rooms.slice(0, ROOM_PAGE_SIZE);
 
   return (
-    <Card id="admin-room-catalog" className="scroll-mt-4">
+    <Card id="admin-room-catalog" className="scroll-mt-4 overflow-x-auto">
       <CardHeader className="flex-wrap">
         <div className="min-w-0 flex-1">
           <CardTitle>
@@ -1981,8 +2101,8 @@ function RoomCatalog({
           </>
         ) : (
           <>
-            <TableContainer className="w-[calc(100%+3rem)]!">
-              <Table>
+            <TableContainer className="w-[calc(100%+3rem)]! min-w-0">
+              <Table className="min-w-[40rem]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Room</TableHead>
@@ -1994,13 +2114,17 @@ function RoomCatalog({
                 <TableBody>
                   {visibleRooms.map((room) => (
                     <TableRow key={room.id}>
-                      <TableCell>
+                      <TableCell className="whitespace-nowrap">
                         <Text className="font-medium">{room.name}</Text>
                       </TableCell>
-                      <TableCell>{room.location}</TableCell>
-                      <TableCell>{room.capacity} seats</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex flex-wrap justify-end gap-1">
+                      <TableCell className="whitespace-nowrap">
+                        {room.location}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {room.capacity} seats
+                      </TableCell>
+                      <TableCell className="text-right whitespace-nowrap">
+                        <div className="flex justify-end gap-1">
                           <Button
                             size="sm"
                             variant="secondary"

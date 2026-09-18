@@ -1305,7 +1305,7 @@ The successful mutation also best-effort updates the existing offline Calendar e
 - **Auth:** Admin
 - **Input:** `{ bookingId, category, reason, affectedParticipants?, marksAction?, userNote?, internalNote? }` (`category` one of tutor_no_show/medical_emergency/technical_failure/admin_correction/student_no_show/force_cancel; `marksAction` one of release_holds/compensate_credit/compensate_deduct)
 - **Output:** `{ booking }` — the updated booking
-- **Errors:** `BOOKING_NOT_FOUND` (404), terminal-state override rejected
+- **Errors:** `BOOKING_NOT_FOUND` (404), terminal-state override rejected (`TERMINAL_STATE_OVERRIDE`, 409 — message names the final status, e.g. "This booking is already completed and can no longer be overridden. Final bookings are locked — check state history or use a wallet correction if Marks need fixing.")
 - **Description:** Force state transition bypassing the state machine; optionally adjusts held Marks per participant; records audit log + state history + participant notification
 - **Frontend note:** The admin override form reads the booking roster through protected `booking.get` and presents names/roles in a multi-select. It submits the selected participant user IDs automatically in `affectedParticipants`; the API input remains unchanged.
 
@@ -1314,6 +1314,7 @@ The successful mutation also best-effort updates the existing offline Calendar e
 - **Auth:** Admin
 - **Input:** Same as `applyOverride`
 - **Output:** `{ bookingId, currentState, projectedState, affectedParticipants, marksAction, perParticipantImpact }` — no persistence
+- **Errors:** Same terminal-state rejection as `applyOverride` (`TERMINAL_STATE_OVERRIDE`, 409)
 - **Description:** Returns the projected booking state and per-participant wallet impact before applying
 
 ### `adminBooking.listBookings`

@@ -268,7 +268,10 @@ function RouteComponent() {
       <div className="grid lg:grid-cols-[1fr_2fr] gap-6">
         <TutorInviteForm />
 
-        <Card id="admin-tutor-invites" className="flex scroll-mt-4 flex-col">
+        <Card
+          id="admin-tutor-invites"
+          className="flex min-w-0 scroll-mt-4 flex-col"
+        >
           <CardHeader>
             <CardTitle>Invitations</CardTitle>
             <CardHeaderAction>
@@ -296,7 +299,7 @@ function RouteComponent() {
           </CardHeader>
           <CardBody
             aria-busy={invitesFetching}
-            className="flex flex-1 flex-col *:data-[slot=pagination]:mt-auto"
+            className="flex min-w-0 flex-1 flex-col *:data-[slot=pagination]:mt-auto"
           >
             {invites.length === 0 ? (
               <EmptyState
@@ -315,8 +318,8 @@ function RouteComponent() {
                 className="rounded-lg"
               />
             ) : (
-              <TableContainer className="w-[calc(100%+3rem)]!">
-                <Table>
+              <TableContainer className="w-[calc(100%+3rem)]! min-w-0">
+                <Table className="min-w-[36rem]">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Tutor</TableHead>

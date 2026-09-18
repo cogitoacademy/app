@@ -7,7 +7,7 @@ export const Route = createFileRoute("/_app/tutors_/$tutorId/book")({
   head: () => ({
     meta: [
       {
-        title: "Book a tutor — Cogito Academy",
+        title: "Book a tutor · Cogito Academy",
       },
     ],
   }),

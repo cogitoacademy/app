@@ -39,6 +39,7 @@ export function CalendarAgendaView({
           title="No events in this period"
           description="Events scheduled for these dates will appear here."
           className="min-h-[70svh]"
+          tone="secondary"
         />
       ) : (
         days.map((day) => {
@@ -52,7 +53,7 @@ export function CalendarAgendaView({
               className="relative my-6 border-t border-border/70"
             >
               <span
-                className="absolute -top-3 left-0 flex h-6 items-center bg-card pe-4 text-[10px] uppercase text-muted sm:text-xs"
+                className="absolute -top-3 left-0 flex h-6 items-center bg-card pe-4 text-[10px] text-muted sm:text-xs"
                 data-today={isToday(day) || undefined}
               >
                 {format(day, "d MMM, EEEE")}

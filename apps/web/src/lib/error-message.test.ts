@@ -18,6 +18,16 @@ describe("getUserFacingError", () => {
     ).toBe("This booking is no longer available.");
   });
 
+  test("translates terminal-state override into admin-friendly language", () => {
+    expect(
+      getUserFacingError(
+        new Error("Cannot override a booking in terminal state"),
+      ),
+    ).toBe(
+      "This booking is already final and can no longer be overridden. Final bookings are locked — check state history or use a wallet correction if Marks need fixing.",
+    );
+  });
+
   test("translates payment provider failures into plain language", () => {
     expect(
       getUserFacingError(
