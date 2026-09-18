@@ -3,6 +3,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { VerifyEmailForm } from "@/components/verify-email-form";
 
 export const Route = createFileRoute("/verify-email")({
+  head: () => ({
+    meta: [
+      {
+        title: "Verify email · Cogito Academy",
+      },
+    ],
+  }),
   validateSearch: (search: Record<string, string>) => {
     const email = search.email;
     const redirect = search.redirect;

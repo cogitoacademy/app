@@ -17,6 +17,13 @@ export function validateResetPasswordSearch(
 }
 
 export const Route = createFileRoute("/reset-password")({
+  head: () => ({
+    meta: [
+      {
+        title: "Reset password · Cogito Academy",
+      },
+    ],
+  }),
   component: RouteComponent,
   validateSearch: validateResetPasswordSearch,
 });

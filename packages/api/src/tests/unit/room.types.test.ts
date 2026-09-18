@@ -3,6 +3,8 @@ import {
   listRoomsInput,
   listPendingRoomApprovalsInput,
   createRoomInput,
+  updateRoomInput,
+  deactivateRoomInput,
   assignRoomInput,
 } from "../../modules/room/room.types";
 
@@ -67,6 +69,41 @@ describe("Room Types (Zod schemas)", () => {
       capacity: 1.5,
     });
     expect(result.success).toBe(false);
+  });
+
+  test("updateRoomInput accepts complete room details", () => {
+    const result = updateRoomInput.safeParse({
+      id: "room1",
+      name: "Room B",
+      location: "Building 2",
+      capacity: 12,
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  test("updateRoomInput rejects an invalid room id or capacity", () => {
+    expect(
+      updateRoomInput.safeParse({
+        id: "",
+        name: "Room B",
+        location: "Building 2",
+        capacity: 12,
+      }).success,
+    ).toBe(false);
+    expect(
+      updateRoomInput.safeParse({
+        id: "room1",
+        name: "Room B",
+        location: "Building 2",
+        capacity: 1.5,
+      }).success,
+    ).toBe(false);
+  });
+
+  test("deactivateRoomInput accepts a room id", () => {
+    expect(deactivateRoomInput.safeParse({ id: "room1" }).success).toBe(true);
+    expect(deactivateRoomInput.safeParse({ id: "" }).success).toBe(false);
   });
 
   test("assignRoomInput coerces ISO date strings to Date objects", () => {

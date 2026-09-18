@@ -6,6 +6,13 @@ import { StudentDashboardPage } from "@/components/dashboard/student-dashboard-p
 import { TutorDashboardPage } from "@/components/dashboard/tutor-dashboard-page";
 
 export const Route = createFileRoute("/_app/dashboard")({
+  head: () => ({
+    meta: [
+      {
+        title: "Dashboard · Cogito Academy",
+      },
+    ],
+  }),
   component: RouteComponent,
 });
 

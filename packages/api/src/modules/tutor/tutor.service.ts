@@ -135,15 +135,11 @@ export function validateSubmitForReview(
   }
 
   const hasAchievement =
-    (typeof profile.achievements === "string" &&
-      profile.achievements.trim().length > 0) ||
-    (Array.isArray(profile.competitionAchievements) &&
-      profile.competitionAchievements.length > 0);
+    Array.isArray(profile.competitionAchievements) &&
+    profile.competitionAchievements.length > 0;
   const hasExperience =
-    (typeof profile.experiences === "string" &&
-      profile.experiences.trim().length > 0) ||
-    (Array.isArray(profile.experienceEntries) &&
-      profile.experienceEntries.length > 0);
+    Array.isArray(profile.experienceEntries) &&
+    profile.experienceEntries.length > 0;
   const submittedProfileImageUrl =
     profileImageUrl ??
     (profile as TutorProfileWithSubjectRelations).user?.image;
@@ -288,16 +284,11 @@ export function createTutorService(deps: {
       profile!.pendingProfileChanges as Record<string, unknown> | null
     )?.profileImageUrl;
     const protectedFields = [
-      "displayName",
-      "achievements",
-      "experiences",
       "achievementProofUrls",
       "experienceProofUrls",
-      "credentialsSummary",
       "education",
       "competitionAchievements",
       "experienceEntries",
-      "expertise",
       "modality",
       "prices",
     ] as const;

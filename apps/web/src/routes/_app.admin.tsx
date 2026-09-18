@@ -4,6 +4,13 @@ import type { CogitoUser } from "@cogito-app/auth";
 import { AdminDashboardPage } from "@/components/dashboard/admin-dashboard-page";
 
 export const Route = createFileRoute("/_app/admin")({
+  head: () => ({
+    meta: [
+      {
+        title: "Admin · Cogito Academy",
+      },
+    ],
+  }),
   component: AdminRoute,
   beforeLoad: ({ context }) => {
     const user = context.session.data?.user as CogitoUser | undefined;

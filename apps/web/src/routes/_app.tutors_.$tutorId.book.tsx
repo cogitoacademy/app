@@ -4,6 +4,13 @@ import type { CogitoUser } from "@cogito-app/auth";
 import { CreateBookingPage } from "@/components/booking/create-booking-page";
 
 export const Route = createFileRoute("/_app/tutors_/$tutorId/book")({
+  head: () => ({
+    meta: [
+      {
+        title: "Book a tutor · Cogito Academy",
+      },
+    ],
+  }),
   component: CreateBookingRoute,
   beforeLoad: ({ context }) => {
     const user = context.session?.data?.user as CogitoUser | undefined;

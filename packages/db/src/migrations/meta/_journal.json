@@ -316,6 +316,20 @@
       "when": 1789381386201,
       "tag": "0044_drop_duplicate_booking_index",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1789626597133,
+      "tag": "0045_magenta_forgotten_one",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1789700000000,
+      "tag": "0046_session_completion_feedback",
+      "breakpoints": true
     }
   ]
 }

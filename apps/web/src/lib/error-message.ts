@@ -43,6 +43,12 @@ export function getUserFacingError(
     return "You do not have permission to perform this action.";
   }
   if (
+    normalized.includes("terminal state") ||
+    normalized.includes("terminal_state_override")
+  ) {
+    return "This booking is already final and can no longer be overridden. Final bookings are locked — check state history or use a wallet correction if Marks need fixing.";
+  }
+  if (
     normalized.includes("failed to fetch") ||
     normalized.includes("network") ||
     normalized.includes("load failed") ||

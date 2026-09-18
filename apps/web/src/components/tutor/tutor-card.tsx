@@ -51,7 +51,6 @@ export type TutorSummaryData = {
   id: string;
   displayName: string | null;
   shortBio: string | null;
-  expertise: string[];
   subjects?: TutorSubject[] | null;
   modality: string | null;
   prices?: Record<string, number> | null;
@@ -81,7 +80,7 @@ function getTutorSubjectLabels(
   tutor: TutorSummaryData,
   includeCategory: boolean,
 ) {
-  return groupTutorSubjects(tutor.subjects, tutor.expertise).flatMap((group) =>
+  return groupTutorSubjects(tutor.subjects).flatMap((group) =>
     group.children.map((child) => ({
       id: child.id,
       field: group.parent?.slug ?? child.slug,

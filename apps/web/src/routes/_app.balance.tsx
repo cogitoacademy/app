@@ -4,6 +4,13 @@ import type { CogitoUser } from "@cogito-app/auth";
 import { BalancePage } from "@/components/dashboard/pages/balance-page";
 
 export const Route = createFileRoute("/_app/balance")({
+  head: () => ({
+    meta: [
+      {
+        title: "Balance · Cogito Academy",
+      },
+    ],
+  }),
   component: BalancePage,
   beforeLoad: ({ context }) => {
     const user = context.session?.data?.user as CogitoUser | undefined;

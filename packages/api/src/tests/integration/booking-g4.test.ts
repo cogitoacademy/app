@@ -1,3 +1,4 @@
+import { TEST_COMPLETION_FEEDBACK } from "../helpers/completion-feedback";
 import { describe, test, expect, beforeAll } from "bun:test";
 import { eq, like } from "drizzle-orm";
 import { db } from "@cogito-app/db";
@@ -68,13 +69,9 @@ async function createPublishedTutor(email: string, ts: number) {
     .values({
       userId: tutorId,
       inviteId: invite!.id,
-      displayName: "Prof G4",
       shortBio: "Bio",
-      credentialsSummary: "Creds",
-      expertise: ["Mathematics"],
       modality: "both",
       prices: { "1": 50, "2": 45, "3": 35, "4": 28, "5": 25, "6": 22 },
-      availabilitySummary: "Flexible",
       onboardingStatus: "published",
       publishedAt: new Date(),
     })
@@ -290,6 +287,7 @@ describe("G4: group repricing on headcount change", () => {
       .where(eq(bookingTable.id, bookingId));
 
     const completed = await tutorClient.tutorActions.completeSession({
+      feedback: TEST_COMPLETION_FEEDBACK,
       bookingId,
     });
     expect(completed.currentState).toBe("completed");

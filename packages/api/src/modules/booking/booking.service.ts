@@ -47,6 +47,7 @@ import {
   BookingSeriesNoOptOutError,
   BookingAcceptanceDeadlinePassedError,
   BookingCancellationDeadlinePassedError,
+  BookingCompletionFeedbackRequiredError,
 } from "./booking.errors";
 import { escapeHtml, sanitizeHtml } from "../../lib/sanitize";
 import {
@@ -178,6 +179,12 @@ export interface BookingTransition {
 }
 
 export type BookingService = ReturnType<typeof createBookingService>;
+
+export type CompletionFeedback = {
+  discussion: string[];
+  strengths: string[];
+  improvements: string[];
+};
 
 type BookingRow = NonNullable<
   Awaited<ReturnType<BookingRepo["findBookingById"]>>
@@ -1313,10 +1320,40 @@ export function createBookingService(deps: {
     });
   }
 
+  function normalizeFeedbackBullets(value: unknown): string[] {
+    const items = Array.isArray(value) ? value : [];
+    return items
+      .map((s) => (typeof s === "string" ? s.trim() : ""))
+      .filter(Boolean)
+      .slice(0, 30);
+  }
+
+  function assertCompletionFeedback(
+    bookingId: string,
+    feedback: CompletionFeedback | undefined,
+  ): asserts feedback is CompletionFeedback {
+    const discussion = normalizeFeedbackBullets(feedback?.discussion);
+    const strengths = normalizeFeedbackBullets(feedback?.strengths);
+    const improvements = normalizeFeedbackBullets(feedback?.improvements);
+    if (
+      discussion.length === 0 ||
+      strengths.length === 0 ||
+      improvements.length === 0
+    ) {
+      throw new BookingCompletionFeedbackRequiredError(bookingId);
+    }
+    feedback!.discussion = discussion.map((s) => escapeHtml(s).slice(0, 1000));
+    feedback!.strengths = strengths.map((s) => escapeHtml(s).slice(0, 1000));
+    feedback!.improvements = improvements.map((s) =>
+      escapeHtml(s).slice(0, 1000),
+    );
+  }
+
   async function completeSession(
     bookingId: string,
     tutorId: string,
     sessionId?: string,
+    feedback?: CompletionFeedback,
   ) {
     return db.transaction(async (tx) => {
       const b = await repo.findBookingById(tx, bookingId);
@@ -1329,10 +1366,17 @@ export function createBookingService(deps: {
       await lockTutorForPayout(tx, b.tutorId);
 
       if (b.type !== BOOKING_TYPE.SERIES) {
-        return completeSingleSession(tx, b, bookingId, tutorId);
+        return completeSingleSession(tx, b, bookingId, tutorId, feedback);
       }
 
-      return completeSeriesSession(tx, b, bookingId, tutorId, sessionId);
+      return completeSeriesSession(
+        tx,
+        b,
+        bookingId,
+        tutorId,
+        sessionId,
+        feedback,
+      );
     });
   }
 
@@ -1341,6 +1385,7 @@ export function createBookingService(deps: {
     b: BookingRow,
     bookingId: string,
     tutorId: string,
+    feedback?: CompletionFeedback,
   ) {
     if (b.currentState !== BOOKING_STATE.SCHEDULED) {
       throw new BookingStateTransitionError(
@@ -1349,6 +1394,8 @@ export function createBookingService(deps: {
         BOOKING_STATE.COMPLETED,
       );
     }
+
+    assertCompletionFeedback(bookingId, feedback);
 
     if (b.scheduledStartAt.getTime() > Date.now()) {
       throw new BookingSessionNotStartedError(bookingId);
@@ -1396,6 +1443,15 @@ export function createBookingService(deps: {
 
     await repo.updateBookingHoldAmount(tx, bookingId, 0);
 
+    await repo.insertCompletionFeedback(tx, {
+      bookingId,
+      sessionId: null,
+      authorId: tutorId,
+      discussion: feedback!.discussion,
+      strengths: feedback!.strengths,
+      improvements: feedback!.improvements,
+    });
+
     await notification.writeBestEffort({
       db: tx,
       userId: b.proposerId,
@@ -1416,6 +1472,7 @@ export function createBookingService(deps: {
     bookingId: string,
     tutorId: string,
     sessionId?: string,
+    feedback?: CompletionFeedback,
   ) {
     if (b.currentState !== BOOKING_STATE.SCHEDULED) {
       throw new BookingStateTransitionError(
@@ -1425,6 +1482,7 @@ export function createBookingService(deps: {
       );
     }
     if (!sessionId) throw new BookingSessionRequiredError(bookingId);
+    assertCompletionFeedback(bookingId, feedback);
 
     const session = await repo.findSessionById(tx, sessionId);
     if (!session || session.seriesBookingId !== bookingId) {
@@ -1524,6 +1582,15 @@ export function createBookingService(deps: {
     );
 
     await repo.completeSession(tx, session.id);
+
+    await repo.insertCompletionFeedback(tx, {
+      bookingId,
+      sessionId: session.id,
+      authorId: tutorId,
+      discussion: feedback!.discussion,
+      strengths: feedback!.strengths,
+      improvements: feedback!.improvements,
+    });
 
     await notification.writeBestEffort({
       db: tx,
@@ -1760,6 +1827,19 @@ export function createBookingService(deps: {
       throw new BookingNotCompletedError(bookingId);
     }
     return repo.listSessionNotes(db, bookingId);
+  }
+
+  async function listCompletionFeedback(
+    bookingId: string,
+    userId: string,
+    userRole?: string,
+  ) {
+    const b = await repo.findBookingById(db, bookingId);
+    if (!b) throw new BookingNotFoundError(bookingId);
+    if (userRole !== "admin") {
+      await assertBookingAccess(b, userId, db, bookingId);
+    }
+    return repo.listCompletionFeedbackByBooking(db, bookingId);
   }
 
   /**
@@ -4664,6 +4744,7 @@ export function createBookingService(deps: {
     cancelSession,
     addSessionNote,
     getSessionNotes,
+    listCompletionFeedback,
     listSessions,
     getTutorPayouts,
     getPendingTutorPayouts,

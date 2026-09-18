@@ -1,0 +1,21 @@
+# Cogito Academy
+
+> Find expert tutors, book lessons, and track achievements.
+
+- App: https://app.cogitoacademy.id/
+- Company: https://cogitoacademy.id/
+- API: https://api.cogitoacademy.id (oRPC; procedure paths use slashes, e.g. `/rpc/auth/getProfile`; request bodies wrapped in `{"json": ...}`)
+
+## Routes
+
+- `/login` — sign in / sign up (public entry)
+- `/dashboard` — role-specific home (student / tutor / admin)
+- `/tutors` — tutor discovery (students)
+- `/bookings` — booking list + detail (`/bookings/$bookingId`)
+- `/calendar`, `/balance`, `/achievements`, `/knowledge-bank`, `/notifications`, `/profile`, `/guide`
+
+## Stack
+
+- Web: Vite SPA (TanStack Router + React Query), static nginx, no `/rpc` proxy
+- API: Bun + Elysia, oRPC, Better Auth, Drizzle/Postgres, Redis
+- CMS: Sanity (Knowledge Bank resources)

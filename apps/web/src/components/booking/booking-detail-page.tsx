@@ -106,9 +106,17 @@ import {
 } from "./booking-pricing";
 import { ContactRequestPanel } from "./contact-request-panel";
 import { ManualMeetingLinkDialog } from "./manual-meeting-link-dialog";
+import {
+  CompleteSessionDialog,
+  type CompletionFeedbackDraft,
+} from "./complete-session-dialog";
+import { SessionCompletionFeedbackCard } from "./session-completion-feedback-card";
 
 type BookingConfirmation = {
-  action: "cancel" | "complete";
+  action: "cancel";
+} | null;
+
+type CompleteDialogState = {
   sessionId?: string;
 } | null;
 
@@ -153,6 +161,8 @@ export function BookingDetailPage({
   );
   const [confirmationDialog, setConfirmationDialog] =
     useState<BookingConfirmation>(null);
+  const [completeDialog, setCompleteDialog] =
+    useState<CompleteDialogState>(null);
   const [declineReason, setDeclineReason] = useState("");
   const [cancellationReason, setCancellationReason] = useState("");
   const [manualLinkDialogOpen, setManualLinkDialogOpen] = useState(false);
@@ -253,9 +263,14 @@ export function BookingDetailPage({
   const complete = useMutation(
     orpc.tutorActions.completeSession.mutationOptions({
       onSuccess: () => {
-        setConfirmationDialog(null);
+        setCompleteDialog(null);
         toastManager.add({ title: "Session completed", type: "success" });
         refreshBookingQueries();
+        void queryClient.invalidateQueries({
+          queryKey: orpc.booking.listCompletionFeedback.queryKey({
+            input: { bookingId },
+          }),
+        });
       },
       onError: (error: Error) =>
         toastManager.add({
@@ -312,8 +327,11 @@ export function BookingDetailPage({
       enabled: bookingQuery.data?.type === "series",
     }),
   );
+  const feedbackQuery = useQuery(
+    orpc.booking.listCompletionFeedback.queryOptions({ input: { bookingId } }),
+  );
   const completeSessionById = (sessionId: string) => {
-    setConfirmationDialog({ action: "complete", sessionId });
+    setCompleteDialog({ sessionId });
   };
 
   if (bookingQuery.isPending) return <Loader />;
@@ -391,7 +409,7 @@ export function BookingDetailPage({
     decline.isPending ||
     complete.isPending ||
     meetingLinkPending;
-  const confirmationPending = cancel.isPending || complete.isPending;
+  const confirmationPending = cancel.isPending;
   const canProposeReschedule =
     !isAdmin &&
     canProposeBookingReschedule({
@@ -454,6 +472,14 @@ export function BookingDetailPage({
   const perSessionHonorariumIdr =
     booking.priceSnapshot?.tutorHonorariumIdr ??
     (booking.priceSnapshot?.tutorShare ?? 0) * LEGACY_TUTOR_PAYOUT_RATE_IDR;
+  const completionFeedbacks = feedbackQuery.data ?? [];
+  const sessionLabels: Record<string, string> = {};
+  for (const s of seriesSessions ?? []) {
+    sessionLabels[s.id] =
+      `${formatBookingDate(s.scheduledStartAt, booking.timezone)} · ${formatBookingTimeRange(s.scheduledStartAt, s.scheduledEndAt, booking.timezone)}`;
+  }
+  const showCompletionFeedback =
+    completionFeedbacks.length > 0 || booking.currentState === "completed";
 
   function requestCancellation() {
     setConfirmationDialog({ action: "cancel" });
@@ -466,7 +492,19 @@ export function BookingDetailPage({
   }
 
   function completeSession() {
-    setConfirmationDialog({ action: "complete" });
+    setCompleteDialog({});
+  }
+
+  function confirmCompleteSession(feedback: CompletionFeedbackDraft) {
+    if (completeDialog?.sessionId) {
+      complete.mutate({
+        bookingId,
+        sessionId: completeDialog.sessionId,
+        feedback,
+      });
+    } else {
+      complete.mutate({ bookingId, feedback });
+    }
   }
 
   function saveMeetingLink(url: string) {
@@ -481,18 +519,9 @@ export function BookingDetailPage({
   function confirmBookingAction() {
     if (!confirmationDialog) return;
 
-    if (confirmationDialog.action === "cancel") {
-      const reason = cancellationReason.trim();
-      if (!reason) return;
-      cancel.mutate({ bookingId, cancellationReason: reason });
-      return;
-    }
-
-    if (confirmationDialog.sessionId) {
-      complete.mutate({ bookingId, sessionId: confirmationDialog.sessionId });
-    } else {
-      complete.mutate({ bookingId });
-    }
+    const reason = cancellationReason.trim();
+    if (!reason) return;
+    cancel.mutate({ bookingId, cancellationReason: reason });
   }
 
   return (
@@ -956,6 +985,14 @@ export function BookingDetailPage({
               />
             ) : null}
 
+            {showCompletionFeedback ? (
+              <SessionCompletionFeedbackCard
+                feedbacks={completionFeedbacks}
+                timezone={booking.timezone}
+                sessionLabels={sessionLabels}
+              />
+            ) : null}
+
             {extensions?.activity ?? (
               <Card className="min-w-0 overflow-hidden">
                 <CardHeader>
@@ -1233,52 +1270,36 @@ export function BookingDetailPage({
             setCancellationReason("");
           }
         }}
-        title={
-          confirmationDialog?.action === "cancel"
-            ? "Cancel this booking?"
-            : confirmationDialog?.sessionId
-              ? "Complete this session?"
-              : "Mark this session as completed?"
-        }
-        description={
-          confirmationDialog?.action === "cancel"
-            ? "Cancellation rules and applicable refunds will be applied."
-            : isTutor
-              ? "The session will be marked complete and your IDR honorarium will be recorded."
-              : "Held Marks will be settled."
-        }
-        confirmLabel={
-          confirmationDialog?.action === "cancel"
-            ? "Cancel booking"
-            : "Complete session"
-        }
-        confirmVariant={
-          confirmationDialog?.action === "cancel" ? "danger" : "primary"
-        }
+        title="Cancel this booking?"
+        description="Cancellation rules and applicable refunds will be applied."
+        confirmLabel="Cancel booking"
+        confirmVariant="danger"
         pending={confirmationPending}
-        confirmDisabled={
-          confirmationDialog?.action === "cancel" && !cancellationReason.trim()
-        }
+        confirmDisabled={!cancellationReason.trim()}
         onConfirm={confirmBookingAction}
       >
-        {confirmationDialog?.action === "cancel" ? (
-          <Field>
-            <FieldLabel htmlFor="booking-cancellation-reason">
-              Reason
-            </FieldLabel>
-            <Textarea
-              id="booking-cancellation-reason"
-              value={cancellationReason}
-              maxLength={500}
-              onChange={(event) => setCancellationReason(event.target.value)}
-              placeholder="Explain why you need to cancel this booking."
-            />
-            <FieldDescription>
-              This reason will be shared with the tutor.
-            </FieldDescription>
-          </Field>
-        ) : null}
+        <Field>
+          <FieldLabel htmlFor="booking-cancellation-reason">Reason</FieldLabel>
+          <Textarea
+            id="booking-cancellation-reason"
+            value={cancellationReason}
+            maxLength={500}
+            onChange={(event) => setCancellationReason(event.target.value)}
+            placeholder="Explain why you need to cancel this booking."
+          />
+          <FieldDescription>
+            This reason will be shared with the tutor.
+          </FieldDescription>
+        </Field>
       </ConfirmationDialog>
+      <CompleteSessionDialog
+        open={completeDialog !== null}
+        pending={complete.isPending}
+        onOpenChange={(open) => {
+          if (!open) setCompleteDialog(null);
+        }}
+        onConfirm={confirmCompleteSession}
+      />
       <ManualMeetingLinkDialog
         open={manualLinkDialogOpen}
         onOpenChange={setManualLinkDialogOpen}

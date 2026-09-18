@@ -2,6 +2,8 @@ import {
   listRoomsInput,
   listPendingRoomApprovalsInput,
   createRoomInput,
+  updateRoomInput,
+  deactivateRoomInput,
   assignRoomInput,
   checkAvailabilityInput,
   relocateRoomInput,
@@ -45,6 +47,29 @@ export function createRoomRouter(handler: RoomHandler) {
       })
       .input(createRoomInput)
       .handler(handler.create),
+
+    update: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/rooms/update",
+        tags: ["Admin", "Rooms"],
+        summary: "Update a room",
+        description: "Updates an active or inactive physical room",
+      })
+      .input(updateRoomInput)
+      .handler(handler.update),
+
+    deactivate: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/rooms/deactivate",
+        tags: ["Admin", "Rooms"],
+        summary: "Deactivate a room",
+        description:
+          "Removes a room from new offline-booking assignment without deleting its history",
+      })
+      .input(deactivateRoomInput)
+      .handler(handler.deactivate),
 
     assign: adminProcedure
       .route({

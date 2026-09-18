@@ -5,6 +5,13 @@ import type { CogitoUser } from "@cogito-app/auth";
 import { KnowledgeBankPage } from "@/components/content/knowledge-bank-page";
 
 export const Route = createFileRoute("/_app/knowledge-bank")({
+  head: () => ({
+    meta: [
+      {
+        title: "Knowledge Bank · Cogito Academy",
+      },
+    ],
+  }),
   component: KnowledgeBankPage,
   beforeLoad: ({ context }) => {
     const user = context.session?.data?.user as CogitoUser | undefined;

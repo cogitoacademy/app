@@ -60,13 +60,9 @@ async function createPublishedTutor(
   await db.insert(tutorProfile).values({
     userId: tutor.id,
     inviteId: invite!.id,
-    displayName: "Prof Deadline",
     shortBio: "Bio",
-    credentialsSummary: "Creds",
-    expertise: ["Mathematics"],
     modality: "both",
     prices,
-    availabilitySummary: "Flexible",
     onboardingStatus: "published",
     publishedAt: new Date(),
   });

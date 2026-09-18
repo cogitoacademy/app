@@ -40,8 +40,9 @@ Competition colors are a frontend presentation concern shared through `packages/
 Data-table pagination is owned by the module that reads the collection. The
 achievement and room repositories apply `limit`/`offset` directly to their
 ordered SQL queries; admin booking and ledger repositories continue to expose
-cursor pages; and admin tutor lists keep their offset pages. Web components
-render a bounded page plus a one-row sentinel where needed, use
+cursor pages; and admin tutor lists keep their offset pages. Manage Tutors and
+Tutor Payouts own independent page state for their respective collections. Web
+components render a bounded page plus a one-row sentinel where needed, use
 `keepPreviousData` during transitions, and reset pagination after filter or
 selection changes. Aggregate achievement counts come from dedicated stats
 queries rather than counting the current page. Fixed pricing/economy matrices
@@ -151,7 +152,9 @@ request and disables the controls until the next page arrives. Cursor-loaded
 notifications already preserve prior pages by design. User-specific wallet
 lookup and student search do not retain stale results across a changed query.
 Manage Tutors requests three invitations and five tutor profiles per page; the
-two collections keep independent page size, offset, and next-page state.
+two collections keep independent page size, offset, and next-page state. Tutor
+Payouts requests ten tutor profiles per page and loads each visible tutor's
+pending honorarium summary for its operational table.
 
 The shared booking list uses Needs action, Upcoming, Series, History, and All tabs. Admins default to All; students and tutors default to Upcoming unless an explicit URL tab is present. The page sends the selected view to `booking.listMine`; repository predicates apply the tab semantics before cursor pagination, and a separate role-scoped aggregate returns exact counts for every tab. Changing views loads a new first page, while **Load more bookings** appends the selected view's cursor. Recommended, Soonest, and Latest sorting remains client-side within the loaded filtered pages.
 
@@ -256,7 +259,7 @@ Editorial content integration is also read-only: Sanity remains the source of tr
 - `listStudentResources()` — returns resource metadata without asset URLs
 - `getStudentResourceFile(resourceId)` — resolves the published asset URL and file metadata for the already-authorized proxy
 
-The calendar frontend consumes `listCompetitions()` as a read-only projection. It mirrors the academy's month/agenda interaction model (multi-day spans, overflow popup, 30-day agenda, and event-details modal) while using Cogito App Selia components, design tokens, and Tabler icons. Its authenticated route is viewport-contained: the calendar card body owns vertical scrolling, while the month grid owns horizontal scrolling so the page shell and calendar toolbar do not scroll with the grid. The month view always keeps the standard grid visible, including for an event-free selected month; the page-level empty state remains reserved for a response with no competitions at all. The Knowledge Bank frontend is available at the authenticated `/knowledge-bank` route and renders resource category slugs as mapped or title-cased labels while keeping raw slugs for filtering.
+The calendar frontend consumes `listCompetitions()` as a read-only projection. It mirrors the academy's month/agenda interaction model (multi-day spans, overflow popup, 30-day agenda, and event-details modal) while using Cogito App Selia components, design tokens, and Tabler icons. Its authenticated route is viewport-contained: the calendar card body owns vertical scrolling, while the month grid owns horizontal scrolling so the page shell and calendar toolbar do not scroll with the grid. The month view always keeps the standard grid visible, including for an event-free selected month; the page-level empty state remains reserved for a response with no competitions at all. The Knowledge Bank frontend is available at the authenticated `/knowledge-bank` route and renders resource category slugs as mapped or title-cased labels while keeping raw slugs for filtering. Admins get `Edit resources` (`studentResource`) and `Edit competitions` (`competition`) buttons on the Knowledge Bank and calendar pages; both open the matching document-type list in Sanity Studio in a new tab.
 
 When the page-level no-competition state is rendered, its calendar glyph uses
 the Cogito orange token; this accent is scoped to the Competition Calendar and
@@ -320,7 +323,16 @@ does not change the shared empty-state tone defaults.
 
 ## Admin Module
 
-**Purpose:** System administration — user management, role assignment, wallet/ledger lookup, payout summaries, active economy schedule management, and aggregate business analytics.
+**Purpose:** System administration — user management, role assignment, wallet/ledger lookup, operational tutor payout processing, active economy schedule management, and aggregate business analytics.
+
+**Admin UI workflow:** `/admin-tutors` owns tutor invitations, profile review,
+publication, and moderation. `/admin-tutor-payouts` is the separate operational
+payout workspace: it lists unpaid tutor honorarium, shows the completed sessions
+included in each unpaid amount, verifies private destination-account details,
+calculates bank transfer fees and net transfer amount, and records a completed
+transfer through **Mark as paid**. The unpaid amount advances from the latest
+recorded completion-time cutoff; it does not reset automatically each calendar
+week.
 
 **Files:**
 
@@ -463,6 +475,7 @@ payment package codes stable.
 - The Manage Tutors invitation table maps `invited` to a warning badge, `accepted` to success, and `expired`/`revoked` to danger; unknown status values use the secondary fallback
 - Approving published profile edits validates and applies pending `subjectIds` to the normalized tutor-subject join table in the same transaction as the profile update
 - The admin tutor review card maps pending `subjectIds` to active category/specialization labels and wraps long pending values; this is presentation-only and does not change the admin API payload
+- The focused admin tutor review card derives normalized added/changed/removed/filled/empty statuses, shows summary counts with composable search/status filters, expands each pending field into current/proposed panes, and marks each profile section as changed or empty when applicable; profile photos remain in the dedicated side-by-side comparison
 - Structured achievement corrections are limited to 2 education entries and 5 competition entries; a stale `version` returns `OPTIMISTIC_LOCK` and no audit record is written.
 
 ---
@@ -572,7 +585,8 @@ The Participants fieldset owns the derived Solo/Group badge; summaries represent
 - `tutorAccept(bookingId, tutorId)` — Tutor accepts booking; attempts meeting creation for online bookings and schedules on success, while a provider failure leaves the booking `CONFIRMED` for scheduler retry; sets room approval for offline. **F6:** whenever meeting creation fails (provider throw or `status === "failed"`), `finalizeMeetingSchedule` bumps `deadlineAt` to `scheduledEndAt + 24h` so the 5-minute retry window is respected — the old tutor-review `now+12h` deadline can never expire the booking (release holds) or no-show the session while a meeting retry is pending. The proposer notification distinguishes `scheduled` from `confirmed`/meeting-setup attention, so a provider failure is not presented as a scheduled session. The booking-detail UI confirms the scheduled date/time, modality, and attendance before invoking this method; cancel/complete actions use the same in-app confirmation pattern.
 - `tutorDecline(bookingId, tutorId, reason)` — Requires a non-blank tutor reason, declines the request, and releases all holds
 - `tutorSetMeetingLink(bookingId, tutorId, url)` — Assigned tutor adds or replaces a manual URL for an online `CONFIRMED`/`SCHEDULED` booking when automatic meeting setup is unavailable; updates the active meeting row, notifies confirmed participants, and records `tutor_set_meeting_link`
-- `completeSession(bookingId, tutorId, sessionId?)` — Marks a session complete; deducts held marks (sessionId for series children)
+- `completeSession(bookingId, tutorId, sessionId?, feedback)` — Marks a session complete; deducts held marks (sessionId for series children). Requires `feedback { discussion[], strengths[], improvements[] }` (1–30 bullets each, 1–1000 chars, HTML-escaped); saves `session_completion_feedback` atomically; throws `BOOKING_COMPLETION_FEEDBACK_REQUIRED` when missing/empty
+- `listCompletionFeedback(bookingId, userId, userRole?)` — Lists completion feedback for student/tutor/admin payout review (admin bypasses access check)
 - `cancelSession(userId, sessionId)` — Student cancels an individual series session only before that session starts; pre-H2 releases its hold, a pre-start post-H2 cancellation forfeits it, and at/after start the call throws `BOOKING_CANCELLATION_DEADLINE_PASSED`.
 - `proposeReschedule(actorId, actorRole, bookingId, sessionId, start, reason)` — Shared service used by the student-proposer and tutor RPC routes; requires a non-blank reason and proposes a fixed 90-minute replacement for one session
 - `acceptReschedule(actorId, bookingId, proposalId?)` / `rejectReschedule(...)` — Records a required tutor/student vote against the active, unexpired proposal under a booking advisory lock; `proposalId` prevents stale UI actions from deciding a superseded proposal. Final acceptance additionally locks the tutor and rechecks booking overlap, target-series ownership/state, and sibling-session overlap before applying the schedule. Only unanimous acceptance applies the schedule, then the booking returns to its pre-proposal state; any rejection keeps the old schedule and also returns to that state. For booking-level offline proposals, the confirmed room assignment is synchronized with the new time on acceptance and restored to the original time on rejection/expiry. A missing or conflicting room returns the booking to `awaiting_admin_room_approval`, and the rollback path uses `roomPort.resyncRoomBookingToSchedule` so the room never stays blocked for the wrong window.
@@ -903,29 +917,33 @@ chat directory.
 
 **Admin UI workflow:** The Operations → Room approvals tab now starts with an
 Active rooms catalog. Admins can use **Add room** to create an active physical
-room with its name, location, and learner capacity; the list refreshes after a
-successful create so the room is immediately available to offline booking and
-assignment selectors. The same tab remains the cross-booking work queue: a
-requested room can be assigned inline, while choosing a room or a different
-room opens the admin-only booking detail page, where the Offline room card
-performs assignment, relocation, or room removal with the booking's schedule
-already attached. The UI does not ask admins to type booking UUIDs, and this
-workflow does not change the RPC contracts.
+room with its name, location, and learner capacity; **Edit** updates those
+details, and **Deactivate** removes a room from new assignments without
+deleting its history. The list refreshes after each successful mutation so the
+active catalog and offline-booking selectors stay current. The same tab remains
+the cross-booking work queue: a requested room can be assigned inline, while
+choosing a room or a different room opens the admin-only booking detail page,
+where the Offline room card performs assignment, relocation, or room removal
+with the booking's schedule already attached. The UI does not ask admins to
+type booking UUIDs, and this workflow does not change the existing booking RPC
+contracts.
 
 **Files:**
 
-- `room.types.ts` — Zod schemas for list/pending-approval/create/assign/check-availability/relocate/cancel inputs
+- `room.types.ts` — Zod schemas for list/pending-approval/create/update/deactivate/assign/check-availability/relocate/cancel inputs
 - `room.errors.ts` — `RoomNotFoundError`, `RoomBookingConflictError`
 - `room.repo.ts` — room queries, pending approval lookup, room-booking insert/update/find
-- `room.service.ts` — `listActive`, `listPendingApprovals`, `createRoom`, `assignRoom`, `checkAvailability`, `relocateRoom`, `cancelRoomBooking`, `syncRoomBookingScheduleForBooking`, `resyncRoomBookingToSchedule`
-- `room.handler.ts` — `list`, `listPendingApprovals`, `create`, `assign`, `checkAvailability`, `relocate`, `cancelBooking`
-- `room.router.ts` — `list`/`checkAvailability` protected; `listPendingApprovals`/`create`/`assign`/`relocate`/`cancelBooking` admin-only
+- `room.service.ts` — `listActive`, `listPendingApprovals`, `createRoom`, `updateRoom`, `deactivateRoom`, `assignRoom`, `checkAvailability`, `relocateRoom`, `cancelRoomBooking`, `syncRoomBookingScheduleForBooking`, `resyncRoomBookingToSchedule`
+- `room.handler.ts` — `list`, `listPendingApprovals`, `create`, `update`, `deactivate`, `assign`, `checkAvailability`, `relocate`, `cancelBooking`
+- `room.router.ts` — `list`/`checkAvailability` protected; `listPendingApprovals`/`create`/`update`/`deactivate`/`assign`/`relocate`/`cancelBooking` admin-only
 
 **Service Methods:**
 
 - `listActive(input?)` — Returns active rooms; `{ limit, offset }` applies deterministic server pagination, while omitted input preserves the full selector-compatible list
 - `listPendingApprovals(input?)` — Returns a server-paginated page of offline bookings in `AWAITING_ADMIN_ROOM_APPROVAL`, including bookings with no requested room row after a requested-room conflict
 - `createRoom({ name, location, capacity })` — Creates a room
+- `updateRoom({ id, name, location, capacity })` — Updates an active or inactive room's editable catalog details
+- `deactivateRoom(id)` — Soft-deactivates a room so it cannot be selected for new offline bookings while historical assignments remain intact; repeated deactivation is a no-op
 - `assignRoom(bookingId, roomId, startAt, endAt)` — Confirms a room for a booking with conflict check; transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED`, then best-effort creates/refreshes its non-Meet Calendar event after commit, and notifies tutor + confirmed students (#46, G14). **F22 state guard:** the booking must be `AWAITING_ADMIN_ROOM_APPROVAL` (or `RESCHEDULE_PROPOSED`, the H3 pre-assignment carve-out) — any other state throws `ROOM_BOOKING_STATE` before the roomBooking row is inserted (no orphan CONFIRMED rows)
 - `checkAvailability(roomId, startAt, endAt)` — Returns whether the room is free for the slot
 - `relocateRoom(bookingId, roomId, startAt, endAt, actorId?)` — Moves a booking to a different room, freeing the previous one; transitions the booking `AWAITING_ADMIN_ROOM_APPROVAL → SCHEDULED` (mirroring `assignRoom`, safe no-op otherwise), then best-effort refreshes the non-Meet Calendar location after commit, and notifies tutor + confirmed students (#46, H3/REVIEW-FIXES-4 P2.6). **F22 state guard:** allowed from `AWAITING_ADMIN_ROOM_APPROVAL`/`SCHEDULED`/`RESCHEDULE_PROPOSED` only
@@ -1066,8 +1084,8 @@ The authenticated dashboard shell is viewport-fixed. Its content pane exclusivel
 - Profile updates use optimistic locking (`version`)
 - New tutor pricing is stored as IDR base honoraria by modality (`baseRatesIdr`) and validated against the active economy minimum and Rp5,000 increments; published tutors may change these rates at any time, new bookings use the new rate, and existing booking snapshots remain authoritative for payout. The legacy Marks map remains readable during migration
 - The tutor profile editor at `/profile` renders selected modalities in one combined six-row IDR group-size matrix using the same table structure as the student discovery drawer; this is presentation-only. The legacy `/onboarding` path redirects to `/profile` for tutors.
-- The tutor profile editor places the profile-photo upload first and uses a clickable avatar with the shared circular crop flow. Compact Selia `InfoPreview` popovers reveal the full submitted/current/proposed image on demand. For a published tutor it labels `user.image` as the current public photo and a differing `pendingProfileChanges.profileImageUrl` as the proposed photo. The admin review drawer compares both assets side by side; `approve_edits` remains the only operation that promotes the proposal into `user.image`.
-- The admin tutor index derives the status badge from `onboardingStatus` plus `profileEditStatus`; published tutors with `pending_review` edits show **Edit review**, and edits returned with `changes_requested` show **Revision requested**, making review-needed rows visible before opening the drawer.
+- The tutor profile editor places the profile-photo upload first and uses a clickable avatar with the shared circular crop flow. Compact Selia `InfoPreview` popovers reveal the full submitted/current/proposed image on demand. For a published tutor it labels `user.image` as the current public photo and a differing `pendingProfileChanges.profileImageUrl` as the proposed photo. The admin review page compares both assets side by side; `approve_edits` remains the only operation that promotes the proposal into `user.image`.
+- The admin tutor index derives the status badge from `onboardingStatus` plus `profileEditStatus`; published tutors with `pending_review` edits show **Edit review**, and edits returned with `changes_requested` show **Revision requested**, making review-needed rows visible before opening the full-page review workspace.
 - The tutor profile editor exposes one combined structured Achievements & experience section. It supports education plus competition entries and up to five role/organization/year/description entries; each subsection's optional proof URL list is protected by profile review and never enters the public discovery projection. The form recommends one shared Google Drive folder for both proof types, using the “Anyone with the link can view” setting. Legacy `achievements`, credential-summary, and `experiences` text remain readable fallback data, and migration 0032 copies the credential summary into achievements for older rows. Availability summaries and the old generic credential-proof URLs are retired from tutor editing.
 - The tutor profile editor uses the authenticated shell's page-level vertical scroll container, matching the student profile and avoiding a nested form scrollbar. Direct page children cannot flex-shrink, so the tutor wrapper and onboarding content share one natural height; specialization-category fieldsets keep their natural height and the final action card stays in normal document flow without trailing scroll space. This is presentation-only and does not change the tutor RPC contract.
 - The tutor profile editor keeps draft/save and submit-for-review as distinct actions. Missing required fields are allowed during draft/save, while submit requires the complete profile; malformed fields are surfaced beside their controls and in a validation summary. A published tutor can continue editing while a profile-change proposal is under review; saving updates the pending proposal and the explicit submit action queues the latest validated version.
@@ -1126,7 +1144,7 @@ The authenticated dashboard shell is viewport-fixed. Its content pane exclusivel
 - Published tutor projections include the structured education and competition achievement arrays. The student drawer renders each first line in a semibold hierarchy, separates achievement bullets with breathing room, and joins multiple awards with commas.
 - Published tutor projections also include `user.image` and structured `experienceEntries`; the student drawer presents education, achievements, and experiences in separate profile-highlight cards and falls back to legacy achievement/experience text when structured arrays are absent.
 - Tutor discovery cards use natural-width child specialization labels without repeating the parent category, keep desktop metadata on one line, reveal additional specialization badges at wider breakpoints, and retain the `From [Marks icon] #` starting-price treatment. This is presentation-only and does not change discovery filters or response fields.
-- Long student and admin tutor profiles scroll inside the drawer content area while header/action regions stay outside that scroll area; local body overscroll is contained and cannot move the fixed regions. This is presentation-only and does not change the discovery or review contracts.
+- Long student tutor profiles scroll inside the drawer content area while the header/action regions stay outside that scroll area; local body overscroll is contained and cannot move the fixed regions. Admin tutor review uses the focused full-page workspace and keeps its action area usable at narrow widths. This is presentation-only and does not change the discovery or review contracts.
 
 The student booking route `/tutors/:tutorId/book` reuses the published tutor
 drawer through a **View tutor profile** header action. It preserves the
@@ -1206,6 +1224,11 @@ no discovery input, output, or RPC contract changes.
 ## Tutor payout presentation (2026-08-28)
 
 Tutor financial presentation is denominated in IDR and must not expose Marks. The dashboard's honorarium is the unpaid balance since the latest admin-paid cutoff, not lifetime earnings or a calendar-reset balance. Admin payout records are immutable and contain the cutoff, gross, bank, transfer fee, net, paidAt, and paidBy. Only conventional BCA (the exact bank name `BCA`) has no transfer deduction; BCA Syariah, `blu` (BCA Digital), and other banks deduct Rp2,500 once per payout. Bank name, account number, account-holder name, account-opening city/regency, ownership, and the transfer disclaimer are private tutor-profile payout fields; all are required by onboarding submission validation and omitted from public discovery.
+
+The admin operational payout workflow lives at `/admin-tutor-payouts`, separate
+from Manage Tutors profile review. It reuses tutor profiles for account
+readiness, reads the pending completion-time summary, and records the current
+unpaid honorarium only after the operator confirms the net transfer.
 
 Numeric Marks amounts in the web UI are rendered through `apps/web/src/components/cogito-marks.tsx`. The component owns the Cogito mark-symbol prefix, supported icon sizes, whitespace behavior, and accessible `value + Marks` label; feature components should not duplicate that markup.
 

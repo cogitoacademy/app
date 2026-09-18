@@ -124,7 +124,7 @@ describe("Tutor Invite & Onboarding", () => {
         .where(eq(tutorProfile.userId, tutorId))
         .limit(1);
       expect(p).toBeDefined();
-      expect(p!.displayName).toBe("Prof Awesome");
+      expect(p!.onboardingStatus).toBe("draft");
 
       tutorClient = createTestClient(await createTestContext(tutorCookie));
     });
@@ -173,17 +173,28 @@ describe("Tutor Invite & Onboarding", () => {
       const version = await getTutorVersion();
       const updated = await tutorClient.tutor.updateMyProfile({
         version,
-        displayName: "Prof Awesome",
         shortBio: "Passionate math educator",
-        credentialsSummary: "PhD Mathematics, 10 years teaching",
-        achievements: "National mathematics medalist",
-        experiences: "Ten years teaching mathematics",
         profileImageUrl: "https://example.com/tutor-profile.jpg",
-        expertise: ["Mathematics", "Physics"],
+        education: [{ university: "Cogito University", degree: "B.Sc. Math" }],
+        competitionAchievements: [
+          {
+            competitionName: "National Mathematics Olympiad",
+            year: 2024,
+            awards: ["Gold Medal"],
+          },
+        ],
+        experienceEntries: [
+          {
+            role: "Math Tutor",
+            organization: "Cogito Academy",
+            startYear: 2020,
+            endYear: null,
+            description: "Ten years teaching mathematics",
+          },
+        ],
         subjectIds: ["40000000-0000-4000-8000-000000000001"],
         modality: "online",
         prices: { "1": 50, "2": 40, "3": 32, "4": 28, "5": 25, "6": 22 },
-        availabilitySummary: "Weekdays 3-6 PM",
         bankName: "BCA",
         bankAccountNumber: "1234567890",
         bankAccountHolderName: "Prof Awesome",
@@ -192,7 +203,7 @@ describe("Tutor Invite & Onboarding", () => {
         bankTransferDisclaimerAccepted: true,
       });
 
-      expect(updated.displayName).toBe("Prof Awesome");
+      expect(updated.shortBio).toBe("Passionate math educator");
       expect(updated.subjects).toHaveLength(1);
       expect(updated.user?.image).toBe("https://example.com/tutor-profile.jpg");
     });
@@ -267,7 +278,7 @@ describe("Tutor Invite & Onboarding", () => {
       const version = await getTutorVersion();
       await tutorClient.tutor.updateMyProfile({
         version,
-        credentialsSummary: "PhD Math, 10yr exp, Olympiad coach",
+        shortBio: "PhD Math, 10yr exp, Olympiad coach",
       });
 
       const result = await tutorClient.tutor.submitForReview({});
@@ -294,13 +305,13 @@ describe("Tutor Invite & Onboarding", () => {
       const version = await getTutorVersion();
       const updated = await tutorClient.tutor.updateMyProfile({
         version,
-        displayName: "Pending Display Name",
+        modality: "offline",
       });
 
-      expect(updated.displayName).not.toBe("Pending Display Name");
+      expect(updated.modality).not.toBe("offline");
       expect(updated.profileEditStatus).toBe("pending_review");
       expect(updated.pendingProfileChanges).toMatchObject({
-        displayName: "Pending Display Name",
+        modality: "offline",
       });
     });
 

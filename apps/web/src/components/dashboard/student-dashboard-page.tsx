@@ -135,9 +135,9 @@ function RecommendedTutorsCard({
             variant="plain"
             size="sm"
             nativeButton={false}
-            render={<Link to="/tutors" aria-label="View all tutors" />}
+            render={<Link to="/tutors" aria-label="See all tutors" />}
           >
-            View all <IconArrowRight />
+            See all <IconArrowRight />
           </Button>
         </CardHeaderAction>
       </CardHeader>

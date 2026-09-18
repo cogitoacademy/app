@@ -26,6 +26,7 @@ import {
   bookingRescheduleProposal,
   bookingSession,
   sessionNote,
+  sessionCompletionFeedback,
   availabilitySlot,
   tutorProfile,
   user,
@@ -757,6 +758,65 @@ async function listSessionNotes(conn: DbOrTx, bookingId: string) {
     .orderBy(desc(sessionNote.createdAt));
 }
 
+async function insertCompletionFeedback(
+  conn: DbOrTx,
+  values: {
+    bookingId: string;
+    sessionId: string | null;
+    authorId: string;
+    discussion: string[];
+    strengths: string[];
+    improvements: string[];
+  },
+) {
+  const [row] = await conn
+    .insert(sessionCompletionFeedback)
+    .values({
+      bookingId: values.bookingId,
+      sessionId: values.sessionId,
+      authorId: values.authorId,
+      discussion: values.discussion,
+      strengths: values.strengths,
+      improvements: values.improvements,
+    })
+    .returning();
+  return row!;
+}
+
+async function listCompletionFeedbackByBooking(
+  conn: DbOrTx,
+  bookingId: string,
+) {
+  return conn
+    .select({ ...getTableColumns(sessionCompletionFeedback) })
+    .from(sessionCompletionFeedback)
+    .where(eq(sessionCompletionFeedback.bookingId, bookingId))
+    .orderBy(asc(sessionCompletionFeedback.createdAt));
+}
+
+async function findCompletionFeedback(
+  conn: DbOrTx,
+  bookingId: string,
+  sessionId: string | null,
+) {
+  const rows = await conn
+    .select({ ...getTableColumns(sessionCompletionFeedback) })
+    .from(sessionCompletionFeedback)
+    .where(
+      sessionId
+        ? and(
+            eq(sessionCompletionFeedback.bookingId, bookingId),
+            eq(sessionCompletionFeedback.sessionId, sessionId),
+          )
+        : and(
+            eq(sessionCompletionFeedback.bookingId, bookingId),
+            isNull(sessionCompletionFeedback.sessionId),
+          ),
+    )
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 /**
  * Finds a tutor's overlapping bookings in the given window, optionally excluding one booking or states.
  *
@@ -1344,6 +1404,9 @@ export function createBookingRepo(db: DbType) {
     completeSession,
     insertSessionNote,
     listSessionNotes,
+    insertCompletionFeedback,
+    listCompletionFeedbackByBooking,
+    findCompletionFeedback,
     listSessionsBySeriesId,
     updateBookingPriceSnapshot,
     updateBookingSchedule,

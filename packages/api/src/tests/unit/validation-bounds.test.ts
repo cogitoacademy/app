@@ -138,14 +138,14 @@ describe("Validation bounds — string .max()", () => {
     }
   });
 
-  test("Short text: displayName rejects >255 chars", () => {
+  test("Short text: bankName rejects >100 chars", () => {
     const result = updateMyProfileInput.safeParse({
       version: 1,
-      displayName: LONG_SHORT_TEXT,
+      bankName: `${LONG_SHORT_TEXT}${LONG_SHORT_TEXT}`,
     });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.issues[0].message).toMatch(/<=255/i);
+      expect(result.error.issues[0].message).toMatch(/<=100/i);
     }
   });
 
@@ -403,15 +403,6 @@ describe("Validation bounds — array .max()", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.issues[0].message).toMatch(/<=5/i);
-    }
-  });
-
-  test("expertise rejects >20 items", () => {
-    const expertise = Array.from({ length: 21 }, (_, i) => `subject-${i}`);
-    const result = updateMyProfileInput.safeParse({ version: 1, expertise });
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues[0].message).toMatch(/<=20/i);
     }
   });
 

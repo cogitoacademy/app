@@ -8,6 +8,13 @@ import { TutorProfilePage } from "@/components/tutor/tutor-profile-page";
 import { client, orpc } from "@/utils/orpc";
 
 export const Route = createFileRoute("/_app/profile")({
+  head: () => ({
+    meta: [
+      {
+        title: "Profile · Cogito Academy",
+      },
+    ],
+  }),
   component: RouteComponent,
   beforeLoad: ({ context }) => {
     const user = context.session?.data?.user as CogitoUser | undefined;

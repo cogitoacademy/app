@@ -44,11 +44,7 @@ export const tutorProfile = pgTable(
     inviteId: text("invite_id")
       .notNull()
       .references(() => tutorInvite.id, { onDelete: "cascade" }),
-    displayName: text("display_name"),
     shortBio: text("short_bio"),
-    credentialsSummary: text("credentials_summary"),
-    achievements: text("achievements"),
-    experiences: text("experiences"),
     achievementProofUrls: jsonb("achievement_proof_urls")
       .$type<string[]>()
       .default([]),
@@ -62,7 +58,6 @@ export const tutorProfile = pgTable(
     experienceEntries: jsonb("experience_entries")
       .$type<TutorExperienceEntry[]>()
       .default([]),
-    expertise: jsonb("expertise").$type<string[]>().default([]),
     modality: text("modality"),
     prices: jsonb("prices").$type<Record<string, number>>(),
     baseRatesIdr:
@@ -81,28 +76,20 @@ export const tutorProfile = pgTable(
       .notNull(),
     termsOfServiceAcceptedAt: timestamp("terms_of_service_accepted_at"),
     termsOfServiceVersion: text("terms_of_service_version"),
-    availabilitySummary: text("availability_summary"),
-    proofUrls: jsonb("proof_urls").$type<string[]>().default([]),
     onboardingStatus: text("onboarding_status").notNull().default("draft"),
     adminReviewNote: text("admin_review_note"),
     pendingProfileChanges: jsonb("pending_profile_changes").$type<
       Partial<{
-        displayName: string;
-        credentialsSummary: string;
-        achievements: string;
-        experiences: string;
-        achievementProofUrls: string[];
-        experienceProofUrls: string[];
         profileImageUrl: string;
         education: TutorEducationEntry[];
         competitionAchievements: TutorCompetitionAchievement[];
         experienceEntries: TutorExperienceEntry[];
-        expertise: string[];
         subjectIds: string[];
         modality: "online" | "offline" | "both";
         baseRatesIdr: Partial<{ online: number; offline: number }>;
         prices: Record<string, number>;
-        proofUrls: string[];
+        achievementProofUrls: string[];
+        experienceProofUrls: string[];
       }>
     >(),
     profileEditStatus: text("profile_edit_status").notNull().default("none"),

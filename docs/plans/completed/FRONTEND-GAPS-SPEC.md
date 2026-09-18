@@ -1,13 +1,13 @@
 # Cogito Frontend — PRD Gaps Specification
 
-| Field      | Value                                                                                                                                                                                                                                                                                                                     |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status     | Living gap inventory (updated 2026-09-04; F1/F8/F9/F13/F14/F18 closed; F16 scope retired; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F12 closed; competition taxonomy and tutor-achievement-format follow-ups implemented; meeting fallback and admin wallet-search follow-ups added; production UI/E2E audit verified) |
-| Branch     | `f/frontend-prd-gaps` (merged #55); `f/competition-taxonomy` (PR pending)                                                                                                                                                                                                                                                 |
-| Created    | 2026-07-29                                                                                                                                                                                                                                                                                                                |
-| Audited    | 2026-09-04                                                                                                                                                                                                                                                                                                                |
-| Depends on | Backend PRD gaps (G1-G19) where API is needed                                                                                                                                                                                                                                                                             |
-| Scope      | Frontend surfaces plus the admin queue projection needed for SLA detail (`apps/web/`, `packages/api/`)                                                                                                                                                                                                                    |
+| Field      | Value                                                                                                                                                                                                                                                                                                                                                                                           |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status     | Living gap inventory (updated 2026-09-17; F1/F8/F9/F13/F14/F18 closed; F16 scope retired; F2/F3/F6/F7/F11/F17 closed by merged PR #55; F12 closed; competition taxonomy and tutor-achievement-format follow-ups implemented; meeting fallback and admin wallet-search follow-ups added; separate admin tutor payout workspace and room detail controls added; production UI/E2E audit verified) |
+| Branch     | `f/frontend-prd-gaps` (merged #55); `f/competition-taxonomy` (PR pending)                                                                                                                                                                                                                                                                                                                       |
+| Created    | 2026-07-29                                                                                                                                                                                                                                                                                                                                                                                      |
+| Audited    | 2026-09-17                                                                                                                                                                                                                                                                                                                                                                                      |
+| Depends on | Backend PRD gaps (G1-G19) where API is needed                                                                                                                                                                                                                                                                                                                                                   |
+| Scope      | Frontend surfaces plus the admin queue projection needed for SLA detail (`apps/web/`, `packages/api/`)                                                                                                                                                                                                                                                                                          |
 
 This document catalogs all PRD-required frontend surfaces that are not yet implemented. It runs in parallel with (or after) the backend PRD gaps spec — each frontend gap references the backend gap it depends on.
 
@@ -17,6 +17,16 @@ The student achievement summary now shares one Selia card across Total,
 Approved, and Pending, keeping all three counts in one row at narrow widths.
 The page source typo was also corrected to `achievements-page.tsx` and
 `AchievementsPage`. RPC, schema, and persistence contracts are unchanged.
+
+### Admin tutor payout workspace follow-up (2026-09-17)
+
+Operational tutor payouts now have a dedicated `/admin-tutor-payouts` page.
+Manage Tutors remains focused on invitations and profile review, while the
+payout workspace independently pages ten tutor profiles at a time, loads
+pending completion-time summaries, verifies account readiness, shows the
+private destination account and gross/fee/net breakdown, and records a
+confirmed transfer through **Mark as paid**. Existing payout RPCs and schema
+contracts are reused.
 
 The backend spec is `docs/plans/completed/PRD-GAPS-SPEC.md` (backend-only). This is the frontend counterpart.
 
@@ -155,6 +165,19 @@ The onboarding selector stores normalized IDs for persistence and renders all cu
 
 The admin tutor review card now resolves proposed `subjectIds` through the active taxonomy and renders category/specialization labels as wrapping badges instead of exposing raw UUIDs. Other pending values also wrap safely on narrow cards. This is presentation-only; the `adminTutor.listTutorProfiles` and `adminTutor.reviewTutorProfile` contracts are unchanged.
 
+### Tutor review diff design follow-up (2026-09-17)
+
+The focused admin tutor review card now presents a BranchDiff-style summary for
+pending profile fields. It derives normalized added, changed, removed, filled,
+and empty states; exposes summary counts with composable search/status chips;
+and renders each pending field as an accessible expandable Selia item with
+current/proposed panes. Profile, teaching setup, credentials, proofs, Marks,
+photo, and payout sections remain visible with changed or empty badges and
+inline empty states. The profile photo keeps its existing side-by-side panel.
+Pure status/filter logic is covered by web unit tests. This is presentation-only;
+the admin tutor RPCs, request/response payloads, schema, and persistence
+contracts are unchanged.
+
 ### Achievement list table follow-up (2026-09-02)
 
 The student `/achievements` list and admin `/admin-achievements` moderation queue now use compact minimum-width Selia tables instead of card grids. Rows expose core identity/status/date information and a shared responsive detail drawer contains consistently labeled metadata, proof/documentation image previews with original-link fallbacks, moderator notes, and the relevant student or admin actions. It opens as a bottom sheet on mobile and from the right at the `sm` breakpoint and above. The table containers scroll horizontally when the viewport is narrower than the column minimums, without changing any RPC, schema, or persistence contract.
@@ -212,9 +235,9 @@ The authenticated shell's existing Light/Dark/System menu now also responds to `
 
 The student profile and tutor onboarding surfaces now share a responsive account-identity editor. Student learning and parent/guardian fields are separated into clear cards with a completion indicator and one learning-profile save action. Tutor onboarding keeps profile status and review feedback visible, groups public profile/teaching setup/availability fields, presents pricing in a compact responsive grid, and consolidates draft/save/submit actions into a sticky footer. No profile or auth API contracts changed.
 
-The tutor profile photo upload now appears before the rest of the editable profile fields and uses the same compact clickable-avatar crop interaction as the student editor. Published tutors see current and proposed photos separately, with explicit review messaging; full image previews open on demand through the shared Selia `InfoPreview` popover. The admin review drawer compares those assets side by side and approval promotes the proposed URL through the existing pending-change contract.
+The tutor profile photo upload now appears before the rest of the editable profile fields and uses the same compact clickable-avatar crop interaction as the student editor. Published tutors see current and proposed photos separately, with explicit review messaging; full image previews open on demand through the shared Selia `InfoPreview` popover. The admin review page compares those assets side by side and approval promotes the proposed URL through the existing pending-change contract.
 
-The admin tutor index now surfaces the edit-review state in its status badge: a published tutor with submitted changes is shown as **Edit review**, while a returned edit is shown as **Revision requested**, so pending work is visible without opening each drawer.
+The admin tutor index now surfaces the edit-review state in its status badge: a published tutor with submitted changes is shown as **Edit review**, while a returned edit is shown as **Revision requested**, so pending work is visible before opening the full-page review workspace.
 
 ### Student profile photo crop follow-up (2026-08-31)
 
@@ -416,6 +439,7 @@ for classmates.
 | `/_app/admin`                | admin-dashboard-page.tsx                  | Complete F1 admin workspace entry point                                                                                                                              |
 | `/_app/admin-operations`     | admin-operations-page.tsx                 | Complete F1 queue/detail surface — filters, hydrated participants/wallets/ledger, override, rooms, and searchable wallet lookup                                      |
 | `/_app/admin-tutors`         | admin tutor invite + review               | Complete — invite/review queue plus version-checked structured achievement correction                                                                                |
+| `/_app/admin-tutor-payouts`  | admin tutor payout workspace              | Complete — independently paginated unpaid honorarium review, account readiness, transfer breakdown, and confirmed payout recording                                   |
 | `/_app/admin-achievements`   | achievement-moderation-page.tsx           | Exists (table-based moderation UI)                                                                                                                                   |
 | `/_app/admin-economy`        | economy-settings-page.tsx                 | Complete — admin-managed Cogito take schedule with validation, preview, optimistic versioning, and audit-backed persistence                                          |
 
@@ -740,7 +764,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-22
 
-**Current state:** **CLOSED (2026-09-02).** The Room approvals tab includes an Active rooms catalog backed by `room.list` and an Add room dialog backed by `room.create`, with name/location trimming, positive whole-number capacity validation, and shared room-list cache invalidation after success. It also consumes `room.listPendingApprovals` as the cross-booking queue. Requested rooms can be assigned inline; Choose room/Choose another navigates to the admin booking detail Offline room card, where assignment, relocation, and cancellation use the booking's existing context. No pending or detail flow requires admins to paste a booking UUID. Existing room mutations remain the action paths.
+**Current state:** **CLOSED (2026-09-17).** The Room approvals tab includes an Active rooms catalog backed by `room.list` and Add, Edit, and Deactivate controls backed by `room.create`, `room.update`, and `room.deactivate`. The forms trim name/location and validate a positive whole-number capacity; deactivation is a soft removal that preserves historical assignments while preventing new selections. Shared room-list cache invalidation refreshes the catalog and offline selectors after a successful change. It also consumes `room.listPendingApprovals` as the cross-booking queue. Requested rooms can be assigned inline; Choose room/Choose another navigates to the admin booking detail Offline room card, where assignment, relocation, and cancellation use the booking's existing context. No pending or detail flow requires admins to paste a booking UUID. Existing room mutations remain the action paths.
 
 **Required (after G14 backend):**
 
@@ -956,6 +980,15 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 ---
 
 ### Version Notes
+
+- v1.76 (2026-09-17): Reapplied the dedicated `/admin-tutor-payouts` operational
+  workspace and moved payout navigation out of the Manage Tutors focus. The
+  workspace independently paginates tutor profiles, shows unpaid honorarium,
+  completed sessions, account readiness, private destination details, and
+  gross/fee/net values, and records confirmed transfers through **Mark as
+  paid**. Also restored admin room Edit and Deactivate controls with soft
+  deactivation and documented the related `room.update`/`room.deactivate`
+  contracts.
 
 - v1.73 (2026-09-08): Replaced bespoke pulse skeleton placeholders across the
   web loading states with the shared `apps/web/src/components/loader.tsx`

@@ -1,3 +1,4 @@
+import { TEST_COMPLETION_FEEDBACK } from "../helpers/completion-feedback";
 import { describe, test, expect, beforeAll } from "bun:test";
 import { eq } from "drizzle-orm";
 import { db } from "@cogito-app/db";
@@ -76,13 +77,9 @@ async function createPublishedTutor(
     .values({
       userId: tutorId,
       inviteId: invite!.id,
-      displayName: name,
       shortBio: "Bio",
-      credentialsSummary: "Creds",
-      expertise: ["Mathematics"],
       modality: "both",
       prices: { "1": 50, "2": 45, "3": 40, "4": 35, "5": 30, "6": 28 },
-      availabilitySummary: "Flexible",
       onboardingStatus: "published",
       publishedAt: new Date(),
     })
@@ -249,6 +246,7 @@ describe("B1/U12: offline bookings do not auto-NO_SHOW at session start", () => 
     expect(row.deadlineAt!.getTime()).toBeGreaterThan(now);
 
     const completed = await tutorClient.tutorActions.completeSession({
+      feedback: TEST_COMPLETION_FEEDBACK,
       bookingId: b.id,
     });
     expect(completed.currentState).toBe(BOOKING_STATE.COMPLETED);

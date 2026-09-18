@@ -53,7 +53,6 @@ export function TutorProfilePage({
         accountUser={accountUser}
         profile={{
           ...profile,
-          expertise: profile.expertise ?? [],
           bankAccountOwnership:
             profile.bankAccountOwnership === "self" ||
             profile.bankAccountOwnership === "trusted_person"

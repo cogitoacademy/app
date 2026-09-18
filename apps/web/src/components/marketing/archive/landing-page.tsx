@@ -139,7 +139,7 @@ export function LandingPage() {
         <div className="mx-auto flex h-16 w-full max-w-7xl items-center gap-4 px-4 sm:px-6 lg:px-8">
           <Link to="/" className="flex items-center gap-2.5">
             <span className="grid size-9 place-items-center rounded-lg bg-tertiary text-tertiary-foreground ring ring-tertiary-border">
-              <img src="/c of cogito.png" alt="" className="size-5 invert" />
+              <img src="/cogito-c-mark.png" alt="" className="size-5 invert" />
             </span>
             <span className="font-semibold">Cogito</span>
           </Link>

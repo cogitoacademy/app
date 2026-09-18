@@ -1,3 +1,4 @@
+import { TEST_COMPLETION_FEEDBACK } from "../helpers/completion-feedback";
 import { describe, test, expect, mock } from "bun:test";
 import {
   createBookingService,
@@ -29,6 +30,7 @@ import {
   BookingSeriesNoOptOutError,
   BookingAcceptanceDeadlinePassedError,
   BookingCancellationDeadlinePassedError,
+  BookingCompletionFeedbackRequiredError,
 } from "../../modules/booking/booking.errors";
 
 function makeDb() {
@@ -100,6 +102,9 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     cancelSession: mock(async () => {}),
     insertSessionNote: mock(async () => ({})),
     listSessionNotes: mock(async () => []),
+    insertCompletionFeedback: mock(async () => ({})),
+    listCompletionFeedbackByBooking: mock(async () => []),
+    findCompletionFeedback: mock(async () => null),
     ...overrides,
   };
 }
@@ -2169,14 +2174,33 @@ describe("BookingService", () => {
   });
 
   describe("completeSession", () => {
+    test("requires completion feedback before completing a scheduled booking", async () => {
+      const { service } = createService({
+        repo: {
+          findBookingById: mock(async () =>
+            makeBooking({ currentState: "scheduled" }),
+          ),
+        },
+      });
+
+      await expect(service.completeSession("b1", "tutor1")).rejects.toThrow(
+        BookingCompletionFeedbackRequiredError,
+      );
+    });
+
     test("throws BookingNotFoundError when booking does not exist", async () => {
       const { service } = createService({
         repo: { findBookingById: mock(async () => null) },
       });
 
-      await expect(service.completeSession("b1", "tutor1")).rejects.toThrow(
-        BookingNotFoundError,
-      );
+      await expect(
+        service.completeSession(
+          "b1",
+          "tutor1",
+          undefined,
+          TEST_COMPLETION_FEEDBACK,
+        ),
+      ).rejects.toThrow(BookingNotFoundError);
     });
 
     test("throws BookingNotOwnedError when not the tutor", async () => {
@@ -2186,9 +2210,14 @@ describe("BookingService", () => {
         },
       });
 
-      await expect(service.completeSession("b1", "tutor1")).rejects.toThrow(
-        BookingNotOwnedError,
-      );
+      await expect(
+        service.completeSession(
+          "b1",
+          "tutor1",
+          undefined,
+          TEST_COMPLETION_FEEDBACK,
+        ),
+      ).rejects.toThrow(BookingNotOwnedError);
     });
 
     test("throws BookingSessionRequiredError for series bookings without sessionId", async () => {
@@ -2200,9 +2229,14 @@ describe("BookingService", () => {
         },
       });
 
-      await expect(service.completeSession("b1", "tutor1")).rejects.toThrow(
-        BookingSessionRequiredError,
-      );
+      await expect(
+        service.completeSession(
+          "b1",
+          "tutor1",
+          undefined,
+          TEST_COMPLETION_FEEDBACK,
+        ),
+      ).rejects.toThrow(BookingSessionRequiredError);
     });
 
     test("series session completion deducts perSession, marks session completed, keeps booking scheduled (G18)", async () => {
@@ -2249,7 +2283,12 @@ describe("BookingService", () => {
         },
       });
 
-      const result = await service.completeSession("b1", "tutor1", "s1");
+      const result = await service.completeSession(
+        "b1",
+        "tutor1",
+        "s1",
+        TEST_COMPLETION_FEEDBACK,
+      );
 
       expect(wallet.deduct).toHaveBeenCalledTimes(1);
       expect(wallet.deduct.mock.calls[0][1]).toMatchObject({
@@ -2323,7 +2362,12 @@ describe("BookingService", () => {
         },
       });
 
-      const result = await service.completeSession("b1", "tutor1", "s1");
+      const result = await service.completeSession(
+        "b1",
+        "tutor1",
+        "s1",
+        TEST_COMPLETION_FEEDBACK,
+      );
 
       // The admin released 130 of the 150-hold via cancelSeriesSession(..., release);
       // the completion must deduct only the remaining 20, never 50 (would throw
@@ -2390,7 +2434,12 @@ describe("BookingService", () => {
         },
       });
 
-      const result = await service.completeSession("b1", "tutor1", "s1");
+      const result = await service.completeSession(
+        "b1",
+        "tutor1",
+        "s1",
+        TEST_COMPLETION_FEEDBACK,
+      );
 
       // Each participant holds only 20 of the 40 per-session amount after the
       // admin released part of their package — never deduct more than held.
@@ -2473,7 +2522,12 @@ describe("BookingService", () => {
         },
       });
 
-      const result = await service.completeSession("b1", "tutor1", "s3");
+      const result = await service.completeSession(
+        "b1",
+        "tutor1",
+        "s3",
+        TEST_COMPLETION_FEEDBACK,
+      );
 
       expect(repo.updateBookingVersioned).toHaveBeenCalledTimes(1);
       expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
@@ -2555,7 +2609,12 @@ describe("BookingService", () => {
         },
       });
 
-      const result = await service.completeSession("b1", "tutor1", "s3");
+      const result = await service.completeSession(
+        "b1",
+        "tutor1",
+        "s3",
+        TEST_COMPLETION_FEEDBACK,
+      );
 
       expect(result.currentState).toBe("completed");
       expect(result.holdAmount).toBe(0);
@@ -2600,7 +2659,7 @@ describe("BookingService", () => {
       });
 
       await expect(
-        service.completeSession("b1", "tutor1", "s1"),
+        service.completeSession("b1", "tutor1", "s1", TEST_COMPLETION_FEEDBACK),
       ).rejects.toThrow(BookingSessionNotStartedError);
     });
 
@@ -2627,7 +2686,7 @@ describe("BookingService", () => {
       });
 
       await expect(
-        service.completeSession("b1", "tutor1", "s1"),
+        service.completeSession("b1", "tutor1", "s1", TEST_COMPLETION_FEEDBACK),
       ).rejects.toThrow(BookingStateTransitionError);
     });
 
@@ -2640,9 +2699,14 @@ describe("BookingService", () => {
         },
       });
 
-      await expect(service.completeSession("b1", "tutor1")).rejects.toThrow(
-        BookingStateTransitionError,
-      );
+      await expect(
+        service.completeSession(
+          "b1",
+          "tutor1",
+          undefined,
+          TEST_COMPLETION_FEEDBACK,
+        ),
+      ).rejects.toThrow(BookingStateTransitionError);
     });
 
     test("group booking after proposer withdrawal deducts each confirmed participant's hold", async () => {
@@ -2676,7 +2740,12 @@ describe("BookingService", () => {
         },
       });
 
-      await service.completeSession("b1", "tutor1");
+      await service.completeSession(
+        "b1",
+        "tutor1",
+        undefined,
+        TEST_COMPLETION_FEEDBACK,
+      );
 
       expect(repo.findConfirmedParticipants).toHaveBeenCalledTimes(1);
       expect(wallet.deduct).toHaveBeenCalledTimes(3);
@@ -2730,7 +2799,12 @@ describe("BookingService", () => {
         },
       });
 
-      await service.completeSession("b1", "tutor1");
+      await service.completeSession(
+        "b1",
+        "tutor1",
+        undefined,
+        TEST_COMPLETION_FEEDBACK,
+      );
 
       expect(wallet.deduct).toHaveBeenCalledTimes(1);
       expect(wallet.deduct.mock.calls[0][1]).toMatchObject({
@@ -7283,9 +7357,9 @@ describe("BookingService additional coverage paths", () => {
       },
     });
 
-    await expect(service.completeSession("b1", "tutor1", "s1")).rejects.toThrow(
-      BookingStateTransitionError,
-    );
+    await expect(
+      service.completeSession("b1", "tutor1", "s1", TEST_COMPLETION_FEEDBACK),
+    ).rejects.toThrow(BookingStateTransitionError);
   });
 
   test("rejects completing a session that belongs to another booking", async () => {
@@ -7305,9 +7379,9 @@ describe("BookingService additional coverage paths", () => {
       },
     });
 
-    await expect(service.completeSession("b1", "tutor1", "s1")).rejects.toThrow(
-      BookingSessionNotFoundError,
-    );
+    await expect(
+      service.completeSession("b1", "tutor1", "s1", TEST_COMPLETION_FEEDBACK),
+    ).rejects.toThrow(BookingSessionNotFoundError);
   });
 
   test("releases residual holds when a group series completes", async () => {
@@ -7367,7 +7441,12 @@ describe("BookingService additional coverage paths", () => {
       },
     });
 
-    await service.completeSession("b1", "tutor1", "s1");
+    await service.completeSession(
+      "b1",
+      "tutor1",
+      "s1",
+      TEST_COMPLETION_FEEDBACK,
+    );
 
     expect(wallet.release).toHaveBeenCalledWith(
       expect.anything(),

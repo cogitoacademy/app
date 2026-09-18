@@ -16,11 +16,11 @@ export function LoginPage() {
     <main className="relative mx-auto flex min-h-svh w-full flex-col p-4 sm:p-6 lg:p-8 justify-center">
       <div className="flex w-full items-center justify-center md:justify-between">
         <img
-          src="/logo extended.png"
+          src="/logo-extended.png"
           alt="Cogito Academy"
           width={256}
           height={64}
-          className="h-auto w-36 object-contain sm:w-32"
+          className="h-auto w-36 object-contain sm:w-32 dark:brightness-0 dark:invert"
         />
         <div className="hidden">
           <ModeToggle />
@@ -42,7 +42,7 @@ export function LoginPage() {
           />
         )}
         <p className="max-w-md px-4 text-center text-dimmed text-xs leading-relaxed">
-          By continuing, you agree to Cogito Digital&apos;s{" "}
+          By continuing, you agree to Cogito Academy&apos;s{" "}
           <TextLink
             href="https://cogitoacademy.id/en/privacy-policy"
             target="_blank"

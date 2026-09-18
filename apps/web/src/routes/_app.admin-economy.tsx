@@ -4,6 +4,13 @@ import type { CogitoUser } from "@cogito-app/auth";
 import { EconomySettingsPage } from "@/components/admin/economy-settings-page";
 
 export const Route = createFileRoute("/_app/admin-economy")({
+  head: () => ({
+    meta: [
+      {
+        title: "Economy settings · Cogito Academy",
+      },
+    ],
+  }),
   component: EconomySettingsPage,
   beforeLoad: ({ context }) => {
     const user = context.session.data?.user as CogitoUser | undefined;

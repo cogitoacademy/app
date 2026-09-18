@@ -1,5 +1,5 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import { useState } from "react";
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import {
   Card,
@@ -21,6 +21,11 @@ import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@cogito-app/ui/components/selia/avatar";
+import {
   Menu,
   MenuItem,
   MenuPopup,
@@ -36,30 +41,17 @@ import {
   TableHeader,
   TableRow,
 } from "@cogito-app/ui/components/selia/table";
-import {
-  Drawer,
-  DrawerBody,
-  DrawerClose,
-  DrawerDescription,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerPopup,
-  DrawerTitle,
-} from "@cogito-app/ui/components/selia/drawer";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import type { CogitoUser } from "@cogito-app/auth";
 import { client, orpc } from "@/utils/orpc";
 import { TutorInviteForm } from "@/components/admin/tutor-invite-form";
-import { TutorReviewCard } from "@/components/admin/tutor-review-card";
 import { TablePagination } from "@/components/table-pagination";
-import { useSubjectTaxonomy } from "@/components/tutor/subject-taxonomy";
 import {
   IconCopy,
   IconDots,
   IconInbox,
   IconRefresh,
   IconTrash,
-  IconX,
 } from "@tabler/icons-react";
 import { EmptyState } from "@/components/empty-state";
 import { getUserFacingError } from "@/lib/error-message";
@@ -118,6 +110,13 @@ const INVITE_STATUS_BADGES: Record<
 };
 
 export const Route = createFileRoute("/_app/admin-tutors")({
+  head: () => ({
+    meta: [
+      {
+        title: "Manage tutors · Cogito Academy",
+      },
+    ],
+  }),
   component: RouteComponent,
   beforeLoad: async ({ context }) => {
     const user = context.session?.data?.user as CogitoUser | undefined;
@@ -132,30 +131,11 @@ function RouteComponent() {
   const [inviteFilter, setInviteFilter] = useState("");
   const [profilePage, setProfilePage] = useState(0);
   const [invitePage, setInvitePage] = useState(0);
-  const [selectedProfile, setSelectedProfile] = useState<TutorProfile | null>(
-    null,
-  );
-  const [reviewFooterTarget, setReviewFooterTarget] =
-    useState<HTMLElement | null>(null);
   const [latestInviteLinks, setLatestInviteLinks] = useState<
     Record<string, string>
   >({});
-  const { data: subjectCategories = [] } = useSubjectTaxonomy();
-  const subjectLabels = useMemo(() => {
-    const labels = new Map<string, string>();
-    for (const category of subjectCategories) {
-      for (const subject of category.children) {
-        labels.set(subject.id, `${category.name} · ${subject.name}`);
-      }
-    }
-    return labels;
-  }, [subjectCategories]);
 
-  const {
-    data: profiles = [],
-    isFetching: profilesFetching,
-    refetch: refetchProfiles,
-  } = useQuery({
+  const { data: profiles = [], isFetching: profilesFetching } = useQuery({
     queryKey: ["adminTutorProfiles", profileFilter, profilePage],
     queryFn: () =>
       profileFilter
@@ -288,7 +268,10 @@ function RouteComponent() {
       <div className="grid lg:grid-cols-[1fr_2fr] gap-6">
         <TutorInviteForm />
 
-        <Card id="admin-tutor-invites" className="flex scroll-mt-4 flex-col">
+        <Card
+          id="admin-tutor-invites"
+          className="flex min-w-0 scroll-mt-4 flex-col"
+        >
           <CardHeader>
             <CardTitle>Invitations</CardTitle>
             <CardHeaderAction>
@@ -316,7 +299,7 @@ function RouteComponent() {
           </CardHeader>
           <CardBody
             aria-busy={invitesFetching}
-            className="flex flex-1 flex-col *:data-[slot=pagination]:mt-auto"
+            className="flex min-w-0 flex-1 flex-col *:data-[slot=pagination]:mt-auto"
           >
             {invites.length === 0 ? (
               <EmptyState
@@ -335,8 +318,8 @@ function RouteComponent() {
                 className="rounded-lg"
               />
             ) : (
-              <TableContainer className="w-[calc(100%+3rem)]!">
-                <Table>
+              <TableContainer className="w-[calc(100%+3rem)]! min-w-0">
+                <Table className="min-w-[36rem]">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Tutor</TableHead>
@@ -546,12 +529,27 @@ function RouteComponent() {
                     return (
                       <TableRow key={profile.id}>
                         <TableCell>
-                          <Text className="font-medium">
-                            {profile.user?.name ?? "Tutor"}
-                          </Text>
-                          <Text className="text-sm text-muted">
-                            {profile.user?.email ?? "No email"}
-                          </Text>
+                          <div className="flex min-w-48 items-center gap-3">
+                            <Avatar size="sm">
+                              <AvatarImage
+                                src={profile.user?.image ?? undefined}
+                              />
+                              <AvatarFallback>
+                                {profile.user?.name
+                                  ?.trim()
+                                  .slice(0, 2)
+                                  .toUpperCase() || "TU"}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <Text className="truncate font-medium">
+                                {profile.user?.name ?? "Tutor"}
+                              </Text>
+                              <Text className="truncate text-sm text-muted">
+                                {profile.user?.email ?? "No email"}
+                              </Text>
+                            </div>
+                          </div>
                         </TableCell>
                         <TableCell>
                           <Badge variant={status?.variant ?? "secondary"}>
@@ -568,11 +566,18 @@ function RouteComponent() {
                             {new Date(profile.updatedAt).toLocaleString()}
                           </Text>
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right px-3! sm:px-6!">
                           <Button
                             size="sm"
                             variant="secondary"
-                            onClick={() => setSelectedProfile(profile)}
+                            nativeButton={false}
+                            render={
+                              <Link
+                                to="/admin-tutors/$profileId"
+                                params={{ profileId: profile.id }}
+                                aria-label={`Review ${profile.user?.name ?? "tutor"}`}
+                              />
+                            }
                           >
                             Review
                           </Button>
@@ -599,56 +604,6 @@ function RouteComponent() {
           ) : null}
         </CardBody>
       </Card>
-
-      <Drawer
-        open={selectedProfile !== null}
-        onOpenChange={(open) => {
-          if (!open) setSelectedProfile(null);
-        }}
-      >
-        <DrawerPopup direction="right" className="w-full max-w-2xl">
-          <DrawerHeader className="justify-between border-b border-drawer-border pb-4.5">
-            <div className="min-w-0">
-              <DrawerTitle className="truncate">
-                {selectedProfile?.user?.name ?? "Tutor review"}
-              </DrawerTitle>
-              <DrawerDescription>
-                Review profile details, proofs, photos, and publication status.
-              </DrawerDescription>
-            </div>
-            <DrawerClose
-              render={<Button variant="plain" size="sm" aria-label="Close" />}
-            >
-              <IconX />
-            </DrawerClose>
-          </DrawerHeader>
-          <DrawerBody className="p-0! [&>[data-slot=card]]:rounded-none! [&>[data-slot=card]]:bg-transparent! [&>[data-slot=card]]:shadow-none! [&>[data-slot=card]]:ring-0!">
-            {selectedProfile ? (
-              <TutorReviewCard
-                profile={{
-                  ...selectedProfile,
-                  expertise: selectedProfile.expertise ?? [],
-                  bankAccountOwnership:
-                    selectedProfile.bankAccountOwnership === "self" ||
-                    selectedProfile.bankAccountOwnership === "trusted_person"
-                      ? selectedProfile.bankAccountOwnership
-                      : null,
-                }}
-                subjectLabels={subjectLabels}
-                footerTarget={reviewFooterTarget}
-                onAction={() => {
-                  void refetchProfiles();
-                  setSelectedProfile(null);
-                }}
-              />
-            ) : null}
-          </DrawerBody>
-          <DrawerFooter
-            ref={setReviewFooterTarget}
-            className="flex-wrap gap-2"
-          />
-        </DrawerPopup>
-      </Drawer>
     </div>
   );
 }
