@@ -9,7 +9,11 @@ exception to the 35-Mark gate. Grants are keyed to the student user, have one
 future expiry timestamp, and are evaluated on every eligibility/file request;
 no scheduler is needed to revoke expired access. Admin create/update/remove
 operations are audit-logged, and removing a grant deletes only the live
-exception while preserving the audit record.
+exception while preserving the audit record. The web form searches the bounded
+admin `admin.searchUsers` identity projection and accepts the email only after
+an operator selects a student result. Expiry entry composes the shared Selia
+calendar with the cross-browser minute time picker; new grants default to
+23:59 local time thirty days from today.
 
 ## Competition Calendar agenda list (2026-09-18)
 
@@ -323,6 +327,7 @@ Knowledge Bank access by email when the student should not currently need the
 - Create and update require a strictly future ISO datetime. Expired rows stay visible to admins but never bypass the threshold.
 - Removal is a hard delete of the live grant; audit history remains in `audit_log`.
 - The admin UI lives at `/admin-knowledge-bank` and supports active/expired/all filtering, edit, and confirmation-gated removal.
+- The create dialog searches by student name or email through `admin.searchUsers`, requires a selected student result, and uses a Selia date picker plus minute time control instead of native `datetime-local`; new grants default to 23:59 local time thirty days out.
 
 **Dependencies:** `AdminKnowledgeBankRepo`, `AuditPort`
 

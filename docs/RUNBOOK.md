@@ -6,18 +6,19 @@ Last updated: 2026-09-18
 
 Deploy the API/web build together with migration
 `0048_knowledge_bank_access_grant.sql`. After the migration, an admin can open
-`/admin-knowledge-bank`, enter an existing student's email, choose a future
-expiry, and optionally add an operator note. Active and expired grants remain
-visible in the table. **Edit** can extend or shorten a future expiry; **Remove**
-immediately restores the normal student Marks gate. Expiry is enforced on each
-Knowledge Bank metadata and file request, so no scheduler or manual cleanup is
-required.
+`/admin-knowledge-bank`, type at least two characters of an existing student's
+name or email, select the matching student result, choose a future expiry, and
+optionally add an operator note. New grants default to 30 days out at 23:59 in
+the operator's local time. Active and expired grants remain visible in the
+table. **Edit** can extend or shorten a future expiry; **Remove** immediately
+restores the normal student Marks gate. Expiry is enforced on each Knowledge
+Bank metadata and file request, so no scheduler or manual cleanup is required.
 
 For a production smoke check, use a student below 35 total Marks: create a
-one-hour grant, refresh `/knowledge-bank`, open a PDF, then verify an expired
-grant locks both metadata and PDF access again. Remove the test grant after
-verification. The API records create/update/remove audit events under
-`knowledge_bank_access_grant`.
+grant from the selected search result, refresh `/knowledge-bank`, open a PDF,
+then verify an expired grant locks both metadata and PDF access again. Remove
+the test grant after verification. The API records create/update/remove audit
+events under `knowledge_bank_access_grant`.
 
 ## Competition Calendar agenda list (2026-09-18)
 

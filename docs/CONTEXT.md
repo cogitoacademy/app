@@ -10,7 +10,11 @@ grant with an admin-selected future expiry and note. The wallet/content gate
 checks that expiry on every request, so expired grants immediately fall back to
 the normal Marks rule without a cleanup scheduler. Admins can edit or remove a
 grant; create/update/remove actions are audit-logged, while removal deletes
-only the live exception.
+only the live exception. The create dialog resolves students through the
+admin-only `admin.searchUsers` lookup and requires selecting a student result,
+so operators do not have to enter an email address blindly. Its expiry control
+uses the shared Selia calendar plus the cross-browser minute time picker; new
+grants default to 30 days from today at 23:59 in the operator's local timezone.
 
 ## Offline Calendar room metadata (2026-09-18)
 

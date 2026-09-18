@@ -9,7 +9,11 @@ from `/admin-knowledge-bank`. The grant bypasses the student 35-Mark threshold
 until `expiresAt`; the eligibility check evaluates the timestamp on every
 request, so the student automatically needs the normal minimum Marks again
 after expiry. Admins can edit the expiry/note or remove the grant. Removing the
-live row does not remove its audit-log history.
+live row does not remove its audit-log history. The web create dialog uses the
+admin-only `admin.searchUsers` identity lookup to select the student before
+sending the email to `adminKnowledgeBank.create`; its calendar and minute time
+controls are browser-independent, and new grants default to 23:59 thirty days
+out in the operator's local timezone.
 
 ## Offline Calendar room metadata (2026-09-18)
 
@@ -480,7 +484,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Admin
 - **Input:** `{ query, limit? }` (`query` is trimmed and must contain at least 2 characters; `limit` defaults to 10 and is capped at 20)
 - **Output:** `UserSearchResult[]` where each result is `{ id, name, email, image, role }`
-- **Description:** Case-insensitive partial lookup for admin support workflows. Matches `name`, `email`, or `id`; exact email/ID matches are ranked first. Wildcard characters are treated literally. The wallet lookup UI uses the selected result's `id` with `admin.getWallet` and `admin.listLedgerEntries`.
+- **Description:** Case-insensitive partial lookup for admin support workflows. Matches `name`, `email`, or `id`; exact email/ID matches are ranked first. Wildcard characters are treated literally. The wallet lookup UI uses the selected result's `id` with `admin.getWallet` and `admin.listLedgerEntries`; the Knowledge Bank access form filters the same bounded result set to students and uses the selected email for a grant.
 
 ### `admin.setRole`
 
@@ -564,7 +568,7 @@ is checked at read time rather than by a scheduled cleanup job.
 - **Input:** `{ email, expiresAt, note? }`; `expiresAt` is an ISO datetime in the future and `note` is limited to 500 characters
 - **Output:** `KnowledgeBankAccessView`
 - **Errors:** `STUDENT_NOT_FOUND` (404), `TARGET_USER_NOT_STUDENT` (400), `KNOWLEDGE_BANK_ACCESS_GRANT_ALREADY_EXISTS` (409), `INVALID_KNOWLEDGE_BANK_ACCESS_EXPIRY` (400)
-- **Description:** Finds the account case-insensitively by email and creates a temporary Knowledge Bank exception only for a student. Creation is audit-logged.
+- **Description:** Finds the account case-insensitively by email and creates a temporary Knowledge Bank exception only for a student. The admin web form normally supplies this email from a selected `admin.searchUsers` result. Creation is audit-logged.
 
 ### `adminKnowledgeBank.update`
 
