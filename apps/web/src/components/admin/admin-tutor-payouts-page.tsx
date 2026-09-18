@@ -20,9 +20,9 @@ import {
   DrawerPopup,
   DrawerTitle,
 } from "@cogito-app/ui/components/selia/drawer";
+import { DatePicker } from "@cogito-app/ui/components/selia/date-picker";
 import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
-import { Input } from "@cogito-app/ui/components/selia/input";
 import {
   Select,
   SelectItem,
@@ -392,20 +392,20 @@ export function AdminTutorPayoutsPage() {
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <Field>
               <FieldLabel htmlFor="payout-report-from">Start date</FieldLabel>
-              <Input
+              <DatePicker
                 id="payout-report-from"
-                type="date"
                 value={draftFrom}
-                onChange={(event) => setDraftFrom(event.target.value)}
+                onChange={setDraftFrom}
+                maxDate={draftTo}
               />
             </Field>
             <Field>
               <FieldLabel htmlFor="payout-report-to">End date</FieldLabel>
-              <Input
+              <DatePicker
                 id="payout-report-to"
-                type="date"
                 value={draftTo}
-                onChange={(event) => setDraftTo(event.target.value)}
+                onChange={setDraftTo}
+                minDate={draftFrom}
               />
             </Field>
             <Field>

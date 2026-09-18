@@ -146,7 +146,8 @@ when it needs to discover `hasNext`, keeps previous rows visible through
 `keepPreviousData`, scrolls the owning card back into view after navigation, and
 resets pagination when filters or the selected wallet change. Tutor Payouts
 requests ten tutor profiles per page and loads the pending summary for each
-visible tutor.
+visible tutor. Its custom report range uses the shared Selia date picker; the
+web app does not rely on browser-native date controls.
 
 Achievement status cards use dedicated `achievement.stats` and
 `achievement.adminStats` aggregates, so counts do not describe only the

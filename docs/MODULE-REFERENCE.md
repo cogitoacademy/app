@@ -64,7 +64,9 @@ Data-table pagination is owned by the module that reads the collection. The
 achievement and room repositories apply `limit`/`offset` directly to their
 ordered SQL queries; admin booking and ledger repositories continue to expose
 cursor pages; and admin tutor lists keep their offset pages. Manage Tutors and
-Tutor Payouts own independent page state for their respective collections. Web
+Tutor Payouts own independent page state for their respective collections. Its
+custom date range uses the shared Selia `DatePicker`, not native browser date
+inputs. Web
 components render a bounded page plus a one-row sentinel where needed, use
 `keepPreviousData` during transitions, and reset pagination after filter or
 selection changes. Aggregate achievement counts come from dedicated stats
