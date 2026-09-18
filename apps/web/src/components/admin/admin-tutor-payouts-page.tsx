@@ -20,11 +20,7 @@ import {
   DrawerPopup,
   DrawerTitle,
 } from "@cogito-app/ui/components/selia/drawer";
-import {
-  Field,
-  FieldDescription,
-  FieldLabel,
-} from "@cogito-app/ui/components/selia/field";
+import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Input } from "@cogito-app/ui/components/selia/input";
 import {
@@ -426,10 +422,10 @@ export function AdminTutorPayoutsPage() {
               </Button>
             ))}
           </div>
-          <FieldDescription>
+          <Text className="text-sm text-muted">
             Paid rows use tanggal transfer. Unpaid rows show the tutor&apos;s
             current outstanding balance sejak payout terakhir.
-          </FieldDescription>
+          </Text>
         </CardBody>
       </Card>
 
