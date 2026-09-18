@@ -2,6 +2,15 @@
 
 Last updated: 2026-09-18
 
+## Temporary Knowledge Bank access grants (2026-09-18)
+
+The admin Knowledge Bank access workspace grants a named student a temporary
+exception to the 35-Mark gate. Grants are keyed to the student user, have one
+future expiry timestamp, and are evaluated on every eligibility/file request;
+no scheduler is needed to revoke expired access. Admin create/update/remove
+operations are audit-logged, and removing a grant deletes only the live
+exception while preserving the audit record.
+
 ## Competition Calendar agenda list (2026-09-18)
 
 The web calendar derives its agenda projection locally from the protected
@@ -278,8 +287,47 @@ does not change the shared empty-state tone defaults.
 
 - Sanity is queried with `perspective: "published"`; the API token, if used, stays server-side.
 - Competition Calendar requires an authenticated session but is not Marks-gated.
-- Knowledge Bank is available to students, tutors, and admins through `wallet.knowledgeBankEligible`. Students must meet the existing 35-Mark total-balance rule, including held Marks; tutors and admins bypass that wallet threshold.
+- Knowledge Bank is available to students, tutors, and admins through `wallet.knowledgeBankEligible`. Students must meet the existing 35-Mark total-balance rule, including held Marks, unless an active admin grant exists; tutors and admins bypass that wallet threshold. An active grant exposes its expiry through `overrideExpiresAt` and is checked on every request.
 - Resource files are streamed through the app with private/no-store headers. Raw Sanity asset URLs are never returned by the list procedure.
+
+---
+
+## Admin Knowledge Bank Access Module
+
+**Purpose:** Give admins a controlled, auditable way to grant a student temporary
+Knowledge Bank access by email when the student should not currently need the
+35-Mark threshold.
+
+**Files:**
+
+- `admin-knowledge-bank.types.ts` — list/create/update/remove input schemas
+- `admin-knowledge-bank.errors.ts` — student, role, duplicate, expiry, and missing-grant domain errors
+- `admin-knowledge-bank.repo.ts` — grant CRUD, case-insensitive student email lookup, active-expiry query, and status/search listing
+- `admin-knowledge-bank.service.ts` — future-expiry validation, one-grant-per-student rule, audit events, and view mapping
+- `admin-knowledge-bank.handler.ts` — session-admin delegation and domain-error mapping
+- `admin-knowledge-bank.router.ts` — admin-only list/create/update/remove routes
+- `index.ts` — module factory and the `KnowledgeBankAccessPort` consumed by Wallet
+
+**Service Methods:**
+
+- `list(input)` — returns active, expired, or all grants with optional student name/email search
+- `create(adminId, input)` — resolves a student by email, creates a future-dated grant, and records `knowledge_bank_access_grant_created`
+- `update(adminId, input)` — changes expiry/note and records before/after state in `knowledge_bank_access_grant_updated`
+- `remove(adminId, id)` — deletes the live exception and records `knowledge_bank_access_grant_removed`
+- `getActiveByUserId(userId, now?)` — returns only an unexpired grant for the wallet/content access gate
+
+**Business Rules:**
+
+- Only users whose current role is `student` may receive a grant; lookup is case-insensitive by email.
+- A student can have one live grant. The unique `user_id` index and duplicate-error mapping protect concurrent creates.
+- Create and update require a strictly future ISO datetime. Expired rows stay visible to admins but never bypass the threshold.
+- Removal is a hard delete of the live grant; audit history remains in `audit_log`.
+- The admin UI lives at `/admin-knowledge-bank` and supports active/expired/all filtering, edit, and confirmation-gated removal.
+
+**Dependencies:** `AdminKnowledgeBankRepo`, `AuditPort`
+
+**Consumer:** Wallet uses the exported `KnowledgeBankAccessPort` to apply the
+active-grant override to `knowledgeBankEligible`.
 
 ---
 

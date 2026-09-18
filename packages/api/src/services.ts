@@ -10,6 +10,7 @@ import { createAuthModule } from "./modules/auth";
 import { createAdminModule } from "./modules/admin";
 import { createAdminTutorModule } from "./modules/admin-tutor";
 import { createAdminMarkPackageModule } from "./modules/admin-mark-package";
+import { createAdminKnowledgeBankModule } from "./modules/admin-knowledge-bank";
 import { createTutorModule } from "./modules/tutor";
 import { createDiscoveryModule } from "./modules/tutor-discovery";
 import { createInviteModule } from "./modules/invite";
@@ -39,6 +40,7 @@ import type { AuthService } from "./modules/auth/auth.service";
 import type { AdminService } from "./modules/admin/admin.service";
 import type { AdminTutorService } from "./modules/admin-tutor/admin-tutor.service";
 import type { AdminMarkPackageService } from "./modules/admin-mark-package/admin-mark-package.service";
+import type { AdminKnowledgeBankService } from "./modules/admin-knowledge-bank/admin-knowledge-bank.service";
 import type { TutorService } from "./modules/tutor/tutor.service";
 import type { InviteService } from "./modules/invite/invite.service";
 import type { AchievementService } from "./modules/achievement/achievement.service";
@@ -60,6 +62,7 @@ import type { AuthHandler } from "./modules/auth/auth.handler";
 import type { AdminHandler } from "./modules/admin/admin.handler";
 import type { AdminTutorHandler } from "./modules/admin-tutor/admin-tutor.handler";
 import type { AdminMarkPackageHandler } from "./modules/admin-mark-package/admin-mark-package.handler";
+import type { AdminKnowledgeBankHandler } from "./modules/admin-knowledge-bank/admin-knowledge-bank.handler";
 import type { TutorHandler } from "./modules/tutor/tutor.handler";
 import type { DiscoveryHandler } from "./modules/tutor-discovery/discovery.handler";
 import type { InviteHandler } from "./modules/invite/invite.handler";
@@ -83,6 +86,7 @@ export interface ServiceRegistry {
   admin: AdminService;
   adminTutor: AdminTutorService;
   adminMarkPackage: AdminMarkPackageService;
+  adminKnowledgeBank: AdminKnowledgeBankService;
   tutor: TutorService;
   invite: InviteService;
   achievement: AchievementService;
@@ -105,6 +109,7 @@ export interface HandlerRegistry {
   admin: AdminHandler;
   adminTutor: AdminTutorHandler;
   adminMarkPackage: AdminMarkPackageHandler;
+  adminKnowledgeBank: AdminKnowledgeBankHandler;
   tutor: TutorHandler;
   discovery: DiscoveryHandler;
   invite: InviteHandler;
@@ -281,6 +286,10 @@ function createServices() {
     emailFrom: env.EMAIL_FROM,
     redis,
   });
+  const adminKnowledgeBank = createAdminKnowledgeBankModule({
+    db,
+    audit: audit.service,
+  });
   const meeting = createMeetingModule({
     db,
     googleMeetEnabled: !!(env.GOOGLE_MEET_ENABLED && googleMeetConfig),
@@ -305,6 +314,7 @@ function createServices() {
   const wallet = createWalletModule({
     db,
     xenditMode: xenditConfig?.mode,
+    knowledgeBankAccess: adminKnowledgeBank.service,
   });
   const content = createContentModule({ wallet: wallet.service });
   const auth = createAuthModule({ db, wallet: wallet.service });
@@ -449,6 +459,7 @@ function createServices() {
     admin: admin.service,
     adminTutor: adminTutor.service,
     adminMarkPackage: adminMarkPackage.service,
+    adminKnowledgeBank: adminKnowledgeBank.service,
     tutor: tutor.service,
     invite: invite.service,
     achievement: achievement.service,
@@ -471,6 +482,7 @@ function createServices() {
     admin: admin.handler,
     adminTutor: adminTutor.handler,
     adminMarkPackage: adminMarkPackage.handler,
+    adminKnowledgeBank: adminKnowledgeBank.handler,
     tutor: tutor.handler,
     discovery: discovery.handler,
     invite: invite.handler,

@@ -2,6 +2,16 @@
 
 Last updated: 2026-09-18
 
+## Temporary Knowledge Bank access grants (2026-09-18)
+
+Admins can open `/admin-knowledge-bank` to grant a student access to Knowledge
+Bank by email without the normal 35-Mark minimum. Each student has one optional
+grant with an admin-selected future expiry and note. The wallet/content gate
+checks that expiry on every request, so expired grants immediately fall back to
+the normal Marks rule without a cleanup scheduler. Admins can edit or remove a
+grant; create/update/remove actions are audit-logged, while removal deletes
+only the live exception.
+
 ## Offline Calendar room metadata (2026-09-18)
 
 Offline booking Calendar events now prepend the assigned room metadata to the
@@ -570,8 +580,8 @@ Competition Calendar and Knowledge Bank content are now delivered inside the aut
 
 - `content.listCompetitions` is protected for every authenticated role and powers `/_app/calendar`. Admins see an `Edit competitions` button that opens the `competition` list in Sanity Studio (`https://cogitoacademy.sanity.studio`).
 - The authenticated calendar keeps the academy's read-only interaction model: month view with multi-day event spans and overflow popup, a flat 30-day agenda list that shows each overlapping competition once in first-event-date order, keyboard shortcuts (`M`/`A`), period navigation, a responsive event-details drawer (right-side on desktop, bottom sheet on mobile), and a toolbar type filter (multi-select across the seven competition fields, all-on by default) that narrows both the month and agenda views. Its colors, controls, and icons use the app's Selia design system; the academy's bilingual copy is not carried into the English-only app. The calendar route uses a contained viewport shell: the page heading and calendar toolbar stay in place while the calendar body owns vertical scrolling, and the month grid owns horizontal scrolling. A month with no events still renders the normal calendar grid so users can navigate dates; only the page-level no-competition state and event-free agenda period use empty-state messaging.
-- `content.listStudentResources` powers the authenticated `/knowledge-bank` route for students, tutors, and admins. Admins see an `Edit resources` button that opens the `studentResource` list in Sanity Studio. Students receive resources only after `wallet.knowledgeBankEligible` confirms the existing 35-Mark total-balance threshold (held Marks count); tutors and admins bypass that wallet threshold. Resource category slugs are presented as readable labels in the UI without changing the API values used for filtering.
-- Knowledge Bank list responses never expose Sanity asset URLs. `GET /content/knowledge-bank/:resourceId/file` rechecks the student/tutor/admin role and wallet threshold, with the threshold bypassed for tutors and admins, fetches the published Sanity asset server-side, and streams it with private/no-store cache headers. The proxy is hardened (`apps/server/src/content-proxy.ts`): host allowlist (`cdn.sanity.io` / `*.sanity.io` — anything else is a 502 before any fetch), a 10s `AbortController` timeout, and a 5MB cap enforced on `content-length` and on the streamed body; the route is rate-limited 30/min per IP (`content` kind, `rate-limit-paths.ts`).
+- `content.listStudentResources` powers the authenticated `/knowledge-bank` route for students, tutors, and admins. Admins see an `Edit resources` button that opens the `studentResource` list in Sanity Studio. Students receive resources after `wallet.knowledgeBankEligible` confirms the existing 35-Mark total-balance threshold (held Marks count) or an active admin grant; tutors and admins bypass that wallet threshold. Resource category slugs are presented as readable labels in the UI without changing the API values used for filtering.
+- Knowledge Bank list responses never expose Sanity asset URLs. `GET /content/knowledge-bank/:resourceId/file` rechecks the student/tutor/admin role and wallet threshold, with the threshold bypassed for tutors and admins or while a student's admin grant is unexpired, fetches the published Sanity asset server-side, and streams it with private/no-store cache headers. The proxy is hardened (`apps/server/src/content-proxy.ts`): host allowlist (`cdn.sanity.io` / `*.sanity.io` — anything else is a 502 before any fetch), a 10s `AbortController` timeout, and a 5MB cap enforced on `content-length` and on the streamed body; the route is rate-limited 30/min per IP (`content` kind, `rate-limit-paths.ts`).
 - The academy landing site remains bilingual. Its calendar and Knowledge Bank navigation uses app-login CTAs with an internal redirect target; the old localized URLs remain compatibility redirects rather than public content pages.
 
 The shared booking list sorts active and all rows by the nearest scheduled start while keeping past/cancelled history newest-first. It defaults to Upcoming for students, Pending for tutors when requests need review (otherwise Upcoming), and All for admins; an explicit `tab` query parameter overrides the role-aware default. Dashboard next-lesson cards use the nearest future booking that is neither terminal nor pending, matching the list's Upcoming semantics. The tutor review queue keeps a stable empty/loading card so the requests and next-lesson modules remain visible together even when no review request exists.
@@ -768,6 +778,7 @@ POST /rpc/booking.create
 export interface ServiceRegistry {
   auth: AuthHandler; // Handler type for modules with HTTP endpoints
   admin: AdminHandler;
+  adminKnowledgeBank: AdminKnowledgeBankHandler;
   wallet: WalletHandler; // Handler type (was WalletPort before)
   booking: BookingHandler; // Handler type (was BookingService before)
   contact: ContactService; // Service type for consent-based contact exchange
@@ -812,13 +823,15 @@ Routers access handlers via `context.services.{module}.{method}`. Other modules 
 - **Deployment:** Coolify on the OVH VPS; production API and web images are pulled from GHCR
 - **Database TLS:** Controlled by `DB_SSL_ENABLED`; Coolify's bundled PostgreSQL is non-TLS, while external managed databases may require it
 
-## DB Schema (31 tables)
+## DB Schema (32 tables)
 
 ### `user` (auth.ts) — CHECK(role IN ('student','tutor','admin'))
 
 ### `session` / `account` / `verification` (auth.ts) — Better Auth owned
 
 ### `wallet` (wallet.ts) — CHECK(total=held+available), uuid PK
+
+### `knowledgeBankAccessGrant` (knowledge-bank-access.ts) — one optional per-student admin exception, future `expires_at`, audit-preserved removal
 
 ### `ledgerEntry` (wallet.ts) — UNIQUE(wallet_id,event_key,source_reference), CHECK entry types
 
@@ -875,7 +888,7 @@ when set to false.
 
 ### `supportTicket` (support-ticket.ts) — lateness/no-show + issue reports; status + sla_deadline
 
-## API Modules (20 routers + internal modules)
+## API Modules (21 routers + internal modules)
 
 All procedures are POST (oRPC convention). Auth via session cookies.
 
@@ -887,6 +900,11 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 ### Admin Module (admin)
 
 - `listUsers`, `searchUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getPendingTutorPayouts`, `markTutorPayoutPaid`, `getEconomySettings`, `updateEconomySettings`
+
+### AdminKnowledgeBank Module (admin)
+
+- `list`, `create`, `update`, `remove`
+- Owns the one-per-student temporary Knowledge Bank exception, validates future expiry, and records audit events. Wallet and content consume its `getActiveByUserId` port for read-time gating.
 
 ### AdminMarkPackage Module (admin)
 
@@ -1050,6 +1068,7 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 
 | Plan                                                              | Branch                                                                              | Status                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `docs/plans/completed/KNOWLEDGE-BANK-ACCESS-OVERRIDE.md`           | working tree                                                                        | **Completed (2026-09-18)** — admin-managed student Knowledge Bank access grants with expiry, audit trail, UI, and read-time threshold enforcement                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `docs/plans/completed/WEBSITE-AUDIT-P1-HARDENING.md`              | working tree                                                                        | **Completed (2026-08-29)** — cross-booking no-show ownership guard, locked/stale-safe reschedule decisions, database-backed room overlap prevention, and sidebar type-gate repair                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `docs/plans/completed/WEBSITE-AUDIT-P2-HARDENING.md`              | `f/website-audit-hardening`                                                         | **Completed (2026-08-29)** — HTTP(S)-only external links, final-attempt DLQ routing, and optimistic concurrency for achievement/tutor moderation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `docs/plans/completed/WEBSITE-AUDIT-P3-PAYMENT-WEBHOOK.md`        | `f/website-audit-hardening`                                                         | **Completed (2026-08-29)** — lifecycle-aware Xendit webhook idempotency without cross-status or missing-event-id collisions                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |

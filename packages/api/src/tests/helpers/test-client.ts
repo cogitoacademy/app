@@ -131,6 +131,7 @@ const TRUNCATE_TABLES = [
   "achievement",
   "audit_log",
   "support_ticket",
+  "knowledge_bank_access_grant",
   "student_profile",
   "mark_package",
   "account",

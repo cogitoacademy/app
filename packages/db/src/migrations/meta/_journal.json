@@ -337,6 +337,13 @@
       "when": 1789712951305,
       "tag": "0047_debate_law_specialization",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1789737600000,
+      "tag": "0048_knowledge_bank_access_grant",
+      "breakpoints": true
     }
   ]
 }

@@ -9,6 +9,8 @@
 
 ## Completed (merged to main)
 
+| [KNOWLEDGE-BANK-ACCESS-OVERRIDE.md](completed/KNOWLEDGE-BANK-ACCESS-OVERRIDE.md) | working tree | **Completed locally 2026-09-18** — temporary admin student grants with expiry, audit trail, admin UI, and read-time Marks-gate enforcement |
+
 | [TUTOR-PROFILE-BOOKING-PREVIEW.md](completed/TUTOR-PROFILE-BOOKING-PREVIEW.md) | working tree | **Completed locally 2026-09-08** — reopened the published tutor profile from the booking form without losing booking state |
 
 | [COMPETITION-FIELD-COLORS.md](completed/COMPETITION-FIELD-COLORS.md) | working tree | — | **Completed locally 2026-09-08** — academy field palette imported as paired Selia tokens with reusable soft/solid mappings |

@@ -2,6 +2,23 @@
 
 Last updated: 2026-09-18
 
+## Temporary Knowledge Bank access grants (2026-09-18)
+
+Deploy the API/web build together with migration
+`0048_knowledge_bank_access_grant.sql`. After the migration, an admin can open
+`/admin-knowledge-bank`, enter an existing student's email, choose a future
+expiry, and optionally add an operator note. Active and expired grants remain
+visible in the table. **Edit** can extend or shorten a future expiry; **Remove**
+immediately restores the normal student Marks gate. Expiry is enforced on each
+Knowledge Bank metadata and file request, so no scheduler or manual cleanup is
+required.
+
+For a production smoke check, use a student below 35 total Marks: create a
+one-hour grant, refresh `/knowledge-bank`, open a PDF, then verify an expired
+grant locks both metadata and PDF access again. Remove the test grant after
+verification. The API records create/update/remove audit events under
+`knowledge_bank_access_grant`.
+
 ## Competition Calendar agenda list (2026-09-18)
 
 In the `/calendar` smoke check, Agenda should show a flat list for the
@@ -275,6 +292,14 @@ The route selects the dashboard from the authenticated session role. A tutor or 
 ### Knowledge Bank smoke check
 
 As an authenticated student, open `/knowledge-bank`. With at least 35 total Marks, confirm published Sanity resource metadata loads, category slugs render as human-readable labels in the filter dropdown, search/category filtering works, and the PDF preview opens through the authenticated `/content/knowledge-bank/:resourceId/file` proxy. Below 35 Marks, confirm the page stays locked and offers the balance/top-up action. Then sign in as a tutor and an admin with no Marks balance and confirm each role sees Knowledge Bank in the sidebar, the route loads resources, and the PDF preview opens without a wallet threshold. Opening the Knowledge Bank as an eligible student, tutor, or admin must not create a Marks deduction.
+
+For the admin exception flow, open `/admin-knowledge-bank` as an admin. Add a
+student by email with a future expiry and verify the student below 35 Marks can
+load both the metadata and PDF. Edit the expiry/note and confirm the row and
+access state refresh. Use the Active, Expired, and All filters, then remove the
+grant and verify the student is locked again. An expired grant must remain
+visible as **Expired** but must not bypass the 35-Mark gate; this behavior is
+read-time and does not depend on a scheduler.
 
 ### Empty-state consistency smoke check
 
@@ -684,6 +709,13 @@ PostgreSQL-backed `booking.booking_number` sequence, assigns numbers to
 existing bookings, and enforces uniqueness. Numbers are immutable and may have
 gaps after rolled-back inserts; this is expected and is not a migration or data
 integrity failure. No manual backfill or environment variable is required.
+
+Temporary admin Knowledge Bank access requires migration
+`0048_knowledge_bank_access_grant.sql`. Run `bun run db:migrate` before starting
+the build that includes `/admin-knowledge-bank`. It creates one optional grant
+per student, with a unique student index and an expiry index. Expiry is checked
+at read time; expired rows are intentionally retained for admin visibility and
+can be removed from the page without affecting audit history.
 
 The IDR economy and admin rate-control surface require migration
 `0028_economy_config.sql`. Run `bun run db:migrate` before starting the server;

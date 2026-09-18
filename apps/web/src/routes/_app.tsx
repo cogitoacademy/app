@@ -28,6 +28,7 @@ const routeTitles: Record<string, string> = {
   "/admin-achievements": "Achievement Moderation",
   "/admin-operations": "Operations",
   "/admin-economy": "Economy Settings",
+  "/admin-knowledge-bank": "Knowledge Bank Access",
   "/calendar": "Competition Calendar",
   "/knowledge-bank": "Knowledge Bank",
   "/guide": "How Cogito Works",

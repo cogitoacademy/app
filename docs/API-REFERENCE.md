@@ -2,6 +2,15 @@
 
 Last updated: 2026-09-18
 
+## Temporary Knowledge Bank access grants (2026-09-18)
+
+Admins can grant a specific student temporary Knowledge Bank access by email
+from `/admin-knowledge-bank`. The grant bypasses the student 35-Mark threshold
+until `expiresAt`; the eligibility check evaluates the timestamp on every
+request, so the student automatically needs the normal minimum Marks again
+after expiry. Admins can edit the expiry/note or remove the grant. Removing the
+live row does not remove its audit-log history.
+
 ## Offline Calendar room metadata (2026-09-18)
 
 When `room.assign` or `room.relocate` syncs an offline booking to Google
@@ -255,15 +264,15 @@ Sanity is queried only by the API server. The browser receives normalized conten
 
 - **Auth:** Protected (student, tutor, or admin)
 - **Input:** None
-- **Output:** `{ items: [{ id, title, description, category }], access: { eligible, balance, threshold } }`
-- **Description:** Returns published Knowledge Bank metadata for the authenticated `/knowledge-bank` app route. Students must meet the 35-Mark total-balance threshold (held Marks count toward eligibility); below the threshold, `items` is empty and the access state explains the lock. Tutors and admins are eligible regardless of wallet balance. `category` remains the Sanity slug in the API response; the web UI maps known slugs and title-cases hyphenated or underscored slugs for display while retaining the raw value for filtering.
+- **Output:** `{ items: [{ id, title, description, category }], access: { eligible, balance, threshold, overrideExpiresAt? } }`
+- **Description:** Returns published Knowledge Bank metadata for the authenticated `/knowledge-bank` app route. Students must meet the 35-Mark total-balance threshold (held Marks count toward eligibility), unless they have an active admin grant; below both conditions, `items` is empty and the access state explains the lock. Tutors and admins are eligible regardless of wallet balance. `overrideExpiresAt` is returned only while a student grant is active. `category` remains the Sanity slug in the API response; the web UI maps known slugs and title-cases hyphenated or underscored slugs for display while retaining the raw value for filtering.
 
 ### `GET /content/knowledge-bank/:resourceId/file`
 
-- **Auth:** Student with current total balance at or above the threshold, Tutor, or Admin
+- **Auth:** Student with current total balance at or above the threshold or an active admin grant, Tutor, or Admin
 - **Input:** `resourceId` path parameter
 - **Output:** Streamed Sanity file, normally `application/pdf`
-- **Description:** Revalidates the student/tutor/admin role and Knowledge Bank eligibility, resolves the asset server-side, and streams it with `Cache-Control: private, no-store`. Tutors and admins bypass the student wallet threshold. This is an Elysia file route, not an oRPC procedure.
+- **Description:** Revalidates the student/tutor/admin role and Knowledge Bank eligibility, resolves the asset server-side, and streams it with `Cache-Control: private, no-store`. Tutors and admins bypass the student wallet threshold; students with an unexpired admin grant bypass it until the stored expiry timestamp. This is an Elysia file route, not an oRPC procedure.
 
 ### Verification
 
@@ -534,6 +543,46 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Output:** The updated economy settings object; `version` increments only when at least one schedule value changes
 - **Errors:** `ECONOMY_CONFIG_CONFLICT` (409) when `expectedVersion` is stale; validation errors (400) for unsupported values
 - **Description:** Updates the active Cogito take schedule, records an audit event, and affects only future bookings and new repricing snapshots. Existing booking snapshots remain unchanged. The update does not notify tutors; their IDR honorarium settings and the student-facing Marks preview remain separate concerns. Saving identical values is a no-op and creates no new audit event or notification.
+
+## Admin Knowledge Bank Access (`adminKnowledgeBank.*`)
+
+All routes are admin-only. Each student has at most one live grant; the expiry
+is checked at read time rather than by a scheduled cleanup job.
+
+### `adminKnowledgeBank.list`
+
+- **RPC path:** `/rpc/admin/knowledge-bank/access/list`
+- **Auth:** Admin
+- **Input:** `{ search?, status?: "all" | "active" | "expired" }`
+- **Output:** `KnowledgeBankAccessView[]`, where each item is `{ id, userId, studentName, studentEmail, expiresAt, note, createdAt, updatedAt, status }`
+- **Description:** Lists temporary student grants, optionally filtering by student name/email and active/expired status. The admin page is `/admin-knowledge-bank`.
+
+### `adminKnowledgeBank.create`
+
+- **RPC path:** `/rpc/admin/knowledge-bank/access/create`
+- **Auth:** Admin
+- **Input:** `{ email, expiresAt, note? }`; `expiresAt` is an ISO datetime in the future and `note` is limited to 500 characters
+- **Output:** `KnowledgeBankAccessView`
+- **Errors:** `STUDENT_NOT_FOUND` (404), `TARGET_USER_NOT_STUDENT` (400), `KNOWLEDGE_BANK_ACCESS_GRANT_ALREADY_EXISTS` (409), `INVALID_KNOWLEDGE_BANK_ACCESS_EXPIRY` (400)
+- **Description:** Finds the account case-insensitively by email and creates a temporary Knowledge Bank exception only for a student. Creation is audit-logged.
+
+### `adminKnowledgeBank.update`
+
+- **RPC path:** `/rpc/admin/knowledge-bank/access/update`
+- **Auth:** Admin
+- **Input:** `{ id, expiresAt, note? }`; `expiresAt` must remain in the future
+- **Output:** `KnowledgeBankAccessView`
+- **Errors:** `KNOWLEDGE_BANK_ACCESS_GRANT_NOT_FOUND` (404), `INVALID_KNOWLEDGE_BANK_ACCESS_EXPIRY` (400)
+- **Description:** Changes the expiry and note while keeping the student identity fixed. The before/after values are audit-logged.
+
+### `adminKnowledgeBank.remove`
+
+- **RPC path:** `/rpc/admin/knowledge-bank/access/remove`
+- **Auth:** Admin
+- **Input:** `{ id }`
+- **Output:** `null`
+- **Errors:** `KNOWLEDGE_BANK_ACCESS_GRANT_NOT_FOUND` (404)
+- **Description:** Removes the live exception immediately. The removal is audit-logged so the historical decision remains available to operators.
 
 ---
 
