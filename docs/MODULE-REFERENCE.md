@@ -392,9 +392,11 @@ publication, and moderation. `/admin-tutor-payouts` is the separate operational
 payout workspace: it lists unpaid tutor honorarium, shows the completed sessions
 included in each unpaid amount, verifies private destination-account details,
 calculates bank transfer fees and net transfer amount, and records a completed
-transfer through **Mark as paid**. The unpaid amount advances from the latest
-recorded completion-time cutoff; it does not reset automatically each calendar
-week.
+transfer through **Mark as paid**. It also exposes a date-window report that
+combines paid transfer batches with current unpaid balances, supports status and
+sorting views, and downloads the active result set as a CSV compatible with
+Excel/Google Sheets. The unpaid amount advances from the latest recorded
+completion-time cutoff; it does not reset automatically each calendar week.
 
 **Files:**
 
@@ -1290,7 +1292,9 @@ Tutor financial presentation is denominated in IDR and must not expose Marks. Th
 The admin operational payout workflow lives at `/admin-tutor-payouts`, separate
 from Manage Tutors profile review. It reuses tutor profiles for account
 readiness, reads the pending completion-time summary, and records the current
-unpaid honorarium only after the operator confirms the net transfer.
+unpaid honorarium only after the operator confirms the net transfer. Paid payout
+rows snapshot the account number and account-holder name at transfer time; old
+rows without those snapshots use the current profile as a display fallback.
 
 Numeric Marks amounts in the web UI are rendered through `apps/web/src/components/cogito-marks.tsx`. The component owns the Cogito mark-symbol prefix, supported icon sizes, whitespace behavior, and accessible `value + Marks` label; feature components should not duplicate that markup.
 

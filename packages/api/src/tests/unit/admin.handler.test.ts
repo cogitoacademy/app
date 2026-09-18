@@ -66,19 +66,28 @@ describe("AdminHandler", () => {
 
   test("delegates tutor payout reads and payment marking", async () => {
     const service = {
+      getTutorPayoutReport: mock(async (input: unknown) => ({ input })),
       getPendingTutorPayouts: mock(async () => ({ total: 10 })),
       markTutorPayoutPaid: mock(async () => ({ id: "p1" })),
     } as any;
     const handler = createAdminHandler(service);
     const context = { session: { user: { id: "admin1" } } } as any;
     const input = { tutorId: "t1" };
+    const reportInput = {
+      dateFrom: "2026-08-01T00:00:00.000Z",
+      dateTo: "2026-08-31T23:59:59.999Z",
+    };
 
+    await expect(
+      handler.getTutorPayoutReport({ context, input: reportInput }),
+    ).resolves.toEqual({ input: reportInput });
     await expect(
       handler.getPendingTutorPayouts({ context, input }),
     ).resolves.toEqual({ total: 10 });
     await expect(
       handler.markTutorPayoutPaid({ context, input }),
     ).resolves.toEqual({ id: "p1" });
+    expect(service.getTutorPayoutReport).toHaveBeenCalledWith(reportInput);
     expect(service.getPendingTutorPayouts).toHaveBeenCalledWith(input);
     expect(service.markTutorPayoutPaid).toHaveBeenCalledWith("admin1", input);
   });

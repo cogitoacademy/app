@@ -127,6 +127,10 @@ export interface BookingRoomPort {
 }
 
 export interface BookingPayoutPort {
+  getTutorPayoutReport?(input: {
+    dateFrom?: Date;
+    dateTo?: Date;
+  }): Promise<TutorPayoutReportRow[]>;
   getTutorPayouts(input: {
     tutorId: string;
     dateFrom?: Date;
@@ -156,8 +160,29 @@ export interface BookingPayoutPort {
     transferFeeIdr: number;
     netHonorariumIdr: number;
     bankName: string;
+    bankAccountNumber: string;
+    bankAccountHolderName: string;
     paidAt: Date;
   } | null>;
+}
+
+export type TutorPayoutReportStatus = "paid" | "pending";
+
+export interface TutorPayoutReportRow {
+  id: string;
+  tutorId: string;
+  tutorName: string;
+  bankName: string | null;
+  bankAccountNumber: string | null;
+  bankAccountHolderName: string | null;
+  bankAccountOpeningCity: string | null;
+  bankAccountOwnership: "self" | "trusted_person" | null;
+  grossHonorariumIdr: number;
+  transferFeeIdr: number;
+  netHonorariumIdr: number;
+  status: TutorPayoutReportStatus;
+  paidAt: Date | null;
+  payoutAccountComplete: boolean;
 }
 
 export function createBookingModule(deps: {

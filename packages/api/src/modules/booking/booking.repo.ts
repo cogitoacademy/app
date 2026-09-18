@@ -1097,6 +1097,66 @@ async function findLatestPaidTutorPayout(conn: DbOrTx, tutorId: string) {
   return row ?? null;
 }
 
+/**
+ * Returns the private tutor/account fields needed by the admin payout report.
+ * The query deliberately selects only payout-relevant profile data.
+ */
+async function listTutorPayoutProfiles(conn: DbOrTx) {
+  return conn
+    .select({
+      tutorId: tutorProfile.userId,
+      tutorName: user.name,
+      bankName: tutorProfile.bankName,
+      bankAccountNumber: tutorProfile.bankAccountNumber,
+      bankAccountHolderName: tutorProfile.bankAccountHolderName,
+      bankAccountOpeningCity: tutorProfile.bankAccountOpeningCity,
+      bankAccountOwnership: tutorProfile.bankAccountOwnership,
+      bankTransferDisclaimerAccepted:
+        tutorProfile.bankTransferDisclaimerAccepted,
+    })
+    .from(tutorProfile)
+    .innerJoin(user, eq(tutorProfile.userId, user.id))
+    .orderBy(desc(tutorProfile.createdAt));
+}
+
+/**
+ * Lists immutable payout batches by transfer date and joins the current
+ * profile only as a fallback for legacy rows that predate account snapshots.
+ */
+async function listTutorPayoutRecords(
+  conn: DbOrTx,
+  dateFrom?: Date,
+  dateTo?: Date,
+) {
+  const conditions: SQL[] = [eq(tutorPayout.status, "paid")];
+  if (dateFrom) conditions.push(gte(tutorPayout.paidAt, dateFrom));
+  if (dateTo) conditions.push(lte(tutorPayout.paidAt, dateTo));
+
+  return conn
+    .select({
+      id: tutorPayout.id,
+      tutorId: tutorPayout.tutorId,
+      tutorName: user.name,
+      bankName: tutorPayout.bankName,
+      bankAccountNumber: tutorPayout.bankAccountNumber,
+      bankAccountHolderName: tutorPayout.bankAccountHolderName,
+      profileBankAccountNumber: tutorProfile.bankAccountNumber,
+      profileBankAccountHolderName: tutorProfile.bankAccountHolderName,
+      profileBankAccountOpeningCity: tutorProfile.bankAccountOpeningCity,
+      profileBankAccountOwnership: tutorProfile.bankAccountOwnership,
+      grossHonorariumIdr: tutorPayout.grossHonorariumIdr,
+      transferFeeIdr: tutorPayout.transferFeeIdr,
+      netHonorariumIdr: tutorPayout.netHonorariumIdr,
+      status: tutorPayout.status,
+      paidAt: tutorPayout.paidAt,
+    })
+    .from(tutorPayout)
+    .innerJoin(user, eq(tutorPayout.tutorId, user.id))
+    .leftJoin(tutorProfile, eq(tutorPayout.tutorId, tutorProfile.userId))
+    .where(and(...conditions))
+    .orderBy(desc(tutorPayout.paidAt), desc(tutorPayout.id));
+}
+
 async function insertTutorPayout(
   conn: DbOrTx,
   input: typeof tutorPayout.$inferInsert,
@@ -1421,6 +1481,8 @@ export function createBookingRepo(db: DbType) {
     cancelAllSessions,
     findCompletedBookingsByTutor,
     findLatestPaidTutorPayout,
+    listTutorPayoutProfiles,
+    listTutorPayoutRecords,
     insertTutorPayout,
   };
 }

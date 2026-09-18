@@ -144,6 +144,37 @@ describe("Admin Service", () => {
       ).rejects.toThrow(TutorPayoutNotAvailableError);
     });
 
+    test("returns the tutor payout report and validates its date window", async () => {
+      const payout = {
+        getTutorPayoutReport: mock(async (input: unknown) => ({ input })),
+      };
+      const { service } = makeService(payout);
+      const dateFrom = "2026-08-01T00:00:00.000Z";
+      const dateTo = "2026-08-31T23:59:59.999Z";
+
+      await expect(
+        service.getTutorPayoutReport({ dateFrom, dateTo }),
+      ).resolves.toEqual({
+        input: {
+          dateFrom: new Date(dateFrom),
+          dateTo: new Date(dateTo),
+        },
+      });
+      expect(payout.getTutorPayoutReport).toHaveBeenCalledWith({
+        dateFrom: new Date(dateFrom),
+        dateTo: new Date(dateTo),
+      });
+      await expect(
+        service.getTutorPayoutReport({
+          dateFrom: dateTo,
+          dateTo: dateFrom,
+        }),
+      ).rejects.toThrow(InvalidLedgerFilterError);
+      await expect(
+        makeService({}).service.getTutorPayoutReport({}),
+      ).rejects.toThrow(TutorPayoutNotAvailableError);
+    });
+
     test("marks a payout paid and audits it", async () => {
       const row = { id: "p1", tutorId: "t1", transferFeeIdr: 6500 };
       const payout = { markTutorPayoutPaid: mock(async () => row) };

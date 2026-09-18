@@ -518,6 +518,14 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Errors:** `INVALID_LEDGER_FILTER` (400) — invalid date
 - **Description:** Internal tutor payout reporting from completed bookings in the requested date range. With no date filters this is an all-time report; use `admin.getPendingTutorPayouts` for the unpaid amount after the latest admin-paid cutoff. `totalMarks` reports the internal split basis (`priceSnapshot.baseline`), so `totalMarks === cogitoTake + tutorPayout`; per-student rounding surpluses (`actualMarksPooled ≥ baseline`) are not included.
 
+### `admin.getTutorPayoutReport`
+
+- **RPC path:** `/rpc/admin/payouts/tutor/report`
+- **Auth:** Admin
+- **Input:** `{ dateFrom?, dateTo? }` (ISO datetimes; both are optional)
+- **Output:** `TutorPayoutReportRow[]`, where each row contains `{ id, tutorId, tutorName, bankName, bankAccountNumber, bankAccountHolderName, bankAccountOpeningCity, bankAccountOwnership, grossHonorariumIdr, transferFeeIdr, netHonorariumIdr, status, paidAt, payoutAccountComplete }`; `status` is `paid` or `pending`.
+- **Description:** Returns immutable paid payout batches whose `paidAt` falls in the requested date window plus each tutor's current unpaid balance after the latest paid cutoff. The date window limits paid transfer history; current unpaid balances remain visible even when the outstanding completion is older than the selected window. Legacy paid rows without stored account snapshots fall back to the current tutor profile for account number and account-holder display.
+
 ### `admin.getPendingTutorPayouts`
 
 - **Auth:** Admin
@@ -529,7 +537,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 - **Auth:** Admin
 - **Input:** `{ tutorId }`
-- **Output:** `{ id, tutorId, grossHonorariumIdr, transferFeeIdr, netHonorariumIdr, bankName, paidAt }`
+- **Output:** `{ id, tutorId, grossHonorariumIdr, transferFeeIdr, netHonorariumIdr, bankName, bankAccountNumber, bankAccountHolderName, paidAt }`
 - **Errors:** `TUTOR_PAYOUT_NOT_AVAILABLE` (400) when no unpaid honorarium exists or payout account details are incomplete
 - **Description:** Atomically records an immutable paid payout at the current completion-time cutoff. Exact conventional `BCA` has no transfer fee; all other bank names deduct Rp2,500 once from the payout. The application records the payment and audit trail but does not execute the bank transfer.
 
