@@ -1363,14 +1363,17 @@ The diagrams below are rendered as images for the PDF. The Mermaid source is kep
 
 \textbf{Student booking and operational approval flow}
 
+% Build-tolerant include: renders a placeholder box when the diagram PNG is
+% absent so `latexmk` (local `make prd-pdf` and the prd-pdf workflow) still
+% produces docs/prd.pdf. No product meaning changes when the file exists.
 \begin{center}
-\includegraphics[width=\linewidth,height=0.92\textheight,keepaspectratio]{booking-flow.png}
+\IfFileExists{diagrams/booking-flow.png}{\includegraphics[width=\linewidth,height=0.92\textheight,keepaspectratio]{booking-flow.png}}{\fbox{\parbox{0.9\linewidth}{\centering Diagram placeholder: booking-flow (add diagrams/booking-flow.png).}}}
 \end{center}
 
 \textbf{Booking state machine}
 
 \begin{center}
-\includegraphics[width=\linewidth,height=0.92\textheight,keepaspectratio]{booking-state-machine.png}
+\IfFileExists{diagrams/booking-state-machine.png}{\includegraphics[width=\linewidth,height=0.92\textheight,keepaspectratio]{booking-state-machine.png}}{\fbox{\parbox{0.9\linewidth}{\centering Diagram placeholder: booking-state-machine (add diagrams/booking-state-machine.png).}}}
 \end{center}
 
 \subsection{Deferred Features}
