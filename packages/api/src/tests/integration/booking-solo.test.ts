@@ -183,6 +183,37 @@ describe("Booking solo flow", () => {
     expect(b.meeting?.status).toBe("manual");
   });
 
+  test("tutor Needs action includes an ended scheduled session", async () => {
+    const { booking } = await import("@cogito-app/db/schema");
+    await db
+      .update(booking)
+      .set({
+        scheduledStartAt: new Date(Date.now() - 2 * 60_000),
+        scheduledEndAt: new Date(Date.now() - 60_000),
+      })
+      .where(eq(booking.id, bookingId));
+
+    const [tutorActions, tutorUpcoming, tutorHistory, studentActions] =
+      await Promise.all([
+        tutorClient.booking.listMine({ view: "action" }),
+        tutorClient.booking.listMine({ view: "upcoming" }),
+        tutorClient.booking.listMine({ view: "history" }),
+        studentClient.booking.listMine({ view: "action" }),
+      ]);
+
+    expect(tutorActions.items.some((item) => item.id === bookingId)).toBe(true);
+    expect(tutorActions.counts.action).toBeGreaterThanOrEqual(1);
+    expect(tutorUpcoming.items.some((item) => item.id === bookingId)).toBe(
+      false,
+    );
+    expect(tutorHistory.items.some((item) => item.id === bookingId)).toBe(
+      false,
+    );
+    expect(studentActions.items.some((item) => item.id === bookingId)).toBe(
+      false,
+    );
+  });
+
   test("TC-16: tutor completes session → completed", async () => {
     const { booking } = await import("@cogito-app/db/schema");
     await db

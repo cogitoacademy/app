@@ -771,10 +771,12 @@ export function createBookingService(deps: {
         limit,
         cursor: opts.cursor,
         includeAll: userRole === "admin",
+        ...(userRole === "tutor" ? { includeCompletionActions: true } : {}),
         ...(opts.view ? { view: opts.view } : {}),
       }),
       repo.countBookingsForAccess(userId, {
         includeAll: userRole === "admin",
+        ...(userRole === "tutor" ? { includeCompletionActions: true } : {}),
       }),
     ]);
     const items = rows.slice(0, limit);

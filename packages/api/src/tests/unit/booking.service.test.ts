@@ -706,6 +706,11 @@ describe("BookingService", () => {
         limit: 20,
         cursor: undefined,
         includeAll: false,
+        includeCompletionActions: true,
+      });
+      expect(repo.countBookingsForAccess).toHaveBeenCalledWith("tutor1", {
+        includeAll: false,
+        includeCompletionActions: true,
       });
     });
 

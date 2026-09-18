@@ -166,6 +166,34 @@ describe("Series session completion (G18)", () => {
     expect(sessionIds.length).toBe(3);
   });
 
+  test("tutor Needs action includes a series with an ended child session", async () => {
+    await db
+      .update(bookingSession)
+      .set({
+        scheduledStartAt: new Date(Date.now() - 2 * 3600_000),
+        scheduledEndAt: new Date(Date.now() - 1 * 3600_000),
+      })
+      .where(eq(bookingSession.id, sessionIds[0]!));
+
+    const tutorActions = await tutorClient.booking.listMine({ view: "action" });
+    const studentActions = await studentClient.booking.listMine({
+      view: "action",
+    });
+
+    expect(tutorActions.items.some((item) => item.id === bookingId)).toBe(true);
+    expect(studentActions.items.some((item) => item.id === bookingId)).toBe(
+      false,
+    );
+
+    await db
+      .update(bookingSession)
+      .set({
+        scheduledStartAt: new Date(Date.now() + 1 * 3600_000),
+        scheduledEndAt: new Date(Date.now() + 2 * 3600_000),
+      })
+      .where(eq(bookingSession.id, sessionIds[0]!));
+  });
+
   test("attempt to complete a future session → rejected", async () => {
     await expect(
       tutorClient.tutorActions.completeSession({

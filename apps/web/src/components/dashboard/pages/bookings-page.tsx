@@ -432,7 +432,7 @@ function getEmptyStateTitle(tab: BookingTab) {
 function getEmptyStateDescription(tab: BookingTab, role: string): ReactNode {
   if (tab === "action") {
     return role === "tutor"
-      ? "New student requests and reschedule decisions will appear here."
+      ? "New student requests, reschedule decisions, and sessions ready to complete will appear here."
       : "Requests, confirmations, and reschedule proposals will appear here.";
   }
   if (role === "admin") return "Bookings will appear here as they are created.";

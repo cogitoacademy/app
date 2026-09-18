@@ -42,6 +42,19 @@ Tutor `completeSession` now requires 3 bullet-list sections (Session discussion,
 
 The completed-booking Session notes card is no longer rendered in the web UI because the product surface now uses read-only Student notes plus tutor-authored Session feedback. The former rich-text editor, toolbar, preview, Add note control, and client-side note renderer were removed. The protected `addSessionNote` and `getSessionNotes` procedures remain available for API compatibility and legacy data; the web client does not query or render them.
 
+## Tutor completion queue in Needs action (2026-09-18)
+
+The shared booking list now treats an ended `scheduled` booking as a tutor
+action. For a single or group booking, the row enters **Needs action** when
+`scheduledEndAt` has passed and remains there until the tutor completes it. For
+a series, the same rule is evaluated per `booking_session`, so a parent series
+appears when any scheduled child session has ended, even if a later session is
+still upcoming. This completion predicate is tutor-only; students do not see a
+false completion task. The server applies the same predicate to action,
+upcoming, history, and facet counts, and the sidebar badge requests the action
+view so it stays in sync. No RPC input, response shape, schema, or lifecycle
+transition changed.
+
 ## Observability alert-latch fix + Important Logs board (2026-09-14)
 
 The CpuHigh 80% alert kept firing while live VPS CPU sat at 28–45%.
@@ -248,13 +261,11 @@ is frontend-only and changes no API, schema, or persistence contract.
 ## Sidebar booking-action badge (2026-09-04)
 
 The authenticated sidebar now shows a compact count badge beside the shared
-`/bookings` navigation item when the role-visible booking list contains rows in
-the same pending states used by the **Needs action** tab. The badge uses the
-existing protected `booking.listMine` read with those states, displays `99+`
-when the result exceeds the compact limit, and stays hidden while the count is
-zero or still loading. The state tuple is shared by the sidebar, booking list,
-and booking cards. This is frontend-only; no RPC, schema, persistence, or
-booking lifecycle rule changed.
+`/bookings` navigation item when the role-visible `booking.listMine` action view
+contains rows. That view includes pending decisions and, for tutors, scheduled
+sessions whose end time has passed and still need completion. The badge uses
+the server-side action predicate, displays `99+` when the result exceeds the
+compact limit, and stays hidden while the count is zero or still loading.
 
 ## Sidebar logo contrast (2026-09-04)
 
@@ -595,7 +606,7 @@ Competition Calendar and Knowledge Bank content are now delivered inside the aut
 - Knowledge Bank list responses never expose Sanity asset URLs. `GET /content/knowledge-bank/:resourceId/file` rechecks the student/tutor/admin role and wallet threshold, with the threshold bypassed for tutors and admins or while a student's admin grant is unexpired, fetches the published Sanity asset server-side, and streams it with private/no-store cache headers. The proxy is hardened (`apps/server/src/content-proxy.ts`): host allowlist (`cdn.sanity.io` / `*.sanity.io` — anything else is a 502 before any fetch), a 10s `AbortController` timeout, and a 5MB cap enforced on `content-length` and on the streamed body; the route is rate-limited 30/min per IP (`content` kind, `rate-limit-paths.ts`).
 - The academy landing site remains bilingual. Its calendar and Knowledge Bank navigation uses app-login CTAs with an internal redirect target; the old localized URLs remain compatibility redirects rather than public content pages.
 
-The shared booking list sorts active and all rows by the nearest scheduled start while keeping past/cancelled history newest-first. It defaults to Upcoming for students, Pending for tutors when requests need review (otherwise Upcoming), and All for admins; an explicit `tab` query parameter overrides the role-aware default. Dashboard next-lesson cards use the nearest future booking that is neither terminal nor pending, matching the list's Upcoming semantics. The tutor review queue keeps a stable empty/loading card so the requests and next-lesson modules remain visible together even when no review request exists.
+The shared booking list sorts active and all rows by the nearest scheduled start while keeping past/cancelled history newest-first. It defaults to Upcoming for students and tutors and All for admins; an explicit `tab` query parameter overrides the role-aware default. Needs action includes pending decisions for every role plus ended scheduled sessions requiring tutor completion. For series, an ended child session is enough to surface the parent while later sessions remain upcoming. Dashboard next-lesson cards use the nearest future booking that is neither terminal nor pending, matching the list's Upcoming semantics. The tutor review queue keeps a stable empty/loading card so the requests and next-lesson modules remain visible together even when no review request exists.
 
 The booking status switcher uses a page-local semantic button tablist styled with Selia's `tabs`, `tabs-accent`, and `tabs-border` tokens. The active state updates optimistically on click while the filtered content shows the normal loader until the server returns the selected view. On narrow screens, sorting moves into the wrapping header action row while the rounded tab strip directly precedes the booking content; only the inner list scrolls horizontally. On larger screens, sorting remains beside the tabs.
 

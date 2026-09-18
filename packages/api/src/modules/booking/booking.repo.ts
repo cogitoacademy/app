@@ -128,20 +128,31 @@ function bookingCursorCondition(cursor: string): SQL<unknown> {
 function bookingViewCondition(
   view: BookingListView | undefined,
   now: Date,
+  opts: { completionCondition?: SQL<unknown> } = {},
 ): SQL<unknown> | undefined {
   if (!view || view === "all") return undefined;
   const pending = inArray(booking.currentState, [...BOOKING_ACTION_STATES]);
   const terminal = inArray(booking.currentState, [...TERMINAL_BOOKING_STATES]);
+  const actionRequired = opts.completionCondition
+    ? or(pending, opts.completionCondition)!
+    : pending;
 
   switch (view) {
     case "action":
-      return pending;
+      return actionRequired;
     case "upcoming":
-      return and(gte(booking.scheduledEndAt, now), not(terminal), not(pending));
+      return and(
+        gte(booking.scheduledEndAt, now),
+        not(terminal),
+        not(actionRequired),
+      );
     case "recurring":
       return and(eq(booking.type, "series"), not(terminal));
     case "history":
-      return or(terminal, and(lt(booking.scheduledEndAt, now), not(pending)));
+      return or(
+        terminal,
+        and(lt(booking.scheduledEndAt, now), not(actionRequired)),
+      );
   }
 }
 
@@ -1214,6 +1225,27 @@ async function updateBookingVersioned(
 }
 
 export function createBookingRepo(db: DbType) {
+  function tutorCompletionCondition(now: Date): SQL<unknown> {
+    const endedSeriesSession = db
+      .select({ id: bookingSession.id })
+      .from(bookingSession)
+      .where(
+        and(
+          eq(bookingSession.seriesBookingId, booking.id),
+          eq(bookingSession.currentState, "scheduled"),
+          lte(bookingSession.scheduledEndAt, now),
+        ),
+      );
+
+    return and(
+      eq(booking.currentState, "scheduled"),
+      or(
+        and(ne(booking.type, "series"), lte(booking.scheduledEndAt, now)),
+        and(eq(booking.type, "series"), exists(endedSeriesSession)),
+      ),
+    )!;
+  }
+
   /**
    * Finds a booking with participants, state history, meeting, and room bookings eager-loaded.
    *
@@ -1338,6 +1370,7 @@ export function createBookingRepo(db: DbType) {
       limit: number;
       cursor?: string;
       includeAll?: boolean;
+      includeCompletionActions?: boolean;
       view?: BookingListView;
     },
   ) {
@@ -1363,7 +1396,11 @@ export function createBookingRepo(db: DbType) {
     if (opts.states?.length) {
       conditions.push(inArray(booking.currentState, opts.states));
     }
-    const viewCondition = bookingViewCondition(opts.view, new Date());
+    const now = new Date();
+    const viewOptions = opts.includeCompletionActions
+      ? { completionCondition: tutorCompletionCondition(now) }
+      : {};
+    const viewCondition = bookingViewCondition(opts.view, now, viewOptions);
     if (viewCondition) conditions.push(viewCondition);
     if (opts.cursor) {
       conditions.push(bookingCursorCondition(opts.cursor));
@@ -1386,7 +1423,7 @@ export function createBookingRepo(db: DbType) {
 
   async function countBookingsForAccess(
     userId: string,
-    opts: { includeAll?: boolean },
+    opts: { includeAll?: boolean; includeCompletionActions?: boolean },
   ) {
     const conditions = [];
     if (!opts.includeAll) {
@@ -1409,12 +1446,15 @@ export function createBookingRepo(db: DbType) {
     }
     const where = conditions.length > 0 ? and(...conditions) : undefined;
     const now = new Date();
+    const viewOptions = opts.includeCompletionActions
+      ? { completionCondition: tutorCompletionCondition(now) }
+      : {};
     const [counts] = await db
       .select({
-        action: sql<number>`count(*) filter (where ${bookingViewCondition("action", now)})`,
-        upcoming: sql<number>`count(*) filter (where ${bookingViewCondition("upcoming", now)})`,
-        recurring: sql<number>`count(*) filter (where ${bookingViewCondition("recurring", now)})`,
-        history: sql<number>`count(*) filter (where ${bookingViewCondition("history", now)})`,
+        action: sql<number>`count(*) filter (where ${bookingViewCondition("action", now, viewOptions)})`,
+        upcoming: sql<number>`count(*) filter (where ${bookingViewCondition("upcoming", now, viewOptions)})`,
+        recurring: sql<number>`count(*) filter (where ${bookingViewCondition("recurring", now, viewOptions)})`,
+        history: sql<number>`count(*) filter (where ${bookingViewCondition("history", now, viewOptions)})`,
         all: sql<number>`count(*)`,
       })
       .from(booking)

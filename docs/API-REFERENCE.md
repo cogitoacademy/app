@@ -111,10 +111,13 @@ in the Cogito orange accent.
 
 ## Sidebar booking-action badge (2026-09-04)
 
-The authenticated sidebar reuses `booking.listMine` with the existing pending
-booking states to show the role-visible count beside `/bookings`. It caps the
-display at `99+` when another cursor remains. No new RPC path, request input,
-response output, schema, or persistence contract was added.
+The authenticated sidebar reuses `booking.listMine` with `view: "action"` to
+show the role-visible count beside `/bookings`. The action view includes
+pending booking decisions and tutor-owned scheduled sessions whose end time
+has passed and still require `completeSession`; series bookings use ended child
+sessions. It caps the display at `99+` when another cursor remains. No new RPC
+path, request input, response output, schema, or persistence contract was
+added.
 
 ## Sidebar logo contrast (2026-09-04)
 
@@ -1062,7 +1065,7 @@ RPC contract.
 - **Auth:** Protected
 - **Input:** `{ cursor?, limit?, states?, view? }`, where `view` is `action | upcoming | recurring | history | all`
 - **Output:** `{ items: Booking[], nextCursor, counts: { action, upcoming, recurring, history, all } }`
-- **Description:** Shared role-aware booking list. Students see bookings where they are proposer or participant, tutors see bookings assigned to them, and admins see all bookings. `states` can narrow results for server consumers; `view` applies the booking-list tab semantics server-side before cursor pagination. Counts are exact role-scoped facets across all accessible bookings, not only the current page. The web requests 20 items at a time and follows `nextCursor` for **Load more bookings**. Related user projections contain display identity only (`id`, `name`, `image`, `role`); internal meeting attendee email arrays are never part of this response. The web row presents Marks with the Cogito mark icon and keeps status explanations in the status-badge tooltip. Dashboards reuse the same read model for their next-lesson card; no dashboard-specific endpoint is required.
+- **Description:** Shared role-aware booking list. Students see bookings where they are proposer or participant, tutors see bookings assigned to them, and admins see all bookings. `states` can narrow results for server consumers; `view` applies the booking-list tab semantics server-side before cursor pagination. The `action` view includes pending booking decisions for all roles and, for tutors only, `scheduled` single/group bookings whose `scheduledEndAt` has passed plus series bookings with at least one ended scheduled child session. Those completion tasks are excluded from the tutor's `upcoming` and `history` facets until completed. Counts are exact role-scoped facets across all accessible bookings, not only the current page. The web requests 20 items at a time and follows `nextCursor` for **Load more bookings**. Related user projections contain display identity only (`id`, `name`, `image`, `role`); internal meeting attendee email arrays are never part of this response. The web row presents Marks with the Cogito mark icon and keeps status explanations in the status-badge tooltip. Dashboards reuse the same read model for their next-lesson card; no dashboard-specific endpoint is required.
 
 ### `booking.cancel`
 

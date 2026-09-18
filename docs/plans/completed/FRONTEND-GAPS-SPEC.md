@@ -350,6 +350,16 @@ optimistically, shows its content loader for the new query key, and appends only
 the selected view's cursor pages. Sorting remains client-side within loaded
 filtered pages.
 
+### Tutor completion queue follow-up (2026-09-18)
+
+The server-filtered **Needs action** view now includes tutor-owned scheduled
+single/group bookings after their scheduled end and series bookings with an
+ended scheduled child session. The same role-aware predicate updates Upcoming,
+History, facet counts, and the authenticated sidebar badge, while students do
+not receive a false completion task. The change reuses the existing
+`booking.listMine` contract and completion lifecycle; no schema or migration is
+needed.
+
 ### Booking-list overflow polish follow-up (2026-08-28)
 
 The booking tab scroller now includes internal horizontal and vertical paint

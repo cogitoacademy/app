@@ -180,15 +180,20 @@ pending honorarium summary for its operational table.
 
 The shared booking list uses Needs action, Upcoming, Series, History, and All tabs. Admins default to All; students and tutors default to Upcoming unless an explicit URL tab is present. The page sends the selected view to `booking.listMine`; repository predicates apply the tab semantics before cursor pagination, and a separate role-scoped aggregate returns exact counts for every tab. Changing views loads a new first page, while **Load more bookings** appends the selected view's cursor. Recommended, Soonest, and Latest sorting remains client-side within the loaded filtered pages.
 
+For tutors, Needs action also includes a `scheduled` single/group booking after
+its scheduled end and a `series` parent when any scheduled child session has
+ended. This is a correlated `booking_session` existence check, so a series can
+surface one ended session while a later session remains upcoming. Students and
+admins retain the pending-decision action predicate; completion tasks are not
+exposed as student actions.
+
 `BookingListCard` derives one contextual time chip from server facts: pending states read `deadlineAt`, confirmed/scheduled states read the scheduled window, and terminal states render none. A module-level external clock store updates all mounted cards from one 30-second interval rather than allocating one timer per row.
 The reusable card exposes `showFinancialInfo`; booking lists keep it enabled and place the time chip after it, while dashboard next-lesson cards disable it.
 
-The authenticated sidebar reuses `booking.listMine` with the shared
-`BOOKING_ACTION_STATES` tuple and shows a compact `99+`-capped badge beside
-`/bookings` when role-visible pending rows exist. The tuple is shared with the
-booking list/card presentation so the badge and **Needs action** tab remain
-aligned. This is frontend presentation only; the booking service, repository,
-event keys, and lifecycle rules are unchanged.
+The authenticated sidebar requests `booking.listMine` with `view: "action"` and
+shows a compact `99+`-capped badge beside `/bookings` when role-visible action
+rows exist. It therefore includes tutor completion tasks as well as pending
+decisions and stays aligned with the server-filtered **Needs action** tab.
 
 Tutor invitations use the shared email provider: create sends once, **Generate & copy link** only rotates the token, and the separate **Send again** procedure rotates then explicitly delivers through Resend. Delivery failure does not roll back the valid invite.
 

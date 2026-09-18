@@ -177,6 +177,14 @@ Started-session cancellation check: open a scheduled booking as its student befo
 
 Booking-list smoke check: verify Needs action, Upcoming, Series, History, and All. Students and tutors default to Upcoming; admins default to All. Each selection must immediately update the active tab, show the content loader, and return only server-filtered rows for that view. Tab counts must remain exact before and after **Load more bookings** appends the next cursor. Recommended, Soonest, and Latest order the loaded filtered rows, `?tab=`/`?sort=` preserve choices, and History contains every terminal outcome.
 
+For tutor coverage, use a scheduled booking whose `scheduledEndAt` is in the
+past but whose state is still `scheduled`. It must appear in Needs action and
+the sidebar badge, must not appear in tutor Upcoming or History, and must not
+appear as a completion task in the student's Needs action view. For a series,
+end one child session while leaving a later child scheduled and verify the
+parent appears in the tutor action view. After **Complete session**, verify the
+row leaves Needs action and the facet count refreshes.
+
 Timing-chip check: pending rows with `deadlineAt` show Respond in, switch to warning within three hours and danger within 30 minutes, then say Response overdue without pretending the state is Expired. Confirmed/scheduled rows show Today, Starts in within three hours, Starting soon within 30 minutes, and In progress between start and end. Completed, declined, cancelled, expired, and other terminal rows show no chip. Leave the page open and confirm labels refresh without reloading.
 On `/bookings`, verify the timing chip follows the role-appropriate financial summary (IDR Honorarium for tutors; Earns/Total or You pay for student/admin views) and has a vertical divider on its left. On student and tutor dashboards, verify the shared next-lesson card hides You pay/Earns/Total while retaining the timing chip.
 
