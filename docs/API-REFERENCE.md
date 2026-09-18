@@ -1101,14 +1101,14 @@ RPC contract.
 - **Auth:** Protected (tutor or student party)
 - **Input:** `{ bookingId, content }` (`content` max 10,000 chars, sanitized)
 - **Output:** `{ note }`
-- **Description:** Adds a note to a completed session. The web editor sends allow-listed HTML for paragraphs/headings, emphasis, lists, and links; the API sanitizer remains authoritative before persistence.
+- **Description:** Adds a note to a completed session for protected API clients. The completed-booking web UI no longer exposes this mutation; the API sanitizer remains authoritative before persistence.
 
 ### `booking.getSessionNotes`
 
 - **Auth:** Protected (tutor or student party)
 - **Input:** `{ bookingId }`
 - **Output:** `{ items: SessionNote[] }`
-- **Description:** Returns all notes for the completed booking so both parties can read the shared session record. The web client applies a DOMPurify allow-list before rendering note HTML.
+- **Description:** Returns all legacy notes for the completed booking so protected API clients can read the shared session record. The procedure remains available for API compatibility; the web client no longer queries or renders a Session notes card.
 
 ### `booking.createGroup`
 
@@ -1226,8 +1226,8 @@ RPC contract.
 - **Auth:** Tutor
 - **Input:** `{ bookingId, sessionId?, feedback: { discussion: string[1..30], strengths: string[1..30], improvements: string[1..30] } }` (`sessionId` required for series child sessions; each bullet 1–1000 chars)
 - **Output:** `{ booking }`
-- **Description:** Marks a scheduled session completed and deducts held Marks. Requires session discussion, identified strengths, and points of improvement; saves one `session_completion_feedback` row atomically (per booking for solo/group, per session for series). Missing/empty feedback returns `BOOKING_COMPLETION_FEEDBACK_REQUIRED` (400).
-- **Frontend note:** Cancel uses Selia confirmation dialog; complete uses `CompleteSessionDialog` popup with 3 bullet-list sections (Enter = new bullet). Mutation feedback is emitted through the global toast layer and does not change this RPC contract.
+- **Description:** Marks a scheduled session completed and deducts held Marks. Requires session discussion, strengths observed, and areas for improvement; saves one `session_completion_feedback` row atomically (per booking for solo/group, per session for series). Missing/empty feedback returns `BOOKING_COMPLETION_FEEDBACK_REQUIRED` (400).
+- **Frontend note:** Cancel uses Selia confirmation dialog; complete uses `CompleteSessionDialog` for three textarea-backed tutor feedback sections (each line is a bullet and Enter adds another). Booking detail shows read-only Student notes with Session feedback directly beneath it in the same Session overview block after completion. Mutation feedback is emitted through the global toast layer and does not change this RPC contract.
 
 ### `booking.listCompletionFeedback`
 

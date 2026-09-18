@@ -473,7 +473,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 | F6  | Tutor reschedule proposal UI                  | FR-15                  | G6                                                     | 1d     | Closed                                                                                                                         |
 | F7  | Student reschedule approval UI                | FR-15                  | G6                                                     | 1d     | Closed                                                                                                                         |
 | F8  | Series session completion UI                  | FR-20                  | G18                                                    | 1d     | **Closed (REVIEW-FIXES-3 P6)**                                                                                                 |
-| F9  | Session notes (rich-text) view + add          | FR-09, DL-18           | G7                                                     | 1.5d   | **Closed (2026-08-22)** — toolbar editor, client DOMPurify render pass, and author context                                     |
+| F9  | Session notes (legacy API) + post-session feedback | FR-09, DL-18       | G7                                                     | 1.5d   | **Closed (2026-09-18)** — legacy note API retained; web surface now uses read-only Student notes plus tutor Session feedback |
 | F10 | Notifications page                            | FR-17                  | G17                                                    | 1.5d   | **Closed** — full inbox plus bell-item navigation to the associated page and aligned notification typography                   |
 | F11 | Admin wallet/ledger view                      | FR-10                  | G9                                                     | 1d     | **Closed** — wallet lookup now resolves users by name/email/ID before loading wallet and ledger                                |
 | F12 | Admin room approval UI                        | FR-22                  | G14                                                    | 1d     | **Closed (room approval queue)**                                                                                               |
@@ -709,21 +709,21 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-09, DL-18, prd.tex:1033-1043
 
-**Current state:** **CLOSED (2026-08-22).** Completed bookings expose a shared notes view for both parties and a toolbar editor supporting paragraphs, headings, bold, italic, bullet lists, numbered lists, and safe links. Preview and persisted note rendering use a DOMPurify allow-list before `dangerouslySetInnerHTML`; the API still sanitizes and validates content server-side.
+**Current state:** **CLOSED (2026-09-18).** The legacy completed-booking note procedures remain available for protected API clients, but the web surface no longer renders a Session notes card or exposes a rich-text editor. Booking detail shows read-only Student notes from `learningGoal` and tutor-authored Session feedback directly beneath it, with the three feedback groups rendered as bullet lists.
 
 **Required (after G7 backend):**
 
-1. On booking detail (after session completed), "Add session note" section
-2. Rich-text editor supporting: paragraphs, headings, bullet lists, numbered lists, links, bold, italic
-3. Sanitize on render (DOMPurify allow-list; server sanitizer remains authoritative)
-4. "View notes" section showing all notes from both parties
-5. Only visible after session is completed
+1. Keep `addSessionNote` and `getSessionNotes` available for protected API compatibility
+2. Show the student's `learningGoal` as read-only Student notes on booking detail
+3. Show tutor completion feedback directly below Student notes
+4. Render Session discussion, Strengths observed, and Areas for improvement as bullet lists
+5. Only show post-session feedback after completion
 
 **Acceptance:**
 
-- Tutor adds note with formatting → renders correctly
-- Student views notes → sees formatted content
-- XSS attempt → sanitized
+- Tutor completes the session → feedback persists and appears below Student notes
+- Student/admin views a completed booking → sees Student notes and Session feedback
+- Legacy note API clients → retain access to the protected procedures
 
 ---
 
@@ -889,14 +889,14 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-07, FR-08, FR-14, FR-15, FR-21
 
-**Current state:** **CLOSED (2026-08-19; UX follow-up 2026-08-24; manual fallback follow-up 2026-08-27; admin shared-shell follow-up 2026-09-02).** The booking detail route implements student/tutor state, schedule, participants, Marks, meeting/room access, history, cancellation, tutor review/completion, group invitation/reconfirmation, reschedule proposal/decision, lateness reporting with ticket status, and post-session notes. Its responsive task-detail presentation now prioritizes status, schedule, format/access, visible participant identities, and role-appropriate primary booking actions directly below the status badge; contextual actions remain above the role-appropriate financial or operational rail content or in the main flow. Participant rows show saved images or initials, names, roles, and confirmation states; online meeting-pending/failed states explain when the link is generated and when retries are active, while an available meeting URL is opened from the compact meeting-status popover instead of a `Ready` badge or standalone CTA. Tutor review uses a compact responsive accept/decline dialog with a session summary before the existing mutation is submitted. When automatic meeting setup is unavailable, the assigned tutor can add or replace a trusted URL for an online `confirmed`/`scheduled` booking through a shared Selia dialog; admins retain the operations fallback. The desktop overview/activity flow now stays in an independent left column from the sticky Actions/financial rail, preventing the rail height from creating a blank row before Activity; narrow layouts retain the overview → actions/financial content → Activity order. Backend guards reject offline, terminal, pre-confirmation, and wrong-tutor requests. Admins now use the same page shell through explicit extensions for review context, room actions, participant wallet/ledger detail, wallet impact, state history, and override controls. The manual-link follow-up adds `tutorActions.setMeetingLink` and keeps the booking state machine unchanged.
+**Current state:** **CLOSED (2026-08-19; UX follow-up 2026-08-24; manual fallback follow-up 2026-08-27; admin shared-shell follow-up 2026-09-02).** The booking detail route implements student/tutor state, schedule, participants, Marks, meeting/room access, history, cancellation, tutor review/completion, group invitation/reconfirmation, reschedule proposal/decision, lateness reporting with ticket status, and post-session Student notes plus tutor Session feedback. Its responsive task-detail presentation now prioritizes status, schedule, format/access, visible participant identities, and role-appropriate primary booking actions directly below the status badge; contextual actions remain above the role-appropriate financial or operational rail content or in the main flow. Participant rows show saved images or initials, names, roles, and confirmation states; online meeting-pending/failed states explain when the link is generated and when retries are active, while an available meeting URL is opened from the compact meeting-status popover instead of a `Ready` badge or standalone CTA. Tutor review uses a compact responsive accept/decline dialog with a session summary before the existing mutation is submitted. When automatic meeting setup is unavailable, the assigned tutor can add or replace a trusted URL for an online `confirmed`/`scheduled` booking through a shared Selia dialog; admins retain the operations fallback. The desktop overview/activity flow now stays in an independent left column from the sticky Actions/financial rail, preventing the rail height from creating a blank row before Activity; narrow layouts retain the overview → actions/financial content → Activity order. Backend guards reject offline, terminal, pre-confirmation, and wrong-tutor requests. Admins now use the same page shell through explicit extensions for review context, room actions, participant wallet/ledger detail, wallet impact, state history, and override controls. The manual-link follow-up adds `tutorActions.setMeetingLink` and keeps the booking state machine unchanged.
 
 **Required:**
 
 1. New route `/_app/bookings/$bookingId` — booking detail
 2. Shows: booking state, type, tutor, participants, scheduled time, meeting link (if created), room (if offline), price, hold amount, state history timeline
 3. Student actions: cancel (pre-H-2), report lateness (F3), accept/reject reschedule (F7)
-4. Tutor actions: accept/decline (existing in tutor-bookings), propose reschedule (F6), complete session (F8), add session notes (F9), add/replace a manual meeting link when automatic setup is unavailable
+4. Tutor actions: accept/decline (existing in tutor-bookings), propose reschedule (F6), complete session with feedback (F8/F9), add/replace a manual meeting link when automatic setup is unavailable
 5. Meeting link visible only after all confirmations (G11 backend); pending/failed provider states explain generation timing and retry behavior; manual-link entry is limited to online `confirmed`/`scheduled` bookings and authorized tutor/admin roles
 6. State history: timeline of all transitions with timestamps and actors
 
@@ -1125,6 +1125,7 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 - v1.14 (2026-08-24): Moved role-appropriate primary booking actions below the shared status badge. Tutor review keeps propose/decline/accept together; students see their available propose/cancel actions in the same header slot. Admins continue to use the dedicated operations and override workflow. No RPC, schema, or persistence contract changed.
 - v1.12 (2026-08-23): Fixed the shared Selia portal layer for `DatePicker` and `SelectPopup` so achievement-form date, Category, Level, and calendar month/year controls remain above modal dialogs and clickable. No RPC, schema, or persistence contract changed.
 - v1.16 (2026-08-24): Hardened email sign-in/sign-up transitions: await Better Auth success and a fresh session before navigation, suppress the overlapping auth-store refetch during the handoff, and make the authenticated parent guard use the fresh session. Added E2E coverage against an intermediate `/login` navigation. No auth API or persistence contract changed.
+- v1.19 (2026-09-18): Retired the web Session notes card and client renderer. Booking detail now keeps Student notes in Session overview and places tutor Session feedback directly beneath it with the same lightweight bordered treatment. Legacy `addSessionNote`/`getSessionNotes` procedures remain available for protected API clients; no RPC or schema contract changed.
 - v1.11 (2026-08-22): Moved available Booking actions above Marks in the sticky desktop rail while keeping session notes/support reports in the main content flow. Narrow layouts place actions and Marks before Activity. No booking API or state-machine contract changed.
 - v1.10 (2026-08-22): Moved format/access and participant identity details into the booking detail overview. The overview keeps meeting/room access prominent, shows participant images/names/roles/statuses in a responsive list, and leaves only Marks in the sticky metadata rail. No booking API or state-machine contract changed.
 - v1.10a (2026-08-22): Replaced app-level browser-native date/time/number/select/textarea controls with Selia wrappers and the shared minute-level date/time primitives. This is a UI-only refactor; RPC, schema, and state-machine contracts are unchanged.

@@ -839,6 +839,39 @@ export function BookingDetailPage({
                   )}
                 </div>
               </section>
+
+              <Divider aria-hidden="true" />
+
+              <section
+                aria-labelledby="student-notes-title"
+                className="space-y-3"
+              >
+                <div className="space-y-1">
+                  <Text id="student-notes-title" className="font-medium">
+                    Student notes
+                  </Text>
+                  <Text className="text-sm text-muted">
+                    Shared by the student when this session was booked.
+                  </Text>
+                </div>
+                <blockquote className="rounded-lg border border-item-border bg-item px-4 py-3">
+                  <Text className="whitespace-pre-wrap text-sm text-muted">
+                    {booking.learningGoal.trim() ||
+                      "No student notes were provided."}
+                  </Text>
+                </blockquote>
+              </section>
+
+              {showCompletionFeedback ? (
+                <>
+                  <Divider aria-hidden="true" />
+                  <SessionCompletionFeedbackCard
+                    feedbacks={completionFeedbacks}
+                    timezone={booking.timezone}
+                    sessionLabels={sessionLabels}
+                  />
+                </>
+              ) : null}
             </CardBody>
           </Card>
 
@@ -982,14 +1015,6 @@ export function BookingDetailPage({
               <BookingLifecycleActions
                 {...lifecycleActionProps}
                 section="supplementary"
-              />
-            ) : null}
-
-            {showCompletionFeedback ? (
-              <SessionCompletionFeedbackCard
-                feedbacks={completionFeedbacks}
-                timezone={booking.timezone}
-                sessionLabels={sessionLabels}
               />
             ) : null}
 
