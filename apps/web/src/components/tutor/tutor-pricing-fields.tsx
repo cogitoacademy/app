@@ -26,6 +26,7 @@ const TUTOR_INCREMENT_IDR = { online: 30_000, offline: 40_000 } as const;
 interface PricingFieldsProps {
   modality: string;
   baseRatesIdr: Partial<{ online: number; offline: number }>;
+  maxClassSize: { online: number; offline: number };
   onChange: (
     baseRatesIdr: Partial<{ online: number; offline: number }>,
   ) => void;
@@ -39,6 +40,7 @@ function formatIdr(value: number) {
 export function TutorPricingFields({
   modality,
   baseRatesIdr,
+  maxClassSize,
   onChange,
   errors,
 }: PricingFieldsProps) {
@@ -50,17 +52,26 @@ export function TutorPricingFields({
     (currentModality) =>
       typeof baseRatesIdr[currentModality as "online" | "offline"] === "number",
   );
-  const previewRows = Array.from({ length: 6 }, (_, index) => ({
-    size: String(index + 1),
-    ...(previewModalities.includes("online")
-      ? { online: baseRatesIdr.online! + index * TUTOR_INCREMENT_IDR.online }
-      : {}),
-    ...(previewModalities.includes("offline")
-      ? {
-          offline: baseRatesIdr.offline! + index * TUTOR_INCREMENT_IDR.offline,
-        }
-      : {}),
-  }));
+  const largestPreviewSize = Math.max(
+    ...previewModalities.map(
+      (currentModality) => maxClassSize[currentModality],
+    ),
+  );
+  const previewRows = Array.from(
+    { length: largestPreviewSize },
+    (_, index) => ({
+      size: String(index + 1),
+      ...(previewModalities.includes("online") && index < maxClassSize.online
+        ? { online: baseRatesIdr.online! + index * TUTOR_INCREMENT_IDR.online }
+        : {}),
+      ...(previewModalities.includes("offline") && index < maxClassSize.offline
+        ? {
+            offline:
+              baseRatesIdr.offline! + index * TUTOR_INCREMENT_IDR.offline,
+          }
+        : {}),
+    }),
+  );
 
   return (
     <div className="flex flex-col gap-4">

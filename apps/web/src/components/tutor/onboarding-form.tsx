@@ -19,6 +19,7 @@ import {
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import { TutorTermsOfService } from "./tutor-terms-of-service";
+import { TutorCapacityFields } from "./tutor-capacity-fields";
 import { InfoPreview } from "@/components/info-preview";
 import {
   Field,
@@ -114,6 +115,8 @@ interface OnboardingFormProps {
     subjects?: TutorSubject[] | null;
     modality: string | null;
     baseRatesIdr: Partial<{ online: number; offline: number }> | null;
+    onlineMaxClassSize: number;
+    offlineMaxClassSize: number;
     bankName: string | null;
     bankAccountNumber: string | null;
     bankAccountHolderName: string | null;
@@ -463,6 +466,10 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
         online: 175_000,
         offline: 225_000,
       },
+    maxClassSize: {
+      online: profile.onlineMaxClassSize ?? 6,
+      offline: profile.offlineMaxClassSize ?? 6,
+    },
     bankName: profile.bankName ?? "",
     bankAccountNumber: profile.bankAccountNumber ?? "",
     bankAccountHolderName: profile.bankAccountHolderName ?? "",
@@ -617,6 +624,8 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       subjectIds?: string[];
       modality?: Modality;
       baseRatesIdr?: Partial<{ online: number; offline: number }>;
+      onlineMaxClassSize?: number;
+      offlineMaxClassSize?: number;
       bankName?: string;
       bankAccountNumber?: string;
       bankAccountHolderName?: string;
@@ -674,6 +683,8 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       payload.bankAccountOwnership = form.bankAccountOwnership;
     payload.bankTransferDisclaimerAccepted =
       form.bankTransferDisclaimerAccepted;
+    payload.onlineMaxClassSize = form.maxClassSize.online;
+    payload.offlineMaxClassSize = form.maxClassSize.offline;
     if (form.baseRatesIdr && Object.keys(form.baseRatesIdr).length > 0) {
       const cleanBaseRates = Object.fromEntries(
         Object.entries(form.baseRatesIdr).filter(([, value]) => value > 0),
@@ -1503,15 +1514,25 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                 </Field>
 
                 {form.modality ? (
-                  <TutorPricingFields
-                    modality={form.modality}
-                    baseRatesIdr={form.baseRatesIdr}
-                    onChange={(baseRatesIdr) => {
-                      setForm((current) => ({ ...current, baseRatesIdr }));
-                      clearError("baseRatesIdr");
-                    }}
-                    errors={errors}
-                  />
+                  <div className="flex flex-col gap-5">
+                    <TutorCapacityFields
+                      modality={form.modality}
+                      capacity={form.maxClassSize}
+                      onChange={(maxClassSize) =>
+                        setForm((current) => ({ ...current, maxClassSize }))
+                      }
+                    />
+                    <TutorPricingFields
+                      modality={form.modality}
+                      baseRatesIdr={form.baseRatesIdr}
+                      maxClassSize={form.maxClassSize}
+                      onChange={(baseRatesIdr) => {
+                        setForm((current) => ({ ...current, baseRatesIdr }));
+                        clearError("baseRatesIdr");
+                      }}
+                      errors={errors}
+                    />
+                  </div>
                 ) : (
                   <Text className="rounded-lg bg-accent px-3 py-2 text-sm text-muted">
                     Choose a teaching modality to see the recommended group

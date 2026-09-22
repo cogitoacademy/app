@@ -1,6 +1,17 @@
 # Cogito Runbook
 
-Last updated: 2026-09-18
+Last updated: 2026-09-22
+
+## Tutor class-capacity smoke check (2026-09-22)
+
+Apply migration `0050_tutor_class_capacity.sql`. Open `/profile` as a tutor,
+set Online maximum to 3 and Offline maximum to Private only, then save. As a
+student, confirm tutor discovery shows pricing only through size 3 online and
+size 1 offline. On the booking page, Online must allow at most two invitees;
+switching to Offline must remove invitees and disable student search. Bypass
+the UI and call both `booking.createGroup` and `booking.createGroupSeries`
+above the configured maximum; both must return `BOOKING_TUTOR_CAPACITY` before
+holding Marks or creating a booking. Existing bookings are unaffected.
 
 ## Temporary Knowledge Bank access grants (2026-09-18)
 

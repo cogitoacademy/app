@@ -194,6 +194,13 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
     orpc.tutors.getProfile.queryOptions({ input: { tutorId } }),
   );
   const walletQuery = useQuery(orpc.wallet.get.queryOptions());
+  const selectedBookingModality: Modality =
+    profileQuery.data?.modality === "offline" ? "offline" : selectedModality;
+  const maxClassSize =
+    selectedBookingModality === "offline"
+      ? (profileQuery.data?.offlineMaxClassSize ?? 6)
+      : (profileQuery.data?.onlineMaxClassSize ?? 6);
+  const maxInvitees = Math.max(0, maxClassSize - 1);
   useEffect(() => {
     const timer = window.setTimeout(
       () => setDebouncedStudentSearch(studentSearch.trim()),
@@ -216,7 +223,8 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
 
   function addInvitee(student: StudentMatch) {
     setInvitees((current) =>
-      current.length < 5 && !current.some(({ id }) => id === student.id)
+      current.length < maxInvitees &&
+      !current.some(({ id }) => id === student.id)
         ? [...current, student]
         : current,
     );
@@ -492,7 +500,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
     createPending ||
     !sessionNotes.trim() ||
     (subjects.length > 0 && !effectiveSubjectId) ||
-    invitees.length > 5;
+    invitees.length > maxInvitees;
   const submitLabel =
     selectedSlots.length > 1
       ? `Send series request (${selectedSlots.length})`
@@ -525,7 +533,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
       learningGoal: sessionNotes.trim(),
     };
     if (isGroupBooking) {
-      if (invitees.length > 5) return;
+      if (invitees.length > maxInvitees) return;
       if (selectedSlots.length > 1) {
         createGroupSeries.mutate({
           ...baseInput,
@@ -680,8 +688,9 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                   <div className="space-y-1">
                     <Text className="font-medium">Participants (optional)</Text>
                     <Text className="text-sm text-muted">
-                      Invite up to five students. Adding someone makes this a
-                      group booking.
+                      {maxInvitees === 0
+                        ? "This tutor accepts private classes only for this format."
+                        : `Invite up to ${maxInvitees} ${maxInvitees === 1 ? "student" : "students"}. Adding someone makes this a group booking.`}
                     </Text>
                   </div>
                   <Badge variant="info" pill className="whitespace-nowrap">
@@ -753,7 +762,9 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                             ? "Add another…"
                             : "Type a name or email…"
                         }
-                        disabled={invitees.length >= 5}
+                        disabled={
+                          maxInvitees === 0 || invitees.length >= maxInvitees
+                        }
                       />
                     </InputGroup>
                     {studentSearchQuery.isFetching ||
@@ -816,9 +827,11 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                     ) : null}
                   </div>
                   <Text className="text-xs text-muted">
-                    {isGroupBooking
-                      ? `${invitees.length + 1}/6 participants including you`
-                      : "Add up to five students to make this a group booking."}
+                    {maxInvitees === 0
+                      ? "Private booking · 1 student"
+                      : isGroupBooking
+                        ? `${invitees.length + 1}/${maxClassSize} participants including you`
+                        : `This tutor accepts up to ${maxClassSize} students for ${effectiveModality} classes.`}
                   </Text>
                 </Field>
               </fieldset>
@@ -860,7 +873,14 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                       onValueChange={(modality) => {
                         if (modality !== "online" && modality !== "offline")
                           return;
+                        const nextMaxClassSize =
+                          modality === "offline"
+                            ? profile.offlineMaxClassSize
+                            : profile.onlineMaxClassSize;
                         setSelectedModality(modality);
+                        setInvitees((current) =>
+                          current.slice(0, Math.max(0, nextMaxClassSize - 1)),
+                        );
                         setSelectedSessions([]);
                         setAvailabilityPage(0);
                         setSelectedAvailabilityDate("");

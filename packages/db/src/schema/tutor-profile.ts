@@ -64,6 +64,8 @@ export const tutorProfile = pgTable(
       jsonb("base_rates_idr").$type<
         Partial<{ online: number; offline: number }>
       >(),
+    onlineMaxClassSize: integer("online_max_class_size").default(6).notNull(),
+    offlineMaxClassSize: integer("offline_max_class_size").default(6).notNull(),
     bankName: text("bank_name"),
     bankAccountNumber: text("bank_account_number"),
     bankAccountHolderName: text("bank_account_holder_name"),
@@ -106,6 +108,14 @@ export const tutorProfile = pgTable(
     check(
       "tutor_profile_modality_check",
       sql`${table.modality} IS NULL OR ${table.modality} IN ('online', 'offline', 'both')`,
+    ),
+    check(
+      "tutor_profile_online_max_class_size_check",
+      sql`${table.onlineMaxClassSize} BETWEEN 1 AND 6`,
+    ),
+    check(
+      "tutor_profile_offline_max_class_size_check",
+      sql`${table.offlineMaxClassSize} BETWEEN 1 AND 6`,
     ),
     check(
       "tutor_profile_bank_account_ownership_check",

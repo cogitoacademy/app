@@ -17,6 +17,8 @@ function makeProfile(
     shortBio: "Experienced tutor",
     experienceEntries: [],
     modality: "online",
+    onlineMaxClassSize: 6,
+    offlineMaxClassSize: 6,
     prices: { "1": 50, "2": 40 },
     publishedAt: new Date("2025-01-01"),
     userId: "u1",
@@ -195,6 +197,32 @@ describe("Discovery Service", () => {
       expect(result[0]?.pricesByModality?.offline?.["1"]).toBe(63);
       expect(result[0]?.prices).toEqual(result[0]?.pricesByModality?.online);
       expect(pricing.getEconomyConfig).toHaveBeenCalledTimes(1);
+    });
+
+    test("only publishes prices up to each modality's class capacity", async () => {
+      const profile = makeProfile({
+        modality: "both",
+        baseRatesIdr: { online: 175_000, offline: 225_000 },
+        onlineMaxClassSize: 3,
+        offlineMaxClassSize: 1,
+      });
+      const repo = makeRepo({ listPublished: mock(async () => [profile]) });
+      const pricing = {
+        ...createPricingService(),
+        getEconomyConfig: mock(async () => DEFAULT_ECONOMY_CONFIG),
+      };
+
+      const [result] = await createDiscoveryService({
+        repo,
+        pricing,
+      }).listPublished();
+
+      expect(Object.keys(result!.pricesByModality!.online!)).toEqual([
+        "1",
+        "2",
+        "3",
+      ]);
+      expect(Object.keys(result!.pricesByModality!.offline!)).toEqual(["1"]);
     });
   });
 

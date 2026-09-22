@@ -133,6 +133,22 @@ export class BookingGroupSizeError extends DomainError {
   }
 }
 
+export class BookingTutorCapacityError extends DomainError {
+  readonly domain = "booking";
+  constructor(
+    tutorId: string,
+    modality: string,
+    requested: number,
+    max: number,
+  ) {
+    super(
+      "BOOKING_TUTOR_CAPACITY",
+      `This tutor accepts up to ${max} ${max === 1 ? "student" : "students"} for ${modality} classes`,
+      { tutorId, modality, requested, max },
+    );
+  }
+}
+
 export class BookingSeriesSizeError extends DomainError {
   readonly domain = "booking";
   constructor(id: string, min: number, max: number) {
@@ -341,6 +357,8 @@ export function mapBookingError(
   if (err instanceof BookingAcceptanceDeadlinePassedError)
     return badRequest(err.message, err);
   if (err instanceof BookingGroupSizeError) return badRequest(err.message, err);
+  if (err instanceof BookingTutorCapacityError)
+    return badRequest(err.message, err);
   if (err instanceof BookingSeriesSizeError)
     return badRequest(err.message, err);
   if (err instanceof BookingParticipantAlreadyConfirmedError)

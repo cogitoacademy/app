@@ -43,13 +43,29 @@ export interface ProfileProjection {
   experienceEntries: TutorProfileRow["experienceEntries"];
   subjects: NormalizedTutorSubject[];
   modality: string | null;
+  onlineMaxClassSize: number;
+  offlineMaxClassSize: number;
   prices: Record<string, number> | null;
   pricesByModality: PricesByModality | null;
   publishedAt: Date | null;
   user: { name: string | null; image: string | null } | null;
 }
 
+function limitPrices(
+  prices: Record<string, number> | null,
+  maxClassSize: number,
+) {
+  if (!prices) return null;
+  return Object.fromEntries(
+    Object.entries(prices).filter(([size]) => Number(size) <= maxClassSize),
+  );
+}
+
 export function buildProjection(profile: ProfileWithUser): ProfileProjection {
+  const onlineMaxClassSize = profile.onlineMaxClassSize ?? 6;
+  const offlineMaxClassSize = profile.offlineMaxClassSize ?? 6;
+  const preferredMaxClassSize =
+    profile.modality === "offline" ? offlineMaxClassSize : onlineMaxClassSize;
   return {
     id: profile.id,
     userId: profile.userId,
@@ -62,7 +78,9 @@ export function buildProjection(profile: ProfileWithUser): ProfileProjection {
     experienceEntries: profile.experienceEntries ?? [],
     subjects: toNormalizedTutorSubjects(profile.subjects),
     modality: profile.modality,
-    prices: profile.prices,
+    onlineMaxClassSize,
+    offlineMaxClassSize,
+    prices: limitPrices(profile.prices, preferredMaxClassSize),
     pricesByModality: null,
     publishedAt: profile.publishedAt,
     user: profile.user
@@ -91,7 +109,12 @@ function buildEconomyPrices(
     if (typeof baseRateIdr !== "number") continue;
 
     const prices: Record<string, number> = {};
+    const maxClassSize =
+      modality === "offline"
+        ? (profile.offlineMaxClassSize ?? 6)
+        : (profile.onlineMaxClassSize ?? 6);
     for (const size of [1, 2, 3, 4, 5, 6] as GroupSize[]) {
+      if (size > maxClassSize) break;
       prices[String(size)] = pricing.computeEconomics(
         modality,
         baseRateIdr,

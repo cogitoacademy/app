@@ -36,6 +36,8 @@ export interface UpdateProfileInput {
   subjectIds?: string[];
   modality?: "online" | "offline" | "both";
   baseRatesIdr?: Partial<{ online: number; offline: number }>;
+  onlineMaxClassSize?: number;
+  offlineMaxClassSize?: number;
   bankName?: string;
   bankAccountNumber?: string;
   bankAccountHolderName?: string;

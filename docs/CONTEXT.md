@@ -2,6 +2,17 @@
 
 Last updated: 2026-09-22
 
+## Tutor class capacity preferences (2026-09-22)
+
+Tutor profiles store separate online and offline maximum class sizes from 1 to
+6, defaulting existing tutors to 6. The tutor profile editor labels size 1 as
+private-only; capacity changes take effect immediately for new bookings and do
+not alter existing bookings. Discovery exposes both limits and omits pricing
+rows above each modality's capacity. The booking form caps invitees and explains
+the active modality limit, while `createGroup` and `createGroupSeries` enforce
+the same limit server-side with `BOOKING_TUTOR_CAPACITY`. Migration
+`0050_tutor_class_capacity.sql` adds the two checked columns.
+
 ## Tutor weekly availability date range (2026-09-22)
 
 The tutor `/availability` weekly-hours form exposes separate **Start date** and

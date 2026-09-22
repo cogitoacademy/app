@@ -51,6 +51,8 @@ type PublishedTutor = {
   experienceEntries: TutorExperienceEntry[] | null;
   subjects?: TutorSubject[] | null;
   modality: string | null;
+  onlineMaxClassSize: number;
+  offlineMaxClassSize: number;
   prices: Record<string, number> | null;
   pricesByModality?: Partial<
     Record<"online" | "offline", Record<string, number>>
