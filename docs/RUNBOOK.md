@@ -33,8 +33,13 @@ migration, job, or deployment configuration is required.
 
 ## Bulk date-override smoke check (2026-09-09)
 
-Open `/availability` as a tutor. In **Date overrides**, verify the Online,
-Offline, and Both tabs are keyboard-accessible; add and remove several future
+Open `/availability` as a tutor. In **Weekly hours**, verify Start date cannot
+be earlier than tomorrow, End date cannot be earlier than Start date, and the
+range cannot exceed 52 weeks. Save a short range and confirm generated slots
+appear only between the two selected dates in Calendar preview. In **Date overrides**, verify the Online,
+Offline, and Both tabs are keyboard-accessible. In the morning, select today
+with an evening time and confirm it saves; then select a start minute that has
+already passed and confirm inline validation disables Save. Add and remove several future
 dates; add up to four non-overlapping time ranges; and save. The calendar
 preview must show every selected date/range with the chosen modality. Repeat
 with a past/duplicate date, malformed or reversed time, overlapping range, and

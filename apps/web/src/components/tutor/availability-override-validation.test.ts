@@ -5,6 +5,7 @@ const minimumDate = new Date(Date.now() + 24 * 60 * 60 * 1000)
   .toISOString()
   .slice(0, 10);
 const ranges = [{ start: "09:00", end: "12:00" }];
+const now = new Date(`${minimumDate}T08:00:00+07:00`).getTime();
 
 describe("getDateOverrideValidationError", () => {
   test("accepts future dates and valid ranges", () => {
@@ -13,6 +14,7 @@ describe("getDateOverrideValidationError", () => {
         dates: [minimumDate],
         ranges,
         minimumDate,
+        now,
         existingSlots: [],
       }),
     ).toBeNull();
@@ -24,6 +26,7 @@ describe("getDateOverrideValidationError", () => {
         dates: [],
         ranges,
         minimumDate,
+        now,
         existingSlots: [],
       }),
     ).toBe("Choose at least one date.");
@@ -35,6 +38,7 @@ describe("getDateOverrideValidationError", () => {
         dates: [minimumDate],
         ranges: [{ start: "12:00", end: "11:00" }],
         minimumDate,
+        now,
         existingSlots: [],
       }),
     ).toBe("Every end time must be after its start time.");
@@ -47,6 +51,7 @@ describe("getDateOverrideValidationError", () => {
           { start: "11:00", end: "13:00" },
         ],
         minimumDate,
+        now,
         existingSlots: [],
       }),
     ).toBe("Override time ranges must not overlap.");
@@ -71,6 +76,7 @@ describe("getDateOverrideValidationError", () => {
         dates: [minimumDate],
         ranges,
         minimumDate,
+        now,
         existingSlots,
       }),
     ).toContain("has an existing one-off availability window");
@@ -80,8 +86,31 @@ describe("getDateOverrideValidationError", () => {
         dates: [minimumDate],
         ranges: [{ start: "13:00", end: "14:00" }],
         minimumDate,
+        now,
         existingSlots: [existingSlots[1]!],
       }),
     ).toBeNull();
+  });
+
+  test("allows a same-day future slot and rejects a time that has passed", () => {
+    expect(
+      getDateOverrideValidationError({
+        dates: [minimumDate],
+        ranges: [{ start: "20:00", end: "22:00" }],
+        minimumDate,
+        now,
+        existingSlots: [],
+      }),
+    ).toBeNull();
+
+    expect(
+      getDateOverrideValidationError({
+        dates: [minimumDate],
+        ranges: [{ start: "07:00", end: "09:00" }],
+        minimumDate,
+        now,
+        existingSlots: [],
+      }),
+    ).toBe("Every override start time must be in the future.");
   });
 });

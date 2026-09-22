@@ -1,6 +1,22 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-09-18
+Last updated: 2026-09-22
+
+## Tutor weekly availability date range (2026-09-22)
+
+The tutor `/availability` weekly-hours form exposes separate **Start date** and
+**End date** Selia date pickers. Both dates are inclusive, must start no earlier
+than tomorrow in Asia/Jakarta, constrain each other, and keep the existing
+52-week server limit. Saving sends the selected start through
+`effectiveFrom` and the selected end through `repeatUntil`; the weekly weekday,
+time, and modality rules are otherwise unchanged. This is a frontend exposure
+of the existing `tutor.replaceWeeklyAvailability` contract and requires no
+schema or RPC shape change.
+
+Date overrides may include today so a tutor can publish a later slot on the
+same day. The client compares each selected start minute with the live clock
+and rejects starts that have already passed; the API's existing future-date
+validation remains the authoritative backstop.
 
 ## Temporary Knowledge Bank access grants (2026-09-18)
 

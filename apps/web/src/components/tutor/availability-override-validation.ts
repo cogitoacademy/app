@@ -15,11 +15,13 @@ export function getDateOverrideValidationError({
   dates,
   ranges,
   minimumDate,
+  now,
   existingSlots,
 }: {
   dates: readonly string[];
   ranges: readonly OverrideRangeValue[];
   minimumDate: string;
+  now: number;
   existingSlots: readonly ExistingAvailability[];
 }) {
   if (dates.length === 0) return "Choose at least one date.";
@@ -54,6 +56,9 @@ export function getDateOverrideValidationError({
     for (const range of ranges) {
       const start = new Date(`${date}T${range.start}:00+07:00`);
       const end = new Date(`${date}T${range.end}:00+07:00`);
+      if (start.getTime() <= now) {
+        return "Every override start time must be in the future.";
+      }
       if (
         oneOffSlots.some((slot) => {
           const existingStart = new Date(slot.startDate);

@@ -778,7 +778,7 @@ The web tutor profile editor groups education, competition achievements, and exp
 - **Input:** `{ slots: [{ startDate, endDate, modality }] }` (1–56 future, non-overlapping one-off windows; `modality` is `online`, `offline`, or `both`)
 - **Output:** `AvailabilitySlot[]`
 - **Errors:** `AVAILABILITY_SLOT_OVERLAP` (409) when the submitted batch overlaps itself or an existing one-off window
-- **Description:** Atomically creates multiple date-specific availability windows. Conflicting recurring occurrences are soft-deactivated; any one-off conflict rolls back the complete batch.
+- **Description:** Atomically creates multiple date-specific availability windows, including same-day windows whose start time is still in the future. Conflicting recurring occurrences are soft-deactivated; any one-off conflict rolls back the complete batch.
 
 ### `tutor.createWeeklyAvailability`
 
@@ -795,7 +795,7 @@ The web tutor profile editor groups education, competition achievements, and exp
 - **Input:** `{ effectiveFrom, repeatUntil, ranges: [{ dayOfWeek, startTime, endTime, modality }] }` (`dayOfWeek` 0–6, times use 24-hour `HH:mm`, max 21 weekly ranges, range up to 52 weeks)
 - **Output:** `AvailabilitySlot[]`
 - **Errors:** `AVAILABILITY_SLOT_OVERLAP` (409) for overlapping weekly ranges
-- **Description:** Atomically deactivates future recurring windows from `effectiveFrom` and regenerates them from weekly hours. One-off date overrides are preserved and take priority over conflicting generated occurrences.
+- **Description:** Atomically deactivates future recurring windows from `effectiveFrom` and regenerates them through the inclusive `repeatUntil` date from weekly hours. The tutor web form exposes these values as Start date and End date pickers that constrain each other and enforce the existing 52-week limit. One-off date overrides are preserved and take priority over conflicting generated occurrences.
 
 ### `tutor.deleteAvailability`
 
