@@ -127,7 +127,7 @@ function ToastIcon({
     <div
       data-slot="toast-icon"
       className={cn(
-        "*:[svg]:w-4.5 self-start",
+        "mt-px flex size-4.5 shrink-0 items-center justify-center [&>svg]:size-full",
         type === "success" && "*:[svg]:fill-success/20 *:[svg]:stroke-success",
         type === "info" && "*:[svg]:fill-info/20 *:[svg]:stroke-info",
         type === "warning" && "*:[svg]:fill-warning/20 *:[svg]:stroke-warning",

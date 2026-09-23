@@ -5,6 +5,7 @@ import {
   filterEventsByCompetitionType,
   getCategoryLabel,
   getAgendaEventsForPeriod,
+  getWeekEventLanes,
   sortDayEvents,
 } from "./calendar-utils";
 import type { CalendarCompetition } from "./calendar-types";
@@ -146,6 +147,36 @@ describe("sortDayEvents", () => {
     ];
     sortDayEvents(events);
     expect(events.map((event) => event.id)).toEqual(["b", "a"]);
+  });
+});
+
+describe("getWeekEventLanes", () => {
+  test("keeps spanning events in one lane and reuses lanes after they end", () => {
+    const endingBlue = {
+      ...makeEvent("ending-blue", ["mun"]),
+      start: new Date(2026, 9, 24),
+      end: new Date(2026, 9, 25, 23, 59, 59),
+    };
+    const green = {
+      ...makeEvent("green", ["business"]),
+      start: new Date(2026, 9, 25),
+      end: new Date(2026, 9, 27, 23, 59, 59),
+    };
+    const startingBlue = {
+      ...makeEvent("starting-blue", ["mun"]),
+      start: new Date(2026, 9, 26),
+      end: new Date(2026, 9, 27, 23, 59, 59),
+    };
+
+    const lanes = getWeekEventLanes(
+      [green, startingBlue, endingBlue],
+      new Date(2026, 9, 25),
+      new Date(2026, 9, 31, 23, 59, 59),
+    );
+
+    expect(lanes.get(endingBlue.id)).toBe(0);
+    expect(lanes.get(green.id)).toBe(1);
+    expect(lanes.get(startingBlue.id)).toBe(0);
   });
 });
 

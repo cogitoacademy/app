@@ -32,8 +32,9 @@ function formatScale(scale: string) {
 
 function InfoLine({ label, value }: { label: string; value: string }) {
   return (
-    <p className="text-sm leading-relaxed">
-      <span className="font-semibold">{label}:</span> {value}
+    <p className="text-sm lg:text-base leading-relaxed">
+      <Text className="font-semibold">{label}:</Text>
+      <Text className="">{value}</Text>
     </p>
   );
 }
@@ -45,7 +46,7 @@ function CategoryBadges({ event }: { event: CalendarCompetition }) {
         <Badge
           key={`${event.id}-${category.coreCategory}`}
           variant="secondary"
-          size="sm"
+          size="md"
           className={getCategoryBadgeClass(category.coreCategory)}
         >
           {getCategoryLabel(category.coreCategory)}
@@ -176,13 +177,13 @@ function EventDetailsContent({ event }: { event: CalendarCompetition }) {
 
       {event.description ? (
         <div
-          className={`rounded-lg bg-accent/30 p-4 ${revealTone} ${revealState}`}
+          className={`rounded-lg bg-accent/30 ${revealTone} ${revealState}`}
           style={{ transitionDelay: "75ms" }}
         >
-          <Heading size="sm" className="text-sm">
+          <Heading size="sm" className="text-sm lg:text-base">
             Description
           </Heading>
-          <Text className="mt-1 whitespace-pre-line text-sm text-muted">
+          <Text className="mt-1 whitespace-pre-line">
             {event.description}
           </Text>
         </div>

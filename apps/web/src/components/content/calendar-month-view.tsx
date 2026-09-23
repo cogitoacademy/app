@@ -24,7 +24,7 @@ import {
   getAllEventsForDay,
   getEventsForDay,
   getSpanningEventsForDay,
-  sortDayEvents,
+  getWeekEventLanes,
 } from "./calendar-utils";
 import type { CalendarCompetition } from "./calendar-types";
 import { useEventVisibility } from "./use-event-visibility";
@@ -104,6 +104,12 @@ export function CalendarMonthView({
         </div>
         <div className="grid auto-rows-fr">
           {weeks.map((week) => {
+            const eventLanes = getWeekEventLanes(
+              events,
+              week[0],
+              week[week.length - 1],
+            );
+
             return (
               <div
                 key={week[0].toISOString()}
@@ -112,16 +118,34 @@ export function CalendarMonthView({
                 {week.map((day, dayIndex) => {
                   const dayEvents = getEventsForDay(events, day);
                   const spanningEvents = getSpanningEventsForDay(events, day);
-                  const allDayEvents = sortDayEvents([
+                  const allDayEvents = [
                     ...spanningEvents,
                     ...dayEvents,
-                  ]);
-                  const allEvents = getAllEventsForDay(events, day);
-                  const visibleLaneCount = getVisibleEventCount(
-                    allDayEvents.length,
+                  ].toSorted(
+                    (left, right) =>
+                      (eventLanes.get(left.id) ?? 0) -
+                      (eventLanes.get(right.id) ?? 0),
                   );
-                  const visibleEvents = allDayEvents.slice(0, visibleLaneCount);
-                  const hiddenEvents = allDayEvents.slice(visibleLaneCount);
+                  const allEvents = getAllEventsForDay(events, day);
+                  const laneCount = allDayEvents.reduce(
+                    (count, event) =>
+                      Math.max(count, (eventLanes.get(event.id) ?? 0) + 1),
+                    0,
+                  );
+                  const visibleLaneCount = getVisibleEventCount(laneCount);
+                  const visibleLanes = Array.from(
+                    { length: visibleLaneCount },
+                    (_, lane) => ({
+                      lane,
+                      event: allDayEvents.find(
+                        (event) => eventLanes.get(event.id) === lane,
+                      ),
+                    }),
+                  );
+                  const hiddenEvents = allDayEvents.filter(
+                    (event) =>
+                      (eventLanes.get(event.id) ?? 0) >= visibleLaneCount,
+                  );
                   const isReferenceCell = week[0] === day && dayIndex === 0;
                   const hasMore = hiddenEvents.length > 0;
 
@@ -144,7 +168,17 @@ export function CalendarMonthView({
                         ref={isReferenceCell ? contentRef : undefined}
                         className="min-h-[calc((var(--event-height)+var(--event-gap))*3)] lg:min-h-[calc((var(--event-height)+var(--event-gap))*4)]"
                       >
-                        {visibleEvents.map((calendarEvent) => {
+                        {visibleLanes.map(({ event: calendarEvent, lane }) => {
+                          if (!calendarEvent) {
+                            return (
+                              <div
+                                key={`${day.toISOString()}-empty-${lane}`}
+                                aria-hidden="true"
+                                className="mt-(--event-gap) h-(--event-height)"
+                              />
+                            );
+                          }
+
                           const eventStart = new Date(calendarEvent.start);
                           const eventEnd = new Date(calendarEvent.end);
                           const isFirstDay = isSameDay(day, eventStart);

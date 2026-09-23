@@ -493,12 +493,14 @@ function GuideStepDetails({ step }: { step: GuideStep }) {
     <div className="space-y-6">
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_16rem]">
         <div>
-          <Text className="mb-3 text-sm font-semibold">What happens</Text>
+          <Text className="mb-3 text-sm lg:text-base font-semibold">
+            What happens
+          </Text>
           <ul className="space-y-2.5">
             {step.details.map((detail) => (
               <li
                 key={detail}
-                className="flex gap-2.5 text-sm leading-6 text-muted"
+                className="flex gap-2.5 text-sm lg:text-base leading-6 text-muted"
               >
                 <IconCheck
                   className="mt-1 size-4 shrink-0 text-success"
@@ -513,7 +515,7 @@ function GuideStepDetails({ step }: { step: GuideStep }) {
         </div>
         {step.statuses?.length ? (
           <div>
-            <Text className="mb-3 text-sm font-semibold">
+            <Text className="mb-3 text-sm lg:text-base font-semibold">
               Possible statuses
             </Text>
             <div className="flex flex-wrap gap-2">
@@ -526,7 +528,9 @@ function GuideStepDetails({ step }: { step: GuideStep }) {
       </div>
       {step.branches?.length ? (
         <div>
-          <Text className="mb-3 text-sm font-semibold">If plans change</Text>
+          <Text className="mb-3 text-sm lg:text-base font-semibold">
+            If plans change
+          </Text>
           <div className="grid gap-3 xl:grid-cols-2">
             {step.branches.map((branch) => (
               <GuideBranchCard key={branch.title} branch={branch} />

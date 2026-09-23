@@ -71,7 +71,7 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
   const estimatedPayout = Math.max(0, pendingHonorarium - transferFee);
 
   return (
-    <Stack direction="column" spacing="lg">
+    <Stack direction="column" spacing="md">
       <div className="grid gap-4 lg:grid-cols-2">
         <DashboardWelcomeCard
           name={tutorName}

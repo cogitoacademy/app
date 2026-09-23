@@ -2,6 +2,14 @@
 
 Last updated: 2026-09-23
 
+## Competition Calendar stable event lanes (2026-09-23)
+
+Month-view competitions keep one vertical lane across every day they span within
+a calendar week. A lane becomes reusable only after its previous event ends, so
+continuing events no longer jump above or below adjacent events when crossing a
+date boundary. This is frontend-only; API, schema, and persistence contracts are
+unchanged.
+
 ## Tutor onboarding form layout (2026-09-23)
 
 Tutor onboarding fields use a responsive label-and-description column on the
