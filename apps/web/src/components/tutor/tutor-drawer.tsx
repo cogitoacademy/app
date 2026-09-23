@@ -51,6 +51,10 @@ function getInitials(name: string) {
     .toUpperCase();
 }
 
+function formatClassSize(size: number) {
+  return `${size} ${size === 1 ? "student" : "students"}`;
+}
+
 type TutorDrawerProps = {
   tutor: {
     id: string;
@@ -62,6 +66,8 @@ type TutorDrawerProps = {
     experienceEntries: TutorExperienceEntry[] | null;
     subjects?: TutorSubject[] | null;
     modality: string | null;
+    onlineMaxClassSize: number;
+    offlineMaxClassSize: number;
     prices: Record<string, number> | null;
     pricesByModality?: Partial<
       Record<"online" | "offline", Record<string, number>>
@@ -241,6 +247,15 @@ export function TutorDrawer({
               <Heading size="sm" className="mb-2">
                 Pricing
               </Heading>
+              <Text className="mb-3 text-sm text-muted">
+                {selectedTutor.modality === "both"
+                  ? `Maximum class size: ${formatClassSize(selectedTutor.onlineMaxClassSize)} online · ${formatClassSize(selectedTutor.offlineMaxClassSize)} offline`
+                  : `Maximum class size: ${formatClassSize(
+                      selectedTutor.modality === "offline"
+                        ? selectedTutor.offlineMaxClassSize
+                        : selectedTutor.onlineMaxClassSize,
+                    )}`}
+              </Text>
               <TutorPricingTable
                 modalities={priceModalities}
                 rows={priceRows}

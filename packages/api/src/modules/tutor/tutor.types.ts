@@ -51,6 +51,8 @@ export const updateMyProfileInput = z.object({
       { message: "baseRatesIdr must only contain online/offline keys" },
     )
     .optional(),
+  onlineMaxClassSize: z.number().int().min(1).max(6).optional(),
+  offlineMaxClassSize: z.number().int().min(1).max(6).optional(),
   bankName: z.string().trim().min(2).max(100).optional(),
   bankAccountNumber: z
     .string()

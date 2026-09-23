@@ -31,6 +31,7 @@ import {
   BookingAcceptanceDeadlinePassedError,
   BookingCancellationDeadlinePassedError,
   BookingCompletionFeedbackRequiredError,
+  BookingTutorCapacityError,
 } from "../../modules/booking/booking.errors";
 
 function makeDb() {
@@ -945,6 +946,20 @@ describe("BookingService", () => {
       );
     });
 
+    test("rejects a group above the tutor's online capacity", async () => {
+      const { service } = createService({
+        repo: {
+          findTutorProfile: mock(async () =>
+            makeTutorProfile({ onlineMaxClassSize: 2 }),
+          ),
+        },
+      });
+
+      await expect(service.createGroup("student1", groupInput)).rejects.toThrow(
+        BookingTutorCapacityError,
+      );
+    });
+
     test("creates group booking with invites and notifications for invitees", async () => {
       const booking = makeBooking({ type: "group", targetGroupSize: 3 });
       const { service, repo, wallet, notification } = createService({
@@ -1223,6 +1238,23 @@ describe("BookingService", () => {
       ],
       timezone: "Asia/Jakarta",
     };
+
+    test("rejects a group series above the tutor's offline capacity", async () => {
+      const { service } = createService({
+        repo: {
+          findTutorProfile: mock(async () =>
+            makeTutorProfile({ offlineMaxClassSize: 2 }),
+          ),
+        },
+      });
+
+      await expect(
+        service.createGroupSeries("student1", {
+          ...groupSeriesInput,
+          modality: "offline",
+        }),
+      ).rejects.toThrow(BookingTutorCapacityError);
+    });
 
     test("throws BookingNotFoundError when an invitee is not a registered user", async () => {
       const { service } = createService({

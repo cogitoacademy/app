@@ -351,6 +351,13 @@
       "when": 1789721133588,
       "tag": "0049_abandoned_vertigo",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1790035200000,
+      "tag": "0050_tutor_class_capacity",
+      "breakpoints": true
     }
   ]
 }

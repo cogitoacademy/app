@@ -253,11 +253,14 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
   const [schedule, setSchedule] = useState<WeeklySchedule>(
     () => scheduleFromSlots(slots) ?? initialSchedule(),
   );
+  const [effectiveFrom, setEffectiveFrom] = useState(() =>
+    dateKey(Date.now() + DAY_MS),
+  );
   const [repeatUntil, setRepeatUntil] = useState(() =>
     dateKey(Date.now() + 12 * 7 * DAY_MS),
   );
   const [overrideDates, setOverrideDates] = useState<string[]>(() => [
-    dateKey(Date.now() + DAY_MS),
+    dateKey(),
   ]);
   const [overrideDateCandidate, setOverrideDateCandidate] = useState("");
   const [overrideModality, setOverrideModality] = useState<Modality>("online");
@@ -269,7 +272,8 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
   const [slotPendingRemoval, setSlotPendingRemoval] =
     useState<AvailabilitySlot | null>(null);
   const now = useNow();
-  const minimumDate = useMemo(() => dateKey(now + DAY_MS), [now]);
+  const today = useMemo(() => dateKey(now), [now]);
+  const weeklyMinimumDate = useMemo(() => dateKey(now + DAY_MS), [now]);
   const refresh = () =>
     queryClient.invalidateQueries({
       queryKey: orpc.tutor.listAvailability.key(),
@@ -350,11 +354,18 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
       getDateOverrideValidationError({
         dates: overrideDates,
         ranges: overrideRanges,
-        minimumDate,
+        minimumDate: today,
+        now,
         existingSlots: slots,
       }),
-    [minimumDate, overrideDates, overrideRanges, slots],
+    [now, overrideDates, overrideRanges, slots, today],
   );
+  const weeklyDateRangeError =
+    effectiveFrom > repeatUntil
+      ? "The start date cannot be after the end date."
+      : addDays(effectiveFrom, 365) < repeatUntil
+        ? "Weekly availability can be scheduled for up to 52 weeks."
+        : null;
   const activePreviewDate =
     selectedPreviewDate && previewDays.includes(selectedPreviewDate)
       ? selectedPreviewDate
@@ -367,6 +378,14 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
 
   function saveWeekly(event: FormEvent) {
     event.preventDefault();
+    if (weeklyDateRangeError) {
+      toastManager.add({
+        title: "Check weekly date range",
+        description: weeklyDateRangeError,
+        type: "error",
+      });
+      return;
+    }
     const ranges = DAYS.flatMap(([day]) => {
       const value = schedule[day]!;
       return value.enabled
@@ -387,7 +406,7 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
       return;
     }
     replaceWeekly.mutate({
-      effectiveFrom: new Date(`${dateKey(Date.now() + DAY_MS)}T00:00:00+07:00`),
+      effectiveFrom: new Date(`${effectiveFrom}T00:00:00+07:00`),
       repeatUntil: new Date(`${repeatUntil}T23:59:59+07:00`),
       ranges,
     });
@@ -598,17 +617,38 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
             </CardBody>
             <CardFooter className="flex-col items-stretch gap-3 sm:flex-row sm:items-end">
               <Field className="sm:max-w-56">
-                <FieldLabel htmlFor="schedule-until">Generate until</FieldLabel>
+                <FieldLabel htmlFor="schedule-from">Start date</FieldLabel>
+                <DatePicker
+                  id="schedule-from"
+                  minDate={weeklyMinimumDate}
+                  maxDate={repeatUntil}
+                  value={effectiveFrom}
+                  onChange={(date) => {
+                    setEffectiveFrom(date);
+                    if (date > repeatUntil) setRepeatUntil(date);
+                  }}
+                />
+              </Field>
+              <Field className="sm:max-w-56">
+                <FieldLabel htmlFor="schedule-until">End date</FieldLabel>
                 <DatePicker
                   id="schedule-until"
-                  minDate={minimumDate}
+                  minDate={effectiveFrom}
+                  maxDate={addDays(effectiveFrom, 365)}
                   value={repeatUntil}
                   onChange={setRepeatUntil}
                 />
               </Field>
-              <Button type="submit" progress={replaceWeekly.isPending}>
+              <Button
+                type="submit"
+                disabled={weeklyDateRangeError !== null}
+                progress={replaceWeekly.isPending}
+              >
                 Save weekly hours
               </Button>
+              {weeklyDateRangeError ? (
+                <FieldError role="alert">{weeklyDateRangeError}</FieldError>
+              ) : null}
             </CardFooter>
           </Card>
         </form>
@@ -656,7 +696,7 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
                   <FieldLabel htmlFor="override-date">Dates</FieldLabel>
                   <DatePicker
                     id="override-date"
-                    minDate={minimumDate}
+                    minDate={today}
                     value={overrideDateCandidate}
                     placeholder={
                       overrideDates.length === 0

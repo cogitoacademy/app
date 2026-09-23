@@ -9,6 +9,10 @@
 
 ## Completed (merged to main)
 
+| [TUTOR-CLASS-CAPACITY.md](completed/TUTOR-CLASS-CAPACITY.md) | working tree | **Completed locally 2026-09-22** — modality-specific tutor capacity limits now constrain discovery pricing, booking invitees, and server-side group creation |
+
+| [AVAILABILITY-DATE-RANGE.md](completed/AVAILABILITY-DATE-RANGE.md) | working tree | **Completed locally 2026-09-22** — tutor weekly availability now accepts an explicit inclusive start and end date using constrained Selia date pickers |
+
 | [KNOWLEDGE-BANK-ACCESS-OVERRIDE.md](completed/KNOWLEDGE-BANK-ACCESS-OVERRIDE.md) | working tree | **Completed locally 2026-09-18** — temporary admin student grants with expiry, audit trail, admin UI, and read-time Marks-gate enforcement |
 
 | [TUTOR-PROFILE-BOOKING-PREVIEW.md](completed/TUTOR-PROFILE-BOOKING-PREVIEW.md) | working tree | **Completed locally 2026-09-08** — reopened the published tutor profile from the booking form without losing booking state |

@@ -48,6 +48,7 @@ import {
   BookingAcceptanceDeadlinePassedError,
   BookingCancellationDeadlinePassedError,
   BookingCompletionFeedbackRequiredError,
+  BookingTutorCapacityError,
 } from "./booking.errors";
 import { escapeHtml, sanitizeHtml } from "../../lib/sanitize";
 import {
@@ -96,6 +97,29 @@ import {
   EXPIRY_TARGET,
   computeMeetingInfo,
 } from "./booking.helpers";
+
+function assertTutorCapacity(
+  profile: {
+    userId: string;
+    onlineMaxClassSize?: number | null;
+    offlineMaxClassSize?: number | null;
+  },
+  modality: Modality,
+  requestedSize: number,
+) {
+  const maxClassSize =
+    modality === MODALITY.OFFLINE
+      ? (profile.offlineMaxClassSize ?? 6)
+      : (profile.onlineMaxClassSize ?? 6);
+  if (requestedSize > maxClassSize) {
+    throw new BookingTutorCapacityError(
+      profile.userId,
+      modality,
+      requestedSize,
+      maxClassSize,
+    );
+  }
+}
 
 export {
   NON_BCA_TRANSFER_FEE_IDR,
@@ -2547,6 +2571,7 @@ export function createBookingService(deps: {
       publishedOnly: true,
     });
     if (!profile) throw new BookingNotFoundError(input.tutorId);
+    assertTutorCapacity(profile, input.modality, input.targetGroupSize);
     const sessionTopic = await resolveSessionTopic(
       input.tutorId,
       input.subjectId,
@@ -3529,6 +3554,7 @@ export function createBookingService(deps: {
       publishedOnly: true,
     });
     if (!profile) throw new BookingNotFoundError(input.tutorId);
+    assertTutorCapacity(profile, input.modality, input.targetGroupSize);
     const sessionTopic = await resolveSessionTopic(
       input.tutorId,
       input.subjectId,
