@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  IconPlus,
-  IconSchool,
-  IconTrophy,
-  IconTrash,
-} from "@tabler/icons-react";
+import { IconPlus, IconTrash } from "@tabler/icons-react";
 import { useId, useState } from "react";
 
 import { Button } from "@cogito-app/ui/components/selia/button";
@@ -13,7 +8,6 @@ import {
   Field,
   FieldDescription,
   FieldError,
-  FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { NumberField } from "@cogito-app/ui/components/selia/number-field";
@@ -21,6 +15,7 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 
 import { TutorTextDraftInput } from "./tutor-text-draft-input";
 import type { TutorExperienceEntry } from "./tutor-experiences";
+import { TutorFormField, TutorFormRow } from "./tutor-form-layout";
 
 export type TutorEducationEntry = {
   university: string;
@@ -378,51 +373,60 @@ export function TutorAchievementsEditor({
   return (
     <div className="flex flex-col gap-6">
       <div className="divide-y divide-card-separator">
-        <section className="flex min-w-0 flex-col gap-4 pb-6">
-          <div className="flex items-start gap-3">
-            <IconSchool
-              className="mt-0.5 size-5 shrink-0 text-muted"
-              aria-hidden="true"
-            />
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <Heading size="sm">Education</Heading>
-                <Text className="text-sm text-muted">
-                  {education.length}/{MAX_EDUCATION_ENTRIES}
-                </Text>
+        <section className="min-w-0 pb-6">
+          <TutorFormRow
+            label={
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Heading size="sm">Education</Heading>
+                  <Text className="text-sm text-muted">
+                    {education.length}/{MAX_EDUCATION_ENTRIES}
+                  </Text>
+                </div>
               </div>
+            }
+            description={
               <Text className="mt-1 text-sm text-muted">
                 Add your most recent university first. Up to two entries.
               </Text>
-            </div>
-          </div>
-
-          <div className="divide-y divide-item-border">
-            {education.map((entry, index) => (
-              <div
-                key={educationKeys[index] ?? `${editorId}-education-${index}`}
-                className="relative py-4 first:pt-0 last:pb-0"
-              >
-                <Button
-                  type="button"
-                  variant="plain"
-                  size="xs-icon"
-                  className="absolute right-2 top-2"
-                  aria-label={`Remove education entry ${index + 1}`}
-                  onClick={() => removeEducation(index)}
-                >
-                  <IconTrash aria-hidden="true" />
-                </Button>
-                <div className="grid gap-3 pr-8 sm:grid-cols-2">
-                  <Field>
-                    <FieldLabel htmlFor={`${idPrefix}-university-${index}`}>
-                      University
-                    </FieldLabel>
-                    {(() => {
-                      const error = errors?.[`education.${index}.university`];
-                      const errorId = `${idPrefix}-university-${index}-error`;
-                      return (
-                        <>
+            }
+          >
+            <div className="flex flex-col gap-4">
+              <div className="divide-y divide-item-border">
+                {education.map((entry, index) => {
+                  const universityError =
+                    errors?.[`education.${index}.university`];
+                  const universityErrorId = `${idPrefix}-university-${index}-error`;
+                  const degreeError = errors?.[`education.${index}.degree`];
+                  const degreeErrorId = `${idPrefix}-degree-${index}-error`;
+                  return (
+                    <div
+                      key={educationKeys[index]}
+                      className="py-4 first:pt-0 last:pb-0"
+                    >
+                      <div className="mb-2 flex justify-end">
+                        <Button
+                          type="button"
+                          variant="plain"
+                          size="xs-icon"
+                          aria-label={`Remove education entry ${index + 1}`}
+                          onClick={() => removeEducation(index)}
+                        >
+                          <IconTrash aria-hidden="true" />
+                        </Button>
+                      </div>
+                      <div className="flex flex-col gap-3">
+                        <TutorFormField
+                          htmlFor={`${idPrefix}-university-${index}`}
+                          label="University"
+                          error={
+                            universityError ? (
+                              <FieldError id={universityErrorId}>
+                                {universityError}
+                              </FieldError>
+                            ) : undefined
+                          }
+                        >
                           <TutorTextDraftInput
                             id={`${idPrefix}-university-${index}`}
                             value={entry.university}
@@ -431,25 +435,23 @@ export function TutorAchievementsEditor({
                             }
                             placeholder="e.g. Universitas Gadjah Mada"
                             maxLength={255}
-                            aria-invalid={Boolean(error)}
-                            aria-describedby={error ? errorId : undefined}
+                            aria-invalid={Boolean(universityError)}
+                            aria-describedby={
+                              universityError ? universityErrorId : undefined
+                            }
                           />
-                          {error ? (
-                            <FieldError id={errorId}>{error}</FieldError>
-                          ) : null}
-                        </>
-                      );
-                    })()}
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor={`${idPrefix}-degree-${index}`}>
-                      Degree in brief
-                    </FieldLabel>
-                    {(() => {
-                      const error = errors?.[`education.${index}.degree`];
-                      const errorId = `${idPrefix}-degree-${index}-error`;
-                      return (
-                        <>
+                        </TutorFormField>
+                        <TutorFormField
+                          htmlFor={`${idPrefix}-degree-${index}`}
+                          label="Degree in brief"
+                          error={
+                            degreeError ? (
+                              <FieldError id={degreeErrorId}>
+                                {degreeError}
+                              </FieldError>
+                            ) : undefined
+                          }
+                        >
                           <TutorTextDraftInput
                             id={`${idPrefix}-degree-${index}`}
                             value={entry.degree}
@@ -458,97 +460,109 @@ export function TutorAchievementsEditor({
                             }
                             placeholder="e.g. Bachelor of Law"
                             maxLength={255}
-                            aria-invalid={Boolean(error)}
-                            aria-describedby={error ? errorId : undefined}
+                            aria-invalid={Boolean(degreeError)}
+                            aria-describedby={
+                              degreeError ? degreeErrorId : undefined
+                            }
                           />
-                          {error ? (
-                            <FieldError id={errorId}>{error}</FieldError>
-                          ) : null}
-                        </>
-                      );
-                    })()}
-                  </Field>
-                </div>
+                        </TutorFormField>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            ))}
-          </div>
 
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="self-start"
-            disabled={education.length >= MAX_EDUCATION_ENTRIES}
-            onClick={() => {
-              setEducationKeys((keys) => [
-                ...keys,
-                `${editorId}-education-${nextEducationKey}`,
-              ]);
-              setNextEducationKey((key) => key + 1);
-              onEducationChange([...education, createEmptyEducationEntry()]);
-            }}
-          >
-            <IconPlus aria-hidden="true" />
-            Add education
-          </Button>
-          {errors?.education ? (
-            <Field className="gap-0">
-              <FieldError>{errors.education}</FieldError>
-            </Field>
-          ) : null}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="self-end"
+                disabled={education.length >= MAX_EDUCATION_ENTRIES}
+                onClick={() => {
+                  setEducationKeys((keys) => [
+                    ...keys,
+                    `${editorId}-education-${nextEducationKey}`,
+                  ]);
+                  setNextEducationKey((key) => key + 1);
+                  onEducationChange([
+                    ...education,
+                    createEmptyEducationEntry(),
+                  ]);
+                }}
+              >
+                <IconPlus aria-hidden="true" />
+                Add education
+              </Button>
+              {errors?.education ? (
+                <Field className="gap-0">
+                  <FieldError>{errors.education}</FieldError>
+                </Field>
+              ) : null}
+            </div>
+          </TutorFormRow>
         </section>
 
-        <section className="flex min-w-0 flex-col gap-4 pt-6">
-          <div className="flex items-start gap-3">
-            <IconTrophy
-              className="mt-0.5 size-5 shrink-0 text-muted"
-              aria-hidden="true"
-            />
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <Heading size="sm">Competition achievements</Heading>
-                <Text className="text-sm text-muted">
-                  {competitionAchievements.length}/
-                  {MAX_COMPETITION_ACHIEVEMENTS}
-                </Text>
+        <section className="min-w-0 pt-6">
+          <TutorFormRow
+            label={
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Heading size="sm">Competition achievements</Heading>
+                  <Text className="text-sm text-muted">
+                    {competitionAchievements.length}/
+                    {MAX_COMPETITION_ACHIEVEMENTS}
+                  </Text>
+                </div>
               </div>
+            }
+            description={
               <Text className="mt-1 text-sm text-muted">
                 Add your strongest results first. Up to five entries.
               </Text>
-            </div>
-          </div>
-
-          <div className="divide-y divide-item-border">
-            {competitionAchievements.map((entry, index) => (
-              <div
-                key={
-                  competitionKeys[index] ?? `${editorId}-competition-${index}`
-                }
-                className="relative py-4 first:pt-0 last:pb-0"
-              >
-                <Button
-                  type="button"
-                  variant="plain"
-                  size="xs-icon"
-                  className="absolute right-2 top-2"
-                  aria-label={`Remove competition achievement ${index + 1}`}
-                  onClick={() => removeCompetition(index)}
-                >
-                  <IconTrash aria-hidden="true" />
-                </Button>
-                <div className="grid gap-3 pr-8 sm:grid-cols-[minmax(0,1fr)_7rem]">
-                  <Field>
-                    <FieldLabel htmlFor={`${idPrefix}-competition-${index}`}>
-                      Competition name
-                    </FieldLabel>
-                    {(() => {
-                      const error =
-                        errors?.[
-                          `competitionAchievements.${index}.competitionName`
-                        ];
-                      const errorId = `${idPrefix}-competition-${index}-error`;
-                      return (
-                        <>
+            }
+          >
+            <div className="flex flex-col gap-4">
+              <div className="divide-y divide-item-border">
+                {competitionAchievements.map((entry, index) => {
+                  const competitionError =
+                    errors?.[
+                      `competitionAchievements.${index}.competitionName`
+                    ];
+                  const competitionErrorId = `${idPrefix}-competition-${index}-error`;
+                  const yearError =
+                    errors?.[`competitionAchievements.${index}.year`];
+                  const yearErrorId = `${idPrefix}-year-${index}-error`;
+                  const awardsError =
+                    errors?.[`competitionAchievements.${index}.awards`];
+                  const awardsErrorId = `${idPrefix}-awards-${index}-error`;
+                  return (
+                    <div
+                      key={competitionKeys[index]}
+                      className="py-4 first:pt-0 last:pb-0"
+                    >
+                      <div className="mb-2 flex justify-end">
+                        <Button
+                          type="button"
+                          variant="plain"
+                          size="xs-icon"
+                          aria-label={`Remove competition achievement ${index + 1}`}
+                          onClick={() => removeCompetition(index)}
+                        >
+                          <IconTrash aria-hidden="true" />
+                        </Button>
+                      </div>
+                      <div className="flex flex-col gap-3">
+                        <TutorFormField
+                          htmlFor={`${idPrefix}-competition-${index}`}
+                          label="Competition name"
+                          error={
+                            competitionError ? (
+                              <FieldError id={competitionErrorId}>
+                                {competitionError}
+                              </FieldError>
+                            ) : undefined
+                          }
+                        >
                           <TutorTextDraftInput
                             id={`${idPrefix}-competition-${index}`}
                             value={entry.competitionName}
@@ -559,26 +573,23 @@ export function TutorAchievementsEditor({
                             }
                             placeholder="e.g. Harvard Model United Nations"
                             maxLength={255}
-                            aria-invalid={Boolean(error)}
-                            aria-describedby={error ? errorId : undefined}
+                            aria-invalid={Boolean(competitionError)}
+                            aria-describedby={
+                              competitionError ? competitionErrorId : undefined
+                            }
                           />
-                          {error ? (
-                            <FieldError id={errorId}>{error}</FieldError>
-                          ) : null}
-                        </>
-                      );
-                    })()}
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor={`${idPrefix}-year-${index}`}>
-                      Year
-                    </FieldLabel>
-                    {(() => {
-                      const error =
-                        errors?.[`competitionAchievements.${index}.year`];
-                      const errorId = `${idPrefix}-year-${index}-error`;
-                      return (
-                        <>
+                        </TutorFormField>
+                        <TutorFormField
+                          htmlFor={`${idPrefix}-year-${index}`}
+                          label="Year"
+                          error={
+                            yearError ? (
+                              <FieldError id={yearErrorId}>
+                                {yearError}
+                              </FieldError>
+                            ) : undefined
+                          }
+                        >
                           <NumberField
                             id={`${idPrefix}-year-${index}`}
                             value={entry.year || null}
@@ -592,27 +603,29 @@ export function TutorAchievementsEditor({
                             }
                             inputProps={{
                               "aria-label": `Year for competition achievement ${index + 1}`,
-                              "aria-invalid": Boolean(error),
-                              "aria-describedby": error ? errorId : undefined,
+                              "aria-invalid": Boolean(yearError),
+                              "aria-describedby": yearError
+                                ? yearErrorId
+                                : undefined,
                             }}
                           />
-                          {error ? (
-                            <FieldError id={errorId}>{error}</FieldError>
-                          ) : null}
-                        </>
-                      );
-                    })()}
-                  </Field>
-                  <Field className="sm:col-span-2">
-                    <FieldLabel htmlFor={`${idPrefix}-awards-${index}`}>
-                      Award title in full
-                    </FieldLabel>
-                    {(() => {
-                      const error =
-                        errors?.[`competitionAchievements.${index}.awards`];
-                      const errorId = `${idPrefix}-awards-${index}-error`;
-                      return (
-                        <>
+                        </TutorFormField>
+                        <TutorFormField
+                          htmlFor={`${idPrefix}-awards-${index}`}
+                          label="Award title in full"
+                          description={
+                            <FieldDescription>
+                              Separate multiple awards with commas.
+                            </FieldDescription>
+                          }
+                          error={
+                            awardsError ? (
+                              <FieldError id={awardsErrorId}>
+                                {awardsError}
+                              </FieldError>
+                            ) : undefined
+                          }
+                        >
                           <TutorTextDraftInput
                             id={`${idPrefix}-awards-${index}`}
                             value={formatAwardTitles(entry.awards)}
@@ -623,53 +636,49 @@ export function TutorAchievementsEditor({
                             }
                             placeholder="e.g. Champion, Best Speaker, Best Memorial"
                             maxLength={2_600}
-                            aria-invalid={Boolean(error)}
-                            aria-describedby={error ? errorId : undefined}
+                            aria-invalid={Boolean(awardsError)}
+                            aria-describedby={
+                              awardsError ? awardsErrorId : undefined
+                            }
                           />
-                          {error ? (
-                            <FieldError id={errorId}>{error}</FieldError>
-                          ) : null}
-                        </>
-                      );
-                    })()}
-                    <FieldDescription>
-                      Separate multiple awards with commas.
-                    </FieldDescription>
-                  </Field>
-                </div>
+                        </TutorFormField>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            ))}
-          </div>
 
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="self-start"
-            id={`${idPrefix}-competition-add`}
-            disabled={
-              competitionAchievements.length >= MAX_COMPETITION_ACHIEVEMENTS
-            }
-            onClick={() => {
-              setCompetitionKeys((keys) => [
-                ...keys,
-                `${editorId}-competition-${nextCompetitionKey}`,
-              ]);
-              setNextCompetitionKey((key) => key + 1);
-              onCompetitionAchievementsChange([
-                ...competitionAchievements,
-                createEmptyCompetitionAchievement(),
-              ]);
-            }}
-          >
-            <IconPlus aria-hidden="true" />
-            Add achievement
-          </Button>
-          {errors?.competitionAchievements ? (
-            <Field className="gap-0">
-              <FieldError>{errors.competitionAchievements}</FieldError>
-            </Field>
-          ) : null}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="self-end"
+                id={`${idPrefix}-competition-add`}
+                disabled={
+                  competitionAchievements.length >= MAX_COMPETITION_ACHIEVEMENTS
+                }
+                onClick={() => {
+                  setCompetitionKeys((keys) => [
+                    ...keys,
+                    `${editorId}-competition-${nextCompetitionKey}`,
+                  ]);
+                  setNextCompetitionKey((key) => key + 1);
+                  onCompetitionAchievementsChange([
+                    ...competitionAchievements,
+                    createEmptyCompetitionAchievement(),
+                  ]);
+                }}
+              >
+                <IconPlus aria-hidden="true" />
+                Add achievement
+              </Button>
+              {errors?.competitionAchievements ? (
+                <Field className="gap-0">
+                  <FieldError>{errors.competitionAchievements}</FieldError>
+                </Field>
+              ) : null}
+            </div>
+          </TutorFormRow>
         </section>
       </div>
 

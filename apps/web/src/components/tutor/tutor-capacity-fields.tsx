@@ -1,10 +1,6 @@
 "use client";
 
-import {
-  Field,
-  FieldDescription,
-  FieldLabel,
-} from "@cogito-app/ui/components/selia/field";
+import { FieldDescription } from "@cogito-app/ui/components/selia/field";
 import {
   getSelectItemValue,
   Select,
@@ -15,6 +11,7 @@ import {
   SelectValue,
 } from "@cogito-app/ui/components/selia/select";
 import { Text } from "@cogito-app/ui/components/selia/text";
+import { TutorFormField, TutorFormRow } from "./tutor-form-layout";
 
 type CapacityByModality = { online: number; offline: number };
 
@@ -31,22 +28,30 @@ export function TutorCapacityFields({
     modality === "both" ? (["online", "offline"] as const) : [modality];
 
   return (
-    <div className="flex flex-col gap-3">
-      <div>
-        <Text className="font-medium">Teaching capacity</Text>
+    <TutorFormRow
+      label={<Text className="font-medium">Teaching capacity</Text>}
+      description={
         <Text className="mt-1 text-sm text-muted">
           Choose the largest class students can request. Select one student to
           accept private classes only.
         </Text>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
+      }
+    >
+      <div className="flex flex-col gap-3">
         {modalities.map((currentModality) => {
           const key = currentModality as "online" | "offline";
           return (
-            <Field key={key}>
-              <FieldLabel htmlFor={`tutor-${key}-capacity`}>
-                {key === "online" ? "Online" : "Offline"} maximum
-              </FieldLabel>
+            <TutorFormField
+              key={key}
+              htmlFor={`tutor-${key}-capacity`}
+              label={`${key === "online" ? "Online" : "Offline"} maximum`}
+              className="w-full sm:grid-cols-1!"
+              description={
+                <FieldDescription>
+                  New booking requests cannot exceed this capacity.
+                </FieldDescription>
+              }
+            >
               <Select
                 value={String(capacity[key])}
                 onValueChange={(value) =>
@@ -56,7 +61,7 @@ export function TutorCapacityFields({
                   })
                 }
               >
-                <SelectTrigger id={`tutor-${key}-capacity`}>
+                <SelectTrigger id={`tutor-${key}-capacity`} className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectPopup>
@@ -73,13 +78,10 @@ export function TutorCapacityFields({
                   </SelectList>
                 </SelectPopup>
               </Select>
-              <FieldDescription>
-                New booking requests cannot exceed this capacity.
-              </FieldDescription>
-            </Field>
+            </TutorFormField>
           );
         })}
       </div>
-    </div>
+    </TutorFormRow>
   );
 }

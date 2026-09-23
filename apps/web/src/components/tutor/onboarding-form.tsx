@@ -79,6 +79,7 @@ import {
   SubjectSelector,
   type TutorSubject,
 } from "./subject-taxonomy";
+import { TutorFormField } from "./tutor-form-layout";
 
 type Modality = "online" | "offline" | "both";
 type BankAccountOwnership = "self" | "trusted_person";
@@ -1023,7 +1024,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
   ].filter((label): label is string => label !== null);
 
   return (
-    <div className="mx-auto flex w-full flex-col gap-6">
+    <div className="mx-auto flex w-full flex-col gap-6 max-w-4xl">
       <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <Heading level={1} size="md">
@@ -1199,143 +1200,8 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
           }}
           className="flex flex-col gap-6"
         >
-          <div className="grid gap-6 xl:grid-cols-2">
-            <Card className="min-w-0 xl:col-span-2">
-              <CardHeader>
-                <IconBox variant="tertiary-subtle">
-                  <IconPhoto aria-hidden="true" />
-                </IconBox>
-                <CardTitle>
-                  Profile photo
-                  <CardInfoPreview>
-                    <InfoPreview
-                      title="Profile photo"
-                      description="Submit one clear photo. The Cogito team will apply the standard background before publishing or updating it."
-                    />
-                  </CardInfoPreview>
-                </CardTitle>
-              </CardHeader>
-              <CardBody className="flex flex-wrap items-start gap-8">
-                {profile.onboardingStatus === "published" ? (
-                  <div className="flex flex-col items-center gap-2 text-center">
-                    <Avatar size="lg" className="size-20!">
-                      <AvatarImage
-                        src={currentProfileImageUrl || undefined}
-                        alt="Current public tutor profile"
-                      />
-                      <AvatarFallback>
-                        {(accountUser.name.slice(0, 2) || "TU").toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <div className="flex items-center justify-center gap-1">
-                        <Text className="text-sm font-medium">
-                          Current photo
-                        </Text>
-                        <ProfilePhotoPreview
-                          label="Current photo"
-                          description="This photo is visible to students right now."
-                          imageUrl={currentProfileImageUrl || null}
-                          fallback={(
-                            accountUser.name.slice(0, 2) || "TU"
-                          ).toUpperCase()}
-                          tone="success"
-                        />
-                      </div>
-                      <Text className="text-xs text-muted">
-                        Visible to students
-                      </Text>
-                    </div>
-                  </div>
-                ) : null}
-
-                <div className="flex flex-col items-center gap-2 text-center">
-                  <ProfileImagePicker
-                    id="tutor-profile-image"
-                    image={selectedProfileImageUrl}
-                    disabled={isUploadingPhoto}
-                    onUploadingChange={setIsUploadingPhoto}
-                    onImageChange={(profileImageUrl) => {
-                      setForm((current) => ({ ...current, profileImageUrl }));
-                      clearError("profileImageUrl");
-                    }}
-                    compactTrigger={
-                      <Avatar size="lg" className="size-20!">
-                        <AvatarImage
-                          src={selectedProfileImageUrl || undefined}
-                          alt={
-                            hasProposedProfileImage
-                              ? "Proposed tutor profile"
-                              : "Tutor profile"
-                          }
-                        />
-                        <AvatarFallback>
-                          {(accountUser.name.slice(0, 2) || "TU").toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                    }
-                  />
-                  <div>
-                    <div className="flex items-center justify-center gap-1">
-                      <Text className="text-sm font-medium">
-                        {profile.onboardingStatus === "published"
-                          ? hasProposedProfileImage
-                            ? "Proposed photo"
-                            : "Change photo"
-                          : "Profile photo"}
-                      </Text>
-                      {selectedProfileImageUrl ? (
-                        <ProfilePhotoPreview
-                          label={
-                            profile.onboardingStatus === "published" &&
-                            hasProposedProfileImage
-                              ? "Proposed photo"
-                              : "Profile photo"
-                          }
-                          description={
-                            profile.onboardingStatus === "published"
-                              ? "This replacement stays private until an admin approves it."
-                              : "This is the photo that will be submitted with your tutor profile."
-                          }
-                          imageUrl={selectedProfileImageUrl}
-                          fallback={(
-                            accountUser.name.slice(0, 2) || "TU"
-                          ).toUpperCase()}
-                          tone={
-                            profile.onboardingStatus === "published" &&
-                            hasProposedProfileImage
-                              ? "warning"
-                              : "info"
-                          }
-                        />
-                      ) : null}
-                    </div>
-                    <Text className="max-w-56 text-xs text-muted">
-                      {profile.onboardingStatus === "published"
-                        ? "Changes become public after admin approval."
-                        : "Click the avatar to upload and crop your photo."}
-                    </Text>
-                  </div>
-                  {hasProposedProfileImage ? (
-                    <Badge variant="warning" size="sm" pill>
-                      {profile.pendingProfileChanges?.profileImageUrl ===
-                      selectedProfileImageUrl
-                        ? "Awaiting review"
-                        : "Ready to save"}
-                    </Badge>
-                  ) : null}
-                </div>
-                {errors.profileImageUrl ? (
-                  <Field className="basis-full">
-                    <FieldError id="tutor-profile-image-error">
-                      {errors.profileImageUrl}
-                    </FieldError>
-                  </Field>
-                ) : null}
-              </CardBody>
-            </Card>
-
-            <Card className="min-w-0 xl:col-span-2">
+          <div className="flex flex-col gap-6">
+            <Card className="min-w-0">
               <CardHeader>
                 <IconBox variant="tertiary-subtle">
                   <IconUser aria-hidden="true" />
@@ -1350,14 +1216,161 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                   </CardInfoPreview>
                 </CardTitle>
               </CardHeader>
-              <CardBody className="grid gap-5 sm:grid-cols-[1fr_2fr]">
-                <Field>
-                  <FieldLabel htmlFor="tutor-name">
-                    Name <span aria-hidden="true">*</span>
-                  </FieldLabel>
-                  <FieldDescription>
-                    The same account name is used across Cogito for every role.
-                  </FieldDescription>
+              <CardBody className="flex flex-col gap-5">
+                <TutorFormField
+                  className="border-b border-card-separator pb-5"
+                  htmlFor="tutor-profile-image"
+                  label="Profile photo"
+                  description={
+                    <FieldDescription>
+                      Click the avatar to upload and crop one clear photo.
+                      Published changes stay private until admin approval.
+                    </FieldDescription>
+                  }
+                  error={
+                    errors.profileImageUrl ? (
+                      <FieldError id="tutor-profile-image-error">
+                        {errors.profileImageUrl}
+                      </FieldError>
+                    ) : undefined
+                  }
+                >
+                  <div className="flex flex-wrap items-start gap-8">
+                    {profile.onboardingStatus === "published" ? (
+                      <div className="flex flex-col items-center gap-2 text-center">
+                        <Avatar size="lg" className="size-20!">
+                          <AvatarImage
+                            src={currentProfileImageUrl || undefined}
+                            alt="Current public tutor profile"
+                          />
+                          <AvatarFallback>
+                            {(
+                              accountUser.name.slice(0, 2) || "TU"
+                            ).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <div className="flex items-center justify-center gap-1">
+                            <Text className="text-sm font-medium">
+                              Current photo
+                            </Text>
+                            <ProfilePhotoPreview
+                              label="Current photo"
+                              description="This photo is visible to students right now."
+                              imageUrl={currentProfileImageUrl || null}
+                              fallback={(
+                                accountUser.name.slice(0, 2) || "TU"
+                              ).toUpperCase()}
+                              tone="success"
+                            />
+                          </div>
+                          <Text className="text-xs text-muted">
+                            Visible to students
+                          </Text>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <div className="flex flex-col items-center gap-2 text-center">
+                      <ProfileImagePicker
+                        id="tutor-profile-image"
+                        image={selectedProfileImageUrl}
+                        disabled={isUploadingPhoto}
+                        onUploadingChange={setIsUploadingPhoto}
+                        onImageChange={(profileImageUrl) => {
+                          setForm((current) => ({
+                            ...current,
+                            profileImageUrl,
+                          }));
+                          clearError("profileImageUrl");
+                        }}
+                        compactTrigger={
+                          <Avatar size="lg" className="size-20!">
+                            <AvatarImage
+                              src={selectedProfileImageUrl || undefined}
+                              alt={
+                                hasProposedProfileImage
+                                  ? "Proposed tutor profile"
+                                  : "Tutor profile"
+                              }
+                            />
+                            <AvatarFallback>
+                              {(
+                                accountUser.name.slice(0, 2) || "TU"
+                              ).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                        }
+                      />
+                      <div>
+                        <div className="flex items-center justify-center gap-1">
+                          <Text className="text-sm font-medium">
+                            {profile.onboardingStatus === "published"
+                              ? hasProposedProfileImage
+                                ? "Proposed photo"
+                                : "Change photo"
+                              : "Profile photo"}
+                          </Text>
+                          {selectedProfileImageUrl ? (
+                            <ProfilePhotoPreview
+                              label={
+                                profile.onboardingStatus === "published" &&
+                                hasProposedProfileImage
+                                  ? "Proposed photo"
+                                  : "Profile photo"
+                              }
+                              description={
+                                profile.onboardingStatus === "published"
+                                  ? "This replacement stays private until an admin approves it."
+                                  : "This is the photo that will be submitted with your tutor profile."
+                              }
+                              imageUrl={selectedProfileImageUrl}
+                              fallback={(
+                                accountUser.name.slice(0, 2) || "TU"
+                              ).toUpperCase()}
+                              tone={
+                                profile.onboardingStatus === "published" &&
+                                hasProposedProfileImage
+                                  ? "warning"
+                                  : "info"
+                              }
+                            />
+                          ) : null}
+                        </div>
+                      </div>
+                      {hasProposedProfileImage ? (
+                        <Badge variant="warning" size="sm" pill>
+                          {profile.pendingProfileChanges?.profileImageUrl ===
+                          selectedProfileImageUrl
+                            ? "Awaiting review"
+                            : "Ready to save"}
+                        </Badge>
+                      ) : null}
+                    </div>
+                  </div>
+                </TutorFormField>
+
+                <TutorFormField
+                  htmlFor="tutor-name"
+                  label={
+                    <>
+                      Name <span aria-hidden="true">*</span>
+                    </>
+                  }
+                  description={
+                    <FieldDescription>
+                      The same account name is used across Cogito for every
+                      role.
+                    </FieldDescription>
+                  }
+                  error={
+                    errors.name ? (
+                      <FieldError id="tutor-name-error">
+                        {errors.name}
+                      </FieldError>
+                    ) : undefined
+                  }
+                >
                   <Input
                     id="tutor-name"
                     name="name"
@@ -1374,20 +1387,30 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                       errors.name ? "tutor-name-error" : undefined
                     }
                   />
-                  {errors.name ? (
-                    <FieldError id="tutor-name-error">{errors.name}</FieldError>
-                  ) : null}
-                </Field>
+                </TutorFormField>
 
-                <Field>
-                  <FieldLabel htmlFor="tutor-short-bio">
-                    Short bio <span aria-hidden="true">*</span>
-                  </FieldLabel>
-                  <FieldDescription>
-                    Share anything about yourself as a person, including things
-                    beyond the competition field such as your hobbies and
-                    favorite books.
-                  </FieldDescription>
+                <TutorFormField
+                  htmlFor="tutor-short-bio"
+                  label={
+                    <>
+                      Short bio <span aria-hidden="true">*</span>
+                    </>
+                  }
+                  description={
+                    <FieldDescription>
+                      Share anything about yourself as a person, including
+                      things beyond the competition field such as your hobbies
+                      and favorite books.
+                    </FieldDescription>
+                  }
+                  error={
+                    errors.shortBio ? (
+                      <FieldError id="tutor-short-bio-error">
+                        {errors.shortBio}
+                      </FieldError>
+                    ) : undefined
+                  }
+                >
                   <Textarea
                     id="tutor-short-bio"
                     name="shortBio"
@@ -1408,7 +1431,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                     }
                   />
                   <Text
-                    className={`text-right text-xs ${
+                    className={`mt-1 text-right text-xs ${
                       countTutorShortBioWords(form.shortBio) >
                       MAX_TUTOR_SHORT_BIO_WORDS
                         ? "text-danger"
@@ -1419,22 +1442,23 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                     {countTutorShortBioWords(form.shortBio)}/
                     {MAX_TUTOR_SHORT_BIO_WORDS} words
                   </Text>
-                  {errors.shortBio ? (
-                    <FieldError id="tutor-short-bio-error">
-                      {errors.shortBio}
-                    </FieldError>
-                  ) : null}
-                </Field>
+                </TutorFormField>
 
-                <Field className="sm:col-span-2">
-                  <FieldLabel htmlFor="tutor-subject-category">
-                    Specializations *
-                  </FieldLabel>
-                  <FieldDescription>
-                    Select the competition specializations you teach. Students
-                    will see these on your tutor profile. You can select up to{" "}
-                    {MAX_TUTOR_SUBJECTS}.
-                  </FieldDescription>
+                <TutorFormField
+                  htmlFor="tutor-subject-category"
+                  label={
+                    <>
+                      Specializations <span aria-hidden="true">*</span>
+                    </>
+                  }
+                  description={
+                    <FieldDescription>
+                      Select the competition specializations you teach. Students
+                      will see these on your tutor profile. You can select up to{" "}
+                      {MAX_TUTOR_SUBJECTS}.
+                    </FieldDescription>
+                  }
+                >
                   <SubjectSelector
                     triggerId="tutor-subject-category"
                     selectedIds={form.subjectIds}
@@ -1445,7 +1469,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                     }}
                     error={errors.subjects}
                   />
-                </Field>
+                </TutorFormField>
               </CardBody>
             </Card>
 
@@ -1465,10 +1489,27 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                 </CardTitle>
               </CardHeader>
               <CardBody className="flex flex-col gap-5">
-                <Field>
-                  <FieldLabel htmlFor="tutor-modality">
-                    Teaching modality <span aria-hidden="true">*</span>
-                  </FieldLabel>
+                <TutorFormField
+                  htmlFor="tutor-modality"
+                  label={
+                    <>
+                      Teaching modality <span aria-hidden="true">*</span>
+                    </>
+                  }
+                  description={
+                    <FieldDescription>
+                      Choose whether you teach online, offline at the Cogito
+                      campus, or both.
+                    </FieldDescription>
+                  }
+                  error={
+                    errors.modality ? (
+                      <FieldError id="tutor-modality-error">
+                        {errors.modality}
+                      </FieldError>
+                    ) : undefined
+                  }
+                >
                   <Select
                     value={form.modality}
                     onValueChange={(val) => {
@@ -1506,12 +1547,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                       </SelectList>
                     </SelectPopup>
                   </Select>
-                  {errors.modality ? (
-                    <FieldError id="tutor-modality-error">
-                      {errors.modality}
-                    </FieldError>
-                  ) : null}
-                </Field>
+                </TutorFormField>
 
                 {form.modality ? (
                   <div className="flex flex-col gap-5">
@@ -1558,139 +1594,195 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                 </CardTitle>
               </CardHeader>
               <CardBody className="flex flex-col gap-5">
-                <div className="grid gap-5 sm:grid-cols-2">
-                  <Field>
-                    <FieldLabel htmlFor="tutor-bankName">
+                <TutorFormField
+                  htmlFor="tutor-bankName"
+                  label={
+                    <>
                       Bank <span aria-hidden="true">*</span>
-                    </FieldLabel>
-                    <Input
-                      id="tutor-bankName"
-                      value={form.bankName}
-                      placeholder="BCA"
-                      maxLength={100}
-                      aria-invalid={Boolean(errors.bankName)}
-                      aria-describedby={
-                        errors.bankName ? "tutor-bankName-error" : undefined
-                      }
-                      onChange={(event) => {
-                        setForm((current) => ({
-                          ...current,
-                          bankName: event.target.value,
-                        }));
-                        clearError("bankName");
-                      }}
-                    />
+                    </>
+                  }
+                  description={
                     <FieldDescription>
                       Only conventional BCA is fee-free. BCA Syariah and blu
                       (BCA Digital) are treated as non-BCA and incur a Rp2,500
                       transfer fee per payout.
                     </FieldDescription>
-                    {errors.bankName ? (
+                  }
+                  error={
+                    errors.bankName ? (
                       <FieldError id="tutor-bankName-error">
                         {errors.bankName}
                       </FieldError>
-                    ) : null}
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="tutor-bankAccountNumber">
+                    ) : undefined
+                  }
+                >
+                  <Input
+                    id="tutor-bankName"
+                    value={form.bankName}
+                    placeholder="BCA"
+                    maxLength={100}
+                    aria-invalid={Boolean(errors.bankName)}
+                    aria-describedby={
+                      errors.bankName ? "tutor-bankName-error" : undefined
+                    }
+                    onChange={(event) => {
+                      setForm((current) => ({
+                        ...current,
+                        bankName: event.target.value,
+                      }));
+                      clearError("bankName");
+                    }}
+                  />
+                </TutorFormField>
+
+                <TutorFormField
+                  htmlFor="tutor-bankAccountNumber"
+                  label={
+                    <>
                       Account number <span aria-hidden="true">*</span>
-                    </FieldLabel>
-                    <Input
-                      id="tutor-bankAccountNumber"
-                      inputMode="numeric"
-                      autoComplete="off"
-                      value={form.bankAccountNumber}
-                      placeholder="Enter account number"
-                      maxLength={30}
-                      aria-invalid={Boolean(errors.bankAccountNumber)}
-                      aria-describedby={
-                        errors.bankAccountNumber
-                          ? "tutor-bankAccountNumber-error"
-                          : undefined
-                      }
-                      onChange={(event) => {
-                        setForm((current) => ({
-                          ...current,
-                          bankAccountNumber: event.target.value.replaceAll(
-                            /\D/g,
-                            "",
-                          ),
-                        }));
-                        clearError("bankAccountNumber");
-                      }}
-                    />
-                    {errors.bankAccountNumber ? (
+                    </>
+                  }
+                  description={
+                    <FieldDescription>Use 6–30 digits.</FieldDescription>
+                  }
+                  error={
+                    errors.bankAccountNumber ? (
                       <FieldError id="tutor-bankAccountNumber-error">
                         {errors.bankAccountNumber}
                       </FieldError>
-                    ) : null}
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="tutor-bankAccountHolderName">
+                    ) : undefined
+                  }
+                >
+                  <Input
+                    id="tutor-bankAccountNumber"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={form.bankAccountNumber}
+                    placeholder="Enter account number"
+                    maxLength={30}
+                    aria-invalid={Boolean(errors.bankAccountNumber)}
+                    aria-describedby={
+                      errors.bankAccountNumber
+                        ? "tutor-bankAccountNumber-error"
+                        : undefined
+                    }
+                    onChange={(event) => {
+                      setForm((current) => ({
+                        ...current,
+                        bankAccountNumber: event.target.value.replaceAll(
+                          /\D/g,
+                          "",
+                        ),
+                      }));
+                      clearError("bankAccountNumber");
+                    }}
+                  />
+                </TutorFormField>
+
+                <TutorFormField
+                  htmlFor="tutor-bankAccountHolderName"
+                  label={
+                    <>
                       Account holder name <span aria-hidden="true">*</span>
-                    </FieldLabel>
-                    <Input
-                      id="tutor-bankAccountHolderName"
-                      autoComplete="name"
-                      value={form.bankAccountHolderName}
-                      placeholder="Name as registered by the bank"
-                      maxLength={100}
-                      aria-invalid={Boolean(errors.bankAccountHolderName)}
-                      aria-describedby={
-                        errors.bankAccountHolderName
-                          ? "tutor-bankAccountHolderName-error"
-                          : undefined
-                      }
-                      onChange={(event) => {
-                        setForm((current) => ({
-                          ...current,
-                          bankAccountHolderName: event.target.value,
-                        }));
-                        clearError("bankAccountHolderName");
-                      }}
-                    />
-                    {errors.bankAccountHolderName ? (
+                    </>
+                  }
+                  description={
+                    <FieldDescription>
+                      Enter the name exactly as registered by the bank.
+                    </FieldDescription>
+                  }
+                  error={
+                    errors.bankAccountHolderName ? (
                       <FieldError id="tutor-bankAccountHolderName-error">
                         {errors.bankAccountHolderName}
                       </FieldError>
-                    ) : null}
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="tutor-bankAccountOpeningCity">
+                    ) : undefined
+                  }
+                >
+                  <Input
+                    id="tutor-bankAccountHolderName"
+                    autoComplete="name"
+                    value={form.bankAccountHolderName}
+                    placeholder="Name as registered by the bank"
+                    maxLength={100}
+                    aria-invalid={Boolean(errors.bankAccountHolderName)}
+                    aria-describedby={
+                      errors.bankAccountHolderName
+                        ? "tutor-bankAccountHolderName-error"
+                        : undefined
+                    }
+                    onChange={(event) => {
+                      setForm((current) => ({
+                        ...current,
+                        bankAccountHolderName: event.target.value,
+                      }));
+                      clearError("bankAccountHolderName");
+                    }}
+                  />
+                </TutorFormField>
+
+                <TutorFormField
+                  htmlFor="tutor-bankAccountOpeningCity"
+                  label={
+                    <>
                       Account opening city/regency{" "}
                       <span aria-hidden="true">*</span>
-                    </FieldLabel>
-                    <Input
-                      id="tutor-bankAccountOpeningCity"
-                      value={form.bankAccountOpeningCity}
-                      placeholder="e.g. Jakarta Selatan"
-                      maxLength={100}
-                      aria-invalid={Boolean(errors.bankAccountOpeningCity)}
-                      aria-describedby={
-                        errors.bankAccountOpeningCity
-                          ? "tutor-bankAccountOpeningCity-error"
-                          : undefined
-                      }
-                      onChange={(event) => {
-                        setForm((current) => ({
-                          ...current,
-                          bankAccountOpeningCity: event.target.value,
-                        }));
-                        clearError("bankAccountOpeningCity");
-                      }}
-                    />
-                    {errors.bankAccountOpeningCity ? (
+                    </>
+                  }
+                  description={
+                    <FieldDescription>
+                      Use the city or regency where the account was opened.
+                    </FieldDescription>
+                  }
+                  error={
+                    errors.bankAccountOpeningCity ? (
                       <FieldError id="tutor-bankAccountOpeningCity-error">
                         {errors.bankAccountOpeningCity}
                       </FieldError>
-                    ) : null}
-                  </Field>
-                </div>
+                    ) : undefined
+                  }
+                >
+                  <Input
+                    id="tutor-bankAccountOpeningCity"
+                    value={form.bankAccountOpeningCity}
+                    placeholder="e.g. Jakarta Selatan"
+                    maxLength={100}
+                    aria-invalid={Boolean(errors.bankAccountOpeningCity)}
+                    aria-describedby={
+                      errors.bankAccountOpeningCity
+                        ? "tutor-bankAccountOpeningCity-error"
+                        : undefined
+                    }
+                    onChange={(event) => {
+                      setForm((current) => ({
+                        ...current,
+                        bankAccountOpeningCity: event.target.value,
+                      }));
+                      clearError("bankAccountOpeningCity");
+                    }}
+                  />
+                </TutorFormField>
 
-                <Field>
-                  <FieldLabel htmlFor="tutor-bankAccountOwnership">
-                    Account ownership <span aria-hidden="true">*</span>
-                  </FieldLabel>
+                <TutorFormField
+                  htmlFor="tutor-bankAccountOwnership"
+                  label={
+                    <>
+                      Account ownership <span aria-hidden="true">*</span>
+                    </>
+                  }
+                  description={
+                    <FieldDescription>
+                      Tell us who owns the account receiving your payout.
+                    </FieldDescription>
+                  }
+                  error={
+                    errors.bankAccountOwnership ? (
+                      <FieldError id="tutor-bankAccountOwnership-error">
+                        {errors.bankAccountOwnership}
+                      </FieldError>
+                    ) : undefined
+                  }
+                >
                   <Select
                     value={form.bankAccountOwnership}
                     onValueChange={(value) => {
@@ -1735,50 +1827,53 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                       </SelectList>
                     </SelectPopup>
                   </Select>
-                  {errors.bankAccountOwnership ? (
-                    <FieldError id="tutor-bankAccountOwnership-error">
-                      {errors.bankAccountOwnership}
-                    </FieldError>
-                  ) : null}
-                </Field>
+                </TutorFormField>
 
-                <div className={`flex items-start gap-3 rounded-lg bg-item`}>
-                  <Checkbox
-                    id="tutor-bankTransferDisclaimerAccepted"
-                    checked={form.bankTransferDisclaimerAccepted}
-                    aria-invalid={Boolean(
-                      errors.bankTransferDisclaimerAccepted,
-                    )}
-                    aria-describedby={
-                      errors.bankTransferDisclaimerAccepted
-                        ? "tutor-bankTransferDisclaimerAccepted-error"
-                        : undefined
-                    }
-                    onCheckedChange={(checked) => {
-                      setForm((current) => ({
-                        ...current,
-                        bankTransferDisclaimerAccepted: checked === true,
-                      }));
-                      clearError("bankTransferDisclaimerAccepted");
-                    }}
-                  />
-                  <Field className="min-w-0 leading-none">
-                    <FieldLabel
-                      htmlFor="tutor-bankTransferDisclaimerAccepted"
-                      className="text-sm font-normal leading-relaxed text-muted"
-                    >
-                      I confirm this is my own account or an account belonging
-                      to someone I trust for receiving this transfer. Cogito is
-                      not responsible for any issue after the transfer reaches
-                      the account provided here.
+                <Field className="grid min-w-0 gap-x-6 gap-y-2 sm:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] sm:items-start">
+                  <div className="min-w-0">
+                    <FieldLabel htmlFor="tutor-bankTransferDisclaimerAccepted">
+                      Transfer-account confirmation
                     </FieldLabel>
-                    {errors.bankTransferDisclaimerAccepted ? (
-                      <FieldError id="tutor-bankTransferDisclaimerAccepted-error">
-                        {errors.bankTransferDisclaimerAccepted}
-                      </FieldError>
-                    ) : null}
-                  </Field>
-                </div>
+                    <FieldDescription>
+                      Confirm the destination account and transfer
+                      responsibility.
+                    </FieldDescription>
+                  </div>
+                  <div className="flex min-w-0 items-start gap-3 rounded-lg">
+                    <Checkbox
+                      id="tutor-bankTransferDisclaimerAccepted"
+                      checked={form.bankTransferDisclaimerAccepted}
+                      aria-invalid={Boolean(
+                        errors.bankTransferDisclaimerAccepted,
+                      )}
+                      aria-describedby={
+                        errors.bankTransferDisclaimerAccepted
+                          ? "tutor-bankTransferDisclaimerAccepted-error"
+                          : undefined
+                      }
+                      onCheckedChange={(checked) => {
+                        setForm((current) => ({
+                          ...current,
+                          bankTransferDisclaimerAccepted: checked === true,
+                        }));
+                        clearError("bankTransferDisclaimerAccepted");
+                      }}
+                    />
+                    <div className="min-w-0 -mt-0.5">
+                      <span className="text-sm text-muted">
+                        I confirm this is my own account or an account belonging
+                        to someone I trust for receiving this transfer. Cogito
+                        is not responsible for any issue after the transfer
+                        reaches the account provided here.
+                      </span>
+                      {errors.bankTransferDisclaimerAccepted ? (
+                        <FieldError id="tutor-bankTransferDisclaimerAccepted-error">
+                          {errors.bankTransferDisclaimerAccepted}
+                        </FieldError>
+                      ) : null}
+                    </div>
+                  </div>
+                </Field>
               </CardBody>
             </Card>
           </div>
@@ -1819,16 +1914,32 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                 errors={errors}
                 showPreview={false}
               />
-              <Field className="mt-6 border-t border-card-separator pt-6">
-                <FieldLabel htmlFor="tutor-achievement-proofs">
-                  Achievement proof links
-                </FieldLabel>
-                <FieldDescription>
-                  Optional. If possible, put your achievement and experience
-                  proof in one Google Drive folder and use the “Anyone with the
-                  link can view” setting. These links are only used for admin
-                  verification.
-                </FieldDescription>
+              <TutorFormField
+                className="mt-6 border-t border-card-separator pt-6"
+                htmlFor="tutor-achievement-proofs"
+                label="Achievement proof links"
+                description={
+                  <FieldDescription>
+                    Optional. If possible, put your achievement and experience
+                    proof in one Google Drive folder and use the “Anyone with
+                    the link can view” setting. These links are only used for
+                    admin verification.
+                  </FieldDescription>
+                }
+                error={
+                  errors.achievementProofUrls ? (
+                    <FieldError id="tutor-achievement-proofs-error">
+                      {errors.achievementProofUrls}
+                    </FieldError>
+                  ) : Object.entries(errors).some(([key]) =>
+                      key.startsWith("achievementProofUrls."),
+                    ) ? (
+                    <FieldError id="tutor-achievement-proofs-error">
+                      Check each proof link.
+                    </FieldError>
+                  ) : undefined
+                }
+              >
                 <Textarea
                   id="tutor-achievement-proofs"
                   name="achievementProofUrls"
@@ -1860,20 +1971,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                   }}
                   placeholder="https://example.com/certificate"
                 />
-                {errors.achievementProofUrls ? (
-                  <FieldError id="tutor-achievement-proofs-error">
-                    {errors.achievementProofUrls}
-                  </FieldError>
-                ) : null}
-                {!errors.achievementProofUrls &&
-                Object.entries(errors).some(([key]) =>
-                  key.startsWith("achievementProofUrls."),
-                ) ? (
-                  <FieldError id="tutor-achievement-proofs-error">
-                    Check each proof link.
-                  </FieldError>
-                ) : null}
-              </Field>
+              </TutorFormField>
               <div className="mt-6 border-t border-card-separator pt-6">
                 <TutorExperiencesEditor
                   experienceEntries={form.experienceEntries}
@@ -1890,16 +1988,32 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                   errors={errors}
                   showPreview={false}
                 />
-                <Field className="mt-6">
-                  <FieldLabel htmlFor="tutor-experience-proofs">
-                    Experience proof links
-                  </FieldLabel>
-                  <FieldDescription>
-                    Optional. If possible, put your achievement and experience
-                    proof in one Google Drive folder and use the “Anyone with
-                    the link can view” setting. These links are only used for
-                    admin verification.
-                  </FieldDescription>
+                <TutorFormField
+                  className="mt-6"
+                  htmlFor="tutor-experience-proofs"
+                  label="Experience proof links"
+                  description={
+                    <FieldDescription>
+                      Optional. If possible, put your achievement and experience
+                      proof in one Google Drive folder and use the “Anyone with
+                      the link can view” setting. These links are only used for
+                      admin verification.
+                    </FieldDescription>
+                  }
+                  error={
+                    errors.experienceProofUrls ? (
+                      <FieldError id="tutor-experience-proofs-error">
+                        {errors.experienceProofUrls}
+                      </FieldError>
+                    ) : Object.entries(errors).some(([key]) =>
+                        key.startsWith("experienceProofUrls."),
+                      ) ? (
+                      <FieldError id="tutor-experience-proofs-error">
+                        Check each proof link.
+                      </FieldError>
+                    ) : undefined
+                  }
+                >
                   <Textarea
                     id="tutor-experience-proofs"
                     name="experienceProofUrls"
@@ -1931,20 +2045,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                     }}
                     placeholder="https://example.com/reference"
                   />
-                  {errors.experienceProofUrls ? (
-                    <FieldError id="tutor-experience-proofs-error">
-                      {errors.experienceProofUrls}
-                    </FieldError>
-                  ) : null}
-                  {!errors.experienceProofUrls &&
-                  Object.entries(errors).some(([key]) =>
-                    key.startsWith("experienceProofUrls."),
-                  ) ? (
-                    <FieldError id="tutor-experience-proofs-error">
-                      Check each proof link.
-                    </FieldError>
-                  ) : null}
-                </Field>
+                </TutorFormField>
                 <div className="mt-6 border-t border-card-separator pt-6">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <Text className="text-sm font-medium">

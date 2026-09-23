@@ -171,6 +171,16 @@ stays in normal document flow without adding trailing scroll space. This is
 presentation-only; no RPC path, request envelope, response shape, schema, or
 persistence contract changed.
 
+The tutor onboarding editor uses a shared responsive label/description-left,
+control-right layout for profile, teaching setup, payout, evidence, education,
+achievement, and experience fields. Teaching setup and payout are presented as
+one full-width sequence, teaching-capacity selectors and base-honorarium
+steppers fill their control column, profile-photo editing lives inside Public
+profile, and specialization choices use one vertical list. Dynamic entry delete
+actions use a dedicated right-aligned row.
+This is presentation-only; no RPC path, request envelope, response shape,
+schema, or persistence contract changed.
+
 All roles use Better Auth `user.name` as the canonical visible name. Tutor
 onboarding saves its single **Name** field through Better Auth and no longer
 sends tutor-profile `displayName`; discovery keeps its compatible
