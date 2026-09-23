@@ -183,9 +183,7 @@ function EventDetailsContent({ event }: { event: CalendarCompetition }) {
           <Heading size="sm" className="text-sm lg:text-base">
             Description
           </Heading>
-          <Text className="mt-1 whitespace-pre-line">
-            {event.description}
-          </Text>
+          <Text className="mt-1 whitespace-pre-line">{event.description}</Text>
         </div>
       ) : null}
 
