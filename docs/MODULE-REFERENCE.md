@@ -289,7 +289,7 @@ Editorial content integration is also read-only: Sanity remains the source of tr
 - `listStudentResources()` — returns resource metadata without asset URLs
 - `getStudentResourceFile(resourceId)` — resolves the published asset URL and file metadata for the already-authorized proxy
 
-The calendar frontend consumes `listCompetitions()` as a read-only projection. It mirrors the academy's month interaction model (multi-day spans and overflow popup) and uses a flat 30-day agenda list that renders each overlapping competition once in first-event-date order, plus an event-details modal, while using Cogito App Selia components, design tokens, and Tabler icons. Its authenticated route is viewport-contained: the calendar card body owns vertical scrolling, while the month grid owns horizontal scrolling so the page shell and calendar toolbar do not scroll with the grid. The month view always keeps the standard grid visible, including for an event-free selected month; the page-level empty state remains reserved for a response with no competitions at all. The Knowledge Bank frontend is available at the authenticated `/knowledge-bank` route and renders resource category slugs as mapped or title-cased labels while keeping raw slugs for filtering. Admins get `Edit resources` (`studentResource`) and `Edit competitions` (`competition`) buttons on the Knowledge Bank and calendar pages; both open the matching document-type list in Sanity Studio in a new tab.
+The calendar frontend consumes `listCompetitions()` as a read-only projection. It mirrors the academy's month interaction model (multi-day spans and overflow popup) and uses a flat 30-day agenda list that renders each overlapping competition once in first-event-date order, plus an event-details modal, while using Cogito App Selia components, design tokens, and Tabler icons. Month-view event lanes are allocated per week and remain stable for every day an event spans; an ended event's lane may be reused by the next non-overlapping event. Its authenticated route is viewport-contained: the calendar card body owns vertical scrolling, while the month grid owns horizontal scrolling so the page shell and calendar toolbar do not scroll with the grid. The month view always keeps the standard grid visible, including for an event-free selected month; the page-level empty state remains reserved for a response with no competitions at all. The Knowledge Bank frontend is available at the authenticated `/knowledge-bank` route and renders resource category slugs as mapped or title-cased labels while keeping raw slugs for filtering. Admins get `Edit resources` (`studentResource`) and `Edit competitions` (`competition`) buttons on the Knowledge Bank and calendar pages; both open the matching document-type list in Sanity Studio in a new tab.
 
 When the page-level no-competition state is rendered, its calendar glyph uses
 the Cogito orange token; this accent is scoped to the Competition Calendar and
@@ -1112,7 +1112,17 @@ contracts.
 
 **Purpose:** Tutor profile management — create, update, submit for review, availability management, and payout summaries.
 
-The web tutor profile editor groups education, competition achievements, and experiences into one combined **Achievements & experience** section with consistent full-width, border-light subsections. Typography, whitespace, thin rules, and row-based entries establish hierarchy without nested cards; each subsection retains its own private proof-link list. Its live preview labels draft versus published-profile edit state and names the structured sections that differ from the current public profile. The tutor-facing photo card only presents the current/proposed photo, while audit history remains an admin review concern. Short bios are limited to 50 words, and the form recommends one Google Drive folder with the “Anyone with the link can view” setting for both achievement and experience evidence.
+The web tutor profile editor groups education, competition achievements, and experiences into one combined **Achievements & experience** section with consistent full-width, border-light subsections. Typography, whitespace, thin rules, and row-based entries establish hierarchy without nested cards; each subsection retains its own private proof-link list. Its live preview labels draft versus published-profile edit state and names the structured sections that differ from the current public profile. The profile-photo field lives inside the Public profile section and only presents the current/proposed photo, while audit history remains an admin review concern. Dynamic entry delete actions use a dedicated right-aligned row instead of overlapping fields. Short bios are limited to 50 words, and the form recommends one Google Drive folder with the “Anyone with the link can view” setting for both achievement and experience evidence.
+
+The tutor onboarding form uses a shared responsive field composition: labels and
+descriptions stay in the left column while inputs, selectors, textareas,
+validation messages, and dynamic add-entry controls stay in the right column;
+mobile layouts stack those columns. Teaching setup and payout account render in
+one full-width sequence, and specialization choices use one vertical list.
+Teaching-capacity selectors and base-honorarium steppers fill the available
+control-column width.
+This is presentation-only and does not change tutor RPC inputs or persisted
+profile data.
 
 Compact student and tutor profile-photo pickers use a native screen-reader-only file input instead of Selia's visible full-width Input. The dashboard shell therefore retains a single contained content scroller without document-level overflow.
 
@@ -1188,7 +1198,7 @@ The authenticated dashboard shell is viewport-fixed. Its content pane exclusivel
 - Tutors may select at most 7 active specializations; the web selector communicates the cap and disables additional choices, while the API validates the same limit
 - The legacy `expertise` JSON remains for compatibility with existing rows and clients, but normalized `subjectIds` drives new onboarding and discovery filters
 - The onboarding selector renders every current category with keyboard-accessible checkboxes, keeps normalized IDs for persistence/filtering, and shows archived profile subjects as read-only labels; raw UUIDs are an implementation detail and must not appear in user-facing controls
-- At `md` and wider breakpoints, the onboarding selector places alternating category cards into two independent vertical stacks so variable card heights do not create empty gaps beside shorter cards; below `md`, the cards use one visible column. This is presentation-only and does not change taxonomy or selection contracts
+- The onboarding selector uses one vertical column for category cards and specialization options at every viewport width, keeping long labels readable. This is presentation-only and does not change taxonomy or selection contracts
 
 ---
 

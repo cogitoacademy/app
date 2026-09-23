@@ -50,9 +50,9 @@ export function getCategoryBadgeClass(coreCategory?: string) {
 }
 
 export function getBorderRadiusClass(isFirstDay: boolean, isLastDay: boolean) {
-  if (isFirstDay && isLastDay) return "rounded";
+  if (isFirstDay && isLastDay) return "rounded-l-none rounded-r-xs";
   if (isFirstDay) return "rounded-r-none";
-  if (isLastDay) return "rounded-r-sm rounded-l-none";
+  if (isLastDay) return "rounded-r-xs rounded-l-none";
   return "rounded-none";
 }
 
@@ -181,4 +181,44 @@ export function sortDayEvents(
 
     return new Date(left.start).getTime() - new Date(right.start).getTime();
   });
+}
+
+export function getWeekEventLanes(
+  events: CalendarCompetition[],
+  weekStart: Date,
+  weekEnd: Date,
+): Map<string, number> {
+  const laneEnds: number[] = [];
+  const lanes = new Map<string, number>();
+  const visibleEvents = events
+    .filter((event) => {
+      const eventStart = startOfDay(new Date(event.start));
+      const eventEnd = endOfDay(new Date(event.end));
+      return !isAfter(eventStart, weekEnd) && !isBefore(eventEnd, weekStart);
+    })
+    .toSorted((left, right) => {
+      const startDifference =
+        startOfDay(new Date(left.start)).getTime() -
+        startOfDay(new Date(right.start)).getTime();
+      if (startDifference !== 0) return startDifference;
+
+      const endDifference =
+        endOfDay(new Date(right.end)).getTime() -
+        endOfDay(new Date(left.end)).getTime();
+      if (endDifference !== 0) return endDifference;
+
+      return left.id.localeCompare(right.id);
+    });
+
+  for (const event of visibleEvents) {
+    const eventStart = startOfDay(new Date(event.start)).getTime();
+    const eventEnd = endOfDay(new Date(event.end)).getTime();
+    const availableLane = laneEnds.findIndex((laneEnd) => laneEnd < eventStart);
+    const lane = availableLane === -1 ? laneEnds.length : availableLane;
+
+    laneEnds[lane] = eventEnd;
+    lanes.set(event.id, lane);
+  }
+
+  return lanes;
 }

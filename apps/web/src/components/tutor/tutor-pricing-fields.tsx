@@ -1,10 +1,8 @@
 "use client";
 
 import {
-  Field,
   FieldDescription,
   FieldError,
-  FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { IconMinus, IconPlus } from "@tabler/icons-react";
@@ -19,6 +17,7 @@ import {
   TutorPricingTable,
   type TutorPricingModality,
 } from "./tutor-pricing-table";
+import { TutorFormField, TutorFormRow } from "./tutor-form-layout";
 
 const MIN_BASE_RATE_IDR = 50_000;
 const TUTOR_INCREMENT_IDR = { online: 30_000, offline: 40_000 } as const;
@@ -74,29 +73,43 @@ export function TutorPricingFields({
   );
 
   return (
-    <div className="flex flex-col gap-4">
-      <div>
-        <Text className="font-medium">Base honorarium</Text>
+    <TutorFormRow
+      label={<Text className="font-medium">Base honorarium</Text>}
+      description={
         <Text className="mt-1 text-sm text-muted">
           Adjust your one-student IDR honorarium with the minus and plus
           controls. Each step is Rp5,000. Changes apply to new bookings;
           existing bookings keep their original honorarium for payout.
         </Text>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
+      }
+    >
+      <div className="flex flex-col gap-4">
         {modalities.map((currentModality) => {
           const key = currentModality as "online" | "offline";
           const value = baseRatesIdr[key];
           const error = errors[`baseRatesIdr.${key}`] ?? errors.baseRatesIdr;
           const errorId = `tutor-base-rate-${key}-error`;
           return (
-            <Field key={key}>
-              <FieldLabel htmlFor={"tutor-base-rate-" + key}>
-                {key === "online" ? "Online" : "Offline"} base rate
-              </FieldLabel>
+            <TutorFormField
+              key={key}
+              htmlFor={`tutor-base-rate-${key}`}
+              label={`${key === "online" ? "Online" : "Offline"} base rate`}
+              className="w-full sm:grid-cols-1!"
+              description={
+                <FieldDescription>
+                  Minimum {formatIdr(MIN_BASE_RATE_IDR)} · +{" "}
+                  {formatIdr(TUTOR_INCREMENT_IDR[key])} per additional student
+                </FieldDescription>
+              }
+              error={
+                error ? (
+                  <FieldError id={errorId}>{error}</FieldError>
+                ) : undefined
+              }
+            >
               <NumberField
-                id={"tutor-base-rate-" + key}
-                name={"base-rate-" + key}
+                id={`tutor-base-rate-${key}`}
+                name={`base-rate-${key}`}
                 value={value ?? MIN_BASE_RATE_IDR}
                 min={MIN_BASE_RATE_IDR}
                 step={5_000}
@@ -142,29 +155,31 @@ export function TutorPricingFields({
                   </NumberFieldIncrement>
                 </NumberFieldGroup>
               </NumberField>
-              <FieldDescription>
-                Minimum {formatIdr(MIN_BASE_RATE_IDR)} · +{" "}
-                {formatIdr(TUTOR_INCREMENT_IDR[key])} per additional student
-              </FieldDescription>
-              {error ? <FieldError id={errorId}>{error}</FieldError> : null}
-            </Field>
+            </TutorFormField>
           );
         })}
+        {previewModalities.length > 0 ? (
+          <TutorFormRow
+            className="w-full sm:grid-cols-1!"
+            label={<Text className="font-medium">Honorarium preview</Text>}
+            description={
+              <Text className="mt-1 text-sm text-muted">
+                Preview prices by group size.
+              </Text>
+            }
+          >
+            <TutorPricingTable
+              modalities={previewModalities}
+              rows={previewRows}
+              columnLabels={{
+                online: "Online honorarium",
+                offline: "Offline honorarium",
+              }}
+              renderValue={formatIdr}
+            />
+          </TutorFormRow>
+        ) : null}
       </div>
-      {previewModalities.length > 0 ? (
-        <div>
-          <Text className="mb-2 font-medium">Honorarium preview</Text>
-          <TutorPricingTable
-            modalities={previewModalities}
-            rows={previewRows}
-            columnLabels={{
-              online: "Online honorarium",
-              offline: "Offline honorarium",
-            }}
-            renderValue={formatIdr}
-          />
-        </div>
-      ) : null}
-    </div>
+    </TutorFormRow>
   );
 }
