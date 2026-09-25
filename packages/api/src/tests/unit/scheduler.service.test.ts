@@ -315,6 +315,55 @@ describe("createSchedulerService", () => {
     expect(infoLogs.length).toBe(1);
   });
 
+  test("handles reconcile-payments job", async () => {
+    const onReconcilePayments = mock(async () => ({
+      checked: 4,
+      reconciled: 2,
+      pending: 1,
+      failed: 1,
+    }));
+    createSchedulerService("redis://localhost:6379", {
+      onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
+      onReleaseHolds: mock(async () => ({ released: 0 })),
+      onCheckTutorLateness: mock(async () => ({ flagged: 0, failed: 0 })),
+      onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
+      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
+      onReconcilePayments,
+    });
+
+    const result = await capturedJobHandler!({
+      id: "payments-1",
+      name: "reconcile-payments",
+      data: {},
+    });
+
+    expect(onReconcilePayments).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      checked: 4,
+      reconciled: 2,
+      pending: 1,
+      failed: 1,
+    });
+  });
+
+  test("returns zero reconciliation counts when handler is not configured", async () => {
+    createSchedulerService("redis://localhost:6379", {
+      onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),
+      onReleaseHolds: mock(async () => ({ released: 0 })),
+      onCheckTutorLateness: mock(async () => ({ flagged: 0, failed: 0 })),
+      onSendNotificationEmail: mock(async () => ({ sent: 0, failed: 0 })),
+      onEscalateSupportTickets: mock(async () => ({ escalated: 0 })),
+    });
+
+    await expect(
+      capturedJobHandler!({
+        id: "payments-2",
+        name: "reconcile-payments",
+        data: {},
+      }),
+    ).resolves.toEqual({ checked: 0, reconciled: 0, pending: 0, failed: 0 });
+  });
+
   test("logs warning for unknown job", async () => {
     createSchedulerService("redis://localhost:6379", {
       onExpireBookings: mock(async () => ({ expired: 0, failed: 0 })),

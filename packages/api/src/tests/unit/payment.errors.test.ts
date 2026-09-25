@@ -7,6 +7,7 @@ import {
   WebhookSignatureError,
   WebhookTimestampError,
   UnknownPaymentStatusError,
+  PaymentWebhookMismatchError,
   mapPaymentError,
 } from "../../modules/payment/payment.errors";
 
@@ -103,6 +104,14 @@ describe("payment.errors", () => {
       expect(err.domain).toBe("payment");
       expect(err.message).toBe("Unknown payment status: BOGUS");
       expect(err.name).toBe("UnknownPaymentStatusError");
+    });
+  });
+  describe("PaymentWebhookMismatchError", () => {
+    it("preserves the mismatch message", () => {
+      const err = new PaymentWebhookMismatchError("Payment amount mismatch");
+      expect(err.code).toBe("PAYMENT_WEBHOOK_MISMATCH");
+      expect(err.domain).toBe("payment");
+      expect(err.message).toBe("Payment amount mismatch");
     });
   });
   describe("mapPaymentError", () => {

@@ -5,6 +5,7 @@ import {
   findLatestPaymentByUserAndPackage,
   findPaymentById,
   findPaymentByProviderEventId,
+  findPaymentsForReconciliation,
   insertPayment,
   updatePaymentStatus,
   createPaymentRepo,
@@ -145,6 +146,31 @@ describe("findPaymentById", () => {
   });
 });
 
+describe("findPaymentsForReconciliation", () => {
+  test("returns stale non-terminal payment attempts", async () => {
+    const rows = [
+      { id: "p1", provider: "midtrans", status: "PENDING" },
+      { id: "p2", provider: "midtrans", status: "FAILED" },
+    ];
+    const { select, chain } = makeSelectConn(rows);
+    const conn: any = { select };
+    const olderThan = new Date("2026-09-25T00:00:00.000Z");
+
+    const result = await findPaymentsForReconciliation(
+      conn,
+      "midtrans",
+      olderThan,
+      25,
+    );
+
+    expect(result).toEqual(rows);
+    expect(chain.from).toHaveBeenCalledTimes(1);
+    expect(chain.where).toHaveBeenCalledTimes(1);
+    expect(chain.orderBy).toHaveBeenCalledTimes(1);
+    expect(chain.limit).toHaveBeenCalledWith(25);
+  });
+});
+
 describe("findPaymentByProviderEventId", () => {
   test("returns record when found", async () => {
     const row = { id: "p1", providerEventId: "evt123" };
@@ -272,6 +298,7 @@ describe("createPaymentRepo", () => {
     expect(repo).toHaveProperty("findLatestPaymentByUserAndPackage");
     expect(repo).toHaveProperty("findPaymentById");
     expect(repo).toHaveProperty("findPaymentByProviderEventId");
+    expect(repo).toHaveProperty("findPaymentsForReconciliation");
     expect(repo).toHaveProperty("insertPayment");
     expect(repo).toHaveProperty("updatePaymentStatus");
   });
@@ -370,5 +397,20 @@ describe("createPaymentRepo", () => {
     const repo = createPaymentRepo({} as any);
     const result = await repo.findPaymentByProviderEventId("evt1", conn);
     expect(result).toEqual(row);
+  });
+
+  test("repo findPaymentsForReconciliation uses conn when provided", async () => {
+    const rows = [{ id: "p1", provider: "midtrans", status: "PENDING" }];
+    const { select } = makeSelectConn(rows);
+    const conn: any = { select };
+
+    const repo = createPaymentRepo({} as any);
+    const result = await repo.findPaymentsForReconciliation(
+      "midtrans",
+      new Date("2026-09-25T00:00:00.000Z"),
+      10,
+      conn,
+    );
+    expect(result).toEqual(rows);
   });
 });

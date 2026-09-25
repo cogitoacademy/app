@@ -4,6 +4,8 @@ import {
   recordRequest,
   getMetrics,
   _resetForTest,
+  recordPaymentIntegrity,
+  recordPaymentReconciliation,
 } from "../../lib/metrics";
 
 describe("metrics exposition", () => {
@@ -156,6 +158,31 @@ describe("metrics exposition", () => {
     ).toContain('provider="midtrans",provider_mode="live"');
     expect(renderExposition({ provider: "stub" })).toContain(
       'provider="stub",provider_mode="none"',
+    );
+  });
+
+  test("renders payment integrity and reconciliation counters", () => {
+    recordPaymentIntegrity("midtrans", "provider_mismatch");
+    recordPaymentIntegrity("midtrans", "amount_mismatch");
+    recordPaymentIntegrity("midtrans", "currency_mismatch");
+    recordPaymentIntegrity("midtrans", "partial_refund");
+    recordPaymentReconciliation("midtrans", "reconciled");
+    recordPaymentReconciliation("midtrans", "pending");
+    recordPaymentReconciliation("midtrans", "failed");
+
+    const out = renderExposition();
+
+    expect(out).toContain(
+      'payment_integrity_events_total{provider="midtrans",type="provider_mismatch"} 1',
+    );
+    expect(out).toContain(
+      'payment_integrity_events_total{provider="midtrans",type="partial_refund"} 1',
+    );
+    expect(out).toContain(
+      'payment_reconciliation_total{provider="midtrans",outcome="reconciled"} 1',
+    );
+    expect(out).toContain(
+      'payment_reconciliation_total{provider="midtrans",outcome="failed"} 1',
     );
   });
 });

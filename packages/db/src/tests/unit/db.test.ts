@@ -8,6 +8,8 @@ const mockEnv = {
   SANITY_PROJECT_ID: "skfmwuke",
   SANITY_DATASET: "development",
   SANITY_API_VERSION: "2024-03-01",
+  // Bun can share this module mock with integration tests in one process.
+  CORS_ORIGIN: "http://localhost:3000",
 };
 
 mock.module("@cogito-app/env/server", () => ({
