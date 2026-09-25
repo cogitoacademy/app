@@ -1262,6 +1262,11 @@ Coolify build's DELETE endpoint semantics are unverified):
    env-switch path and verify the boot line shows the intended
    provider/mode.
 
+The env apply refreshes the Coolify env list after creating missing rows before
+running this uniqueness guard. A remaining `missing keys` entry means the live
+API did not persist or return that row; the playbook fails before restart so the
+operator can investigate safely.
+
 ### Drizzle Studio ownership (LIVE 2026-09-05 — `cogito-studio`)
 
 Coolify service `cogito-studio` (app `drizzle-gateway`,

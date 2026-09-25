@@ -36,6 +36,18 @@
 | PR #102              | **Merged (#115)** — Terraform + runbook landed with the infra scaffold                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | New env vars to wire | `ADMIN_EMAILS` (default `itcogitoacademy01@gmail.com` — verify this is the operator account)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
+> **Post-merge incident update (2026-09-25):** PR #271 merged as
+> `7f54fecbd91b446081f248f9f3618d6f2e5d2eb5`. Infra Apply run
+> `36107311485` failed because the env uniqueness guard used a stale
+> pre-create Coolify snapshot for `PAYMENT_TEST_ALLOWED_EMAILS`; Deploy
+> Production run `36107311414` migrated the database and queued deployment,
+> but timed out while rollback API calls received HTTP `403` through the public
+> webhook route. Production currently serves old SHA
+> `98567cc85105c874934d92f973bd4e5069016f42`. The rollout is not complete.
+> `0051_short_hobgoblin.sql` renames tutor-profile columns, so forward deploy
+> of the merged image is required before any image rollback is considered.
+> Current recovery patch is uncommitted on `fix/infra-env-apply-rollback`.
+
 ## 2. Target topology (single VPS, declarative, scale-ready)
 
 ```

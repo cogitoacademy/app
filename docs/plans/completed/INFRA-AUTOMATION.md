@@ -94,8 +94,9 @@ service (zero config inside) and the empty `cogito` project itself.
     5. Post-apply: run `verify` phase (health sha + webhook route probe),
        post a one-line result to the Discord webhook (GitHub secret) on
        failure only.
-- **Concurrency:** `concurrency: infra-apply` (never two applies at once);
-  the CD `production-deploy` concurrency group stays separate.
+- **Concurrency:** the original wave used `concurrency: infra-apply` (never two
+  applies at once). Superseded 2026-09-25: infra apply now shares CD's
+  `production-deploy` group so env restarts cannot race image rollout.
 - **Rollback story:** every apply is idempotent (playbooks + terraform
   plan/apply); a bad auto-apply is reverted by reverting the commit (CI
   applies the revert). Coolify-side changes are drift-checked; terraform

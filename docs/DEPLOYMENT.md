@@ -346,7 +346,11 @@ message and exits 1 (readable failure instead of a bare `curl exit 6`).
    API (`COOLIFY_API_TOKEN` set: resolve the app UUID by `COOLIFY_APP_UUID` or
    domain match, `PATCH` the resource image tag to `v<prev-sha>`, trigger the
    redeploy; Databases are NEVER restored automatically), then prints the
-   rollback hint and exits 1.
+   rollback hint and exits 1. The VPS runner uses Coolify's loopback API
+   (`http://127.0.0.1:8000`) for these GET/PATCH calls because the public
+   `cl.cogitoacademy.id` route exposes deploy webhooks only.
+   Infra applies and production CD share one concurrency lock, so an env
+   restart cannot race an image deploy.
    > **Deploy-flow history (2026-09-02):** #175–#177 switched the deploy to
    > Coolify's native image endpoint (`POST /api/v1/applications/<uuid>/rollback`
    > with `{"commit":"v<GIT_SHA>"}` — deploy-only access, no PATCH), but #178
