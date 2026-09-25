@@ -12,10 +12,10 @@ import {
 } from "../../modules/booking/booking.types";
 import { updateMyProfileInput } from "../../modules/tutor/tutor.types";
 import {
-  tutorCompetitionAchievementsInput,
+  tutorAchievementsInput,
   tutorEducationInput,
 } from "../../modules/tutor/tutor-achievements";
-import { tutorExperienceEntriesInput } from "../../modules/tutor/tutor-experiences";
+import { tutorExperiencesInput } from "../../modules/tutor/tutor-experiences";
 import { upsertAvailabilityInput } from "../../modules/tutor/availability.types";
 import { achievementInput } from "../../modules/achievement/achievement.types";
 import { createInviteInput } from "../../modules/admin-tutor/admin-tutor.types";
@@ -69,7 +69,7 @@ describe("Validation bounds — string .max()", () => {
     ).toBe(false);
 
     expect(
-      tutorCompetitionAchievementsInput.safeParse(
+      tutorAchievementsInput.safeParse(
         Array.from({ length: 6 }, (_, index) => ({
           competitionName: `Competition ${index + 1}`,
           year: 2020,
@@ -85,7 +85,7 @@ describe("Validation bounds — string .max()", () => {
         .success,
     ).toBe(false);
     expect(
-      tutorCompetitionAchievementsInput.safeParse([
+      tutorAchievementsInput.safeParse([
         { competitionName: "Competition", year: 2020, awards: [] },
       ]).success,
     ).toBe(false);
@@ -100,18 +100,29 @@ describe("Validation bounds — string .max()", () => {
       description: "Guided students through olympiad preparation.",
     };
     expect(
-      tutorExperienceEntriesInput.safeParse(
+      tutorExperiencesInput.safeParse(
         Array.from({ length: 6 }, () => validEntry),
       ).success,
     ).toBe(false);
     expect(
-      tutorExperienceEntriesInput.safeParse([
+      tutorExperiencesInput.safeParse([
         { ...validEntry, startYear: 2025, endYear: 2024 },
       ]).success,
     ).toBe(false);
     expect(
-      tutorExperienceEntriesInput.safeParse([{ ...validEntry, role: "" }])
-        .success,
+      tutorExperiencesInput.safeParse([{ ...validEntry, role: "" }]).success,
+    ).toBe(false);
+  });
+
+  test("Tutor affiliation accepts draft blanks but enforces its length bound", () => {
+    expect(
+      updateMyProfileInput.safeParse({ version: 1, affiliation: "" }).success,
+    ).toBe(true);
+    expect(
+      updateMyProfileInput.safeParse({
+        version: 1,
+        affiliation: "a".repeat(256),
+      }).success,
     ).toBe(false);
   });
 

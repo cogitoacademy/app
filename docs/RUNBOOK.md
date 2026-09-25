@@ -621,9 +621,9 @@ control-column width.
 
 ### Tutor achievement and experience formatting smoke check
 
-The tutor editor uses one combined **Achievements & experience** card and one public preview for all three structured subsections. The proof-link fields remain separate for compatibility, but the form recommends putting both achievement and experience proof in one Google Drive folder with the “Anyone with the link can view” setting.
+The tutor editor uses one combined Education, Achievements, and Experiences card and one public preview. Proof-link fields remain separate, and the form recommends putting both proof types in one Google Drive folder with the “Anyone with the link can view” setting.
 
-Open `/profile` as a tutor and confirm the Public profile has no duplicate free-text Achievements or Experiences fields. In the combined Achievements & experience section, add two education entries and five competition achievements. Type a comma after one award before entering the next title and confirm the comma remains visible; verify a comma in an experience role, organization, or description also remains visible. Add up to five role/organization/year/description entries, leaving End year blank for an ongoing role. Confirm the sixth row controls are disabled, incomplete rows and an end year before the start year are rejected on **Submit for review**, and every year field displays plain digits without grouping dots. Save a draft, reload, and verify the structured arrays persist. Open a published tutor in discovery and confirm the drawer uses the published profile image as a 300px full-width hero, keeps the close control visible over the image, and layers up to three specialization badges over its lower edge. Scroll the drawer and confirm education, achievements, and experiences appear in separate profile-highlight cards; for an old profile with only legacy achievement or experience text, confirm the matching fallback card remains visible. As an admin, open `/admin-tutors` and verify structured experience entries render readably in the review card and pending-change panel. Repeat the same short-viewport check in the admin tutor-review page; its review actions must remain usable while the content wraps. Repeat with an intentionally stale review tab/version and confirm the API returns a conflict without overwriting the newer values.
+Open `/profile` as a tutor. Enter affiliation plus two education entries, five achievements, and five experiences. Verify labels sit above inputs, add actions remain left-aligned below entries, delete actions remain right-aligned below entries, and experience years share one desktop row but stack on mobile. Confirm sixth-entry controls disable, malformed rows fail validation, draft save permits blank affiliation, and review submission requires affiliation plus at least one achievement and experience. Reload and verify persistence. Open published discovery and admin review; confirm affiliation and canonical arrays render, pending diffs use canonical labels, and no legacy text fallback appears.
 
 Open **View details** from both `/achievements` and `/admin-achievements`. Confirm Status retains its semantic badge beneath the field label, while Category, Level, Subjects, Award, Awarded, and Location use the same label/value hierarchy. Below the `sm` breakpoint, confirm the detail opens from the bottom, stays usable within the viewport, and dismisses with a downward swipe. At `sm` and wider, confirm it opens from the right and dismisses with a rightward swipe. Resize across the breakpoint while the drawer is open and confirm its placement and dismissal direction update together. Open both available attachment types and confirm image URLs render in the preview, **Open original** launches the source in a new tab, and a non-image or inaccessible URL shows the preview-unavailable fallback without removing the original link.
 
@@ -666,7 +666,7 @@ photo unchanged.
 
 ### Tutor experience formatting smoke check
 
-Open `/profile` as a tutor and verify the Experiences subsection of the combined Achievements & experience section accepts up to five role, organization, start-year, end-year, and description entries. Leave End year blank for ongoing work, confirm year inputs stay as plain digits without grouping dots, verify an end year before the start year is rejected on review submission, and confirm structured entries persist in the public discovery drawer and admin review card while legacy `experiences` text still renders as a fallback.
+Open `/profile` as a tutor and verify the Experiences subsection accepts up to five role, organization, start-year, end-year, and description entries. Leave End year blank for ongoing work, confirm year inputs stay as plain digits without grouping dots, verify an end year before the start year is rejected on review submission, and confirm canonical entries persist in the public discovery drawer and admin review card with no text fallback.
 
 Open `/profile` as a student and as a tutor at desktop and narrow widths. Verify the account card shows the current name, profile image (or initials), and read-only sign-in email; changing the name or image enables only the account save action. On a new student account without a profile row, confirm the student page still opens with an empty editable form and does not require the wallet/tutor aggregate request. On the student page, learning and parent/guardian fields use separate sections with one learning-profile save action. On the tutor page, the shell title and sidebar item say **Tutor Profile**, profile status and review feedback remain visible, the public profile section is separated from the teaching setup row, the honorarium preview is one combined modality matrix, fields are grouped into public profile/teaching setup/availability sections, and the final action card offers draft save plus submit-for-review only when the profile is editable. Verify the tutor profile scrolls through the same page-level shell container as the student profile, with no inner form scrollbar or large blank region after the action card; inspect the shell, tutor wrapper, and onboarding root and confirm the wrapper's natural height covers the full form rather than shrinking to the viewport. The action card must remain in normal document flow, and shorter specialization categories should not stretch to the height of the longest category. Opening `/onboarding` as a tutor should redirect to `/profile`. As an admin, verify the avatar menu has no **Profile** item and opening `/profile` redirects to `/dashboard`. In the payout-account form, verify all four account details plus ownership and disclaimer confirmation are required, the conventional-BCA/non-BCA fee copy is visible, and BCA Syariah and blu (BCA Digital) are not treated as fee-free. Confirm the browser console has no runtime errors and that the updated payout fields remain private to the tutor/admin surfaces.
 
@@ -726,19 +726,12 @@ pending migration) and restart the server. `bun run db:push` can detect broad
 schema drift and ask ambiguous rename questions; review those prompts instead
 of accepting unrelated changes blindly.
 
-Tutor profile achievement fields require migration `0039_secret_blink.sql`.
-Run `bun run db:migrate` before starting an API build that includes the
-structured achievement editor; it adds JSONB `education` and
-`competition_achievements` columns with empty-array defaults. Existing
-`credentials_summary` text is intentionally preserved as the public fallback,
-so this migration does not require a data backfill.
-
-Tutor profile experience fields require migration `0040_colossal_morlun.sql`.
-Run `bun run db:migrate` before starting an API build that includes the
-structured experience editor; it adds JSONB `experience_entries` with an
-empty-array default. Existing `experiences` text is intentionally preserved
-as the compatibility fallback, so this migration does not require parsing or
-data backfill.
+Canonical tutor profile credentials require migration
+`0051_short_hobgoblin.sql`. Run `bun run db:migrate` before deploying matching
+API/web builds. Migration adds nullable `affiliation`, renames
+`competition_achievements` to `achievements`, renames `experience_entries` to
+`experiences`, preserves both JSONB arrays, and discards obsolete pending JSON
+keys. Existing published affiliation values may remain null until edited.
 
 Tutor Terms of Service acceptance requires migration
 `0042_nappy_thunderbird.sql`. Run `bun run db:migrate` before starting an API

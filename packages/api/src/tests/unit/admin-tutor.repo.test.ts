@@ -197,19 +197,19 @@ describe("AdminTutorRepo", () => {
       const update = mock(() => ({ set }));
       const conn = { update } as any;
       const education = [{ university: "University", degree: "Degree" }];
-      const competitionAchievements = [
+      const achievements = [
         { competitionName: "Competition", year: 2020, awards: ["Champion"] },
       ];
 
       const result = await repo.updateTutorProfileWithVersion(conn, "tp1", 2, {
         education,
-        competitionAchievements,
+        achievements,
       });
 
       expect(result).toEqual([updated]);
       expect(update).toHaveBeenCalledTimes(1);
       expect(set).toHaveBeenCalledWith(
-        expect.objectContaining({ education, competitionAchievements }),
+        expect.objectContaining({ education, achievements }),
       );
       expect(where).toHaveBeenCalledTimes(1);
     });

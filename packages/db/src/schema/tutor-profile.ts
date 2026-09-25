@@ -19,13 +19,13 @@ export type TutorEducationEntry = {
   degree: string;
 };
 
-export type TutorCompetitionAchievement = {
+export type TutorAchievement = {
   competitionName: string;
   year: number;
   awards: string[];
 };
 
-export type TutorExperienceEntry = {
+export type TutorExperience = {
   role: string;
   organization: string;
   startYear: number;
@@ -45,6 +45,7 @@ export const tutorProfile = pgTable(
       .notNull()
       .references(() => tutorInvite.id, { onDelete: "cascade" }),
     shortBio: text("short_bio"),
+    affiliation: text("affiliation"),
     achievementProofUrls: jsonb("achievement_proof_urls")
       .$type<string[]>()
       .default([]),
@@ -52,12 +53,8 @@ export const tutorProfile = pgTable(
       .$type<string[]>()
       .default([]),
     education: jsonb("education").$type<TutorEducationEntry[]>().default([]),
-    competitionAchievements: jsonb("competition_achievements")
-      .$type<TutorCompetitionAchievement[]>()
-      .default([]),
-    experienceEntries: jsonb("experience_entries")
-      .$type<TutorExperienceEntry[]>()
-      .default([]),
+    achievements: jsonb("achievements").$type<TutorAchievement[]>().default([]),
+    experiences: jsonb("experiences").$type<TutorExperience[]>().default([]),
     modality: text("modality"),
     prices: jsonb("prices").$type<Record<string, number>>(),
     baseRatesIdr:
@@ -83,9 +80,10 @@ export const tutorProfile = pgTable(
     pendingProfileChanges: jsonb("pending_profile_changes").$type<
       Partial<{
         profileImageUrl: string;
+        affiliation: string;
         education: TutorEducationEntry[];
-        competitionAchievements: TutorCompetitionAchievement[];
-        experienceEntries: TutorExperienceEntry[];
+        achievements: TutorAchievement[];
+        experiences: TutorExperience[];
         subjectIds: string[];
         modality: "online" | "offline" | "both";
         baseRatesIdr: Partial<{ online: number; offline: number }>;

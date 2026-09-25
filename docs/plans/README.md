@@ -9,6 +9,8 @@
 
 ## Completed (merged to main)
 
+| [TUTOR-PROFILE-CANONICAL-FIELDS.md](completed/TUTOR-PROFILE-CANONICAL-FIELDS.md) | working tree | **Completed locally 2026-09-25** — canonical tutor achievements/experiences, required-on-review affiliation, moderation/discovery wiring, and migration |
+
 | [TUTOR-CLASS-CAPACITY.md](completed/TUTOR-CLASS-CAPACITY.md) | working tree | **Completed locally 2026-09-22** — modality-specific tutor capacity limits now constrain discovery pricing, booking invitees, and server-side group creation |
 
 | [AVAILABILITY-DATE-RANGE.md](completed/AVAILABILITY-DATE-RANGE.md) | working tree | **Completed locally 2026-09-22** — tutor weekly availability now accepts an explicit inclusive start and end date using constrained Selia date pickers |

@@ -122,8 +122,7 @@ export function createAdminTutorRouter(handler: AdminTutorHandler) {
         path: "/admin/tutors/profiles/achievements/update",
         tags: ["Admin Tutors"],
         summary: "Edit tutor achievements",
-        description:
-          "Corrects a tutor's structured education and competition achievements",
+        description: "Corrects a tutor's structured education and achievements",
       })
       .input(updateTutorAchievementsInput)
       .handler(handler.updateTutorAchievements),

@@ -15,7 +15,8 @@ function makeProfile(
   return {
     id: "tp1",
     shortBio: "Experienced tutor",
-    experienceEntries: [],
+    affiliation: "Mathematics, Cogito Academy",
+    experiences: [],
     modality: "online",
     onlineMaxClassSize: 6,
     offlineMaxClassSize: 6,
@@ -51,7 +52,8 @@ describe("Discovery Service", () => {
       expect(result.userId).toBe("u1");
       expect(result.displayName).toBe("Dr. Smith");
       expect(result.shortBio).toBe("Experienced tutor");
-      expect(result.experienceEntries).toEqual([]);
+      expect(result.affiliation).toBe("Mathematics, Cogito Academy");
+      expect(result.experiences).toEqual([]);
       expect(result.modality).toBe("online");
       expect(result.prices).toEqual({ "1": 50, "2": 40 });
       expect(result.publishedAt).toEqual(new Date("2025-01-01"));
@@ -71,7 +73,7 @@ describe("Discovery Service", () => {
     });
 
     test("maps structured experiences to the public projection", () => {
-      const experienceEntries = [
+      const experiences = [
         {
           role: "Mathematics Tutor",
           organization: "Cogito Academy",
@@ -80,8 +82,8 @@ describe("Discovery Service", () => {
           description: "Guided students through olympiad preparation.",
         },
       ];
-      const result = buildProjection(makeProfile({ experienceEntries }));
-      expect(result.experienceEntries).toEqual(experienceEntries);
+      const result = buildProjection(makeProfile({ experiences }));
+      expect(result.experiences).toEqual(experiences);
     });
   });
 

@@ -35,10 +35,10 @@ import { orpc } from "@/utils/orpc";
 import { TutorCard } from "./tutor-card";
 import { TutorDrawer } from "./tutor-drawer";
 import type {
-  TutorCompetitionAchievement,
+  TutorAchievement,
   TutorEducationEntry,
 } from "./tutor-achievements";
-import type { TutorExperienceEntry } from "./tutor-experiences";
+import type { TutorExperience } from "./tutor-experiences";
 import { useSubjectTaxonomy, type TutorSubject } from "./subject-taxonomy";
 
 type PublishedTutor = {
@@ -46,9 +46,10 @@ type PublishedTutor = {
   userId: string;
   displayName: string | null;
   shortBio: string | null;
+  affiliation: string | null;
   education: TutorEducationEntry[] | null;
-  competitionAchievements: TutorCompetitionAchievement[] | null;
-  experienceEntries: TutorExperienceEntry[] | null;
+  achievements: TutorAchievement[] | null;
+  experiences: TutorExperience[] | null;
   subjects?: TutorSubject[] | null;
   modality: string | null;
   onlineMaxClassSize: number;

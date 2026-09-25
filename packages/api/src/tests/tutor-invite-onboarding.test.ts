@@ -174,16 +174,17 @@ describe("Tutor Invite & Onboarding", () => {
       const updated = await tutorClient.tutor.updateMyProfile({
         version,
         shortBio: "Passionate math educator",
+        affiliation: "Mathematics, Cogito University",
         profileImageUrl: "https://example.com/tutor-profile.jpg",
         education: [{ university: "Cogito University", degree: "B.Sc. Math" }],
-        competitionAchievements: [
+        achievements: [
           {
             competitionName: "National Mathematics Olympiad",
             year: 2024,
             awards: ["Gold Medal"],
           },
         ],
-        experienceEntries: [
+        experiences: [
           {
             role: "Math Tutor",
             organization: "Cogito Academy",

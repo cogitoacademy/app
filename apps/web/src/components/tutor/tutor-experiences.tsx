@@ -17,7 +17,7 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 import { TutorTextDraftInput } from "./tutor-text-draft-input";
 import { TutorFormField, TutorFormRow } from "./tutor-form-layout";
 
-export type TutorExperienceEntry = {
+export type TutorExperience = {
   role: string;
   organization: string;
   startYear: number;
@@ -51,7 +51,7 @@ function getDisplayRows<T>(
   });
 }
 
-export function createEmptyExperienceEntry(): TutorExperienceEntry {
+export function createEmptyExperience(): TutorExperience {
   return {
     role: "",
     organization: "",
@@ -62,12 +62,12 @@ export function createEmptyExperienceEntry(): TutorExperienceEntry {
 }
 
 export function validateTutorExperienceDraft(
-  experienceEntries: readonly TutorExperienceEntry[],
+  experiences: readonly TutorExperience[],
 ): TutorExperienceDraftErrors {
   const errors: TutorExperienceDraftErrors = {};
 
-  for (const [index, entry] of experienceEntries.entries()) {
-    const fieldPrefix = `experienceEntries.${index}`;
+  for (const [index, entry] of experiences.entries()) {
+    const fieldPrefix = `experiences.${index}`;
     if (!entry.role.trim()) {
       errors[`${fieldPrefix}.role`] = "Role or position is required.";
     } else if (entry.role.trim().length > 255) {
@@ -107,31 +107,31 @@ export function validateTutorExperienceDraft(
     }
   }
 
-  if (Object.keys(errors).some((key) => key.startsWith("experienceEntries."))) {
-    errors.experienceEntries = "Complete the highlighted experience fields.";
+  if (Object.keys(errors).some((key) => key.startsWith("experiences."))) {
+    errors.experiences = "Complete the highlighted experience fields.";
   }
 
   return errors;
 }
 
-function formatExperiencePeriod(entry: TutorExperienceEntry) {
+function formatExperiencePeriod(entry: TutorExperience) {
   return `${entry.startYear}–${entry.endYear ?? "Present"}`;
 }
 
 type TutorExperiencesDisplayProps = {
-  experienceEntries?: readonly TutorExperienceEntry[] | null;
+  experiences?: readonly TutorExperience[] | null;
   emptyMessage?: string;
   className?: string;
   idPrefix?: string;
 };
 
 export function TutorExperiencesDisplay({
-  experienceEntries,
+  experiences,
   emptyMessage = "No experiences added yet.",
   className,
   idPrefix = "tutor-experiences",
 }: TutorExperiencesDisplayProps) {
-  const entries = experienceEntries ?? [];
+  const entries = experiences ?? [];
   const rows = getDisplayRows(
     entries,
     (entry) =>
@@ -180,40 +180,35 @@ export function TutorExperiencesDisplay({
 }
 
 type TutorExperiencesEditorProps = {
-  experienceEntries: TutorExperienceEntry[];
-  onExperienceEntriesChange: (
-    experienceEntries: TutorExperienceEntry[],
+  experiences: TutorExperience[];
+  onExperiencesChange: (
+    experiences: TutorExperience[],
     changedField?: string,
   ) => void;
   errors?: TutorExperienceDraftErrors;
-  legacyText?: string | null;
   idPrefix?: string;
   showPreview?: boolean;
 };
 
 export function TutorExperiencesEditor({
-  experienceEntries,
-  onExperienceEntriesChange,
+  experiences,
+  onExperiencesChange,
   errors,
-  legacyText,
   idPrefix = "tutor-experiences",
   showPreview = true,
 }: TutorExperiencesEditorProps) {
   const [experienceKeys, setExperienceKeys] = useState(() =>
-    experienceEntries.map(() => createDraftKey(`${idPrefix}-entry`)),
+    experiences.map(() => createDraftKey(`${idPrefix}-entry`)),
   );
 
-  function updateExperience(
-    index: number,
-    update: Partial<TutorExperienceEntry>,
-  ) {
-    onExperienceEntriesChange(
-      experienceEntries.map((entry, entryIndex) =>
+  function updateExperience(index: number, update: Partial<TutorExperience>) {
+    onExperiencesChange(
+      experiences.map((entry, entryIndex) =>
         entryIndex === index ? { ...entry, ...update } : entry,
       ),
       Object.keys(update)[0]
-        ? `experienceEntries.${index}.${Object.keys(update)[0]}`
-        : `experienceEntries.${index}`,
+        ? `experiences.${index}.${Object.keys(update)[0]}`
+        : `experiences.${index}`,
     );
   }
 
@@ -221,9 +216,17 @@ export function TutorExperiencesEditor({
     setExperienceKeys((current) =>
       current.filter((_, entryIndex) => entryIndex !== index),
     );
-    onExperienceEntriesChange(
-      experienceEntries.filter((_, entryIndex) => entryIndex !== index),
+    onExperiencesChange(
+      experiences.filter((_, entryIndex) => entryIndex !== index),
     );
+  }
+
+  function addExperience() {
+    setExperienceKeys((current) => [
+      ...current,
+      createDraftKey(`${idPrefix}-entry`),
+    ]);
+    onExperiencesChange([...experiences, createEmptyExperience()]);
   }
 
   return (
@@ -233,9 +236,9 @@ export function TutorExperiencesEditor({
           label={
             <div className="flex items-start gap-3">
               <div className="flex flex-wrap items-center gap-2">
-                <Heading size="sm">Experience entries</Heading>
+                <Heading size="sm">Experiences</Heading>
                 <Text className="text-sm text-muted">
-                  {experienceEntries.length}/{MAX_EXPERIENCE_ENTRIES}
+                  {experiences.length}/{MAX_EXPERIENCE_ENTRIES}
                 </Text>
               </div>
             </div>
@@ -247,36 +250,20 @@ export function TutorExperiencesEditor({
           }
         >
           <div className="flex flex-col gap-4">
-            {legacyText?.trim() && experienceEntries.length === 0 ? (
-              <div className="rounded-lg border border-warning-border bg-warning/10 p-3">
-                <Text className="text-sm font-medium">
-                  Existing experience details
-                </Text>
-                <Text className="mt-1 whitespace-pre-line text-sm text-muted">
-                  {legacyText}
-                </Text>
-                <Text className="mt-2 text-xs text-muted">
-                  This older format is still preserved. Add structured entries
-                  to show experiences in the new profile layout.
-                </Text>
-              </div>
-            ) : null}
-
             <div className="divide-y divide-item-border">
-              {experienceEntries.map((entry, index) => {
-                const roleError = errors?.[`experienceEntries.${index}.role`];
+              {experiences.map((entry, index) => {
+                const roleError = errors?.[`experiences.${index}.role`];
                 const roleErrorId = `${idPrefix}-role-${index}-error`;
                 const organizationError =
-                  errors?.[`experienceEntries.${index}.organization`];
+                  errors?.[`experiences.${index}.organization`];
                 const organizationErrorId = `${idPrefix}-organization-${index}-error`;
                 const startYearError =
-                  errors?.[`experienceEntries.${index}.startYear`];
+                  errors?.[`experiences.${index}.startYear`];
                 const startYearErrorId = `${idPrefix}-start-year-${index}-error`;
-                const endYearError =
-                  errors?.[`experienceEntries.${index}.endYear`];
+                const endYearError = errors?.[`experiences.${index}.endYear`];
                 const endYearErrorId = `${idPrefix}-end-year-${index}-error`;
                 const descriptionError =
-                  errors?.[`experienceEntries.${index}.description`];
+                  errors?.[`experiences.${index}.description`];
                 const descriptionErrorId = `${idPrefix}-description-${index}-error`;
 
                 return (
@@ -284,19 +271,9 @@ export function TutorExperiencesEditor({
                     key={experienceKeys[index]}
                     className="py-4 first:pt-0 last:pb-0"
                   >
-                    <div className="mb-2 flex justify-end">
-                      <Button
-                        type="button"
-                        variant="plain"
-                        size="xs-icon"
-                        aria-label={`Remove experience entry ${index + 1}`}
-                        onClick={() => removeExperience(index)}
-                      >
-                        <IconTrash aria-hidden="true" />
-                      </Button>
-                    </div>
                     <div className="flex flex-col gap-3">
                       <TutorFormField
+                        className="grid-cols-1 gap-y-1 sm:grid-cols-1"
                         htmlFor={`${idPrefix}-role-${index}`}
                         label="Role or position"
                         error={
@@ -320,6 +297,7 @@ export function TutorExperiencesEditor({
                         />
                       </TutorFormField>
                       <TutorFormField
+                        className="grid-cols-1 gap-y-1 sm:grid-cols-1"
                         htmlFor={`${idPrefix}-organization-${index}`}
                         label="Organization or company"
                         error={
@@ -344,74 +322,79 @@ export function TutorExperiencesEditor({
                           }
                         />
                       </TutorFormField>
-                      <TutorFormField
-                        htmlFor={`${idPrefix}-start-year-${index}`}
-                        label="Start year"
-                        error={
-                          startYearError ? (
-                            <FieldError id={startYearErrorId}>
-                              {startYearError}
-                            </FieldError>
-                          ) : undefined
-                        }
-                      >
-                        <NumberField
-                          id={`${idPrefix}-start-year-${index}`}
-                          value={entry.startYear || null}
-                          min={1900}
-                          max={2100}
-                          step={1}
-                          format={YEAR_FORMAT}
-                          allowOutOfRange
-                          onValueChange={(value) =>
-                            updateExperience(index, { startYear: value ?? 0 })
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <TutorFormField
+                          className="grid-cols-1 gap-y-1 sm:grid-cols-1"
+                          htmlFor={`${idPrefix}-start-year-${index}`}
+                          label="Start year"
+                          error={
+                            startYearError ? (
+                              <FieldError id={startYearErrorId}>
+                                {startYearError}
+                              </FieldError>
+                            ) : undefined
                           }
-                          inputProps={{
-                            "aria-label": `Start year for experience entry ${index + 1}`,
-                            "aria-invalid": Boolean(startYearError),
-                            "aria-describedby": startYearError
-                              ? startYearErrorId
-                              : undefined,
-                          }}
-                        />
-                      </TutorFormField>
-                      <TutorFormField
-                        htmlFor={`${idPrefix}-end-year-${index}`}
-                        label="End year"
-                        description={
+                        >
+                          <NumberField
+                            id={`${idPrefix}-start-year-${index}`}
+                            value={entry.startYear || null}
+                            min={1900}
+                            max={2100}
+                            step={1}
+                            format={YEAR_FORMAT}
+                            allowOutOfRange
+                            onValueChange={(value) =>
+                              updateExperience(index, { startYear: value ?? 0 })
+                            }
+                            inputProps={{
+                              "aria-label": `Start year for experience entry ${index + 1}`,
+                              "aria-invalid": Boolean(startYearError),
+                              "aria-describedby": startYearError
+                                ? startYearErrorId
+                                : undefined,
+                            }}
+                          />
+                        </TutorFormField>
+                        <TutorFormField
+                          className="grid-cols-1 gap-y-1 sm:grid-cols-1"
+                          htmlFor={`${idPrefix}-end-year-${index}`}
+                          label="End year"
+                          error={
+                            endYearError ? (
+                              <FieldError id={endYearErrorId}>
+                                {endYearError}
+                              </FieldError>
+                            ) : undefined
+                          }
+                        >
+                          <NumberField
+                            id={`${idPrefix}-end-year-${index}`}
+                            value={entry.endYear}
+                            min={1900}
+                            max={2100}
+                            step={1}
+                            format={YEAR_FORMAT}
+                            allowOutOfRange
+                            onValueChange={(value) =>
+                              updateExperience(index, {
+                                endYear: value ?? null,
+                              })
+                            }
+                            inputProps={{
+                              "aria-label": `End year for experience entry ${index + 1}`,
+                              "aria-invalid": Boolean(endYearError),
+                              "aria-describedby": endYearError
+                                ? endYearErrorId
+                                : undefined,
+                            }}
+                          />
                           <FieldDescription>
                             Leave blank if this experience is ongoing.
                           </FieldDescription>
-                        }
-                        error={
-                          endYearError ? (
-                            <FieldError id={endYearErrorId}>
-                              {endYearError}
-                            </FieldError>
-                          ) : undefined
-                        }
-                      >
-                        <NumberField
-                          id={`${idPrefix}-end-year-${index}`}
-                          value={entry.endYear}
-                          min={1900}
-                          max={2100}
-                          step={1}
-                          format={YEAR_FORMAT}
-                          allowOutOfRange
-                          onValueChange={(value) =>
-                            updateExperience(index, { endYear: value ?? null })
-                          }
-                          inputProps={{
-                            "aria-label": `End year for experience entry ${index + 1}`,
-                            "aria-invalid": Boolean(endYearError),
-                            "aria-describedby": endYearError
-                              ? endYearErrorId
-                              : undefined,
-                          }}
-                        />
-                      </TutorFormField>
+                        </TutorFormField>
+                      </div>
                       <TutorFormField
+                        className="grid-cols-1 gap-y-1 sm:grid-cols-1"
                         htmlFor={`${idPrefix}-description-${index}`}
                         label="Description in brief"
                         error={
@@ -440,35 +423,55 @@ export function TutorExperiencesEditor({
                         />
                       </TutorFormField>
                     </div>
+                    <div className="mt-4 flex items-center justify-between">
+                      {index === experiences.length - 1 ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          id={`${idPrefix}-add`}
+                          disabled={
+                            experiences.length >= MAX_EXPERIENCE_ENTRIES
+                          }
+                          onClick={addExperience}
+                        >
+                          <IconPlus aria-hidden="true" />
+                          Add experience
+                        </Button>
+                      ) : (
+                        <span aria-hidden="true" />
+                      )}
+                      <Button
+                        type="button"
+                        variant="plain"
+                        size="xs-icon"
+                        aria-label={`Remove experience entry ${index + 1}`}
+                        onClick={() => removeExperience(index)}
+                      >
+                        <IconTrash aria-hidden="true" />
+                      </Button>
+                    </div>
                   </div>
                 );
               })}
             </div>
 
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="self-end"
-              id={`${idPrefix}-add`}
-              disabled={experienceEntries.length >= MAX_EXPERIENCE_ENTRIES}
-              onClick={() => {
-                setExperienceKeys((current) => [
-                  ...current,
-                  createDraftKey(`${idPrefix}-entry`),
-                ]);
-                onExperienceEntriesChange([
-                  ...experienceEntries,
-                  createEmptyExperienceEntry(),
-                ]);
-              }}
-            >
-              <IconPlus aria-hidden="true" />
-              Add experience
-            </Button>
-            {errors?.experienceEntries ? (
+            {experiences.length === 0 ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="self-start"
+                id={`${idPrefix}-add`}
+                onClick={addExperience}
+              >
+                <IconPlus aria-hidden="true" />
+                Add experience
+              </Button>
+            ) : null}
+            {errors?.experiences ? (
               <Field className="gap-0">
-                <FieldError>{errors.experienceEntries}</FieldError>
+                <FieldError>{errors.experiences}</FieldError>
               </Field>
             ) : null}
           </div>
@@ -484,7 +487,7 @@ export function TutorExperiencesEditor({
           </Text>
           <div className="mt-4">
             <TutorExperiencesDisplay
-              experienceEntries={experienceEntries}
+              experiences={experiences}
               emptyMessage="Add an experience to see the public profile preview."
             />
           </div>

@@ -75,7 +75,7 @@ describe("AdminTutor Types (Zod schemas)", () => {
         education: [
           { university: "Universitas Gadjah Mada", degree: "Bachelor of Law" },
         ],
-        competitionAchievements: [
+        achievements: [
           {
             competitionName: "Harvard Model United Nations",
             year: 2019,
@@ -95,7 +95,7 @@ describe("AdminTutor Types (Zod schemas)", () => {
         { university: "B", degree: "B" },
         { university: "C", degree: "C" },
       ],
-      competitionAchievements: [],
+      achievements: [],
     });
 
     expect(result.success).toBe(false);

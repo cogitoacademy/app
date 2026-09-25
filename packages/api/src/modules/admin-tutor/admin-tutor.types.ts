@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { profileImageUrl } from "../../lib/url-schema";
 import {
-  tutorCompetitionAchievementsInput,
+  tutorAchievementsInput,
   tutorEducationInput,
 } from "../tutor/tutor-achievements";
 
@@ -72,5 +72,5 @@ export const updateTutorAchievementsInput = z.object({
   tutorProfileId: z.string().max(100),
   version: z.number().int(),
   education: tutorEducationInput,
-  competitionAchievements: tutorCompetitionAchievementsInput,
+  achievements: tutorAchievementsInput,
 });
