@@ -265,7 +265,7 @@ function AnalyticsContent({
         />
         <AnalyticsMetric
           icon={<IconChartHistogram />}
-          label="Gross Marks volume"
+          label="Booked Marks (snapshot)"
           value={
             <CogitoMarks
               value={numberFormatter.format(data.summary.grossMarks)}
@@ -278,16 +278,16 @@ function AnalyticsContent({
                 value={numberFormatter.format(data.summary.platformTakeMarks)}
                 size="3"
               />{" "}
-              platform take
+              platform take snapshot
             </div>
           }
           tone="info-subtle"
         />
         <AnalyticsMetric
           icon={<IconUserPlus />}
-          label="Active learners"
+          label="Active booking proposers"
           value={numberFormatter.format(data.summary.activeLearners)}
-          helper={`${numberFormatter.format(data.summary.newStudents)} new students · ${numberFormatter.format(data.summary.newTutors)} tutors`}
+          helper={`${numberFormatter.format(data.summary.newStudents)} new students · ${numberFormatter.format(data.summary.newTutors)} tutors · proposer-based`}
           tone="warning-subtle"
         />
       </div>
@@ -408,6 +408,11 @@ function AnalyticsContent({
         <Card>
           <CardHeader>
             <CardTitle>Current booking portfolio</CardTitle>
+            <CardHeaderAction>
+              <Badge variant="secondary" pill>
+                All time
+              </Badge>
+            </CardHeaderAction>
           </CardHeader>
           <CardBody>
             {stateData.length > 0 ? (

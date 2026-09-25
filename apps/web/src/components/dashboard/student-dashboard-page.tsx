@@ -17,8 +17,11 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   IconArrowRight,
+  IconAlertCircle,
   IconCalendarEvent,
+  IconCircleCheck,
   IconSchool,
+  IconTrophy,
 } from "@tabler/icons-react";
 
 import {
@@ -27,6 +30,7 @@ import {
   type BookingCardData,
 } from "@/components/booking/booking-card";
 import { DashboardWelcomeCard } from "@/components/dashboard/dashboard-welcome-card";
+import { DashboardInsights } from "@/components/dashboard/dashboard-insights";
 import { BalanceWidget } from "@/components/dashboard/balance-widget";
 import { EmptyState } from "@/components/empty-state";
 import Loader from "@/components/loader";
@@ -47,6 +51,9 @@ export function StudentDashboardPage({ studentName }: { studentName: string }) {
     }),
   );
   const wallet = useQuery(orpc.wallet.get.queryOptions());
+  const achievementStats = useQuery(
+    orpc.achievement.stats.queryOptions({ input: undefined }),
+  );
 
   const now = useNow();
   const bookingItems = (bookings.data?.items ?? []) as BookingCardData[];
@@ -72,10 +79,95 @@ export function StudentDashboardPage({ studentName }: { studentName: string }) {
             heldBalance={wallet.data?.heldBalance ?? 0}
             totalBalance={wallet.data?.totalBalance ?? 0}
             isLoading={wallet.isPending}
+            actionLabel={
+              wallet.isPending
+                ? "Check balance"
+                : wallet.data?.availableBalance
+                  ? "Find a tutor"
+                  : wallet.data?.heldBalance
+                    ? "Review bookings"
+                    : "Top up"
+            }
+            actionHref={
+              wallet.data?.availableBalance
+                ? "/tutors"
+                : wallet.data?.heldBalance
+                  ? "/bookings"
+                  : "/balance"
+            }
           />
           <CompetitionCalendarCard />
         </div>
       </div>
+
+      <DashboardInsights
+        title="Learning pulse"
+        description="Use these signals to decide what needs attention next."
+        items={[
+          {
+            key: "action",
+            icon: <IconAlertCircle />,
+            label: "Needs action",
+            value: bookings.isPending
+              ? "..."
+              : (bookings.data?.counts.action ?? 0),
+            detail: "Requests or session decisions waiting on you",
+            tone: "warning-subtle",
+            to: "/bookings",
+            actionLabel: "Open bookings needing action",
+          },
+          {
+            key: "upcoming",
+            icon: <IconCalendarEvent />,
+            label: "Upcoming sessions",
+            value: bookings.isPending
+              ? "..."
+              : (bookings.data?.counts.upcoming ?? 0),
+            detail: "Scheduled sessions visible in your calendar",
+            tone: "info-subtle",
+            to: "/bookings",
+            actionLabel: "Open upcoming bookings",
+          },
+          {
+            key: "completed",
+            icon: <IconCircleCheck />,
+            label: "Completed sessions",
+            value: bookings.isPending
+              ? "..."
+              : (bookings.data?.counts.completed ?? 0),
+            detail: "Sessions completed across your booking history",
+            tone: "success-subtle",
+            to: "/bookings",
+            actionLabel: "Open completed bookings",
+          },
+          {
+            key: "problem",
+            icon: <IconAlertCircle />,
+            label: "Problem outcomes",
+            value: bookings.isPending
+              ? "..."
+              : (bookings.data?.counts.problem ?? 0),
+            detail: "Cancelled, missed, or expired sessions in history",
+            tone: "danger-subtle",
+            to: "/bookings",
+            actionLabel: "Open problem bookings",
+          },
+          {
+            key: "achievements",
+            icon: <IconTrophy />,
+            label: "Verified achievements",
+            value: achievementStats.isPending
+              ? "..."
+              : (achievementStats.data?.approved ?? 0),
+            detail: achievementStats.isPending
+              ? "Loading achievement status"
+              : `${achievementStats.data?.total ?? 0} total achievements submitted`,
+            tone: "primary-subtle",
+            to: "/achievements",
+            actionLabel: "Open achievements",
+          },
+        ]}
+      />
 
       <div className="grid items-start gap-4 min-[1600px]:grid-cols-2">
         <NextLessonSection

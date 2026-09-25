@@ -1,6 +1,23 @@
 # Cogito API Reference
 
-Last updated: 2026-09-18
+Last updated: 2026-09-25
+
+## Role-based dashboard analytics (2026-09-25)
+
+Student and tutor dashboards reuse the protected `booking.listMine` aggregate
+read for action, upcoming, completed, and problem counts. Counts are exact for
+the viewer's accessible bookings and are not limited to the first page. Student
+achievement cards use `achievement.stats`; tutor availability cards use
+`tutor.listAvailability`. The admin dashboard adds queue counts from existing
+admin booking, tutor-review, and achievement-review reads. No new RPC endpoint
+was added. Balance readiness remains a presentation decision from the existing
+`wallet.get` available/held/total snapshot; it does not estimate future booking
+affordability.
+
+Booking date labels render `Asia/Jakarta` as `WIB` instead of the browser's
+`GMT+7` short timezone label. Other IANA timezones retain the native Intl short
+label. Shared empty states use the existing Selia token system and remain
+presentation-only; the dashed-border experiment was reverted.
 
 ## Temporary Knowledge Bank access grants (2026-09-18)
 
@@ -484,7 +501,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Admin
 - **Input:** `{ period?: "7d" | "30d" | "90d" }` (default `"30d"`)
 - **Output:** `{ period, periodStart, periodEnd, summary, bookingTrend, userTrend, stateBreakdown, modalityBreakdown, categoryBreakdown }`
-- **Description:** Returns the aggregate data used by the admin Business insights section. Period metrics use booking/user creation time and WIB calendar days; `summary` includes booking volume, resolved-booking completion rate, active learners, new students/tutors, gross Marks, and platform-take Marks. `stateBreakdown` is the live all-bookings state mix, while modality/category breakdowns are scoped to the selected period. Missing trend days are returned as zero rows so charts stay continuous.
+- **Description:** Returns the aggregate data used by the admin Business insights section. Period metrics use booking/user creation time and WIB calendar days; `summary.activeLearners` is explicitly a distinct booking-proposer count, not a participant or login-active-user count. `summary.grossMarks` and `summary.platformTakeMarks` are locked booking-price snapshots, not cash revenue or settlement. `stateBreakdown` is the live all-bookings state mix, while modality/category breakdowns are scoped to the selected period. Missing trend days are returned as zero rows so charts stay continuous.
 
 ### `admin.listUsers`
 
@@ -1071,8 +1088,8 @@ RPC contract.
 
 - **Auth:** Protected
 - **Input:** `{ cursor?, limit?, states?, view? }`, where `view` is `action | upcoming | recurring | history | all`
-- **Output:** `{ items: Booking[], nextCursor, counts: { action, upcoming, recurring, history, all } }`
-- **Description:** Shared role-aware booking list. Students see bookings where they are proposer or participant, tutors see bookings assigned to them, and admins see all bookings. `states` can narrow results for server consumers; `view` applies the booking-list tab semantics server-side before cursor pagination. The `action` view includes pending booking decisions for all roles and, for tutors only, `scheduled` single/group bookings whose `scheduledEndAt` has passed plus series bookings with at least one ended scheduled child session. Those completion tasks are excluded from the tutor's `upcoming` and `history` facets until completed. Counts are exact role-scoped facets across all accessible bookings, not only the current page. The web requests 20 items at a time and follows `nextCursor` for **Load more bookings**. Related user projections contain display identity only (`id`, `name`, `image`, `role`); internal meeting attendee email arrays are never part of this response. The web row presents Marks with the Cogito mark icon and keeps status explanations in the status-badge tooltip. Dashboards reuse the same read model for their next-lesson card; no dashboard-specific endpoint is required.
+- **Output:** `{ items: Booking[], nextCursor, counts: { action, upcoming, recurring, history, completed, problem, all } }`
+- **Description:** Shared role-aware booking list. Students see bookings where they are proposer or participant, tutors see bookings assigned to them, and admins see all bookings. `states` can narrow results for server consumers; `view` applies the booking-list tab semantics server-side before cursor pagination. The `action` view includes pending booking decisions for all roles and, for tutors only, `scheduled` single/group bookings whose `scheduledEndAt` has passed plus series bookings with at least one ended scheduled child session. Those completion tasks are excluded from the tutor's `upcoming` and `history` facets until completed. `completed` counts bookings in `completed`; `problem` counts `cancelled`, `late_cancelled`, `no_show`, and `expired`. Counts are exact role-scoped facets across all accessible bookings, not only the current page. The web requests 20 items at a time and follows `nextCursor` for **Load more bookings**. Related user projections contain display identity only (`id`, `name`, `image`, `role`); internal meeting attendee email arrays are never part of this response. The web row presents Marks with the Cogito mark icon and keeps status explanations in the status-badge tooltip. Dashboards reuse the same read model for their next-lesson card; no dashboard-specific endpoint is required.
 
 ### `booking.cancel`
 

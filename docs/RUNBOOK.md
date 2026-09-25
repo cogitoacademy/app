@@ -1,6 +1,14 @@
 # Cogito Runbook
 
-Last updated: 2026-09-22
+Last updated: 2026-09-25
+
+## Dashboard timezone and empty-state smoke check (2026-09-25)
+
+Open a booking list, booking detail, tutor dashboard, and admin operations page
+with a booking in `Asia/Jakarta`. Date/deadline labels must end in `WIB`, never
+`GMT+7`. Other test timezones may retain their native Intl short label. Confirm
+empty states retain existing backgrounds and spacing; no dashed border is
+expected because that visual trial was reverted.
 
 ## Tutor class-capacity smoke check (2026-09-22)
 

@@ -55,6 +55,8 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
       upcoming: 0,
       recurring: 0,
       history: 0,
+      completed: 0,
+      problem: 0,
       all: 0,
     })),
     findTutorProfile: mock(async () => null),
@@ -721,6 +723,8 @@ describe("BookingService", () => {
         upcoming: 4,
         recurring: 1,
         history: 8,
+        completed: 6,
+        problem: 2,
         all: 14,
       };
       const { service, repo } = createService({

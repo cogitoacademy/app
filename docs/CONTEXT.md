@@ -2,6 +2,27 @@
 
 Last updated: 2026-09-25
 
+## Role-based dashboard analytics (2026-09-25)
+
+Student and tutor dashboards now show action-oriented insight cards sourced
+from protected `booking.listMine` counts: needs action, upcoming, completed,
+and problem outcomes. Students also see verified achievement count from
+`achievement.stats` and a wallet-readiness CTA; tutors see active availability
+windows from `tutor.listAvailability` and the nearest available action deadline.
+Admin `/dashboard` shows queue counts for escalated bookings, booking
+exceptions, tutor reviews, and achievement reviews using existing admin reads.
+
+Admin Business insights labels are explicit: the booking-state portfolio is
+all-time/live, selected-period trends use WIB calendar days, and booked Marks
+plus platform take are locked booking snapshots rather than cash revenue.
+`activeLearners` remains proposer-based and is rendered as **Active booking
+proposers** until group-participant and login-activity definitions are approved.
+No new RPC endpoint was added. Remaining plan work: tutor capacity/payout
+analytics and admin payment, funnel, supply-demand, and SLA aggregates.
+Booking date copy uses `WIB` for `Asia/Jakarta` instead of `GMT+7`; other
+timezones retain native Intl labels. A dashed border trial on shared empty
+states was reverted and is not part of the current visual system.
+
 ## Competition Calendar stable event lanes (2026-09-23)
 
 Month-view competitions keep one vertical lane across every day they span within

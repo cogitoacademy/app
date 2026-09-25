@@ -2,7 +2,14 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { IconArrowRight, IconInbox } from "@tabler/icons-react";
+import {
+  IconAlertCircle,
+  IconArrowRight,
+  IconCalendarEvent,
+  IconCircleCheck,
+  IconClock,
+  IconInbox,
+} from "@tabler/icons-react";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
@@ -24,6 +31,7 @@ import {
   type BookingCardData,
 } from "@/components/booking/booking-card";
 import { DashboardWelcomeCard } from "@/components/dashboard/dashboard-welcome-card";
+import { DashboardInsights } from "@/components/dashboard/dashboard-insights";
 import {
   formatBookingDate,
   getBookingStateLabel,
@@ -41,6 +49,7 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
   );
   const profile = useQuery(orpc.tutor.getMyProfile.queryOptions());
   const payouts = useQuery(orpc.tutor.getMyPayouts.queryOptions({ input: {} }));
+  const availability = useQuery(orpc.tutor.listAvailability.queryOptions());
 
   const items = (bookings.data?.items ?? []) as BookingCardData[];
   const reviewQueue = items.filter(
@@ -54,6 +63,12 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
         new Date(b.scheduledStartAt).getTime(),
     );
   const nextBooking = upcoming[0];
+  const nearestActionDeadline = items
+    .filter((booking) => booking.deadlineAt)
+    .toSorted(
+      (a, b) =>
+        new Date(a.deadlineAt!).getTime() - new Date(b.deadlineAt!).getTime(),
+    )[0];
   const pendingHonorarium = payouts.data?.tutorPayoutIdr ?? 0;
   const hasBankDetails = Boolean(
     profile.data?.bankName?.trim() &&
@@ -84,6 +99,63 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
           reviewQueue={reviewQueue}
         />
       </div>
+
+      <DashboardInsights
+        title="Teaching pulse"
+        description="Keep requests, sessions, and schedule capacity moving."
+        items={[
+          {
+            key: "action",
+            icon: <IconAlertCircle />,
+            label: "Needs action",
+            value: bookings.isPending
+              ? "..."
+              : (bookings.data?.counts.action ?? 0),
+            detail: nearestActionDeadline
+              ? `Next deadline: ${formatBookingDate(nearestActionDeadline.deadlineAt!, nearestActionDeadline.timezone)}`
+              : "Requests or completion steps waiting on you",
+            tone: "warning-subtle",
+            to: "/bookings",
+            actionLabel: "Open bookings needing action",
+          },
+          {
+            key: "upcoming",
+            icon: <IconCalendarEvent />,
+            label: "Upcoming sessions",
+            value: bookings.isPending
+              ? "..."
+              : (bookings.data?.counts.upcoming ?? 0),
+            detail: "Scheduled sessions on your teaching calendar",
+            tone: "info-subtle",
+            to: "/bookings",
+            actionLabel: "Open upcoming bookings",
+          },
+          {
+            key: "completed",
+            icon: <IconCircleCheck />,
+            label: "Completed sessions",
+            value: bookings.isPending
+              ? "..."
+              : (bookings.data?.counts.completed ?? 0),
+            detail: "Completed sessions visible in your history",
+            tone: "success-subtle",
+            to: "/bookings",
+            actionLabel: "Open completed bookings",
+          },
+          {
+            key: "availability",
+            icon: <IconClock />,
+            label: "Availability windows",
+            value: availability.isPending
+              ? "..."
+              : (availability.data?.length ?? 0),
+            detail: "Active windows open for student bookings",
+            tone: "primary-subtle",
+            to: "/availability",
+            actionLabel: "Open availability",
+          },
+        ]}
+      />
 
       <div className="grid items-start gap-4 lg:grid-cols-2">
         <Card className="min-w-0">

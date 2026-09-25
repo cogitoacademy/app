@@ -1,6 +1,26 @@
 # Cogito Module Reference
 
-Last updated: 2026-09-18
+Last updated: 2026-09-25
+
+## Role-based dashboard analytics (2026-09-25)
+
+Dashboard analytics stays read-only and role-scoped. Student and tutor cards
+consume `booking.listMine` counts from `listAccessible`; the repository computes
+`completed` and `problem` across every accessible booking rather than the
+current page. Student achievement status comes from `achievement.stats`, tutor
+availability count comes from `tutor.listAvailability`, and admin queue cards
+reuse admin booking/tutor/achievement moderation reads. Balance readiness is
+derived from the wallet snapshot without claiming future affordability.
+
+Admin Business insights labels distinguish selected-period metrics from the
+live all-time state portfolio. Booked Marks and platform take remain locked
+booking-price snapshots, not payment cash or realized revenue. Active learners
+is currently named **Active booking proposers** in the UI because the aggregate
+does not yet count group participants or login activity.
+
+`formatBookingDate` maps `Asia/Jakarta` to the user-facing `WIB` suffix while
+preserving native Intl short labels for other IANA zones. The shared
+`EmptyState` visual remains unchanged after reverting the dashed-border trial.
 
 ## Temporary Knowledge Bank access grants (2026-09-18)
 
@@ -641,7 +661,7 @@ The Participants fieldset owns the derived Solo/Group badge; summaries represent
 **Service Methods:**
 
 - `getById(bookingId, userId, userRole?)` — Returns booking with access check; admins may inspect any booking. The read model derives `meetingStatus`/`meetingUrl` and includes participant profile images plus state-history fields used by the booking-detail timeline.
-- `listAccessible(userId, userRole, opts)` — Shared role-aware list: proposer/participant visibility for students, assigned bookings for tutors, and all bookings for admins; cursor-paginated
+- `listAccessible(userId, userRole, opts)` — Shared role-aware list: proposer/participant visibility for students, assigned bookings for tutors, and all bookings for admins; cursor-paginated. Returns exact role-scoped `action`, `upcoming`, `recurring`, `history`, `completed`, `problem`, and `all` counts alongside the page.
 - `listMine(userId, opts)` — Paginated list of user's bookings (proposer)
 - `listForTutor(tutorId, opts)` — Paginated list of bookings assigned to a tutor
 - `createSolo(proposerId, input)` — Creates solo booking with wallet hold, overlap check, and notification
@@ -691,6 +711,7 @@ The Participants fieldset owns the derived Solo/Group badge; summaries represent
 - Availability is stored as a free-time window; students may choose any minute-level start that keeps the server-fixed 90-minute session inside it. Terminal bookings do not keep the window blocked.
 - Rescheduling is per session, may iterate until accepted, expires after 24 hours, and requires the tutor plus every active student. The booking proposer may propose or counter in the eligible pre-terminal states, including `confirmed` and `scheduled`; student proposals remain subject to current/new H-2 checks. Proposal expiry reverts to the pre-proposal state without cancelling the booking, releasing its hold, or changing its original schedule. For offline booking-level proposals, room assignment timing is kept in sync on accept/reject/expiry, with a room-approval fallback on conflict. Only the tutor may propose outside the original availability window. Force-majeure exceptions are handled by support/admin operations with an auditable reason and an admin override decision rather than an automatic H-2 bypass.
 - Optimistic locking via `version` field prevents concurrent state changes
+- Dashboard facet counts are computed from the full role-visible booking relation, not the requested page. `completed` means `currentState = completed`; `problem` means `cancelled`, `late_cancelled`, `no_show`, or `expired`.
 - Calendar/Meet event summaries and the authenticated booking list/detail title use the same `formatBookingEventTitle` formatter: `Cogito - {Competition} | {Tutor} x {Student}`, with `& Friends` for group/group-series bookings. This is presentation metadata only and does not add a database column or RPC response field.
 - New IDR booking snapshots copy the active economy version, tutor base/increment, tutor honorarium, Cogito take, total IDR, total Marks, and rounded pooled Marks. Later economy updates do not mutate those snapshots.
 - Only `student` accounts can create bookings or perform student participant actions; tutor/admin attempts fail with `FORBIDDEN` before handlers run. The protected booking list/detail/session reads are available to authenticated parties, while admins can inspect the full booking set; tutor fulfillment remains under `tutorActions.*`.

@@ -90,7 +90,7 @@ export function formatBookingDate(
   value: string | Date,
   timeZone = "Asia/Jakarta",
 ) {
-  return new Intl.DateTimeFormat("en-GB", {
+  const formatted = new Intl.DateTimeFormat("en-GB", {
     weekday: "short",
     day: "numeric",
     month: "short",
@@ -98,8 +98,10 @@ export function formatBookingDate(
     hour: "2-digit",
     minute: "2-digit",
     timeZone,
-    timeZoneName: "short",
+    ...(timeZone === "Asia/Jakarta" ? {} : { timeZoneName: "short" }),
   }).format(new Date(value));
+
+  return timeZone === "Asia/Jakarta" ? `${formatted} WIB` : formatted;
 }
 
 export function formatBookingDateOnly(
