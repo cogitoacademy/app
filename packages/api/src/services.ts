@@ -30,7 +30,6 @@ import { createSupportModule } from "./modules/support";
 import { createUploadModule } from "./modules/upload";
 import { createContactModule } from "./modules/contact";
 import { createStorage } from "./lib/storage";
-import type { XenditMode } from "./modules/payment/xendit-payment.provider";
 import type { MidtransMode } from "./modules/payment/midtrans-payment.provider";
 
 import type { AuditPort } from "./modules/audit/audit.service";
@@ -170,51 +169,13 @@ export function resolveGoogleMeetConfig(input: GoogleMeetConfigInput) {
   return undefined;
 }
 
-export interface XenditConfigInput {
-  provider: string;
-  secretKey?: string;
-  webhookToken?: string;
-  mode?: XenditMode;
-  testAllowedEmails?: string;
-  successRedirectUrl?: string;
-  failureRedirectUrl?: string;
-  defaultPaymentMethod: "ewallet_ovo" | "qris" | "va_bca";
-}
-
-export function resolveXenditConfig(input: XenditConfigInput) {
-  if (
-    input.provider !== "xendit" ||
-    !input.secretKey ||
-    !input.webhookToken ||
-    !input.mode
-  ) {
-    return undefined;
-  }
-
-  return {
-    secretKey: input.secretKey,
-    webhookToken: input.webhookToken,
-    mode: input.mode,
-    testAllowedEmails: (input.testAllowedEmails ?? "")
-      .split(",")
-      .map((email) => email.trim().toLowerCase())
-      .filter(Boolean),
-    successRedirectUrl: input.successRedirectUrl ?? "",
-    failureRedirectUrl: input.failureRedirectUrl ?? "",
-    defaultPaymentMethod: input.defaultPaymentMethod,
-  };
-}
-
 export interface MidtransConfigInput {
   provider: string;
   serverKey?: string;
   merchantId?: string;
   mode?: MidtransMode;
   webhookSignatureKey?: string;
-  // Shared (provider-agnostic) test-mode UAT list, sourced from
-  // env.XENDIT_TEST_ALLOWED_EMAILS (no new env keys — see the field comment
-  // in packages/env/src/server.ts). CSV, normalized to trim + lowercase like
-  // resolveXenditConfig.
+  // Shared test-mode UAT list, normalized to trim + lowercase.
   testAllowedEmails?: string;
 }
 
@@ -298,22 +259,8 @@ function createServices() {
   });
 
   // Core modules
-  // The Xendit config is resolved once and shared: the payment module uses it
-  // to enforce Test Mode restrictions, and the wallet module exposes the mode
-  // to clients (listPackages) so the web app can label Test Mode amount caps.
-  const xenditConfig = resolveXenditConfig({
-    provider: env.PAYMENT_PROVIDER,
-    secretKey: env.XENDIT_SECRET_KEY,
-    webhookToken: env.XENDIT_WEBHOOK_TOKEN,
-    mode: env.XENDIT_MODE,
-    testAllowedEmails: env.XENDIT_TEST_ALLOWED_EMAILS,
-    successRedirectUrl: env.XENDIT_SUCCESS_REDIRECT_URL,
-    failureRedirectUrl: env.XENDIT_FAILURE_REDIRECT_URL,
-    defaultPaymentMethod: env.XENDIT_DEFAULT_PAYMENT_METHOD,
-  });
   const wallet = createWalletModule({
     db,
-    xenditMode: xenditConfig?.mode,
     knowledgeBankAccess: adminKnowledgeBank.service,
   });
   const content = createContentModule({ wallet: wallet.service });
@@ -400,16 +347,14 @@ function createServices() {
     db,
     wallet: wallet.service,
     provider: env.PAYMENT_PROVIDER,
-    xenditConfig,
     midtransConfig: resolveMidtransConfig({
       provider: env.PAYMENT_PROVIDER,
       serverKey: env.MIDTRANS_SERVER_KEY,
       merchantId: env.MIDTRANS_MERCHANT_ID,
       mode: env.MIDTRANS_MODE,
       webhookSignatureKey: env.MIDTRANS_WEBHOOK_SIGNATURE_KEY,
-      // The shared test-mode UAT list (XENDIT_TEST_ALLOWED_EMAILS) gates
-      // Midtrans Sandbox purchases too — see resolveMidtransConfig.
-      testAllowedEmails: env.XENDIT_TEST_ALLOWED_EMAILS,
+      // Shared test-mode UAT list gates Midtrans Sandbox purchases too.
+      testAllowedEmails: env.PAYMENT_TEST_ALLOWED_EMAILS,
     }),
     webhookSecret: env.PAYMENT_WEBHOOK_SECRET,
     notification: notification.service,
@@ -424,8 +369,8 @@ function createServices() {
     wallet: wallet.service,
     refund: {
       ...refund.service,
-      // X1: the provider refund runs against the active payment provider
-      // (Xendit real refund / stub mock id).
+      // The provider refund runs against the active payment provider
+      // (real provider refund / stub mock id).
       refundWithProvider: createProviderRefundDelegate(
         payment.service.provider,
       ),

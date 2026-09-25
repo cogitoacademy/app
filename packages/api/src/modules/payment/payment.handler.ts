@@ -29,16 +29,16 @@ export function createPaymentHandler(
   wallet: PaymentHandlerWalletPort,
   config: {
     /**
-     * The active provider's environment mode ("test" for Xendit Test Mode /
-     * Midtrans Sandbox, "live" for the real environment). Drives the Test Mode
-     * purchase restriction and the `canSimulate` flag.
+     * The active provider's environment mode ("test" for a sandbox,
+     * "live" for the real environment). Drives the Test Mode purchase
+     * restriction and the `canSimulate` flag.
      */
     providerMode?: "test" | "live";
     testAllowedEmails?: readonly string[];
     /**
-     * Whether the active provider exposes a Test Mode simulation endpoint
-     * (Xendit does; Midtrans sandbox does not — test payments use the sandbox
-     * test cards on the Snap page).
+     * Whether the active provider exposes a Test Mode simulation endpoint.
+     * Midtrans Sandbox has no simulation endpoint; test payments use sandbox
+     * test cards on the Snap page.
      */
     simulationEnabled?: boolean;
   } = {},

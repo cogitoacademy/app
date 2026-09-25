@@ -1,4 +1,13 @@
-import { eq, and, desc, inArray, getTableColumns } from "drizzle-orm";
+import {
+  eq,
+  and,
+  desc,
+  asc,
+  inArray,
+  getTableColumns,
+  isNotNull,
+  lt,
+} from "drizzle-orm";
 import { paymentRecord, markPackage } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
@@ -83,6 +92,31 @@ export async function findPaymentById(conn: DbOrTx, id: string) {
     .where(eq(paymentRecord.id, id))
     .limit(1);
   return record ?? null;
+}
+
+export async function findPaymentsForReconciliation(
+  conn: DbOrTx,
+  provider: string,
+  olderThan: Date,
+  limit: number,
+) {
+  return conn
+    .select({ ...getTableColumns(paymentRecord) })
+    .from(paymentRecord)
+    .where(
+      and(
+        eq(paymentRecord.provider, provider),
+        inArray(paymentRecord.status, [
+          PAYMENT_STATUS.PENDING,
+          PAYMENT_STATUS.FAILED,
+          PAYMENT_STATUS.EXPIRED,
+        ]),
+        isNotNull(paymentRecord.providerRequestId),
+        lt(paymentRecord.updatedAt, olderThan),
+      ),
+    )
+    .orderBy(asc(paymentRecord.updatedAt), asc(paymentRecord.id))
+    .limit(limit);
 }
 
 /**
@@ -204,6 +238,19 @@ export function createPaymentRepo(db: DbType) {
     },
     findPaymentById(id: string, conn?: DbOrTx) {
       return findPaymentById(conn ?? db, id);
+    },
+    findPaymentsForReconciliation(
+      provider: string,
+      olderThan: Date,
+      limit: number,
+      conn?: DbOrTx,
+    ) {
+      return findPaymentsForReconciliation(
+        conn ?? db,
+        provider,
+        olderThan,
+        limit,
+      );
     },
     findPaymentByProviderEventId(providerEventId: string, conn?: DbOrTx) {
       return findPaymentByProviderEventId(conn ?? db, providerEventId);

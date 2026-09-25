@@ -69,13 +69,13 @@ describe("metrics exposition", () => {
       breakers: {
         resend: "open",
         "google-meet": "closed",
-        xendit: "half-open",
+        midtrans: "half-open",
       },
     });
     expect(out).toContain(
       'breaker_state{name="google-meet",instance="single"} 0',
     );
-    expect(out).toContain('breaker_state{name="xendit",instance="single"} 1');
+    expect(out).toContain('breaker_state{name="midtrans",instance="single"} 1');
     expect(out).toContain('breaker_state{name="resend",instance="single"} 2');
   });
 
@@ -114,11 +114,11 @@ describe("metrics exposition", () => {
     expect(
       renderExposition({
         version: "abc123def",
-        provider: "xendit",
+        provider: "midtrans",
         providerMode: "live",
       }),
     ).toContain(
-      'app_info{version="abc123def",provider="xendit",provider_mode="live"} 1',
+      'app_info{version="abc123def",provider="midtrans",provider_mode="live"} 1',
     );
     expect(
       renderExposition({
@@ -152,8 +152,8 @@ describe("metrics exposition", () => {
       renderExposition({ provider: "midtrans", providerMode: "test" }),
     ).toContain('provider="midtrans",provider_mode="test"');
     expect(
-      renderExposition({ provider: "xendit", providerMode: "live" }),
-    ).toContain('provider="xendit",provider_mode="live"');
+      renderExposition({ provider: "midtrans", providerMode: "live" }),
+    ).toContain('provider="midtrans",provider_mode="live"');
     expect(renderExposition({ provider: "stub" })).toContain(
       'provider="stub",provider_mode="none"',
     );

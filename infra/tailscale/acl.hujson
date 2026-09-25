@@ -30,7 +30,7 @@
     },
 
     // The server needs outbound egress for its public traffic (Postgres,
-    // Redis, Resend, Xendit, Google, Sanity, R2, backups). The tailnet ACL
+    // Redis, Resend, Midtrans, Google, Sanity, R2, backups). The tailnet ACL
     // governs *control-plane* reachability; public egress is not a tailnet
     // route. Allow server -> members for any future control-plane need
     // (e.g. pulling from the operator's machine), scoped narrowly.

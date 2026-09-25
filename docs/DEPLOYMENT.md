@@ -299,7 +299,7 @@ not append it to the URL. The workflow must send it as an
 > variant first (token with the `deploy` permission); if it still returns
 > `401`/`404`, the Traefik route for `cl.cogitoacademy.id/api/v1/deploy/*`
 > is missing (declared in `infra/ansible/coolify-resources.yml`). Both causes
-> are documented in RUNBOOK → Xendit webhook wiring → "Webhook 401
+> are documented in RUNBOOK → deploy webhook wiring → "Webhook 401
 > investigation".
 
 The workflows intentionally fail if a webhook is missing or unreachable. A

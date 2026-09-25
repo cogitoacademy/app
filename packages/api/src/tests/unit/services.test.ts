@@ -3,7 +3,6 @@ import {
   createProviderRefundDelegate,
   resolveGoogleMeetConfig,
   resolveMidtransConfig,
-  resolveXenditConfig,
 } from "../../services";
 
 describe("Services conditional logic", () => {
@@ -57,32 +56,6 @@ describe("Services conditional logic", () => {
     expect(
       resolveGoogleMeetConfig({ clientEmail: "service@example.com" }),
     ).toBe(undefined);
-  });
-
-  test("resolves Xendit configuration only for a complete Xendit setup", () => {
-    expect(
-      resolveXenditConfig({
-        provider: "xendit",
-        secretKey: "secret",
-        webhookToken: "token",
-        mode: "test",
-        testAllowedEmails: "QA@cogitoacademy.id",
-        successRedirectUrl: "https://app.test/success",
-        failureRedirectUrl: "https://app.test/failure",
-        defaultPaymentMethod: "qris",
-      }),
-    ).toMatchObject({
-      secretKey: "secret",
-      webhookToken: "token",
-      mode: "test",
-      defaultPaymentMethod: "qris",
-    });
-    expect(
-      resolveXenditConfig({
-        provider: "stub",
-        defaultPaymentMethod: "ewallet_ovo",
-      }),
-    ).toBeUndefined();
   });
 
   test("resolves Midtrans configuration only for a complete Midtrans setup", () => {
@@ -201,41 +174,5 @@ describe("Services conditional logic", () => {
     );
 
     expect(useGoogleMeet).toBe(false);
-  });
-
-  test("Xendit enabled when both secret key and webhook token are set", () => {
-    const XENDIT_SECRET_KEY = "sk-test";
-    const XENDIT_WEBHOOK_TOKEN = "wt-test";
-
-    const useXendit = !!(XENDIT_SECRET_KEY && XENDIT_WEBHOOK_TOKEN);
-
-    expect(useXendit).toBe(true);
-  });
-
-  test("Xendit disabled when secret key is missing", () => {
-    const XENDIT_SECRET_KEY: string | undefined = undefined;
-    const XENDIT_WEBHOOK_TOKEN = "wt-test";
-
-    const useXendit = !!(XENDIT_SECRET_KEY && XENDIT_WEBHOOK_TOKEN);
-
-    expect(useXendit).toBe(false);
-  });
-
-  test("Xendit disabled when webhook token is missing", () => {
-    const XENDIT_SECRET_KEY = "sk-test";
-    const XENDIT_WEBHOOK_TOKEN: string | undefined = undefined;
-
-    const useXendit = !!(XENDIT_SECRET_KEY && XENDIT_WEBHOOK_TOKEN);
-
-    expect(useXendit).toBe(false);
-  });
-
-  test("Xendit disabled when both are missing", () => {
-    const XENDIT_SECRET_KEY: string | undefined = undefined;
-    const XENDIT_WEBHOOK_TOKEN: string | undefined = undefined;
-
-    const useXendit = !!(XENDIT_SECRET_KEY && XENDIT_WEBHOOK_TOKEN);
-
-    expect(useXendit).toBe(false);
   });
 });

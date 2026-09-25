@@ -50,12 +50,12 @@ describe("payment.errors", () => {
   });
   describe("PaymentProviderError", () => {
     it("should be instance of DomainError", () => {
-      const err = new PaymentProviderError("xendit", "timeout");
+      const err = new PaymentProviderError("midtrans", "timeout");
       expect(err).toBeInstanceOf(DomainError);
       expect(err).toBeInstanceOf(Error);
     });
     it("should have correct properties", () => {
-      const err = new PaymentProviderError("xendit", new Error("timeout"));
+      const err = new PaymentProviderError("midtrans", new Error("timeout"));
       expect(err.code).toBe("PAYMENT_PROVIDER_ERROR");
       expect(err.domain).toBe("payment");
       expect(err.message).toBe("Payment provider temporarily unavailable");
@@ -63,7 +63,7 @@ describe("payment.errors", () => {
     });
     it("preserves bounded provider HTTP diagnostics", () => {
       const err = new PaymentProviderError(
-        "xendit",
+        "midtrans",
         new Error(
           "Payment simulation error: 403 REQUEST_FORBIDDEN_ERROR - Use a Test Mode API key",
         ),
@@ -117,7 +117,9 @@ describe("payment.errors", () => {
       expect(result.status).toBe(409);
     });
     it("should map PaymentProviderError to SERVICE_UNAVAILABLE", () => {
-      const result = mapPaymentError(new PaymentProviderError("xendit", "err"));
+      const result = mapPaymentError(
+        new PaymentProviderError("midtrans", "err"),
+      );
       expect(result.status).toBe(503);
     });
     it("should fall back to INTERNAL_SERVER_ERROR for unknown domain error", () => {

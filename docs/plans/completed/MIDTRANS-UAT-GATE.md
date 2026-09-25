@@ -59,11 +59,11 @@ SOPS vault ──▶ env.yml ──GET envs──▶ PATCH first-match by key / 
 - **Source of truth is files, not UI clicks:** Grafana access is
   loopback/tailnet-only; `infra/grafana/provisioning/**` is provisioned with
   `allowUiUpdates: false`. Iterate in git, not in the UI.
-- **Root decision (locked): option (a)** — `XENDIT_TEST_ALLOWED_EMAILS` is the
-  provider-agnostic test-mode UAT list, not "Xendit-only". Every doc touched
-  by this wave says that.
+- **Root decision (locked): option (a)** — `PAYMENT_TEST_ALLOWED_EMAILS` is the
+  provider-agnostic test-mode UAT list. It gates Midtrans Sandbox purchases in
+  production-like environments.
 - **Metric contract (owned by the sibling backend worker, not this wave):**
-  `app_info{version="<sha|dev>",provider="<stub|xendit|midtrans>",provider_mode="<test|live|none>"}`
+  `app_info{version="<sha|dev>",provider="<stub|midtrans>",provider_mode="<test|live|none>"}`
   value `1`. Panels below build on exactly that; if the series is absent, the
   dashboard stat shows its NoData-safe text and the stub alert stays OK-safe
   (never `KeepLast`-held, never silent-OK confusion — OK means Normal state).
@@ -133,6 +133,7 @@ SOPS vault ──▶ env.yml ──GET envs──▶ PATCH first-match by key / 
   (`rules.yaml` T3 and `env.yml` T4 unchanged). Their own reverts live with
   their owning waves.
 - **Docs/plan:** `git revert`; no runtime effect.
-- **Provider rollback (unchanged, owned by `docs/MIDTRANS-MIGRATION.md` §6):**
-  `PAYMENT_PROVIDER=xendit` + matching `XENDIT_MODE`/keys; Xendit path stays
-  wired. This wave adds no new rollback dependency.
+- **Provider rollback (owned by `docs/MIDTRANS-MIGRATION.md` §6):**
+  redeploy the last known-good image with matching Midtrans configuration, or
+  set `PAYMENT_PROVIDER=stub` as an emergency stop after confirming no real
+  checkout can be created. The retired provider is not re-enabled.

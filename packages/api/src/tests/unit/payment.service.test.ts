@@ -79,7 +79,9 @@ function makeRepo(overrides: Partial<PaymentRepo> = {}): PaymentRepo {
 
 function makeDb() {
   return {
-    transaction: mock(async (fn: any) => fn({})),
+    transaction: mock(async (fn: any) =>
+      fn({ execute: mock(async () => undefined) }),
+    ),
   } as any;
 }
 
@@ -212,11 +214,15 @@ describe("PaymentService", () => {
 
       const result = await service.createIntent("user1", "w1", "pkg1");
       expect(result.checkoutUrl).toBe("https://checkout.test/refreshed");
-      expect(updatePaymentStatus).toHaveBeenCalledWith("pay_existing", {
-        status: PAYMENT_STATUS.PENDING,
-        providerRequestId: "pr_refreshed",
-        checkoutUrl: "https://checkout.test/refreshed",
-      });
+      expect(updatePaymentStatus).toHaveBeenCalledWith(
+        "pay_existing",
+        {
+          status: PAYMENT_STATUS.PENDING,
+          providerRequestId: "pr_refreshed",
+          checkoutUrl: "https://checkout.test/refreshed",
+        },
+        expect.anything(),
+      );
     });
 
     test("H4: PENDING re-purchase returns the stored checkoutUrl without re-calling the provider", async () => {
@@ -339,11 +345,15 @@ describe("PaymentService", () => {
       });
 
       await service.createIntent("user1", "w1", "pkg1");
-      expect(updatePaymentStatus).toHaveBeenCalledWith("pay_winner", {
-        status: PAYMENT_STATUS.PENDING,
-        providerRequestId: "pr_winner",
-        checkoutUrl: "https://checkout.test/winner",
-      });
+      expect(updatePaymentStatus).toHaveBeenCalledWith(
+        "pay_winner",
+        {
+          status: PAYMENT_STATUS.PENDING,
+          providerRequestId: "pr_winner",
+          checkoutUrl: "https://checkout.test/winner",
+        },
+        expect.anything(),
+      );
     });
 
     test("B6: reuses the winner's stored checkout URL", async () => {
@@ -446,11 +456,15 @@ describe("PaymentService", () => {
       });
 
       await service.createIntent("user1", "w1", "pkg1");
-      expect(updatePaymentStatus).toHaveBeenCalledWith(expect.any(String), {
-        status: PAYMENT_STATUS.PENDING,
-        providerRequestId: "pr_new",
-        checkoutUrl: "https://checkout.test/new",
-      });
+      expect(updatePaymentStatus).toHaveBeenCalledWith(
+        expect.any(String),
+        {
+          status: PAYMENT_STATUS.PENDING,
+          providerRequestId: "pr_new",
+          checkoutUrl: "https://checkout.test/new",
+        },
+        expect.anything(),
+      );
     });
 
     test("createIntent re-purchases after a FAILED payment with a new payment row", async () => {
@@ -485,10 +499,14 @@ describe("PaymentService", () => {
       expect(result.paymentId).not.toBe("pay_existing");
       expect(result.providerReference).toMatch(/^stub:user1:pkg1:/);
       expect(result.checkoutUrl).toBe("https://checkout.test/123");
-      expect(updatePaymentStatus).toHaveBeenCalledWith(result.paymentId, {
-        status: PAYMENT_STATUS.PENDING,
-        checkoutUrl: "https://checkout.test/123",
-      });
+      expect(updatePaymentStatus).toHaveBeenCalledWith(
+        result.paymentId,
+        {
+          status: PAYMENT_STATUS.PENDING,
+          checkoutUrl: "https://checkout.test/123",
+        },
+        expect.anything(),
+      );
     });
 
     test("createIntent re-purchases after an EXPIRED payment with a new payment row", async () => {
@@ -523,10 +541,14 @@ describe("PaymentService", () => {
       expect(result.paymentId).not.toBe("pay_existing");
       expect(result.providerReference).toMatch(/^stub:user1:pkg1:/);
       expect(result.checkoutUrl).toBe("https://checkout.test/123");
-      expect(updatePaymentStatus).toHaveBeenCalledWith(result.paymentId, {
-        status: PAYMENT_STATUS.PENDING,
-        checkoutUrl: "https://checkout.test/123",
-      });
+      expect(updatePaymentStatus).toHaveBeenCalledWith(
+        result.paymentId,
+        {
+          status: PAYMENT_STATUS.PENDING,
+          checkoutUrl: "https://checkout.test/123",
+        },
+        expect.anything(),
+      );
     });
 
     test("creates new payment intent when no existing payment", async () => {
@@ -662,7 +684,7 @@ describe("PaymentService", () => {
         wallet: makeWallet() as any,
         repo,
         provider: provider as any,
-        providerName: "xendit",
+        providerName: "midtrans",
       });
 
       await expect(service.simulatePurchase("pay1", "user1")).resolves.toEqual({
@@ -691,7 +713,7 @@ describe("PaymentService", () => {
         wallet: makeWallet() as any,
         repo,
         provider: provider as any,
-        providerName: "xendit",
+        providerName: "midtrans",
       });
 
       await expect(
@@ -716,7 +738,7 @@ describe("PaymentService", () => {
         wallet: makeWallet() as any,
         repo,
         provider: provider as any,
-        providerName: "xendit",
+        providerName: "midtrans",
       });
 
       await expect(
@@ -743,7 +765,7 @@ describe("PaymentService", () => {
         wallet: makeWallet() as any,
         repo,
         provider: provider as any,
-        providerName: "xendit",
+        providerName: "midtrans",
       });
 
       await expect(
@@ -751,7 +773,7 @@ describe("PaymentService", () => {
       ).rejects.toBeInstanceOf(PaymentProviderError);
     });
 
-    test("reconciles an already-completed payment when Xendit reports an inactive QR", async () => {
+    test("reconciles an already-completed payment when Midtrans reports an inactive QR", async () => {
       const provider = makeProvider();
       provider.simulatePayment.mockImplementation(async () => {
         throw new Error(
@@ -778,7 +800,7 @@ describe("PaymentService", () => {
         wallet: wallet as any,
         repo,
         provider: provider as any,
-        providerName: "xendit",
+        providerName: "midtrans",
       });
 
       await expect(service.simulatePurchase("pay1", "user1")).resolves.toEqual({
@@ -792,7 +814,7 @@ describe("PaymentService", () => {
       expect(wallet.credit).toHaveBeenCalledTimes(1);
     });
 
-    test("reconciles an inactive QR that Xendit reports as settled", async () => {
+    test("reconciles an inactive QR that Midtrans reports as settled", async () => {
       const provider = makeProvider();
       provider.simulatePayment.mockImplementation(async () => {
         throw new Error(
@@ -824,7 +846,7 @@ describe("PaymentService", () => {
         wallet: wallet as any,
         repo,
         provider: provider as any,
-        providerName: "xendit",
+        providerName: "midtrans",
       });
 
       await expect(service.simulatePurchase("pay1", "user1")).resolves.toEqual({
@@ -860,7 +882,7 @@ describe("PaymentService", () => {
         wallet: makeWallet() as any,
         repo,
         provider: provider as any,
-        providerName: "xendit",
+        providerName: "midtrans",
       });
 
       await expect(
@@ -895,7 +917,7 @@ describe("PaymentService", () => {
         wallet: makeWallet() as any,
         repo,
         provider: provider as any,
-        providerName: "xendit",
+        providerName: "midtrans",
       });
 
       await expect(
@@ -920,7 +942,7 @@ describe("PaymentService", () => {
           })),
         }),
         provider: makeProvider() as any,
-        providerName: "xendit",
+        providerName: "midtrans",
       });
 
       await expect(
@@ -928,7 +950,7 @@ describe("PaymentService", () => {
       ).rejects.toBeInstanceOf(PaymentNotFoundError);
     });
 
-    test("does not query Xendit for an already terminal payment", async () => {
+    test("does not query Midtrans for an already terminal payment", async () => {
       const provider = makeProvider();
       const service = createPaymentService({
         db: makeDb(),
@@ -941,7 +963,7 @@ describe("PaymentService", () => {
           })),
         }),
         provider: provider as any,
-        providerName: "xendit",
+        providerName: "midtrans",
       });
 
       await expect(service.reconcilePurchase("pay1", "user1")).resolves.toEqual(
@@ -979,7 +1001,7 @@ describe("PaymentService", () => {
         wallet: wallet as any,
         repo,
         provider: provider as any,
-        providerName: "xendit",
+        providerName: "midtrans",
       });
 
       await expect(service.reconcilePurchase("pay1", "user1")).resolves.toEqual(
@@ -1011,7 +1033,7 @@ describe("PaymentService", () => {
         wallet: makeWallet() as any,
         repo,
         provider: provider as any,
-        providerName: "xendit",
+        providerName: "midtrans",
       });
 
       await expect(service.reconcilePurchase("pay1", "user1")).resolves.toEqual(
@@ -1036,7 +1058,7 @@ describe("PaymentService", () => {
           })),
         }),
         provider: provider as any,
-        providerName: "xendit",
+        providerName: "midtrans",
       });
 
       await expect(
@@ -1349,7 +1371,7 @@ describe("PaymentService", () => {
       expect(updatePaymentStatus).toHaveBeenCalledTimes(0);
     });
 
-    test("PAID webhook when record is FAILED (out-of-order) returns FAILED, no credit", async () => {
+    test("PAID webhook after FAILED recovers and credits once", async () => {
       const wallet = makeWallet();
       const updatePaymentStatus = mock(async () => {});
       const repo = makeRepo({
@@ -1382,9 +1404,9 @@ describe("PaymentService", () => {
         status: PAYMENT_STATUS.PAID as PaymentStatus,
       });
 
-      expect(result.status).toBe(PAYMENT_STATUS.FAILED);
-      expect(wallet.credit).toHaveBeenCalledTimes(0);
-      expect(updatePaymentStatus).toHaveBeenCalledTimes(0);
+      expect(result.status).toBe(PAYMENT_STATUS.PAID);
+      expect(wallet.credit).toHaveBeenCalledTimes(1);
+      expect(updatePaymentStatus).toHaveBeenCalledTimes(1);
     });
 
     test("PENDING then PAID credits wallet exactly once", async () => {
@@ -1904,11 +1926,15 @@ describe("PaymentService", () => {
       expect(result.providerReference).toMatch(/^stub:user1:pkg1:/);
       // The new attempt receives its own provider request; the failed row and
       // its event marker remain unchanged as history.
-      expect(updatePaymentStatus).toHaveBeenCalledWith(result.paymentId, {
-        status: PAYMENT_STATUS.PENDING,
-        providerRequestId: "pr_new_attempt",
-        checkoutUrl: "https://checkout.test/new",
-      });
+      expect(updatePaymentStatus).toHaveBeenCalledWith(
+        result.paymentId,
+        {
+          status: PAYMENT_STATUS.PENDING,
+          providerRequestId: "pr_new_attempt",
+          checkoutUrl: "https://checkout.test/new",
+        },
+        expect.anything(),
+      );
     });
 
     test("H3: stale FAILED webhook for the OLD attempt after re-purchase is ignored (row stays PENDING)", async () => {

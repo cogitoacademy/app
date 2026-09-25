@@ -21,7 +21,7 @@ const BREAKER_STATE_VALUE = {
 
 export type BreakerStateName = keyof typeof BREAKER_STATE_VALUE;
 
-export type MetricsPaymentProvider = "stub" | "xendit" | "midtrans";
+export type MetricsPaymentProvider = "stub" | "midtrans";
 export type MetricsProviderMode = "test" | "live" | "none";
 
 export interface ExpositionInput {
@@ -56,6 +56,8 @@ interface Series {
 }
 
 const series = new Map<string, Series>();
+const paymentIntegrity = new Map<string, number>();
+const paymentReconciliation = new Map<string, number>();
 const lastAccess = new Map<string, number>();
 let lastCleanup = 0;
 
@@ -125,6 +127,26 @@ export function recordRequest(
   maybeCleanup(now);
 }
 
+export function recordPaymentIntegrity(
+  provider: "midtrans",
+  type:
+    | "provider_mismatch"
+    | "amount_mismatch"
+    | "currency_mismatch"
+    | "partial_refund",
+) {
+  const key = `${provider}:${type}`;
+  paymentIntegrity.set(key, (paymentIntegrity.get(key) ?? 0) + 1);
+}
+
+export function recordPaymentReconciliation(
+  provider: "midtrans",
+  outcome: "reconciled" | "pending" | "failed",
+) {
+  const key = `${provider}:${outcome}`;
+  paymentReconciliation.set(key, (paymentReconciliation.get(key) ?? 0) + 1);
+}
+
 function maybeCleanup(now: number) {
   if (now - lastCleanup < CLEANUP_INTERVAL_MS) return;
   for (const [key, time] of lastAccess) {
@@ -179,7 +201,7 @@ function requestLabels(entry: Series): string {
 function isMetricsPaymentProvider(
   value: unknown,
 ): value is MetricsPaymentProvider {
-  return value === "stub" || value === "xendit" || value === "midtrans";
+  return value === "stub" || value === "midtrans";
 }
 
 function isMetricsProviderMode(value: unknown): value is MetricsProviderMode {
@@ -297,6 +319,27 @@ export function renderExposition(input: ExpositionInput = {}): string {
     }
   }
 
+  lines.push(
+    "# HELP payment_integrity_events_total Payment integrity events requiring review.",
+  );
+  lines.push("# TYPE payment_integrity_events_total counter");
+  for (const [key, count] of paymentIntegrity) {
+    const [paymentProvider, type] = key.split(":");
+    lines.push(
+      `payment_integrity_events_total{provider="${paymentProvider}",type="${type}"} ${count}`,
+    );
+  }
+  lines.push(
+    "# HELP payment_reconciliation_total Payment reconciliation outcomes.",
+  );
+  lines.push("# TYPE payment_reconciliation_total counter");
+  for (const [key, count] of paymentReconciliation) {
+    const [paymentProvider, outcome] = key.split(":");
+    lines.push(
+      `payment_reconciliation_total{provider="${paymentProvider}",outcome="${outcome}"} ${count}`,
+    );
+  }
+
   return `${lines.join("\n")}\n`;
 }
 
@@ -304,4 +347,6 @@ export function _resetForTest() {
   series.clear();
   lastAccess.clear();
   lastCleanup = 0;
+  paymentIntegrity.clear();
+  paymentReconciliation.clear();
 }

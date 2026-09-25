@@ -1,32 +1,34 @@
 # Midtrans (Snap) Migration Guide
 
-Operator runbook for switching the payment provider from **Xendit** to
-**Midtrans Snap**, and back. The application supports both providers behind the
-same `PaymentProvider` port; `PAYMENT_PROVIDER` selects the active one and the
-Xendit path stays fully wired for rollback.
+Operator runbook for the **Midtrans Snap** payment provider. The active runtime
+supports `stub` and `midtrans`; `PAYMENT_PROVIDER` selects the active one.
+Historical Xendit payment rows remain readable for audit and reconciliation,
+but no Xendit runtime or rollback path remains.
 
 - **Code:** `packages/api/src/modules/payment/midtrans-payment.provider.ts`
 - **Webhook route:** `POST /webhooks/payments/midtrans`
-- **Status:** implementation merged; operator cutover pending (this guide)
+- **Status:** implementation merged; Midtrans is the production provider
 
 ---
 
 ## 1. What changed (summary)
 
-| Area           | Xendit (unchanged, rollback path)                       | Midtrans (new)                                                                                                                            |
-| -------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Intent API     | `POST /v3/payment_requests` (2024-11-11)                | `POST /snap/v1/transactions`                                                                                                              |
-| Checkout       | QRIS dynamic QR / e-wallet redirect                     | Snap `redirect_url` (hosted payment page)                                                                                                 |
-| Webhook auth   | `x-callback-token` header                               | `signature_key` **inside the body** — `SHA512(order_id + status_code + gross_amount + signatureKey)`                                      |
-| Webhook URL    | `https://api.cogitoacademy.id/webhooks/payments/xendit` | `https://api.cogitoacademy.id/webhooks/payments/midtrans`                                                                                 |
-| Test mode      | Xendit Test Mode + simulation endpoint                  | Midtrans **Sandbox** (no simulation endpoint; use sandbox test cards on the Snap page)                                                    |
-| Status mapping | `SUCCEEDED`/`ACCEPTING_PAYMENTS`/…                      | `capture`→PAID, `settlement`→SETTLED, `pending`→PENDING, `deny/cancel/failure`→FAILED, `expire`→EXPIRED, `refund/partial_refund`→REFUNDED |
-| order_id       | provider reference (`xendit:user:code[:uuid]`)          | **payment UUID** (Snap `order_id` max 50 chars, `[A-Za-z0-9._~-]`; the provider reference contains colons and can exceed 50 chars)        |
+| Area         | Midtrans                                                                                                                                  |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Intent API   | `POST /snap/v1/transactions`                                                                                                              |
+| Checkout     | Snap `redirect_url` (hosted payment page)                                                                                                 |
+| Webhook auth | `signature_key` **inside the body** — `SHA512(order_id + status_code + gross_amount + signatureKey)`                                      |
+| Webhook URL  | `https://api.cogitoacademy.id/webhooks/payments/midtrans`                                                                                 |
+| Test mode    | Midtrans **Sandbox**; use sandbox test cards on the Snap page                                                                             |
+| Status map   | `capture`→PAID, `settlement`→SETTLED, `pending`→PENDING, `deny/cancel/failure`→FAILED, `expire`→EXPIRED, `refund/partial_refund`→REFUNDED |
+| order_id     | **payment UUID** (Snap `order_id` max 50 chars, `[A-Za-z0-9._~-]`)                                                                        |
 
 The `PaymentProvider` port contract is unchanged: `createIntent` still returns
 `{ checkoutUrl, paymentRequestId? }`, `confirmFromWebhook`/`getPurchase`/
-`reconcilePurchase`/`refund` behave identically, and `payment.service.ts` /
-`payment.repo.ts` / the webhook idempotency + DLQ logic are untouched.
+`reconcilePurchase`/`refund` keep their public behavior, while the shared
+payment service/repository now add amount/provider integrity checks, repeatable
+attempt history, and status reconciliation. Webhook idempotency and DLQ
+behavior remain compatible with existing deliveries.
 
 ### Repurchase safety (#188)
 
@@ -42,14 +44,12 @@ service matches the correct attempt row.
 The frontend "Test Mode" affordances (`canSimulate`, `simulatePurchase`) are
 driven by the handler config:
 
-- **Xendit:** `simulationEnabled=true` — approved UAT accounts get the
-  "Simulate successful payment" button (Xendit's test-only simulation API).
 - **Midtrans:** `simulationEnabled=false` — no simulation button. Sandbox test
   payments are made with Midtrans' sandbox test cards on the Snap page
   (card `4811 1111 1111 1114`, CVV `123`, OTP `112233`).
 
-The `xenditMode` handler option was renamed to `providerMode` (internal only —
-no API contract change).
+The internal provider mode is `providerMode`; it is not exposed as a payment
+provider-specific API field.
 
 ---
 
@@ -60,9 +60,9 @@ no API contract change).
 2. **Retrieve API keys** — Settings → Access Keys:
    - **Sandbox** keys (prefix `SB-Mid-server-…` / `SB-Mid-client-…`) for test.
    - **Production** keys (prefix `Mid-server-…` / `Mid-client-…`) for live.
-   - The **Server Key** selects the environment (Sandbox vs Production) — the
-     same rule as Xendit's API key. `MIDTRANS_MODE` is our explicit
-     deployment assertion and must match the key.
+   - The **Server Key** selects the environment (Sandbox vs Production).
+     `MIDTRANS_MODE` is our explicit deployment assertion and must match the
+     key.
 3. **Enable Snap** — Settings → Snap Preference. Confirm the payment methods
    you want (QRIS, GoPay, bank transfer, etc.) are active.
 4. **Configure the Payment Notification URL** — Settings → Configuration →
@@ -98,13 +98,11 @@ entries so rollback is a flip, not a re-encrypt):
 | `MIDTRANS_CLIENT_KEY`            | `SB-Mid-client-…` | yes                 |
 | `MIDTRANS_MERCHANT_ID`           | `G…`              | yes                 |
 | `MIDTRANS_WEBHOOK_SIGNATURE_KEY` | (optional)        | no                  |
-| `XENDIT_TEST_ALLOWED_EMAILS`     | `uat-a@…,uat-b@…` | yes (in test mode)  |
+| `PAYMENT_TEST_ALLOWED_EMAILS`    | `uat-a@…,uat-b@…` | yes (in test mode)  |
 
-`XENDIT_TEST_ALLOWED_EMAILS` is the **provider-agnostic** test-mode UAT
-list (not Xendit-only): in `MIDTRANS_MODE=test` on a production/staging
-domain it gates `payment.createPurchase` to the approved verified student
-emails, exactly as it does in Xendit Test Mode. There is no separate
-Midtrans allowlist variable.
+`PAYMENT_TEST_ALLOWED_EMAILS` is the test-mode UAT list. In
+`MIDTRANS_MODE=test` on a production/staging domain it gates
+`payment.createPurchase` to approved verified student emails.
 
 The env schema fails boot when `PAYMENT_PROVIDER=midtrans` is missing any of
 the required `MIDTRANS_*` values — a half-swapped config cannot silently run
@@ -116,9 +114,9 @@ the stub.
 
 1. Open the server resource in Coolify → Environment Variables.
 2. Add the `MIDTRANS_*` keys from §3 (and flip `PAYMENT_PROVIDER` when ready).
-3. Keep the existing `XENDIT_*` variables in place — they are the rollback
-   path and are ignored while `PAYMENT_PROVIDER != xendit`.
-4. `WEBHOOK_ALLOWED_IPS` still applies to the midtrans webhook route (it is
+3. Remove retired provider variables from the API resource; only keys listed
+   in `infra/ansible/coolify-resources.yml` are applied.
+4. `WEBHOOK_ALLOWED_IPS` still applies to the Midtrans webhook route (it is
    provider-agnostic). Midtrans publishes its notification egress IPs at
    <https://docs.midtrans.com/docs/ip-address>; add them if you want the
    defense-in-depth allowlist. An empty allowlist = signature-only gating.
@@ -172,35 +170,22 @@ the stub.
 
 ---
 
-## 6. Rollback (back to Xendit)
+## 6. Rollback
 
-The Xendit provider, env vars, and webhook route remain fully intact.
-
-1. In Coolify set `PAYMENT_PROVIDER=xendit` (and restore `XENDIT_MODE` +
-   Test/Live `XENDIT_SECRET_KEY`/`XENDIT_WEBHOOK_TOKEN` + redirect URLs if they
-   were removed — they should still be present).
-2. In the Xendit dashboard, confirm the webhook URL is
-   `https://api.cogitoacademy.id/webhooks/payments/xendit` (it was never
-   removed).
-3. Redeploy and verify the boot log shows `provider=xendit`.
-4. Midtrans webhooks that arrive after the flip are rejected by signature
-   verification (the midtrans provider is no longer active) — Midtrans will
-   retry; once the dashboard notification URL is pointed back at Xendit (or
-   the midtrans route is re-enabled) processing resumes. In-flight Midtrans
-   payments created before the flip are reconciled by the normal
-   `reconcilePurchase` status lookup only while the midtrans provider is
-   active; if a rollback is needed mid-flight, prefer completing the cutover
-   checklist first or reconcile the stragglers manually via the Midtrans
-   dashboard.
+Rollback means redeploying the last known-good application image and matching
+Midtrans configuration. For an emergency payment stop, set
+`PAYMENT_PROVIDER=stub` only after confirming no real checkout can be created.
+Do not re-enable the retired provider. In-flight Midtrans payments require
+Midtrans status reconciliation before or after the rollback.
 
 ---
 
 ## 7. Refund path
 
 `adminRefund` is **in-app Marks credits only** (N1, PRD §677) — it never calls
-the provider. The Midtrans provider implements the `refund()` port
+the provider. Midtrans implements the `refund()` port
 (`POST /v2/{order_id}/refund`) for a future payment-error-only cash-refund
-flow, but it is not wired into `adminRefund`, exactly like Xendit.
+flow, but it is not wired into `adminRefund`.
 
 ---
 

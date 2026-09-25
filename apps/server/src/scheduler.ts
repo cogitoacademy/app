@@ -9,6 +9,7 @@ import { scheduleCheckTutorLateness } from "@cogito-app/api/modules/scheduler/jo
 import { scheduleSendNotificationEmail } from "@cogito-app/api/modules/scheduler/jobs/send-notification-email.job";
 import { scheduleEscalateSupportTickets } from "@cogito-app/api/modules/scheduler/jobs/escalate-support-tickets.job";
 import { scheduleRetryFailedMeetings } from "@cogito-app/api/modules/scheduler/jobs/retry-failed-meetings.job";
+import { scheduleReconcilePayments } from "@cogito-app/api/modules/scheduler/jobs/reconcile-payments.job";
 import { services } from "@cogito-app/api";
 
 let scheduler: ReturnType<typeof createSchedulerService> = null;
@@ -50,6 +51,7 @@ export async function initScheduler(): Promise<void> {
       services.notification.dispatchQueuedEmails(50),
     onEscalateSupportTickets: () => services.support.escalatePastSlaTickets(),
     onRetryFailedMeetings: () => services.booking.retryFailedMeetings(),
+    onReconcilePayments: () => services.payment.reconcilePendingPayments(50),
   });
 
   if (!scheduler) {
@@ -67,6 +69,7 @@ export async function initScheduler(): Promise<void> {
   await scheduleSendNotificationEmail(scheduler.queue);
   await scheduleEscalateSupportTickets(scheduler.queue);
   await scheduleRetryFailedMeetings(scheduler.queue);
+  await scheduleReconcilePayments(scheduler.queue);
 
   log({
     level: "info",

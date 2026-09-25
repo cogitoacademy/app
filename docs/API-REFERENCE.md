@@ -969,8 +969,8 @@ The create/edit/correction form is presented as a bottom drawer on mobile and a 
 
 - **Auth:** Protected
 - **Input:** None
-- **Output:** `{ xenditMode: "test" | "live" | null, packages: MarkPackage[] }`
-- **Description:** Returns active purchasable mark packages plus the client-visible payment mode signal. `xenditMode` is `"test"` when `PAYMENT_PROVIDER=xendit` and `XENDIT_MODE=test`, `"live"` for Live Mode, and `null` when the stub provider is active — the web app uses it to label packages that exceed the Xendit Test Mode amount cap (~IDR 1,000,000; Explorer/Pioneer are rejected in Test Mode but work in Live Mode). The default catalog is installed automatically by versioned database migration `0041_seed_mark_packages.sql`; values are Starter Pack 50 Marks / Rp312,500; Learner Pack 120 Marks / Rp690,000; Explorer Pack 200 Marks / Rp1,070,000; Pioneer Pack 400 Marks / Rp2,000,000. Admins can manage later catalog changes through `adminMarkPackage.*`.
+- **Output:** `{ packages: MarkPackage[] }`
+- **Description:** Returns active purchasable Mark packages. The default catalog is installed automatically by versioned database migration `0041_seed_mark_packages.sql`; values are Starter Pack 50 Marks / Rp312,500; Learner Pack 120 Marks / Rp690,000; Explorer Pack 200 Marks / Rp1,070,000; Pioneer Pack 400 Marks / Rp2,000,000. Admins can manage later catalog changes through `adminMarkPackage.*`.
 
 ### `wallet.knowledgeBankEligible`
 
@@ -993,29 +993,21 @@ The create/edit/correction form is presented as a bottom drawer on mobile and a 
 - **Errors:** `PACKAGE_NOT_FOUND` (404), `PAYMENT_TEST_MODE_RESTRICTED` (403), `PAYMENT_PROVIDER_ERROR` (503)
 - **Description:** Creates a purchase intent with the payment provider. A current PENDING intent is reused so retries do not mint duplicate checkouts; after any terminal outcome (`PAID`, `SETTLED`, `FAILED`, `EXPIRED`, or `REFUNDED`), the endpoint creates a new payment record and provider reference, retaining the prior attempt as history. A provider-confirmed terminal status credits the wallet through the idempotent confirmation path.
 
-### Xendit environment selection
-
-- `PAYMENT_PROVIDER=xendit` selects the Xendit provider. `XENDIT_MODE` is required and must be `test` or `live`; the Xendit API key, created in the matching Xendit Dashboard mode, selects the actual transaction environment. `XENDIT_MODE` is not sent as an API field.
-- In production/staging, `XENDIT_MODE=test` also requires `XENDIT_TEST_ALLOWED_EMAILS`; only those verified student emails can call `payment.createPurchase`. This keeps production-domain UAT from granting sandbox-funded Marks to arbitrary accounts. The default provider channel is QRIS; `checkoutUrl` carries Xendit's `PRESENT_TO_CUSTOMER` dynamic QR payload for the Balance page to render (the legacy field name is retained for API compatibility).
-- `payment.createPurchase` also returns `canSimulate`. When true, the Balance page may call `payment.simulatePurchase` with the owned payment UUID. That procedure is rejected outside Xendit Test Mode and for accounts outside `XENDIT_TEST_ALLOWED_EMAILS`; wallet credit still occurs only after provider confirmation through the verified webhook or the approved Test Mode reconciliation fallback.
-
 ### Midtrans (Snap) environment selection
 
 - `PAYMENT_PROVIDER=midtrans` selects the Midtrans Snap provider. `MIDTRANS_MODE` is required and must be `test` (Sandbox) or `live` (Production); the Server Key, created in the matching Midtrans dashboard mode, selects the actual environment. `MIDTRANS_SERVER_KEY`, `MIDTRANS_CLIENT_KEY`, and `MIDTRANS_MERCHANT_ID` are required (fail-loud env guard).
-- `checkoutUrl` carries the Snap `redirect_url` (hosted payment page) — the Balance page detects the `https://` URL via `isRedirectCheckoutUrl` and opens it in a new tab instead of rendering a QR code (Xendit QRIS payloads remain inline QR).
+- In production/staging, `MIDTRANS_MODE=test` also requires `PAYMENT_TEST_ALLOWED_EMAILS`; only approved verified student emails can call `payment.createPurchase`.
+- `checkoutUrl` carries the Snap `redirect_url` (hosted payment page). The Balance page detects the `https://` URL via `isRedirectCheckoutUrl` and opens it in a new tab instead of rendering a QR code.
 - `canSimulate` is **always false** in Midtrans mode: the Midtrans Sandbox has no simulation endpoint. Sandbox test payments use the Snap test cards (`4811 1111 1111 1114`, CVV `123`, OTP `112233`). `payment.simulatePurchase` returns `PAYMENT_SIMULATION_UNAVAILABLE` (403) in Midtrans mode.
 - `order_id` is the payment UUID (unique per repurchase attempt); webhooks and status lookups resolve it back to the stored provider reference.
-- `XENDIT_TEST_ALLOWED_EMAILS` is the provider-agnostic test-mode UAT list: in `MIDTRANS_MODE=test` on production/staging it gates `payment.createPurchase` to the approved verified student emails, exactly as in Xendit Test Mode (rejections surface as `PAYMENT_TEST_MODE_RESTRICTED`, visible on the Important Logs board payment gate panel).
+- Rejections surface as `PAYMENT_TEST_MODE_RESTRICTED`, visible on the Important Logs board payment gate panel.
 
 ### `payment.simulatePurchase`
 
 - Input: `{ paymentId: string (UUID) }`
 - Output: `{ status: "PENDING", message: string }`
-- Auth: verified student, approved Test Mode email, and ownership of a pending payment with a stored Xendit payment-request id.
-- Provider failures are returned as `PAYMENT_PROVIDER_ERROR` (503). The message preserves a bounded Xendit HTTP status, `error_code`, and diagnostic message when Xendit returns a structured error body; arbitrary upstream/infrastructure errors remain the generic `Payment provider temporarily unavailable` message.
-- If Xendit rejects a retry with `400 INACTIVE_PAYMENT_METHOD`, the server performs one authoritative status lookup. A terminal `PAID`/`SETTLED` result is reconciled through the idempotent confirmation path before the client starts its normal status poll; an unresolved request keeps the provider diagnostic.
-- While an approved Test Mode client polls `payment.getPurchase`, the server reconciles a still-pending local record against Xendit's authoritative `GET /v3/payment_requests/{id}` result. A remote terminal status runs through the same idempotent confirmation service used by webhooks, recovering safely from a delayed or rejected sandbox callback.
-- Test and live webhooks use the same endpoint path, but must be configured in the matching Xendit Dashboard mode and must use that mode's `x-callback-token`.
+- Auth: verified student, approved Test Mode email, and ownership of a pending payment.
+- Midtrans mode always returns `PAYMENT_SIMULATION_UNAVAILABLE` because Sandbox has no simulation endpoint. The endpoint remains for compatibility with clients that already know the procedure.
 
 ### `payment.getPurchase`
 
@@ -1028,10 +1020,10 @@ The create/edit/correction form is presented as a bottom drawer on mobile and a 
 ### `POST /webhooks/payments/:provider` (external)
 
 - **Auth:** Public (non-oRPC route)
-- **Input:** Raw body; headers `x-callback-token` (xendit) / `x-webhook-signature` (stub), `x-timestamp` (timestamp validation is **skipped for xendit and midtrans** — Xendit documents only `x-callback-token` (P3.5/L4); Midtrans signs via the body `signature_key` and sends no timestamp header)
+- **Input:** Raw body; Midtrans verifies body `signature_key`, stub verifies `x-webhook-signature`; timestamp validation is skipped for Midtrans because its body signature is the authenticity check.
 - **Output:** `{ ok: true }`
-- **Errors:** 401 signature failure, 408 stale timestamp (> 5 min, non-xendit/non-midtrans), 403 IP not allowlisted, 500 processing failure
-- **Description:** Provider webhook; verifies signature, validates timestamp (provider-conditional), then atomically claims the idempotency key (released on transient processing failure), calls `payment.confirmFromWebhook`, and updates payment status (`PENDING → PAID/SETTLED/FAILED/EXPIRED`; `PAID/SETTLED → REFUNDED`); credits the wallet on PAID/SETTLED and writes the payment notification (#46). Xendit lifecycle keys combine provider, `data.payment_id ?? data.payment_request_id`, and normalized status because 2024-11-11 webhooks carry no unique `event_id`: distinct lifecycle states for one payment are processed, while retries of the same state dedupe. A missing event id falls back to the provider reference rather than a shared placeholder. Every repeat purchase uses a separate payment row and provider reference, so late webhooks from an earlier attempt cannot change the newer attempt's state or suppress its wallet credit. A REFUNDED webhook reads the wallet through the transaction (`wallet.getByUserId(tx, ...)`, N4) and reverses the credited Marks from the **total balance** (`held + available`): held Marks are released back to available (`refund.{id}.release`) then the full payment Marks are reversed via `compensate_deduct` (`refund.{id}.reverse`) when total ≥ marks; if the Marks were already spent (`totalBalance < marks`, H4), the payment is still marked REFUNDED and a `refund_webhook_reconciliation` audit + `refund_record` row are written for admin (no reversal, no throw, no 500/retry loop — P2.7/H4, M1/N4 wave-6b)
+- **Errors:** 401 signature failure, 408 stale timestamp (> 5 min when applicable), 403 IP not allowlisted, 500 processing failure
+- **Description:** Provider webhook; verifies signature, validates any applicable timestamp, then atomically claims the lifecycle idempotency key (released on transient processing failure), calls `payment.confirmFromWebhook`, and updates payment status (`PENDING → PAID/SETTLED/FAILED/EXPIRED`; `PAID/SETTLED → REFUNDED`). Lifecycle keys include provider, verified event/reference id, and normalized status, so different lifecycle states process while retries of one state dedupe. Every repeat purchase uses a separate payment row and provider reference, so late events from an earlier attempt cannot change the newer attempt's state or suppress its wallet credit. A REFUNDED webhook reads the wallet through the transaction (`wallet.getByUserId(tx, ...)`, N4) and reverses credited Marks from the **total balance** (`held + available`): held Marks are released (`refund.{id}.release`) then the full payment Marks are reversed via `compensate_deduct` (`refund.{id}.reverse`) when total ≥ marks; if Marks were already spent (`totalBalance < marks`, H4), the payment is still marked REFUNDED and a `refund_webhook_reconciliation` audit + `refund_record` row are written for admin (no reversal, no throw, no 500/retry loop — P2.7/H4, M1/N4 wave-6b)
 
 ### Midtrans (Snap) webhook (`POST /webhooks/payments/midtrans`)
 
@@ -1041,9 +1033,9 @@ The create/edit/correction form is presented as a bottom drawer on mobile and a 
 - **Reference resolution:** `order_id` is the payment UUID (Snap `order_id` max 50 chars, `[A-Za-z0-9._~-]` — the provider reference contains colons and can exceed 50 chars). The provider resolves the UUID back to the stored `providerReference` via a DB lookup; when unresolvable it falls back to the `order_id` and the service's DB reference fallback.
 - **Idempotency:** the same lifecycle key derivation applies — `midtrans:{transaction_id ?? order_id}:{status}` — so a `settlement` retry dedupes while a later `refund` for the same payment still processes.
 
-### Provider refunds (X1, P3.6 — superseded by N1, 2026-08-19)
+### Provider refunds
 
-- ~~`adminRefund` initiates a provider-side refund via the active provider's `refund(paymentRequestId, amountIdr, reason?)` — Xendit `POST /v3/refunds` (`{payment_request_id, currency, amount, reason}` → `{id}`), stub returns `rfd-stub-{paymentRequestId}`. The provider refund is **best-effort**: a provider failure is logged and never rolls back the Marks reversal. The returned refund id is stored on `refund_record.provider_event_id`.~~ **REMOVED (N1):** `adminRefund` no longer calls the payment provider at all — admin refunds are in-app Marks credits only (PRD §677: purchased Marks are never convertible back to rupiah). `refund_record.amount_idr` is `0` and `provider_event_id` is `NULL` for admin refunds. The provider `refund()` port (Xendit `POST /v3/refunds`, migration 0025 `payment_record.provider_request_id`) remains on the provider/payment service for a future payment-error-only cash-refund flow, but `adminRefund` must never invoke it.
+- `adminRefund` never calls the payment provider — admin refunds are in-app Marks credits only (PRD §677: purchased Marks are never convertible to rupiah). `refund_record.amount_idr` is `0` and `provider_event_id` is `NULL` for admin refunds. The provider `refund()` port remains available for a future payment-error-only cash-refund flow, but `adminRefund` must never invoke it.
 
 ---
 

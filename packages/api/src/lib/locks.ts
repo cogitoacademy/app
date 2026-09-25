@@ -52,3 +52,23 @@ export async function lockRoomForBooking(
     sql`SELECT pg_advisory_xact_lock(hashtextextended(${roomId}, 3))`,
   );
 }
+
+/**
+ * Serializes payment-intent creation for one user/package/provider tuple.
+ *
+ * The lock intentionally spans the provider request. A unique database
+ * constraint prevents duplicate rows, but cannot prevent two callers from
+ * both POSTing the same non-idempotent provider intent before either checkout
+ * URL is persisted.
+ */
+export async function lockPaymentIntent(
+  conn: DbOrTx,
+  userId: string,
+  packageId: string,
+  provider: string,
+): Promise<void> {
+  const lockKey = `${provider}:${userId}:${packageId}`;
+  await conn.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 4))`,
+  );
+}

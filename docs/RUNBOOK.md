@@ -1226,10 +1226,9 @@ provisioned copy otherwise lingers as stale).
   recreate + health polls, same class as the Kuma 503-flap absorbed by
   `maxretries=2`); investigate only if sustained >5 min outside
   deploy/backup windows.
-- **`XENDIT_TEST_ALLOWED_EMAILS` is the provider-agnostic test-mode UAT
-  list** (not Xendit-only): in `MIDTRANS_MODE=test` on production/staging it
-  gates `payment.createPurchase` to the approved verified student emails,
-  exactly as in Xendit Test Mode.
+  - **`PAYMENT_TEST_ALLOWED_EMAILS` is the test-mode UAT list:** in
+    `MIDTRANS_MODE=test` on production/staging it gates `payment.createPurchase`
+    to approved verified student emails.
 
 ### Coolify duplicate env row dedupe procedure
 
@@ -1480,7 +1479,7 @@ curl http://localhost:3001/health
 # Returns: { "status": "ok", "checks": { "database": "ok", "redis": "ok", "scheduler": "ok" }, "timestamp": "..." }
 ```
 
-`checks.scheduler` mirrors Redis reachability (`ok`/`error`/`degraded`) because the BullMQ scheduler runs on the same Redis — an `error` there means the booking-expiry/hold-release/email/SLA jobs are not running and the readiness check trips (503).
+`checks.scheduler` mirrors Redis reachability (`ok`/`error`/`degraded`) because the BullMQ scheduler runs on the same Redis — an `error` there means the booking-expiry/hold-release/email/SLA/payment-reconciliation jobs are not running and the readiness check trips (503).
 
 When investigating `cogito-jobs-dlq`, expect one entry only after the source
 job has exhausted its configured BullMQ attempt count. A failure with retries
@@ -1500,7 +1499,7 @@ in Redis for `ops.sh dlq` inspection and `dlq-clear` still removes it. An
 entry exactly 24h old counts as stale (the window is a strict `failedAt >
 now − window` comparison).
 
-**Scheduler boot failure mode:** with `SCHEDULER_ENABLED=true`, `initScheduler()` pings Redis first and **throws if unreachable — the API boot aborts**. This is intentional: a silently dead scheduler (no expiry/hold-release/email jobs) is worse than a failed deploy. Fix Redis (or set `SCHEDULER_ENABLED=false` for a scheduler-less instance) and redeploy.
+**Scheduler boot failure mode:** with `SCHEDULER_ENABLED=true`, `initScheduler()` pings Redis first and **throws if unreachable — the API boot aborts**. This is intentional: a silently dead scheduler (no expiry/hold-release/email/payment-reconciliation jobs) is worse than a failed deploy. Fix Redis (or set `SCHEDULER_ENABLED=false` for a scheduler-less instance) and redeploy.
 
 Redis is **mandatory** (`REDIS_URL` is required — the server won't boot without it). The in-memory stores are defensive fallbacks only when a configured Redis call fails at runtime; they are per-process and degrade cross-instance guarantees.
 
@@ -1518,7 +1517,6 @@ redis-cli --scan --pattern "cogito:rl:*" | xargs redis-cli DEL  # Clear all
 redis-cli KEYS "cogito:cb:*"       # List circuit breaker keys
 redis-cli DEL "cogito:cb:google_meet"  # Reset Google Meet circuit
 redis-cli DEL "cogito:cb:resend"       # Reset Resend circuit
-redis-cli DEL "cogito:cb:xendit"       # Reset Xendit circuit
 redis-cli DEL "cogito:cb:midtrans"     # Reset Midtrans circuit
 ```
 
@@ -1636,11 +1634,9 @@ Concurrent modification conflict. The `version` field didn't match. Retry the op
 
 - `Email service unavailable: 503` — Resend circuit breaker is open. Wait 2 minutes or reset manually.
 - `Google Meet API timeout after 30s` — Google Meet circuit breaker is open. Wait 1 minute or reset manually.
-- `Payment provider error` — the active provider's circuit breaker is open (Xendit `cogito:cb:xendit` / Midtrans `cogito:cb:midtrans`). Wait 30 seconds or reset manually.
-- `Payment simulation error: 403 REQUEST_FORBIDDEN_ERROR` — verify the production key is a Test Mode secret (`xnd_development_...`) with **Money-in / Payments → Write** permission, while `XENDIT_MODE=test`; then create a fresh purchase.
-- `Payment simulation error: 400 INACTIVE_PAYMENT_METHOD` — the dynamic QR has already been completed, canceled, or expired. On the patched build, retrying once performs an authoritative status reconciliation; if it still fails, use a fresh pending intent rather than retrying the inactive QR indefinitely.
-- `Payment simulation error: 400 ...` — inspect the Xendit error code/message for amount mismatch or another request validation failure. Do not retry an old payment indefinitely; create a fresh pending intent after correcting the request/configuration.
-- `Payment provider error: 503 ...` on Explorer (Rp1,070,000) / Pioneer (Rp2,000,000) only — **Xendit Test Mode amount cap (~IDR 1,000,000)**. Starter/Learner work; all four packages work in Live Mode (QRIS channel limit is 1–10,000,000 IDR). For UAT use Starter/Learner, or temporarily lower the package price below 1M via the admin mark-package API. The Balance page labels Explorer/Pioneer in Test Mode.
+- `Payment provider error` — the active provider's circuit breaker is open (`cogito:cb:midtrans-test` or `cogito:cb:midtrans-live`). Wait 30 seconds or reset manually.
+- `Payment simulation error: 403 PAYMENT_SIMULATION_UNAVAILABLE` — expected for Midtrans; Sandbox has no simulation endpoint. Use the Midtrans Snap test cards instead.
+- `Payment provider error: 503 ...` — inspect the bounded provider status/code/message, circuit state, credentials, and provider dashboard status. Do not retry an old pending intent indefinitely; create a fresh intent after correcting configuration.
 - Re-purchase behavior — a PAID, SETTLED, FAILED, EXPIRED, or REFUNDED attempt is retained as history and the next `payment.createPurchase` call creates a new payment row/provider reference. Only the latest PENDING attempt is reused. Test transactions in the production database therefore do not permanently lock a package for the UAT account.
 
 ### Database Connection Errors
@@ -1768,12 +1764,9 @@ Key environment variables (see `.env.example` for full list):
 | `RESEND_API_KEY`                                                                              | No       | Resend API key (required in production/staging — P4.1)                                                                                                                                                                                                                           |
 | `EMAIL_FROM`                                                                                  | No       | Sender address (default `noreply@cogitoacademy.id`; must be a verified Resend domain in prod/staging)                                                                                                                                                                            |
 | `ADMIN_EMAILS`                                                                                | No       | Comma-separated production/staging admin bootstrap emails (default `itcogitoacademy01@gmail.com`); existing admins are never demoted                                                                                                                                             |
-| `XENDIT_SECRET_KEY`                                                                           | No       | Xendit API secret key (required when `PAYMENT_PROVIDER=xendit`); use a Test Mode key with Money-in / Payments **Write** permission while `XENDIT_MODE=test`                                                                                                                      |
-| `XENDIT_WEBHOOK_TOKEN`                                                                        | No       | Xendit webhook verification token                                                                                                                                                                                                                                                |
-| `XENDIT_MODE`                                                                                 | No       | Required when `PAYMENT_PROVIDER=xendit`: `test` for Xendit Test Mode or `live` for Live Mode. The matching Xendit API key selects the actual environment                                                                                                                         |
-| `XENDIT_TEST_ALLOWED_EMAILS`                                                                  | No       | Provider-agnostic test-mode UAT list: comma-separated verified student emails allowed to create purchases in test mode on production/staging (`XENDIT_MODE=test` or `MIDTRANS_MODE=test`); required there to prevent unrestricted sandbox-funded Marks                           |
-| `XENDIT_SUCCESS_REDIRECT_URL` / `XENDIT_FAILURE_REDIRECT_URL`                                 | No       | Required when `PAYMENT_PROVIDER=xendit` (P3.7)                                                                                                                                                                                                                                   |
-| `WEBHOOK_ALLOWED_IPS`                                                                         | No       | Webhook source IP allowlist (comma-separated). **Required in production/staging when `PAYMENT_PROVIDER=xendit`** (D2) — the env schema rejects boot with an empty allowlist so the endpoint is never open to every IP                                                            |
+| `PAYMENT_PROVIDER`                                                                            | No       | `stub` or `midtrans`; defaults to `stub` in development                                                                                                                                                                                                                          |
+| `PAYMENT_TEST_ALLOWED_EMAILS`                                                                 | No       | Comma-separated verified student emails allowed to create Midtrans Sandbox purchases in production/staging; required when `MIDTRANS_MODE=test` there                                                                                                                             |
+| `WEBHOOK_ALLOWED_IPS`                                                                         | No       | Optional webhook source IP allowlist (comma-separated). Signature verification remains the primary gate                                                                                                                                                                          |
 | `SCHEDULER_ENABLED`                                                                           | No       | Starts the BullMQ worker + repeatable jobs (default false). **Required `true` in production/staging (D3)** — the env schema rejects boot with it false, since a prod server without the scheduler silently skips booking expiry, hold release, email dispatch and SLA escalation |
 | `TRUST_PROXY`                                                                                 | No       | Trust `x-forwarded-for` first hop for client IP (default false) — required behind a reverse proxy so rate limiting and webhook IP checks see real client IPs                                                                                                                     |
 | `DB_SSL_ENABLED`                                                                              | No       | Enable TLS for the PostgreSQL connection (default true); set false for Coolify's bundled non-TLS PostgreSQL                                                                                                                                                                      |
@@ -1784,7 +1777,6 @@ Key environment variables (see `.env.example` for full list):
 | `SANITY_DATASET`                                                                              | No       | Sanity dataset (defaults to `development`; production/staging must set the intended published dataset)                                                                                                                                                                           |
 | `SANITY_API_VERSION`                                                                          | No       | Sanity API version in `YYYY-MM-DD` format (default `2024-03-01`)                                                                                                                                                                                                                 |
 | `SANITY_API_TOKEN`                                                                            | No       | Server-only token for private Sanity datasets; never add it to `apps/web`/`VITE_*` variables                                                                                                                                                                                     |
-| `XENDIT_DEFAULT_PAYMENT_METHOD`                                                               | No       | Default Xendit channel (`ewallet_ovo`/`qris`/`va_bca`; default `qris`). QRIS uses a dynamic QR payload rendered by the Balance page.                                                                                                                                             |
 | `MIDTRANS_SERVER_KEY`                                                                         | No       | Midtrans Snap Server Key (required when `PAYMENT_PROVIDER=midtrans`); Sandbox keys (`SB-Mid-server-…`) for `MIDTRANS_MODE=test`, Production keys (`Mid-server-…`) for `live`. The key selects the actual environment                                                             |
 | `MIDTRANS_CLIENT_KEY`                                                                         | No       | Midtrans Snap Client Key (required when `PAYMENT_PROVIDER=midtrans`)                                                                                                                                                                                                             |
 | `MIDTRANS_MERCHANT_ID`                                                                        | No       | Midtrans merchant id (required when `PAYMENT_PROVIDER=midtrans`)                                                                                                                                                                                                                 |
@@ -1798,17 +1790,16 @@ Key environment variables (see `.env.example` for full list):
 | `SEED_ADMIN_PASSWORD` / `SEED_TUTOR_PASSWORD` / `SEED_STUDENT_PASSWORD`                       | No       | One-time seed inputs, all required in production/staging with at least 12 characters. Remove them from the deployment environment immediately after seeding.                                                                                                                     |
 | `STUB_WEBHOOK_ALLOWED`                                                                        | No       | Stub-checkout E2E flag; the stub checkout endpoint only serves `development`/`test` — staging always returns 404 (prod-fixes C2)                                                                                                                                                 |
 
-## Real-Provider Swap (Resend / Xendit / Google Meet / R2)
+## Real-Provider Swap (Resend / Midtrans / Google Meet / R2)
 
 The app defaults to dev-safe stand-ins (stub email, stub payments, manual Meet fallback, local-disk uploads). Before a production launch these must be swapped for real providers. What fails **loud** vs **silent**, and what each swap requires:
 
-| Provider    | Dev default          | Silent-failure mode if misconfigured                                                                                                      | Prod requirement (fail-loud guard PR)                                                                                                                        |
-| ----------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Resend      | Stub (no-op email)   | **Silent** — `RESEND_API_KEY` optional, no `NODE_ENV` check; critical emails suppressed with no alert                                     | `RESEND_API_KEY` required when `NODE_ENV` is production/staging + verified `EMAIL_FROM` domain (P4.1)                                                        |
-| Xendit      | Stub provider        | Wrong mode key/token, or unrestricted production sandbox purchases                                                                        | `XENDIT_MODE` + matching Test/Live key/token + redirect URLs; production/staging Test Mode also requires a UAT email allowlist; sandbox E2E before live (P3) |
-| Midtrans    | Stub provider        | Wrong mode key, or a Sandbox key used in production (sandbox payments never settle real money)                                            | `MIDTRANS_MODE` + matching Sandbox/Production Server Key + Client Key + merchant id; sandbox E2E before live (see `docs/MIDTRANS-MIGRATION.md`)              |
-| Google Meet | Manual link fallback | **Boot warning + fallback** — a failed probe is logged and online bookings fall back to manual/retry handling until credentials are fixed | Complete credential set + `GOOGLE_IMPERSONATED_USER` (SA mode) + successful boot probe (P4.2)                                                                |
-| R2          | Local `UPLOAD_DIR`   | **Silent** — prod without R2 writes to container-local disk, lost on redeploy; R2 set but `R2_PUBLIC_URL` unset → objects unreachable     | All `R2_*` + `R2_PUBLIC_URL` required in production/staging (P4.3)                                                                                           |
+| Provider    | Dev default          | Silent-failure mode if misconfigured                                                                                                      | Prod requirement (fail-loud guard PR)                                                                                                           |
+| ----------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Resend      | Stub (no-op email)   | **Silent** — `RESEND_API_KEY` optional, no `NODE_ENV` check; critical emails suppressed with no alert                                     | `RESEND_API_KEY` required when `NODE_ENV` is production/staging + verified `EMAIL_FROM` domain (P4.1)                                           |
+| Midtrans    | Stub provider        | Wrong mode key, or a Sandbox key used in production (sandbox payments never settle real money)                                            | `MIDTRANS_MODE` + matching Sandbox/Production Server Key + Client Key + merchant id; sandbox E2E before live (see `docs/MIDTRANS-MIGRATION.md`) |
+| Google Meet | Manual link fallback | **Boot warning + fallback** — a failed probe is logged and online bookings fall back to manual/retry handling until credentials are fixed | Complete credential set + `GOOGLE_IMPERSONATED_USER` (SA mode) + successful boot probe (P4.2)                                                   |
+| R2          | Local `UPLOAD_DIR`   | **Silent** — prod without R2 writes to container-local disk, lost on redeploy; R2 set but `R2_PUBLIC_URL` unset → objects unreachable     | All `R2_*` + `R2_PUBLIC_URL` required in production/staging (P4.3)                                                                              |
 
 > **Midtrans (2026-09-03; Balance redirect handling 2026-09-12):** the Midtrans Snap provider is implemented behind
 > the same `PaymentProvider` port (`docs/MIDTRANS-MIGRATION.md`). Snap returns
@@ -1822,37 +1813,27 @@ The app defaults to dev-safe stand-ins (stub email, stub payments, manual Meet f
 > Midtrans Sandbox has **no simulation endpoint** — `canSimulate` is false and
 > sandbox test payments use the Snap test cards. `PAYMENT_PROVIDER=midtrans`
 > requires `MIDTRANS_SERVER_KEY`/`MIDTRANS_CLIENT_KEY`/`MIDTRANS_MERCHANT_ID`/
-> `MIDTRANS_MODE` (fail-loud env guard). Xendit remains the default and the
-> rollback path.
+> `MIDTRANS_MODE` (fail-loud env guard). No retired-provider rollback path
+> remains; emergency payment stop uses `PAYMENT_PROVIDER=stub` after confirming
+> no real checkout can be created.
 
-> **P3 status (2026-08-17; idempotency hardened 2026-08-29):** the Xendit provider was rewritten for `api-version: 2024-11-11` — `request_amount`/`channel_code`/`channel_properties`, top-level response with `actions[].value` (REDIRECT_CUSTOMER → PRESENT_TO_CUSTOMER), statuses ACCEPTING_PAYMENTS/SUCCEEDED/REQUIRES_ACTION/AUTHORIZED/CANCELED, webhook lifecycle keys from provider + `data.payment_id`/`payment_request_id` + normalized status (with provider-reference fallback), and a provider `refund()` port (migration 0025 adds `payment_record.provider_request_id`). The status component ensures a later paid/refunded lifecycle event is not hidden by an earlier event for the same payment; an identical retry still deduplicates. Timestamp validation is provider-conditional (skipped for xendit — L4). `XENDIT_SUCCESS/FAILURE_REDIRECT_URL` are required by the env schema when `PAYMENT_PROVIDER=xendit` (P3.7). **N1 (2026-08-19):** the provider `refund()` port is **no longer wired into `adminRefund`** — admin refunds are in-app Marks credits only (`refund_record.amount_idr = 0`, `provider_event_id` NULL); no Xendit cash refund is ever issued from `adminRefund` (PRD §677: Marks not convertible to rupiah).
+> Historical provider implementation notes are retained in archived plans. This
+> runbook documents only the active `stub`/Midtrans runtime and current operator
+> procedures.
 
 ### Payment-provider go-live checklist (production switch)
 
-The active provider is Midtrans (`PAYMENT_PROVIDER=midtrans`, currently Test Mode). The Xendit steps below stay as the wired alternative/rollback path (`PAYMENT_PROVIDER=xendit`, see `docs/MIDTRANS-MIGRATION.md` §6); the Midtrans-live equivalents are `MIDTRANS_MODE=live` plus the production `MIDTRANS_SERVER_KEY`/`MIDTRANS_CLIENT_KEY`/`MIDTRANS_MERCHANT_ID`, with the Payment Notification URL `https://api.cogitoacademy.id/webhooks/payments/midtrans`.
+The active provider is Midtrans (`PAYMENT_PROVIDER=midtrans`, currently Test Mode). The live switch uses `MIDTRANS_MODE=live` plus the production `MIDTRANS_SERVER_KEY`/`MIDTRANS_CLIENT_KEY`/`MIDTRANS_MERCHANT_ID`, with the Payment Notification URL `https://api.cogitoacademy.id/webhooks/payments/midtrans`.
 
 The production app can run provider Test Mode first. The switch to Live Mode happens only after the production-domain UAT checklist below passes:
 
-1. **Pre-flight:** run the sandbox checklist above against the sandbox keys. Confirm `XENDIT_DEFAULT_PAYMENT_METHOD` matches the launch channel (default `qris`).
-2. **Webhook wiring:** set the Xendit dashboard webhook URL to `https://api.cogitoacademy.id/webhooks/payments/xendit` and confirm the dashboard sends the `api-version: 2024-11-11` payload shape (`data.payment_id` / `data.payment_request_id`). The webhook idempotency key derives from the verified payload id/reference plus normalized lifecycle status — no `x-callback-token` guessing. During UAT, send the same paid payload twice (the second must be idempotent), then verify a different lifecycle status for the same payment is not suppressed.
-3. **Env:** in the SOPS-encrypted prod env, set `XENDIT_MODE=live` and replace the Test Mode `XENDIT_SECRET_KEY`/`XENDIT_WEBHOOK_TOKEN` with Live Mode credentials. Keep the redirect URLs, update the webhook configuration to Live Mode, and set `WEBHOOK_ALLOWED_IPS` to the live egress IPs from Xendit. The env schema fails boot if `PAYMENT_PROVIDER=xendit` lacks credentials or an explicit mode, so a half-swapped config cannot silently run the stub.
-4. **Live smoke:** run one real small purchase (Pioneer 400 / Rp2,000,000 or the smallest approved package) end-to-end: create purchase → Xendit checkout → webhook → wallet credit once. Verify the redirect return works and the balance page reflects the credit.
-5. **Negative tests:** deliver a webhook with a wrong token (rejected), from a non-allowlisted IP (rejected), and a duplicate delivery (idempotent — single credit).
-6. **Refund path:** confirm an `adminRefund` writes `refund_record` with `amount_idr = 0` and `provider_event_id` NULL — no Xendit cash refund is ever issued (PRD §677).
-7. **Rollback:** keep Test Mode keys/token and the UAT allowlist in the SOPS vault under separate named entries. Roll back by restoring `XENDIT_MODE=test` plus the Test Mode credentials/allowlist and redeploying; use `PAYMENT_PROVIDER=stub` only as an emergency fallback. Document the switch timestamp and transaction reference in the ops log.
-
-### Xendit sandbox verification checklist (L4)
-
-Steps to validate the Xendit integration on the production domain before accepting real payments. Xendit Test/Live is selected by the API key; `NODE_ENV` stays `production` throughout this checklist.
-
-1. In Coolify, set `PAYMENT_PROVIDER=xendit`, `XENDIT_MODE=test`, the Xendit Test Mode secret key and Test Mode `x-callback-token`, both redirect URLs, `XENDIT_TEST_ALLOWED_EMAILS` for the approved verified UAT accounts, and the Test Mode webhook egress IPs in `WEBHOOK_ALLOWED_IPS`. Keep `STUB_WEBHOOK_ALLOWED=false`.
-2. In the Xendit Dashboard, switch to **Test Mode** and configure the webhook URL `https://api.cogitoacademy.id/webhooks/payments/xendit` for the payment events used by the current API. Test and Live webhook settings are separate; use the Test Mode callback token in Coolify.
-3. Sign in with an allowlisted verified student account and create a purchase with `XENDIT_DEFAULT_PAYMENT_METHOD=qris`. Confirm the Balance page renders the dynamic QR from Xendit's `PRESENT_TO_CUSTOMER` action. A non-allowlisted account must receive `403` from `payment.createPurchase`.
-4. Click **Simulate successful payment** below the QR. The button is emitted only for an approved UAT account in Xendit Test Mode and calls Xendit's test-only payment-request simulation endpoint. Completion is asynchronous by webhook; while waiting, app polling also reconciles against [`GET /v3/payment_requests/{payment_request_id}`](https://docs.xendit.co/apidocs/get-payment-request) so a delayed/rejected sandbox callback cannot leave a remotely completed payment stuck. Never attempt to pay the sandbox QR with a real banking app.
-5. Confirm the webhook reaches the production API with `api-version: 2024-11-11`, `data.payment_id` or `data.payment_request_id`, and `status=SUCCEEDED`; the payment becomes `PAID` and Marks are credited once. Check the boot log for `action=payment_provider_configured` and `xenditMode=test`; the secret must never appear in logs.
-6. Verify the wrong Test Mode token returns 401, a non-allowlisted webhook source returns 403, a duplicate webhook is idempotent, and a REFUNDED webhook follows the reconciliation rules. Xendit timestamp validation is intentionally skipped because the current integration relies on `x-callback-token`.
-7. Record the test payment IDs and remove/expire the UAT data or use dedicated test accounts before switching to Live Mode. Test transactions in the production database remain application data for reconciliation/audit, but terminal attempts no longer prevent the same account from purchasing that package again.
-8. Only after all checks pass, follow the go-live checklist and switch the key/token + `XENDIT_MODE` from `test` to `live`.
+1. **Pre-flight:** run the Midtrans Sandbox checklist in `docs/MIDTRANS-MIGRATION.md` §5.1. Confirm Sandbox keys, merchant id, webhook URL, and `PAYMENT_TEST_ALLOWED_EMAILS`.
+2. **Webhook wiring:** configure `https://api.cogitoacademy.id/webhooks/payments/midtrans` in Midtrans Sandbox. Send one valid notification, one bad-signature notification, and one duplicate lifecycle notification.
+3. **Env:** keep `PAYMENT_PROVIDER=midtrans`, `MIDTRANS_MODE=test`, matching Sandbox keys, and the approved UAT list in the SOPS-encrypted environment. The env schema fails boot on missing Midtrans credentials or a missing production-like Sandbox allowlist.
+4. **Live smoke:** after Sandbox passes, replace keys with Production keys, set `MIDTRANS_MODE=live`, and run one approved small purchase end-to-end: create purchase → Snap checkout → webhook → wallet credit once. Verify the redirect return and balance.
+5. **Negative tests:** deliver a wrong body `signature_key`, a non-allowlisted webhook source when `WEBHOOK_ALLOWED_IPS` is configured, and a duplicate notification. Expect rejection/retry/idempotency as applicable.
+6. **Refund path:** confirm `adminRefund` writes `refund_record` with `amount_idr = 0` and `provider_event_id` NULL; no provider cash refund is issued (PRD §677).
+7. **Emergency stop:** set `PAYMENT_PROVIDER=stub` only after confirming no real checkout can be created. In-flight Midtrans payments require status reconciliation before or after the stop.
 
 ### Google Meet refresh-token acquisition (X3)
 

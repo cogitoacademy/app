@@ -8,7 +8,7 @@ describe("stubCheckoutEnabled", () => {
   test("true only when all three conditions hold", () => {
     expect(stubCheckoutEnabled("development", "stub", true)).toBe(true);
     expect(stubCheckoutEnabled("production", "stub", true)).toBe(false);
-    expect(stubCheckoutEnabled("development", "xendit", true)).toBe(false);
+    expect(stubCheckoutEnabled("development", "midtrans", true)).toBe(false);
   });
   test("never true in staging (production-like)", () => {
     expect(stubCheckoutEnabled("staging", "stub", true)).toBe(false);

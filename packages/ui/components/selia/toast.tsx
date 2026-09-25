@@ -74,7 +74,7 @@ function ToastContent({ toast }: { toast: ToastObject<object> }) {
         <div className="min-w-0">
           <BaseToast.Title
             data-slot="toast-title"
-            className="text-foreground font-medium"
+            className="text-foreground font-medium leading-snug"
           />
           <BaseToast.Description
             data-slot="toast-description"

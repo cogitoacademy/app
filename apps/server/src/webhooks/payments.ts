@@ -6,8 +6,10 @@ import { getTrace } from "@cogito-app/api/lib/trace";
 import { getClientIp, readBodyWithLimit } from "@cogito-app/api/lib/request-id";
 import { isProductionLike } from "@cogito-app/env/node-env";
 import { env } from "@cogito-app/env/server";
+import { ORPCError } from "@orpc/server";
 import {
   PaymentNotFoundError,
+  PaymentWebhookMismatchError,
   UnknownPaymentStatusError,
   WebhookSignatureError,
   WebhookTimestampError,
@@ -42,7 +44,16 @@ export function paymentWebhookIdempotencyKey(
 function isPermanentWebhookError(error: unknown): boolean {
   return (
     error instanceof PaymentNotFoundError ||
-    error instanceof UnknownPaymentStatusError
+    error instanceof UnknownPaymentStatusError ||
+    error instanceof PaymentWebhookMismatchError ||
+    (error instanceof ORPCError && error.code === "BAD_REQUEST")
+  );
+}
+
+function isInvalidWebhookSignature(error: unknown): boolean {
+  return (
+    error instanceof WebhookSignatureError ||
+    (error instanceof ORPCError && error.code === "UNAUTHORIZED")
   );
 }
 
@@ -76,14 +87,9 @@ export function validateWebhookTimestamp(
   request: Request,
   provider: string,
 ): void {
-  // L4: Xendit documents only the `x-callback-token` header on its webhooks —
-  // there is no reliable `Date`/`x-timestamp` header to validate against, so
-  // the timestamp check is skipped for xendit (verified against a real
-  // sandbox event; revisit if Xendit starts sending a timestamp header).
-  // Midtrans notifications carry no timestamp header either — authenticity is
-  // established by the body `signature_key` (SHA512), so the check is skipped
-  // there too.
-  if (provider === "xendit" || provider === "midtrans") return;
+  // Midtrans notifications carry no timestamp header; authenticity comes from
+  // body `signature_key` (SHA512), so timestamp validation is skipped.
+  if (provider === "midtrans") return;
   const timestamp =
     request.headers.get("x-timestamp") ?? request.headers.get("date");
   if (!timestamp) {
@@ -105,13 +111,14 @@ export function paymentsWebhook(app: Elysia) {
     "/webhooks/payments/:provider",
     async ({ request, params, set, server }: ElysiaContext) => {
       const provider = params.provider as string;
-      // Xendit signs via the `x-callback-token` header. Midtrans signs via the
-      // `signature_key` INSIDE the body (SHA512 of order_id+status_code+
-      // gross_amount+signature key) — there is no signature header, so the
-      // header value is left empty and the provider verifies the body.
+      if (isProductionLike(env.NODE_ENV) && provider !== env.PAYMENT_PROVIDER) {
+        set.status = 404;
+        return { error: "Payment provider not found" };
+      }
+      // Midtrans signs via `signature_key` inside body. Stub uses header.
       const signature =
-        provider === "xendit"
-          ? (request.headers.get("x-callback-token") ?? "")
+        provider === "midtrans"
+          ? ""
           : (request.headers.get("x-webhook-signature") ?? "");
 
       const { body: rawBody, tooLarge } = await readBodyWithLimit(
@@ -158,7 +165,7 @@ export function paymentsWebhook(app: Elysia) {
 
         // L1: an event with neither a provider event id nor a provider reference
         // cannot be matched to a payment and would otherwise collapse onto the
-        // shared `xendit:no-event-id` idempotency key, hiding real delivery
+        // shared no-event-id idempotency key, hiding real delivery
         // failures. Reject it as a permanent 400 with a log instead.
         if (!payload.providerEventId && !payload.providerReference) {
           log({
@@ -175,11 +182,9 @@ export function paymentsWebhook(app: Elysia) {
           return { error: "Webhook event is missing a payment reference" };
         }
 
-        // Xendit identifies lifecycle notifications with a payment or
-        // payment-request id rather than a unique delivery id. Include status
-        // so PENDING and PAID for one payment both run, while retries of the
-        // same lifecycle event remain idempotent. If an event id is absent,
-        // isolate the claim by the provider payment reference.
+        // Include status so PENDING and PAID for one payment both run, while
+        // retries of the same lifecycle event remain idempotent. If event id
+        // is absent, isolate claim by provider payment reference.
         const idempotencyKey = paymentWebhookIdempotencyKey(provider, payload);
         // Short 2-minute claim window (R7): a crash mid-processing only blocks
         // retries for 2 minutes instead of the 24h processed-record TTL, so the
@@ -198,6 +203,10 @@ export function paymentsWebhook(app: Elysia) {
             status: payload.status,
             receiptUrl: payload.receiptUrl,
             failureReason: payload.failureReason,
+            amountIdr: payload.amountIdr,
+            refundAmountIdr: payload.refundAmountIdr,
+            currency: payload.currency,
+            refundKind: payload.refundKind,
           });
 
           // T1: round-trip the traceId on the idempotency record so a replay
@@ -213,7 +222,7 @@ export function paymentsWebhook(app: Elysia) {
         } catch (error) {
           // M5: release the claim ONLY on transient errors so the provider's
           // retry re-processes. For permanent errors mark the event processed
-          // (dead-letter) so it does not loop against Xendit forever.
+          // (dead-letter) so it does not loop against a permanent provider error.
           if (isPermanentWebhookError(error)) {
             await webhookIdempotency.markProcessed(idempotencyKey, {
               ok: false,
@@ -230,7 +239,7 @@ export function paymentsWebhook(app: Elysia) {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
 
-        if (error instanceof WebhookSignatureError) {
+        if (isInvalidWebhookSignature(error)) {
           log({
             level: "error",
             action: "webhook_signature_failed",
@@ -254,9 +263,8 @@ export function paymentsWebhook(app: Elysia) {
           return { error: message };
         }
 
-        // M5: permanent failures (payment not found, unknown status) are a 4xx
-        // dead-letter — the provider should stop retrying. Only transient
-        // errors (DB/Redis) are a 5xx that Xendit retries.
+        // M5: permanent failures (payment not found, bad payload, unknown
+        // status) are 4xx dead-letter. Only transient DB/Redis errors are 5xx.
         if (isPermanentWebhookError(error)) {
           log({
             level: "error",

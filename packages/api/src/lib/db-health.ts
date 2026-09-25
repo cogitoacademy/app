@@ -136,7 +136,7 @@ export async function checkDlqHealth(
 
 /**
  * Reports the state of every Redis-backed circuit breaker (Resend, Google
- * Meet, Xendit). Reads the `cogito:cb:*` HSET keys; a missing key means the
+ * Meet, and the active payment provider). Reads the `cogito:cb:*` HSET keys; a missing key means the
  * breaker has never tripped (closed). Informational only — never flips the
  * overall health status (mirrors `dlq`): an open breaker means the app is
  * deliberately failing fast, not that the instance cannot serve.
@@ -200,7 +200,7 @@ export async function healthCheck(redis?: RedisClient, db: DbType = defaultDb) {
   const dlqDepth = await checkDlqHealth(redis);
   const dlqStatus: "ok" | "error" = dlqDepth === 0 ? "ok" : "error";
 
-  // Circuit-breaker states (Resend / Google Meet / Xendit) — informational
+  // Circuit-breaker states (Resend / Google Meet / payment provider) — informational
   // only, like `dlq`: an open breaker is the app deliberately failing fast,
   // not a readiness failure, so it must never flip the overall status.
   const circuitBreakers = await checkCircuitBreakers(redis);

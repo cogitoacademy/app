@@ -8,11 +8,17 @@ import {
   PaymentNotFoundError,
   PaymentProviderError,
   PaymentSimulationUnavailableError,
+  PaymentWebhookMismatchError,
 } from "./payment.errors";
 import type { PaymentWalletPort } from "./index";
 import type { PaymentAuditPort } from "./index";
 import type { PaymentRefundRecordPort } from "./index";
+import {
+  recordPaymentIntegrity,
+  recordPaymentReconciliation,
+} from "../../lib/metrics";
 import type { PaymentRepo } from "./payment.repo";
+import { lockPaymentIntent } from "../../lib/locks";
 
 export type PaymentStatus =
   | "PENDING"
@@ -28,6 +34,10 @@ export interface WebhookPayload {
   status: PaymentStatus;
   receiptUrl?: string | null;
   failureReason?: string | null;
+  amountIdr?: number;
+  refundAmountIdr?: number;
+  currency?: string;
+  refundKind?: "full" | "partial";
 }
 
 export interface PaymentProvider {
@@ -37,13 +47,12 @@ export interface PaymentProvider {
     providerReference: string;
   }): Promise<{
     checkoutUrl: string;
-    // X1: the provider-side payment request id (Xendit `pr-...`), stored on
-    // the payment record so admin refunds can initiate a provider refund.
+    // Provider-side request/order id, stored for status lookups and refunds.
     paymentRequestId?: string | null;
   }>;
   verifyWebhook(rawBody: string, signature: string): Promise<WebhookPayload>;
   /**
-   * Initiates a provider-side refund (X1). Returns the provider refund id for
+   * Initiates a provider-side refund. Returns the provider refund id for
    * storage on refundRecord. Stub providers return a mock id.
    */
   refund(
@@ -73,6 +82,10 @@ export interface ConfirmInput {
   status: PaymentStatus;
   receiptUrl?: string | null;
   failureReason?: string | null;
+  amountIdr?: number;
+  refundAmountIdr?: number;
+  currency?: string;
+  refundKind?: "full" | "partial";
 }
 
 export type PaymentService = ReturnType<typeof createPaymentService>;
@@ -85,17 +98,15 @@ const ALLOWED_TRANSITIONS: Record<string, readonly string[]> = {
   PENDING: ["PAID", "FAILED", "EXPIRED", "SETTLED"],
   PAID: ["SETTLED", "REFUNDED"],
   SETTLED: ["REFUNDED"],
-  FAILED: [],
-  EXPIRED: [],
+  FAILED: ["PAID", "SETTLED"],
+  EXPIRED: ["PAID", "SETTLED"],
   REFUNDED: [],
 };
 
 /**
- * A Test Mode simulation can be retried after Xendit has already completed the
- * payment. In that case Xendit rejects the now-consumed dynamic QR with this
- * provider error instead of returning the completed status. The status lookup
- * below is the safe recovery path; other simulation failures must retain their
- * original diagnostics.
+ * A provider simulation can be retried after payment already completed. The
+ * provider may reject the consumed payment method instead of returning status;
+ * authoritative status lookup is the safe recovery path.
  */
 function isInactiveSimulationError(error: unknown): boolean {
   return String(error).includes("400 INACTIVE_PAYMENT_METHOD");
@@ -155,132 +166,157 @@ export function createPaymentService(deps: {
     // Keep the old reference fallback for rows created before repeat purchases
     // were supported. New rows are selected by their relational keys so an
     // earlier terminal attempt does not become a permanent package lock.
-    const existingByPackage = repo.findLatestPaymentByUserAndPackage
-      ? await repo.findLatestPaymentByUserAndPackage(
-          userId,
-          pkg.id,
-          providerName,
-        )
-      : null;
-    const existing =
-      existingByPackage ??
-      (await repo.findPaymentByProviderReference(baseProviderReference));
-    if (existing) {
-      if (existing.status === PAYMENT_STATUS.PENDING) {
-        // H4: reuse the persisted checkout URL when available so a PENDING
-        // re-purchase does not re-call the provider (payment provider intents
-        // are not guaranteed idempotent and would mint a second checkout).
-        if (existing.checkoutUrl) {
-          return {
-            paymentId: existing.id,
-            providerReference: existing.providerReference,
-            checkoutUrl: existing.checkoutUrl,
-          };
-        }
-        const existingIntent = await provider.createIntent({
-          paymentId: existing.id,
+    const outcome = await db.transaction(async (tx) => {
+      // B6: unique references prevent duplicate rows; this transaction lock
+      // also prevents concurrent callers from POSTing duplicate provider
+      // intents before either caller persists its checkout URL.
+      await lockPaymentIntent(tx, userId, pkg.id, providerName);
+
+      const existingByPackage = repo.findLatestPaymentByUserAndPackage
+        ? await repo.findLatestPaymentByUserAndPackage(
+            userId,
+            pkg.id,
+            providerName,
+            tx,
+          )
+        : null;
+      const existing =
+        existingByPackage ??
+        (await repo.findPaymentByProviderReference(baseProviderReference, tx));
+
+      const persistIntent = async (
+        paymentId: string,
+        providerReference: string,
+      ) => {
+        const intent = await provider.createIntent({
+          paymentId,
           amountIdr: pkg.priceIdr,
-          providerReference: existing.providerReference,
+          providerReference,
         });
-        // X1: refresh the provider payment-request id in case it rotated.
         const update: {
           status: string;
           providerRequestId?: string;
           checkoutUrl?: string | null;
-        } = { status: PAYMENT_STATUS.PENDING };
-        if (existingIntent.paymentRequestId) {
-          update.providerRequestId = existingIntent.paymentRequestId;
-        }
-        update.checkoutUrl = existingIntent.checkoutUrl;
-        await repo.updatePaymentStatus(existing.id, update);
-        return {
-          paymentId: existing.id,
-          providerReference: existing.providerReference,
-          checkoutUrl: existingIntent.checkoutUrl,
+        } = {
+          status: PAYMENT_STATUS.PENDING,
+          checkoutUrl: intent.checkoutUrl,
         };
-      }
-      // PAID, SETTLED, FAILED, EXPIRED, and REFUNDED are historical outcomes,
-      // not a package-level lock. Fall through and create a new payment record
-      // below. Keeping each attempt in its own row ensures its webhook and
-      // wallet-credit idempotency key remain independent of earlier attempts.
-    }
+        if (intent.paymentRequestId) {
+          update.providerRequestId = intent.paymentRequestId;
+        }
+        await repo.updatePaymentStatus(paymentId, update, tx);
+        return {
+          paymentId,
+          providerReference,
+          checkoutUrl: intent.checkoutUrl,
+        };
+      };
 
-    const paymentId = crypto.randomUUID();
-    const providerReference = existing
-      ? `${baseProviderReference}:${paymentId}`
-      : baseProviderReference;
-
-    const inserted = await repo.insertPayment({
-      id: paymentId,
-      userId,
-      walletId,
-      packageId: pkg.id,
-      provider: providerName,
-      providerReference,
-      amountIdr: pkg.priceIdr,
-      marks: pkg.marks,
-      status: PAYMENT_STATUS.PENDING,
-    });
-
-    // B6: a concurrent request won the check-then-insert race and its row
-    // was committed first — reuse the existing (PENDING) payment instead of
-    // creating a zombie duplicate.
-    if (inserted === null) {
-      const existingRow =
-        await repo.findPaymentByProviderReference(providerReference);
-      if (existingRow) {
-        if (existingRow.checkoutUrl) {
+      if (existing?.status === PAYMENT_STATUS.PENDING) {
+        // H4: reuse persisted checkout URL; provider intents are not
+        // guaranteed idempotent.
+        if (existing.checkoutUrl) {
           return {
-            paymentId: existingRow.id,
-            providerReference: existingRow.providerReference,
-            checkoutUrl: existingRow.checkoutUrl,
+            ok: true as const,
+            value: {
+              paymentId: existing.id,
+              providerReference: existing.providerReference,
+              checkoutUrl: existing.checkoutUrl,
+            },
           };
         }
-        const existingIntent = await provider.createIntent({
-          paymentId: existingRow.id,
-          amountIdr: pkg.priceIdr,
-          providerReference: existingRow.providerReference,
-        });
-        await repo.updatePaymentStatus(existingRow.id, {
-          status: PAYMENT_STATUS.PENDING,
-          checkoutUrl: existingIntent.checkoutUrl,
-          ...(existingIntent.paymentRequestId
-            ? { providerRequestId: existingIntent.paymentRequestId }
-            : {}),
-        });
-        return {
-          paymentId: existingRow.id,
-          providerReference: existingRow.providerReference,
-          checkoutUrl: existingIntent.checkoutUrl,
-        };
+        try {
+          return {
+            ok: true as const,
+            value: await persistIntent(existing.id, existing.providerReference),
+          };
+        } catch (error) {
+          await repo.updatePaymentStatus(
+            existing.id,
+            { status: PAYMENT_STATUS.EXPIRED },
+            tx,
+          );
+          return { ok: false as const, error };
+        }
       }
-    }
 
-    try {
-      const intent = await provider.createIntent({
-        paymentId,
-        amountIdr: pkg.priceIdr,
-        providerReference,
-      });
-      // X1: persist the provider payment-request id for provider refunds.
-      // H4: persist the checkout URL for PENDING re-purchase reuse.
-      const update: {
-        status: string;
-        providerRequestId?: string;
-        checkoutUrl?: string | null;
-      } = { status: PAYMENT_STATUS.PENDING };
-      if (intent.paymentRequestId) {
-        update.providerRequestId = intent.paymentRequestId;
+      // PAID, SETTLED, FAILED, EXPIRED, and REFUNDED are historical outcomes,
+      // not package-level locks. Each retry gets independent webhook and
+      // wallet-credit idempotency history.
+      const paymentId = crypto.randomUUID();
+      const providerReference = existing
+        ? `${baseProviderReference}:${paymentId}`
+        : baseProviderReference;
+      const inserted = await repo.insertPayment(
+        {
+          id: paymentId,
+          userId,
+          walletId,
+          packageId: pkg.id,
+          provider: providerName,
+          providerReference,
+          amountIdr: pkg.priceIdr,
+          marks: pkg.marks,
+          status: PAYMENT_STATUS.PENDING,
+        },
+        tx,
+      );
+
+      // Keep conflict recovery for callers using older repository behavior.
+      if (inserted === null) {
+        const existingRow = await repo.findPaymentByProviderReference(
+          providerReference,
+          tx,
+        );
+        if (existingRow) {
+          if (existingRow.checkoutUrl) {
+            return {
+              ok: true as const,
+              value: {
+                paymentId: existingRow.id,
+                providerReference: existingRow.providerReference,
+                checkoutUrl: existingRow.checkoutUrl,
+              },
+            };
+          }
+          try {
+            return {
+              ok: true as const,
+              value: await persistIntent(
+                existingRow.id,
+                existingRow.providerReference,
+              ),
+            };
+          } catch (error) {
+            await repo.updatePaymentStatus(
+              existingRow.id,
+              { status: PAYMENT_STATUS.EXPIRED },
+              tx,
+            );
+            return { ok: false as const, error };
+          }
+        }
       }
-      update.checkoutUrl = intent.checkoutUrl;
-      await repo.updatePaymentStatus(paymentId, update);
-      return { paymentId, providerReference, checkoutUrl: intent.checkoutUrl };
-    } catch (error) {
-      await repo.updatePaymentStatus(paymentId, {
-        status: PAYMENT_STATUS.EXPIRED,
-      });
-      throw new PaymentProviderError(providerName, error);
+
+      try {
+        return {
+          ok: true as const,
+          value: await persistIntent(paymentId, providerReference),
+        };
+      } catch (error) {
+        await repo.updatePaymentStatus(
+          paymentId,
+          { status: PAYMENT_STATUS.EXPIRED },
+          tx,
+        );
+        return { ok: false as const, error };
+      }
+    });
+
+    if (!outcome.ok) {
+      throw new PaymentProviderError(providerName, outcome.error);
     }
+    return outcome.value;
   }
 
   async function simulatePurchase(paymentId: string, userId: string) {
@@ -352,14 +388,54 @@ export function createPaymentService(deps: {
       return confirmFromWebhook({
         provider: providerName,
         ...remote,
-        // Xendit includes reference_id on this endpoint, but retain the
-        // database reference as a safe fallback if a provider response omits
-        // it while still reporting a terminal status.
+        // Retain database reference if provider response omits it while still
+        // reporting terminal status.
         providerReference: remote.providerReference || record.providerReference,
       });
     } catch (error) {
       throw new PaymentProviderError(providerName, error);
     }
+  }
+
+  async function reconcilePendingPayments(limit = 50) {
+    if (!provider.getPaymentRequestStatus) {
+      return { checked: 0, reconciled: 0, pending: 0, failed: 0 };
+    }
+    const records = await repo.findPaymentsForReconciliation(
+      providerName,
+      new Date(Date.now() - 5 * 60 * 1000),
+      Math.min(Math.max(limit, 1), 100),
+    );
+    let reconciled = 0;
+    let pending = 0;
+    let failed = 0;
+    for (const record of records) {
+      try {
+        const remote = await provider.getPaymentRequestStatus(
+          record.providerRequestId!,
+        );
+        if (remote.status === PAYMENT_STATUS.PENDING) {
+          pending += 1;
+          if (providerName === "midtrans")
+            recordPaymentReconciliation("midtrans", "pending");
+          continue;
+        }
+        await confirmFromWebhook({
+          provider: providerName,
+          ...remote,
+          providerReference:
+            remote.providerReference || record.providerReference,
+        });
+        reconciled += 1;
+        if (providerName === "midtrans")
+          recordPaymentReconciliation("midtrans", "reconciled");
+      } catch {
+        failed += 1;
+        if (providerName === "midtrans")
+          recordPaymentReconciliation("midtrans", "failed");
+      }
+    }
+    return { checked: records.length, reconciled, pending, failed };
   }
 
   /**
@@ -379,6 +455,57 @@ export function createPaymentService(deps: {
       );
 
       if (!record) throw new PaymentNotFoundError(input.providerReference);
+      if (record.provider && record.provider !== input.provider) {
+        if (providerName === "midtrans")
+          recordPaymentIntegrity("midtrans", "provider_mismatch");
+        throw new PaymentWebhookMismatchError("Payment provider mismatch");
+      }
+      if (input.currency !== undefined && input.currency !== "IDR") {
+        if (providerName === "midtrans")
+          recordPaymentIntegrity("midtrans", "currency_mismatch");
+        throw new PaymentWebhookMismatchError("Payment currency mismatch");
+      }
+      if (
+        input.amountIdr !== undefined &&
+        input.amountIdr !== record.amountIdr
+      ) {
+        if (providerName === "midtrans")
+          recordPaymentIntegrity("midtrans", "amount_mismatch");
+        throw new PaymentWebhookMismatchError("Payment amount mismatch");
+      }
+
+      if (input.refundKind === "partial") {
+        if (providerName === "midtrans")
+          recordPaymentIntegrity("midtrans", "partial_refund");
+        if (audit) {
+          await audit.record({
+            db: tx,
+            actorId: null,
+            actorType: ACTOR_TYPE.SYSTEM,
+            action: "partial_refund_reconciliation",
+            targetId: record.id,
+            targetType: "payment_record",
+            details: {
+              paymentId: record.id,
+              providerEventId: input.providerEventId,
+              amountIdr: input.amountIdr,
+              refundAmountIdr: input.refundAmountIdr,
+            },
+          });
+        }
+        if (refundRecord) {
+          await refundRecord.insertRefundRecord(tx, {
+            paymentId: record.id,
+            walletId: record.walletId,
+            amountIdr: input.refundAmountIdr ?? 0,
+            marks: 0,
+            reason:
+              "Provider partial refund: manual Marks reconciliation required",
+            providerEventId: input.providerEventId,
+          });
+        }
+        return { status: record.status };
+      }
       // PAID/SETTLED are terminal for idempotency purposes, EXCEPT a REFUNDED
       // webhook (per ALLOWED_TRANSITIONS PAID/SETTLED -> REFUNDED) which must be
       // processed so the payment is marked REFUNDED and the payer is notified.
@@ -387,14 +514,22 @@ export function createPaymentService(deps: {
         input.status !== PAYMENT_STATUS.REFUNDED
       )
         return { status: PAYMENT_STATUS.PAID };
-      if (record.status === PAYMENT_STATUS.FAILED)
+      if (
+        record.status === PAYMENT_STATUS.FAILED &&
+        input.status !== PAYMENT_STATUS.PAID &&
+        input.status !== PAYMENT_STATUS.SETTLED
+      )
         return { status: PAYMENT_STATUS.FAILED };
       if (
         record.status === PAYMENT_STATUS.SETTLED &&
         input.status !== PAYMENT_STATUS.REFUNDED
       )
         return { status: PAYMENT_STATUS.SETTLED };
-      if (record.status === PAYMENT_STATUS.EXPIRED)
+      if (
+        record.status === PAYMENT_STATUS.EXPIRED &&
+        input.status !== PAYMENT_STATUS.PAID &&
+        input.status !== PAYMENT_STATUS.SETTLED
+      )
         return { status: PAYMENT_STATUS.EXPIRED };
       if (record.status === PAYMENT_STATUS.REFUNDED)
         return { status: PAYMENT_STATUS.REFUNDED };
@@ -415,7 +550,9 @@ export function createPaymentService(deps: {
       }
 
       const shouldCredit =
-        record.status === PAYMENT_STATUS.PENDING &&
+        record.status !== PAYMENT_STATUS.PAID &&
+        record.status !== PAYMENT_STATUS.SETTLED &&
+        record.status !== PAYMENT_STATUS.REFUNDED &&
         (input.status === PAYMENT_STATUS.PAID ||
           input.status === PAYMENT_STATUS.SETTLED);
 
@@ -578,10 +715,9 @@ export function createPaymentService(deps: {
           // hit the early return above and never credit. The stale marker is the
           // previous attempt's providerEventId: if the incoming terminal event
           // carries that same id, it is the old attempt (or a duplicate of it)
-          // and must be ignored. (We cannot compare against providerRequestId
-          // because Xendit payment events carry payment_id, not
-          // payment_request_id.) Records without a stale marker fall back to the
-          // old behavior.
+          // and must be ignored. Provider event identifiers may differ from
+          // provider request identifiers, so compare the persisted event marker.
+          // Records without a stale marker fall back to the old behavior.
           if (
             record.status === PAYMENT_STATUS.PENDING &&
             record.providerEventId &&
@@ -624,6 +760,7 @@ export function createPaymentService(deps: {
     createIntent,
     simulatePurchase,
     reconcilePurchase,
+    reconcilePendingPayments,
     confirmFromWebhook,
     getPurchase,
     provider,

@@ -34,6 +34,7 @@ async function insertRefundRecord(
       actorId: record.actorId ?? null,
       providerEventId: record.providerEventId ?? null,
     })
+    .onConflictDoNothing({ target: refundRecord.providerEventId })
     .returning();
   return inserted;
 }

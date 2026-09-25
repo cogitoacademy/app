@@ -35,11 +35,11 @@ Router (oRPC procedures) → Handler (request shaping, auth, errors) → Service
 | `invite`             | Tutor invites (hashed token, onboarding completion)                                                                                                |
 | `meeting`            | Meeting provider: Google Meet with fallback to manual-link provider                                                                                |
 | `notification`       | Notification records + outbox-style dispatch                                                                                                       |
-| `payment`            | Payments: Xendit/Midtrans/stub providers, checkout, webhook reversal handling                                                                      |
+| `payment`            | Payments: Midtrans/stub providers, checkout, webhook reversal handling                                                                             |
 | `pricing`            | Pricing calculation port built on `economy` config                                                                                                 |
 | `refund`             | Refund records and refund lifecycle                                                                                                                |
 | `room`               | Rooms + room bookings with overlap guards                                                                                                          |
-| `scheduler`          | BullMQ queue/worker: booking expiry, hold release, SLA escalation, notification emails, tutor lateness, failed-meeting retries (`scheduler/jobs/`) |
+| `scheduler`          | BullMQ queue/worker: booking expiry, hold release, SLA escalation, notification emails, tutor lateness, failed-meeting retries, payment reconciliation (`scheduler/jobs/`) |
 | `support`            | Support tickets with SLA deadlines and escalation                                                                                                  |
 | `tutor`              | Tutor profiles, availability, experiences, onboarding status                                                                                       |
 | `tutor-discovery`    | Discovery/search for tutors                                                                                                                        |

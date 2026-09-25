@@ -58,6 +58,50 @@ groups:
         noDataState: OK
         execErrState: Error
 
+      - uid: payment-integrity-event
+        title: PaymentIntegrityEvent
+        condition: C
+        for: 0m
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: "sum(increase(payment_integrity_events_total[5m])) or vector(0)"
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: A
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: B
+              refId: C
+              type: threshold
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+        annotations:
+          summary: "Payment integrity mismatch or partial refund requires immediate reconciliation"
+        labels:
+          severity: critical
+        noDataState: OK
+        execErrState: Error
+
       - uid: disk-warn
         title: DiskWarn
         condition: C
@@ -639,7 +683,7 @@ groups:
         execErrState: Error
 
       # Burst of test-mode gate rejections: non-UAT purchases hitting the
-      # provider-agnostic allowlist (XENDIT_TEST_ALLOWED_EMAILS) on a
+      # provider-agnostic allowlist (PAYMENT_TEST_ALLOWED_EMAILS) on a
       # test-mode domain. Usually an allowlist misconfig during UAT, not a
       # provider outage — query PAYMENT_TEST_MODE_RESTRICTED in Explore first
       # (the payment-only board is retired; see the Important Logs board).

@@ -860,7 +860,7 @@ chat directory.
 
 ## Payment Module
 
-**Purpose:** Mark package purchases via a payment provider (Xendit default; Midtrans Snap selectable) with webhook confirmation, idempotency, and wallet crediting.
+**Purpose:** Mark package purchases via the active payment provider (Midtrans Snap or development stub) with webhook confirmation, idempotency, and wallet crediting.
 
 **Files:**
 
@@ -868,9 +868,8 @@ chat directory.
 - `payment.errors.ts` — `PackageNotFoundError`, `PaymentNotFoundError`, `PackageAlreadyPurchasedError` (legacy), `PaymentProviderError`
 - `payment.repo.ts` — `findPackageByCode`, `insertPayment`, `findPaymentByProviderReference`, `findLatestPaymentByUserAndPackage`, `findPaymentByProviderEventId`, `findPaymentById`, `updatePaymentStatus`
 - `payment.service.ts` — `createIntent`, `confirmFromWebhook`, `getPurchase`; exposes `provider`
-- `payment.handler.ts` — `createPurchase`, approved-UAT-only `simulatePurchase`, `getPurchase`; config `providerMode` (test/live) + `simulationEnabled` (Xendit only)
+- `payment.handler.ts` — `createPurchase`, Test Mode `simulatePurchase`, `getPurchase`; config `providerMode` (test/live) + `simulationEnabled`
 - `payment.router.ts` — `createPurchase` and `simulatePurchase` use `verifiedStudentProcedure` (student role + verified email; `getPurchase` stays protected)
-- `xendit-payment.provider.ts` — Xendit API integration with circuit breaker and retry; explicit Test/Live mode label; bounded provider error diagnostics; `verifyWebhook`
 - `midtrans-payment.provider.ts` — Midtrans Snap integration (`POST /snap/v1/transactions` → `redirect_url`; webhook `signature_key` = `SHA512(order_id + status_code + gross_amount + key)` verified in the body; status mapping `capture`→PAID / `settlement`→SETTLED / `pending`→PENDING / `deny|cancel|failure`→FAILED / `expire`→EXPIRED / `refund|partial_refund`→REFUNDED; `order_id` = payment UUID resolved back to the stored provider reference; circuit breaker + retry; `refund()` port)
 - `stub-payment.provider.ts` — Development stub
 - Webhook route lives in `apps/server/src/webhooks/payments.ts` (`POST /webhooks/payments/:provider`)
@@ -885,18 +884,16 @@ chat directory.
 
 **Business Rules:**
 
-- Webhook signature verified via `verifyWebhook` (provider-specific) + timestamp window (5 min, skipped for xendit/midtrans) + IP allowlist (honors `TRUST_PROXY`)
+- Webhook signature verified via `verifyWebhook` (provider-specific) + applicable timestamp window (5 min) + IP allowlist (honors `TRUST_PROXY`); Midtrans uses the body `signature_key` and skips timestamp validation
 - Webhook idempotency is atomic — `IdempotencyStore.claim` keys lifecycle events by provider + verified payment/event id (or provider reference fallback) + normalized status. This prevents a PENDING event from suppressing a later PAID event for the same payment while still deduplicating provider retries of the same state; transient processing failures release the claim (#46)
 - Circuit breaker prevents cascading failures to the provider
 - Payment statuses: `PENDING` → `PAID`/`SETTLED`/`EXPIRED`/`FAILED`/`REFUNDED`
 - Package purchases are repeatable: the latest PENDING attempt is reused, while terminal attempts remain immutable history and do not block a new payment row/provider reference.
-- Payment/refund notifications are written per the PRD matrix (B6, #46); `PAYMENT_PROVIDER=xendit` requires Xendit credentials and an explicit `XENDIT_MODE` (no silent stub fallback); `PAYMENT_PROVIDER=midtrans` requires `MIDTRANS_SERVER_KEY`/`MIDTRANS_CLIENT_KEY`/`MIDTRANS_MERCHANT_ID`/`MIDTRANS_MODE` (no silent stub fallback)
-- Xendit selects the actual environment from the API key. In production/staging Test Mode, `XENDIT_TEST_ALLOWED_EMAILS` restricts `payment.createPurchase` to approved UAT accounts; the allowlist is normalized case-insensitively. The default channel is QRIS; its payment request sends channel-specific `qr_string_type=DYNAMIC` plus a 48-hour expiry, and the web client renders the returned `PRESENT_TO_CUSTOMER` QR string.
+- Payment/refund notifications are written per the PRD matrix (B6, #46); `PAYMENT_PROVIDER=midtrans` requires `MIDTRANS_SERVER_KEY`/`MIDTRANS_CLIENT_KEY`/`MIDTRANS_MERCHANT_ID`/`MIDTRANS_MODE` (no silent stub fallback)
 - Midtrans selects the actual environment from the Server Key (Sandbox vs Production). `MIDTRANS_MODE` is the explicit deployment assertion. Snap returns a hosted `redirect_url` as `checkoutUrl`; `order_id` is the payment UUID (unique per repurchase attempt) and is resolved back to the stored provider reference for webhook/status matching. Midtrans Sandbox has **no simulation endpoint** — `canSimulate` is false and `simulatePurchase` returns `PAYMENT_SIMULATION_UNAVAILABLE` in Midtrans mode; sandbox test payments use the Snap test cards.
-- Test QRIS cannot be paid from a real banking app. For an owned pending purchase, `simulatePurchase` calls Xendit's `/v3/payment_requests/{id}/simulate` only in Test Mode and only for an approved UAT account. It never credits Marks directly; provider-confirmed status must pass through the transactional confirmation service.
-- Structured provider non-2xx responses (Xendit and Midtrans) are reduced to a single-line, bounded `status + error_code + message` diagnostic. That detail is safe to return as the `PAYMENT_PROVIDER_ERROR` message; arbitrary response bodies and credentials are never echoed.
-- If a Test Mode simulation retry receives `400 INACTIVE_PAYMENT_METHOD`, the payment service performs one authoritative status lookup. A terminal `PAID`/`SETTLED` result is confirmed through the same idempotent wallet-credit path used by webhooks; unresolved status lookup leaves the original provider diagnostic intact.
-- Test-mode status polling is also a recovery path: `getPurchase` checks the provider's authoritative status for approved UAT users (Xendit `GET /v3/payment_requests/{id}`, Midtrans `GET /v2/{order_id}/status`). If the provider reports a terminal status, it delegates to the same transactional/idempotent `confirmFromWebhook` logic, so a missing sandbox webhook cannot leave a completed payment stuck forever.
+- `simulatePurchase` never credits Marks directly; provider-confirmed status must pass through the transactional confirmation service.
+- Structured provider non-2xx responses are reduced to a single-line, bounded `status + error_code + message` diagnostic. That detail is safe to return as the `PAYMENT_PROVIDER_ERROR` message; arbitrary response bodies and credentials are never echoed.
+- Test-mode status polling is a recovery path: `getPurchase` checks the active provider's authoritative status for approved UAT users. If the provider reports a terminal status, it delegates to the same transactional/idempotent `confirmFromWebhook` logic, so a missing sandbox webhook cannot leave a completed payment stuck forever.
 
 ---
 
@@ -1039,7 +1036,7 @@ contracts.
 
 ## Scheduler Module
 
-**Purpose:** Background job scheduling using BullMQ for booking expiry, hold release, tutor-lateness admin-queue flagging, email outbox dispatch, and support-ticket SLA escalation.
+**Purpose:** Background job scheduling using BullMQ for booking expiry, hold release, tutor-lateness admin-queue flagging, email outbox dispatch, support-ticket SLA escalation, failed-meeting retry, and Midtrans payment reconciliation.
 
 **Files:**
 
@@ -1050,6 +1047,7 @@ contracts.
 - `jobs/send-notification-email.job.ts` — repeatable job (60 s) — consumes the email outbox (queued + failed-with-retries-left rows, max 3 attempts per dispatch)
 - `jobs/escalate-support-tickets.job.ts` — repeatable job (15 min) — SLA escalation
 - `jobs/retry-failed-meetings.job.ts` — repeatable job (5 min) — re-creates Google Meet for CONFIRMED online bookings whose meeting creation failed (max 3 attempts; afterwards left for assigned-tutor or admin manual link, U1)
+- `jobs/reconcile-payments.job.ts` — repeatable job (15 min) — checks stale Midtrans payment requests and confirms terminal provider status
 - Wiring: `apps/server/src/scheduler.ts` — `initScheduler()` gates on `SCHEDULER_ENABLED=true` + `REDIS_URL`
 
 **Service Methods:**
@@ -1062,12 +1060,13 @@ contracts.
 - `onSendNotificationEmail()` — Calls `notificationService.dispatchQueuedEmails(50)` (outbox consumer; #46; failed rows retried up to 3 attempts)
 - `onEscalateSupportTickets()` — Calls `supportService.escalatePastSlaTickets()` (marks overdue tickets in_progress + escalated + audit; #46)
 - `onRetryFailedMeetings()` — Calls `bookingService.retryFailedMeetings()` (re-schedules CONFIRMED online bookings with a failed meeting)
+- `onReconcilePayments()` — Calls `paymentService.reconcilePendingPayments(50)` (confirms stale Midtrans provider requests and records reconciliation outcomes)
 
 **Dependencies:** `BookingService`, `NotificationService`, `SupportService`, BullMQ queue
 
 **Business Rules:**
 
-- Expiry job every 5 min; hold-release every 10 min; lateness every 5 min; email every 60 s; SLA escalation every 15 min
+- Expiry job every 5 min; hold-release every 10 min; lateness every 5 min; email every 60 s; SLA escalation every 15 min; failed-meeting retry every 5 min; payment reconciliation every 15 min
 - Jobs use retry with exponential backoff (3 attempts); the failed-event handler compares `attemptsMade` with the job's configured `opts.attempts`, and only after that budget is exhausted copies the job to `cogito-jobs-dlq`. Intermediate failures remain eligible for BullMQ retry. The DLQ worker logs the entry and keeps a bounded Redis list (`cogito:dlq`, max 100 entries) for inspection (M4)
 - Every repeatable payload carries the scheduling scope's `{ traceId, userId }` (`traceJobData()`; `{}` when scheduled outside a request); the worker re-enters that scope via `runWithTrace` (minting a fresh `req_*` id for unstamped system ticks) and logs both on start/complete/fail
 - Circuit breaker state persisted in Redis (when available)

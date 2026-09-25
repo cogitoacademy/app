@@ -58,13 +58,13 @@ describe("findPackageByCode", () => {
 
 describe("findPaymentByProviderReference", () => {
   test("returns record when found", async () => {
-    const row = { id: "p1", providerReference: "xendit:u1:starter" };
+    const row = { id: "p1", providerReference: "midtrans:u1:starter" };
     const { select, chain } = makeSelectConn([row]);
     const conn: any = { select };
 
     const result = await findPaymentByProviderReference(
       conn,
-      "xendit:u1:starter",
+      "midtrans:u1:starter",
     );
 
     expect(result).toEqual(row);
@@ -88,7 +88,7 @@ describe("findLatestPaymentByUserAndPackage", () => {
       id: "p2",
       userId: "u1",
       packageId: "pkg1",
-      provider: "xendit",
+      provider: "midtrans",
     };
     const { select, chain } = makeSelectConn([row]);
     const conn: any = { select };
@@ -97,7 +97,7 @@ describe("findLatestPaymentByUserAndPackage", () => {
       conn,
       "u1",
       "pkg1",
-      "xendit",
+      "midtrans",
     );
 
     expect(result).toEqual(row);
@@ -115,7 +115,7 @@ describe("findLatestPaymentByUserAndPackage", () => {
       conn,
       "u1",
       "pkg1",
-      "xendit",
+      "midtrans",
     );
 
     expect(result).toBeNull();
@@ -175,8 +175,8 @@ describe("insertPayment", () => {
         id: "p1",
         userId: "u1",
         walletId: "w1",
-        provider: "xendit",
-        providerReference: "xendit:u1:starter",
+        provider: "midtrans",
+        providerReference: "midtrans:u1:starter",
         amountIdr: 50000,
         marks: 100,
         status: "PENDING",
@@ -192,8 +192,8 @@ describe("insertPayment", () => {
       userId: "u1",
       walletId: "w1",
       packageId: "pkg1",
-      provider: "xendit",
-      providerReference: "xendit:u1:starter",
+      provider: "midtrans",
+      providerReference: "midtrans:u1:starter",
       amountIdr: 50000,
       marks: 100,
       status: "PENDING",
@@ -215,8 +215,8 @@ describe("insertPayment", () => {
       id: "p1",
       userId: "u1",
       walletId: "w1",
-      provider: "xendit",
-      providerReference: "xendit:u1:starter",
+      provider: "midtrans",
+      providerReference: "midtrans:u1:starter",
       amountIdr: 50000,
       marks: 100,
       status: "PENDING",
@@ -318,8 +318,8 @@ describe("createPaymentRepo", () => {
         userId: "u1",
         walletId: "w1",
         packageId: "pkg1",
-        provider: "xendit",
-        providerReference: "xendit:u1:starter",
+        provider: "midtrans",
+        providerReference: "midtrans:u1:starter",
         amountIdr: 50000,
         marks: 100,
         status: "PENDING",
