@@ -18,34 +18,34 @@ Router (oRPC procedures) → Handler (request shaping, auth, errors) → Service
 
 ## Module map (`src/modules/`, 26 modules)
 
-| Module               | Purpose                                                                                                                                            |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `auth`               | Sign-in/sign-up session flow, profile queries, wallet snapshot port                                                                                |
-| `admin`              | Admin operations (bookings overview, dashboard stats)                                                                                              |
-| `admin-booking`      | Admin booking management (create/modify/cancel)                                                                                                    |
-| `admin-mark-package` | Admin management of purchased mark-packages                                                                                                        |
-| `admin-tutor`        | Admin tutor management (approval, onboarding status, profiles)                                                                                     |
-| `achievement`        | Student/portfolio achievements with optimistic-lock versioning                                                                                     |
-| `audit`              | Append-only audit-log service                                                                                                                      |
-| `booking`            | Booking lifecycle: state machine, sessions, rooms, reschedules, tutor actions                                                                      |
-| `contact`            | Contact-us requests                                                                                                                                |
-| `content`            | Sanity CMS-backed content (competitions, student resources)                                                                                        |
-| `economy`            | Economy configuration (pricing parameters, mark-package settings)                                                                                  |
-| `email`              | Email port: Resend provider + dev stub provider                                                                                                    |
-| `invite`             | Tutor invites (hashed token, onboarding completion)                                                                                                |
-| `meeting`            | Meeting provider: Google Meet with fallback to manual-link provider                                                                                |
-| `notification`       | Notification records + outbox-style dispatch                                                                                                       |
-| `payment`            | Payments: Midtrans/stub providers, checkout, webhook reversal handling                                                                             |
-| `pricing`            | Pricing calculation port built on `economy` config                                                                                                 |
-| `refund`             | Refund records and refund lifecycle                                                                                                                |
-| `room`               | Rooms + room bookings with overlap guards                                                                                                          |
+| Module               | Purpose                                                                                                                                                                    |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auth`               | Sign-in/sign-up session flow, profile queries, wallet snapshot port                                                                                                        |
+| `admin`              | Admin operations (bookings overview, dashboard stats)                                                                                                                      |
+| `admin-booking`      | Admin booking management (create/modify/cancel)                                                                                                                            |
+| `admin-mark-package` | Admin management of purchased mark-packages                                                                                                                                |
+| `admin-tutor`        | Admin tutor management (approval, onboarding status, profiles)                                                                                                             |
+| `achievement`        | Student/portfolio achievements with optimistic-lock versioning                                                                                                             |
+| `audit`              | Append-only audit-log service                                                                                                                                              |
+| `booking`            | Booking lifecycle: state machine, sessions, rooms, reschedules, tutor actions                                                                                              |
+| `contact`            | Contact-us requests                                                                                                                                                        |
+| `content`            | Sanity CMS-backed content (competitions, student resources)                                                                                                                |
+| `economy`            | Economy configuration (pricing parameters, mark-package settings)                                                                                                          |
+| `email`              | Email port: Resend provider + dev stub provider                                                                                                                            |
+| `invite`             | Tutor invites (hashed token, onboarding completion)                                                                                                                        |
+| `meeting`            | Meeting provider: Google Meet with fallback to manual-link provider                                                                                                        |
+| `notification`       | Notification records + outbox-style dispatch                                                                                                                               |
+| `payment`            | Payments: Midtrans/stub providers, checkout, webhook reversal handling                                                                                                     |
+| `pricing`            | Pricing calculation port built on `economy` config                                                                                                                         |
+| `refund`             | Refund records and refund lifecycle                                                                                                                                        |
+| `room`               | Rooms + room bookings with overlap guards                                                                                                                                  |
 | `scheduler`          | BullMQ queue/worker: booking expiry, hold release, SLA escalation, notification emails, tutor lateness, failed-meeting retries, payment reconciliation (`scheduler/jobs/`) |
-| `support`            | Support tickets with SLA deadlines and escalation                                                                                                  |
-| `tutor`              | Tutor profiles, availability, experiences, onboarding status                                                                                       |
-| `tutor-discovery`    | Discovery/search for tutors                                                                                                                        |
-| `tutor-subjects`     | Subject taxonomy + subject-selection rules (1–7 subjects)                                                                                          |
-| `upload`             | Signed upload flow (local `POST /uploads/*` or R2 presigned PUT)                                                                                   |
-| `wallet`             | Wallet + ledger entries (Marks)                                                                                                                    |
+| `support`            | Support tickets with SLA deadlines and escalation                                                                                                                          |
+| `tutor`              | Tutor profiles, availability, experiences, onboarding status                                                                                                               |
+| `tutor-discovery`    | Discovery/search for tutors                                                                                                                                                |
+| `tutor-subjects`     | Subject taxonomy + subject-selection rules (1–7 subjects)                                                                                                                  |
+| `upload`             | Signed upload flow (local `POST /uploads/*` or R2 presigned PUT)                                                                                                           |
+| `wallet`             | Wallet + ledger entries (Marks)                                                                                                                                            |
 
 ## lib/ utilities (`src/lib/`)
 
