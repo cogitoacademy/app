@@ -29,10 +29,11 @@
 #   COOLIFY_APP_UUID       (optional) Coolify application UUID of the API
 #                          resource; when set, the auto-rollback skips the
 #                          applications-list domain matching below.
-#   COOLIFY_API_BASE_URL   (optional) Coolify public API host used for the
-#                          rollback API calls. Default:
-#                          https://cl.cogitoacademy.id (canonical Coolify
-#                          host since 2026-08-31).
+#   COOLIFY_API_BASE_URL   (optional) Coolify API host used for rollback API
+#                          calls. Default: http://127.0.0.1:8000 on the
+#                          production VPS runner. Override when running from
+#                          another host; the public cl.cogitoacademy.id route
+#                          exposes deploy webhooks only.
 #   PROD_DATABASE_URL      Production PostgreSQL connection string
 #   R2_ACCOUNT_ID          Cloudflare account id (R2 S3 endpoint host)
 #   R2_ACCESS_KEY_ID       R2 API token access key id
@@ -91,7 +92,7 @@ set -euo pipefail
 
 # Keep the documented optional override safe under `set -u`. This must be
 # initialized before coolify_api() can be called from the failure path.
-COOLIFY_API_BASE_URL="${COOLIFY_API_BASE_URL:-https://cl.cogitoacademy.id}"
+COOLIFY_API_BASE_URL="${COOLIFY_API_BASE_URL:-http://127.0.0.1:8000}"
 # Avoid accidental double slashes when an operator supplies a trailing slash.
 COOLIFY_API_BASE_URL="${COOLIFY_API_BASE_URL%/}"
 

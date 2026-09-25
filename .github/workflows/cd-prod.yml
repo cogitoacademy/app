@@ -149,10 +149,12 @@ jobs:
         env:
           COOLIFY_WEBHOOK: ${{ secrets.COOLIFY_PROD_SERVER_WEBHOOK }}
           COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
-          # (optional) pin the API resource UUID to skip rollback domain
-          # matching; env override for the Coolify API host used by the
-          # rollback calls (default https://cl.cogitoacademy.id)
-          # COOLIFY_APP_UUID / COOLIFY_API_BASE_URL
+          # Rollback API calls run on the production VPS runner. The public
+          # cl.cogitoacademy.id route exposes deploy webhooks only, so using it
+          # for GET/PATCH rollback calls returns 403.
+          COOLIFY_API_BASE_URL: http://127.0.0.1:8000
+          # Optional: pin the API resource UUID to skip domain matching.
+          COOLIFY_APP_UUID: ${{ secrets.COOLIFY_APP_UUID }}
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}

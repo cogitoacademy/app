@@ -51,7 +51,9 @@ on:
         default: "manual re-apply"
 
 concurrency:
-  group: infra-apply
+  # Share rollout lock with cd-prod.yml. A merge touching both app and infra
+  # must not restart env/config while the image deploy is in flight.
+  group: production-deploy
   cancel-in-progress: false
 
 permissions:

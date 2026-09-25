@@ -312,6 +312,38 @@ device` (Coolify `application_deployment_queues.logs`); the deploy
   wave PR's squash-merge is the re-trigger)
 - Verification: the run goes green and `/health` version == the merged sha
 
+### 5.8 Env apply reports a newly-created key as missing
+
+- Detect: Infra Apply fails the uniqueness guard with a key such as
+  `PAYMENT_TEST_ALLOWED_EMAILS` in `missing keys` immediately after a POST
+  create.
+- Meaning: the guard read the pre-create Coolify env snapshot, or Coolify did
+  not persist/return the row. The playbook must not restart the application.
+- Recovery: use the refreshed env-list result in the log, inspect the Coolify
+  application env rows, then rerun the apply. Never auto-delete duplicate rows;
+  use RUNBOOK → Coolify duplicate env row dedupe procedure.
+
+### 5.9 Auto-rollback returns HTTP 403
+
+- Detect: CD health poll times out and rollback logs show HTTP `403` for
+  `GET /api/v1/applications` or `PATCH /api/v1/applications/<uuid>`.
+- Meaning: the public `cl.cogitoacademy.id` route exposes deploy webhooks,
+  not the general Coolify API.
+- Recovery: run rollback API calls through
+  `COOLIFY_API_BASE_URL=http://127.0.0.1:8000` on the production VPS runner;
+  verify `COOLIFY_API_TOKEN` has the required Coolify API permissions. Confirm
+  `/health.version` after redeploy.
+
+### 5.10 Migration completed while old image remains live
+
+- Detect: `/health` remains on the previous SHA after the migration step, and
+  the release contains a non-additive schema migration.
+- Meaning: CD migrates before triggering Coolify. Old application code may not
+  understand renamed or removed columns even if `/health` stays `200`.
+- Recovery: deploy the intended immutable image forward. Do not blind-rollback
+  the image or restore the database; use the pre-migrate snapshot only through
+  reviewed DR-2 procedures.
+
 ## 6. Disaster recovery (DR)
 
 ### DR-1 Bad deploy / app down
