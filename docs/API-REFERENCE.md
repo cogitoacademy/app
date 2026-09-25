@@ -1,6 +1,23 @@
 # Cogito API Reference
 
-Last updated: 2026-09-18
+Last updated: 2026-09-25
+
+## Role-based dashboard analytics (2026-09-25)
+
+Student and tutor dashboards reuse the protected `booking.listMine` aggregate
+read for action, upcoming, completed, and problem counts. Counts are exact for
+the viewer's accessible bookings and are not limited to the first page. Student
+achievement cards use `achievement.stats`; tutor availability cards use
+`tutor.listAvailability`. The admin dashboard adds queue counts from existing
+admin booking, tutor-review, and achievement-review reads. No new RPC endpoint
+was added. Balance readiness remains a presentation decision from the existing
+`wallet.get` available/held/total snapshot; it does not estimate future booking
+affordability.
+
+Booking date labels render `Asia/Jakarta` as `WIB` instead of the browser's
+`GMT+7` short timezone label. Other IANA timezones retain the native Intl short
+label. Shared empty states use the existing Selia token system and remain
+presentation-only; the dashed-border experiment was reverted.
 
 ## Temporary Knowledge Bank access grants (2026-09-18)
 
@@ -484,7 +501,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Admin
 - **Input:** `{ period?: "7d" | "30d" | "90d" }` (default `"30d"`)
 - **Output:** `{ period, periodStart, periodEnd, summary, bookingTrend, userTrend, stateBreakdown, modalityBreakdown, categoryBreakdown }`
-- **Description:** Returns the aggregate data used by the admin Business insights section. Period metrics use booking/user creation time and WIB calendar days; `summary` includes booking volume, resolved-booking completion rate, active learners, new students/tutors, gross Marks, and platform-take Marks. `stateBreakdown` is the live all-bookings state mix, while modality/category breakdowns are scoped to the selected period. Missing trend days are returned as zero rows so charts stay continuous.
+- **Description:** Returns the aggregate data used by the admin Business insights section. Period metrics use booking/user creation time and WIB calendar days; `summary.activeLearners` is explicitly a distinct booking-proposer count, not a participant or login-active-user count. `summary.grossMarks` and `summary.platformTakeMarks` are locked booking-price snapshots, not cash revenue or settlement. `stateBreakdown` is the live all-bookings state mix, while modality/category breakdowns are scoped to the selected period. Missing trend days are returned as zero rows so charts stay continuous.
 
 ### `admin.listUsers`
 
@@ -723,7 +740,7 @@ All routes are admin-only. Package `code` is the stable business key used by
 
 - **RPC path:** `/rpc/adminTutor/updateTutorAchievements`
 - **Auth:** Admin
-- **Input:** `{ tutorProfileId, version, education, competitionAchievements }`; `education` accepts up to 2 `{ university, degree }` entries and `competitionAchievements` accepts up to 5 `{ competitionName, year, awards }` entries, with awards as one or more full titles
+- **Input:** `{ tutorProfileId, version, education, achievements }`; `education` accepts up to 2 `{ university, degree }` entries and `achievements` accepts up to 5 `{ competitionName, year, awards }` entries, with awards as one or more full titles
 - **Output:** Updated `TutorProfile` row
 - **Errors:** `TUTOR_PROFILE_NOT_FOUND` (404), `OPTIMISTIC_LOCK` (409) when `version` no longer matches
 - **Description:** Lets an admin normalize education and competition copy during profile review. The update increments the profile version, records an audit event, and mirrors matching pending achievement fields when a published tutor has a pending edit proposal.
@@ -749,26 +766,26 @@ All routes are admin-only. Package `code` is the stable business key used by
 ### `tutor.updateMyProfile`
 
 - **Auth:** Tutor
-- **Input:** `{ version, displayName? (legacy clients only), shortBio? (maximum 50 whitespace-delimited words and 2,000 characters), credentialsSummary?, achievements?, experiences?, achievementProofUrls?, experienceProofUrls?, profileImageUrl?, education?, competitionAchievements?, experienceEntries?, expertise?, subjectIds?, modality?, baseRatesIdr?, onlineMaxClassSize?, offlineMaxClassSize?, bankName?, bankAccountNumber?, bankAccountHolderName?, bankAccountOpeningCity?, bankAccountOwnership?: "self" | "trusted_person", bankTransferDisclaimerAccepted?, prices? }`; each maximum class size is an integer from 1–6. `experienceEntries` accepts up to 5 `{ role, organization, startYear, endYear, description }` entries, with `endYear` nullable for an ongoing role. The tutor editor saves its canonical name through Better Auth, exposes one combined structured Achievements & experience section and one profile-image field, and does not send `displayName`. The legacy `achievements`/`credentialsSummary`/`experiences` values remain accepted for older profiles.
+- **Input:** `{ version, shortBio?, affiliation?, achievementProofUrls?, experienceProofUrls?, profileImageUrl?, education?, achievements?, experiences?, subjectIds?, modality?, baseRatesIdr?, onlineMaxClassSize?, offlineMaxClassSize?, bankName?, bankAccountNumber?, bankAccountHolderName?, bankAccountOpeningCity?, bankAccountOwnership?: "self" | "trusted_person", bankTransferDisclaimerAccepted?, prices? }`. `affiliation` is a trimmed string of 1–255 characters when supplied. `achievements` accepts up to 5 `{ competitionName, year, awards }` entries. `experiences` accepts up to 5 `{ role, organization, startYear, endYear, description }` entries; `endYear` may be null for ongoing work. Draft saves may omit affiliation.
 - **Output:** `{ profile, subjects: [{ id, slug, name, description?, isSelectable, parent: { id, slug, name } }] }`
 - **Errors:** `OPTIMISTIC_LOCK` (409) on version mismatch, `INVALID_TUTOR_PRICING` (400) on floor-price violation, `INVALID_TUTOR_SUBJECT_SELECTION` (400) when ids are not active specializations or exceed 7; tutor domain validation errors include field-specific data such as `missingFields`, `pricingError`, or `subjectIds` where available
-- **Description:** Updates the tutor profile with optimistic locking. The tutor editor presents one combined structured Achievements & experience section and one profile-image field; each experience stores a role, organization, start/end years, and a brief description. Short bios are limited to 50 whitespace-delimited words (and 2,000 characters). Year values are sent as plain integers without grouping punctuation, and an end year must be on or after its start year. Comma punctuation in award and experience text remains visible while editing; comma-separated award titles still normalize to the structured `awards` array. Legacy `achievements`/`credentialsSummary`/`experiences` text remains readable as a fallback when no structured entries exist. `achievementProofUrls` and `experienceProofUrls` accept bounded HTTP(S) URLs; `profileImageUrl` accepts bounded HTTP(S) URLs or a generated local `/uploads/...` storage path. The tutor-facing proof guidance recommends putting both achievement and experience evidence in one Google Drive folder with the “Anyone with the link can view” setting. `profileImageUrl` is the single canonical tutor profile image: draft/changes-requested updates write it to the account image, while published changes wait in `pendingProfileChanges` until admin review. The admin can replace it with the background-standardized final asset through tutor review. `subjectIds` is the normalized specialization selection. Payout-account fields remain private. A published tutor's `baseRatesIdr` takes effect immediately for future bookings; existing bookings retain their stored price snapshot for payout. Other trust-sensitive changes—including structured achievements and experiences—wait in `pendingProfileChanges`. The web editor exposes separate **Save draft**/**Save profile changes** and **Submit for review** actions: saving permits incomplete required top-level fields while still highlighting malformed values, while submission applies the complete required-field gate. Both client-side and API-side validation errors are shown beside the affected field and in the form summary.
+- **Description:** Updates the tutor profile with optimistic locking. The tutor editor presents one combined Education, Achievements, and Experiences section plus one profile-image field; each experience stores a role, organization, start/end years, and a brief description. Affiliation stores a study program/university or professional role/organization and is required on review. Short bios are limited to 50 whitespace-delimited words (and 2,000 characters). Year values are plain integers, and an end year must be on or after its start year. Award titles normalize to the structured `awards` array. `achievementProofUrls` and `experienceProofUrls` accept bounded HTTP(S) URLs; `profileImageUrl` accepts bounded HTTP(S) URLs or a generated local `/uploads/...` storage path. The tutor-facing proof guidance recommends one Google Drive folder with the “Anyone with the link can view” setting. `profileImageUrl` is the canonical tutor profile image: draft/changes-requested updates write it to the account image, while published changes wait in `pendingProfileChanges` until admin review. `subjectIds` is the normalized specialization selection. Payout-account fields remain private. A published tutor's `baseRatesIdr` takes effect immediately for future bookings; existing bookings retain their stored price snapshot for payout. Trust-sensitive structured profile changes wait in `pendingProfileChanges`. The web editor exposes separate **Save draft**/**Save profile changes** and **Submit for review** actions: saving permits incomplete required top-level fields while still highlighting malformed values, while submission applies the complete required-field gate. Both client-side and API-side validation errors are shown beside the affected field and in the form summary.
 
 `onlineMaxClassSize` and `offlineMaxClassSize` take effect immediately for new
 booking requests; size 1 means private-only for that modality. Existing
 bookings retain their stored target size and price snapshot.
 
-Structured tutor experience fields are submitted through `experienceEntries` as up to five `{ role, organization, startYear, endYear, description }` entries. Years are plain integers; `endYear` may be `null` for an ongoing role and cannot precede `startYear`. Legacy `experiences` text remains accepted for older profiles.
+Structured tutor experience fields use `experiences`. Years are plain integers; `endYear` may be `null` and cannot precede `startYear`.
 
 ### `tutor.submitForReview`
 
-The web tutor profile editor groups education, competition achievements, and experiences into one combined **Achievements & experience** section with one public preview; the review endpoint also enforces the one-time Terms of Service acceptance described above.
+The web tutor profile editor groups Education, Achievements, and Experiences into one combined section with one public preview; review also requires affiliation and enforces the one-time Terms of Service acceptance described above.
 
 - **Auth:** Tutor
 - **Input:** `{ acceptTerms?: boolean }`
 - **Output:** `{ profile }`
 - **Errors:** `TUTOR_PROFILE_INCOMPLETE` (400) when required profile fields are missing; `INVALID_TUTOR_PRICING` (400) when a base honorarium is invalid; `INVALID_TUTOR_SUBJECT_SELECTION` (400) when specialization ids are invalid; `TUTOR_TERMS_NOT_ACCEPTED` (400) when the profile has never accepted the current terms and `acceptTerms` is not `true`
-- **Description:** Submits a draft profile for admin review. The required achievement may come from the structured competition-achievement entries or from legacy achievement text retained on an older profile. The required experience may come from `experienceEntries` or legacy experience text retained on an older profile. Incomplete and pricing errors include their missing-field or pricing detail so the web form can highlight the relevant controls. On the first successful submission, the caller must send `acceptTerms: true`; the server stores the acceptance timestamp/version once and transitions the profile to `pending_review` in the same transaction. Later submissions can send `{}`.
+- **Description:** Submits a draft profile for admin review. Affiliation, at least one achievement, and at least one experience are required. Incomplete and pricing errors identify fields for UI highlighting. First successful submission requires `acceptTerms: true`; later submissions may send `{}`.
 
 ### `tutor.listAvailability`
 
@@ -841,15 +858,15 @@ The web tutor profile editor groups education, competition achievements, and exp
 
 - **Auth:** Student
 - **Input:** `{ search?, expertise?, categoryId?, subjectId?, categoryIds?, subjectIds?, modality?, limit?, offset? }` (`limit` default 20, max 50)
-- **Output:** `{ items: TutorProfile[] }`; each profile includes its published `user.image` when available, `education`, `competitionAchievements`, `experienceEntries`, `subjects: [{ id, slug, name, description?, isSelectable, parent }]`, `onlineMaxClassSize`, `offlineMaxClassSize`, and computed `pricesByModality.online/offline` Marks maps limited to each modality's supported sizes when the profile has IDR base honoraria
-- **Description:** `categoryId`/`subjectId` remain supported for single-value clients. `categoryIds` and `subjectIds` accept up to 50 unique values and match any selected value within that facet; when both facets are present, the same normalized category/specialization relation must satisfy the selected category and specialization constraints. Search matches normalized specialization names as well as legacy profile text; no matching normalized relation returns an empty `items` array. Structured education, competition achievements, and experience entries are returned in their normalized arrays; older profiles may still rely on legacy `achievements`, `experiences`, or `credentialsSummary` text. Marks prices are derived from the active economy config; tutor IDR base honoraria are not exposed in this student response. The frontend may render the returned modality maps as one group-size matrix with separate Online and Offline columns, prefixing populated values with the Cogito Marks icon; tutor cards render natural-width child specialization names without repeating the parent category, keep their desktop metadata on one line, and use a smooth hover-shadow treatment without translate or pressed-scale effects; the tutor drawer presents education, achievements, and experiences in separate profile-highlight cards. These are presentation details and do not alter the RPC contract.
+- **Output:** `{ items: TutorProfile[] }`; each profile includes published `user.image`, nullable `affiliation`, `education`, `achievements`, `experiences`, normalized `subjects`, class-size limits, and computed modality prices.
+- **Description:** `categoryId`/`subjectId` remain supported for single-value clients. `categoryIds` and `subjectIds` accept up to 50 unique values. Search matches normalized specialization names. Results expose nullable `affiliation` plus canonical `education`, `achievements`, and `experiences` arrays. Marks prices derive from active economy config; tutor IDR base honoraria stay private.
 
 ### `tutors.getProfile`
 
 - **Auth:** Student
 - **Input:** `{ tutorId }`
 - **Output:** `{ profile }` with `onlineMaxClassSize`, `offlineMaxClassSize`, and computed capacity-limited `pricesByModality` Marks maps
-- **Description:** Returns the published tutor profile and future availability slots for the booking form, including the published image plus structured education, competition achievements, and experience entries. Legacy achievement/experience text remains available for older profiles. Marks prices use the active economy config for new IDR profiles; legacy profiles continue to return their stored Marks map.
+- **Description:** Returns the published tutor profile and future availability slots for the booking form, including the published image plus canonical education, achievements, and experiences. Marks prices use the active economy config for new IDR profiles; older pricing maps remain readable.
 
 ---
 
@@ -969,8 +986,8 @@ The create/edit/correction form is presented as a bottom drawer on mobile and a 
 
 - **Auth:** Protected
 - **Input:** None
-- **Output:** `{ xenditMode: "test" | "live" | null, packages: MarkPackage[] }`
-- **Description:** Returns active purchasable mark packages plus the client-visible payment mode signal. `xenditMode` is `"test"` when `PAYMENT_PROVIDER=xendit` and `XENDIT_MODE=test`, `"live"` for Live Mode, and `null` when the stub provider is active — the web app uses it to label packages that exceed the Xendit Test Mode amount cap (~IDR 1,000,000; Explorer/Pioneer are rejected in Test Mode but work in Live Mode). The default catalog is installed automatically by versioned database migration `0041_seed_mark_packages.sql`; values are Starter Pack 50 Marks / Rp312,500; Learner Pack 120 Marks / Rp690,000; Explorer Pack 200 Marks / Rp1,070,000; Pioneer Pack 400 Marks / Rp2,000,000. Admins can manage later catalog changes through `adminMarkPackage.*`.
+- **Output:** `{ packages: MarkPackage[] }`
+- **Description:** Returns active purchasable Mark packages. The default catalog is installed automatically by versioned database migration `0041_seed_mark_packages.sql`; values are Starter Pack 50 Marks / Rp312,500; Learner Pack 120 Marks / Rp690,000; Explorer Pack 200 Marks / Rp1,070,000; Pioneer Pack 400 Marks / Rp2,000,000. Admins can manage later catalog changes through `adminMarkPackage.*`.
 
 ### `wallet.knowledgeBankEligible`
 
@@ -993,29 +1010,21 @@ The create/edit/correction form is presented as a bottom drawer on mobile and a 
 - **Errors:** `PACKAGE_NOT_FOUND` (404), `PAYMENT_TEST_MODE_RESTRICTED` (403), `PAYMENT_PROVIDER_ERROR` (503)
 - **Description:** Creates a purchase intent with the payment provider. A current PENDING intent is reused so retries do not mint duplicate checkouts; after any terminal outcome (`PAID`, `SETTLED`, `FAILED`, `EXPIRED`, or `REFUNDED`), the endpoint creates a new payment record and provider reference, retaining the prior attempt as history. A provider-confirmed terminal status credits the wallet through the idempotent confirmation path.
 
-### Xendit environment selection
-
-- `PAYMENT_PROVIDER=xendit` selects the Xendit provider. `XENDIT_MODE` is required and must be `test` or `live`; the Xendit API key, created in the matching Xendit Dashboard mode, selects the actual transaction environment. `XENDIT_MODE` is not sent as an API field.
-- In production/staging, `XENDIT_MODE=test` also requires `XENDIT_TEST_ALLOWED_EMAILS`; only those verified student emails can call `payment.createPurchase`. This keeps production-domain UAT from granting sandbox-funded Marks to arbitrary accounts. The default provider channel is QRIS; `checkoutUrl` carries Xendit's `PRESENT_TO_CUSTOMER` dynamic QR payload for the Balance page to render (the legacy field name is retained for API compatibility).
-- `payment.createPurchase` also returns `canSimulate`. When true, the Balance page may call `payment.simulatePurchase` with the owned payment UUID. That procedure is rejected outside Xendit Test Mode and for accounts outside `XENDIT_TEST_ALLOWED_EMAILS`; wallet credit still occurs only after provider confirmation through the verified webhook or the approved Test Mode reconciliation fallback.
-
 ### Midtrans (Snap) environment selection
 
 - `PAYMENT_PROVIDER=midtrans` selects the Midtrans Snap provider. `MIDTRANS_MODE` is required and must be `test` (Sandbox) or `live` (Production); the Server Key, created in the matching Midtrans dashboard mode, selects the actual environment. `MIDTRANS_SERVER_KEY`, `MIDTRANS_CLIENT_KEY`, and `MIDTRANS_MERCHANT_ID` are required (fail-loud env guard).
-- `checkoutUrl` carries the Snap `redirect_url` (hosted payment page) — the Balance page detects the `https://` URL via `isRedirectCheckoutUrl` and opens it in a new tab instead of rendering a QR code (Xendit QRIS payloads remain inline QR).
+- In production/staging, `MIDTRANS_MODE=test` also requires `PAYMENT_TEST_ALLOWED_EMAILS`; only approved verified student emails can call `payment.createPurchase`.
+- `checkoutUrl` carries the Snap `redirect_url` (hosted payment page). The Balance page detects the `https://` URL via `isRedirectCheckoutUrl` and opens it in a new tab instead of rendering a QR code.
 - `canSimulate` is **always false** in Midtrans mode: the Midtrans Sandbox has no simulation endpoint. Sandbox test payments use the Snap test cards (`4811 1111 1111 1114`, CVV `123`, OTP `112233`). `payment.simulatePurchase` returns `PAYMENT_SIMULATION_UNAVAILABLE` (403) in Midtrans mode.
 - `order_id` is the payment UUID (unique per repurchase attempt); webhooks and status lookups resolve it back to the stored provider reference.
-- `XENDIT_TEST_ALLOWED_EMAILS` is the provider-agnostic test-mode UAT list: in `MIDTRANS_MODE=test` on production/staging it gates `payment.createPurchase` to the approved verified student emails, exactly as in Xendit Test Mode (rejections surface as `PAYMENT_TEST_MODE_RESTRICTED`, visible on the Important Logs board payment gate panel).
+- Rejections surface as `PAYMENT_TEST_MODE_RESTRICTED`, visible on the Important Logs board payment gate panel.
 
 ### `payment.simulatePurchase`
 
 - Input: `{ paymentId: string (UUID) }`
 - Output: `{ status: "PENDING", message: string }`
-- Auth: verified student, approved Test Mode email, and ownership of a pending payment with a stored Xendit payment-request id.
-- Provider failures are returned as `PAYMENT_PROVIDER_ERROR` (503). The message preserves a bounded Xendit HTTP status, `error_code`, and diagnostic message when Xendit returns a structured error body; arbitrary upstream/infrastructure errors remain the generic `Payment provider temporarily unavailable` message.
-- If Xendit rejects a retry with `400 INACTIVE_PAYMENT_METHOD`, the server performs one authoritative status lookup. A terminal `PAID`/`SETTLED` result is reconciled through the idempotent confirmation path before the client starts its normal status poll; an unresolved request keeps the provider diagnostic.
-- While an approved Test Mode client polls `payment.getPurchase`, the server reconciles a still-pending local record against Xendit's authoritative `GET /v3/payment_requests/{id}` result. A remote terminal status runs through the same idempotent confirmation service used by webhooks, recovering safely from a delayed or rejected sandbox callback.
-- Test and live webhooks use the same endpoint path, but must be configured in the matching Xendit Dashboard mode and must use that mode's `x-callback-token`.
+- Auth: verified student, approved Test Mode email, and ownership of a pending payment.
+- Midtrans mode always returns `PAYMENT_SIMULATION_UNAVAILABLE` because Sandbox has no simulation endpoint. The endpoint remains for compatibility with clients that already know the procedure.
 
 ### `payment.getPurchase`
 
@@ -1028,10 +1037,10 @@ The create/edit/correction form is presented as a bottom drawer on mobile and a 
 ### `POST /webhooks/payments/:provider` (external)
 
 - **Auth:** Public (non-oRPC route)
-- **Input:** Raw body; headers `x-callback-token` (xendit) / `x-webhook-signature` (stub), `x-timestamp` (timestamp validation is **skipped for xendit and midtrans** — Xendit documents only `x-callback-token` (P3.5/L4); Midtrans signs via the body `signature_key` and sends no timestamp header)
+- **Input:** Raw body; Midtrans verifies body `signature_key`, stub verifies `x-webhook-signature`; timestamp validation is skipped for Midtrans because its body signature is the authenticity check.
 - **Output:** `{ ok: true }`
-- **Errors:** 401 signature failure, 408 stale timestamp (> 5 min, non-xendit/non-midtrans), 403 IP not allowlisted, 500 processing failure
-- **Description:** Provider webhook; verifies signature, validates timestamp (provider-conditional), then atomically claims the idempotency key (released on transient processing failure), calls `payment.confirmFromWebhook`, and updates payment status (`PENDING → PAID/SETTLED/FAILED/EXPIRED`; `PAID/SETTLED → REFUNDED`); credits the wallet on PAID/SETTLED and writes the payment notification (#46). Xendit lifecycle keys combine provider, `data.payment_id ?? data.payment_request_id`, and normalized status because 2024-11-11 webhooks carry no unique `event_id`: distinct lifecycle states for one payment are processed, while retries of the same state dedupe. A missing event id falls back to the provider reference rather than a shared placeholder. Every repeat purchase uses a separate payment row and provider reference, so late webhooks from an earlier attempt cannot change the newer attempt's state or suppress its wallet credit. A REFUNDED webhook reads the wallet through the transaction (`wallet.getByUserId(tx, ...)`, N4) and reverses the credited Marks from the **total balance** (`held + available`): held Marks are released back to available (`refund.{id}.release`) then the full payment Marks are reversed via `compensate_deduct` (`refund.{id}.reverse`) when total ≥ marks; if the Marks were already spent (`totalBalance < marks`, H4), the payment is still marked REFUNDED and a `refund_webhook_reconciliation` audit + `refund_record` row are written for admin (no reversal, no throw, no 500/retry loop — P2.7/H4, M1/N4 wave-6b)
+- **Errors:** 401 signature failure, 408 stale timestamp (> 5 min when applicable), 403 IP not allowlisted, 500 processing failure
+- **Description:** Provider webhook; verifies signature, validates any applicable timestamp, then atomically claims the lifecycle idempotency key (released on transient processing failure), calls `payment.confirmFromWebhook`, and updates payment status (`PENDING → PAID/SETTLED/FAILED/EXPIRED`; `PAID/SETTLED → REFUNDED`). Lifecycle keys include provider, verified event/reference id, and normalized status, so different lifecycle states process while retries of one state dedupe. Every repeat purchase uses a separate payment row and provider reference, so late events from an earlier attempt cannot change the newer attempt's state or suppress its wallet credit. A REFUNDED webhook reads the wallet through the transaction (`wallet.getByUserId(tx, ...)`, N4) and reverses credited Marks from the **total balance** (`held + available`): held Marks are released (`refund.{id}.release`) then the full payment Marks are reversed via `compensate_deduct` (`refund.{id}.reverse`) when total ≥ marks; if Marks were already spent (`totalBalance < marks`, H4), the payment is still marked REFUNDED and a `refund_webhook_reconciliation` audit + `refund_record` row are written for admin (no reversal, no throw, no 500/retry loop — P2.7/H4, M1/N4 wave-6b)
 
 ### Midtrans (Snap) webhook (`POST /webhooks/payments/midtrans`)
 
@@ -1041,9 +1050,9 @@ The create/edit/correction form is presented as a bottom drawer on mobile and a 
 - **Reference resolution:** `order_id` is the payment UUID (Snap `order_id` max 50 chars, `[A-Za-z0-9._~-]` — the provider reference contains colons and can exceed 50 chars). The provider resolves the UUID back to the stored `providerReference` via a DB lookup; when unresolvable it falls back to the `order_id` and the service's DB reference fallback.
 - **Idempotency:** the same lifecycle key derivation applies — `midtrans:{transaction_id ?? order_id}:{status}` — so a `settlement` retry dedupes while a later `refund` for the same payment still processes.
 
-### Provider refunds (X1, P3.6 — superseded by N1, 2026-08-19)
+### Provider refunds
 
-- ~~`adminRefund` initiates a provider-side refund via the active provider's `refund(paymentRequestId, amountIdr, reason?)` — Xendit `POST /v3/refunds` (`{payment_request_id, currency, amount, reason}` → `{id}`), stub returns `rfd-stub-{paymentRequestId}`. The provider refund is **best-effort**: a provider failure is logged and never rolls back the Marks reversal. The returned refund id is stored on `refund_record.provider_event_id`.~~ **REMOVED (N1):** `adminRefund` no longer calls the payment provider at all — admin refunds are in-app Marks credits only (PRD §677: purchased Marks are never convertible back to rupiah). `refund_record.amount_idr` is `0` and `provider_event_id` is `NULL` for admin refunds. The provider `refund()` port (Xendit `POST /v3/refunds`, migration 0025 `payment_record.provider_request_id`) remains on the provider/payment service for a future payment-error-only cash-refund flow, but `adminRefund` must never invoke it.
+- `adminRefund` never calls the payment provider — admin refunds are in-app Marks credits only (PRD §677: purchased Marks are never convertible to rupiah). `refund_record.amount_idr` is `0` and `provider_event_id` is `NULL` for admin refunds. The provider `refund()` port remains available for a future payment-error-only cash-refund flow, but `adminRefund` must never invoke it.
 
 ---
 
@@ -1079,8 +1088,8 @@ RPC contract.
 
 - **Auth:** Protected
 - **Input:** `{ cursor?, limit?, states?, view? }`, where `view` is `action | upcoming | recurring | history | all`
-- **Output:** `{ items: Booking[], nextCursor, counts: { action, upcoming, recurring, history, all } }`
-- **Description:** Shared role-aware booking list. Students see bookings where they are proposer or participant, tutors see bookings assigned to them, and admins see all bookings. `states` can narrow results for server consumers; `view` applies the booking-list tab semantics server-side before cursor pagination. The `action` view includes pending booking decisions for all roles and, for tutors only, `scheduled` single/group bookings whose `scheduledEndAt` has passed plus series bookings with at least one ended scheduled child session. Those completion tasks are excluded from the tutor's `upcoming` and `history` facets until completed. Counts are exact role-scoped facets across all accessible bookings, not only the current page. The web requests 20 items at a time and follows `nextCursor` for **Load more bookings**. Related user projections contain display identity only (`id`, `name`, `image`, `role`); internal meeting attendee email arrays are never part of this response. The web row presents Marks with the Cogito mark icon and keeps status explanations in the status-badge tooltip. Dashboards reuse the same read model for their next-lesson card; no dashboard-specific endpoint is required.
+- **Output:** `{ items: Booking[], nextCursor, counts: { action, upcoming, recurring, history, completed, problem, all } }`
+- **Description:** Shared role-aware booking list. Students see bookings where they are proposer or participant, tutors see bookings assigned to them, and admins see all bookings. `states` can narrow results for server consumers; `view` applies the booking-list tab semantics server-side before cursor pagination. The `action` view includes pending booking decisions for all roles and, for tutors only, `scheduled` single/group bookings whose `scheduledEndAt` has passed plus series bookings with at least one ended scheduled child session. Those completion tasks are excluded from the tutor's `upcoming` and `history` facets until completed. `completed` counts bookings in `completed`; `problem` counts `cancelled`, `late_cancelled`, `no_show`, and `expired`. Counts are exact role-scoped facets across all accessible bookings, not only the current page. The web requests 20 items at a time and follows `nextCursor` for **Load more bookings**. Related user projections contain display identity only (`id`, `name`, `image`, `role`); internal meeting attendee email arrays are never part of this response. The web row presents Marks with the Cogito mark icon and keeps status explanations in the status-badge tooltip. Dashboards reuse the same read model for their next-lesson card; no dashboard-specific endpoint is required.
 
 ### `booking.cancel`
 

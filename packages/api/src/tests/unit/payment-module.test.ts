@@ -21,12 +21,6 @@ describe("createPaymentModule provider selection (C4)", () => {
     webhookSecret: "test-payment-webhook-secret",
   };
 
-  test("throws when provider=xendit but xenditConfig is missing (no silent stub fallback)", () => {
-    expect(() => createPaymentModule({ ...base, provider: "xendit" })).toThrow(
-      /Xendit credentials are missing/,
-    );
-  });
-
   test("throws when provider=midtrans but midtransConfig is missing (no silent stub fallback)", () => {
     expect(() =>
       createPaymentModule({ ...base, provider: "midtrans" }),
@@ -43,21 +37,6 @@ describe("createPaymentModule provider selection (C4)", () => {
     const module = createPaymentModule({ ...base, provider: "stub" });
     expect(module.service).toBeDefined();
     expect(module.handler).toBeDefined();
-  });
-
-  test("selects the xendit provider when provider=xendit with full config", () => {
-    const module = createPaymentModule({
-      ...base,
-      provider: "xendit",
-      xenditConfig: {
-        secretKey: "sk_test",
-        webhookToken: "wh_token",
-        mode: "test",
-        successRedirectUrl: "http://localhost:3000/success",
-        failureRedirectUrl: "http://localhost:3000/failure",
-      },
-    });
-    expect(module.service).toBeDefined();
   });
 
   test("selects the midtrans provider when provider=midtrans with full config", () => {
@@ -127,6 +106,8 @@ describe("createPaymentModule provider selection (C4)", () => {
         gross_amount: "430000.00",
         transaction_status: "settlement",
         transaction_id: "txn-1",
+        merchant_id: "G123456789",
+        currency: "IDR",
         signature_key: midtransSignature(
           "550e8400-e29b-41d4-a716-446655440000",
           "200",
@@ -166,6 +147,8 @@ describe("createPaymentModule provider selection (C4)", () => {
         gross_amount: "430000.00",
         transaction_status: "settlement",
         transaction_id: "txn-2",
+        merchant_id: "G123456789",
+        currency: "IDR",
         signature_key: midtransSignature(
           "550e8400-e29b-41d4-a716-446655440000",
           "200",

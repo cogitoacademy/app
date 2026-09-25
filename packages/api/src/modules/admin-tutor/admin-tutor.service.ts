@@ -624,7 +624,7 @@ export function createAdminTutorService(deps: {
   }
 
   /**
-   * Lets an admin normalize tutor education and competition copy while
+   * Lets an admin normalize tutor education and achievement data while
    * reviewing a profile. If the tutor has already submitted protected edits,
    * the corrected values are mirrored into the pending proposal as well.
    */
@@ -648,25 +648,23 @@ export function createAdminTutorService(deps: {
         pendingProfileChanges,
         "education",
       );
-      const hasPendingCompetitionAchievements =
-        Object.prototype.hasOwnProperty.call(
-          pendingProfileChanges,
-          "competitionAchievements",
-        );
+      const hasPendingAchievements = Object.prototype.hasOwnProperty.call(
+        pendingProfileChanges,
+        "achievements",
+      );
       if (hasPendingEducation) {
         pendingProfileChanges.education = input.education;
       }
-      if (hasPendingCompetitionAchievements) {
-        pendingProfileChanges.competitionAchievements =
-          input.competitionAchievements;
+      if (hasPendingAchievements) {
+        pendingProfileChanges.achievements = input.achievements;
       }
 
       const updates: TutorProfileUpdates = {};
       if (!hasPendingEducation) updates.education = input.education;
-      if (!hasPendingCompetitionAchievements) {
-        updates.competitionAchievements = input.competitionAchievements;
+      if (!hasPendingAchievements) {
+        updates.achievements = input.achievements;
       }
-      if (hasPendingEducation || hasPendingCompetitionAchievements) {
+      if (hasPendingEducation || hasPendingAchievements) {
         updates.pendingProfileChanges = pendingProfileChanges;
       }
 
@@ -693,11 +691,11 @@ export function createAdminTutorService(deps: {
         targetType: "tutor_profile",
         beforeState: {
           education: existing.education ?? [],
-          competitionAchievements: existing.competitionAchievements ?? [],
+          achievements: existing.achievements ?? [],
         },
         afterState: {
           education: input.education,
-          competitionAchievements: input.competitionAchievements,
+          achievements: input.achievements,
         },
       });
 

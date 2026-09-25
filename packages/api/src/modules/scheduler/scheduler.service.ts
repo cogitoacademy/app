@@ -34,6 +34,12 @@ export interface SchedulerHandlers {
   onSendNotificationEmail: () => Promise<{ sent: number; failed: number }>;
   onEscalateSupportTickets: () => Promise<{ escalated: number }>;
   onRetryFailedMeetings: () => Promise<{ succeeded: number; failed: number }>;
+  onReconcilePayments?: () => Promise<{
+    checked: number;
+    reconciled: number;
+    pending: number;
+    failed: number;
+  }>;
 }
 
 export interface SchedulerService {
@@ -206,6 +212,19 @@ export function createSchedulerService(
               ...escalateResult,
             });
             return escalateResult;
+          case "reconcile-payments":
+            const paymentResult = handlers.onReconcilePayments
+              ? await handlers.onReconcilePayments()
+              : { checked: 0, reconciled: 0, pending: 0, failed: 0 };
+            log({
+              level: paymentResult.failed > 0 ? "warn" : "info",
+              action: "reconcile_payments_complete",
+              message: `Checked ${paymentResult.checked} payments, reconciled ${paymentResult.reconciled}, ${paymentResult.failed} failed`,
+              traceId: ctx.traceId,
+              userId: ctx.userId,
+              ...paymentResult,
+            });
+            return paymentResult;
           default:
             log({
               level: "warn",

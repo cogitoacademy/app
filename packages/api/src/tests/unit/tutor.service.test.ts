@@ -20,14 +20,15 @@ function makeProfile(overrides: Record<string, unknown> = {}) {
   return {
     id: "tp1",
     shortBio: "Experienced tutor",
-    competitionAchievements: [
+    affiliation: "Mathematics, Cogito Academy",
+    achievements: [
       {
         competitionName: "National Mathematics Olympiad",
         year: 2025,
         awards: ["Gold Medal"],
       },
     ],
-    experienceEntries: [
+    experiences: [
       {
         role: "Mathematics Tutor",
         organization: "Cogito Academy",
@@ -215,7 +216,7 @@ describe("Tutor Service", () => {
       expect(() =>
         validateSubmitForReview(
           makeProfile({
-            competitionAchievements: [
+            achievements: [
               {
                 competitionName: "Harvard Model United Nations",
                 year: 2025,
@@ -231,7 +232,7 @@ describe("Tutor Service", () => {
     test("requires an achievement when structured values are empty", () => {
       expect(() =>
         validateSubmitForReview(
-          makeProfile({ competitionAchievements: [] }),
+          makeProfile({ achievements: [] }),
           mockPricingPort,
         ),
       ).toThrow(TutorProfileIncompleteError);
@@ -241,7 +242,7 @@ describe("Tutor Service", () => {
       expect(() =>
         validateSubmitForReview(
           makeProfile({
-            experienceEntries: [
+            experiences: [
               {
                 role: "Mathematics Tutor",
                 organization: "Cogito Academy",
@@ -259,7 +260,7 @@ describe("Tutor Service", () => {
     test("requires an experience when structured values are empty", () => {
       expect(() =>
         validateSubmitForReview(
-          makeProfile({ experienceEntries: [] }),
+          makeProfile({ experiences: [] }),
           mockPricingPort,
         ),
       ).toThrow(TutorProfileIncompleteError);
@@ -605,7 +606,7 @@ describe("Tutor Service", () => {
       const profile = makeProfile({
         onboardingStatus: "published",
         education: [],
-        competitionAchievements: [],
+        achievements: [],
       });
       const updateProfileWithVersion = mock(async () => [profile]);
       const deps = makeDeps({
@@ -617,14 +618,14 @@ describe("Tutor Service", () => {
       });
       const service = createTutorService(deps as any);
       const education = [{ university: "University", degree: "Degree" }];
-      const competitionAchievements = [
+      const achievements = [
         { competitionName: "Competition", year: 2020, awards: ["Champion"] },
       ];
 
       await service.updateMyProfile("u1", {
         version: 1,
         education,
-        competitionAchievements,
+        achievements,
       });
 
       expect(updateProfileWithVersion).toHaveBeenCalledWith(
@@ -632,7 +633,7 @@ describe("Tutor Service", () => {
         "u1",
         1,
         expect.objectContaining({
-          pendingProfileChanges: { education, competitionAchievements },
+          pendingProfileChanges: { education, achievements },
           profileEditStatus: "pending_review",
         }),
       );
@@ -641,13 +642,13 @@ describe("Tutor Service", () => {
         unknown
       >;
       expect(updateArgs.education).toBeUndefined();
-      expect(updateArgs.competitionAchievements).toBeUndefined();
+      expect(updateArgs.achievements).toBeUndefined();
     });
 
     test("published profile stores structured experiences as pending edits", async () => {
       const profile = makeProfile({
         onboardingStatus: "published",
-        experienceEntries: [],
+        experiences: [],
       });
       const updateProfileWithVersion = mock(async () => [profile]);
       const deps = makeDeps({
@@ -658,7 +659,7 @@ describe("Tutor Service", () => {
         },
       });
       const service = createTutorService(deps as any);
-      const experienceEntries = [
+      const experiences = [
         {
           role: "Mathematics Tutor",
           organization: "Cogito Academy",
@@ -670,7 +671,7 @@ describe("Tutor Service", () => {
 
       await service.updateMyProfile("u1", {
         version: 1,
-        experienceEntries,
+        experiences,
       });
 
       expect(updateProfileWithVersion).toHaveBeenCalledWith(
@@ -678,7 +679,7 @@ describe("Tutor Service", () => {
         "u1",
         1,
         expect.objectContaining({
-          pendingProfileChanges: { experienceEntries },
+          pendingProfileChanges: { experiences },
           profileEditStatus: "pending_review",
         }),
       );
@@ -686,7 +687,7 @@ describe("Tutor Service", () => {
         string,
         unknown
       >;
-      expect(updateArgs.experienceEntries).toBeUndefined();
+      expect(updateArgs.experiences).toBeUndefined();
     });
 
     test("published profile applies a changed IDR base honorarium immediately", async () => {

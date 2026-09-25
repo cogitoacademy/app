@@ -30,9 +30,7 @@ export const paymentRecord = pgTable(
     provider: text("provider").notNull(),
     providerReference: text("provider_reference").notNull(),
     providerEventId: text("provider_event_id"),
-    // X1: the provider-side payment-request id (Xendit `pr-...`), used to
-    // initiate provider refunds. Populated when the 2024-11-11 createIntent
-    // response carries an id.
+    // Provider-side request/order id used for authoritative status lookup.
     providerRequestId: text("provider_request_id"),
     // H4: the provider checkout URL, persisted so a PENDING re-purchase can
     // return the stored URL instead of re-calling the provider.
@@ -51,12 +49,14 @@ export const paymentRecord = pgTable(
   (table) => [
     check(
       "payment_provider_check",
-      sql`${table.provider} IN ('stub','xendit')`,
+      sql`${table.provider} IN ('stub','midtrans','xendit')`,
     ),
     check(
       "payment_status_check",
       sql`${table.status} IN ('PENDING','PAID','SETTLED','FAILED','EXPIRED','REFUNDED')`,
     ),
+    check("payment_amount_positive", sql`${table.amountIdr} > 0`),
+    check("payment_marks_positive", sql`${table.marks} > 0`),
     uniqueIndex("payment_provider_event_id_idx").on(table.providerEventId),
     index("payment_userId_idx").on(table.userId),
     // B6: the provider reference is the idempotency key — a unique index
@@ -65,6 +65,16 @@ export const paymentRecord = pgTable(
     uniqueIndex("payment_provider_reference_idx").on(table.providerReference),
     index("payment_status_idx").on(table.status),
     index("payment_userId_status_idx").on(table.userId, table.status),
+    index("payment_reconciliation_idx")
+      .on(table.provider, table.status, table.updatedAt)
+      .where(sql`${table.providerRequestId} IS NOT NULL`),
+    index("payment_latest_attempt_idx").on(
+      table.userId,
+      table.packageId,
+      table.provider,
+      table.createdAt.desc(),
+      table.id.desc(),
+    ),
   ],
 );
 
@@ -90,6 +100,8 @@ export const refundRecord = pgTable(
   },
   (table) => [
     uniqueIndex("refund_provider_event_id_idx").on(table.providerEventId),
+    check("refund_amount_nonnegative", sql`${table.amountIdr} >= 0`),
+    check("refund_marks_nonnegative", sql`${table.marks} >= 0`),
     index("refund_paymentId_idx").on(table.paymentId),
   ],
 );

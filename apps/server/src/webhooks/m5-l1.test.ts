@@ -27,21 +27,21 @@ const requestFor = (payload: Record<string, unknown>) =>
 
 describe("webhook M5/L1 failure handling", () => {
   test("uses lifecycle status and fallback reference in idempotency keys", () => {
-    expect(paymentWebhookIdempotencyKey("xendit", basePayload)).toBe(
-      "xendit:evt_m5:PAID",
+    expect(paymentWebhookIdempotencyKey("stub", basePayload)).toBe(
+      "stub:evt_m5:PAID",
     );
     expect(
-      paymentWebhookIdempotencyKey("xendit", {
+      paymentWebhookIdempotencyKey("stub", {
         ...basePayload,
         status: "PENDING",
       }),
-    ).toBe("xendit:evt_m5:PENDING");
+    ).toBe("stub:evt_m5:PENDING");
     expect(
-      paymentWebhookIdempotencyKey("xendit", {
+      paymentWebhookIdempotencyKey("stub", {
         ...basePayload,
         providerEventId: null,
       }),
-    ).toBe("xendit:stub:user1:pkg1:PAID");
+    ).toBe("stub:stub:user1:pkg1:PAID");
   });
 
   test("L1: event with no event id AND no reference → 400", async () => {

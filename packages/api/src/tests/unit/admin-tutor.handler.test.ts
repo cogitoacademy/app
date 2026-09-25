@@ -98,7 +98,7 @@ describe("AdminTutorHandler", () => {
         tutorProfileId: "p1",
         version: 2,
         education: [{ university: "UGM", degree: "Law" }],
-        competitionAchievements: [],
+        achievements: [],
       },
     });
 
@@ -108,7 +108,7 @@ describe("AdminTutorHandler", () => {
         tutorProfileId: "p1",
         version: 2,
         education: [{ university: "UGM", degree: "Law" }],
-        competitionAchievements: [],
+        achievements: [],
       },
       id: "p1",
     });
@@ -116,7 +116,7 @@ describe("AdminTutorHandler", () => {
       tutorProfileId: "p1",
       version: 2,
       education: [{ university: "UGM", degree: "Law" }],
-      competitionAchievements: [],
+      achievements: [],
     });
   });
 

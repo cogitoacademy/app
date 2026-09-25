@@ -140,7 +140,7 @@
   --avatar-foreground: var(--foreground);
   --card: oklch(0.2579 0.0043 247.99);
   --card-border: oklch(0.2878 0.0046 247.99);
-  --card-separator: oklch(0.2878 0.0046 247.99);
+  --card-separator: oklch(0.35 0.005 247.99);
   --card-footer: oklch(0.2366 0.0037 247.99);
   --card-shadow: 0 8px 6px -4px rgb(0 0 0 / 0.08);
   --item: oklch(0.2579 0.0043 247.99);

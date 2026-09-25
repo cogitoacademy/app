@@ -13,43 +13,7 @@ const validEnv = {
 };
 
 describe("server env schema", () => {
-  test("PAYMENT_PROVIDER=xendit requires Xendit credentials", () => {
-    const base = { ...validEnv, PAYMENT_PROVIDER: "xendit" };
-    expect(() => serverEnvSchema.parse(base)).toThrow();
-    expect(() =>
-      serverEnvSchema.parse({
-        ...base,
-        XENDIT_SECRET_KEY: "sk",
-        XENDIT_WEBHOOK_TOKEN: "wh",
-        XENDIT_MODE: "test",
-      }),
-    ).toThrow();
-  });
-
-  test("P3.7: PAYMENT_PROVIDER=xendit requires success/failure redirect URLs", () => {
-    const base = {
-      ...validEnv,
-      PAYMENT_PROVIDER: "xendit",
-      XENDIT_SECRET_KEY: "sk",
-      XENDIT_WEBHOOK_TOKEN: "wh",
-      XENDIT_MODE: "test",
-    };
-    const err = serverEnvSchema.safeParse(base);
-    expect(err.success).toBe(false);
-    const paths = (err.error?.issues ?? []).map((i) => i.path.join("."));
-    expect(paths).toContain("XENDIT_SUCCESS_REDIRECT_URL");
-    expect(paths).toContain("XENDIT_FAILURE_REDIRECT_URL");
-    expect(() =>
-      serverEnvSchema.parse({
-        ...base,
-        XENDIT_MODE: "test",
-        XENDIT_SUCCESS_REDIRECT_URL: "https://example.com/success",
-        XENDIT_FAILURE_REDIRECT_URL: "https://example.com/failure",
-      }),
-    ).not.toThrow();
-  });
-
-  test("PAYMENT_PROVIDER=stub does not require Xendit credentials", () => {
+  test("PAYMENT_PROVIDER=stub does not require provider credentials", () => {
     expect(() => serverEnvSchema.parse(validEnv)).not.toThrow();
   });
 
@@ -261,78 +225,6 @@ describe("server env schema", () => {
     if (parsed.success) {
       expect(parsed.data.GOOGLE_MEET_ENABLED).toBe(false);
     }
-  });
-
-  test("D2: xendit in production does NOT require WEBHOOK_ALLOWED_IPS (optional defense-in-depth, 2026-08-28)", () => {
-    const prodXendit = {
-      ...validEnv,
-      NODE_ENV: "production",
-      RESEND_API_KEY: "re",
-      EMAIL_FROM: "no-reply@cogitoacademy.id",
-      SCHEDULER_ENABLED: true,
-      PAYMENT_PROVIDER: "xendit",
-      XENDIT_SECRET_KEY: "sk",
-      XENDIT_WEBHOOK_TOKEN: "wh",
-      XENDIT_MODE: "live",
-      XENDIT_SUCCESS_REDIRECT_URL: "https://example.com/success",
-      XENDIT_FAILURE_REDIRECT_URL: "https://example.com/failure",
-    };
-
-    // D2 removed (2026-08-28): Xendit publishes no stable webhook source IP
-    // list, so a wrong allowlist silently 403s webhooks and payments never
-    // credit — the x-callback-token signature is the primary gate. Empty
-    // allowlist = signature-only gating, and boot must succeed.
-    const missing = serverEnvSchema.safeParse(prodXendit);
-    expect(missing.success).toBe(true);
-
-    // With the allowlist set (defense-in-depth) → still parses.
-    expect(() =>
-      serverEnvSchema.parse({
-        ...prodXendit,
-        WEBHOOK_ALLOWED_IPS: "103.10.65.0/24, 114.4.17.0/24",
-      }),
-    ).not.toThrow();
-  });
-
-  test("D2: xendit in development does not require WEBHOOK_ALLOWED_IPS", () => {
-    const devXendit = {
-      ...validEnv,
-      PAYMENT_PROVIDER: "xendit",
-      XENDIT_SECRET_KEY: "sk",
-      XENDIT_WEBHOOK_TOKEN: "wh",
-      XENDIT_MODE: "test",
-      XENDIT_SUCCESS_REDIRECT_URL: "https://example.com/success",
-      XENDIT_FAILURE_REDIRECT_URL: "https://example.com/failure",
-    };
-    expect(() => serverEnvSchema.parse(devXendit)).not.toThrow();
-  });
-
-  test("production Xendit Test Mode requires a UAT email allowlist", () => {
-    const prodTest = {
-      ...validEnv,
-      NODE_ENV: "production",
-      RESEND_API_KEY: "re",
-      EMAIL_FROM: "no-reply@cogitoacademy.id",
-      SCHEDULER_ENABLED: true,
-      PAYMENT_PROVIDER: "xendit",
-      XENDIT_SECRET_KEY: "sk",
-      XENDIT_WEBHOOK_TOKEN: "wh",
-      XENDIT_MODE: "test",
-      XENDIT_SUCCESS_REDIRECT_URL: "https://example.com/success",
-      XENDIT_FAILURE_REDIRECT_URL: "https://example.com/failure",
-      WEBHOOK_ALLOWED_IPS: "103.10.65.0/24",
-    };
-    const missing = serverEnvSchema.safeParse(prodTest);
-    expect(missing.success).toBe(false);
-    const paths = (missing.error?.issues ?? []).map((i) => i.path.join("."));
-    expect(paths).toContain("XENDIT_TEST_ALLOWED_EMAILS");
-
-    expect(() =>
-      serverEnvSchema.parse({
-        ...prodTest,
-        XENDIT_TEST_ALLOWED_EMAILS: "qa@cogitoacademy.id",
-      }),
-    ).not.toThrow();
   });
 
   test("D3: production requires SCHEDULER_ENABLED=true (silently skipping all jobs is a prod outage)", () => {

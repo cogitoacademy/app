@@ -2,7 +2,12 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { IconWallet } from "@tabler/icons-react";
+import {
+  IconAlertTriangle,
+  IconClipboardCheck,
+  IconTrophy,
+  IconWallet,
+} from "@tabler/icons-react";
 import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
@@ -12,6 +17,7 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 import { lazy, Suspense } from "react";
 
 import Loader from "@/components/loader";
+import { DashboardInsights } from "@/components/dashboard/dashboard-insights";
 import { DashboardWelcomeCard } from "@/components/dashboard/dashboard-welcome-card";
 import { orpc } from "@/utils/orpc";
 
@@ -96,6 +102,55 @@ export function AdminDashboardPage({ adminName }: { adminName: string }) {
           </CardBody>
         </Card>
       </div>
+
+      <DashboardInsights
+        title="Operations pulse"
+        description="Queues with a concrete next step, separate from business trends."
+        items={[
+          {
+            key: "escalations",
+            icon: <IconAlertTriangle />,
+            label: "Escalated bookings",
+            value: escalations.isPending
+              ? "..."
+              : (escalations.data?.items.length ?? 0),
+            detail: "Support and booking cases needing review",
+            tone: "danger-subtle",
+            to: "/admin-operations",
+            actionLabel: "Open escalated bookings",
+          },
+          {
+            key: "urgent-bookings",
+            icon: <IconAlertTriangle />,
+            label: "Booking exceptions",
+            value: bookingQueue.isPending ? "..." : urgentBookings.length,
+            detail: "Room, payment, or refund states needing intervention",
+            tone: "warning-subtle",
+            to: "/admin-operations",
+            actionLabel: "Open booking exceptions",
+          },
+          {
+            key: "tutor-review",
+            icon: <IconClipboardCheck />,
+            label: "Tutor reviews",
+            value: tutors.isPending ? "..." : tutorCount,
+            detail: "Tutor profiles waiting for moderation",
+            tone: "info-subtle",
+            to: "/admin-tutors",
+            actionLabel: "Open tutor reviews",
+          },
+          {
+            key: "achievement-review",
+            icon: <IconTrophy />,
+            label: "Achievement reviews",
+            value: achievementStats.isPending ? "..." : achievementCount,
+            detail: "Student submissions waiting for moderation",
+            tone: "primary-subtle",
+            to: "/admin-achievements",
+            actionLabel: "Open achievement reviews",
+          },
+        ]}
+      />
 
       <Suspense fallback={<Loader />}>
         <AdminAnalytics />

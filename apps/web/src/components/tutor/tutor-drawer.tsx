@@ -24,10 +24,10 @@ import { groupTutorSubjects, type TutorSubject } from "./subject-taxonomy";
 import { TutorPricingTable } from "./tutor-pricing-table";
 import {
   TutorAchievementsDisplay,
-  type TutorCompetitionAchievement,
+  type TutorAchievement,
   type TutorEducationEntry,
 } from "./tutor-achievements";
-import type { TutorExperienceEntry } from "./tutor-experiences";
+import type { TutorExperience } from "./tutor-experiences";
 
 const MODALITY_LABELS: Record<string, string> = {
   online: "Online",
@@ -61,9 +61,10 @@ type TutorDrawerProps = {
     userId: string;
     displayName: string | null;
     shortBio: string | null;
+    affiliation: string | null;
     education: TutorEducationEntry[] | null;
-    competitionAchievements: TutorCompetitionAchievement[] | null;
-    experienceEntries: TutorExperienceEntry[] | null;
+    achievements: TutorAchievement[] | null;
+    experiences: TutorExperience[] | null;
     subjects?: TutorSubject[] | null;
     modality: string | null;
     onlineMaxClassSize: number;
@@ -151,10 +152,8 @@ export function TutorDrawer({
   );
   const heroSubjects = subjectLabels.slice(0, 3);
   const hasEducation = Boolean(selectedTutor.education?.length);
-  const hasAchievements = Boolean(
-    selectedTutor.competitionAchievements?.length,
-  );
-  const hasExperiences = Boolean(selectedTutor.experienceEntries?.length);
+  const hasAchievements = Boolean(selectedTutor.achievements?.length);
+  const hasExperiences = Boolean(selectedTutor.experiences?.length);
   const hasProfileHighlights =
     hasEducation || hasAchievements || hasExperiences;
 
@@ -236,6 +235,9 @@ export function TutorDrawer({
             )}
           </div>
 
+          {t.affiliation ? (
+            <Text className="font-medium">{t.affiliation}</Text>
+          ) : null}
           {t.shortBio && (
             <div className="mt-3">
               <Text className="text-muted">{t.shortBio}</Text>
@@ -290,9 +292,7 @@ export function TutorDrawer({
                   <CardBody className="p-4">
                     <TutorAchievementsDisplay
                       className="flex flex-col"
-                      competitionAchievements={
-                        selectedTutor.competitionAchievements
-                      }
+                      achievements={selectedTutor.achievements}
                       idPrefix="tutor-drawer-achievements"
                     />
                   </CardBody>
@@ -304,7 +304,7 @@ export function TutorDrawer({
                   <CardBody className="p-4">
                     <TutorAchievementsDisplay
                       className="flex flex-col"
-                      experienceEntries={selectedTutor.experienceEntries}
+                      experiences={selectedTutor.experiences}
                       idPrefix="tutor-drawer-experiences"
                     />
                   </CardBody>

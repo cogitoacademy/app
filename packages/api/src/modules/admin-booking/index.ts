@@ -43,9 +43,9 @@ export interface AdminBookingRefundPort {
     },
   ): Promise<void>;
   /**
-   * Initiates a provider-side refund (X1). Wired to the active payment
-   * provider (Xendit real refund / stub mock id). The returned provider
-   * refund id is stored on the refundRecord row.
+   * Initiates a provider-side refund. Wired to the active payment provider
+   * (real provider refund / stub mock id). The returned provider refund id is
+   * stored on the refundRecord row.
    */
   refundWithProvider?(
     paymentRequestId: string,

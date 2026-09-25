@@ -14,7 +14,7 @@ import { NumberField } from "@cogito-app/ui/components/selia/number-field";
 import { Text } from "@cogito-app/ui/components/selia/text";
 
 import { TutorTextDraftInput } from "./tutor-text-draft-input";
-import type { TutorExperienceEntry } from "./tutor-experiences";
+import type { TutorExperience } from "./tutor-experiences";
 import { TutorFormField, TutorFormRow } from "./tutor-form-layout";
 
 export type TutorEducationEntry = {
@@ -22,7 +22,7 @@ export type TutorEducationEntry = {
   degree: string;
 };
 
-export type TutorCompetitionAchievement = {
+export type TutorAchievement = {
   competitionName: string;
   year: number;
   awards: string[];
@@ -31,7 +31,7 @@ export type TutorCompetitionAchievement = {
 export type TutorAchievementDraftErrors = Record<string, string>;
 
 const MAX_EDUCATION_ENTRIES = 2;
-const MAX_COMPETITION_ACHIEVEMENTS = 5;
+const MAX_ACHIEVEMENTS = 5;
 const CURRENT_YEAR = new Date().getFullYear();
 const YEAR_FORMAT: Intl.NumberFormatOptions = { useGrouping: false };
 
@@ -52,7 +52,7 @@ export function createEmptyEducationEntry(): TutorEducationEntry {
   return { university: "", degree: "" };
 }
 
-export function createEmptyCompetitionAchievement(): TutorCompetitionAchievement {
+export function createEmptyAchievement(): TutorAchievement {
   return {
     competitionName: "",
     year: CURRENT_YEAR,
@@ -62,7 +62,7 @@ export function createEmptyCompetitionAchievement(): TutorCompetitionAchievement
 
 export function validateTutorAchievementDraft(
   education: readonly TutorEducationEntry[],
-  competitionAchievements: readonly TutorCompetitionAchievement[],
+  achievements: readonly TutorAchievement[],
 ): TutorAchievementDraftErrors {
   const errors: TutorAchievementDraftErrors = {};
 
@@ -79,8 +79,8 @@ export function validateTutorAchievementDraft(
     }
   }
 
-  for (const [index, entry] of competitionAchievements.entries()) {
-    const fieldPrefix = `competitionAchievements.${index}`;
+  for (const [index, entry] of achievements.entries()) {
+    const fieldPrefix = `achievements.${index}`;
     if (!entry.competitionName.trim()) {
       errors[`${fieldPrefix}.competitionName`] =
         "Competition name is required.";
@@ -111,13 +111,8 @@ export function validateTutorAchievementDraft(
   if (Object.keys(errors).some((key) => key.startsWith("education."))) {
     errors.education = "Complete the highlighted education fields.";
   }
-  if (
-    Object.keys(errors).some((key) =>
-      key.startsWith("competitionAchievements."),
-    )
-  ) {
-    errors.competitionAchievements =
-      "Complete the highlighted achievement fields.";
+  if (Object.keys(errors).some((key) => key.startsWith("achievements."))) {
+    errors.achievements = "Complete the highlighted achievement fields.";
   }
 
   return errors;
@@ -136,10 +131,8 @@ function parseAwardTitles(value: string) {
 
 type TutorAchievementsDisplayProps = {
   education?: readonly TutorEducationEntry[] | null;
-  competitionAchievements?: readonly TutorCompetitionAchievement[] | null;
-  experienceEntries?: readonly TutorExperienceEntry[] | null;
-  legacyAchievementText?: string | null;
-  legacyExperienceText?: string | null;
+  achievements?: readonly TutorAchievement[] | null;
+  experiences?: readonly TutorExperience[] | null;
   emptyMessage?: string;
   className?: string;
   idPrefix?: string;
@@ -147,36 +140,30 @@ type TutorAchievementsDisplayProps = {
 
 export function TutorAchievementsDisplay({
   education,
-  competitionAchievements,
-  experienceEntries,
-  legacyAchievementText,
-  legacyExperienceText,
+  achievements,
+  experiences,
   emptyMessage = "No education, achievements, or experiences added yet.",
   className,
   idPrefix = "tutor-achievements",
 }: TutorAchievementsDisplayProps) {
   const educationEntries = education ?? [];
-  const competitionEntries = competitionAchievements ?? [];
-  const experienceEntriesList = experienceEntries ?? [];
-  const legacyAchievement = legacyAchievementText?.trim() ?? "";
-  const legacyExperience = legacyExperienceText?.trim() ?? "";
+  const achievementEntries = achievements ?? [];
+  const experienceItems = experiences ?? [];
   const hasEntries =
     educationEntries.length > 0 ||
-    competitionEntries.length > 0 ||
-    experienceEntriesList.length > 0 ||
-    legacyAchievement.length > 0 ||
-    legacyExperience.length > 0;
+    achievementEntries.length > 0 ||
+    experienceItems.length > 0;
   const educationRows = getDisplayRows(
     educationEntries,
     (entry) => `${entry.university}-${entry.degree}`,
   );
-  const competitionRows = getDisplayRows(
-    competitionEntries,
+  const achievementRows = getDisplayRows(
+    achievementEntries,
     (entry) =>
       `${entry.competitionName}-${entry.year}-${entry.awards.join(",")}`,
   );
   const experienceRows = getDisplayRows(
-    experienceEntriesList,
+    experienceItems,
     (entry) =>
       `${entry.role}-${entry.organization}-${entry.startYear}-${entry.endYear}-${entry.description}`,
   );
@@ -211,18 +198,13 @@ export function TutorAchievementsDisplay({
         </section>
       ) : null}
 
-      {competitionEntries.length > 0 ? (
-        <section
-          aria-labelledby={`${idPrefix}-competition-achievements-heading`}
-        >
-          <Heading
-            id={`${idPrefix}-competition-achievements-heading`}
-            size="sm"
-          >
+      {achievementEntries.length > 0 ? (
+        <section aria-labelledby={`${idPrefix}-achievements-heading`}>
+          <Heading id={`${idPrefix}-achievements-heading`} size="sm">
             Achievements
           </Heading>
           <ul className="mt-3 list-disc space-y-4 pl-5 marker:text-muted">
-            {competitionRows.map(({ entry, key }) => (
+            {achievementRows.map(({ entry, key }) => (
               <li key={key}>
                 <div className="min-w-0">
                   <Text className="font-semibold leading-snug">
@@ -238,18 +220,7 @@ export function TutorAchievementsDisplay({
         </section>
       ) : null}
 
-      {competitionEntries.length === 0 && legacyAchievement ? (
-        <section aria-labelledby={`${idPrefix}-legacy-achievements-heading`}>
-          <Heading id={`${idPrefix}-legacy-achievements-heading`} size="sm">
-            Achievements
-          </Heading>
-          <Text className="mt-3 whitespace-pre-line text-muted">
-            {legacyAchievement}
-          </Text>
-        </section>
-      ) : null}
-
-      {experienceEntriesList.length > 0 ? (
+      {experienceItems.length > 0 ? (
         <section aria-labelledby={`${idPrefix}-experiences-heading`}>
           <Heading id={`${idPrefix}-experiences-heading`} size="sm">
             Experiences
@@ -272,15 +243,6 @@ export function TutorAchievementsDisplay({
             ))}
           </ul>
         </section>
-      ) : legacyExperience ? (
-        <section aria-labelledby={`${idPrefix}-legacy-experiences-heading`}>
-          <Heading id={`${idPrefix}-legacy-experiences-heading`} size="sm">
-            Experiences
-          </Heading>
-          <Text className="mt-3 whitespace-pre-line text-muted">
-            {legacyExperience}
-          </Text>
-        </section>
       ) : null}
     </div>
   );
@@ -288,13 +250,13 @@ export function TutorAchievementsDisplay({
 
 type TutorAchievementsEditorProps = {
   education: TutorEducationEntry[];
-  competitionAchievements: TutorCompetitionAchievement[];
+  achievements: TutorAchievement[];
   onEducationChange: (
     education: TutorEducationEntry[],
     changedField?: string,
   ) => void;
-  onCompetitionAchievementsChange: (
-    competitionAchievements: TutorCompetitionAchievement[],
+  onAchievementsChange: (
+    achievements: TutorAchievement[],
     changedField?: string,
   ) => void;
   errors?: TutorAchievementDraftErrors;
@@ -304,9 +266,9 @@ type TutorAchievementsEditorProps = {
 
 export function TutorAchievementsEditor({
   education,
-  competitionAchievements,
+  achievements,
   onEducationChange,
-  onCompetitionAchievementsChange,
+  onAchievementsChange,
   errors,
   idPrefix = "tutor-achievements",
   showPreview = true,
@@ -315,14 +277,12 @@ export function TutorAchievementsEditor({
   const [educationKeys, setEducationKeys] = useState(() =>
     education.map((_, index) => `${editorId}-education-${index}`),
   );
-  const [competitionKeys, setCompetitionKeys] = useState(() =>
-    competitionAchievements.map(
-      (_, index) => `${editorId}-competition-${index}`,
-    ),
+  const [achievementKeys, setAchievementKeys] = useState(() =>
+    achievements.map((_, index) => `${editorId}-achievement-${index}`),
   );
   const [nextEducationKey, setNextEducationKey] = useState(education.length);
-  const [nextCompetitionKey, setNextCompetitionKey] = useState(
-    competitionAchievements.length,
+  const [nextAchievementKey, setNextAchievementKey] = useState(
+    achievements.length,
   );
 
   function updateEducation(
@@ -338,17 +298,14 @@ export function TutorAchievementsEditor({
     );
   }
 
-  function updateCompetition(
-    index: number,
-    update: Partial<TutorCompetitionAchievement>,
-  ) {
-    onCompetitionAchievementsChange(
-      competitionAchievements.map((entry, entryIndex) =>
+  function updateAchievement(index: number, update: Partial<TutorAchievement>) {
+    onAchievementsChange(
+      achievements.map((entry, entryIndex) =>
         entryIndex === index ? { ...entry, ...update } : entry,
       ),
       Object.keys(update)[0]
-        ? `competitionAchievements.${index}.${Object.keys(update)[0]}`
-        : `competitionAchievements.${index}`,
+        ? `achievements.${index}.${Object.keys(update)[0]}`
+        : `achievements.${index}`,
     );
   }
 
@@ -361,13 +318,31 @@ export function TutorAchievementsEditor({
     );
   }
 
-  function removeCompetition(index: number) {
-    setCompetitionKeys((keys) =>
+  function removeAchievement(index: number) {
+    setAchievementKeys((keys) =>
       keys.filter((_, entryIndex) => entryIndex !== index),
     );
-    onCompetitionAchievementsChange(
-      competitionAchievements.filter((_, entryIndex) => entryIndex !== index),
+    onAchievementsChange(
+      achievements.filter((_, entryIndex) => entryIndex !== index),
     );
+  }
+
+  function addEducation() {
+    setEducationKeys((keys) => [
+      ...keys,
+      `${editorId}-education-${nextEducationKey}`,
+    ]);
+    setNextEducationKey((key) => key + 1);
+    onEducationChange([...education, createEmptyEducationEntry()]);
+  }
+
+  function addAchievement() {
+    setAchievementKeys((keys) => [
+      ...keys,
+      `${editorId}-achievement-${nextAchievementKey}`,
+    ]);
+    setNextAchievementKey((key) => key + 1);
+    onAchievementsChange([...achievements, createEmptyAchievement()]);
   }
 
   return (
@@ -404,19 +379,9 @@ export function TutorAchievementsEditor({
                       key={educationKeys[index]}
                       className="py-4 first:pt-0 last:pb-0"
                     >
-                      <div className="mb-2 flex justify-end">
-                        <Button
-                          type="button"
-                          variant="plain"
-                          size="xs-icon"
-                          aria-label={`Remove education entry ${index + 1}`}
-                          onClick={() => removeEducation(index)}
-                        >
-                          <IconTrash aria-hidden="true" />
-                        </Button>
-                      </div>
                       <div className="flex flex-col gap-3">
                         <TutorFormField
+                          className="grid-cols-1 gap-y-1 sm:grid-cols-1"
                           htmlFor={`${idPrefix}-university-${index}`}
                           label="University"
                           error={
@@ -442,6 +407,7 @@ export function TutorAchievementsEditor({
                           />
                         </TutorFormField>
                         <TutorFormField
+                          className="grid-cols-1 gap-y-1 sm:grid-cols-1"
                           htmlFor={`${idPrefix}-degree-${index}`}
                           label="Degree in brief"
                           error={
@@ -467,32 +433,48 @@ export function TutorAchievementsEditor({
                           />
                         </TutorFormField>
                       </div>
+                      <div className="mt-4 flex items-center justify-between">
+                        {index === education.length - 1 ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={education.length >= MAX_EDUCATION_ENTRIES}
+                            onClick={addEducation}
+                          >
+                            <IconPlus aria-hidden="true" />
+                            Add education
+                          </Button>
+                        ) : (
+                          <span aria-hidden="true" />
+                        )}
+                        <Button
+                          type="button"
+                          variant="plain"
+                          size="xs-icon"
+                          aria-label={`Remove education entry ${index + 1}`}
+                          onClick={() => removeEducation(index)}
+                        >
+                          <IconTrash aria-hidden="true" />
+                        </Button>
+                      </div>
                     </div>
                   );
                 })}
               </div>
 
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="self-end"
-                disabled={education.length >= MAX_EDUCATION_ENTRIES}
-                onClick={() => {
-                  setEducationKeys((keys) => [
-                    ...keys,
-                    `${editorId}-education-${nextEducationKey}`,
-                  ]);
-                  setNextEducationKey((key) => key + 1);
-                  onEducationChange([
-                    ...education,
-                    createEmptyEducationEntry(),
-                  ]);
-                }}
-              >
-                <IconPlus aria-hidden="true" />
-                Add education
-              </Button>
+              {education.length === 0 ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="self-start"
+                  onClick={addEducation}
+                >
+                  <IconPlus aria-hidden="true" />
+                  Add education
+                </Button>
+              ) : null}
               {errors?.education ? (
                 <Field className="gap-0">
                   <FieldError>{errors.education}</FieldError>
@@ -507,10 +489,9 @@ export function TutorAchievementsEditor({
             label={
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Heading size="sm">Competition achievements</Heading>
+                  <Heading size="sm">Achievements</Heading>
                   <Text className="text-sm text-muted">
-                    {competitionAchievements.length}/
-                    {MAX_COMPETITION_ACHIEVEMENTS}
+                    {achievements.length}/{MAX_ACHIEVEMENTS}
                   </Text>
                 </div>
               </div>
@@ -523,36 +504,22 @@ export function TutorAchievementsEditor({
           >
             <div className="flex flex-col gap-4">
               <div className="divide-y divide-item-border">
-                {competitionAchievements.map((entry, index) => {
+                {achievements.map((entry, index) => {
                   const competitionError =
-                    errors?.[
-                      `competitionAchievements.${index}.competitionName`
-                    ];
+                    errors?.[`achievements.${index}.competitionName`];
                   const competitionErrorId = `${idPrefix}-competition-${index}-error`;
-                  const yearError =
-                    errors?.[`competitionAchievements.${index}.year`];
+                  const yearError = errors?.[`achievements.${index}.year`];
                   const yearErrorId = `${idPrefix}-year-${index}-error`;
-                  const awardsError =
-                    errors?.[`competitionAchievements.${index}.awards`];
+                  const awardsError = errors?.[`achievements.${index}.awards`];
                   const awardsErrorId = `${idPrefix}-awards-${index}-error`;
                   return (
                     <div
-                      key={competitionKeys[index]}
+                      key={achievementKeys[index]}
                       className="py-4 first:pt-0 last:pb-0"
                     >
-                      <div className="mb-2 flex justify-end">
-                        <Button
-                          type="button"
-                          variant="plain"
-                          size="xs-icon"
-                          aria-label={`Remove competition achievement ${index + 1}`}
-                          onClick={() => removeCompetition(index)}
-                        >
-                          <IconTrash aria-hidden="true" />
-                        </Button>
-                      </div>
                       <div className="flex flex-col gap-3">
                         <TutorFormField
+                          className="grid-cols-1 gap-y-1 sm:grid-cols-1"
                           htmlFor={`${idPrefix}-competition-${index}`}
                           label="Competition name"
                           error={
@@ -567,7 +534,7 @@ export function TutorAchievementsEditor({
                             id={`${idPrefix}-competition-${index}`}
                             value={entry.competitionName}
                             onCommit={(value) =>
-                              updateCompetition(index, {
+                              updateAchievement(index, {
                                 competitionName: value,
                               })
                             }
@@ -580,6 +547,7 @@ export function TutorAchievementsEditor({
                           />
                         </TutorFormField>
                         <TutorFormField
+                          className="grid-cols-1 gap-y-1 sm:grid-cols-1"
                           htmlFor={`${idPrefix}-year-${index}`}
                           label="Year"
                           error={
@@ -599,7 +567,7 @@ export function TutorAchievementsEditor({
                             format={YEAR_FORMAT}
                             allowOutOfRange
                             onValueChange={(value) =>
-                              updateCompetition(index, { year: value ?? 0 })
+                              updateAchievement(index, { year: value ?? 0 })
                             }
                             inputProps={{
                               "aria-label": `Year for competition achievement ${index + 1}`,
@@ -611,6 +579,7 @@ export function TutorAchievementsEditor({
                           />
                         </TutorFormField>
                         <TutorFormField
+                          className="grid-cols-1 gap-y-1 sm:grid-cols-1"
                           htmlFor={`${idPrefix}-awards-${index}`}
                           label="Award title in full"
                           description={
@@ -630,7 +599,7 @@ export function TutorAchievementsEditor({
                             id={`${idPrefix}-awards-${index}`}
                             value={formatAwardTitles(entry.awards)}
                             onCommit={(value) =>
-                              updateCompetition(index, {
+                              updateAchievement(index, {
                                 awards: parseAwardTitles(value),
                               })
                             }
@@ -643,38 +612,53 @@ export function TutorAchievementsEditor({
                           />
                         </TutorFormField>
                       </div>
+                      <div className="mt-4 flex items-center justify-between">
+                        {index === achievements.length - 1 ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            id={`${idPrefix}-competition-add`}
+                            disabled={achievements.length >= MAX_ACHIEVEMENTS}
+                            onClick={addAchievement}
+                          >
+                            <IconPlus aria-hidden="true" />
+                            Add achievement
+                          </Button>
+                        ) : (
+                          <span aria-hidden="true" />
+                        )}
+                        <Button
+                          type="button"
+                          variant="plain"
+                          size="xs-icon"
+                          aria-label={`Remove achievement ${index + 1}`}
+                          onClick={() => removeAchievement(index)}
+                        >
+                          <IconTrash aria-hidden="true" />
+                        </Button>
+                      </div>
                     </div>
                   );
                 })}
               </div>
 
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="self-end"
-                id={`${idPrefix}-competition-add`}
-                disabled={
-                  competitionAchievements.length >= MAX_COMPETITION_ACHIEVEMENTS
-                }
-                onClick={() => {
-                  setCompetitionKeys((keys) => [
-                    ...keys,
-                    `${editorId}-competition-${nextCompetitionKey}`,
-                  ]);
-                  setNextCompetitionKey((key) => key + 1);
-                  onCompetitionAchievementsChange([
-                    ...competitionAchievements,
-                    createEmptyCompetitionAchievement(),
-                  ]);
-                }}
-              >
-                <IconPlus aria-hidden="true" />
-                Add achievement
-              </Button>
-              {errors?.competitionAchievements ? (
+              {achievements.length === 0 ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="self-start"
+                  id={`${idPrefix}-competition-add`}
+                  onClick={addAchievement}
+                >
+                  <IconPlus aria-hidden="true" />
+                  Add achievement
+                </Button>
+              ) : null}
+              {errors?.achievements ? (
                 <Field className="gap-0">
-                  <FieldError>{errors.competitionAchievements}</FieldError>
+                  <FieldError>{errors.achievements}</FieldError>
                 </Field>
               ) : null}
             </div>
@@ -691,7 +675,7 @@ export function TutorAchievementsEditor({
           <div className="mt-4">
             <TutorAchievementsDisplay
               education={education}
-              competitionAchievements={competitionAchievements}
+              achievements={achievements}
               emptyMessage="Add an entry to see the public profile preview."
             />
           </div>

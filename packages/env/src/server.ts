@@ -46,7 +46,7 @@ const serverShape = {
   // account deterministic while additional admins remain possible through
   // the normal admin role-management flow.
   ADMIN_EMAILS: z.string().default(DEFAULT_PRODUCTION_ADMIN_EMAIL),
-  PAYMENT_PROVIDER: z.enum(["stub", "xendit", "midtrans"]).default("stub"),
+  PAYMENT_PROVIDER: z.enum(["stub", "midtrans"]).default("stub"),
   STUB_WEBHOOK_ALLOWED: boolSchema(false),
   PAYMENT_WEBHOOK_SECRET: z.string().min(32),
   SANITY_PROJECT_ID: z.string().min(1).default("skfmwuke"),
@@ -56,32 +56,14 @@ const serverShape = {
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .default("2024-03-01"),
   SANITY_API_TOKEN: z.string().min(1).optional(),
-  // Optional defense-in-depth (2026-08-28): Xendit publishes no stable webhook
-  // source IP list, so a wrong allowlist silently 403s webhooks and payments
-  // never credit — the x-callback-token signature is the primary gate. The
-  // runtime `ipAllowed` check in apps/server/src/webhooks/payments.ts still
-  // enforces this list when set; an empty value skips the IP check.
+  // Optional defense-in-depth. Runtime enforcement is skipped when empty.
   WEBHOOK_ALLOWED_IPS: z.string().optional(),
-  XENDIT_SECRET_KEY: z.string().min(1).optional(),
-  XENDIT_WEBHOOK_TOKEN: z.string().min(1).optional(),
-  // Xendit selects the actual environment from the API key. Keep this
-  // explicit in our app so a production deployment cannot accidentally omit
-  // the intended Test/Live choice.
-  XENDIT_MODE: z.enum(["test", "live"]).optional(),
-  // Comma-separated UAT account emails. Required for production-like Test
-  // Mode so a sandbox payment cannot grant Marks to arbitrary users.
-  // Shared (provider-agnostic) test-mode UAT list: enforced for Xendit Test
-  // Mode AND Midtrans Sandbox when the active provider runs mode=test in a
-  // production-like env (no new env keys — Midtrans reuses this list).
-  XENDIT_TEST_ALLOWED_EMAILS: z.string().optional(),
-  XENDIT_SUCCESS_REDIRECT_URL: z.string().url().optional(),
-  XENDIT_FAILURE_REDIRECT_URL: z.string().url().optional(),
-  XENDIT_DEFAULT_PAYMENT_METHOD: z
-    .enum(["ewallet_ovo", "qris", "va_bca"])
-    .default("qris"),
+  // Comma-separated verified student emails allowed to create sandbox
+  // purchases in production-like Test Mode.
+  PAYMENT_TEST_ALLOWED_EMAILS: z.string().optional(),
   // Midtrans (Snap) — required when PAYMENT_PROVIDER=midtrans. The Server Key
   // selects the actual environment (Sandbox vs Production); MIDTRANS_MODE is
-  // our explicit deployment assertion, like XENDIT_MODE.
+  // our explicit deployment assertion.
   MIDTRANS_SERVER_KEY: z.string().min(1).optional(),
   MIDTRANS_CLIENT_KEY: z.string().min(1).optional(),
   MIDTRANS_MERCHANT_ID: z.string().min(1).optional(),
@@ -122,14 +104,11 @@ const serverShape = {
 } as const;
 
 export const serverEnvSchema = z.object(serverShape).superRefine((val, ctx) => {
-  // Shared test-mode UAT allowlist validation (provider-agnostic):
-  // XENDIT_TEST_ALLOWED_EMAILS is the single UAT list for both Xendit Test
-  // Mode and Midtrans Sandbox. Whenever it is set alongside the matching
-  // provider, every entry must be a valid email and the trimmed list must
-  // not be empty (stray commas like ", ," are rejected).
+  // Shared test-mode UAT allowlist validation: whenever set, every entry must
+  // be a valid email and the trimmed list must not be empty.
   const validateSharedTestAllowedEmails = () => {
-    if (val.XENDIT_TEST_ALLOWED_EMAILS?.trim()) {
-      const emails = val.XENDIT_TEST_ALLOWED_EMAILS.split(",")
+    if (val.PAYMENT_TEST_ALLOWED_EMAILS?.trim()) {
+      const emails = val.PAYMENT_TEST_ALLOWED_EMAILS.split(",")
         .map((email) => email.trim())
         .filter(Boolean);
       if (
@@ -138,69 +117,12 @@ export const serverEnvSchema = z.object(serverShape).superRefine((val, ctx) => {
       ) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ["XENDIT_TEST_ALLOWED_EMAILS"],
+          path: ["PAYMENT_TEST_ALLOWED_EMAILS"],
           message: "must be a comma-separated list of valid email addresses",
         });
       }
     }
   };
-
-  if (val.PAYMENT_PROVIDER === "xendit") {
-    if (!val.XENDIT_SECRET_KEY) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["XENDIT_SECRET_KEY"],
-        message: "required when PAYMENT_PROVIDER=xendit",
-      });
-    }
-    if (!val.XENDIT_WEBHOOK_TOKEN) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["XENDIT_WEBHOOK_TOKEN"],
-        message: "required when PAYMENT_PROVIDER=xendit",
-      });
-    }
-    if (!val.XENDIT_MODE) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["XENDIT_MODE"],
-        message:
-          "required when PAYMENT_PROVIDER=xendit; choose test for Xendit Test Mode or live for Live Mode",
-      });
-    }
-    if (
-      val.XENDIT_MODE === "test" &&
-      isProductionLike(val.NODE_ENV) &&
-      !val.XENDIT_TEST_ALLOWED_EMAILS?.trim()
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["XENDIT_TEST_ALLOWED_EMAILS"],
-        message:
-          "required when XENDIT_MODE=test in production/staging — restrict sandbox purchases to explicit UAT accounts",
-      });
-    }
-    if (val.XENDIT_TEST_ALLOWED_EMAILS?.trim()) {
-      validateSharedTestAllowedEmails();
-    }
-    // P3.7: the 2024-11-11 payment-request schema requires the success and
-    // failure return URLs (channel_properties) — an empty default would make
-    // every checkout redirect fail.
-    if (!val.XENDIT_SUCCESS_REDIRECT_URL) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["XENDIT_SUCCESS_REDIRECT_URL"],
-        message: "required when PAYMENT_PROVIDER=xendit",
-      });
-    }
-    if (!val.XENDIT_FAILURE_REDIRECT_URL) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["XENDIT_FAILURE_REDIRECT_URL"],
-        message: "required when PAYMENT_PROVIDER=xendit",
-      });
-    }
-  }
 
   if (val.PAYMENT_PROVIDER === "midtrans") {
     if (!val.MIDTRANS_SERVER_KEY) {
@@ -232,23 +154,22 @@ export const serverEnvSchema = z.object(serverShape).superRefine((val, ctx) => {
           "required when PAYMENT_PROVIDER=midtrans; choose test for Midtrans Sandbox or live for Production",
       });
     }
-    // Midtrans Sandbox uses the shared provider-agnostic UAT list
-    // (XENDIT_TEST_ALLOWED_EMAILS) — same semantics as Xendit Test Mode: a
-    // production-like Sandbox without an explicit allowlist would let any
+    // Midtrans Sandbox uses shared UAT list: a production-like Sandbox without
+    // an explicit allowlist would let any
     // account create sandbox purchases, so require it here too.
     if (
       val.MIDTRANS_MODE === "test" &&
       isProductionLike(val.NODE_ENV) &&
-      !val.XENDIT_TEST_ALLOWED_EMAILS?.trim()
+      !val.PAYMENT_TEST_ALLOWED_EMAILS?.trim()
     ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ["XENDIT_TEST_ALLOWED_EMAILS"],
+        path: ["PAYMENT_TEST_ALLOWED_EMAILS"],
         message:
           "required when MIDTRANS_MODE=test in production/staging — restrict sandbox purchases to explicit UAT accounts",
       });
     }
-    if (val.XENDIT_TEST_ALLOWED_EMAILS?.trim()) {
+    if (val.PAYMENT_TEST_ALLOWED_EMAILS?.trim()) {
       validateSharedTestAllowedEmails();
     }
   }

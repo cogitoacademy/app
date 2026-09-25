@@ -19,20 +19,21 @@ import {
 } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
 import type {
-  TutorCompetitionAchievement,
+  TutorAchievement,
   TutorEducationEntry,
-  TutorExperienceEntry,
+  TutorExperience,
 } from "@cogito-app/db/schema";
 
 export interface UpdateProfileInput {
   version: number;
   shortBio?: string;
+  affiliation?: string;
   achievementProofUrls?: string[];
   experienceProofUrls?: string[];
   profileImageUrl?: string;
   education?: TutorEducationEntry[];
-  competitionAchievements?: TutorCompetitionAchievement[];
-  experienceEntries?: TutorExperienceEntry[];
+  achievements?: TutorAchievement[];
+  experiences?: TutorExperience[];
   subjectIds?: string[];
   modality?: "online" | "offline" | "both";
   baseRatesIdr?: Partial<{ online: number; offline: number }>;

@@ -152,17 +152,17 @@ accounts. This is frontend routing only and adds no API or database contract.
 
 ### Tutor profile and payout privacy follow-up (2026-08-28)
 
-Tutor onboarding now has one structured Achievements section and one structured Experiences section, with legacy achievement/credential/experience text retained as a fallback. Achievement and experience entries use repeatable cards with bounded year fields; year values remain ungrouped, and an ongoing experience leaves End year blank. Client-side max-length checks measure the trimmed value to match the API schemas. Availability-summary and credential-proof inputs are retired. Base honorarium is adjusted only through Rp5,000 minus/plus controls and its six group-size outcomes are shown in tables. Tutor portraits use a staged source-to-final workflow: the tutor submits one uploaded source image, an admin uploads the background-standardized replacement, and approval/publication promotes that replacement to the canonical public image; the tutor/admin surfaces expose the review history. Tutor-facing history shows actor names/types without account emails. Tutor payout details expose only completed sessions and IDR honorarium, removing take-rate and Marks terminology from the tutor interface.
+Tutor onboarding uses canonical structured Education, Achievements, and Experiences sections. Achievement and experience entries use repeatable rows with bounded, ungrouped years; ongoing experience leaves End year blank.
 
 Achievement and Experience sections retain separate optional proof URL fields for compatibility. The tutor-facing copy recommends putting both evidence types in one Google Drive folder with the “Anyone with the link can view” setting. The URLs remain visible to admins during review, participate in the protected edit-review flow, and are intentionally omitted from public tutor discovery.
 
 ### Tutor experience formatting follow-up (2026-08-31)
 
-The Experiences section now stores up to five structured `experienceEntries` with role, organization, start year, nullable end year, and brief description. The API keeps legacy `experiences` text as a compatibility fallback, while public discovery and admin review render structured entries when present. Migration `0040_colossal_morlun.sql` adds the JSONB array with an empty-array default.
+Experiences stores up to five canonical `experiences` entries with role, organization, start year, nullable end year, and brief description.
 
 ### Tutor achievement formatting follow-up (2026-08-31)
 
-Tutor onboarding captures structured education (up to 2 entries) and one structured competition-achievement section (up to 5 entries) alongside one multiline Experiences field. Each competition entry stores a name, year, and one or more award titles; the editor accepts comma-separated awards, keeps an in-progress comma visible while the next title is being typed, keeps year values ungrouped, and previews the public format with a bold first line and readable spacing. Experience role, organization, and description text preserves comma punctuation. Published tutor discovery returns the structured arrays and falls back to legacy achievement/credential text for older profiles. Admin tutor review includes an **Edit format** action backed by `adminTutor.updateTutorAchievements`, optimistic `version` checks, and an audit event for corrections. Migration `0039_secret_blink.sql` adds the two JSONB fields after the migrations already present on `main`.
+Tutor onboarding captures structured education and canonical achievements. Published discovery returns canonical arrays only. Admin tutor review retains version-checked **Edit format** correction.
 
 ### Specialization taxonomy follow-up (2026-08-25)
 
@@ -211,7 +211,7 @@ Marks prefix and profile chevron. Desktop keeps the horizontal summary.
 The student tutor drawer now uses a full-width 300px image hero with
 top-aligned cover cropping, a bottom gradient, close control, and overlaid
 specialization badges. Education, achievements, and experiences render in
-separate profile-highlight cards, with legacy text fallbacks for older
+separate profile-highlight cards, using canonical structured fields for
 profiles. Desktop tutor cards progressively reveal one, two, or three
 natural-width child specialization labels without repeating the parent
 category by breakpoint while keeping the `From [Marks icon] #` price treatment
@@ -1113,8 +1113,8 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 - v1.42 (2026-08-31): Contained tutor `/profile` scrolling to one route-owned vertical scroller, removed the action-bar bottom gap, and kept specialization-category fieldsets at natural heights. No RPC, schema, or persistence contract changed.
 
 - v1.40 (2026-08-31): Tightened CI coverage enforcement so `packages/api` lines, overall lines, overall functions, and overall branches must each reach 100% from the shared lcov artifact. The 0/0 branch case is treated as 100%; no runtime or API contract changed.
-- v1.43 (2026-08-31): Replaced the tutor Experiences text area with one structured repeatable section backed by up to five `experienceEntries`, added start/end-year validation without grouping separators, kept legacy `experiences` text as a fallback, exposed the structured entries in discovery/admin review, and added migration `0040_colossal_morlun.sql`.
-- v1.41 (2026-08-31): Simplified tutor profile input to one structured Achievements section plus one Experiences field, kept legacy achievement text as a fallback, and disabled grouping separators in competition-achievement years. The submit validator accepts either structured competition achievements or legacy achievement text.
+- v1.43 (2026-08-31): Added structured repeatable experiences with start/end-year validation.
+- v1.41 (2026-08-31): Added structured achievements with ungrouped years.
 - v1.39 (2026-08-31): Kept profile contact-privacy and tutor-onboarding validation parts under Selia `Field` roots, including structured-achievement section errors, so Base UI error #28 cannot turn an inline validation state into a generic client-side 500. No RPC, schema, persistence, or URL contract changed.
 - v1.38 (2026-08-31): Added structured tutor education and competition achievements with 2/5 entry caps, bold-first-line public rendering, legacy `credentialsSummary` fallback, migration `0039_secret_blink.sql`, and admin correction through `adminTutor.updateTutorAchievements` with optimistic locking and audit logging.
 

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const tutorExperienceEntryInput = z
+export const tutorExperienceInput = z
   .object({
     role: z.string().trim().min(1).max(255),
     organization: z.string().trim().min(1).max(255),
@@ -18,8 +18,6 @@ export const tutorExperienceEntryInput = z
     }
   });
 
-export const tutorExperienceEntriesInput = z
-  .array(tutorExperienceEntryInput)
-  .max(5);
+export const tutorExperiencesInput = z.array(tutorExperienceInput).max(5);
 
-export type TutorExperienceEntry = z.infer<typeof tutorExperienceEntryInput>;
+export type TutorExperience = z.infer<typeof tutorExperienceInput>;

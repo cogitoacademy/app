@@ -61,7 +61,7 @@ Replaced `.select()` in `booking.repo.ts` findBookingById and other queries with
 
 ### 1.5 Webhook IP allowlisting (from 5.1) ✅
 
-Add configurable IP allowlist for Xendit webhook endpoint. Signature verification already exists.
+Add configurable IP allowlist for payment webhook endpoint. Signature verification already exists.
 
 - Landed in **BACKEND-HARDENING PR C** (task C5) — `WEBHOOK_ALLOWED_IPS` config.
 

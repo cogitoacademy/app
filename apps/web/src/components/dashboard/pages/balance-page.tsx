@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@cogito-app/ui/components/selia/button";
-import { Badge } from "@cogito-app/ui/components/selia/badge";
 import {
   Card,
   CardBody,
@@ -86,7 +85,6 @@ export function BalancePage() {
     orpc.wallet.listPackages.queryOptions(),
   );
   const packages = packagesData?.packages ?? [];
-  const xenditTestMode = packagesData?.xenditMode === "test";
   const { data: ledgerData, isLoading: ledgerLoading } = useQuery(
     orpc.wallet.listLedger.queryOptions({ input: { limit: 50 } }),
   );
@@ -287,7 +285,7 @@ export function BalancePage() {
                       description={
                         isRedirectCheckout
                           ? "Open the hosted payment page, choose a payment method, and complete the payment. Your Marks are credited automatically after the provider confirms it."
-                          : "Open your banking or e-wallet app, scan this code, and complete the payment. Your Marks are credited after Xendit confirms the payment."
+                          : "Open your banking or e-wallet app, scan this code, and complete the payment. Your Marks are credited after the payment provider confirms it."
                       }
                     />
                   </CardInfoPreview>
@@ -353,7 +351,7 @@ export function BalancePage() {
                         {simulatedPurchase.data?.status === "PAID" ||
                         simulatedPurchase.data?.status === "SETTLED"
                           ? "Payment confirmed. Your Marks balance has been updated."
-                          : "Simulation submitted. Waiting for Xendit confirmation…"}
+                          : "Simulation submitted. Waiting for provider confirmation…"}
                       </Text>
                     ) : null}
                   </>
@@ -384,16 +382,6 @@ export function BalancePage() {
                 >
                   <CardHeader>
                     <CardTitle>{pkg.name}</CardTitle>
-                    {xenditTestMode &&
-                    (pkg.code === "explorer" || pkg.code === "pioneer") ? (
-                      <Badge
-                        variant="warning"
-                        size="sm"
-                        className="justify-self-end"
-                      >
-                        Test Mode limit
-                      </Badge>
-                    ) : null}
                   </CardHeader>
                   <CardBody>
                     <div className="space-y-1">
@@ -409,13 +397,6 @@ export function BalancePage() {
                       <Text className="text-dimmed text-xs">
                         ~{formatIdr(Math.round(pkg.priceIdr / pkg.marks))}/Mark
                       </Text>
-                      {xenditTestMode &&
-                      (pkg.code === "explorer" || pkg.code === "pioneer") ? (
-                        <Text className="text-xs text-warning">
-                          Xendit Test Mode caps payments at IDR 1,000,000 — this
-                          package is available in Live Mode.
-                        </Text>
-                      ) : null}
                     </div>
                   </CardBody>
                   <CardFooter>

@@ -734,7 +734,7 @@ export function createAdminBookingService(deps: {
 
       // N1/M2 (Refund Policy §677): admin refunds are in-app Marks credits
       // only — purchased Marks are never convertible back to rupiah, so the
-      // payment provider is NEVER called from here (no Xendit cash refund,
+      // payment provider is NEVER called from here (no cash refund,
       // no double-refund-on-retry after a tx rollback). The
       // `refund.refundWithProvider` port is intentionally left unused by
       // adminRefund. No cash moves: the refund record carries amountIdr 0

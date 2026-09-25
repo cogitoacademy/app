@@ -363,6 +363,14 @@ describe("MidtransPaymentProvider verifyWebhook (signature_key)", () => {
     );
   });
 
+  test("rejects a webhook with an invalid amount or currency", async () => {
+    const body = JSON.stringify(notificationBody({ gross_amount: "0" }));
+
+    await expect(provider.verifyWebhook(body, "")).rejects.toThrow(
+      "Invalid webhook payment amount or currency",
+    );
+  });
+
   test("maps capture with fraud accept to PAID", async () => {
     const body = JSON.stringify(
       notificationBody({
@@ -532,6 +540,36 @@ describe("MidtransPaymentProvider getPaymentRequestStatus", () => {
     await expect(
       provider.getPaymentRequestStatus!("pay-error"),
     ).rejects.toMatchObject({ code: "SERVICE_UNAVAILABLE" });
+  });
+
+  test("retries transient TypeError and TimeoutError failures", async () => {
+    const originalSetTimeout = globalThis.setTimeout;
+    globalThis.setTimeout = ((callback: TimerHandler) => {
+      if (typeof callback === "function") callback();
+      return 0 as unknown as ReturnType<typeof setTimeout>;
+    }) as typeof setTimeout;
+
+    try {
+      const typeErrorProvider = createMidtransPaymentProvider(opts);
+      globalThis.fetch = mock(() => {
+        throw new TypeError("network unavailable");
+      }) as never;
+      await expect(
+        typeErrorProvider.getPaymentRequestStatus!("pay-type-error"),
+      ).rejects.toThrow("network unavailable");
+
+      const timeoutError = new Error("request timed out");
+      timeoutError.name = "TimeoutError";
+      const timeoutProvider = createMidtransPaymentProvider(opts);
+      globalThis.fetch = mock(() => {
+        throw timeoutError;
+      }) as never;
+      await expect(
+        timeoutProvider.getPaymentRequestStatus!("pay-timeout"),
+      ).rejects.toThrow("request timed out");
+    } finally {
+      globalThis.setTimeout = originalSetTimeout;
+    }
   });
 });
 

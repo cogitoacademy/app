@@ -22,17 +22,16 @@ describe("wallet module", () => {
     expect(module.handler.listPackages).toBeFunction();
   });
 
-  test("passes the Xendit mode through to the handler", async () => {
+  test("returns active packages", async () => {
     const rows = [{ id: "pkg1", code: "starter", isActive: true }];
     const module = createWalletModule({
       db: makeFakeDb(rows) as any,
-      xenditMode: "test",
     });
 
     const result = await module.handler.listPackages({
       context: { session: { user: { id: "u1" } } },
     } as any);
 
-    expect(result).toEqual({ xenditMode: "test", packages: rows });
+    expect(result).toEqual({ packages: rows });
   });
 });

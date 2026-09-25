@@ -10,17 +10,8 @@ pre-commit:
     sops-plaintext-guard:
       glob: "infra/secrets/prod.env"
       # Per-key check against .sops.yaml encrypted_regex: any listed key
-      # whose value is not ENC[...] ciphertext fails the commit. (A
-      # file-level marker check passed the plaintext GRAFANA_ADMIN_PASSWORD
-      # on 2026-09-06 — and the key itself was missing from encrypted_regex,
-      # so sops would not even have encrypted it. Both fixed. Non-listed
-      # keys are intentionally plaintext config.)
-      run: >
-        python3 -c 'import re,sys;
-        enc=re.search(r"encrypted_regex:\s*\"([^\"]+)\"",open(".sops.yaml").read()).group(1);
-        bad=[l.split("=",1)[0] for l in open(sys.argv[1]) if re.match(r"^[A-Za-z_][A-Za-z0-9_]*=",l) and re.match(enc,l.split("=",1)[0]) and l.split("=",1)[1].strip() != "" and not l.split("=",1)[1].startswith("ENC[")];
-        print("sops-plaintext-guard: " + ("OK" if not bad else "PLAINTEXT: "+" ".join(bad)));
-        sys.exit(1 if bad else 0)' {staged_files}
+      # whose value is not ENC[...] ciphertext fails the commit.
+      run: bun scripts/check-sops-encrypted.ts {staged_files}
 
 pre-push:
   parallel: true

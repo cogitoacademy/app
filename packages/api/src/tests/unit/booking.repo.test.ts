@@ -1065,7 +1065,15 @@ describe("createBookingRepo additional query paths", () => {
     const nestedWhere = mock(() => ({}));
     const nestedFrom = mock(() => ({ where: nestedWhere }));
     const countWhere = mock(async () => [
-      { action: 1, upcoming: 2, recurring: 3, history: 4, all: 5 },
+      {
+        action: 1,
+        upcoming: 2,
+        recurring: 3,
+        history: 4,
+        completed: 5,
+        problem: 6,
+        all: 7,
+      },
     ]);
     const countFrom = mock(() => ({ where: countWhere }));
     const select = mock()
@@ -1080,7 +1088,9 @@ describe("createBookingRepo additional query paths", () => {
       upcoming: 2,
       recurring: 3,
       history: 4,
-      all: 5,
+      completed: 5,
+      problem: 6,
+      all: 7,
     });
     expect(select).toHaveBeenCalledTimes(2);
     expect(nestedWhere).toHaveBeenCalledTimes(1);
@@ -1092,7 +1102,15 @@ describe("createBookingRepo additional query paths", () => {
     const nestedWhere = mock(() => ({}));
     const nestedFrom = mock(() => ({ where: nestedWhere }));
     const countWhere = mock(async () => [
-      { action: 1, upcoming: 2, recurring: 3, history: 4, all: 5 },
+      {
+        action: 1,
+        upcoming: 2,
+        recurring: 3,
+        history: 4,
+        completed: 5,
+        problem: 6,
+        all: 7,
+      },
     ]);
     const countFrom = mock(() => ({ where: countWhere }));
     const select = mock()
@@ -1123,7 +1141,9 @@ describe("createBookingRepo additional query paths", () => {
       upcoming: 2,
       recurring: 3,
       history: 4,
-      all: 5,
+      completed: 5,
+      problem: 6,
+      all: 7,
     });
     expect(select).toHaveBeenCalledTimes(3);
     expect(nestedWhere).toHaveBeenCalledTimes(2);

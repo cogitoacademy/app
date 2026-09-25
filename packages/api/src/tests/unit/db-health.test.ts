@@ -387,7 +387,7 @@ describe("checkCircuitBreakers", () => {
       ["failureCount", "5"],
     );
     await redis.hset(
-      "cogito:cb:xendit",
+      "cogito:cb:midtrans",
       ["state", "closed"],
       ["failureCount", "0"],
     );
@@ -395,7 +395,7 @@ describe("checkCircuitBreakers", () => {
     expect(result).toEqual({
       resend: "open",
       google_meet: "half-open",
-      xendit: "closed",
+      midtrans: "closed",
     });
   });
 

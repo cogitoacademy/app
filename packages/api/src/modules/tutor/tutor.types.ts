@@ -2,10 +2,10 @@ import { z } from "zod";
 import { MAX_TUTOR_SUBJECTS } from "../tutor-subjects/subject-selection";
 import { externalHttpUrl, profileImageUrl } from "../../lib/url-schema";
 import {
-  tutorCompetitionAchievementsInput,
+  tutorAchievementsInput,
   tutorEducationInput,
 } from "./tutor-achievements";
-import { tutorExperienceEntriesInput } from "./tutor-experiences";
+import { tutorExperiencesInput } from "./tutor-experiences";
 
 export const MAX_TUTOR_SHORT_BIO_WORDS = 50;
 export const TUTOR_TERMS_OF_SERVICE_VERSION = "2026-09";
@@ -25,12 +25,13 @@ export const updateMyProfileInput = z.object({
       { message: `Use ${MAX_TUTOR_SHORT_BIO_WORDS} words or fewer.` },
     )
     .optional(),
+  affiliation: z.string().trim().max(255).optional(),
   achievementProofUrls: z.array(externalHttpUrl).max(20).optional(),
   experienceProofUrls: z.array(externalHttpUrl).max(20).optional(),
   profileImageUrl: profileImageUrl.optional(),
   education: tutorEducationInput.optional(),
-  competitionAchievements: tutorCompetitionAchievementsInput.optional(),
-  experienceEntries: tutorExperienceEntriesInput.optional(),
+  achievements: tutorAchievementsInput.optional(),
+  experiences: tutorExperiencesInput.optional(),
   subjectIds: z
     .array(z.string().min(1).max(100))
     .min(1)

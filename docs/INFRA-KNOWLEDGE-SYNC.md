@@ -84,13 +84,13 @@ as a deliberate exception.
 
 **Verdict: needs a three-way split — "built", "declared", and "external".**
 
-| Component                          | Built by us?                                                                                                                                                                                                  | Declared in git?                                                                                                     | Wired via env?                     |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| **Postgres 16 + Redis 7**          | **No — they already exist** as running Coolify containers. The plan explicitly says: _"keep the existing running containers, bring them under Ansible-declared Coolify config... **Never recreate (data)**."_ | Yes — Ansible re-declares them (names, volumes, private network) so drift-check can verify the UI matches the config | Yes — `DATABASE_URL` / `REDIS_URL` |
-| **R2 buckets**                     | **Yes** — Terraform creates `cogito-infra-state` (state) + `cogito-backups` (private dumps) + `cogito-bucket` (public uploads, `r2bucket.cogitoacademy.id` custom domain)                                     | Yes                                                                                                                  | Yes — R2 creds                     |
-| **DNS records**                    | **Yes** — Terraform owns `api.`/`app.`/`status.`/`coolify.`                                                                                                                                                   | Yes                                                                                                                  | n/a                                |
-| **Xendit, Resend, Google, Sanity** | **No — external SaaS**, nothing to build                                                                                                                                                                      | No — their _outputs_ (keys, webhook URLs, redirect URIs) become vault/GitHub values                                  | Yes — that's the whole wiring      |
-| **Tailscale**                      | Yes — join playbook + declarative ACL                                                                                                                                                                         | Yes                                                                                                                  | `TS_AUTH_KEY` (one-time)           |
+| Component                            | Built by us?                                                                                                                                                                                                  | Declared in git?                                                                                                     | Wired via env?                     |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| **Postgres 16 + Redis 7**            | **No — they already exist** as running Coolify containers. The plan explicitly says: _"keep the existing running containers, bring them under Ansible-declared Coolify config... **Never recreate (data)**."_ | Yes — Ansible re-declares them (names, volumes, private network) so drift-check can verify the UI matches the config | Yes — `DATABASE_URL` / `REDIS_URL` |
+| **R2 buckets**                       | **Yes** — Terraform creates `cogito-infra-state` (state) + `cogito-backups` (private dumps) + `cogito-bucket` (public uploads, `r2bucket.cogitoacademy.id` custom domain)                                     | Yes                                                                                                                  | Yes — R2 creds                     |
+| **DNS records**                      | **Yes** — Terraform owns `api.`/`app.`/`status.`/`coolify.`                                                                                                                                                   | Yes                                                                                                                  | n/a                                |
+| **Midtrans, Resend, Google, Sanity** | **No — external SaaS**, nothing to build                                                                                                                                                                      | No — their _outputs_ (keys, webhook URLs, redirect URIs) become vault/GitHub values                                  | Yes — that's the whole wiring      |
+| **Tailscale**                        | Yes — join playbook + declarative ACL                                                                                                                                                                         | Yes                                                                                                                  | `TS_AUTH_KEY` (one-time)           |
 
 The important distinction: **"declared" ≠ "built"**. The DB/Redis were born
 in the Coolify UI (one-time control-plane operation); Ansible's job is to
@@ -114,9 +114,9 @@ What's genuinely true (verified in code):
   read-then-write paths.
 - **Idempotency**: booking creation and webhook processing are idempotency-
   keyed (120s claim + 24h processed record).
-- **Retries with backoff**: all 6 scheduler jobs (attempts: 3), webhook
+- **Retries with backoff**: all 7 scheduler jobs (attempts: 3), webhook
   transient failures (5xx → provider retries), circuit breakers on email/
-  meet/xendit.
+  meet/Midtrans.
 - **Fail-loud boot**: env schema refuses to boot with partial/missing prod
   config; scheduler refuses to boot without Redis; Meet probe logs loudly.
 - **DLQ**: failed jobs land in `cogito-jobs-dlq` + bounded Redis list.
@@ -172,8 +172,8 @@ iptables MASQUERADE does NAT in both directions:
   ports and proxies to container IPs on the private network. Nothing else on
   the host is published.
 - **Outbound**: containers share the host's public IP via NAT. **This is why
-  `WEBHOOK_ALLOWED_IPS` matters** — when Xendit's webhook arrives, the server
-  checks the _client_ IP; and when the server calls Xendit, Xendit sees the
+  `WEBHOOK_ALLOWED_IPS` matters** — when a Midtrans webhook arrives, the server
+  checks the _client_ IP; and when the server calls Midtrans, Midtrans sees the
   VPS's egress IP. Both are the same public IP.
 
 **Tailscale NAT (the second NAT):** Tailscale assigns addresses in
@@ -240,7 +240,7 @@ limits/allowlists break.
 | 7   | **In-memory fallbacks degrade guarantees** when Redis fails at runtime | Low                                  | Documented; Redis is mandatory and monitored via `/health`.                                                                                                                                      |
 | 8   | **GitHub Actions quota**                                               | Low                                  | Repo is public (free for public repos); self-hosted runner on the VPS is the documented fallback.                                                                                                |
 | 9   | **Google OAuth unverified app**                                        | Low (go-live blocker for real users) | Verification video needed before real-user Google sign-in. Email/password works meanwhile.                                                                                                       |
-| 10  | **Xendit sandbox → live swap**                                         | Low                                  | One vault edit + redeploy. Sandbox E2E + one real small transaction first (plan Phase 2).                                                                                                        |
+| 10  | **Midtrans Sandbox → Production swap**                                 | Low                                  | One vault edit + redeploy. Sandbox E2E + one real small transaction first (plan Phase 2).                                                                                                        |
 | 11  | **No plan-only CI audit** (your suggestion)                            | —                                    | **Add to the plan** — cheap, gives the audit trail you want.                                                                                                                                     |
 | 12  | **Drizzle Studio on prod**                                             | —                                    | Not recommended directly; the safe path is a tailnet SSH tunnel + local studio (documented in RUNBOOK).                                                                                          |
 
@@ -275,8 +275,8 @@ The plan is thorough; these are the gaps found during this review:
    (deploy failure, crash-loop, circuit breaker, DLQ alert, DB loss, disk
    full, VPS loss) as one page, not scattered. Task 4.3 covers "incident
    sections" — make the tables explicit.
-6. **`WEBHOOK_ALLOWED_IPS` verification at go-live** — sandbox and live use
-   the same documented Xendit egress IPs, but verify against the live
+6. **`WEBHOOK_ALLOWED_IPS` verification at go-live** — Sandbox and Production
+   use documented Midtrans notification egress IPs, but verify against the live
    dashboard before the first real transaction.
 7. **Default package catalog on prod** — migration
    `0041_seed_mark_packages.sql` now installs/upserts the PRD catalog during
@@ -302,7 +302,7 @@ The plan is thorough; these are the gaps found during this review:
 5. **Drizzle Studio tunnel doc**: include in this wave's docs work?
 6. **Uptime Kuma**: include in this wave (Ansible playbook + docs) or defer
    until RAM is verified after the first phases?
-7. **Xendit**: proceed with sandbox keys in the vault now (checkout flow
-   works end-to-end with test methods)?
+7. **Midtrans**: Sandbox keys and notification URL are now the active payment
+   provider configuration; remaining gate is one Production smoke transaction.
 8. **Approve the 2-worker dispatch** (W1 `coolify-resources.yml` + Traefik
    route fixing the 401; W2 drift-check + Uptime Kuma + docs)?

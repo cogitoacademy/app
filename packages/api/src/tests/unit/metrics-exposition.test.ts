@@ -4,6 +4,8 @@ import {
   recordRequest,
   getMetrics,
   _resetForTest,
+  recordPaymentIntegrity,
+  recordPaymentReconciliation,
 } from "../../lib/metrics";
 
 describe("metrics exposition", () => {
@@ -69,13 +71,13 @@ describe("metrics exposition", () => {
       breakers: {
         resend: "open",
         "google-meet": "closed",
-        xendit: "half-open",
+        midtrans: "half-open",
       },
     });
     expect(out).toContain(
       'breaker_state{name="google-meet",instance="single"} 0',
     );
-    expect(out).toContain('breaker_state{name="xendit",instance="single"} 1');
+    expect(out).toContain('breaker_state{name="midtrans",instance="single"} 1');
     expect(out).toContain('breaker_state{name="resend",instance="single"} 2');
   });
 
@@ -114,11 +116,11 @@ describe("metrics exposition", () => {
     expect(
       renderExposition({
         version: "abc123def",
-        provider: "xendit",
+        provider: "midtrans",
         providerMode: "live",
       }),
     ).toContain(
-      'app_info{version="abc123def",provider="xendit",provider_mode="live"} 1',
+      'app_info{version="abc123def",provider="midtrans",provider_mode="live"} 1',
     );
     expect(
       renderExposition({
@@ -152,10 +154,35 @@ describe("metrics exposition", () => {
       renderExposition({ provider: "midtrans", providerMode: "test" }),
     ).toContain('provider="midtrans",provider_mode="test"');
     expect(
-      renderExposition({ provider: "xendit", providerMode: "live" }),
-    ).toContain('provider="xendit",provider_mode="live"');
+      renderExposition({ provider: "midtrans", providerMode: "live" }),
+    ).toContain('provider="midtrans",provider_mode="live"');
     expect(renderExposition({ provider: "stub" })).toContain(
       'provider="stub",provider_mode="none"',
+    );
+  });
+
+  test("renders payment integrity and reconciliation counters", () => {
+    recordPaymentIntegrity("midtrans", "provider_mismatch");
+    recordPaymentIntegrity("midtrans", "amount_mismatch");
+    recordPaymentIntegrity("midtrans", "currency_mismatch");
+    recordPaymentIntegrity("midtrans", "partial_refund");
+    recordPaymentReconciliation("midtrans", "reconciled");
+    recordPaymentReconciliation("midtrans", "pending");
+    recordPaymentReconciliation("midtrans", "failed");
+
+    const out = renderExposition();
+
+    expect(out).toContain(
+      'payment_integrity_events_total{provider="midtrans",type="provider_mismatch"} 1',
+    );
+    expect(out).toContain(
+      'payment_integrity_events_total{provider="midtrans",type="partial_refund"} 1',
+    );
+    expect(out).toContain(
+      'payment_reconciliation_total{provider="midtrans",outcome="reconciled"} 1',
+    );
+    expect(out).toContain(
+      'payment_reconciliation_total{provider="midtrans",outcome="failed"} 1',
     );
   });
 });

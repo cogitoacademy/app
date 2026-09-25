@@ -1455,6 +1455,8 @@ export function createBookingRepo(db: DbType) {
         upcoming: sql<number>`count(*) filter (where ${bookingViewCondition("upcoming", now, viewOptions)})`,
         recurring: sql<number>`count(*) filter (where ${bookingViewCondition("recurring", now, viewOptions)})`,
         history: sql<number>`count(*) filter (where ${bookingViewCondition("history", now, viewOptions)})`,
+        completed: sql<number>`count(*) filter (where ${booking.currentState} = 'completed')`,
+        problem: sql<number>`count(*) filter (where ${booking.currentState} in ('cancelled', 'late_cancelled', 'no_show', 'expired'))`,
         all: sql<number>`count(*)`,
       })
       .from(booking)
@@ -1464,6 +1466,8 @@ export function createBookingRepo(db: DbType) {
       upcoming: Number(counts?.upcoming ?? 0),
       recurring: Number(counts?.recurring ?? 0),
       history: Number(counts?.history ?? 0),
+      completed: Number(counts?.completed ?? 0),
+      problem: Number(counts?.problem ?? 0),
       all: Number(counts?.all ?? 0),
     };
   }

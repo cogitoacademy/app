@@ -50,18 +50,9 @@
 - Meaning: abuse or client bug
 - Recovery: wait for the window; check the client isn't looping
 
-### 1.5 Webhook failures (Xendit)
+### 1.5 Webhook failures (Midtrans)
 
-- Detect: `./infra/ops.sh logs | grep webhook`; 4xx dead-letter rows
-- Meaning: signature/IP/timestamp rejection (4xx, permanent) or provider
-  retry (5xx)
-- Recovery: 4xx → verify `XENDIT_WEBHOOK_TOKEN` + `WEBHOOK_ALLOWED_IPS` in
-  the vault; 5xx → transient, Xendit retries
-
-### 1.5b Webhook failures (Midtrans)
-
-- Route: `POST /webhooks/payments/midtrans` (same handler as Xendit,
-  provider-selected by the path segment)
+- Route: `POST /webhooks/payments/midtrans`
 - Detect: `./infra/ops.sh logs | grep webhook`; 4xx dead-letter rows
 - Meaning: signature rejection (4xx, permanent) or provider retry (5xx)
 - Signature: Midtrans signs **inside the body** — `signature_key` is
@@ -71,10 +62,9 @@
   header value is left empty for this provider. A bad signature → 401
   (`WebhookSignatureError`). A signed notification for a different
   `merchant_id` is also rejected (defense-in-depth).
-- Idempotency: key `midtrans:{transaction_id ?? order_id}:{status}` (the
-  same `paymentWebhookIdempotencyKey` shape as Xendit — 120s claim + 24h
-  processed record), so retries of one lifecycle event stay idempotent
-  while PENDING and PAID for one payment both run.
+- Idempotency: key `midtrans:{transaction_id ?? order_id}:{status}` (120s
+  claim + 24h processed record), so retries of one lifecycle event stay
+  idempotent while PENDING and PAID for one payment both run.
 - Timestamp: Midtrans has no timestamp header — the L4 timestamp check is
   skipped for this provider (the body signature is the gate).
 - Recovery: 4xx → verify `MIDTRANS_SERVER_KEY` / `MIDTRANS_MERCHANT_ID` /
@@ -128,22 +118,22 @@
 
 ## 3. Dependency failures
 
-### 3.1 Circuit breaker open (Resend / Google Meet / Xendit)
+### 3.1 Circuit breaker open (Resend / Google Meet / Midtrans)
 
 - Detect: `./infra/ops.sh logs | grep circuit_breaker_state_change` (state
   `open` = error level); `./infra/ops.sh cb` (new command, added by this
   wave); `/health` `checks.circuitBreakers` (added by this wave)
 - Meaning: provider failing repeatedly (thresholds: Resend 3, Meet 5,
-  Xendit 5; resets: 120s/60s/30s; half-open probe: 1 attempt)
+  Midtrans 5; resets: 120s/60s/30s; half-open probe: 1 attempt)
 - Note: the Resend and Google Meet breakers share the Redis key
-  `cogito:cb:default` (neither sets a `name`); Xendit keys are
-  `cogito:cb:xendit-test` / `cogito:cb:xendit-live` (mode-scoped). The
+  `cogito:cb:default` (neither sets a `name`); Midtrans keys are
+  `cogito:cb:midtrans-test` / `cogito:cb:midtrans-live` (mode-scoped). The
   `cb` command scans `cogito:cb:*` so it shows the real keys.
 - Recovery: it self-heals after the reset timeout (half-open probe). If it
   stays open: check provider status/credentials → fix → the breaker closes
   on the next successful call. Force-close (only after fixing the root
   cause): `./infra/ops.sh redis DEL cogito:cb:default` (or
-  `cogito:cb:xendit-test` / `cogito:cb:xendit-live`)
+  `cogito:cb:midtrans-test` / `cogito:cb:midtrans-live`)
 - Verification: `./infra/ops.sh cb` shows `closed` (or no keys)
 
 ### 3.2 Resend down
@@ -161,32 +151,19 @@
   tutors/admins enter manual links; `retry-failed-meetings` re-tries every
   5 min (3 attempts per booking)
 
-### 3.4 Xendit down
-
-- Detect: breaker open; payment webhooks failing
-- Meaning: purchases fail loudly (no silent stub)
-- Recovery: check Xendit status; verify `XENDIT_MODE` + keys; webhook
-  idempotency (120s claim + 24h processed record) prevents double-credit
-
-### 3.4b Midtrans down
+### 3.4 Midtrans down
 
 - Detect: Snap page unreachable at checkout (hosted `redirect_url` fails to
   load); payment webhooks failing; breaker open
 - Meaning: purchases fail at checkout — the Snap page is hosted by Midtrans,
-  so a Midtrans outage blocks the payment step itself (unlike Xendit, where
-  the QRIS payload is rendered in-app)
-- Recovery: check Midtrans status; verify `MIDTRANS_MODE` + keys; if the
-  outage persists, **roll back to Xendit** per `docs/MIDTRANS-MIGRATION.md`
-  §6 (set `PAYMENT_PROVIDER=xendit` in Coolify, restore the Xendit keys +
-  webhook URL, redeploy, verify the boot log shows `provider=xendit`).
-  Midtrans webhooks arriving after the flip are rejected by signature
-  verification and retried by Midtrans; in-flight Midtrans payments created
-  before the flip are reconciled by `reconcilePurchase` only while the
-  midtrans provider is active — prefer completing the cutover checklist or
-  reconcile stragglers manually via the Midtrans dashboard
-- Note: the Midtrans circuit breaker is mode-scoped like Xendit
+  so an outage blocks the payment step itself.
+- Recovery: check Midtrans status; verify `MIDTRANS_MODE` + keys; if outage
+  persists, stop new payment creation with `PAYMENT_PROVIDER=stub` only after
+  confirming no real checkout can be created. Reconcile in-flight payments via
+  Midtrans status before or after the stop.
+- Note: the Midtrans circuit breaker is mode-scoped
   (`cogito:cb:midtrans-test` / `cogito:cb:midtrans-live`); force-close only
-  after fixing the root cause
+  after fixing the root cause.
 
 ### 3.5 R2 down
 

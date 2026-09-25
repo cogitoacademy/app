@@ -9,9 +9,9 @@ import {
   Menu,
   MenuItem,
   MenuPopup,
+  MenuSeparator,
   MenuTrigger,
 } from "@cogito-app/ui/components/selia/menu";
-import { Separator } from "@cogito-app/ui/components/selia/separator";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
 import { EmptyState } from "@/components/empty-state";
@@ -155,7 +155,7 @@ export function NotificationBell() {
             </Button>
           )}
         </div>
-        <Separator />
+        <MenuSeparator />
         {listQuery.isLoading ? (
           <div className="px-3 py-4 text-center text-sm text-muted">
             Loading…
@@ -202,7 +202,7 @@ export function NotificationBell() {
             ))}
           </div>
         )}
-        <Separator />
+        <MenuSeparator />
         <div className="px-2 py-1.5">
           <Button
             variant="tertiary"

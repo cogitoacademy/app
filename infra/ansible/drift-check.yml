@@ -51,7 +51,7 @@
 #   - Auto-deploy toggle per resource — verify in the Coolify UI.
 #   - Coolify bundled proxy version (Traefik v3.6, verified 2026-08-28) —
 #     check the proxy container image tag in the Coolify UI.
-#   - Xendit dashboard webhook URL + egress IPs — external to Coolify.
+#   - Midtrans dashboard notification URL + egress IPs — external to Coolify.
 #   - DNS records (api/app/coolify/status) — Terraform-owned, not Coolify.
 #
 # Run (from the repository root; the Coolify API is tailnet-only, so run
@@ -142,13 +142,7 @@
       - DB_SSL_REJECT_UNAUTHORIZED
       - PAYMENT_PROVIDER
       - PAYMENT_WEBHOOK_SECRET
-      - XENDIT_MODE
-      - XENDIT_SECRET_KEY
-      - XENDIT_WEBHOOK_TOKEN
-      - XENDIT_TEST_ALLOWED_EMAILS
-      - XENDIT_SUCCESS_REDIRECT_URL
-      - XENDIT_FAILURE_REDIRECT_URL
-      - XENDIT_DEFAULT_PAYMENT_METHOD
+      - PAYMENT_TEST_ALLOWED_EMAILS
       - MIDTRANS_MODE
       - MIDTRANS_SERVER_KEY
       - MIDTRANS_CLIENT_KEY

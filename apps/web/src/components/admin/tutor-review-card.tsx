@@ -73,13 +73,13 @@ import { client, orpc } from "@/utils/orpc";
 import {
   TutorAchievementsDisplay,
   TutorAchievementsEditor,
-  type TutorCompetitionAchievement,
+  type TutorAchievement,
   type TutorEducationEntry,
   validateTutorAchievementDraft,
 } from "@/components/tutor/tutor-achievements";
 import {
   TutorExperiencesDisplay,
-  type TutorExperienceEntry,
+  type TutorExperience,
 } from "@/components/tutor/tutor-experiences";
 import { ProfilePhotoHistory } from "@/components/tutor/profile-photo-history";
 import {
@@ -147,11 +147,12 @@ interface TutorReviewCardProps {
   profile: {
     id: string;
     shortBio: string | null;
+    affiliation: string | null;
     achievementProofUrls: string[] | null;
     experienceProofUrls: string[] | null;
     education: TutorEducationEntry[] | null;
-    competitionAchievements: TutorCompetitionAchievement[] | null;
-    experienceEntries: TutorExperienceEntry[] | null;
+    achievements: TutorAchievement[] | null;
+    experiences: TutorExperience[] | null;
     subjects?: Array<{
       subject: {
         id: string;
@@ -270,12 +271,10 @@ function readEducationEntries(value: unknown): TutorEducationEntry[] | null {
   return entries;
 }
 
-function readCompetitionAchievements(
-  value: unknown,
-): TutorCompetitionAchievement[] | null {
+function readAchievements(value: unknown): TutorAchievement[] | null {
   if (!Array.isArray(value)) return null;
 
-  const entries: TutorCompetitionAchievement[] = [];
+  const entries: TutorAchievement[] = [];
   for (const entry of value) {
     if (
       !isRecord(entry) ||
@@ -295,10 +294,10 @@ function readCompetitionAchievements(
   return entries;
 }
 
-function readExperienceEntries(value: unknown): TutorExperienceEntry[] | null {
+function readExperiences(value: unknown): TutorExperience[] | null {
   if (!Array.isArray(value)) return null;
 
-  const entries: TutorExperienceEntry[] = [];
+  const entries: TutorExperience[] = [];
   for (const entry of value) {
     if (
       !isRecord(entry) ||
@@ -326,16 +325,13 @@ const PENDING_FIELD_LABELS: Record<string, string> = {
   baseRatesIdr: "Base rates",
   displayName: "Display name",
   shortBio: "Short bio",
-  credentialsSummary: "Credentials summary",
-  achievements: "Achievements (text)",
-  experiences: "Experiences (text)",
+  affiliation: "Affiliation",
+  achievements: "Achievements",
+  experiences: "Experiences",
   achievementProofUrls: "Achievement proof",
   experienceProofUrls: "Experience proof",
   proofUrls: "Proof links",
   education: "Education",
-  competitionAchievements: "Competition achievements",
-  experienceEntries: "Experience entries",
-  expertise: "Expertise (legacy)",
   modality: "Teaching mode",
   prices: "Marks prices",
   profileImageUrl: "Profile photo",
@@ -369,16 +365,9 @@ const DIFF_FILTER_LABELS: Record<TutorReviewDiffFilter, string> = {
 };
 
 const REVIEW_SECTION_FIELDS = {
-  profile: ["shortBio", "displayName", "name"],
+  profile: ["shortBio", "affiliation", "displayName", "name"],
   teaching: ["modality", "subjectIds", "expertise"],
-  credentials: [
-    "education",
-    "competitionAchievements",
-    "experienceEntries",
-    "credentialsSummary",
-    "achievements",
-    "experiences",
-  ],
+  credentials: ["education", "achievements", "experiences"],
   proofs: ["achievementProofUrls", "experienceProofUrls", "proofUrls"],
   marks: ["prices", "baseRatesIdr"],
   photo: ["profileImageUrl"],
@@ -643,14 +632,14 @@ function renderPendingChangePair({
         current: (
           <TutorAchievementsDisplay
             education={currentEntries ?? []}
-            competitionAchievements={[]}
+            achievements={[]}
             idPrefix={`${idPrefix}-current-education`}
           />
         ),
         proposed: (
           <TutorAchievementsDisplay
             education={proposedEntries ?? []}
-            competitionAchievements={[]}
+            achievements={[]}
             idPrefix={`${idPrefix}-education`}
           />
         ),
@@ -658,22 +647,22 @@ function renderPendingChangePair({
     }
   }
 
-  if (field === "competitionAchievements") {
-    const proposedEntries = readCompetitionAchievements(proposed);
-    const currentEntries = readCompetitionAchievements(current);
+  if (field === "achievements") {
+    const proposedEntries = readAchievements(proposed);
+    const currentEntries = readAchievements(current);
     if (proposedEntries || currentEntries) {
       return {
         current: (
           <TutorAchievementsDisplay
             education={[]}
-            competitionAchievements={currentEntries ?? []}
+            achievements={currentEntries ?? []}
             idPrefix={`${idPrefix}-current-competition`}
           />
         ),
         proposed: (
           <TutorAchievementsDisplay
             education={[]}
-            competitionAchievements={proposedEntries ?? []}
+            achievements={proposedEntries ?? []}
             idPrefix={`${idPrefix}-competition`}
           />
         ),
@@ -681,21 +670,21 @@ function renderPendingChangePair({
     }
   }
 
-  if (field === "experienceEntries") {
-    const proposedEntries = readExperienceEntries(proposed);
-    const currentEntries = readExperienceEntries(current);
+  if (field === "experiences") {
+    const proposedEntries = readExperiences(proposed);
+    const currentEntries = readExperiences(current);
     if (proposedEntries || currentEntries) {
       return {
         current: (
           <TutorExperiencesDisplay
-            experienceEntries={currentEntries ?? []}
+            experiences={currentEntries ?? []}
             emptyMessage="—"
             idPrefix={`${idPrefix}-current-experiences`}
           />
         ),
         proposed: (
           <TutorExperiencesDisplay
-            experienceEntries={proposedEntries ?? []}
+            experiences={proposedEntries ?? []}
             emptyMessage="—"
             idPrefix={`${idPrefix}-experiences`}
           />
@@ -772,14 +761,14 @@ function formatPendingValueSummary(field: string, value: unknown): string {
 
   if (
     field === "education" ||
-    field === "competitionAchievements" ||
-    field === "experienceEntries"
+    field === "achievements" ||
+    field === "experiences"
   ) {
     const count = Array.isArray(value) ? value.length : 0;
     const label =
       field === "education"
         ? "education entr"
-        : field === "competitionAchievements"
+        : field === "achievements"
           ? "achievement entr"
           : "experience entr";
     return `${count} ${label}${count === 1 ? "y" : "ies"}`;
@@ -964,7 +953,7 @@ export function TutorReviewCard({
   const [achievementsEditOpen, setAchievementsEditOpen] = useState(false);
   const [achievementDraft, setAchievementDraft] = useState({
     education: [] as TutorEducationEntry[],
-    competitionAchievements: [] as TutorCompetitionAchievement[],
+    achievements: [] as TutorAchievement[],
   });
   const achievementsUpdateMutation = useMutation(
     orpc.adminTutor.updateTutorAchievements.mutationOptions({
@@ -994,13 +983,12 @@ export function TutorReviewCard({
     const pendingEducation = readEducationEntries(
       profile.pendingProfileChanges?.education,
     );
-    const pendingCompetitionAchievements = readCompetitionAchievements(
-      profile.pendingProfileChanges?.competitionAchievements,
+    const pendingAchievements = readAchievements(
+      profile.pendingProfileChanges?.achievements,
     );
     setAchievementDraft({
       education: pendingEducation ?? profile.education ?? [],
-      competitionAchievements:
-        pendingCompetitionAchievements ?? profile.competitionAchievements ?? [],
+      achievements: pendingAchievements ?? profile.achievements ?? [],
     });
     setAchievementsEditOpen(true);
   }
@@ -1008,12 +996,12 @@ export function TutorReviewCard({
   function saveAchievements() {
     const validation = validateTutorAchievementDraft(
       achievementDraft.education,
-      achievementDraft.competitionAchievements,
+      achievementDraft.achievements,
     );
-    if (validation.education || validation.competitionAchievements) {
+    if (validation.education || validation.achievements) {
       toastManager.add({
         title: "Check the achievement entries",
-        description: validation.education ?? validation.competitionAchievements,
+        description: validation.education ?? validation.achievements,
         type: "error",
       });
       return;
@@ -1026,13 +1014,11 @@ export function TutorReviewCard({
         university: entry.university.trim(),
         degree: entry.degree.trim(),
       })),
-      competitionAchievements: achievementDraft.competitionAchievements.map(
-        (entry) => ({
-          competitionName: entry.competitionName.trim(),
-          year: entry.year,
-          awards: entry.awards.map((award) => award.trim()),
-        }),
-      ),
+      achievements: achievementDraft.achievements.map((entry) => ({
+        competitionName: entry.competitionName.trim(),
+        year: entry.year,
+        awards: entry.awards.map((award) => award.trim()),
+      })),
     });
   }
 
@@ -1174,12 +1160,13 @@ export function TutorReviewCard({
     name: profile.user?.name,
     displayName: profile.user?.name,
     shortBio: profile.shortBio,
+    affiliation: profile.affiliation,
     subjectIds: currentSubjectIds,
     achievementProofUrls: profile.achievementProofUrls,
     experienceProofUrls: profile.experienceProofUrls,
     education: profile.education,
-    competitionAchievements: profile.competitionAchievements,
-    experienceEntries: profile.experienceEntries,
+    achievements: profile.achievements,
+    experiences: profile.experiences,
     modality: profile.modality,
     baseRatesIdr: profile.baseRatesIdr,
     prices: profile.prices,
@@ -1219,8 +1206,8 @@ export function TutorReviewCard({
     });
   }
   const hasEducation = Boolean(profile.education?.length);
-  const hasAchievements = Boolean(profile.competitionAchievements?.length);
-  const hasExperiences = Boolean(profile.experienceEntries?.length);
+  const hasAchievements = Boolean(profile.achievements?.length);
+  const hasExperiences = Boolean(profile.experiences?.length);
   const hasTeachingSetup =
     !isTutorReviewValueEmpty(profile.modality) ||
     specializationItems.length > 0;
@@ -1462,14 +1449,24 @@ export function TutorReviewCard({
               showStatus={showSectionStatus("profile")}
             >
               {isTutorReviewValueEmpty(profile.shortBio) ? (
-                <ReviewEmptyState
-                  title="No introduction provided"
-                  description="The tutor has not added a short profile introduction yet."
-                />
+                <div className="flex flex-col gap-2">
+                  <ReviewEmptyState
+                    title="No introduction provided"
+                    description="The tutor has not added a short profile introduction yet."
+                  />
+                  {profile.affiliation ? (
+                    <Text className="font-medium">{profile.affiliation}</Text>
+                  ) : null}
+                </div>
               ) : (
-                <Text className="leading-relaxed text-muted">
-                  {profile.shortBio?.trim()}
-                </Text>
+                <div className="flex flex-col gap-2">
+                  <Text className="leading-relaxed text-muted">
+                    {profile.shortBio?.trim()}
+                  </Text>
+                  {profile.affiliation ? (
+                    <Text className="font-medium">{profile.affiliation}</Text>
+                  ) : null}
+                </div>
               )}
             </ReviewSection>
 
@@ -1551,7 +1548,7 @@ export function TutorReviewCard({
                       <CardBody className="p-4">
                         <TutorAchievementsDisplay
                           education={profile.education}
-                          competitionAchievements={[]}
+                          achievements={[]}
                           idPrefix={`admin-${profile.id}-achievements`}
                         />
                       </CardBody>
@@ -1562,9 +1559,7 @@ export function TutorReviewCard({
                       <CardBody className="p-4">
                         <TutorAchievementsDisplay
                           education={[]}
-                          competitionAchievements={
-                            profile.competitionAchievements
-                          }
+                          achievements={profile.achievements}
                           idPrefix={`admin-${profile.id}-achievements`}
                         />
                       </CardBody>
@@ -1575,7 +1570,7 @@ export function TutorReviewCard({
                       <CardBody className="p-4">
                         <TutorAchievementsDisplay
                           education={[]}
-                          experienceEntries={profile.experienceEntries}
+                          experiences={profile.experiences}
                           idPrefix={`admin-${profile.id}-experiences`}
                         />
                       </CardBody>
@@ -1985,14 +1980,14 @@ export function TutorReviewCard({
           <DialogBody className="min-h-0">
             <TutorAchievementsEditor
               education={achievementDraft.education}
-              competitionAchievements={achievementDraft.competitionAchievements}
+              achievements={achievementDraft.achievements}
               onEducationChange={(education) =>
                 setAchievementDraft((current) => ({ ...current, education }))
               }
-              onCompetitionAchievementsChange={(competitionAchievements) =>
+              onAchievementsChange={(achievements) =>
                 setAchievementDraft((current) => ({
                   ...current,
-                  competitionAchievements,
+                  achievements,
                 }))
               }
               idPrefix={`admin-edit-${profile.id}-achievements`}

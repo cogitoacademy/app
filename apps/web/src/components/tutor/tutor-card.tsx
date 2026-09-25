@@ -51,6 +51,7 @@ export type TutorSummaryData = {
   id: string;
   displayName: string | null;
   shortBio: string | null;
+  affiliation: string | null;
   subjects?: TutorSubject[] | null;
   modality: string | null;
   prices?: Record<string, number> | null;
@@ -129,6 +130,11 @@ export function TutorSummary({
             </Badge>
           )}
         </div>
+        {tutor.affiliation ? (
+          <Text className="line-clamp-1 text-sm font-medium text-muted">
+            {tutor.affiliation}
+          </Text>
+        ) : null}
         <ItemDescription className="line-clamp-1 text-sm">
           {tutor.shortBio ?? "A verified Cogito tutor ready to help you learn."}
         </ItemDescription>
@@ -233,6 +239,11 @@ function MobileTutorCardContent({ tutor }: { tutor: TutorSummaryData }) {
               </Badge>
             ) : null}
           </div>
+          {tutor.affiliation ? (
+            <Text className="mt-1 line-clamp-1 text-sm font-medium text-muted">
+              {tutor.affiliation}
+            </Text>
+          ) : null}
           <Text className="mt-1 line-clamp-2 text-sm leading-relaxed text-muted">
             {tutor.shortBio ??
               "A verified Cogito tutor ready to help you learn."}

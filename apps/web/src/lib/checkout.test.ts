@@ -11,7 +11,7 @@ describe("isRedirectCheckoutUrl", () => {
     ).toBe(true);
   });
 
-  test("treats an Xendit QRIS payload as an inline QR checkout", () => {
+  test("treats an EMVCo QR payload as an inline QR checkout", () => {
     expect(
       isRedirectCheckoutUrl(
         "00020101021226580018ID.CO.EXAMPLE0118ID102431234567803ID",

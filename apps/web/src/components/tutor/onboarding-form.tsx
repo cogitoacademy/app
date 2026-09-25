@@ -65,13 +65,13 @@ import { TutorPricingFields } from "./tutor-pricing-fields";
 import {
   TutorAchievementsDisplay,
   TutorAchievementsEditor,
-  type TutorCompetitionAchievement,
+  type TutorAchievement,
   type TutorEducationEntry,
   validateTutorAchievementDraft,
 } from "./tutor-achievements";
 import {
   TutorExperiencesEditor,
-  type TutorExperienceEntry,
+  type TutorExperience,
   validateTutorExperienceDraft,
 } from "./tutor-experiences";
 import {
@@ -107,12 +107,13 @@ interface OnboardingFormProps {
   profile: {
     id: string;
     shortBio: string | null;
+    affiliation: string | null;
     achievementProofUrls: string[] | null;
     experienceProofUrls: string[] | null;
     user?: { image: string | null } | null;
     education: TutorEducationEntry[] | null;
-    competitionAchievements: TutorCompetitionAchievement[] | null;
-    experienceEntries: TutorExperienceEntry[] | null;
+    achievements: TutorAchievement[] | null;
+    experiences: TutorExperience[] | null;
     subjects?: TutorSubject[] | null;
     modality: string | null;
     baseRatesIdr: Partial<{ online: number; offline: number }> | null;
@@ -133,9 +134,10 @@ interface OnboardingFormProps {
       achievementProofUrls: string[];
       experienceProofUrls: string[];
       profileImageUrl: string;
+      affiliation: string;
       education: TutorEducationEntry[];
-      competitionAchievements: TutorCompetitionAchievement[];
-      experienceEntries: TutorExperienceEntry[];
+      achievements: TutorAchievement[];
+      experiences: TutorExperience[];
       subjectIds: string[];
       modality: Modality;
       baseRatesIdr: Partial<{ online: number; offline: number }>;
@@ -160,8 +162,9 @@ function haveSameStructuredValue(left: unknown, right: unknown) {
 const TUTOR_FIELD_LABELS: Record<string, string> = {
   name: "Name",
   shortBio: "Short bio",
-  competitionAchievements: "Competition achievements",
-  experienceEntries: "Experience entries",
+  affiliation: "Affiliation",
+  achievements: "Achievements",
+  experiences: "Experiences",
   profileImageUrl: "Profile photo",
   modality: "Teaching modality",
   bankName: "Bank",
@@ -213,9 +216,7 @@ function getTutorFieldLabel(field: string) {
     }`;
   }
 
-  const achievementField = field.match(
-    /^competitionAchievements\.(\d+)\.(\w+)$/,
-  );
+  const achievementField = field.match(/^achievements\.(\d+)\.(\w+)$/);
   if (achievementField) {
     const [, index, name] = achievementField;
     const labels: Record<string, string> = {
@@ -226,7 +227,7 @@ function getTutorFieldLabel(field: string) {
     return `Achievement ${Number(index) + 1}: ${labels[name] ?? name}`;
   }
 
-  const experienceField = field.match(/^experienceEntries\.(\d+)\.(\w+)$/);
+  const experienceField = field.match(/^experiences\.(\d+)\.(\w+)$/);
   if (experienceField) {
     const [, index, name] = experienceField;
     const labels: Record<string, string> = {
@@ -274,7 +275,7 @@ function getTutorErrorFocusTarget(
   }
 
   const achievementField = field.match(
-    /^competitionAchievements\.(\d+)\.(competitionName|year|awards)$/,
+    /^achievements\.(\d+)\.(competitionName|year|awards)$/,
   );
   if (achievementField) {
     return `tutor-achievements-${
@@ -285,7 +286,7 @@ function getTutorErrorFocusTarget(
   }
 
   const experienceField = field.match(
-    /^experienceEntries\.(\d+)\.(role|organization|startYear|endYear|description)$/,
+    /^experiences\.(\d+)\.(role|organization|startYear|endYear|description)$/,
   );
   if (experienceField) {
     return `tutor-experiences-${
@@ -301,17 +302,18 @@ function getTutorErrorFocusTarget(
   if (rateField) return `tutor-base-rate-${rateField[1]}`;
   if (field === "subjects") return "tutor-subject-category";
   if (field === "education") return "tutor-achievements-university-0";
-  if (field === "competitionAchievements") {
+  if (field === "achievements") {
     return hasCompetitionEntries
       ? "tutor-achievements-competition-0"
       : "tutor-achievements-competition-add";
   }
-  if (field === "experienceEntries") {
+  if (field === "experiences") {
     return hasExperienceEntries
       ? "tutor-experiences-role-0"
       : "tutor-experiences-add";
   }
   if (field === "shortBio") return "tutor-short-bio";
+  if (field === "affiliation") return "tutor-affiliation";
   if (field === "profileImageUrl") return "tutor-profile-image";
   if (field === "termsOfService") return "tutor-terms-of-service-accepted";
   if (field.startsWith("achievementProofUrls.")) {
@@ -449,6 +451,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     [];
   const [form, setForm] = useState({
     shortBio: profile.shortBio ?? "",
+    affiliation: pending.affiliation ?? profile.affiliation ?? "",
     achievementProofUrls:
       pending.achievementProofUrls ?? profile.achievementProofUrls ?? [],
     experienceProofUrls:
@@ -456,10 +459,8 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     profileImageUrl:
       pending.profileImageUrl ?? profile.user?.image ?? accountUser.image ?? "",
     education: pending.education ?? profile.education ?? [],
-    competitionAchievements:
-      pending.competitionAchievements ?? profile.competitionAchievements ?? [],
-    experienceEntries:
-      pending.experienceEntries ?? profile.experienceEntries ?? [],
+    achievements: pending.achievements ?? profile.achievements ?? [],
+    experiences: pending.experiences ?? profile.experiences ?? [],
     subjectIds: initialSubjectIds,
     modality: (pending.modality ?? profile.modality ?? "") as Modality | "",
     baseRatesIdr: pending.baseRatesIdr ??
@@ -616,12 +617,13 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     const payload: {
       version: number;
       shortBio?: string;
+      affiliation?: string;
       achievementProofUrls?: string[];
       experienceProofUrls?: string[];
       profileImageUrl?: string;
       education?: TutorEducationEntry[];
-      competitionAchievements?: TutorCompetitionAchievement[];
-      experienceEntries?: TutorExperienceEntry[];
+      achievements?: TutorAchievement[];
+      experiences?: TutorExperience[];
       subjectIds?: string[];
       modality?: Modality;
       baseRatesIdr?: Partial<{ online: number; offline: number }>;
@@ -636,19 +638,18 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       prices?: Record<string, number>;
     } = { version: profile.version };
     const shortBio = form.shortBio.trim();
+    const affiliation = form.affiliation.trim();
     const profileImageUrl = form.profileImageUrl.trim();
     const education = form.education.map((entry) => ({
       university: entry.university.trim(),
       degree: entry.degree.trim(),
     }));
-    const competitionAchievements = form.competitionAchievements.map(
-      (entry) => ({
-        competitionName: entry.competitionName.trim(),
-        year: entry.year,
-        awards: entry.awards.map((award) => award.trim()),
-      }),
-    );
-    const experienceEntries = form.experienceEntries.map((entry) => ({
+    const achievements = form.achievements.map((entry) => ({
+      competitionName: entry.competitionName.trim(),
+      year: entry.year,
+      awards: entry.awards.map((award) => award.trim()),
+    }));
+    const experiences = form.experiences.map((entry) => ({
       role: entry.role.trim(),
       organization: entry.organization.trim(),
       startYear: entry.startYear,
@@ -661,12 +662,13 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     const bankAccountOpeningCity = form.bankAccountOpeningCity.trim();
 
     payload.shortBio = shortBio;
+    payload.affiliation = affiliation;
     payload.achievementProofUrls = form.achievementProofUrls;
     payload.experienceProofUrls = form.experienceProofUrls;
     if (profileImageUrl) payload.profileImageUrl = profileImageUrl;
     payload.education = education;
-    payload.competitionAchievements = competitionAchievements;
-    payload.experienceEntries = experienceEntries;
+    payload.achievements = achievements;
+    payload.experiences = experiences;
     if (
       form.subjectIds.length > 0 &&
       !haveSameSubjectIds(form.subjectIds, initialSubjectIds)
@@ -711,6 +713,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       addError("name", "Use 255 characters or fewer.");
     }
     const shortBio = form.shortBio.trim();
+    const affiliation = form.affiliation.trim();
     const shortBioWordCount = countTutorShortBioWords(form.shortBio);
     const profileImageUrl = form.profileImageUrl.trim();
     const bankName = form.bankName.trim();
@@ -719,6 +722,10 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     const bankAccountOpeningCity = form.bankAccountOpeningCity.trim();
 
     if (requireComplete && !shortBio) addError("shortBio", "Required.");
+    if (requireComplete && !affiliation) addError("affiliation", "Required.");
+    if (form.affiliation.length > 255) {
+      addError("affiliation", "Use 255 characters or fewer.");
+    }
     if (shortBioWordCount > MAX_TUTOR_SHORT_BIO_WORDS) {
       addError("shortBio", `Use ${MAX_TUTOR_SHORT_BIO_WORDS} words or fewer.`);
     }
@@ -726,14 +733,11 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       addError("shortBio", "Use 2,000 characters or fewer.");
     }
 
-    if (requireComplete && form.competitionAchievements.length === 0) {
-      addError(
-        "competitionAchievements",
-        "Add at least one competition achievement.",
-      );
+    if (requireComplete && form.achievements.length === 0) {
+      addError("achievements", "Add at least one achievement.");
     }
-    if (requireComplete && form.experienceEntries.length === 0) {
-      addError("experienceEntries", "Add at least one experience entry.");
+    if (requireComplete && form.experiences.length === 0) {
+      addError("experiences", "Add at least one experience.");
     }
     if (requireComplete && !profileImageUrl) {
       addError("profileImageUrl", "Upload a profile photo.");
@@ -748,14 +752,11 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
 
     Object.assign(
       validationErrors,
-      validateTutorAchievementDraft(
-        form.education,
-        form.competitionAchievements,
-      ),
+      validateTutorAchievementDraft(form.education, form.achievements),
     );
     Object.assign(
       validationErrors,
-      validateTutorExperienceDraft(form.experienceEntries),
+      validateTutorExperienceDraft(form.experiences),
     );
 
     const validateProofUrls = (
@@ -887,8 +888,8 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     if (!firstError) return;
     const focusTarget = getTutorErrorFocusTarget(
       firstError,
-      form.competitionAchievements.length > 0,
-      form.experienceEntries.length > 0,
+      form.achievements.length > 0,
+      form.experiences.length > 0,
     );
     window.setTimeout(() => document.getElementById(focusTarget)?.focus(), 0);
   }
@@ -1009,17 +1010,11 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     !haveSameStructuredValue(form.education, profile.education ?? [])
       ? "Education"
       : null,
-    !haveSameStructuredValue(
-      form.competitionAchievements,
-      profile.competitionAchievements ?? [],
-    )
-      ? "Competition achievements"
+    !haveSameStructuredValue(form.achievements, profile.achievements ?? [])
+      ? "Achievements"
       : null,
-    !haveSameStructuredValue(
-      form.experienceEntries,
-      profile.experienceEntries ?? [],
-    )
-      ? "Experience"
+    !haveSameStructuredValue(form.experiences, profile.experiences ?? [])
+      ? "Experiences"
       : null,
   ].filter((label): label is string => label !== null);
 
@@ -1442,6 +1437,47 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                     {countTutorShortBioWords(form.shortBio)}/
                     {MAX_TUTOR_SHORT_BIO_WORDS} words
                   </Text>
+                </TutorFormField>
+
+                <TutorFormField
+                  htmlFor="tutor-affiliation"
+                  label={
+                    <>
+                      Affiliation <span aria-hidden="true">*</span>
+                    </>
+                  }
+                  description={
+                    <FieldDescription>
+                      Current study program and university, or your current
+                      professional role and organization.
+                    </FieldDescription>
+                  }
+                  error={
+                    errors.affiliation ? (
+                      <FieldError id="tutor-affiliation-error">
+                        {errors.affiliation}
+                      </FieldError>
+                    ) : undefined
+                  }
+                >
+                  <Input
+                    id="tutor-affiliation"
+                    name="affiliation"
+                    value={form.affiliation}
+                    maxLength={255}
+                    onChange={(event) => {
+                      setForm((current) => ({
+                        ...current,
+                        affiliation: event.target.value,
+                      }));
+                      clearError("affiliation");
+                    }}
+                    placeholder="e.g. International Law, Universitas Airlangga"
+                    aria-invalid={Boolean(errors.affiliation)}
+                    aria-describedby={
+                      errors.affiliation ? "tutor-affiliation-error" : undefined
+                    }
+                  />
                 </TutorFormField>
 
                 <TutorFormField
@@ -1884,11 +1920,11 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                 <IconSchool aria-hidden="true" />
               </IconBox>
               <CardTitle>
-                Achievements &amp; experience
+                Education, Achievements &amp; Experiences
                 <CardInfoPreview>
                   <InfoPreview
-                    title="Achievements & experience"
-                    description="Add your education, competition achievements, and relevant teaching, work, or mentoring experience in one place."
+                    title="Education, Achievements & Experiences"
+                    description="Add your education, achievements, and relevant teaching, work, or mentoring experience in one place."
                   />
                 </CardInfoPreview>
               </CardTitle>
@@ -1896,20 +1932,17 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
             <CardBody>
               <TutorAchievementsEditor
                 education={form.education}
-                competitionAchievements={form.competitionAchievements}
+                achievements={form.achievements}
                 onEducationChange={(education, changedField) => {
                   setForm((current) => ({ ...current, education }));
                   clearError(changedField ?? "education");
                 }}
-                onCompetitionAchievementsChange={(
-                  competitionAchievements,
-                  changedField,
-                ) => {
+                onAchievementsChange={(achievements, changedField) => {
                   setForm((current) => ({
                     ...current,
-                    competitionAchievements,
+                    achievements,
                   }));
-                  clearError(changedField ?? "competitionAchievements");
+                  clearError(changedField ?? "achievements");
                 }}
                 errors={errors}
                 showPreview={false}
@@ -1974,16 +2007,13 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
               </TutorFormField>
               <div className="mt-6 border-t border-card-separator pt-6">
                 <TutorExperiencesEditor
-                  experienceEntries={form.experienceEntries}
-                  onExperienceEntriesChange={(
-                    experienceEntries,
-                    changedField,
-                  ) => {
+                  experiences={form.experiences}
+                  onExperiencesChange={(experiences, changedField) => {
                     setForm((current) => ({
                       ...current,
-                      experienceEntries,
+                      experiences,
                     }));
-                    clearError(changedField ?? "experienceEntries");
+                    clearError(changedField ?? "experiences");
                   }}
                   errors={errors}
                   showPreview={false}
@@ -2077,8 +2107,8 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                   <div className="mt-4">
                     <TutorAchievementsDisplay
                       education={form.education}
-                      competitionAchievements={form.competitionAchievements}
-                      experienceEntries={form.experienceEntries}
+                      achievements={form.achievements}
+                      experiences={form.experiences}
                       emptyMessage="Add an education, achievement, or experience to see the public profile preview."
                     />
                   </div>

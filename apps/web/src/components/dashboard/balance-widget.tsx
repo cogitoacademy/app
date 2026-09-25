@@ -15,7 +15,7 @@ export type BalanceWidgetProps = {
   totalBalance: number;
   isLoading?: boolean;
   actionLabel?: string;
-  actionHref?: "/balance" | "/tutors";
+  actionHref?: "/balance" | "/bookings" | "/tutors";
   actionIcon?: ReactNode;
 };
 
@@ -37,6 +37,16 @@ export function BalanceWidget({
           <div className="mt-1 text-3xl font-semibold tracking-tight tabular-nums">
             <CogitoMarks value={isLoading ? "—" : availableBalance} size="6" />
           </div>
+
+          <Text className="mt-2 text-xs text-muted">
+            {isLoading
+              ? "Checking balance readiness"
+              : availableBalance > 0
+                ? "Available Marks ready for your next tutor search"
+                : heldBalance > 0
+                  ? "Marks are held in active bookings"
+                  : "Top up Marks before booking a session"}
+          </Text>
 
           <div className="mt-5 grid min-w-0 grid-cols-2 gap-4 text-xs">
             <div className="min-w-0 flex flex-col leading-tight">

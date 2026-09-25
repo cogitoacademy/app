@@ -16,8 +16,6 @@ import { createPaymentService } from "./payment.service";
 import { createPaymentHandler } from "./payment.handler";
 import { createPaymentRepo } from "./payment.repo";
 import { createStubPaymentProvider } from "./stub-payment.provider";
-import { createXenditPaymentProvider } from "./xendit-payment.provider";
-import type { XenditMode } from "./xendit-payment.provider";
 import { createMidtransPaymentProvider } from "./midtrans-payment.provider";
 import type { MidtransMode } from "./midtrans-payment.provider";
 import type { PaymentService } from "./payment.service";
@@ -58,29 +56,19 @@ export interface PaymentRefundRecordPort {
   ): Promise<unknown>;
 }
 
-export type PaymentProviderName = "xendit" | "midtrans" | "stub";
+export type PaymentProviderName = "midtrans" | "stub";
 
 export function createPaymentModule(deps: {
   db: DbType;
   wallet: PaymentWalletPort;
   provider: PaymentProviderName;
-  xenditConfig?: {
-    secretKey: string;
-    webhookToken: string;
-    mode: XenditMode;
-    testAllowedEmails?: readonly string[];
-    successRedirectUrl: string;
-    failureRedirectUrl: string;
-    defaultPaymentMethod?: string;
-  };
   midtransConfig?: {
     serverKey: string;
     merchantId: string;
     mode: MidtransMode;
     webhookSignatureKey?: string;
-    // Shared (provider-agnostic) test-mode UAT list, resolved from
-    // env.XENDIT_TEST_ALLOWED_EMAILS by resolveMidtransConfig (trim +
-    // lowercase). Gates Midtrans Sandbox purchases like the Xendit path.
+    // Shared test-mode UAT list, normalized to trim + lowercase. Gates
+    // Midtrans Sandbox purchases.
     testAllowedEmails?: readonly string[];
   };
   webhookSecret: string;
@@ -89,19 +77,13 @@ export function createPaymentModule(deps: {
   refundRecord?: PaymentRefundRecordPort;
   redis?: RedisClient;
 }) {
-  const useXendit = deps.provider === "xendit";
   const useMidtrans = deps.provider === "midtrans";
-  if (useXendit && !deps.xenditConfig) {
-    throw new Error(
-      "PAYMENT_PROVIDER=xendit but Xendit credentials are missing — refusing to silently fall back to the stub provider",
-    );
-  }
   if (useMidtrans && !deps.midtransConfig) {
     throw new Error(
       "PAYMENT_PROVIDER=midtrans but Midtrans credentials are missing — refusing to silently fall back to the stub provider",
     );
   }
-  if (!useXendit && !useMidtrans && deps.provider !== "stub") {
+  if (!useMidtrans && deps.provider !== "stub") {
     throw new Error(`Unknown payment provider: ${deps.provider}`);
   }
 
@@ -113,25 +95,7 @@ export function createPaymentModule(deps: {
 
   const repo = createPaymentRepo(deps.db);
 
-  if (useXendit) {
-    provider = createXenditPaymentProvider({
-      secretKey: deps.xenditConfig!.secretKey,
-      webhookToken: deps.xenditConfig!.webhookToken,
-      mode: deps.xenditConfig!.mode,
-      successRedirectUrl: deps.xenditConfig!.successRedirectUrl,
-      failureRedirectUrl: deps.xenditConfig!.failureRedirectUrl,
-      defaultPaymentMethod: deps.xenditConfig!.defaultPaymentMethod as
-        | "ewallet_ovo"
-        | "qris"
-        | "va_bca"
-        | undefined,
-      redis: deps.redis,
-    });
-    providerName = "xendit";
-    providerMode = deps.xenditConfig!.mode;
-    testAllowedEmails = deps.xenditConfig!.testAllowedEmails;
-    simulationEnabled = true;
-  } else if (useMidtrans) {
+  if (useMidtrans) {
     provider = createMidtransPaymentProvider({
       serverKey: deps.midtransConfig!.serverKey,
       merchantId: deps.midtransConfig!.merchantId,

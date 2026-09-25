@@ -54,11 +54,7 @@ export function registerHealthMetricsRoutes(app: Elysia) {
       const breakers = await checkCircuitBreakers(redis);
       const provider = env.PAYMENT_PROVIDER;
       const providerMode =
-        provider === "xendit"
-          ? (env.XENDIT_MODE ?? "none")
-          : provider === "midtrans"
-            ? (env.MIDTRANS_MODE ?? "none")
-            : "none";
+        provider === "midtrans" ? (env.MIDTRANS_MODE ?? "none") : "none";
       const version = process.env.GIT_SHA?.trim() || "dev";
       return new Response(
         renderExposition({

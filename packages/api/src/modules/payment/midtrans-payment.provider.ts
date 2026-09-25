@@ -49,6 +49,14 @@ function sanitizeProviderCode(value: unknown): string | undefined {
   return /^[A-Z0-9_]{1,100}$/.test(code) ? code : undefined;
 }
 
+function parseIdrAmount(value: unknown): number | undefined {
+  if (typeof value !== "string" || !/^\d+(?:\.0+)?$/.test(value)) {
+    return undefined;
+  }
+  const amount = Number(value);
+  return Number.isSafeInteger(amount) && amount > 0 ? amount : undefined;
+}
+
 async function throwProviderHttpError(
   response: Response,
   operation: string,
@@ -91,7 +99,8 @@ export type MidtransMode = "test" | "live";
  *   pending/authorize-> PENDING (customer action pending)
  *   deny/cancel/failure -> FAILED
  *   expire           -> EXPIRED
- *   refund/partial_refund -> REFUNDED
+ *   refund           -> REFUNDED
+ *   partial_refund   -> REFUNDED with refundKind=partial for manual reconciliation
  */
 export function mapMidtransStatus(
   status: string,
@@ -125,12 +134,14 @@ interface MidtransNotification {
   order_id?: string;
   status_code?: string;
   gross_amount?: string;
+  refund_amount?: string;
   signature_key?: string;
   transaction_id?: string;
   transaction_status?: string;
   fraud_status?: string;
   status_message?: string;
   merchant_id?: string;
+  currency?: string;
 }
 
 /**
@@ -245,23 +256,19 @@ export function createMidtransPaymentProvider(opts: {
       },
     };
 
+    // Never retry create automatically. A timeout may happen after Midtrans
+    // accepted the deterministic order_id; retrying a non-idempotent POST can
+    // create an ambiguous checkout outcome.
     const res = await midtransCircuitBreaker.execute(() =>
-      retryWithBackoff(
-        () =>
-          fetchWithTimeout(`${snapBase}/snap/v1/transactions`, {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              accept: "application/json",
-              authorization: authHeader,
-            },
-            body: JSON.stringify(body),
-          }),
-        {
-          maxAttempts: 3,
-          retryable: isRetryableProviderError,
+      fetchWithTimeout(`${snapBase}/snap/v1/transactions`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json",
+          authorization: authHeader,
         },
-      ),
+        body: JSON.stringify(body),
+      }),
     );
 
     if (!res.ok) {
@@ -310,6 +317,9 @@ export function createMidtransPaymentProvider(opts: {
       order_id?: string;
       fraud_status?: string;
       status_message?: string;
+      gross_amount?: string;
+      refund_amount?: string;
+      currency?: string;
     };
     const status = mapMidtransStatus(
       json.transaction_status ?? "",
@@ -318,6 +328,8 @@ export function createMidtransPaymentProvider(opts: {
     const remoteOrderId = json.order_id ?? orderId;
     const providerReference =
       (await resolveProviderReference(remoteOrderId)) ?? remoteOrderId;
+    const amountIdr = parseIdrAmount(json.gross_amount);
+    const refundAmountIdr = parseIdrAmount(json.refund_amount);
     return {
       providerReference,
       providerEventId: json.transaction_id ?? remoteOrderId,
@@ -327,6 +339,17 @@ export function createMidtransPaymentProvider(opts: {
           ? (sanitizeProviderMessage(json.status_message) ?? null)
           : null,
       receiptUrl: null,
+      amountIdr,
+      refundAmountIdr,
+      currency: json.currency,
+      refundKind:
+        json.transaction_status === "partial_refund" ||
+        (status === "REFUNDED" &&
+          amountIdr !== undefined &&
+          refundAmountIdr !== undefined &&
+          refundAmountIdr < amountIdr)
+          ? "partial"
+          : undefined,
     };
   }
 
@@ -349,8 +372,13 @@ export function createMidtransPaymentProvider(opts: {
     // the merchant_id must be ours — a signed notification for a different
     // merchant (e.g. a misconfigured dashboard pointing at our URL) must not
     // be processed.
-    if (body.merchant_id && body.merchant_id !== opts.merchantId) {
+    if (body.merchant_id !== opts.merchantId) {
       throw new WebhookSignatureError();
+    }
+
+    const amountIdr = parseIdrAmount(body.gross_amount);
+    if (amountIdr === undefined || body.currency !== "IDR") {
+      throw badRequest("Invalid webhook payment amount or currency");
     }
 
     const orderId = body.order_id ?? "";
@@ -369,6 +397,11 @@ export function createMidtransPaymentProvider(opts: {
           ? (sanitizeProviderMessage(body.status_message) ?? null)
           : null,
       receiptUrl: null,
+      amountIdr,
+      refundAmountIdr: parseIdrAmount(body.refund_amount),
+      currency: body.currency,
+      refundKind:
+        body.transaction_status === "partial_refund" ? "partial" : undefined,
     };
   }
 

@@ -1,6 +1,5 @@
 /**
- * Distinguishes a hosted redirect checkout (Midtrans Snap `redirect_url`,
- * Xendit e-wallet redirect) from an inline QR payload (Xendit QRIS).
+ * Distinguishes hosted redirect checkout from inline EMVCo QR payload.
  * QR payloads are EMVCo data and never start with http(s); redirect
  * checkouts are always absolute http(s) URLs.
  */

@@ -11,9 +11,9 @@ import {
 import type { DbOrTx } from "../../lib/tx";
 import { INVITE_STATUS } from "../../shared/constants";
 import type {
-  TutorCompetitionAchievement,
+  TutorAchievement,
   TutorEducationEntry,
-  TutorExperienceEntry,
+  TutorExperience,
 } from "@cogito-app/db/schema";
 
 export type TutorInviteRow = typeof tutorInvite.$inferSelect;
@@ -62,11 +62,12 @@ export interface TutorProfileUpdates {
   onboardingStatus?: string;
   adminReviewNote?: string | null;
   publishedAt?: Date | null;
+  affiliation?: string | null;
   achievementProofUrls?: string[] | null;
   experienceProofUrls?: string[] | null;
   education?: TutorEducationEntry[] | null;
-  competitionAchievements?: TutorCompetitionAchievement[] | null;
-  experienceEntries?: TutorExperienceEntry[] | null;
+  achievements?: TutorAchievement[] | null;
+  experiences?: TutorExperience[] | null;
   modality?: string | null;
   prices?: Record<string, number> | null;
   pendingProfileChanges?: Record<string, unknown> | null;

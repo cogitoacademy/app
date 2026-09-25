@@ -83,9 +83,9 @@ export class PaymentSimulationUnavailableError extends DomainError {
 }
 
 /**
- * Webhook signature verification failed (Xendit `x-callback-token` header or
- * Midtrans body `signature_key`). Typed so the webhook route can classify the
- * failure as a 401 without message sniffing.
+ * Webhook signature verification failed (Midtrans body `signature_key` or
+ * stub `x-webhook-signature` header). Typed so the webhook route can classify
+ * the failure as a 401 without message sniffing.
  */
 export class WebhookSignatureError extends DomainError {
   readonly domain = "payment";
@@ -95,9 +95,9 @@ export class WebhookSignatureError extends DomainError {
 }
 
 /**
- * Webhook timestamp missing/invalid/stale (non-Xendit, non-Midtrans
- * providers). Typed so the webhook route can classify the failure as a 408
- * without message sniffing.
+ * Webhook timestamp missing/invalid/stale for providers that use timestamp
+ * headers. Midtrans uses its body signature instead. Typed so the webhook
+ * route can classify the failure as a 408 without message sniffing.
  */
 export class WebhookTimestampError extends DomainError {
   readonly domain = "payment";
@@ -115,6 +115,13 @@ export class UnknownPaymentStatusError extends DomainError {
   readonly domain = "payment";
   constructor(status: string) {
     super("UNKNOWN_PAYMENT_STATUS", `Unknown payment status: ${status}`);
+  }
+}
+
+export class PaymentWebhookMismatchError extends DomainError {
+  readonly domain = "payment";
+  constructor(message: string) {
+    super("PAYMENT_WEBHOOK_MISMATCH", message);
   }
 }
 

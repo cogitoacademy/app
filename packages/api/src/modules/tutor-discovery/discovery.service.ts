@@ -38,9 +38,10 @@ export interface ProfileProjection {
   userId: string;
   displayName: string | null;
   shortBio: string | null;
+  affiliation: string | null;
   education: TutorProfileRow["education"];
-  competitionAchievements: TutorProfileRow["competitionAchievements"];
-  experienceEntries: TutorProfileRow["experienceEntries"];
+  achievements: TutorProfileRow["achievements"];
+  experiences: TutorProfileRow["experiences"];
   subjects: NormalizedTutorSubject[];
   modality: string | null;
   onlineMaxClassSize: number;
@@ -73,9 +74,10 @@ export function buildProjection(profile: ProfileWithUser): ProfileProjection {
     // role's visible name from the canonical auth user record.
     displayName: profile.user?.name ?? null,
     shortBio: profile.shortBio,
+    affiliation: profile.affiliation,
     education: profile.education ?? [],
-    competitionAchievements: profile.competitionAchievements ?? [],
-    experienceEntries: profile.experienceEntries ?? [],
+    achievements: profile.achievements ?? [],
+    experiences: profile.experiences ?? [],
     subjects: toNormalizedTutorSubjects(profile.subjects),
     modality: profile.modality,
     onlineMaxClassSize,

@@ -3,9 +3,10 @@ import { createRefundRepo } from "../../modules/refund/refund.repo";
 
 function makeInsertConn(returned: any[] = [{}]) {
   const returning = mock(async () => returned);
-  const values = mock(() => ({ returning }));
+  const onConflictDoNothing = mock(() => ({ returning }));
+  const values = mock(() => ({ onConflictDoNothing }));
   const insert = mock(() => ({ values }));
-  return { insert, values, returning };
+  return { insert, values, onConflictDoNothing, returning };
 }
 
 function makeUpdateConn(returned: any[] = [{}]) {
@@ -42,6 +43,7 @@ describe("insertRefundRecord", () => {
     expect(result).toEqual(inserted);
     expect(conn.insert).toHaveBeenCalledTimes(1);
     expect(conn.values).toHaveBeenCalledTimes(1);
+    expect(conn.onConflictDoNothing).toHaveBeenCalledTimes(1);
     expect(conn.returning).toHaveBeenCalledTimes(1);
   });
 

@@ -610,7 +610,7 @@ describe("AdminTutor Service", () => {
         ...makeProfile(),
         version: 2,
         education: [{ university: "Old University", degree: "Old Degree" }],
-        competitionAchievements: [],
+        achievements: [],
         pendingProfileChanges: {
           education: [{ university: "Old University", degree: "Old Degree" }],
         },
@@ -627,7 +627,7 @@ describe("AdminTutor Service", () => {
       const education = [
         { university: "Universitas Gadjah Mada", degree: "Bachelor of Law" },
       ];
-      const competitionAchievements = [
+      const achievements = [
         {
           competitionName: "Harvard Model United Nations",
           year: 2019,
@@ -640,7 +640,7 @@ describe("AdminTutor Service", () => {
           tutorProfileId: "p1",
           version: 2,
           education,
-          competitionAchievements,
+          achievements,
         }),
       ).resolves.toBe(updated);
 
@@ -651,7 +651,7 @@ describe("AdminTutor Service", () => {
         "p1",
         2,
         expect.objectContaining({
-          competitionAchievements,
+          achievements,
           pendingProfileChanges: expect.objectContaining({
             education,
           }),
@@ -684,17 +684,17 @@ describe("AdminTutor Service", () => {
           tutorProfileId: "p1",
           version: 1,
           education: [],
-          competitionAchievements: [],
+          achievements: [],
         }),
       ).rejects.toThrow(TutorProfileNotFoundError);
     });
 
-    test("updateTutorAchievements mirrors into pending when competitionAchievements already pending", async () => {
+    test("updateTutorAchievements mirrors into pending when achievements already pending", async () => {
       const profile = {
         ...makeProfile(),
         version: 2,
         education: [],
-        competitionAchievements: [
+        achievements: [
           {
             competitionName: "Old Comp",
             year: 2020,
@@ -702,7 +702,7 @@ describe("AdminTutor Service", () => {
           },
         ],
         pendingProfileChanges: {
-          competitionAchievements: [
+          achievements: [
             {
               competitionName: "Old Comp",
               year: 2020,
@@ -720,7 +720,7 @@ describe("AdminTutor Service", () => {
         },
       });
       const service = createAdminTutorService(deps as any);
-      const competitionAchievements = [
+      const achievements = [
         {
           competitionName: "New Comp",
           year: 2024,
@@ -733,7 +733,7 @@ describe("AdminTutor Service", () => {
           tutorProfileId: "p1",
           version: 2,
           education: [],
-          competitionAchievements,
+          achievements,
         }),
       ).resolves.toBe(updated);
 
@@ -746,14 +746,14 @@ describe("AdminTutor Service", () => {
         expect.objectContaining({
           education: [],
           pendingProfileChanges: expect.objectContaining({
-            competitionAchievements,
+            achievements,
           }),
         }),
       );
       const updateArgs = (
         deps.adminTutorRepo.updateTutorProfileWithVersion as any
       ).mock.calls[0][3];
-      expect(updateArgs.competitionAchievements).toBeUndefined();
+      expect(updateArgs.achievements).toBeUndefined();
     });
 
     test("updateTutorAchievements rejects a stale profile version", async () => {
@@ -761,7 +761,7 @@ describe("AdminTutor Service", () => {
         ...makeProfile(),
         version: 2,
         education: [],
-        competitionAchievements: [],
+        achievements: [],
       };
       const deps = makeDeps({
         adminTutorRepo: {
@@ -777,7 +777,7 @@ describe("AdminTutor Service", () => {
           tutorProfileId: "p1",
           version: 1,
           education: [],
-          competitionAchievements: [],
+          achievements: [],
         }),
       ).rejects.toThrow(TutorProfileOptimisticLockError);
       expect(deps.auditPort.record).not.toHaveBeenCalled();

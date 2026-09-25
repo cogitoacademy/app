@@ -361,20 +361,21 @@ async function seed() {
         inviteId: invite!.id,
         shortBio:
           "Competition mentor for the Cogito verification environment. This profile contains review-only demonstration data.",
+        affiliation: "Mathematics, Cogito Review University",
         education: [
           {
             university: "Cogito Review University",
             degree: "B.Sc. Mathematics",
           },
         ],
-        competitionAchievements: [
+        achievements: [
           {
             competitionName: "National Mathematics Review Competition",
             year: 2025,
             awards: ["Gold Medal"],
           },
         ],
-        experienceEntries: [
+        experiences: [
           {
             role: "Competition Tutor",
             organization: "Cogito Academy Review Team",
@@ -400,20 +401,21 @@ async function seed() {
       .set({
         shortBio:
           "Competition mentor for the Cogito verification environment. This profile contains review-only demonstration data.",
+        affiliation: "Mathematics, Cogito Review University",
         education: [
           {
             university: "Cogito Review University",
             degree: "B.Sc. Mathematics",
           },
         ],
-        competitionAchievements: [
+        achievements: [
           {
             competitionName: "National Mathematics Review Competition",
             year: 2025,
             awards: ["Gold Medal"],
           },
         ],
-        experienceEntries: [
+        experiences: [
           {
             role: "Competition Tutor",
             organization: "Cogito Academy Review Team",

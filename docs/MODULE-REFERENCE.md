@@ -1,6 +1,26 @@
 # Cogito Module Reference
 
-Last updated: 2026-09-18
+Last updated: 2026-09-25
+
+## Role-based dashboard analytics (2026-09-25)
+
+Dashboard analytics stays read-only and role-scoped. Student and tutor cards
+consume `booking.listMine` counts from `listAccessible`; the repository computes
+`completed` and `problem` across every accessible booking rather than the
+current page. Student achievement status comes from `achievement.stats`, tutor
+availability count comes from `tutor.listAvailability`, and admin queue cards
+reuse admin booking/tutor/achievement moderation reads. Balance readiness is
+derived from the wallet snapshot without claiming future affordability.
+
+Admin Business insights labels distinguish selected-period metrics from the
+live all-time state portfolio. Booked Marks and platform take remain locked
+booking-price snapshots, not payment cash or realized revenue. Active learners
+is currently named **Active booking proposers** in the UI because the aggregate
+does not yet count group participants or login activity.
+
+`formatBookingDate` maps `Asia/Jakarta` to the user-facing `WIB` suffix while
+preserving native Intl short labels for other IANA zones. The shared
+`EmptyState` visual remains unchanged after reverting the dashed-border trial.
 
 ## Temporary Knowledge Bank access grants (2026-09-18)
 
@@ -535,7 +555,7 @@ payment package codes stable.
 - `listInvites(opts)` — Paginated invite list
 - `listTutorProfiles(opts)` — Paginated tutor profiles with status filter
 - `reviewTutorProfile(profileId, status, adminNote?, profileImageUrl?)` — Approve/reject tutor profile and optionally install the final background-standardized asset into the single canonical tutor profile image. Tutor-submitted published changes remain in `pendingProfileChanges` until approved; `profileImageUrl` accepts bounded HTTP(S) URLs or a generated local `/uploads/...` storage path. The profile status/version and image update are handled in one transaction, and a lost moderation race throws `TutorProfileOptimisticLockError` before image, subject, notification, or audit writes. **F25 state machine (`validateReviewAction`):** each action is only allowed from specific onboarding statuses — `request_changes`/`approve_unpublished`/`publish` from `pending_review`/`changes_requested` (publish also from `approved_unpublished`); `request_changes` and `approve_unpublished` also support `suspended` for explicit admin restoration; `unpublish`/`suspend`/`approve_edits`/`request_edit_changes` only from `published`.
-- `updateTutorAchievements(adminId, input)` — Replaces structured education and competition achievements with optimistic locking, mirrors matching pending edit fields, and records the before/after values in the audit log.
+- `updateTutorAchievements(adminId, input)` — Replaces structured education and achievements with optimistic locking, mirrors matching pending edit fields, and records the before/after values in the audit log.
 
 **Dependencies:** `AdminTutorRepo`, `EmailPort`
 
@@ -641,7 +661,7 @@ The Participants fieldset owns the derived Solo/Group badge; summaries represent
 **Service Methods:**
 
 - `getById(bookingId, userId, userRole?)` — Returns booking with access check; admins may inspect any booking. The read model derives `meetingStatus`/`meetingUrl` and includes participant profile images plus state-history fields used by the booking-detail timeline.
-- `listAccessible(userId, userRole, opts)` — Shared role-aware list: proposer/participant visibility for students, assigned bookings for tutors, and all bookings for admins; cursor-paginated
+- `listAccessible(userId, userRole, opts)` — Shared role-aware list: proposer/participant visibility for students, assigned bookings for tutors, and all bookings for admins; cursor-paginated. Returns exact role-scoped `action`, `upcoming`, `recurring`, `history`, `completed`, `problem`, and `all` counts alongside the page.
 - `listMine(userId, opts)` — Paginated list of user's bookings (proposer)
 - `listForTutor(tutorId, opts)` — Paginated list of bookings assigned to a tutor
 - `createSolo(proposerId, input)` — Creates solo booking with wallet hold, overlap check, and notification
@@ -691,6 +711,7 @@ The Participants fieldset owns the derived Solo/Group badge; summaries represent
 - Availability is stored as a free-time window; students may choose any minute-level start that keeps the server-fixed 90-minute session inside it. Terminal bookings do not keep the window blocked.
 - Rescheduling is per session, may iterate until accepted, expires after 24 hours, and requires the tutor plus every active student. The booking proposer may propose or counter in the eligible pre-terminal states, including `confirmed` and `scheduled`; student proposals remain subject to current/new H-2 checks. Proposal expiry reverts to the pre-proposal state without cancelling the booking, releasing its hold, or changing its original schedule. For offline booking-level proposals, room assignment timing is kept in sync on accept/reject/expiry, with a room-approval fallback on conflict. Only the tutor may propose outside the original availability window. Force-majeure exceptions are handled by support/admin operations with an auditable reason and an admin override decision rather than an automatic H-2 bypass.
 - Optimistic locking via `version` field prevents concurrent state changes
+- Dashboard facet counts are computed from the full role-visible booking relation, not the requested page. `completed` means `currentState = completed`; `problem` means `cancelled`, `late_cancelled`, `no_show`, or `expired`.
 - Calendar/Meet event summaries and the authenticated booking list/detail title use the same `formatBookingEventTitle` formatter: `Cogito - {Competition} | {Tutor} x {Student}`, with `& Friends` for group/group-series bookings. This is presentation metadata only and does not add a database column or RPC response field.
 - New IDR booking snapshots copy the active economy version, tutor base/increment, tutor honorarium, Cogito take, total IDR, total Marks, and rounded pooled Marks. Later economy updates do not mutate those snapshots.
 - Only `student` accounts can create bookings or perform student participant actions; tutor/admin attempts fail with `FORBIDDEN` before handlers run. The protected booking list/detail/session reads are available to authenticated parties, while admins can inspect the full booking set; tutor fulfillment remains under `tutorActions.*`.
@@ -860,7 +881,7 @@ chat directory.
 
 ## Payment Module
 
-**Purpose:** Mark package purchases via a payment provider (Xendit default; Midtrans Snap selectable) with webhook confirmation, idempotency, and wallet crediting.
+**Purpose:** Mark package purchases via the active payment provider (Midtrans Snap or development stub) with webhook confirmation, idempotency, and wallet crediting.
 
 **Files:**
 
@@ -868,9 +889,8 @@ chat directory.
 - `payment.errors.ts` — `PackageNotFoundError`, `PaymentNotFoundError`, `PackageAlreadyPurchasedError` (legacy), `PaymentProviderError`
 - `payment.repo.ts` — `findPackageByCode`, `insertPayment`, `findPaymentByProviderReference`, `findLatestPaymentByUserAndPackage`, `findPaymentByProviderEventId`, `findPaymentById`, `updatePaymentStatus`
 - `payment.service.ts` — `createIntent`, `confirmFromWebhook`, `getPurchase`; exposes `provider`
-- `payment.handler.ts` — `createPurchase`, approved-UAT-only `simulatePurchase`, `getPurchase`; config `providerMode` (test/live) + `simulationEnabled` (Xendit only)
+- `payment.handler.ts` — `createPurchase`, Test Mode `simulatePurchase`, `getPurchase`; config `providerMode` (test/live) + `simulationEnabled`
 - `payment.router.ts` — `createPurchase` and `simulatePurchase` use `verifiedStudentProcedure` (student role + verified email; `getPurchase` stays protected)
-- `xendit-payment.provider.ts` — Xendit API integration with circuit breaker and retry; explicit Test/Live mode label; bounded provider error diagnostics; `verifyWebhook`
 - `midtrans-payment.provider.ts` — Midtrans Snap integration (`POST /snap/v1/transactions` → `redirect_url`; webhook `signature_key` = `SHA512(order_id + status_code + gross_amount + key)` verified in the body; status mapping `capture`→PAID / `settlement`→SETTLED / `pending`→PENDING / `deny|cancel|failure`→FAILED / `expire`→EXPIRED / `refund|partial_refund`→REFUNDED; `order_id` = payment UUID resolved back to the stored provider reference; circuit breaker + retry; `refund()` port)
 - `stub-payment.provider.ts` — Development stub
 - Webhook route lives in `apps/server/src/webhooks/payments.ts` (`POST /webhooks/payments/:provider`)
@@ -885,18 +905,16 @@ chat directory.
 
 **Business Rules:**
 
-- Webhook signature verified via `verifyWebhook` (provider-specific) + timestamp window (5 min, skipped for xendit/midtrans) + IP allowlist (honors `TRUST_PROXY`)
+- Webhook signature verified via `verifyWebhook` (provider-specific) + applicable timestamp window (5 min) + IP allowlist (honors `TRUST_PROXY`); Midtrans uses the body `signature_key` and skips timestamp validation
 - Webhook idempotency is atomic — `IdempotencyStore.claim` keys lifecycle events by provider + verified payment/event id (or provider reference fallback) + normalized status. This prevents a PENDING event from suppressing a later PAID event for the same payment while still deduplicating provider retries of the same state; transient processing failures release the claim (#46)
 - Circuit breaker prevents cascading failures to the provider
 - Payment statuses: `PENDING` → `PAID`/`SETTLED`/`EXPIRED`/`FAILED`/`REFUNDED`
 - Package purchases are repeatable: the latest PENDING attempt is reused, while terminal attempts remain immutable history and do not block a new payment row/provider reference.
-- Payment/refund notifications are written per the PRD matrix (B6, #46); `PAYMENT_PROVIDER=xendit` requires Xendit credentials and an explicit `XENDIT_MODE` (no silent stub fallback); `PAYMENT_PROVIDER=midtrans` requires `MIDTRANS_SERVER_KEY`/`MIDTRANS_CLIENT_KEY`/`MIDTRANS_MERCHANT_ID`/`MIDTRANS_MODE` (no silent stub fallback)
-- Xendit selects the actual environment from the API key. In production/staging Test Mode, `XENDIT_TEST_ALLOWED_EMAILS` restricts `payment.createPurchase` to approved UAT accounts; the allowlist is normalized case-insensitively. The default channel is QRIS; its payment request sends channel-specific `qr_string_type=DYNAMIC` plus a 48-hour expiry, and the web client renders the returned `PRESENT_TO_CUSTOMER` QR string.
+- Payment/refund notifications are written per the PRD matrix (B6, #46); `PAYMENT_PROVIDER=midtrans` requires `MIDTRANS_SERVER_KEY`/`MIDTRANS_CLIENT_KEY`/`MIDTRANS_MERCHANT_ID`/`MIDTRANS_MODE` (no silent stub fallback)
 - Midtrans selects the actual environment from the Server Key (Sandbox vs Production). `MIDTRANS_MODE` is the explicit deployment assertion. Snap returns a hosted `redirect_url` as `checkoutUrl`; `order_id` is the payment UUID (unique per repurchase attempt) and is resolved back to the stored provider reference for webhook/status matching. Midtrans Sandbox has **no simulation endpoint** — `canSimulate` is false and `simulatePurchase` returns `PAYMENT_SIMULATION_UNAVAILABLE` in Midtrans mode; sandbox test payments use the Snap test cards.
-- Test QRIS cannot be paid from a real banking app. For an owned pending purchase, `simulatePurchase` calls Xendit's `/v3/payment_requests/{id}/simulate` only in Test Mode and only for an approved UAT account. It never credits Marks directly; provider-confirmed status must pass through the transactional confirmation service.
-- Structured provider non-2xx responses (Xendit and Midtrans) are reduced to a single-line, bounded `status + error_code + message` diagnostic. That detail is safe to return as the `PAYMENT_PROVIDER_ERROR` message; arbitrary response bodies and credentials are never echoed.
-- If a Test Mode simulation retry receives `400 INACTIVE_PAYMENT_METHOD`, the payment service performs one authoritative status lookup. A terminal `PAID`/`SETTLED` result is confirmed through the same idempotent wallet-credit path used by webhooks; unresolved status lookup leaves the original provider diagnostic intact.
-- Test-mode status polling is also a recovery path: `getPurchase` checks the provider's authoritative status for approved UAT users (Xendit `GET /v3/payment_requests/{id}`, Midtrans `GET /v2/{order_id}/status`). If the provider reports a terminal status, it delegates to the same transactional/idempotent `confirmFromWebhook` logic, so a missing sandbox webhook cannot leave a completed payment stuck forever.
+- `simulatePurchase` never credits Marks directly; provider-confirmed status must pass through the transactional confirmation service.
+- Structured provider non-2xx responses are reduced to a single-line, bounded `status + error_code + message` diagnostic. That detail is safe to return as the `PAYMENT_PROVIDER_ERROR` message; arbitrary response bodies and credentials are never echoed.
+- Test-mode status polling is a recovery path: `getPurchase` checks the active provider's authoritative status for approved UAT users. If the provider reports a terminal status, it delegates to the same transactional/idempotent `confirmFromWebhook` logic, so a missing sandbox webhook cannot leave a completed payment stuck forever.
 
 ---
 
@@ -1039,7 +1057,7 @@ contracts.
 
 ## Scheduler Module
 
-**Purpose:** Background job scheduling using BullMQ for booking expiry, hold release, tutor-lateness admin-queue flagging, email outbox dispatch, and support-ticket SLA escalation.
+**Purpose:** Background job scheduling using BullMQ for booking expiry, hold release, tutor-lateness admin-queue flagging, email outbox dispatch, support-ticket SLA escalation, failed-meeting retry, and Midtrans payment reconciliation.
 
 **Files:**
 
@@ -1050,6 +1068,7 @@ contracts.
 - `jobs/send-notification-email.job.ts` — repeatable job (60 s) — consumes the email outbox (queued + failed-with-retries-left rows, max 3 attempts per dispatch)
 - `jobs/escalate-support-tickets.job.ts` — repeatable job (15 min) — SLA escalation
 - `jobs/retry-failed-meetings.job.ts` — repeatable job (5 min) — re-creates Google Meet for CONFIRMED online bookings whose meeting creation failed (max 3 attempts; afterwards left for assigned-tutor or admin manual link, U1)
+- `jobs/reconcile-payments.job.ts` — repeatable job (15 min) — checks stale Midtrans payment requests and confirms terminal provider status
 - Wiring: `apps/server/src/scheduler.ts` — `initScheduler()` gates on `SCHEDULER_ENABLED=true` + `REDIS_URL`
 
 **Service Methods:**
@@ -1062,12 +1081,13 @@ contracts.
 - `onSendNotificationEmail()` — Calls `notificationService.dispatchQueuedEmails(50)` (outbox consumer; #46; failed rows retried up to 3 attempts)
 - `onEscalateSupportTickets()` — Calls `supportService.escalatePastSlaTickets()` (marks overdue tickets in_progress + escalated + audit; #46)
 - `onRetryFailedMeetings()` — Calls `bookingService.retryFailedMeetings()` (re-schedules CONFIRMED online bookings with a failed meeting)
+- `onReconcilePayments()` — Calls `paymentService.reconcilePendingPayments(50)` (confirms stale Midtrans provider requests and records reconciliation outcomes)
 
 **Dependencies:** `BookingService`, `NotificationService`, `SupportService`, BullMQ queue
 
 **Business Rules:**
 
-- Expiry job every 5 min; hold-release every 10 min; lateness every 5 min; email every 60 s; SLA escalation every 15 min
+- Expiry job every 5 min; hold-release every 10 min; lateness every 5 min; email every 60 s; SLA escalation every 15 min; failed-meeting retry every 5 min; payment reconciliation every 15 min
 - Jobs use retry with exponential backoff (3 attempts); the failed-event handler compares `attemptsMade` with the job's configured `opts.attempts`, and only after that budget is exhausted copies the job to `cogito-jobs-dlq`. Intermediate failures remain eligible for BullMQ retry. The DLQ worker logs the entry and keeps a bounded Redis list (`cogito:dlq`, max 100 entries) for inspection (M4)
 - Every repeatable payload carries the scheduling scope's `{ traceId, userId }` (`traceJobData()`; `{}` when scheduled outside a request); the worker re-enters that scope via `runWithTrace` (minting a fresh `req_*` id for unstamped system ticks) and logs both on start/complete/fail
 - Circuit breaker state persisted in Redis (when available)
@@ -1112,7 +1132,7 @@ contracts.
 
 **Purpose:** Tutor profile management — create, update, submit for review, availability management, and payout summaries.
 
-The web tutor profile editor groups education, competition achievements, and experiences into one combined **Achievements & experience** section with consistent full-width, border-light subsections. Typography, whitespace, thin rules, and row-based entries establish hierarchy without nested cards; each subsection retains its own private proof-link list. Its live preview labels draft versus published-profile edit state and names the structured sections that differ from the current public profile. The profile-photo field lives inside the Public profile section and only presents the current/proposed photo, while audit history remains an admin review concern. Dynamic entry delete actions use a dedicated right-aligned row instead of overlapping fields. Short bios are limited to 50 words, and the form recommends one Google Drive folder with the “Anyone with the link can view” setting for both achievement and experience evidence.
+The web tutor profile editor groups Education, Achievements, and Experiences into one combined section with consistent full-width, border-light subsections. Typography, whitespace, thin rules, and row-based entries establish hierarchy without nested cards; each subsection retains its own private proof-link list. Its live preview labels draft versus published-profile edit state and names the structured sections that differ from the current public profile. The profile-photo field lives inside the Public profile section and only presents the current/proposed photo, while audit history remains an admin review concern. Dynamic entry delete actions use a dedicated right-aligned row instead of overlapping fields. Affiliation is required on review and supports a study program/university or professional role/organization.
 
 The tutor onboarding form uses a shared responsive field composition: labels and
 descriptions stay in the left column while inputs, selectors, textareas,
@@ -1143,9 +1163,9 @@ The authenticated dashboard shell is viewport-fixed. Its content pane exclusivel
 
 - `getMyProfile(userId)` — Returns tutor profile
 - `getMyProfileHistory(userId)` — Returns the newest profile/photo review audit entries for the tutor; actor identity is limited to id and display name so account emails are not exposed to tutors
-- `updateMyProfile(userId, input)` — Updates profile fields with optimistic locking (`version`). The tutor editor uses one combined structured Achievements & experience section backed by `competitionAchievements` (up to 5 entries) and `experienceEntries` (up to 5 entries), with education rendered in the same section. Short bios are limited to 50 whitespace-delimited words (and 2,000 characters). Experience entries require a role, organization, start year, valid end year or null for ongoing work, and a brief description; year values are stored as ungrouped integers. Commas remain usable in the award and experience text editors while comma-separated award titles continue normalizing to the structured array. Legacy `achievements` and `experiences` text remains accepted for older profiles. Published profiles apply bio and `baseRatesIdr` edits immediately; a changed honorarium is used only for future bookings, while each existing booking's price snapshot remains authoritative for payout. Other trust-sensitive edits—including structured achievements and experiences—are stored as pending changes for admin review so discovery continues serving the approved values. The tutor-facing proof guidance recommends one Google Drive folder with the “Anyone with the link can view” setting for both achievement and experience evidence. The web editor's draft/save action permits incomplete required top-level fields, but validates malformed values and renders field-level errors; the separate review action performs the complete required-field validation before calling `submitForReview`.
+- `updateMyProfile(userId, input)` — Updates profile fields with optimistic locking (`version`). Canonical structured fields are `education`, `achievements`, and `experiences`. `affiliation` describes current study program/university or professional role/organization. Draft saves permit omission; review submission requires affiliation and non-empty achievements/experiences. Published-profile changes to affiliation and structured credentials enter pending admin review.
 - `onlineMaxClassSize` / `offlineMaxClassSize` — Immediate operational preferences from 1–6. Size 1 disables group requests for that modality; changes constrain new discovery/booking flows without rewriting existing bookings.
-- `submitForReview(userId, input = {})` — Validates required fields + pricing, accepting either structured or legacy achievement/experience data, then sets `onboardingStatus` to `pending_review`; records audit log. The first submission requires `input.acceptTerms === true` when no prior acceptance exists, persists `termsOfServiceAcceptedAt` and `termsOfServiceVersion` (`2026-09`) once in the same transaction as the status change, and later submissions do not require the flag. Its incomplete-profile, pricing, and Terms of Service errors preserve details for the editor. The web tutor profile form at `/profile` redirects to `/dashboard` after the mutation succeeds.
+- `submitForReview(userId, input = {})` — Requires affiliation, canonical achievements/experiences, complete pricing/profile fields, and first-submit Terms acceptance; then sets `onboardingStatus` to `pending_review` and records audit log.
 - `listAvailability(userId)` — Lists the tutor's active future availability slots
 - `upsertAvailability(userId, input)` — Creates/updates a slot, rejecting overlaps
 - `createDateOverrides(userId, input)` — Atomically creates up to 56 one-off windows across selected dates, including today when each start is still in the future; deactivates conflicting recurring occurrences and rejects the whole batch on an intra-batch or existing one-off conflict
@@ -1169,15 +1189,15 @@ The authenticated dashboard shell is viewport-fixed. Its content pane exclusivel
 - The tutor profile editor at `/profile` renders selected modalities in one combined six-row IDR group-size matrix using the same table structure as the student discovery drawer; this is presentation-only. The legacy `/onboarding` path redirects to `/profile` for tutors.
 - The tutor profile editor places the profile-photo upload first and uses a clickable avatar with the shared circular crop flow. Compact Selia `InfoPreview` popovers reveal the full submitted/current/proposed image on demand. For a published tutor it labels `user.image` as the current public photo and a differing `pendingProfileChanges.profileImageUrl` as the proposed photo. The admin review page compares both assets side by side; `approve_edits` remains the only operation that promotes the proposal into `user.image`.
 - The admin tutor index derives the status badge from `onboardingStatus` plus `profileEditStatus`; published tutors with `pending_review` edits show **Edit review**, and edits returned with `changes_requested` show **Revision requested**, making review-needed rows visible before opening the full-page review workspace.
-- The tutor profile editor exposes one combined structured Achievements & experience section. It supports education plus competition entries and up to five role/organization/year/description entries; each subsection's optional proof URL list is protected by profile review and never enters the public discovery projection. The form recommends one shared Google Drive folder for both proof types, using the “Anyone with the link can view” setting. Legacy `achievements`, credential-summary, and `experiences` text remain readable fallback data, and migration 0032 copies the credential summary into achievements for older rows. Availability summaries and the old generic credential-proof URLs are retired from tutor editing.
+- The tutor profile editor exposes canonical Education, Achievements, and Experiences sections. Education supports two entries; achievements and experiences support five entries each. Optional proof URL lists are protected by profile review and never enter public discovery. No legacy profile-text fallback remains.
 - The tutor profile editor uses the authenticated shell's page-level vertical scroll container, matching the student profile and avoiding a nested form scrollbar. Direct page children cannot flex-shrink, so the tutor wrapper and onboarding content share one natural height; specialization-category fieldsets keep their natural height and the final action card stays in normal document flow without trailing scroll space. This is presentation-only and does not change the tutor RPC contract.
 - The tutor profile editor keeps draft/save and submit-for-review as distinct actions. Missing required fields are allowed during draft/save, while submit requires the complete profile; malformed fields are surfaced beside their controls and in a validation summary. A published tutor can continue editing while a profile-change proposal is under review; saving updates the pending proposal and the explicit submit action queues the latest validated version.
 - Every role uses Better Auth `user.name` as the canonical visible name. Tutor onboarding edits that account field directly and does not submit `tutorProfile.displayName`; discovery search matches `user.name`, its backward-compatible `displayName` projection is populated from `user.name`, and tutor/sidebar/booking/admin surfaces render `user.name`. The tutor-profile column remains legacy compatibility data.
 - Tutor payout calculations retain the internal split fields for accounting compatibility, but tutor-facing payout UI exposes only unpaid completed-session count and IDR honorarium. The private payout form collects bank name, account number, account-holder name, account-opening city/regency, ownership choice, and transfer-responsibility acknowledgment; submission requires all of them. Admin payout records advance the paid cutoff.
 - New tutor submissions must select at least one active specialization from the normalized catalog; categories cannot be selected directly
 - A normalized subject update replaces the tutor's join rows atomically and never accepts arbitrary legacy `expertise` strings as category ids
-- Structured tutor achievements are stored in `tutor_profile.education` and `tutor_profile.competition_achievements` as JSONB arrays. Education has at most 2 entries; the single achievement section can contain at most 5 competition entries, and each entry has a 1900–2100 year plus at least one award. Legacy `achievements`/`credentialsSummary` remains readable as a fallback when no structured competition achievements exist.
-- Structured tutor experiences are stored in `tutor_profile.experience_entries` as a JSONB array with at most 5 entries. Each entry has a role, organization, 1900–2100 start year, nullable 1900–2100 end year, and brief description; end year cannot precede start year. Legacy `experiences` remains readable as a fallback when no structured experience entries exist. Migration `0040_colossal_morlun.sql` adds the array with an empty-array default.
+- Structured tutor achievements are stored in `tutor_profile.education` and `tutor_profile.achievements` as JSONB arrays. Education has at most 2 entries; achievements has at most 5 entries, each with a 1900–2100 year and at least one award.
+- Structured tutor experiences are stored in `tutor_profile.experiences` as a JSONB array with at most 5 entries. Each entry has role, organization, 1900–2100 start year, nullable end year, and brief description; end year cannot precede start year.
 
 ## Tutor Specialization Taxonomy Module
 
@@ -1225,7 +1245,7 @@ The authenticated dashboard shell is viewport-fixed. Its content pane exclusivel
 - The student discovery search row and collapsible filter panel use shrinkable, viewport-bounded containers; shared Selia select positioners and popups cap at Base UI's `--available-width` boundary so multi-select options remain inside narrow viewports. This is presentation-only and does not change discovery inputs or outputs.
 - The student tutor drawer combines the available modality maps into one group-size pricing matrix with separate Online and Offline Marks columns, prefixing populated values with the Cogito Marks icon; missing modality/size combinations are display-only em dashes and do not change the response contract. The profile opens as a bottom sheet with downward dismissal on mobile and switches to a right-side drawer from the `sm` breakpoint.
 - Published tutor projections include the structured education and competition achievement arrays. The student drawer renders each first line in a semibold hierarchy, separates achievement bullets with breathing room, and joins multiple awards with commas.
-- Published tutor projections also include `user.image` and structured `experienceEntries`; the student drawer presents education, achievements, and experiences in separate profile-highlight cards and falls back to legacy achievement/experience text when structured arrays are absent.
+- Published tutor projections include `user.image`, nullable `affiliation`, `education`, `achievements`, and `experiences`; student drawer presents canonical fields without text fallbacks.
 - Tutor discovery cards use natural-width child specialization labels without repeating the parent category, keep desktop metadata on one line, reveal additional specialization badges at wider breakpoints, and retain the `From [Marks icon] #` starting-price treatment. This is presentation-only and does not change discovery filters or response fields.
 - Long student tutor profiles scroll inside the drawer content area while the header/action regions stay outside that scroll area; local body overscroll is contained and cannot move the fixed regions. Admin tutor review uses the focused full-page workspace and keeps its action area usable at narrow widths. This is presentation-only and does not change the discovery or review contracts.
 

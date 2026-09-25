@@ -19,7 +19,6 @@ import {
 import { services } from "../../services";
 import { createTestUser } from "../helpers/factories";
 import { resetDatabase } from "../helpers/test-client";
-import { createXenditPaymentProvider } from "../../modules/payment/xendit-payment.provider";
 import { createMidtransPaymentProvider } from "../../modules/payment/midtrans-payment.provider";
 import { createPaymentService } from "../../modules/payment/payment.service";
 import { createPaymentRepo } from "../../modules/payment/payment.repo";
@@ -334,229 +333,6 @@ describe("PaymentService", () => {
     expect(dispatch!.status).toBe("queued");
   });
 
-  const xenditProvider = createXenditPaymentProvider({
-    secretKey: "xnd_development_test",
-    webhookToken: "wh_token_test",
-    mode: "test",
-    successRedirectUrl: "http://localhost:3000/balance?status=success",
-    failureRedirectUrl: "http://localhost:3000/balance?status=failed",
-  });
-
-  const xenditWallet = createWalletService(createWalletRepo(), db);
-  const xenditPayment = createPaymentService({
-    db,
-    wallet: xenditWallet,
-    repo: createPaymentRepo(db),
-    provider: xenditProvider,
-    providerName: "xendit",
-  });
-
-  describe("PaymentService (Xendit provider)", () => {
-    let originalFetch: typeof globalThis.fetch;
-
-    beforeAll(async () => {
-      await resetDatabase();
-    });
-
-    beforeEach(() => {
-      originalFetch = globalThis.fetch;
-      globalThis.fetch = mock(() =>
-        Promise.resolve(
-          new Response(
-            JSON.stringify({
-              id: "pr_test",
-              payment_request_id: "pr_test",
-              reference_id: "xendit-test",
-              status: "REQUIRES_ACTION",
-              actions: [
-                {
-                  type: "REDIRECT_CUSTOMER",
-                  value: "https://checkout.xendit.co/test",
-                  descriptor: "WEB_URL",
-                },
-              ],
-            }),
-            { status: 201, headers: { "content-type": "application/json" } },
-          ),
-        ),
-      ) as never;
-    });
-
-    afterEach(() => {
-      globalThis.fetch = originalFetch;
-    });
-
-    test("createIntent creates PENDING record with xendit provider reference", async () => {
-      const user = await createTestUser("xc01@cogito.test");
-      const walletRow = await xenditWallet.getOrCreate(user.id);
-
-      const intent = await xenditPayment.createIntent(
-        user.id,
-        walletRow.id,
-        "starter",
-      );
-      expect(intent.providerReference).toContain("xendit:");
-
-      const [record] = await db
-        .select()
-        .from(paymentRecord)
-        .where(eq(paymentRecord.id, intent.paymentId))
-        .limit(1);
-      expect(record!.provider).toBe("xendit");
-      expect(record!.status).toBe("PENDING");
-    });
-
-    test("PAID webhook credits wallet", async () => {
-      const user = await createTestUser("xc02@cogito.test");
-      const walletRow = await xenditWallet.getOrCreate(user.id);
-
-      const intent = await xenditPayment.createIntent(
-        user.id,
-        walletRow.id,
-        "starter",
-      );
-
-      await xenditPayment.confirmFromWebhook({
-        provider: "xendit",
-        providerReference: intent.providerReference,
-        providerEventId: "evt_xc02",
-        status: "PAID",
-      });
-
-      const w = await xenditWallet.getByUserId(db, user.id);
-      expect(w!.totalBalance).toBe(50);
-
-      const [record] = await db
-        .select()
-        .from(paymentRecord)
-        .where(eq(paymentRecord.id, intent.paymentId))
-        .limit(1);
-      expect(record!.status).toBe("PAID");
-    });
-
-    test("SETTLED after PAID is idempotent — no double credit", async () => {
-      const user = await createTestUser("xc03@cogito.test");
-      const walletRow = await xenditWallet.getOrCreate(user.id);
-
-      const intent = await xenditPayment.createIntent(
-        user.id,
-        walletRow.id,
-        "learner",
-      );
-
-      await xenditPayment.confirmFromWebhook({
-        provider: "xendit",
-        providerReference: intent.providerReference,
-        providerEventId: "evt_xc03a",
-        status: "PAID",
-      });
-      await xenditPayment.confirmFromWebhook({
-        provider: "xendit",
-        providerReference: intent.providerReference,
-        providerEventId: "evt_xc03b",
-        status: "SETTLED",
-      });
-
-      const w = await xenditWallet.getByUserId(db, user.id);
-      expect(w!.totalBalance).toBe(120);
-
-      const [record] = await db
-        .select()
-        .from(paymentRecord)
-        .where(eq(paymentRecord.id, intent.paymentId))
-        .limit(1);
-      expect(record!.status).toBe("PAID");
-    });
-
-    test("EXPIRED webhook does not credit", async () => {
-      const user = await createTestUser("xc04@cogito.test");
-      const walletRow = await xenditWallet.getOrCreate(user.id);
-
-      const intent = await xenditPayment.createIntent(
-        user.id,
-        walletRow.id,
-        "starter",
-      );
-
-      await xenditPayment.confirmFromWebhook({
-        provider: "xendit",
-        providerReference: intent.providerReference,
-        providerEventId: "evt_xc04",
-        status: "EXPIRED",
-      });
-
-      const w = await xenditWallet.getByUserId(db, user.id);
-      expect(w!.totalBalance).toBe(0);
-
-      const [record] = await db
-        .select()
-        .from(paymentRecord)
-        .where(eq(paymentRecord.id, intent.paymentId))
-        .limit(1);
-      expect(record!.status).toBe("EXPIRED");
-    });
-
-    test("FAILED webhook records failure reason", async () => {
-      const user = await createTestUser("xc05@cogito.test");
-      const walletRow = await xenditWallet.getOrCreate(user.id);
-
-      const intent = await xenditPayment.createIntent(
-        user.id,
-        walletRow.id,
-        "starter",
-      );
-
-      await xenditPayment.confirmFromWebhook({
-        provider: "xendit",
-        providerReference: intent.providerReference,
-        providerEventId: "evt_xc05",
-        status: "FAILED",
-        failureReason: "DECLINED",
-      });
-
-      const [record] = await db
-        .select()
-        .from(paymentRecord)
-        .where(eq(paymentRecord.id, intent.paymentId))
-        .limit(1);
-      expect(record!.status).toBe("FAILED");
-      expect(record!.failureReason).toBe("DECLINED");
-    });
-
-    test("duplicate PAID webhook is idempotent", async () => {
-      const user = await createTestUser("xc06@cogito.test");
-      const walletRow = await xenditWallet.getOrCreate(user.id);
-
-      const intent = await xenditPayment.createIntent(
-        user.id,
-        walletRow.id,
-        "starter",
-      );
-
-      await xenditPayment.confirmFromWebhook({
-        provider: "xendit",
-        providerReference: intent.providerReference,
-        providerEventId: "evt_xc06",
-        status: "PAID",
-      });
-      await xenditPayment.confirmFromWebhook({
-        provider: "xendit",
-        providerReference: intent.providerReference,
-        providerEventId: "evt_xc06",
-        status: "PAID",
-      });
-
-      const w = await xenditWallet.getByUserId(db, user.id);
-      expect(w!.totalBalance).toBe(50);
-
-      const entries = await db
-        .select()
-        .from(ledgerEntry)
-        .where(eq(ledgerEntry.walletId, walletRow.id));
-      expect(entries.length).toBe(1);
-    });
-  });
-
   const midtransProvider = createMidtransPaymentProvider({
     serverKey: "SB-Mid-server-test",
     merchantId: "G123456789",
@@ -628,6 +404,42 @@ describe("PaymentService", () => {
       expect(record!.status).toBe("PENDING");
       // The provider request id is the payment UUID (Snap order_id).
       expect(record!.providerRequestId).toBe(intent.paymentId);
+    });
+
+    test("concurrent createIntent calls post one Midtrans intent", async () => {
+      const user = await createTestUser("mc01-concurrent@cogito.test");
+      const walletRow = await midtransWallet.getOrCreate(user.id);
+      let fetchCalls = 0;
+
+      globalThis.fetch = mock(async () => {
+        fetchCalls += 1;
+        if (fetchCalls === 1) {
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        return new Response(
+          JSON.stringify({
+            token: "concurrent-token",
+            redirect_url:
+              "https://app.sandbox.midtrans.com/snap/v2/vtweb/concurrent-token",
+          }),
+          { status: 201, headers: { "content-type": "application/json" } },
+        );
+      }) as never;
+
+      const [first, second] = await Promise.all([
+        midtransPayment.createIntent(user.id, walletRow.id, "starter"),
+        midtransPayment.createIntent(user.id, walletRow.id, "starter"),
+      ]);
+
+      expect(fetchCalls).toBe(1);
+      expect(second.paymentId).toBe(first.paymentId);
+      expect(second.providerReference).toBe(first.providerReference);
+
+      const rows = await db
+        .select()
+        .from(paymentRecord)
+        .where(eq(paymentRecord.userId, user.id));
+      expect(rows).toHaveLength(1);
     });
 
     test("SETTLED webhook credits wallet once (idempotent)", async () => {

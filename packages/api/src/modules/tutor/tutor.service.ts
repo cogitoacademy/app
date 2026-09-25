@@ -135,11 +135,9 @@ export function validateSubmitForReview(
   }
 
   const hasAchievement =
-    Array.isArray(profile.competitionAchievements) &&
-    profile.competitionAchievements.length > 0;
+    Array.isArray(profile.achievements) && profile.achievements.length > 0;
   const hasExperience =
-    Array.isArray(profile.experienceEntries) &&
-    profile.experienceEntries.length > 0;
+    Array.isArray(profile.experiences) && profile.experiences.length > 0;
   const submittedProfileImageUrl =
     profileImageUrl ??
     (profile as TutorProfileWithSubjectRelations).user?.image;
@@ -149,6 +147,7 @@ export function validateSubmitForReview(
       value: (profile as TutorProfileWithSubjectRelations).user?.name,
     },
     { key: "shortBio", value: profile.shortBio },
+    { key: "affiliation", value: profile.affiliation },
     { key: "achievements", value: hasAchievement },
     { key: "experiences", value: hasExperience },
     { key: "profileImageUrl", value: submittedProfileImageUrl },
@@ -287,8 +286,9 @@ export function createTutorService(deps: {
       "achievementProofUrls",
       "experienceProofUrls",
       "education",
-      "competitionAchievements",
-      "experienceEntries",
+      "affiliation",
+      "achievements",
+      "experiences",
       "modality",
       "prices",
     ] as const;

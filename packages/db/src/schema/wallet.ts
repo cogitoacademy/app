@@ -34,7 +34,9 @@ export const wallet = pgTable(
       "wallet_balance_invariant",
       sql`${table.totalBalance} = ${table.heldBalance} + ${table.availableBalance}`,
     ),
-    index("wallet_userId_idx").on(table.userId),
+    check("wallet_total_nonnegative", sql`${table.totalBalance} >= 0`),
+    check("wallet_held_nonnegative", sql`${table.heldBalance} >= 0`),
+    check("wallet_available_nonnegative", sql`${table.availableBalance} >= 0`),
   ],
 );
 
