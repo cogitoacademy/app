@@ -51,7 +51,7 @@ jobs:
         run: latexmk -pdf -interaction=nonstopmode -halt-on-error prd.tex
 
       - name: Upload PRD PDF artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: prd-pdf
           path: docs/prd.pdf
