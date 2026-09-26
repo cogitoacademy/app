@@ -403,9 +403,17 @@ the installed headless-shell revision aligned with the browser tests instead
 of allowing a repository-root transient CLI to select a different revision.
 
 Production payment checkout uses Midtrans Snap (`PAYMENT_PROVIDER=midtrans`).
-Snap returns a hosted `redirect_url`; the Balance page detects it via
-`isRedirectCheckoutUrl` (`apps/web/src/lib/checkout.ts`) and opens the hosted
-payment page in a new tab. The webhook `signature_key` is verified in the body
+Snap returns a hosted `redirect_url`; the Balance page navigates directly to
+the hosted payment page after the drawer's final confirmation. Choosing
+**Buy** only opens a content-height bottom
+drawer with the selected package summary; `payment.createPurchase` runs from
+the drawer's **Continue payment** action. Hosted checkout redirects immediately
+without a second drawer click or intermediate QR renderer, so the package grid
+does not shift. The Top Up
+Marks header shows a persistent **Test mode** badge when the protected
+`payment.getConfig` response reflects `MIDTRANS_MODE=test`, including on a
+production-domain UAT deployment. The webhook
+`signature_key` is verified in the body
 (`SHA512(order_id + status_code + gross_amount + key)`), statuses map
 `capture`→PAID / `settlement`→SETTLED / `pending`→PENDING /
 `deny|cancel|failure`→FAILED / `expire`→EXPIRED / `refund|partial_refund`→
@@ -416,9 +424,11 @@ so `canSimulate` is false. `PAYMENT_TEST_ALLOWED_EMAILS` gates production-like
 Sandbox purchases to approved verified students. Approved-user status polling
 can reconcile a terminal provider status through the same transactional,
 idempotent confirmation path used by webhooks. Payment packages are repeatable:
-the latest PENDING attempt is reused for a resume-safe checkout, while PAID,
-SETTLED, FAILED, EXPIRED, and REFUNDED attempts remain history and never block
-a new payment row/provider reference.
+the latest PENDING attempt is reconciled against Midtrans before reuse, so a
+remotely expired checkout becomes terminal and re-purchase creates a fresh
+payment row and Snap URL. A genuinely pending attempt remains resume-safe,
+while PAID, SETTLED, FAILED, EXPIRED, and REFUNDED attempts remain history and
+never block a new payment row/provider reference.
 
 ## Website audit P2 hardening
 

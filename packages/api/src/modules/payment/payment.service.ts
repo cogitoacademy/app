@@ -162,6 +162,30 @@ export function createPaymentService(deps: {
     const pkg = await repo.findPackageByCode(packageCode);
     if (!pkg || !pkg.isActive) throw new PackageNotFoundError(packageCode);
 
+    const pendingAttempt = await repo.findLatestPaymentByUserAndPackage(
+      userId,
+      pkg.id,
+      providerName,
+    );
+    if (
+      pendingAttempt?.status === PAYMENT_STATUS.PENDING &&
+      pendingAttempt.providerRequestId &&
+      provider.getPaymentRequestStatus
+    ) {
+      try {
+        await reconcilePurchase(pendingAttempt.id, userId);
+      } catch (error) {
+        // Provider availability is required to prove an attempt is terminal.
+        // On lookup failure, preserve idempotency and reuse the pending intent.
+        if (
+          !(error instanceof PaymentProviderError) &&
+          !(error instanceof PaymentNotFoundError)
+        ) {
+          throw error;
+        }
+      }
+    }
+
     const baseProviderReference = `${providerName}:${userId}:${packageCode}`;
     // Keep the old reference fallback for rows created before repeat purchases
     // were supported. New rows are selected by their relational keys so an

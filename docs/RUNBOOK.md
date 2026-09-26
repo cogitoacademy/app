@@ -1237,6 +1237,10 @@ provisioned copy otherwise lingers as stale).
   - **`PAYMENT_TEST_ALLOWED_EMAILS` is the test-mode UAT list:** in
     `MIDTRANS_MODE=test` on production/staging it gates `payment.createPurchase`
     to approved verified student emails.
+  - **Balance-page mode check:** authenticated `/balance` must show a persistent
+    **Test mode** badge beside **Top Up Marks** when `MIDTRANS_MODE=test`; it
+    must disappear in live mode. The UI reads protected
+    `POST /rpc/payment/getConfig`, not the application hostname.
 
 ### Coolify duplicate env row dedupe procedure
 
@@ -1650,7 +1654,7 @@ Concurrent modification conflict. The `version` field didn't match. Retry the op
 - `Payment provider error` — the active provider's circuit breaker is open (`cogito:cb:midtrans-test` or `cogito:cb:midtrans-live`). Wait 30 seconds or reset manually.
 - `Payment simulation error: 403 PAYMENT_SIMULATION_UNAVAILABLE` — expected for Midtrans; Sandbox has no simulation endpoint. Use the Midtrans Snap test cards instead.
 - `Payment provider error: 503 ...` — inspect the bounded provider status/code/message, circuit state, credentials, and provider dashboard status. Do not retry an old pending intent indefinitely; create a fresh intent after correcting configuration.
-- Re-purchase behavior — a PAID, SETTLED, FAILED, EXPIRED, or REFUNDED attempt is retained as history and the next `payment.createPurchase` call creates a new payment row/provider reference. Only the latest PENDING attempt is reused. Test transactions in the production database therefore do not permanently lock a package for the UAT account.
+- Re-purchase behavior — a PAID, SETTLED, FAILED, EXPIRED, or REFUNDED attempt is retained as history and the next `payment.createPurchase` call creates a new payment row/provider reference. The latest PENDING attempt is checked against Midtrans before reuse; a remotely expired checkout must produce a fresh payment row and Snap URL. Test transactions in the production database therefore do not permanently lock a package for the UAT account.
 
 ### Database Connection Errors
 
@@ -1816,9 +1820,8 @@ The app defaults to dev-safe stand-ins (stub email, stub payments, manual Meet f
 
 > **Midtrans (2026-09-03; Balance redirect handling 2026-09-12):** the Midtrans Snap provider is implemented behind
 > the same `PaymentProvider` port (`docs/MIDTRANS-MIGRATION.md`). Snap returns
-> a hosted `redirect_url`; the Balance page detects the `https://` URL via
-> `isRedirectCheckoutUrl` and opens it in a new tab (QRIS payloads remain inline
-> QR); the webhook `signature_key` is verified in the body
+> a hosted `redirect_url`; the Balance page navigates directly to it after the
+> drawer confirmation; the webhook `signature_key` is verified in the body
 > (`SHA512(order_id + status_code + gross_amount + signature key)`); statuses
 > map `capture`→PAID (fraud `accept`), `settlement`→SETTLED, `pending`→PENDING,
 > `deny/cancel/failure`→FAILED, `expire`→EXPIRED, `refund/partial_refund`→
