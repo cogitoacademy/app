@@ -8,6 +8,15 @@ import type { PaymentHandler } from "./payment.handler";
 
 export function createPaymentRouter(handler: PaymentHandler) {
   return {
+    getConfig: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/payment/config",
+        tags: ["Payments"],
+        summary: "Get public payment configuration",
+      })
+      .handler(handler.getConfig),
+
     createPurchase: verifiedStudentProcedure
       .route({
         method: "POST",

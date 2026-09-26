@@ -53,6 +53,10 @@ export function createPaymentHandler(
   }
 
   return {
+    getConfig: async () => ({
+      testMode: config.providerMode === "test",
+    }),
+
     createPurchase: async ({
       context,
       input,

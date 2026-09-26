@@ -1002,19 +1002,29 @@ The create/edit/correction form is presented as a bottom drawer on mobile and a 
 
 ## Payment (`payment.*`)
 
+### `payment.getConfig`
+
+- **HTTP:** `POST /rpc/payment/getConfig`
+- **Auth:** Protected
+- **Input:** None
+- **Output:** `{ testMode: boolean }`
+- **Description:** Returns the public payment-environment flag used by the
+  Balance page. `testMode` is true when the active provider is configured with
+  `MIDTRANS_MODE=test`; no provider credentials or allowlist values are exposed.
+
 ### `payment.createPurchase`
 
 - **Auth:** Verified Student (`verifiedStudentProcedure` — student role **and** `emailVerified: true`; unverified students get `FORBIDDEN` "Email verification required")
 - **Input:** `{ packageCode }`
 - **Output:** `{ paymentId, providerReference, checkoutUrl, canSimulate }`
 - **Errors:** `PACKAGE_NOT_FOUND` (404), `PAYMENT_TEST_MODE_RESTRICTED` (403), `PAYMENT_PROVIDER_ERROR` (503)
-- **Description:** Creates a purchase intent with the payment provider. A current PENDING intent is reused so retries do not mint duplicate checkouts; after any terminal outcome (`PAID`, `SETTLED`, `FAILED`, `EXPIRED`, or `REFUNDED`), the endpoint creates a new payment record and provider reference, retaining the prior attempt as history. A provider-confirmed terminal status credits the wallet through the idempotent confirmation path.
+- **Description:** Creates a purchase intent with the payment provider. Before reusing a current PENDING intent, the service checks its authoritative provider status when status lookup is available. A remotely expired/failed attempt is reconciled and replaced with a new payment record, while a genuinely pending attempt is reused so retries do not mint duplicate checkouts. After any terminal outcome (`PAID`, `SETTLED`, `FAILED`, `EXPIRED`, or `REFUNDED`), the endpoint creates a new payment record and provider reference, retaining the prior attempt as history. A provider-confirmed paid status credits the wallet through the idempotent confirmation path. If provider lookup is unavailable, the existing PENDING intent is reused rather than risking a duplicate charge.
 
 ### Midtrans (Snap) environment selection
 
 - `PAYMENT_PROVIDER=midtrans` selects the Midtrans Snap provider. `MIDTRANS_MODE` is required and must be `test` (Sandbox) or `live` (Production); the Server Key, created in the matching Midtrans dashboard mode, selects the actual environment. `MIDTRANS_SERVER_KEY`, `MIDTRANS_CLIENT_KEY`, and `MIDTRANS_MERCHANT_ID` are required (fail-loud env guard).
 - In production/staging, `MIDTRANS_MODE=test` also requires `PAYMENT_TEST_ALLOWED_EMAILS`; only approved verified student emails can call `payment.createPurchase`.
-- `checkoutUrl` carries the Snap `redirect_url` (hosted payment page). The Balance page detects the `https://` URL via `isRedirectCheckoutUrl` and opens it in a new tab instead of rendering a QR code.
+- `checkoutUrl` carries the Snap `redirect_url` (hosted payment page). After the drawer confirmation, the Balance page navigates directly to it.
 - `canSimulate` is **always false** in Midtrans mode: the Midtrans Sandbox has no simulation endpoint. Sandbox test payments use the Snap test cards (`4811 1111 1111 1114`, CVV `123`, OTP `112233`). `payment.simulatePurchase` returns `PAYMENT_SIMULATION_UNAVAILABLE` (403) in Midtrans mode.
 - `order_id` is the payment UUID (unique per repurchase attempt); webhooks and status lookups resolve it back to the stored provider reference.
 - Rejections surface as `PAYMENT_TEST_MODE_RESTRICTED`, visible on the Important Logs board payment gate panel.

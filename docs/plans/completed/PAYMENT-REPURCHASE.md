@@ -10,8 +10,14 @@ for audit and webhook reconciliation without acting as a package-level lock.
 
 ## Behavior
 
-- The latest `PENDING` attempt is reused so a refresh does not create a second
-  checkout.
+- The Balance page reviews the selected package in a content-height bottom
+  drawer. Its final action creates/resumes the purchase and redirects to hosted
+  checkout immediately.
+- The Top Up Marks header shows Test mode whenever the server reports a sandbox
+  payment provider, independent of the web application's domain.
+- The latest `PENDING` attempt is checked against the provider before reuse, so
+  a refresh resumes an active checkout while a remotely expired checkout gets
+  a fresh payment row and URL.
 - Every terminal attempt creates a new `payment_record` and unique provider
   reference on the next purchase.
 - Webhooks for separate attempts resolve to separate records and separate

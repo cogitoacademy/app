@@ -46,6 +46,21 @@ describe("paymentRouter input validation", () => {
 });
 
 describe("paymentHandler", () => {
+  test("exposes whether the active provider uses test mode", async () => {
+    const payment = {};
+    const wallet = {};
+
+    const testHandler = createPaymentHandler(payment as any, wallet as any, {
+      providerMode: "test",
+    });
+    const liveHandler = createPaymentHandler(payment as any, wallet as any, {
+      providerMode: "live",
+    });
+
+    await expect(testHandler.getConfig()).resolves.toEqual({ testMode: true });
+    await expect(liveHandler.getConfig()).resolves.toEqual({ testMode: false });
+  });
+
   describe("createPurchase", () => {
     test("calls wallet.getOrCreate then payment.createIntent", async () => {
       const walletData = {

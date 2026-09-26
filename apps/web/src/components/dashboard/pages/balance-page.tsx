@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@cogito-app/ui/components/selia/button";
+import { Badge } from "@cogito-app/ui/components/selia/badge";
 import {
   Card,
   CardBody,
@@ -13,6 +14,15 @@ import {
 } from "@cogito-app/ui/components/selia/card";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
+import {
+  Drawer,
+  DrawerBody,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerPopup,
+  DrawerTitle,
+} from "@cogito-app/ui/components/selia/drawer";
 import { Separator } from "@cogito-app/ui/components/selia/separator";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
@@ -29,14 +39,12 @@ import {
 } from "@tabler/icons-react";
 import { cn } from "@cogito-app/ui/lib/utils";
 import { Link } from "@tanstack/react-router";
-import { QRCodeSVG } from "qrcode.react";
 
 import { EmptyState } from "@/components/empty-state";
 import { CogitoMarks } from "@/components/cogito-marks";
 import { BalanceWidget } from "@/components/dashboard/balance-widget";
 import { InfoPreview } from "@/components/info-preview";
 import { orpc } from "@/utils/orpc";
-import { isRedirectCheckoutUrl } from "@/lib/checkout";
 import { getUserFacingError } from "@/lib/error-message";
 
 const LEDGER_LABELS: Record<string, string> = {
@@ -69,22 +77,23 @@ function formatIdr(amount: number) {
 
 export function BalancePage() {
   const queryClient = useQueryClient();
-  const [qrPayload, setQrPayload] = useState<string | null>(null);
-  const [simulatedPaymentId, setSimulatedPaymentId] = useState<string | null>(
+  const [selectedPackageCode, setSelectedPackageCode] = useState<string | null>(
     null,
   );
-  // Snap-style checkouts hand back a hosted https page, not a QR payload —
-  // those open in a new tab instead of rendering a QR code.
-  const isRedirectCheckout =
-    qrPayload !== null && isRedirectCheckoutUrl(qrPayload);
-
+  const [paymentDrawerOpen, setPaymentDrawerOpen] = useState(false);
   const { data: wallet, isLoading: walletLoading } = useQuery(
     orpc.wallet.get.queryOptions(),
   );
   const { data: packagesData, isLoading: packagesLoading } = useQuery(
     orpc.wallet.listPackages.queryOptions(),
   );
+  const { data: paymentConfig } = useQuery(
+    orpc.payment.getConfig.queryOptions(),
+  );
   const packages = packagesData?.packages ?? [];
+  const selectedPackage = packages.find(
+    (pkg) => pkg.code === selectedPackageCode,
+  );
   const { data: ledgerData, isLoading: ledgerLoading } = useQuery(
     orpc.wallet.listLedger.queryOptions({ input: { limit: 50 } }),
   );
@@ -92,22 +101,12 @@ export function BalancePage() {
     | { items: LedgerEntry[]; nextCursor: string | null }
     | undefined;
 
-  const simulatedPurchase = useQuery({
-    ...orpc.payment.getPurchase.queryOptions({
-      input: {
-        paymentId: simulatedPaymentId ?? "00000000-0000-0000-0000-000000000000",
-      },
-    }),
-    enabled: simulatedPaymentId !== null,
-    refetchInterval: (query) =>
-      query.state.data?.status === "PENDING" ? 1_000 : false,
-  });
-
   const purchase = useMutation(
     orpc.payment.createPurchase.mutationOptions({
       onSuccess: async (res) => {
         if (res.checkoutUrl) {
-          setQrPayload(res.checkoutUrl);
+          window.location.assign(res.checkoutUrl);
+          return;
         }
         await queryClient.invalidateQueries({
           queryKey: orpc.wallet.get.queryKey(),
@@ -124,29 +123,6 @@ export function BalancePage() {
         }),
     }),
   );
-
-  const simulation = useMutation(
-    orpc.payment.simulatePurchase.mutationOptions({
-      onSuccess: (_result, variables) => {
-        setSimulatedPaymentId(variables.paymentId);
-      },
-    }),
-  );
-
-  useEffect(() => {
-    if (
-      simulatedPurchase.data?.status !== "PAID" &&
-      simulatedPurchase.data?.status !== "SETTLED"
-    ) {
-      return;
-    }
-    void queryClient.invalidateQueries({
-      queryKey: orpc.wallet.get.queryKey(),
-    });
-    void queryClient.invalidateQueries({
-      queryKey: orpc.wallet.listLedger.key(),
-    });
-  }, [queryClient, simulatedPurchase.data?.status]);
 
   const totalBalance = wallet?.totalBalance ?? 0;
   const heldBalance = wallet?.heldBalance ?? 0;
@@ -248,6 +224,9 @@ export function BalancePage() {
         <CardHeader>
           <CardTitle>
             Top Up Marks
+            {paymentConfig?.testMode ? (
+              <Badge variant="warning">Test mode</Badge>
+            ) : null}
             <CardInfoPreview>
               <InfoPreview
                 title="Top Up Marks"
@@ -257,108 +236,6 @@ export function BalancePage() {
           </CardTitle>
         </CardHeader>
         <CardBody>
-          <div className="rounded-lg border border-border bg-card p-4 mb-4">
-            <Heading size="sm" className="mb-1">
-              Payment processing
-            </Heading>
-            <Text className="text-dimmed text-sm">
-              Checkout is controlled by the server payment configuration. In
-              sandbox or test mode, use an approved demo account: test
-              transactions do not charge real money and Marks are credited only
-              after the payment provider confirms the payment.
-            </Text>
-          </div>
-          {qrPayload ? (
-            <Card className="mb-4 min-w-0 max-w-full">
-              <CardHeader>
-                <CardTitle>
-                  {isRedirectCheckout
-                    ? "Complete your payment"
-                    : "Scan QRIS to pay"}
-                  <CardInfoPreview>
-                    <InfoPreview
-                      title={
-                        isRedirectCheckout
-                          ? "Complete your payment"
-                          : "Scan QRIS to pay"
-                      }
-                      description={
-                        isRedirectCheckout
-                          ? "Open the hosted payment page, choose a payment method, and complete the payment. Your Marks are credited automatically after the provider confirms it."
-                          : "Open your banking or e-wallet app, scan this code, and complete the payment. Your Marks are credited after the payment provider confirms it."
-                      }
-                    />
-                  </CardInfoPreview>
-                </CardTitle>
-              </CardHeader>
-              <CardBody className="flex min-w-0 flex-col items-center gap-4">
-                {isRedirectCheckout ? (
-                  <>
-                    <Text className="text-dimmed text-center text-sm">
-                      You’re being handed off to our payment partner to pay
-                      securely. After paying, return to this page — your balance
-                      updates automatically once the payment is confirmed.
-                    </Text>
-                    <Button
-                      render={
-                        <a
-                          href={qrPayload}
-                          target="_blank"
-                          rel="noreferrer"
-                          aria-label="Open payment page"
-                        />
-                      }
-                      nativeButton={false}
-                    >
-                      Open payment page
-                    </Button>
-                  </>
-                ) : (
-                  <div className="w-full max-w-68 rounded-lg bg-background p-4 text-foreground">
-                    <QRCodeSVG
-                      value={qrPayload}
-                      size={240}
-                      level="M"
-                      bgColor="var(--color-background)"
-                      fgColor="var(--color-foreground)"
-                      className="h-auto w-full"
-                    />
-                  </div>
-                )}
-                {purchase.data?.canSimulate ? (
-                  <>
-                    <Button
-                      variant="secondary"
-                      progress={simulation.isPending}
-                      disabled={
-                        simulation.isPending || simulatedPaymentId !== null
-                      }
-                      onClick={() =>
-                        simulation.mutate({
-                          paymentId: purchase.data.paymentId,
-                        })
-                      }
-                    >
-                      {simulation.isPending ? (
-                        <IconLoader2 className="animate-spin" />
-                      ) : null}
-                      {simulatedPaymentId
-                        ? "Waiting for confirmation"
-                        : "Simulate successful payment"}
-                    </Button>
-                    {simulatedPaymentId ? (
-                      <Text className="text-dimmed text-sm">
-                        {simulatedPurchase.data?.status === "PAID" ||
-                        simulatedPurchase.data?.status === "SETTLED"
-                          ? "Payment confirmed. Your Marks balance has been updated."
-                          : "Simulation submitted. Waiting for provider confirmation…"}
-                      </Text>
-                    ) : null}
-                  </>
-                ) : null}
-              </CardBody>
-            </Card>
-          ) : null}
           {packagesLoading ? (
             <Text className="text-muted">Loading packages...</Text>
           ) : packages.length === 0 ? (
@@ -402,19 +279,13 @@ export function BalancePage() {
                   <CardFooter>
                     <Button
                       block
-                      progress={purchase.isPending}
-                      disabled={purchase.isPending}
                       onClick={() => {
-                        setQrPayload(null);
-                        setSimulatedPaymentId(null);
-                        purchase.mutate({ packageCode: pkg.code });
+                        purchase.reset();
+                        setSelectedPackageCode(pkg.code);
+                        setPaymentDrawerOpen(true);
                       }}
                     >
-                      {purchase.isPending ? (
-                        <IconLoader2 className="animate-spin" />
-                      ) : (
-                        <IconShoppingCart />
-                      )}
+                      <IconShoppingCart />
                       Buy
                     </Button>
                   </CardFooter>
@@ -424,6 +295,59 @@ export function BalancePage() {
           )}
         </CardBody>
       </Card>
+
+      <Drawer
+        open={paymentDrawerOpen}
+        onOpenChange={(open) => {
+          if (!purchase.isPending) setPaymentDrawerOpen(open);
+        }}
+        swipeDirection="down"
+      >
+        <DrawerPopup direction="bottom" className="mx-auto max-w-xl">
+          <DrawerHeader className="flex-col items-start gap-1.5 border-b border-drawer-border pb-4.5">
+            <DrawerTitle>Review your top-up</DrawerTitle>
+            <DrawerDescription>
+              Confirm your Marks package before continuing to payment.
+            </DrawerDescription>
+          </DrawerHeader>
+          <DrawerBody className="space-y-4">
+            {selectedPackage ? (
+              <div className="rounded-lg border border-item-border bg-item p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <Text className="font-semibold">
+                      {selectedPackage.name}
+                    </Text>
+                    <Text className="text-dimmed text-sm">
+                      <CogitoMarks value={selectedPackage.marks} size="3" />
+                    </Text>
+                  </div>
+                  <Text className="font-semibold">
+                    {formatIdr(selectedPackage.priceIdr)}
+                  </Text>
+                </div>
+              </div>
+            ) : null}
+          </DrawerBody>
+          {selectedPackage ? (
+            <DrawerFooter>
+              <Button
+                block
+                progress={purchase.isPending}
+                disabled={purchase.isPending}
+                onClick={() =>
+                  purchase.mutate({ packageCode: selectedPackage.code })
+                }
+              >
+                {purchase.isPending ? (
+                  <IconLoader2 className="animate-spin" />
+                ) : null}
+                Continue payment · {formatIdr(selectedPackage.priceIdr)}
+              </Button>
+            </DrawerFooter>
+          ) : null}
+        </DrawerPopup>
+      </Drawer>
 
       <Card className="w-full min-w-0 max-w-full">
         <CardHeader>
