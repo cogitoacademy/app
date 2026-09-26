@@ -862,7 +862,7 @@ Full override form per PRD §Emergency Override UI/UX:
 
 **PRD:** FR-12, DL-16
 
-**Current state:** **CLOSED (2026-08-23; tutor/admin access expanded 2026-09-01).** The authenticated Knowledge Bank route uses the server-side `wallet.knowledgeBankEligible` rule. Eligible students (at least 35 total Marks), all authenticated tutors, and all authenticated admins see published Sanity resource metadata and protected PDF previews; below-threshold students remain in the app with a top-up CTA.
+**Current state:** **CLOSED (2026-08-23; tutor/admin access expanded 2026-09-01; cross-subdomain PDF framing fixed 2026-09-26).** The authenticated Knowledge Bank route uses the server-side `wallet.knowledgeBankEligible` rule. Eligible students (at least 35 total Marks), all authenticated tutors, and all authenticated admins see published Sanity resource metadata and protected PDF previews; below-threshold students remain in the app with a top-up CTA. The protected file route permits framing only from the configured app origin; all other API routes retain framing denial.
 
 **Required:**
 
