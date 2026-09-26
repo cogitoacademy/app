@@ -2033,7 +2033,7 @@ bun scripts/run-test-suite.mjs e2e --grep economy --reporter=line
 The role suite covers student, tutor, and admin authorization plus the
 admin-update → future-booking snapshot path. The E2E runner starts the isolated
 web/server ports above and seeds deterministic role credentials.
-Its setup resolves `student.seed@cogitoacademy.id` before clearing test bookings
+Its setup resolves `cogito.andre@yopmail.com` before clearing test bookings
 and resets the test economy row to defaults, so repeated runs do not depend on
 stale seeded state or a hard-coded user ID. Economy inputs are displayed with
 locale grouping separators; the browser check edits them through the visible

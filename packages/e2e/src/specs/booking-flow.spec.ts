@@ -43,17 +43,17 @@ async function openBookingPage(page: Page) {
 
   const drawer = page.locator('[data-slot="drawer-popup"]').first();
   await expect(
-    drawer.getByRole("heading", { name: "[seed] Tutor" }),
+    drawer.getByRole("heading", { name: "Diego by Cogito" }),
   ).toBeVisible();
   // The sticky drawer footer is rendered outside `drawer-popup`; use the
   // button's accessible name instead of scoping the CTA to the content pane.
   await page
     .getByRole("dialog")
-    .getByRole("button", { name: "Book [seed] Tutor", exact: true })
+    .getByRole("button", { name: "Book Diego by Cogito", exact: true })
     .click();
   await page.waitForURL(/\/tutors\/[^/]+\/book$/);
   await expect(
-    page.getByRole("heading", { name: "Book [seed] Tutor" }),
+    page.getByRole("heading", { name: "Book Diego by Cogito" }),
   ).toBeVisible();
 
   const specialization = page.getByRole("combobox", {

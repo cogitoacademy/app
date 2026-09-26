@@ -3,6 +3,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { request } from "@playwright/test";
 import dotenv from "dotenv";
+import { STUDENT_EMAIL } from "./test-accounts";
 
 async function globalSetup() {
   const serverDir = path.resolve(process.cwd(), "../../apps/server");
@@ -65,7 +66,7 @@ async function globalSetup() {
   });
   const signIn = await authContext.post("/api/auth/sign-in/email", {
     data: {
-      email: "student.seed@cogitoacademy.id",
+      email: STUDENT_EMAIL,
       password: testSeedEnv.SEED_STUDENT_PASSWORD,
     },
   });
