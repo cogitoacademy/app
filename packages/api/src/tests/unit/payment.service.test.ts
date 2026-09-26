@@ -408,9 +408,9 @@ describe("PaymentService", () => {
         providerName: "midtrans",
       });
 
-      await expect(
-        service.createIntent("user1", "w1", "pkg1"),
-      ).rejects.toThrow("repository bug");
+      await expect(service.createIntent("user1", "w1", "pkg1")).rejects.toThrow(
+        "repository bug",
+      );
     });
 
     test("B6: createIntent reuses the existing row when its insert conflicts (check-then-insert race)", async () => {
