@@ -333,6 +333,86 @@ describe("PaymentService", () => {
       expect(result.checkoutUrl).toBe("https://checkout.test/new");
     });
 
+    test("reuses a PENDING checkout when provider reconciliation is unavailable", async () => {
+      const provider = {
+        ...makeProvider(),
+        getPaymentRequestStatus: mock(async () => {
+          throw new Error("provider unavailable");
+        }),
+      };
+      const existingPayment = {
+        id: "pay_existing",
+        userId: "user1",
+        status: PAYMENT_STATUS.PENDING,
+        providerReference: "midtrans:user1:pkg1",
+        providerRequestId: "pay_existing",
+        checkoutUrl: "https://checkout.test/pending",
+      };
+      const repo = makeRepo({
+        findPackageByCode: mock(async () => ({
+          id: "pkg1",
+          code: "pkg1",
+          isActive: true,
+          priceIdr: 50000,
+          marks: 100,
+        })),
+        findLatestPaymentByUserAndPackage: mock(
+          async () => existingPayment as any,
+        ),
+        findPaymentById: mock(async () => existingPayment as any),
+      });
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo,
+        provider: provider as any,
+        providerName: "midtrans",
+      });
+
+      const result = await service.createIntent("user1", "w1", "pkg1");
+
+      expect(result.paymentId).toBe("pay_existing");
+      expect(result.checkoutUrl).toBe("https://checkout.test/pending");
+      expect(provider.createIntent).not.toHaveBeenCalled();
+    });
+
+    test("does not hide unexpected reconciliation errors", async () => {
+      const existingPayment = {
+        id: "pay_existing",
+        userId: "user1",
+        status: PAYMENT_STATUS.PENDING,
+        providerReference: "midtrans:user1:pkg1",
+        providerRequestId: "pay_existing",
+        checkoutUrl: "https://checkout.test/pending",
+      };
+      const repo = makeRepo({
+        findPackageByCode: mock(async () => ({
+          id: "pkg1",
+          code: "pkg1",
+          isActive: true,
+          priceIdr: 50000,
+          marks: 100,
+        })),
+        findLatestPaymentByUserAndPackage: mock(
+          async () => existingPayment as any,
+        ),
+        findPaymentById: mock(async () => {
+          throw new TypeError("repository bug");
+        }),
+      });
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "midtrans",
+      });
+
+      await expect(
+        service.createIntent("user1", "w1", "pkg1"),
+      ).rejects.toThrow("repository bug");
+    });
+
     test("B6: createIntent reuses the existing row when its insert conflicts (check-then-insert race)", async () => {
       let lookupCount = 0;
       const repo = makeRepo({
