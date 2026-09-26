@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 import { db } from "@cogito-app/db";
 import { markPackage } from "@cogito-app/db/schema";
 import {
+  DEFAULT_SEED_STUDENTS,
+  DEFAULT_SEED_TUTOR,
   assertReviewAdminIsSeparate,
   requireProductionReviewPassword,
   resolveSeedAdminEmail,
@@ -13,6 +15,18 @@ import {
 import { PACKAGES, seedPackages, seedPackagesAllowed } from "./seed-packages";
 
 describe("seed guards", () => {
+  test("uses the Cogito launch review identities", () => {
+    expect(DEFAULT_SEED_TUTOR).toEqual({
+      email: "cogito.diego@yopmail.com",
+      name: "Diego by Cogito",
+    });
+    expect(DEFAULT_SEED_STUDENTS).toEqual([
+      { email: "cogito.andre@yopmail.com", name: "Andre by Cogito" },
+      { email: "cogito.argya@yopmail.com", name: "Argya by Cogito" },
+      { email: "cogito.athena@yopmail.com", name: "Athena by Cogito" },
+    ]);
+  });
+
   test("seedAllowed is false in production without explicit flag", () => {
     expect(seedAllowed("production", undefined)).toBe(false);
     expect(seedAllowed("production", "true")).toBe(true);
