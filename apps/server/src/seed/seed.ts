@@ -23,8 +23,16 @@ import { DEFAULT_ECONOMY_CONFIG } from "@cogito-app/api/modules/economy/economy.
 import { hashInviteToken } from "@cogito-app/api/lib/tokens";
 import { parseConfiguredAdminEmails } from "@cogito-app/env/admin";
 
-const SEED_SUFFIX = "seed";
-const SEED_DISPLAY_TAG = "[seed]";
+export const DEFAULT_SEED_TUTOR = {
+  email: "cogito.diego@yopmail.com",
+  name: "Diego by Cogito",
+};
+
+export const DEFAULT_SEED_STUDENTS = [
+  { email: "cogito.andre@yopmail.com", name: "Andre by Cogito" },
+  { email: "cogito.argya@yopmail.com", name: "Argya by Cogito" },
+  { email: "cogito.athena@yopmail.com", name: "Athena by Cogito" },
+] as const;
 
 export function seedAllowed(
   nodeEnv: string,
@@ -316,7 +324,7 @@ async function seed() {
 
   const tutorEmail =
     process.env.SEED_REVIEW_TUTOR_EMAIL?.trim().toLowerCase() ||
-    `tutor.${SEED_SUFFIX}@cogitoacademy.id`;
+    DEFAULT_SEED_TUTOR.email;
   const tutorPassword = demoPassword(
     process.env.SEED_TUTOR_PASSWORD,
     "tutor123",
@@ -324,7 +332,7 @@ async function seed() {
   const tutorUser = await ensureUser(
     tutorEmail,
     tutorPassword,
-    `${SEED_DISPLAY_TAG} Tutor`,
+    DEFAULT_SEED_TUTOR.name,
   );
   await db
     .update(user)
@@ -342,7 +350,7 @@ async function seed() {
       .insert(tutorInvite)
       .values({
         email: tutorEmail,
-        displayName: `${SEED_DISPLAY_TAG} Tutor`,
+        displayName: DEFAULT_SEED_TUTOR.name,
         token: hashInviteToken(crypto.randomUUID()),
         status: "accepted",
         invitedBy: admin.id,
@@ -439,9 +447,9 @@ async function seed() {
 
   await seedDemoStudent(
     process.env.SEED_REVIEW_STUDENT_EMAIL?.trim().toLowerCase() ||
-      `student.${SEED_SUFFIX}@cogitoacademy.id`,
+      DEFAULT_SEED_STUDENTS[0].email,
     demoPassword(process.env.SEED_STUDENT_PASSWORD, "student123"),
-    `${SEED_DISPLAY_TAG} Student`,
+    DEFAULT_SEED_STUDENTS[0].name,
   );
 
   const friendPassword = demoPassword(
@@ -451,19 +459,14 @@ async function seed() {
 
   await Promise.all([
     seedDemoStudent(
-      `student.friend1.${SEED_SUFFIX}@cogitoacademy.id`,
+      DEFAULT_SEED_STUDENTS[1].email,
       friendPassword,
-      `${SEED_DISPLAY_TAG} Alya Friend`,
+      DEFAULT_SEED_STUDENTS[1].name,
     ),
     seedDemoStudent(
-      `student.friend2.${SEED_SUFFIX}@cogitoacademy.id`,
+      DEFAULT_SEED_STUDENTS[2].email,
       friendPassword,
-      `${SEED_DISPLAY_TAG} Bima Friend`,
-    ),
-    seedDemoStudent(
-      `student.friend3.${SEED_SUFFIX}@cogitoacademy.id`,
-      friendPassword,
-      `${SEED_DISPLAY_TAG} Citra Friend`,
+      DEFAULT_SEED_STUDENTS[2].name,
     ),
   ]);
 }

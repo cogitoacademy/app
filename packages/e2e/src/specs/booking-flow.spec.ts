@@ -2,9 +2,12 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
 
 import {
   FRIEND_EMAIL,
+  FRIEND_NAME,
   STUDENT_EMAIL as SEED_EMAIL,
+  STUDENT_NAME,
   STUDENT_PASSWORD as SEED_PASSWORD,
   TUTOR_EMAIL,
+  TUTOR_NAME,
   TUTOR_PASSWORD,
 } from "../fixtures/test-accounts";
 
@@ -36,24 +39,22 @@ async function openBookingPage(page: Page) {
   ).toBeVisible();
 
   const seedTutorCard = page
-    .getByRole("button", { name: /\[seed\] Tutor/ })
+    .getByRole("button", { name: new RegExp(TUTOR_NAME) })
     .first();
   await expect(seedTutorCard).toBeVisible();
   await seedTutorCard.click();
 
   const drawer = page.locator('[data-slot="drawer-popup"]').first();
-  await expect(
-    drawer.getByRole("heading", { name: "[seed] Tutor" }),
-  ).toBeVisible();
+  await expect(drawer.getByRole("heading", { name: TUTOR_NAME })).toBeVisible();
   // The sticky drawer footer is rendered outside `drawer-popup`; use the
   // button's accessible name instead of scoping the CTA to the content pane.
   await page
     .getByRole("dialog")
-    .getByRole("button", { name: "Book [seed] Tutor", exact: true })
+    .getByRole("button", { name: `Book ${TUTOR_NAME}`, exact: true })
     .click();
   await page.waitForURL(/\/tutors\/[^/]+\/book$/);
   await expect(
-    page.getByRole("heading", { name: "Book [seed] Tutor" }),
+    page.getByRole("heading", { name: `Book ${TUTOR_NAME}` }),
   ).toBeVisible();
 
   const specialization = page.getByRole("combobox", {
@@ -153,9 +154,7 @@ async function openTutorBooking(browser: Browser, bookingId: string) {
   );
   await reviewLink.click();
   await page.waitForURL(`/bookings/${bookingId}`);
-  await expect(
-    page.getByRole("heading", { name: /\[seed\] Tutor/ }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: TUTOR_NAME })).toBeVisible();
   return { context, page };
 }
 
@@ -217,7 +216,9 @@ test("student can book a solo session from tutor discovery", async ({
 
   await page.waitForURL(/\/bookings\/[^/]+$/);
   await expect(
-    page.getByRole("heading", { name: /\[seed\] Tutor x \[seed\] Student/ }),
+    page.getByRole("heading", {
+      name: new RegExp(`${TUTOR_NAME} x ${STUDENT_NAME}`),
+    }),
   ).toBeVisible();
   await expect(page.getByText("Respond by")).toBeVisible();
   await expect(page.getByText("Online", { exact: true }).first()).toBeVisible();
@@ -239,10 +240,10 @@ test("student can configure an offline group booking and see the target hold", a
   ).toBeVisible();
 
   const studentSearch = page.getByPlaceholder("Type a name or email");
-  await studentSearch.fill("student.friend1.seed");
+  await studentSearch.fill(FRIEND_EMAIL);
   const friend = page
     .getByRole("button")
-    .filter({ hasText: "[seed] Alya Friend" })
+    .filter({ hasText: FRIEND_NAME })
     .last();
   await expect(friend).toBeVisible();
   await friend.click();
@@ -276,10 +277,10 @@ test("group invitee can accept and tutor can accept the full online booking", as
     .fill("Solve a group set of quadratic-equation problems.");
 
   const studentSearch = page.getByPlaceholder("Type a name or email");
-  await studentSearch.fill("student.friend1.seed");
+  await studentSearch.fill(FRIEND_EMAIL);
   const friend = page
     .getByRole("button")
-    .filter({ hasText: "[seed] Alya Friend" })
+    .filter({ hasText: FRIEND_NAME })
     .last();
   await expect(friend).toBeVisible();
   await friend.click();

@@ -583,7 +583,9 @@ a separate `SEED_REVIEW_ADMIN_EMAIL` and refuses to reuse any address in
 `ADMIN_EMAILS`; local/test seed keeps `admin@cogitoacademy.id`. Its review
 student has verified local authentication and seeded Marks, while its review
 tutor has a published structured profile, normalized specializations, and future
-availability. The Google Calendar operator password is never part of reviewer
+availability. Default launch identities are Diego by Cogito for the tutor and
+Andre, Argya, and Athena by Cogito for the three students, using
+`cogito.<name>@yopmail.com` addresses. The Google Calendar operator password is never part of reviewer
 credentials. Additional admins can still be granted through the existing admin
 role management flow.
 

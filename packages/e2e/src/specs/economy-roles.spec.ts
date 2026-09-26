@@ -4,6 +4,7 @@ import {
   ADMIN_EMAIL,
   ADMIN_PASSWORD,
   STUDENT_EMAIL,
+  STUDENT_NAME,
   STUDENT_PASSWORD,
   TUTOR_EMAIL,
   TUTOR_PASSWORD,
@@ -69,7 +70,11 @@ test("student sees closed-loop Marks pricing and cannot open admin economy", asy
   await page.goto("/admin-economy");
   await page.waitForURL("/dashboard");
   await expect(
-    page.getByRole("heading", { name: /\[seed\]/ }).first(),
+    page
+      .getByRole("heading", {
+        name: new RegExp(STUDENT_NAME.split(" ")[0] ?? STUDENT_NAME),
+      })
+      .first(),
   ).toBeVisible();
 });
 

@@ -256,7 +256,9 @@ applies the same rule to a matching signup after boot. The guarded
 production/staging review seed is deliberately separate: it uses
 `SEED_REVIEW_ADMIN_EMAIL`, rejects any address also present in `ADMIN_EMAILS`,
 and creates local-login student/tutor/admin review identities without touching
-the Google Calendar operator account.
+the Google Calendar operator account. Defaults create Diego by Cogito at
+`cogito.diego@yopmail.com` and three students, Andre, Argya, and Athena by
+Cogito, at matching `cogito.<name>@yopmail.com` addresses.
 
 Recommended-tutor summaries place the starting Marks price below the avatar on
 narrow screens and keep it inline with subject metadata on wider screens. This

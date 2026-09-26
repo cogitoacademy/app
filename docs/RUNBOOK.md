@@ -815,6 +815,12 @@ bun run seed-packages          # Optional local/test or explicitly approved reco
 
 Production guard: `NODE_ENV=production bun run seed-packages` will exit with an error unless `SEED_ALLOWED_IN_PROD=true` is explicitly set. Do not run it as part of normal deploys: the CD migration step applies `0041_seed_mark_packages.sql` automatically and safely. Use the command only for local/test setup or an explicitly approved recovery. The full `bun run seed` command uses the same guard and additionally requires `SEED_ADMIN_PASSWORD`, `SEED_TUTOR_PASSWORD`, and `SEED_STUDENT_PASSWORD` (minimum 12 characters). In production it creates a dedicated local-login review admin from `SEED_REVIEW_ADMIN_EMAIL` and refuses to reuse an operator address from `ADMIN_EMAILS`. Set the review student/tutor emails explicitly, run the seed once, then remove all seed passwords and `SEED_ALLOWED_IN_PROD` from the deployment environment. Never provide the Google Calendar account password to a reviewer.
 
+Launch defaults are `cogito.diego@yopmail.com` (Diego by Cogito, tutor) and
+`cogito.andre@yopmail.com`, `cogito.argya@yopmail.com`, and
+`cogito.athena@yopmail.com` (Andre, Argya, and Athena by Cogito, students).
+`SEED_REVIEW_TUTOR_EMAIL` and `SEED_REVIEW_STUDENT_EMAIL` override Diego and
+Andre only; Argya and Athena remain fixed defaults.
+
 The full production/staging seed creates or reuses the separate review address
 from `SEED_REVIEW_ADMIN_EMAIL` and sets its role to `admin`. Independently, on
 every production-like server boot, the `ADMIN_EMAILS` operator allowlist
@@ -2027,7 +2033,7 @@ bun scripts/run-test-suite.mjs e2e --grep economy --reporter=line
 The role suite covers student, tutor, and admin authorization plus the
 admin-update → future-booking snapshot path. The E2E runner starts the isolated
 web/server ports above and seeds deterministic role credentials.
-Its setup resolves `student.seed@cogitoacademy.id` before clearing test bookings
+Its setup resolves `cogito.andre@yopmail.com` before clearing test bookings
 and resets the test economy row to defaults, so repeated runs do not depend on
 stale seeded state or a hard-coded user ID. Economy inputs are displayed with
 locale grouping separators; the browser check edits them through the visible

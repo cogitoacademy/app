@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import { user, wallet } from "@cogito-app/db/schema";
 import { eq } from "drizzle-orm";
 
-const SEED_STUDENT_EMAIL = "student.seed@cogitoacademy.id";
+const SEED_STUDENT_EMAIL = "cogito.andre@yopmail.com";
 
 async function reset() {
   const [seedStudent] = await db
