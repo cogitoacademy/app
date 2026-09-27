@@ -143,7 +143,7 @@ function RootComponent() {
   const apiHost = import.meta.env.VITE_PUBLIC_POSTHOG_HOST;
 
   if (!apiKey || !apiHost) {
-    if (import.meta.env.DEV) {
+    if (import.meta.env.DEV && import.meta.env.MODE !== "test") {
       const missingVariable = apiKey
         ? "VITE_PUBLIC_POSTHOG_HOST"
         : "VITE_PUBLIC_POSTHOG_PROJECT_TOKEN";

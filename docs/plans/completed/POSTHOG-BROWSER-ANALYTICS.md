@@ -21,6 +21,9 @@
   exists before capturing the event.
 - Pass public PostHog values into production web image builds through CD
   secrets; missing production config remains a no-op.
+- Run browser E2E with Vite `test` mode, using the disabled client when public
+  analytics values are absent so test infrastructure does not require a real
+  PostHog project.
 
 ## Verification
 
