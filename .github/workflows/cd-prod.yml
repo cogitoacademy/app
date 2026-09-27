@@ -90,6 +90,8 @@ jobs:
             -t ghcr.io/${{ github.repository }}/web:latest \
             -f apps/web/Dockerfile \
             --build-arg VITE_SERVER_URL=https://api.cogitoacademy.id \
+            --build-arg VITE_PUBLIC_POSTHOG_PROJECT_TOKEN="${{ secrets.VITE_PUBLIC_POSTHOG_PROJECT_TOKEN }}" \
+            --build-arg VITE_PUBLIC_POSTHOG_HOST="${{ secrets.VITE_PUBLIC_POSTHOG_HOST }}" \
             .
           docker tag ghcr.io/${{ github.repository }}/web:latest ghcr.io/${{ github.repository }}/web:v${{ github.sha }}
           docker push ghcr.io/${{ github.repository }}/web:latest

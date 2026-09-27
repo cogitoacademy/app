@@ -1,7 +1,11 @@
 import { Component, type ReactNode } from "react";
 
 export class ErrorBoundary extends Component<
-  { children: ReactNode; fallback?: ReactNode },
+  {
+    children: ReactNode;
+    fallback?: ReactNode;
+    onError?: (error: Error) => void;
+  },
   { hasError: boolean }
 > {
   state = { hasError: false };
@@ -11,6 +15,7 @@ export class ErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error) {
+    this.props.onError?.(error);
     console.error("ErrorBoundary caught:", error);
   }
 

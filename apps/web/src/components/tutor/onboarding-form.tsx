@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { usePostHog } from "@posthog/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
@@ -435,6 +436,7 @@ function readServerFieldErrors(error: unknown) {
 export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const posthog = usePostHog();
   const pending = profile.pendingProfileChanges ?? {};
   const legacySubjectIds = new Set(
     profile.subjects
@@ -581,6 +583,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
   const submitMutation = useMutation(
     orpc.tutor.submitForReview.mutationOptions({
       onSuccess: async () => {
+        posthog.capture("tutor_profile_submitted");
         toastManager.add({
           title: "Profile submitted for review!",
           type: "success",

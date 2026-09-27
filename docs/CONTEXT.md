@@ -1,6 +1,30 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-09-25
+Last updated: 2026-09-27
+
+## PostHog browser analytics and auth attribution (2026-09-27)
+
+The web app initializes one provider-scoped PostHog browser client from
+`VITE_PUBLIC_POSTHOG_PROJECT_TOKEN` and `VITE_PUBLIC_POSTHOG_HOST` when both
+values exist. It captures browser exceptions, PostHog Logs records from the
+three instrumented success paths, and the product event contract for auth,
+booking, tutor onboarding, lifecycle, and session-completion actions. Events
+carry the Better Auth `user.id` identity after session resolution; event
+properties contain no personal data. Missing config is a loud development
+error and a production no-op that preserves the existing error boundary. The
+Playwright web server runs Vite in `test` mode, where the same disabled client
+keeps analytics config from blocking seeded browser tests.
+
+Google OAuth passes separate Better Auth `callbackURL` and
+`newUserCallbackURL` values. The frontend callback stores the resolved outcome
+(`signed-in` or `created`) in session storage, then `PostHogIdentity` identifies
+the user before capturing `account_signed_in` or `account_created`. Email
+authentication uses the same handoff, so both methods include the correct
+`authentication_method` without an anonymous auth event. The web Docker build
+accepts the public PostHog values as build args; production CD supplies them
+from GitHub Actions secrets. This is frontend/deployment configuration only; no
+RPC, schema, or server event contract changed. Delivery still requires browser
+smoke verification in PostHog.
 
 ## Role-based dashboard analytics (2026-09-25)
 
@@ -1144,7 +1168,7 @@ Internal-only modules with no RPC procedures: `audit`, `economy`, `email`, `meet
 ## CI/CD
 
 - **CI test and coverage performance (2026-09-02):** `.github/workflows/ci.yml` restores the shared Bun install cache before `bun install`, and typecheck/build restore separate Turbo caches. Pull requests use full git history plus Turbo `--affected` for typecheck and build; manual dispatches still run the full graph. The web `check-types` task runs `tsgo --noEmit`, leaving the production Vite build to the Build job. Test + Coverage starts independently of lint/typecheck, runs one lcov-producing coverage suite, then the server suite in a separate process because its webhook test uses `mock.module`; the previous duplicate uninstrumented API pass is removed. A failed coverage test command is explicitly propagated after the coverage comment/gate step.
-- **GitHub Actions** (`.github/workflows/ci.yml`): 5 jobs (lint, typecheck, build, test+coverage, and the isolated E2E Browser Workflow). The lint job auto-applies `oxlint --fix` + `oxfmt --write` and commits the fixes back to the PR branch before verifying, so formatting nits don't require a manual push cycle. Tests run `packages/api/src/tests/`, the env/auth/db package tests, and `apps/server/src/openapi.test.ts` in the coverage process; the remaining `apps/server/src/` tests stay in a **separate process** because the webhook idempotency TTL test uses `mock.module` for `@cogito-app/api`. The E2E package participates in the root typecheck gate and the E2E job provisions PostgreSQL 16 and Redis 7, writes an isolated `.env.test`, migrates, installs Chromium, runs the full seeded workflow, and uploads the Playwright HTML report plus failure screenshots/traces on failure or success. Test hooks have a 30-second budget to absorb slow CI database setup while still catching hangs. Coverage gate: `packages/api` lines, overall lines, overall functions, and overall branches must each be 100% (enforced by `.github/scripts/coverage-comment.ts`; a 0/0 branch total is treated as 100%). The PR comment separates the status blockquote and coverage tables with blank lines required by GitHub Markdown.
+- **GitHub Actions** (`.github/workflows/ci.yml`): 5 jobs (lint, typecheck, build, test+coverage, and the isolated E2E Browser Workflow). The lint job auto-applies `oxlint --fix` + `oxfmt --write` and commits the fixes back to the PR branch before verifying, so formatting nits don't require a manual push cycle. Tests run `packages/api/src/tests/`, the env/auth/db package tests, and `apps/server/src/openapi.test.ts` in the coverage process; the remaining `apps/server/src/` tests stay in a **separate process** because the webhook idempotency TTL test uses `mock.module` for `@cogito-app/api`. The E2E package participates in the root typecheck gate and the E2E job provisions PostgreSQL 16 and Redis 7, writes an isolated `.env.test`, migrates, installs Chromium, starts the web server in Vite `test` mode, runs the full seeded workflow, and uploads the Playwright HTML report plus failure screenshots/traces on failure or success. Test hooks have a 30-second budget to absorb slow CI database setup while still catching hangs. Coverage gate: `packages/api` lines, overall lines, overall functions, and overall branches must each be 100% (enforced by `.github/scripts/coverage-comment.ts`; a 0/0 branch total is treated as 100%). The PR comment separates the status blockquote and coverage tables with blank lines required by GitHub Markdown.
 - **CD**: The production workflow and `scripts/migrate-and-deploy.sh` are restored to their last known successful state at `bb1ccb9a` after a VPS-side immutable-image pull exhausted disk and crashed the self-hosted runner. GitHub Actions builds and pushes server/web images on a hosted runner; the VPS job resolves the private database, runs pg_dump → private R2 snapshot → `bun run db:migrate`, posts the configured Coolify webhook, and verifies `/health.version`. The VPS deploy job does not pull application images directly. Infra apply and production CD share the `production-deploy` concurrency group, preventing env restarts from racing image rollout.
 - **Lefthook** pre-commit: oxlint + oxfmt. Pre-push: typecheck.
 - **Labeler** (`.github/workflows/labeler.yml`): labels PRs `server`/`web`/`infrastructure`/`docs` by changed paths (`.github/labeler.yml`); needs `pull-requests: write` permission.
