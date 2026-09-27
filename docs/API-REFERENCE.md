@@ -308,7 +308,7 @@ Sanity is queried only by the API server. The browser receives normalized conten
 - **Auth:** Student with current total balance at or above the threshold or an active admin grant, Tutor, or Admin
 - **Input:** `resourceId` path parameter
 - **Output:** Streamed Sanity file, normally `application/pdf`
-- **Description:** Revalidates the student/tutor/admin role and Knowledge Bank eligibility, resolves the asset server-side, and streams it with `Cache-Control: private, no-store`. Tutors and admins bypass the student wallet threshold; students with an unexpired admin grant bypass it until the stored expiry timestamp. This is an Elysia file route, not an oRPC procedure.
+- **Description:** Revalidates the student/tutor/admin role and Knowledge Bank eligibility, resolves the asset server-side, and streams it with `Cache-Control: private, no-store`. Its CSP permits framing only from configured app origin for the PDF preview; other API routes remain non-frameable. Tutors and admins bypass the student wallet threshold; students with an unexpired admin grant bypass it until the stored expiry timestamp. This is an Elysia file route, not an oRPC procedure.
 
 ### Verification
 

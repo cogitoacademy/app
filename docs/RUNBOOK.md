@@ -329,7 +329,7 @@ The route selects the dashboard from the authenticated session role. A tutor or 
 
 ### Knowledge Bank smoke check
 
-As an authenticated student, open `/knowledge-bank`. With at least 35 total Marks, confirm published Sanity resource metadata loads, category slugs render as human-readable labels in the filter dropdown, search/category filtering works, and the PDF preview opens through the authenticated `/content/knowledge-bank/:resourceId/file` proxy. Below 35 Marks, confirm the page stays locked and offers the balance/top-up action. Then sign in as a tutor and an admin with no Marks balance and confirm each role sees Knowledge Bank in the sidebar, the route loads resources, and the PDF preview opens without a wallet threshold. Opening the Knowledge Bank as an eligible student, tutor, or admin must not create a Marks deduction.
+As an authenticated student, open `/knowledge-bank`. With at least 35 total Marks, confirm published Sanity resource metadata loads, category slugs render as human-readable labels in the filter dropdown, search/category filtering works, and the PDF preview opens through the authenticated `/content/knowledge-bank/:resourceId/file` proxy. Inspect that file response: `Content-Security-Policy` must contain `frame-ancestors` with the configured app origin and `X-Frame-Options` must be absent; another API response must still use `frame-ancestors 'none'` and `X-Frame-Options: DENY`. Below 35 Marks, confirm the page stays locked and offers the balance/top-up action. Then sign in as a tutor and an admin with no Marks balance and confirm each role sees Knowledge Bank in the sidebar, the route loads resources, and the PDF preview opens without a wallet threshold. Opening the Knowledge Bank as an eligible student, tutor, or admin must not create a Marks deduction.
 
 For the admin exception flow, open `/admin-knowledge-bank` as an admin. Add a
 student by email with a future expiry and verify the student below 35 Marks can
@@ -841,6 +841,11 @@ bun run db:migrate
 Then call `adminMarkPackage.list` as an admin and confirm the four default codes are present. The next normal CD deployment runs this migration automatically; no per-deploy seed command or server-boot seed is required.
 
 ### Reset the Database
+
+For the exceptional production prelaunch wipe/reseed procedure, including the
+mandatory private-R2 backup and restore path, use
+[`PRODUCTION-DATA-RESET.md`](./PRODUCTION-DATA-RESET.md). Never delete the
+Coolify PostgreSQL resource or volume to reset application data.
 
 ```bash
 # Stop and remove the Docker container, then recreate:

@@ -1,4 +1,4 @@
-import { SECURITY_HEADERS } from "@cogito-app/api/lib/security-headers";
+import { securityHeadersForPath } from "@cogito-app/api/lib/security-headers";
 import {
   normalizeMetricsPath,
   recordRequest,
@@ -161,8 +161,9 @@ export function registerCors(app: Elysia) {
 }
 
 export function registerSecurityHeaders(app: Elysia) {
-  return app.onRequest(({ set }) => {
-    for (const [header, value] of Object.entries(SECURITY_HEADERS)) {
+  return app.onRequest(({ request, set }) => {
+    const headers = securityHeadersForPath(new URL(request.url).pathname);
+    for (const [header, value] of Object.entries(headers)) {
       set.headers[header] = value;
     }
   });

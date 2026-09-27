@@ -9,7 +9,7 @@ mock.module("@cogito-app/env/server", () => ({
   },
 }));
 
-const { SECURITY_HEADERS, buildCSP } =
+const { SECURITY_HEADERS, buildCSP, securityHeadersForPath } =
   await import("../../lib/security-headers");
 
 describe("SECURITY_HEADERS", () => {
@@ -72,5 +72,32 @@ describe("buildCSP", () => {
   test("includes frame-ancestors 'none'", () => {
     const csp = buildCSP("https://app.example.com");
     expect(csp).toContain("frame-ancestors 'none'");
+  });
+
+  test("accepts a scoped frame ancestor", () => {
+    const csp = buildCSP("https://app.example.com", "https://app.example.com");
+    expect(csp).toContain("frame-ancestors https://app.example.com");
+  });
+});
+
+describe("securityHeadersForPath", () => {
+  test("allows only the configured app to frame Knowledge Bank files", () => {
+    const headers = securityHeadersForPath(
+      "/content/knowledge-bank/resource-1/file",
+    );
+
+    expect(headers["X-Frame-Options"]).toBeUndefined();
+    expect(headers["Content-Security-Policy"]).toContain(
+      "frame-ancestors https://app.example.com",
+    );
+  });
+
+  test("keeps framing denied for other paths", () => {
+    const headers = securityHeadersForPath("/rpc/auth/me");
+
+    expect(headers["X-Frame-Options"]).toBe("DENY");
+    expect(headers["Content-Security-Policy"]).toContain(
+      "frame-ancestors 'none'",
+    );
   });
 });
