@@ -1,5 +1,6 @@
 "use client";
 
+import { usePostHog } from "@posthog/react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Avatar,
@@ -119,6 +120,7 @@ export function AppSidebar({
   role?: string;
 }) {
   const navigate = useNavigate();
+  const posthog = usePostHog();
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
@@ -149,6 +151,7 @@ export function AppSidebar({
       : resourceItems.slice(0, 2);
 
   function signOut() {
+    posthog.capture("account_signed_out");
     authClient.signOut({
       fetchOptions: {
         onSuccess: () => {

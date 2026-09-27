@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { usePostHog } from "@posthog/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -155,6 +156,7 @@ export function BookingDetailPage({
   extensions?: BookingDetailExtensions;
 }) {
   const navigate = useNavigate();
+  const posthog = usePostHog();
   const queryClient = useQueryClient();
   const [reviewDialog, setReviewDialog] = useState<"accept" | "decline" | null>(
     null,
@@ -216,6 +218,7 @@ export function BookingDetailPage({
   const cancel = useMutation(
     orpc.booking.cancel.mutationOptions({
       onSuccess: () => {
+        posthog.capture("booking_cancelled", { booking_type: booking.type });
         setConfirmationDialog(null);
         setCancellationReason("");
         toastManager.add({ title: "Booking cancelled", type: "success" });
@@ -232,6 +235,7 @@ export function BookingDetailPage({
   const accept = useMutation(
     orpc.tutorActions.acceptBooking.mutationOptions({
       onSuccess: () => {
+        posthog.capture("booking_accepted", { booking_type: booking.type });
         setReviewDialog(null);
         toastManager.add({ title: "Booking accepted", type: "success" });
         refreshBookingQueries();
@@ -247,6 +251,7 @@ export function BookingDetailPage({
   const decline = useMutation(
     orpc.tutorActions.declineBooking.mutationOptions({
       onSuccess: () => {
+        posthog.capture("booking_declined", { booking_type: booking.type });
         setReviewDialog(null);
         setDeclineReason("");
         toastManager.add({ title: "Booking declined", type: "success" });
@@ -263,6 +268,7 @@ export function BookingDetailPage({
   const complete = useMutation(
     orpc.tutorActions.completeSession.mutationOptions({
       onSuccess: () => {
+        posthog.capture("session_completed", { booking_type: booking.type });
         setCompleteDialog(null);
         toastManager.add({ title: "Session completed", type: "success" });
         refreshBookingQueries();

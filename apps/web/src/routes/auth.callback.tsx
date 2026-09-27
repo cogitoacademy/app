@@ -6,6 +6,7 @@ import {
   getPostLoginDestination,
   readTutorOnboardingStatus,
 } from "@/lib/post-login-redirect";
+import { rememberAuthOutcome } from "@/lib/posthog-auth";
 import { client } from "@/utils/orpc";
 import { validateLoginSearch } from "./-login-search";
 
@@ -20,6 +21,9 @@ export const Route = createFileRoute("/auth/callback")({
     }
 
     const sessionUser = session.data.user as CogitoUser;
+    if (search.authOutcome) {
+      rememberAuthOutcome(search.authOutcome);
+    }
     const role = sessionUser.role;
     const tutorOnboardingStatus =
       role === "tutor" && !search.redirect

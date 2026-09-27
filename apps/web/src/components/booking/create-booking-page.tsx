@@ -1,6 +1,7 @@
 "use client";
 
 import { type ReactNode, useEffect, useState } from "react";
+import { usePostHog } from "@posthog/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -162,6 +163,7 @@ function sessionTimesOverlap(
 
 export function CreateBookingPage({ tutorId }: { tutorId: string }) {
   const navigate = useNavigate();
+  const posthog = usePostHog();
   const queryClient = useQueryClient();
   const [selectedModality, setSelectedModality] = useState<Modality>("online");
   const [selectedSubjectId, setSelectedSubjectId] = useState("");
@@ -221,6 +223,23 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
   );
   const isGroupBooking = invitees.length > 0;
 
+  function captureBookingCreated() {
+    const bookingAttributes = {
+      booking_type: isGroupBooking
+        ? selectedSessions.length > 1
+          ? "group_series"
+          : "group"
+        : selectedSessions.length > 1
+          ? "series"
+          : "solo",
+      session_count: selectedSessions.length,
+      group_size: invitees.length + 1,
+      modality: selectedBookingModality,
+    };
+    posthog.capture("booking_created", bookingAttributes);
+    posthog.logger.info("booking creation completed", bookingAttributes);
+  }
+
   function addInvitee(student: StudentMatch) {
     setInvitees((current) =>
       current.length < maxInvitees &&
@@ -235,6 +254,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
   const createBooking = useMutation(
     orpc.booking.createSolo.mutationOptions({
       onSuccess: (booking) => {
+        captureBookingCreated();
         if (
           !booking ||
           typeof booking !== "object" ||
@@ -306,6 +326,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
   }
 
   function handleCreatedBooking(booking: unknown) {
+    captureBookingCreated();
     if (
       !booking ||
       typeof booking !== "object" ||

@@ -1,4 +1,7 @@
+import { isAuthOutcome, type AuthOutcome } from "@/lib/posthog-auth";
+
 export type LoginSearch = {
+  authOutcome?: AuthOutcome;
   redirect?: string;
 };
 
@@ -7,7 +10,13 @@ export function validateLoginSearch(
 ): LoginSearch {
   const redirect = search.redirect;
   if (redirect && redirect.startsWith("/") && !redirect.startsWith("//")) {
-    return { redirect };
+    const authOutcome = isAuthOutcome(search.authOutcome)
+      ? search.authOutcome
+      : undefined;
+    return authOutcome ? { authOutcome, redirect } : { redirect };
   }
-  return {};
+
+  return isAuthOutcome(search.authOutcome)
+    ? { authOutcome: search.authOutcome }
+    : {};
 }

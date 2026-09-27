@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePostHog } from "@posthog/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
@@ -185,6 +186,7 @@ export function BookingLifecycleActions({
 }) {
   const showActions = section !== "supplementary";
   const showSupplementary = section !== "actions";
+  const posthog = usePostHog();
   const [dialog, setDialog] = useState<DialogKind>(null);
   const [supportCategory, setSupportCategory] =
     useState<SupportCategory>("tutor_late");
@@ -252,6 +254,10 @@ export function BookingLifecycleActions({
   const accept = useMutation(
     orpc.booking.acceptReschedule.mutationOptions({
       onSuccess: () => {
+        posthog.capture("booking_reschedule_accepted", {
+          booking_type: bookingType,
+          viewer_role: viewerRole,
+        });
         toastManager.add({ title: "New schedule accepted", type: "success" });
         onBookingChanged();
       },
@@ -262,6 +268,10 @@ export function BookingLifecycleActions({
   const reject = useMutation(
     orpc.booking.rejectReschedule.mutationOptions({
       onSuccess: () => {
+        posthog.capture("booking_reschedule_rejected", {
+          booking_type: bookingType,
+          viewer_role: viewerRole,
+        });
         toastManager.add({ title: "Reschedule rejected", type: "success" });
         onBookingChanged();
       },

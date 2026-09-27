@@ -10,6 +10,8 @@
 
 ## Completed (merged to main)
 
+| [POSTHOG-BROWSER-ANALYTICS.md](completed/POSTHOG-BROWSER-ANALYTICS.md) | working tree | **Completed locally 2026-09-27** — browser analytics, identity-safe auth/booking events, exception capture, explicit Logs, and Google/email auth outcome attribution |
+
 | [TUTOR-PROFILE-CANONICAL-FIELDS.md](completed/TUTOR-PROFILE-CANONICAL-FIELDS.md) | working tree | **Completed locally 2026-09-25** — canonical tutor achievements/experiences, required-on-review affiliation, moderation/discovery wiring, and migration |
 
 | [TUTOR-CLASS-CAPACITY.md](completed/TUTOR-CLASS-CAPACITY.md) | working tree | **Completed locally 2026-09-22** — modality-specific tutor capacity limits now constrain discovery pricing, booking invitees, and server-side group creation |

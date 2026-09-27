@@ -1,6 +1,28 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-09-25
+Last updated: 2026-09-27
+
+## PostHog browser analytics and auth attribution (2026-09-27)
+
+The web app initializes one provider-scoped PostHog browser client from
+`VITE_PUBLIC_POSTHOG_PROJECT_TOKEN` and `VITE_PUBLIC_POSTHOG_HOST` when both
+values exist. It captures browser exceptions, PostHog Logs records from the
+three instrumented success paths, and the product event contract for auth,
+booking, tutor onboarding, lifecycle, and session-completion actions. Events
+carry the Better Auth `user.id` identity after session resolution; event
+properties contain no personal data. Missing config is a loud development
+error and a production no-op that preserves the existing error boundary.
+
+Google OAuth passes separate Better Auth `callbackURL` and
+`newUserCallbackURL` values. The frontend callback stores the resolved outcome
+(`signed-in` or `created`) in session storage, then `PostHogIdentity` identifies
+the user before capturing `account_signed_in` or `account_created`. Email
+authentication uses the same handoff, so both methods include the correct
+`authentication_method` without an anonymous auth event. The web Docker build
+accepts the public PostHog values as build args; production CD supplies them
+from GitHub Actions secrets. This is frontend/deployment configuration only; no
+RPC, schema, or server event contract changed. Delivery still requires browser
+smoke verification in PostHog.
 
 ## Role-based dashboard analytics (2026-09-25)
 

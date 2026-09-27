@@ -30,6 +30,7 @@ import {
   getPostLoginDestination,
   readTutorOnboardingStatus,
 } from "@/lib/post-login-redirect";
+import { buildAuthCallbackUrl, rememberAuthOutcome } from "@/lib/posthog-auth";
 import { client } from "@/utils/orpc";
 
 import { getAuthErrorMessage } from "./auth-error-message";
@@ -96,6 +97,7 @@ export default function SignInForm({
         }
 
         const sessionUser = session.data.user as CogitoUser | undefined;
+        rememberAuthOutcome("signed-in", "email");
         const role = sessionUser?.role;
         const tutorOnboardingStatus =
           role === "tutor" && !redirectPath
@@ -183,17 +185,14 @@ export default function SignInForm({
             block
             size="sm"
             onClick={() => {
-              const callbackUrl = new URL(
-                "/auth/callback",
-                window.location.origin,
-              );
-              if (redirectPath) {
-                callbackUrl.searchParams.set("redirect", redirectPath);
-              }
               authClient.signIn.social(
                 {
                   provider: "google",
-                  callbackURL: callbackUrl.toString(),
+                  callbackURL: buildAuthCallbackUrl("signed-in", redirectPath),
+                  newUserCallbackURL: buildAuthCallbackUrl(
+                    "created",
+                    redirectPath,
+                  ),
                 },
                 {
                   onError: (error) => {

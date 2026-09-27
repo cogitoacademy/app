@@ -20,6 +20,8 @@
     "@orpc/client": "catalog:",
     "@orpc/server": "catalog:",
     "@orpc/tanstack-query": "^1.13.14",
+    "@posthog/react": "^1.6.0",
+    "posthog-js": "^1.434.15",
     "@tabler/icons-react": "^3.46.0",
     "@tailwindcss/vite": "^4.3.3",
     "@tanstack/react-form": "^1.33.4",

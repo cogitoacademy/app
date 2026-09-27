@@ -22,7 +22,11 @@ COPY . .
 # route to the API.
 # CI passes the per-environment value via --build-arg (cd-prod/cd-staging).
 ARG VITE_SERVER_URL=https://api.cogitoacademy.id
+ARG VITE_PUBLIC_POSTHOG_PROJECT_TOKEN
+ARG VITE_PUBLIC_POSTHOG_HOST
 ENV VITE_SERVER_URL=$VITE_SERVER_URL
+ENV VITE_PUBLIC_POSTHOG_PROJECT_TOKEN=$VITE_PUBLIC_POSTHOG_PROJECT_TOKEN
+ENV VITE_PUBLIC_POSTHOG_HOST=$VITE_PUBLIC_POSTHOG_HOST
 RUN bun run build:web
 
 # C5: pin the nginx base to a digest and run as the unprivileged nginx user.
