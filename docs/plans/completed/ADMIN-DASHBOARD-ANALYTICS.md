@@ -31,9 +31,10 @@ turning the operational queue into a misleading analytics sample.
 Period metrics use booking/user creation time and WIB calendar boundaries.
 Completion rate is completed bookings divided by completed plus terminal
 exception bookings in the selected creation cohort. The current state mix is
-all-time by design so it represents the live admin workload. Marks-based
-platform take is a locked booking-snapshot signal and is explicitly not a cash
-revenue report.
+all-time by design so it represents the live admin workload. Booked value and
+platform share are exposed in both Marks and IDR from each booking's locked
+pricing fields. Later economy changes do not rewrite them, and they are
+explicitly not a cash-revenue report.
 
 ## Verification
 

@@ -50,6 +50,8 @@ describe("getDashboardAnalytics", () => {
       activeLearners: 3,
       grossMarks: 120,
       platformTakeMarks: 24,
+      grossIdr: 600_000,
+      platformTakeIdr: 120_000,
     };
     const select = makeSelectSequence([
       [bookingSummary],

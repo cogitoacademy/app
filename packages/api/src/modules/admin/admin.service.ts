@@ -41,6 +41,8 @@ export interface DashboardAnalytics {
     newTutors: number;
     grossMarks: number;
     platformTakeMarks: number;
+    grossIdr: number;
+    platformTakeIdr: number;
   };
   bookingTrend: Array<{
     date: string;
@@ -249,6 +251,8 @@ export function createAdminService(deps: {
         newTutors: toNumber(userSummary.newTutors),
         grossMarks: toNumber(bookingSummary.grossMarks),
         platformTakeMarks: toNumber(bookingSummary.platformTakeMarks),
+        grossIdr: toNumber(bookingSummary.grossIdr),
+        platformTakeIdr: toNumber(bookingSummary.platformTakeIdr),
       },
       bookingTrend: dateKeys.map((date) => {
         const row = bookingTrendByDate.get(date);

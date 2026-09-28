@@ -52,7 +52,10 @@ describe("Booking invite withdrawal", () => {
   const inviteeEmail = `invitee.withdraw.${ts}@cogito.test`;
   const otherInviteeEmail = `invitee2.withdraw.${ts}@cogito.test`;
   let proposerClient: TestClient;
+  let inviteeClient: TestClient;
+  let otherInviteeClient: TestClient;
   let inviteeId: string;
+  let otherInviteeId: string;
   let tutorId: string;
   let slotId: string;
 
@@ -115,6 +118,7 @@ describe("Booking invite withdrawal", () => {
       "Invitee Withdraw",
     );
     const inviteeContext = await createTestContext(invitee.cookie);
+    inviteeClient = createTestClient(inviteeContext);
     if (!inviteeContext.session?.user)
       throw new Error("test setup: expected invitee session user");
     inviteeId = inviteeContext.session.user.id;
@@ -126,12 +130,14 @@ describe("Booking invite withdrawal", () => {
       "Other Invitee",
     );
     const otherContext = await createTestContext(otherInvitee.cookie);
+    otherInviteeClient = createTestClient(otherContext);
     if (!otherContext.session?.user)
       throw new Error("test setup: expected other invitee session user");
-    await creditWallet(otherContext.session.user.id, 100);
+    otherInviteeId = otherContext.session.user.id;
+    await creditWallet(otherInviteeId, 100);
   });
 
-  test("proposer can withdraw one pending invite without changing headcount", async () => {
+  test("withdrawing the last invite expires an undersized group", async () => {
     const booking = await proposerClient.booking.createGroup({
       tutorId,
       availabilitySlotId: slotId,
@@ -150,8 +156,9 @@ describe("Booking invite withdrawal", () => {
     });
 
     expect(result).toEqual({ withdrawn: true, inviteeUserId: inviteeId });
-    expect(booking.confirmedHeadcount).toBe(1);
-    expect(booking.currentState).toBe("awaiting_participant_confirmation");
+    const fetched = await proposerClient.booking.get({ bookingId: booking.id });
+    expect(fetched.confirmedHeadcount).toBe(1);
+    expect(fetched.currentState).toBe("expired");
 
     const [participant] = await db
       .select()
@@ -180,5 +187,29 @@ describe("Booking invite withdrawal", () => {
       );
     expect(inviteNotification!.title).toBe("Group invitation withdrawn");
     expect(inviteNotification!.body).toContain("group size changed");
+  });
+
+  test("declining the last invite sends a viable partial group to reconfirmation", async () => {
+    const booking = await proposerClient.booking.createGroup({
+      tutorId,
+      availabilitySlotId: slotId,
+      modality: "online",
+      targetGroupSize: 3,
+      inviteeUserIds: [inviteeId, otherInviteeId],
+      scheduledStartAt: new Date(Date.now() + 72 * 3_600_000).toISOString(),
+      scheduledEndAt: new Date(Date.now() + 73 * 3_600_000).toISOString(),
+      timezone: "Asia/Jakarta",
+    });
+
+    await inviteeClient.booking.confirmInvite({ bookingId: booking.id });
+    await otherInviteeClient.booking.declineInvite({
+      bookingId: booking.id,
+      reason: "Cannot attend",
+    });
+
+    const fetched = await proposerClient.booking.get({ bookingId: booking.id });
+    expect(fetched.confirmedHeadcount).toBe(2);
+    expect(fetched.currentState).toBe("awaiting_reconfirmation");
+    expect(fetched.deadlineAt).not.toBeNull();
   });
 });

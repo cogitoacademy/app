@@ -174,10 +174,10 @@ reduced-motion and token-based overlay styles remain in effect.
 
 The 2026-09-02 admin booking-detail layout consolidation adds no environment
 variables, migrations, jobs, or operational steps.
-The 2026-09-03 override-participant selector update also adds no environment
-variables, migrations, jobs, or API contract changes. In the override dialog,
-choose affected people from the booking roster by name/role; do not type user
-IDs manually.
+The 2026-09-28 automatic override policy adds no environment variables,
+migrations, or jobs. In the override dialog, choose only the category and
+reason; the roster is read-only and shows the derived outcome for every student
+and the tutor. There must be no separate Marks-action or participant selector.
 For an offline scheduled booking, remove its room and verify the room selector
 remains available; assigning a new room must succeed without changing the
 scheduled session window.
@@ -459,7 +459,7 @@ Force the Google provider into an unavailable state or use the fallback test pro
 bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests/integration/admin-meeting-link.test.ts
 ```
 
-For a force-majeure or other exceptional case, use the admin override flow with an auditable reason and the appropriate affected participants/Marks action. For `force_cancel` + `release_holds`, verify the booking becomes `cancelled`, participant holds and booking `holdAmount` become zero, a ledger entry and state-history/audit records exist, and provider meeting cleanup is best-effort. A second override on the terminal booking must be rejected. Do not use the normal student reschedule route to bypass H-2; after H-2 the case goes through support/admin handling. The force-cancel regression command is:
+For a force-majeure or other exceptional case, use the admin override flow with an auditable category and reason. Verify the preview automatically includes students and tutor. For `student_no_show`, student holds must be forfeited and the preview must show the tutor as payout-eligible. For every other category, student holds must be returned and the tutor must be ineligible. After apply, verify the booking is terminal, booking/participant holds reconcile to zero, ledger plus state-history/audit records exist, and provider meeting cleanup is best-effort. A second override on the terminal booking must be rejected. Do not use the normal student reschedule route to bypass H-2; after H-2 the case goes through support/admin handling. The override regression command is:
 
 ```bash
 bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests/integration/admin-override.test.ts
@@ -555,7 +555,7 @@ The response should be the standard oRPC envelope with a JSON array. Inspect one
 
 On a completed booking, verify there is no separate Session notes card, rich-text editor, preview, textarea, or Add note action. Student notes should appear in the Session overview, and when tutor feedback exists it should appear directly below them with the three feedback groups rendered as bullet lists. The legacy `addSessionNote` and `getSessionNotes` procedures remain available for protected API clients, but they are not part of the web booking-detail surface.
 
-For a group booking with a pending invite, verify the invitee sees **Accept invitation** and **Decline invitation** (decline is the pre-confirmation exit path). As the booking proposer, verify **Withdraw invite** opens an in-app confirmation dialog, optionally records a reason, marks only the selected pending invitee `withdrawn_pre_h2`, leaves confirmed headcount and Marks holds unchanged, and creates a notification for that invitee. A confirmed participant uses the separate participant `withdraw` flow; group-series no-opt-out rules still apply. For a one-session group, verify the booking form shows both the per-student price and the full temporary target-headcount hold, and blocks submit when the wallet cannot cover that hold.
+For a group booking with a pending invite, verify the invitee sees **Accept invitation** and **Decline invitation** (decline is the pre-confirmation exit path). As the booking proposer, verify **Withdraw invite** opens an in-app confirmation dialog, optionally records a reason, marks only the selected pending invitee `withdrawn_pre_h2`, leaves confirmed headcount unchanged, and creates a notification for that invitee. If another pending invite remains, the parent must stay in `awaiting_participant_confirmation`. If this is the final pending invite, verify fewer than two confirmed participants releases holds and expires the booking; a viable partial group enters `awaiting_reconfirmation` with a fresh deadline; a full group advances to `awaiting_tutor_review`. Expired group-series sessions must be cancelled. A confirmed participant uses the separate participant `withdraw` flow; group-series no-opt-out rules still apply. For a one-session group, verify the booking form shows both the per-student price and the full temporary target-headcount hold, and blocks submit when the wallet cannot cover that hold. On tutor dashboard, verify **Needs action** matches Bookings **Needs action** rather than showing tutor-review requests only.
 
 For booking deadline coverage, inspect a new online request, an offline request awaiting room approval, a group invite, and an `awaiting_reconfirmation` booking. Each detail page should show a timezone-aware **Respond by** notice with a live remaining window; an expired or near-expiry deadline should use the danger treatment. Confirm an invite, decline an invite, and accept/reject a reschedule from separate participant sessions. For an offline booking with a confirmed room, accept a new booking-level time and verify the room window moves with it; reject or let the proposal expire and verify the room returns to the original window. A conflicting room window must return the booking to admin room approval rather than leaving a stale room reservation. After H-2, confirm student self-service cancellation/reschedule is blocked and the late-cancellation/no-show path is surfaced with the expected warning and hold outcome. Tutor lateness reporting must be available for both online and offline scheduled bookings after the 15-minute tolerance.
 

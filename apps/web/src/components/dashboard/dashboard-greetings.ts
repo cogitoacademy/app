@@ -3,7 +3,7 @@ export type DayPeriod = "morning" | "midday" | "afternoon" | "evening";
 
 type GreetingContext = {
   hasUpcomingLesson?: boolean;
-  reviewCount?: number;
+  actionCount?: number;
   priorityCount?: number;
 };
 
@@ -152,11 +152,11 @@ export function createDashboardGreeting(
       "Your next lesson is lined up — arrive curious and ready to grow.",
       "A learning session is coming up. A quick review now will go a long way.",
     ];
-  } else if (role === "tutor" && (context.reviewCount ?? 0) > 0) {
+  } else if (role === "tutor" && (context.actionCount ?? 0) > 0) {
     descriptions = [
-      `You have ${context.reviewCount} student ${context.reviewCount === 1 ? "request" : "requests"} waiting for review.`,
-      `${context.reviewCount} ${context.reviewCount === 1 ? "learner is" : "learners are"} waiting for your response.`,
-      "Start with the student request queue, then check your next session.",
+      `You have ${context.actionCount} booking ${context.actionCount === 1 ? "item" : "items"} needing action.`,
+      `${context.actionCount} ${context.actionCount === 1 ? "booking needs" : "bookings need"} your response.`,
+      "Start with the action queue, then check your next session.",
     ];
   } else if (role === "admin" && (context.priorityCount ?? 0) > 0) {
     descriptions = [

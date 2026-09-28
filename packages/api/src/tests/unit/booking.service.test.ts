@@ -78,6 +78,7 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     updateParticipantState: mock(async () => {}),
     findParticipant: mock(async () => null),
     findConfirmedParticipants: mock(async () => []),
+    findPendingInvitees: mock(async () => []),
     findUserEmails: mock(async () => []),
     findUsersByIds: mock(async () => []),
     findReconfirmedParticipants: mock(async () => []),
@@ -3067,6 +3068,78 @@ describe("BookingService", () => {
       expect(repo.updateParticipantState.mock.calls[0][2]).toMatchObject({
         confirmationState: "declined",
       });
+    });
+
+    test("resolves a viable partial group when the last pending invite is declined", async () => {
+      const booking = makeBooking({
+        type: "group",
+        currentState: "awaiting_participant_confirmation",
+        targetGroupSize: 3,
+        confirmedHeadcount: 2,
+      });
+      const confirmed = [
+        makeParticipant({ id: "p1", userId: "student1", heldAmount: 42 }),
+        makeParticipant({ id: "p3", userId: "student3", heldAmount: 42 }),
+      ];
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => booking),
+          findParticipant: mock(async () =>
+            makeParticipant({
+              role: "invitee",
+              userId: "student2",
+              confirmationState: "pending",
+            }),
+          ),
+          findPendingInvitees: mock(async () => []),
+          findConfirmedParticipants: mock(async () => confirmed),
+          findTutorProfile: mock(async () => makeTutorProfile()),
+        },
+      });
+
+      await service.declineInvite("student2", "b1", "busy");
+
+      expect(repo.updateBookingVersioned).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        1,
+        expect.objectContaining({
+          currentState: "awaiting_reconfirmation",
+        }),
+      );
+      expect(repo.updateBookingDeadline).toHaveBeenCalledTimes(1);
+    });
+
+    test("keeps awaiting participants while another invite is pending", async () => {
+      const booking = makeBooking({
+        type: "group",
+        currentState: "awaiting_participant_confirmation",
+        targetGroupSize: 3,
+      });
+      const { service, repo } = createService({
+        repo: {
+          findBookingById: mock(async () => booking),
+          findParticipant: mock(async () =>
+            makeParticipant({
+              role: "invitee",
+              userId: "student2",
+              confirmationState: "pending",
+            }),
+          ),
+          findPendingInvitees: mock(async () => [
+            makeParticipant({
+              id: "p3",
+              userId: "student3",
+              role: "invitee",
+              confirmationState: "pending",
+            }),
+          ]),
+        },
+      });
+
+      await service.declineInvite("student2", "b1");
+
+      expect(repo.updateBookingVersioned).not.toHaveBeenCalled();
     });
 
     test("throws BookingNotEditableError when user is not an invitee", async () => {
@@ -8625,6 +8698,50 @@ describe("BookingService coverage paths", () => {
     const body = calls[0]![0].body as string;
     expect(body).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
     expect(body).not.toContain("<script>");
+  });
+
+  test("withdrawInvite expires an undersized group when the last invite is withdrawn", async () => {
+    const booking = makeBooking({
+      type: "group",
+      currentState: "awaiting_participant_confirmation",
+      targetGroupSize: 2,
+      confirmedHeadcount: 1,
+    });
+    const proposer = makeParticipant({
+      id: "p1",
+      userId: "student1",
+      role: "proposer",
+      heldAmount: 84,
+    });
+    const { service, repo, wallet } = createService({
+      repo: {
+        findBookingById: mock(async () => booking),
+        findParticipant: mock(async () =>
+          makeParticipant({
+            role: "invitee",
+            userId: "student2",
+            confirmationState: "pending",
+          }),
+        ),
+        findPendingInvitees: mock(async () => []),
+        findConfirmedParticipants: mock(async () => [proposer]),
+      },
+    });
+
+    await service.withdrawInvite("student1", "b1", "student2");
+
+    expect(wallet.release).toHaveBeenCalledTimes(1);
+    expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
+      expect.anything(),
+      "b1",
+      0,
+    );
+    expect(repo.updateBookingVersioned).toHaveBeenCalledWith(
+      expect.anything(),
+      "b1",
+      1,
+      expect.objectContaining({ currentState: "expired" }),
+    );
   });
 
   test("cancels an unknown booking type defensively during withdraw", async () => {

@@ -131,6 +131,16 @@ export async function getDashboardAnalytics(
   const exceptionCount = sql<number>`count(*) FILTER (WHERE ${booking.currentState} IN ('declined', 'cancelled', 'late_cancelled', 'no_show', 'expired'))::int`;
   const grossMarks = sql<number>`coalesce(sum(${booking.originalMarks}), 0)::int`;
   const platformTakeMarks = sql<number>`coalesce(sum(coalesce(nullif(${booking.priceSnapshot}->>'cogitoTake', '')::numeric, 0)), 0)::int`;
+  const grossIdr = sql<number>`coalesce(sum(coalesce(
+    nullif(${booking.priceSnapshot}->>'totalIdr', '')::numeric,
+    ${booking.originalMarks} * nullif(${booking.priceSnapshot}->>'markValueIdr', '')::numeric,
+    0
+  )), 0)::bigint`;
+  const platformTakeIdr = sql<number>`coalesce(sum(coalesce(
+    nullif(${booking.priceSnapshot}->>'cogitoTakeIdr', '')::numeric,
+    nullif(${booking.priceSnapshot}->>'cogitoTake', '')::numeric * nullif(${booking.priceSnapshot}->>'markValueIdr', '')::numeric,
+    0
+  )), 0)::bigint`;
   const studentCount = sql<number>`count(*) FILTER (WHERE ${user.role} = 'student')::int`;
   const tutorCount = sql<number>`count(*) FILTER (WHERE ${user.role} = 'tutor')::int`;
 
@@ -151,6 +161,8 @@ export async function getDashboardAnalytics(
         activeLearners: sql<number>`count(distinct ${booking.proposerId})::int`,
         grossMarks,
         platformTakeMarks,
+        grossIdr,
+        platformTakeIdr,
       })
       .from(booking)
       .where(periodFilter),
@@ -217,6 +229,8 @@ export async function getDashboardAnalytics(
       activeLearners: 0,
       grossMarks: 0,
       platformTakeMarks: 0,
+      grossIdr: 0,
+      platformTakeIdr: 0,
     },
     userSummary: userSummaryRows[0] ?? { newStudents: 0, newTutors: 0 },
     bookingTrend,

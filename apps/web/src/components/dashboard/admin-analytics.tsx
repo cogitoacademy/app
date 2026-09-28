@@ -119,6 +119,13 @@ const numberFormatter = new Intl.NumberFormat("id-ID");
 const percentageFormatter = new Intl.NumberFormat("id-ID", {
   maximumFractionDigits: 1,
 });
+
+function formatIdr(value: unknown) {
+  const amount = Number(value);
+  return Number.isFinite(amount)
+    ? `Rp${numberFormatter.format(amount)}`
+    : "Unavailable";
+}
 const tooltipStyle = {
   backgroundColor: "var(--popover)",
   border: "1px solid var(--popover-border)",
@@ -167,6 +174,7 @@ export function AdminAnalytics() {
   const analytics = useQuery(
     orpc.admin.getDashboardAnalytics.queryOptions({ input: { period } }),
   );
+  const economy = useQuery(orpc.admin.getEconomySettings.queryOptions());
   const selectedPeriod = PERIOD_OPTIONS.find(
     (option) => option.value === period,
   );
@@ -216,6 +224,7 @@ export function AdminAnalytics() {
         <AnalyticsContent
           data={analytics.data}
           periodDescription={selectedPeriod?.description ?? "Selected period"}
+          fallbackMarkValueIdr={economy.data?.markValueIdr}
         />
       )}
     </section>
@@ -225,9 +234,11 @@ export function AdminAnalytics() {
 function AnalyticsContent({
   data,
   periodDescription,
+  fallbackMarkValueIdr,
 }: {
   data: DashboardAnalytics;
   periodDescription: string;
+  fallbackMarkValueIdr?: number;
 }) {
   const stateData = STATE_ORDER.map((state) => {
     const row = data.stateBreakdown.find(
@@ -245,6 +256,20 @@ function AnalyticsContent({
     1,
     ...data.categoryBreakdown.map((row) => row.bookings),
   );
+  const lockedGrossIdr = Number(data.summary.grossIdr);
+  const lockedPlatformTakeIdr = Number(data.summary.platformTakeIdr);
+  const usesCurrentRateFallback =
+    !Number.isFinite(lockedGrossIdr) || !Number.isFinite(lockedPlatformTakeIdr);
+  const grossIdr = Number.isFinite(lockedGrossIdr)
+    ? lockedGrossIdr
+    : fallbackMarkValueIdr
+      ? data.summary.grossMarks * fallbackMarkValueIdr
+      : undefined;
+  const platformTakeIdr = Number.isFinite(lockedPlatformTakeIdr)
+    ? lockedPlatformTakeIdr
+    : fallbackMarkValueIdr
+      ? data.summary.platformTakeMarks * fallbackMarkValueIdr
+      : undefined;
 
   return (
     <>
@@ -265,20 +290,25 @@ function AnalyticsContent({
         />
         <AnalyticsMetric
           icon={<IconChartHistogram />}
-          label="Booked Marks (snapshot)"
-          value={
-            <CogitoMarks
-              value={numberFormatter.format(data.summary.grossMarks)}
-              size="5"
-            />
-          }
+          label="Booked value (locked at booking)"
+          value={formatIdr(grossIdr)}
           helper={
-            <div className="flex items-center gap-x-1">
-              <CogitoMarks
-                value={numberFormatter.format(data.summary.platformTakeMarks)}
-                size="3"
-              />{" "}
-              platform take snapshot
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-x-1">
+                Equivalent to
+                <CogitoMarks
+                  value={numberFormatter.format(data.summary.grossMarks)}
+                  size="3"
+                />
+              </div>
+              <div>
+                Platform share: {formatIdr(platformTakeIdr)} (
+                <CogitoMarks
+                  value={numberFormatter.format(data.summary.platformTakeMarks)}
+                  size="3"
+                />
+                )
+              </div>
             </div>
           }
           tone="info-subtle"
@@ -660,8 +690,10 @@ function AnalyticsContent({
       </div>
 
       <Text className="mt-3 text-xs text-dimmed">
-        Platform take is shown in Marks from each booking&apos;s locked price
-        snapshot. It is an operational signal, not a cash-revenue report.
+        {usesCurrentRateFallback
+          ? "IDR estimates use the active Marks rate because this API response predates locked IDR totals. "
+          : "Booked value and platform share use IDR amounts locked when each booking was created. Later price changes do not alter these figures. "}
+        This is an operational booking value, not cash revenue received.
       </Text>
     </>
   );
@@ -693,7 +725,7 @@ function AnalyticsMetric({
         <Heading size="sm" className="mt-1 break-words text-2xl">
           {value}
         </Heading>
-        <Text className="mt-2 text-xs text-dimmed">{helper}</Text>
+        <div className="mt-2 text-xs text-dimmed">{helper}</div>
       </CardBody>
     </Card>
   );

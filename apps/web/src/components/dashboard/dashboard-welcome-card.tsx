@@ -15,7 +15,7 @@ export type DashboardWelcomeCardProps = {
   name: string;
   viewerRole: DashboardRole;
   hasUpcomingLesson?: boolean;
-  reviewCount?: number;
+  actionCount?: number;
   priorityCount?: number;
 };
 
@@ -23,7 +23,7 @@ export function DashboardWelcomeCard({
   name,
   viewerRole,
   hasUpcomingLesson = false,
-  reviewCount = 0,
+  actionCount = 0,
   priorityCount = 0,
 }: DashboardWelcomeCardProps) {
   const now = useNow(60_000);
@@ -33,7 +33,7 @@ export function DashboardWelcomeCard({
     name,
     new Date(now).getHours(),
     randomValue,
-    { hasUpcomingLesson, reviewCount, priorityCount },
+    { hasUpcomingLesson, actionCount, priorityCount },
   );
   return (
     <Card className="relative min-h-70 md:min-h-40 overflow-hidden bg-primary/10">

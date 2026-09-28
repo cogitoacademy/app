@@ -503,7 +503,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Admin
 - **Input:** `{ period?: "7d" | "30d" | "90d" }` (default `"30d"`)
 - **Output:** `{ period, periodStart, periodEnd, summary, bookingTrend, userTrend, stateBreakdown, modalityBreakdown, categoryBreakdown }`
-- **Description:** Returns the aggregate data used by the admin Business insights section. Period metrics use booking/user creation time and WIB calendar days; `summary.activeLearners` is explicitly a distinct booking-proposer count, not a participant or login-active-user count. `summary.grossMarks` and `summary.platformTakeMarks` are locked booking-price snapshots, not cash revenue or settlement. `stateBreakdown` is the live all-bookings state mix, while modality/category breakdowns are scoped to the selected period. Missing trend days are returned as zero rows so charts stay continuous.
+- **Description:** Returns the aggregate data used by the admin Business insights section. Period metrics use booking/user creation time and WIB calendar days; `summary.activeLearners` is explicitly a distinct booking-proposer count, not a participant or login-active-user count. `summary.grossMarks`/`summary.platformTakeMarks` and `summary.grossIdr`/`summary.platformTakeIdr` are summed from each booking's locked pricing fields. They represent operational booking value at creation-time prices, not cash revenue or settlement. `stateBreakdown` is the live all-bookings state mix, while modality/category breakdowns are scoped to the selected period. Missing trend days are returned as zero rows so charts stay continuous.
 
 ### `admin.listUsers`
 
@@ -1198,13 +1198,14 @@ RPC contract.
 - **Auth:** Student (invitee)
 - **Input:** `{ bookingId, reason? }`
 - **Output:** `{ declined: true }`
+- **Description:** Declines one pending group or group-series invitation. When no pending invitees remain, the parent resolves immediately: fewer than two confirmed participants expires the booking and releases holds; a viable partial group enters `awaiting_reconfirmation` with a fresh response window; a full group enters `awaiting_tutor_review`.
 
 ### `booking.withdrawInvite`
 
 - **Auth:** Student (booking proposer)
 - **Input:** `{ bookingId, inviteeUserId, reason? }`
 - **Output:** `{ withdrawn: true, inviteeUserId }`
-- **Description:** Withdraws one pending group or group-series invitation before confirmation. The target participant is marked `withdrawn_pre_h2`; confirmed headcount and Marks holds are unchanged, and the invitee receives a booking notification.
+- **Description:** Withdraws one pending group or group-series invitation before confirmation. The target participant is marked `withdrawn_pre_h2`, confirmed headcount is unchanged, and the invitee receives a booking notification. When no pending invitees remain, the same parent resolution as `booking.declineInvite` runs; undersized bookings release remaining holds and expire, while viable partial groups enter reconfirmation.
 
 ### `booking.reconfirm`
 
@@ -1421,8 +1422,8 @@ The successful mutation also best-effort updates the existing offline Calendar e
 ### `adminBooking.applyOverride`
 
 - **Auth:** Admin
-- **Input:** `{ bookingId, category, reason, affectedParticipants?, marksAction?, userNote?, internalNote? }` (`category` one of tutor_no_show/medical_emergency/technical_failure/admin_correction/student_no_show/force_cancel; `marksAction` one of release_holds/compensate_credit/compensate_deduct)
-- **Output:** `{ booking }` — the updated booking
+- **Input:** `{ bookingId, category, reason, affectedParticipants?, marksAction?, userNote?, internalNote? }` (`category` one of tutor_no_show/medical_emergency/technical_failure/admin_correction/student_no_show/force_cancel). Omit `affectedParticipants` and `marksAction` to use the automatic category policy (the web client always does this): `student_no_show` forfeits student holds and preserves tutor payout eligibility; every other category returns student holds and withholds tutor payout. Explicit legacy values remain accepted for backwards compatibility (`marksAction`: release_holds/compensate_credit/compensate_deduct).
+- **Output:** `{ booking }` — the updated booking; resolved financial policy is recorded in `overrideMeta`
 - **Errors:** `BOOKING_NOT_FOUND` (404), terminal-state override rejected (`TERMINAL_STATE_OVERRIDE`, 409 — message names the final status, e.g. "This booking is already completed and can no longer be overridden. Final bookings are locked — check state history or use a wallet correction if Marks need fixing.")
 - **Description:** Force state transition bypassing the state machine; optionally adjusts held Marks per participant; records audit log + state history + participant notification
 - **Frontend note:** The admin override form reads the booking roster through protected `booking.get` and presents names/roles in a multi-select. It submits the selected participant user IDs automatically in `affectedParticipants`; the API input remains unchanged.
@@ -1431,7 +1432,7 @@ The successful mutation also best-effort updates the existing offline Calendar e
 
 - **Auth:** Admin
 - **Input:** Same as `applyOverride`
-- **Output:** `{ bookingId, currentState, projectedState, affectedParticipants, marksAction, perParticipantImpact }` — no persistence
+- **Output:** `{ bookingId, currentState, projectedState, affectedParticipants, marksAction, tutorPayoutEligible, perParticipantImpact }` — no persistence. `affectedParticipants` includes students and tutor for notifications; `perParticipantImpact` contains student wallet movements.
 - **Errors:** Same terminal-state rejection as `applyOverride` (`TERMINAL_STATE_OVERRIDE`, 409)
 - **Description:** Returns the projected booking state and per-participant wallet impact before applying
 

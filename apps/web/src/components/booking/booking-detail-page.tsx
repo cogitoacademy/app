@@ -567,7 +567,7 @@ export function BookingDetailPage({
                 getBookingStateDescription(booking.currentState)}
             </Text>
             {booking.disclaimer ? (
-              <div className="mt-3 max-w-2xl rounded-lg border border-warning-border bg-warning/10 px-3 py-2 text-sm text-warning-foreground">
+              <div className="mt-3 max-w-4xl rounded-lg border border-warning-border bg-warning/10 px-3 py-2 text-sm leading-relaxed text-foreground">
                 {booking.disclaimer}
               </div>
             ) : null}
@@ -1028,19 +1028,19 @@ export function BookingDetailPage({
               <Card className="min-w-0 overflow-hidden">
                 <CardHeader>
                   <CardTitle>
-                    Activity
+                    History
                     <CardInfoPreview>
                       <InfoPreview
-                        title="Activity"
+                        title="History"
                         description="A chronological record of this booking"
-                        label="About booking activity"
+                        label="About booking history"
                       />
                     </CardInfoPreview>
                   </CardTitle>
                 </CardHeader>
                 <CardBody className="px-6">
                   {history.length > 0 ? (
-                    <ol aria-label="Booking activity" className="relative">
+                    <ol aria-label="Booking history" className="relative">
                       {history.map((entry) => (
                         <ActivityTimelineItem
                           key={entry.id}

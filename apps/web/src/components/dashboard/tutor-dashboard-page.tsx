@@ -47,14 +47,17 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
   const bookings = useQuery(
     orpc.booking.listMine.queryOptions({ input: { limit: 100 } }),
   );
+  const actionBookings = useQuery(
+    orpc.booking.listMine.queryOptions({
+      input: { limit: 100, view: "action" },
+    }),
+  );
   const profile = useQuery(orpc.tutor.getMyProfile.queryOptions());
   const payouts = useQuery(orpc.tutor.getMyPayouts.queryOptions({ input: {} }));
   const availability = useQuery(orpc.tutor.listAvailability.queryOptions());
 
   const items = (bookings.data?.items ?? []) as BookingCardData[];
-  const reviewQueue = items.filter(
-    (booking) => booking.currentState === "awaiting_tutor_review",
-  );
+  const actionItems = (actionBookings.data?.items ?? []) as BookingCardData[];
   const upcoming = items
     .filter((booking) => isUpcomingBooking(booking, now))
     .toSorted(
@@ -63,7 +66,7 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
         new Date(b.scheduledStartAt).getTime(),
     );
   const nextBooking = upcoming[0];
-  const nearestActionDeadline = items
+  const nearestActionDeadline = actionItems
     .filter((booking) => booking.deadlineAt)
     .toSorted(
       (a, b) =>
@@ -91,12 +94,12 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
         <DashboardWelcomeCard
           name={tutorName}
           viewerRole="tutor"
-          reviewCount={reviewQueue.length}
+          actionCount={bookings.data?.counts.action ?? 0}
         />
 
-        <ReviewRequestsCard
-          isLoading={bookings.isPending}
-          reviewQueue={reviewQueue}
+        <NeedsActionCard
+          isLoading={actionBookings.isPending}
+          actionItems={actionItems}
         />
       </div>
 
@@ -235,17 +238,17 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
     </Stack>
   );
 }
-function ReviewRequestsCard({
+function NeedsActionCard({
   isLoading,
-  reviewQueue,
+  actionItems,
 }: {
   isLoading: boolean;
-  reviewQueue: BookingCardData[];
+  actionItems: BookingCardData[];
 }) {
   return (
     <Card className="min-w-0">
       <CardHeader className="py-3">
-        <CardTitle>Requests to review</CardTitle>
+        <CardTitle>Needs action</CardTitle>
         <CardHeaderAction>
           <Button
             variant="plain"
@@ -260,21 +263,21 @@ function ReviewRequestsCard({
       <CardBody>
         {isLoading ? (
           <Loader />
-        ) : reviewQueue.length > 0 ? (
+        ) : actionItems.length > 0 ? (
           <Stack direction="column" spacing="sm" className="m-0!">
-            {reviewQueue.slice(0, 3).map((booking) => (
+            {actionItems.slice(0, 3).map((booking) => (
               <BookingAction
                 key={booking.id}
                 booking={booking}
-                actionLabel="Review request"
+                actionLabel={getTutorActionLabel(booking.currentState)}
               />
             ))}
           </Stack>
         ) : (
           <EmptyState
             icon={<IconInbox />}
-            title="No requests to review"
-            description="New student requests will appear here."
+            title="Nothing needs action"
+            description="Bookings requiring your response will appear here."
             size="compact"
             tone="warning"
             className="rounded-lg"
@@ -283,6 +286,13 @@ function ReviewRequestsCard({
       </CardBody>
     </Card>
   );
+}
+
+function getTutorActionLabel(state: BookingCardData["currentState"]) {
+  if (state === "awaiting_tutor_review") return "Review request";
+  if (state === "reschedule_proposed") return "Review reschedule";
+  if (state === "scheduled") return "Complete session";
+  return "View details";
 }
 
 function BookingAction({

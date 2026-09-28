@@ -1,6 +1,10 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-09-27
+Last updated: 2026-09-28
+
+## Automatic admin override financial policy (2026-09-28)
+
+Emergency overrides now derive their financial outcome from the selected category instead of asking the admin to separately choose Marks handling or participants. `student_no_show` forfeits every student's held Marks and keeps the tutor eligible for the booking's normal payout. `tutor_no_show`, `medical_emergency`, `technical_failure`, `admin_correction`, and `force_cancel` return student holds and make the tutor ineligible for payment. All booking participants, including the tutor, are included in notifications automatically. The preview exposes `tutorPayoutEligible` alongside student wallet impacts, and override metadata records the resolved policy. Legacy API callers may still send explicit `marksAction` and `affectedParticipants`, but the web flow always uses the category policy.
 
 ## PostHog browser analytics and auth attribution (2026-09-27)
 
@@ -33,6 +37,14 @@ from protected `booking.listMine` counts: needs action, upcoming, completed,
 and problem outcomes. Students also see verified achievement count from
 `achievement.stats` and a wallet-readiness CTA; tutors see active availability
 windows from `tutor.listAvailability` and the nearest available action deadline.
+Tutor dashboard's **Needs action** queue uses `booking.listMine({ view: "action" })`,
+matching the Bookings page instead of locally selecting only tutor-review requests.
+Admin **Booked value** displays IDR as the primary amount, Marks as its supporting
+equivalent, and platform share in both units. Values come from pricing locked when
+each booking was created; later economy changes do not rewrite historical totals.
+During a mixed frontend/API rollout where locked IDR aggregate fields are absent,
+the card temporarily estimates IDR from Marks using the active economy rate and
+labels that fallback explicitly instead of rendering an invalid amount.
 Admin `/dashboard` shows queue counts for escalated bookings, booking
 exceptions, tutor reviews, and achievement reviews using existing admin reads.
 
@@ -210,7 +222,8 @@ actions card is removed; Student notes and tutor Session feedback live in the
 Session overview, while support reports remain in the main flow. Lateness
 reporting is an accessible icon-only secondary action. This
 supersedes older placement notes below that refer to contextual booking actions
-in the sticky rail.
+in the sticky rail. The user-facing state timeline is labeled **History**;
+internal state-history and activity component names remain unchanged.
 
 ## Competition field color tokens (2026-09-08)
 
@@ -745,6 +758,7 @@ Booking detail also renders the current response window for deadline-bound state
 ## Email notifications (P1/P2, PRD notification matrix)
 
 - **Group/group-series invitee email (P1):** the invitee notification written by `booking.service.ts` (`createGroup`/`createGroupSeries`) carries the PRD-mandated content in its body — full schedule, per-student price, total Marks hold, the no-opt-out disclaimer (series only), and a direct in-platform CTA (`${CORS_ORIGIN}/bookings/{bookingId}`). Because `notification.write` uses `notif.body` as the email `html`, the CTA is present in both the in-app notification and the dispatched email.
+- **Invitation-phase closure:** `declineInvite` and proposer-side `withdrawInvite` query remaining pending invitees after mutation. While any remain, participant confirmation continues. Once none remain, fewer than two confirmed participants causes hold release and expiry (plus group-series session cancellation), a viable partial group enters fresh reconfirmation, and a full group advances to tutor review.
 - **Signup verification/welcome email (P2/G2):** a new email/password signup receives one `auth` email through Better Auth's email-OTP signup hook. The combined template includes the welcome/onboarding entry point, login link, brief platform intro, and six-digit verification OTP, saving one provider delivery compared with separate messages. Resends, legacy-account verification, sign-in OTPs, and password/change-email OTPs remain scoped to their existing authentication purpose; an existing-user sign-in never re-sends signup welcome copy.
 
 ## Tutor invite flow

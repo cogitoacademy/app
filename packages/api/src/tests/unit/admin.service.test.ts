@@ -29,6 +29,8 @@ describe("Admin Service", () => {
             activeLearners: "3",
             grossMarks: "120",
             platformTakeMarks: "24",
+            grossIdr: "600000",
+            platformTakeIdr: "120000",
           },
           userSummary: { newStudents: "3", newTutors: "1" },
           bookingTrend: [
@@ -77,6 +79,8 @@ describe("Admin Service", () => {
         newTutors: 1,
         grossMarks: 120,
         platformTakeMarks: 24,
+        grossIdr: 600000,
+        platformTakeIdr: 120000,
       });
       expect(result.bookingTrend.some((row) => row.bookings === 0)).toBe(true);
       expect(result.stateBreakdown).toEqual([{ state: "completed", count: 2 }]);

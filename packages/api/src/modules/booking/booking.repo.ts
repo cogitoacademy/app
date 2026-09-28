@@ -371,6 +371,20 @@ async function findConfirmedParticipants(
     .where(and(...conditions));
 }
 
+/** Returns invitees whose response can still keep a group in invitation phase. */
+async function findPendingInvitees(conn: DbOrTx, bookingId: string) {
+  return conn
+    .select({ ...getTableColumns(bookingParticipant) })
+    .from(bookingParticipant)
+    .where(
+      and(
+        eq(bookingParticipant.bookingId, bookingId),
+        eq(bookingParticipant.role, "invitee"),
+        eq(bookingParticipant.confirmationState, CONFIRMATION_STATE.PENDING),
+      ),
+    );
+}
+
 async function findUserEmails(
   conn: DbOrTx,
   userIds: string[],
@@ -1064,7 +1078,16 @@ async function findCompletedBookingsByTutor(
 ): Promise<BookingRow[]> {
   const conditions: SQL[] = [
     eq(booking.tutorId, tutorId),
-    eq(booking.currentState, BOOKING_STATE.COMPLETED),
+    or(
+      eq(booking.currentState, BOOKING_STATE.COMPLETED),
+      and(
+        eq(booking.currentState, BOOKING_STATE.NO_SHOW),
+        eq(
+          sql`coalesce(${booking.overrideMeta}->>'tutorPayoutEligible', 'false')`,
+          "true",
+        ),
+      ),
+    )!,
   ];
   if (dateFrom) {
     const condition =
@@ -1486,6 +1509,7 @@ export function createBookingRepo(db: DbType) {
     listActiveTutorAvailability,
     findParticipant,
     findConfirmedParticipants,
+    findPendingInvitees,
     findUserEmails,
     findUsersByIds,
     findReconfirmedParticipants,
