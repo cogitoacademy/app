@@ -12,6 +12,15 @@ import {
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
+  Drawer,
+  DrawerBody,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerPopup,
+  DrawerTitle,
+} from "@cogito-app/ui/components/selia/drawer";
+import {
   Card,
   CardBody,
   CardFooter,
@@ -53,6 +62,7 @@ import {
   IconPhoto,
   IconSchool,
   IconChalkboardTeacher,
+  IconChevronUp,
   IconUser,
 } from "@tabler/icons-react";
 
@@ -488,6 +498,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isTutorTermsOpen, setIsTutorTermsOpen] = useState(false);
+  const [isMobileActionsOpen, setIsMobileActionsOpen] = useState(false);
   const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
   const hasRecordedTutorTermsAcceptance = Boolean(
     profile.termsOfServiceAcceptedAt,
@@ -939,6 +950,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
   }
 
   function openTutorTerms() {
+    setIsMobileActionsOpen(false);
     setIsTutorTermsOpen(true);
   }
 
@@ -1196,7 +1208,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
             event.stopPropagation();
             handleSaveProgress();
           }}
-          className="flex flex-col gap-6"
+          className="flex flex-col gap-6 pb-24 sm:pb-0"
         >
           <div className="flex flex-col gap-6">
             <Card className="min-w-0">
@@ -2120,7 +2132,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
             </CardBody>
           </Card>
 
-          <Card className="sticky bottom-0 z-10 overflow-hidden *:border-none">
+          <Card className="sticky bottom-0 z-10 hidden overflow-hidden *:border-none sm:block">
             <CardFooter className="flex-col items-stretch gap-4 3xl:flex-row 3xl:items-center 3xl:justify-between">
               <div className="min-w-0 flex-1">
                 <Text className="font-medium">
@@ -2188,6 +2200,89 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
               </div>
             </CardFooter>
           </Card>
+
+          <div className="fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-30 sm:hidden">
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-auto w-full justify-between rounded-xl! px-4! py-3! shadow-popover"
+              onClick={() => setIsMobileActionsOpen(true)}
+            >
+              <span className="flex min-w-0 flex-col items-start gap-0.5">
+                <span className="font-medium">
+                  {isSubmitting
+                    ? "Saving…"
+                    : editedProfileSections.length > 0
+                      ? "Unsaved changes"
+                      : "Profile updates"}
+                </span>
+                <span className="text-xs font-normal text-muted">
+                  Review and submit profile
+                </span>
+              </span>
+              <IconChevronUp aria-hidden="true" />
+            </Button>
+          </div>
+
+          <Drawer
+            open={isMobileActionsOpen}
+            onOpenChange={setIsMobileActionsOpen}
+            swipeDirection="down"
+          >
+            <DrawerPopup direction="bottom" className="z-50 sm:hidden">
+              <DrawerHeader className="flex-col items-start gap-1.5 border-b border-drawer-border pb-4.5">
+                <DrawerTitle>
+                  {isDraft
+                    ? "Ready to move your profile forward?"
+                    : "Profile updates"}
+                </DrawerTitle>
+                <DrawerDescription>
+                  {isDraft
+                    ? "Save a draft while you work, or submit the completed profile for admin review."
+                    : "Save changes while you work, or submit the latest version for admin review."}
+                </DrawerDescription>
+              </DrawerHeader>
+              <DrawerBody>
+                <TutorTermsConsent
+                  accepted={hasRecordedTutorTermsAcceptance || hasAcceptedTerms}
+                  disabled={hasRecordedTutorTermsAcceptance || isSubmitting}
+                  error={errors.termsOfService}
+                  onAcceptedChange={(accepted) => {
+                    setHasAcceptedTerms(accepted);
+                    clearError("termsOfService");
+                  }}
+                  onOpenTerms={openTutorTerms}
+                />
+              </DrawerBody>
+              <DrawerFooter className="flex-col gap-3">
+                <Button
+                  type="button"
+                  block
+                  variant="secondary"
+                  progress={nameMutation.isPending || updateMutation.isPending}
+                  disabled={isSubmitting}
+                  onClick={handleSaveProgress}
+                >
+                  {isDraft ? "Save draft" : "Save profile changes"}
+                </Button>
+                <Button
+                  type="button"
+                  block
+                  progress={
+                    nameMutation.isPending
+                      ? true
+                      : isDraft
+                        ? submitMutation.isPending
+                        : updateMutation.isPending
+                  }
+                  disabled={isSubmitting || isTutorTermsBlockingSubmit}
+                  onClick={handleSubmitForReview}
+                >
+                  {isDraft ? "Submit for review" : "Submit changes for review"}
+                </Button>
+              </DrawerFooter>
+            </DrawerPopup>
+          </Drawer>
         </form>
       ) : null}
 

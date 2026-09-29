@@ -446,9 +446,6 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
             plans change.
           </Text>
         </div>
-        <Badge variant="secondary" pill>
-          Asia/Jakarta · 90-minute sessions
-        </Badge>
       </div>
 
       <div className="grid gap-4 2xl:grid-cols-[minmax(0,30fr)_minmax(0,25fr)] xl:items-start">
@@ -474,9 +471,9 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
                 return (
                   <div
                     key={day}
-                    className="grid gap-3 py-4 sm:grid-cols-[7rem_1fr]"
+                    className="grid gap-2.5 py-3 sm:grid-cols-[7rem_1fr] sm:gap-3 sm:py-4"
                   >
-                    <label className="flex items-center gap-3 self-start pt-2">
+                    <label className="flex items-center gap-3 self-start sm:pt-2">
                       <Checkbox
                         checked={value.enabled}
                         onCheckedChange={(checked) =>
@@ -493,12 +490,13 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
                         {value.ranges.map((range) => (
                           <div
                             key={range.id}
-                            className="grid gap-2 sm:grid-cols-[6rem_1rem_6rem_9rem_auto]"
+                            className="grid grid-cols-[minmax(0,1fr)_1rem_minmax(0,1fr)_auto] items-center gap-2 sm:grid-cols-[6rem_1rem_6rem_9rem_auto]"
                           >
                             <MinuteTimeInput
                               id={`availability-${day}-${range.id}-start`}
                               ariaLabel={`${label} start`}
                               value={range.start}
+                              showIcon={false}
                               onChange={(nextTime) =>
                                 updateDay(day, (current) => ({
                                   ...current,
@@ -520,6 +518,7 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
                               id={`availability-${day}-${range.id}-end`}
                               ariaLabel={`${label} end`}
                               value={range.end}
+                              showIcon={false}
                               onChange={(nextTime) =>
                                 updateDay(day, (current) => ({
                                   ...current,
@@ -531,19 +530,21 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
                                 }))
                               }
                             />
-                            <ModalitySelect
-                              value={range.modality}
-                              onChange={(modality) =>
-                                updateDay(day, (current) => ({
-                                  ...current,
-                                  ranges: current.ranges.map((item) =>
-                                    item.id === range.id
-                                      ? { ...item, modality }
-                                      : item,
-                                  ),
-                                }))
-                              }
-                            />
+                            <div className="col-span-3 sm:col-auto">
+                              <ModalitySelect
+                                value={range.modality}
+                                onChange={(modality) =>
+                                  updateDay(day, (current) => ({
+                                    ...current,
+                                    ranges: current.ranges.map((item) =>
+                                      item.id === range.id
+                                        ? { ...item, modality }
+                                        : item,
+                                    ),
+                                  }))
+                                }
+                              />
+                            </div>
                             <Button
                               type="button"
                               variant="danger"
@@ -751,6 +752,7 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
                           id={`override-${range.id}-start`}
                           ariaLabel={`Override time ${index + 1} start`}
                           value={range.start}
+                          showIcon={false}
                           onChange={(start) =>
                             setOverrideRanges((current) =>
                               current.map((item) =>
@@ -768,6 +770,7 @@ function AvailabilityPageContent({ slots }: { slots: AvailabilitySlot[] }) {
                           id={`override-${range.id}-end`}
                           ariaLabel={`Override time ${index + 1} end`}
                           value={range.end}
+                          showIcon={false}
                           onChange={(end) =>
                             setOverrideRanges((current) =>
                               current.map((item) =>
@@ -909,7 +912,7 @@ function CalendarPreview({
             >
               <IconChevronLeft />
             </Button>
-            <div className="grid min-w-0 flex-1 grid-cols-7 gap-1">
+            <div className="grid min-w-0 flex-1 auto-cols-[calc((100%_-_0.5rem)/3)] grid-flow-col gap-1 overflow-x-auto sm:grid-flow-row sm:grid-cols-7 sm:overflow-visible">
               {previewDays.map((date, index) => {
                 const active = date === activeDate;
                 return (
