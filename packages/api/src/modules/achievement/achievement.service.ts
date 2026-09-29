@@ -251,47 +251,51 @@ export function createAchievementService(deps: {
   }
 
   async function adminDelete(adminId: string, achievementId: string) {
-    const existing = await achievementRepo.getById(db, achievementId);
-    if (!existing) throw new AchievementNotFoundError(achievementId);
-    const updated = await achievementRepo.softDelete(
-      db,
-      achievementId,
-      existing.version,
-    );
-    if (!updated)
-      throw new OptimisticLockError(achievementId, existing.version);
-    await auditPort.record({
-      db,
-      actorId: adminId,
-      actorType: ACTOR_TYPE.ADMIN,
-      action: "achievement_deleted",
-      targetId: achievementId,
-      targetType: "achievement",
-      details: { previousStatus: existing.status },
+    return db.transaction(async (tx) => {
+      const existing = await achievementRepo.getById(tx, achievementId);
+      if (!existing) throw new AchievementNotFoundError(achievementId);
+      const updated = await achievementRepo.softDelete(
+        tx,
+        achievementId,
+        existing.version,
+      );
+      if (!updated)
+        throw new OptimisticLockError(achievementId, existing.version);
+      await auditPort.record({
+        db: tx,
+        actorId: adminId,
+        actorType: ACTOR_TYPE.ADMIN,
+        action: "achievement_deleted",
+        targetId: achievementId,
+        targetType: "achievement",
+        details: { previousStatus: existing.status },
+      });
+      return updated;
     });
-    return updated;
   }
 
   async function adminRestore(adminId: string, achievementId: string) {
-    const existing = await achievementRepo.getById(db, achievementId);
-    if (!existing) throw new AchievementNotFoundError(achievementId);
-    const updated = await achievementRepo.restore(
-      db,
-      achievementId,
-      existing.version,
-    );
-    if (!updated)
-      throw new OptimisticLockError(achievementId, existing.version);
-    await auditPort.record({
-      db,
-      actorId: adminId,
-      actorType: ACTOR_TYPE.ADMIN,
-      action: "achievement_restored",
-      targetId: achievementId,
-      targetType: "achievement",
-      details: { previousStatus: existing.status },
+    return db.transaction(async (tx) => {
+      const existing = await achievementRepo.getById(tx, achievementId);
+      if (!existing) throw new AchievementNotFoundError(achievementId);
+      const updated = await achievementRepo.restore(
+        tx,
+        achievementId,
+        existing.version,
+      );
+      if (!updated)
+        throw new OptimisticLockError(achievementId, existing.version);
+      await auditPort.record({
+        db: tx,
+        actorId: adminId,
+        actorType: ACTOR_TYPE.ADMIN,
+        action: "achievement_restored",
+        targetId: achievementId,
+        targetType: "achievement",
+        details: { previousStatus: existing.status },
+      });
+      return updated;
     });
-    return updated;
   }
 
   async function adminStats() {

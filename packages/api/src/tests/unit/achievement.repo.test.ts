@@ -124,12 +124,14 @@ describe("achievement counts", () => {
   test("returns grouped counts for all achievements", async () => {
     const rows = [{ status: "rejected", count: 3 }];
     const groupBy = mock(async () => rows);
-    const from = mock(() => ({ groupBy }));
+    const where = mock(() => ({ groupBy }));
+    const from = mock(() => ({ where }));
     const select = mock(() => ({ from }));
 
-    const result = await repo.countAll({ select, from, groupBy } as any);
+    const result = await repo.countAll({ select, from, where, groupBy } as any);
 
     expect(result).toEqual(rows);
+    expect(where).toHaveBeenCalledTimes(1);
     expect(groupBy).toHaveBeenCalledTimes(1);
   });
 });
@@ -351,6 +353,34 @@ describe("getById", () => {
     );
 
     expect(result).toBeUndefined();
+  });
+});
+
+describe("soft delete and restore", () => {
+  test("soft-deletes an achievement with optimistic locking", async () => {
+    const conn = {
+      ...makeUpdateConn([{ id: "a1", deletedAt: new Date() }]),
+    } as any;
+
+    const result = await repo.softDelete(conn, "a1", 2);
+
+    expect(result).toHaveLength(1);
+    expect(conn.set).toHaveBeenCalledWith(
+      expect.objectContaining({ deletedAt: expect.any(Date) }),
+    );
+    expect(conn.where).toHaveBeenCalledTimes(1);
+  });
+
+  test("restores an achievement with optimistic locking", async () => {
+    const conn = { ...makeUpdateConn([{ id: "a1", deletedAt: null }]) } as any;
+
+    const result = await repo.restore(conn, "a1", 3);
+
+    expect(result).toHaveLength(1);
+    expect(conn.set).toHaveBeenCalledWith(
+      expect.objectContaining({ deletedAt: null }),
+    );
+    expect(conn.where).toHaveBeenCalledTimes(1);
   });
 });
 

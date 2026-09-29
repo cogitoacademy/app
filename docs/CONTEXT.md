@@ -18,6 +18,10 @@ labeled **Fields awaiting approval**, lists only actual added/changed/removed
 review-gated fields, and distinguishes those proposals from direct-live edits.
 The full review history appears alongside the profile review sections and keeps
 direct-live edits, status transitions, and photo previews visible together.
+Profile, account-name, subject, photo, and audit writes share one database
+transaction. Reverting the final pending proposal clears both
+`pendingProfileChanges` and `profileEditStatus` instead of leaving an empty
+review task.
 
 ## Knowledge Bank PDF drawer (2026-09-29)
 
@@ -80,7 +84,8 @@ plus platform take are locked booking snapshots rather than cash revenue.
 `activeLearners` remains proposer-based and is rendered as **Active booking
 proposers** until group-participant and login-activity definitions are approved.
 Admins can use 7/30/90-day presets or an inclusive custom WIB range of up to
-366 days. Account insights separate current/rolling snapshots from selected-
+366 valid calendar days; impossible dates are rejected at the RPC boundary.
+Account insights separate current/rolling snapshots from selected-
 range metrics: total accounts and current student Marks ownership are current;
 MAU, inactivity, and churn use rolling 30-day auth-session activity; signups and
 realized top-up revenue use the selected range. Paid conversion is lifetime
@@ -800,7 +805,7 @@ Booking detail also renders the current response window for deadline-bound state
 ## Email notifications (P1/P2, PRD notification matrix)
 
 - **Group/group-series invitee email (P1):** the invitee notification written by `booking.service.ts` (`createGroup`/`createGroupSeries`) carries the PRD-mandated content in its body — full schedule, per-student price, total Marks hold, the no-opt-out disclaimer (series only), and a direct in-platform CTA (`${CORS_ORIGIN}/bookings/{bookingId}`). Because `notification.write` uses `notif.body` as the email `html`, the CTA is present in both the in-app notification and the dispatched email.
-- **Invitation-phase closure:** `declineInvite` and proposer-side `withdrawInvite` query remaining pending invitees after mutation. While any remain, participant confirmation continues. Once none remain, fewer than two confirmed participants causes hold release and expiry (plus group-series session cancellation), a viable partial group enters fresh reconfirmation, and a full group advances to tutor review.
+- **Invitation-phase closure:** `declineInvite` and proposer-side `withdrawInvite` lock the parent booking before mutating an invitation, then query remaining pending invitees. Concurrent final responses therefore serialize. While any remain, participant confirmation continues. Once none remain, fewer than two confirmed participants causes hold release and expiry (plus group-series session cancellation), a viable partial group enters fresh reconfirmation, and a full group advances to tutor review.
 - **Signup verification/welcome email (P2/G2):** a new email/password signup receives one `auth` email through Better Auth's email-OTP signup hook. The combined template includes the welcome/onboarding entry point, login link, brief platform intro, and six-digit verification OTP, saving one provider delivery compared with separate messages. Resends, legacy-account verification, sign-in OTPs, and password/change-email OTPs remain scoped to their existing authentication purpose; an existing-user sign-in never re-sends signup welcome copy.
 
 ## Tutor invite flow
@@ -1131,6 +1136,7 @@ The tutor `/profile` editor presents Education, Achievements, and Experiences in
 - Student achievement levels are presented in this order: `International`, `National`, `Province/State`, `City/Regency`, `School`. The student proof field gives Google Drive guidance (upload proof, set General access to “Anyone with the link” + Viewer, then paste the link); students do not provide the public documentation image.
 - The student form uses one clear Location value (for example `Jakarta, Indonesia`, `Geneva, Switzerland`, or `Online`) and a long-answer `Brief Description` field with a ranked-result example. The public documentation image is an admin-only correction field.
 - `adminUpdate` lets admins correct all submission fields plus the public documentation image while a record is `pending`/`pending_review`; it uses the row version as a compare-and-swap, writes an `achievement_admin_updated` audit record, and leaves status unchanged until the separate review action.
+- Admin soft-delete/restore commits its row mutation and audit record atomically. Aggregate moderation counts exclude soft-deleted rows.
 - The achievement form uses the shared Selia calendar; selected/today states are drawn on the rounded day button rather than its square grid cell. Add, edit, and admin-correction forms open as swipe-down bottom drawers below the `sm` breakpoint and right-side drawers at `sm` and above. Their portal-based date picker and Category/Level selects render above the drawer so every popup control remains interactive.
 
 ### Wallet Module (protected)

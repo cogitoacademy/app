@@ -581,6 +581,7 @@ describe("AchievementService", () => {
 
       expect(repo.adminList).toHaveBeenCalledWith(expect.anything(), {
         status: "pending_review",
+        deleted: false,
         limit: 10,
         offset: 0,
       });
@@ -600,6 +601,8 @@ describe("AchievementService", () => {
       await service.adminList();
 
       expect(repo.adminList).toHaveBeenCalledWith(expect.anything(), {
+        status: undefined,
+        deleted: false,
         limit: 50,
         offset: 0,
       });

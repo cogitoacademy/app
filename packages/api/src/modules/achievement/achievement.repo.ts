@@ -105,6 +105,7 @@ async function countAll(conn: DbOrTx) {
   return conn
     .select({ status: achievement.status, count: count() })
     .from(achievement)
+    .where(isNull(achievement.deletedAt))
     .groupBy(achievement.status);
 }
 

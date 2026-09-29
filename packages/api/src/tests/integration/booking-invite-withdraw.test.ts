@@ -212,4 +212,49 @@ describe("Booking invite withdrawal", () => {
     expect(fetched.currentState).toBe("awaiting_reconfirmation");
     expect(fetched.deadlineAt).not.toBeNull();
   });
+
+  test("concurrent declines serialize invitation completion", async () => {
+    const booking = await proposerClient.booking.createGroup({
+      tutorId,
+      availabilitySlotId: slotId,
+      modality: "online",
+      targetGroupSize: 3,
+      inviteeUserIds: [inviteeId, otherInviteeId],
+      scheduledStartAt: new Date(Date.now() + 96 * 3_600_000).toISOString(),
+      scheduledEndAt: new Date(Date.now() + 97 * 3_600_000).toISOString(),
+      timezone: "Asia/Jakarta",
+    });
+
+    const results = await Promise.all([
+      inviteeClient.booking.declineInvite({
+        bookingId: booking.id,
+        reason: "Cannot attend",
+      }),
+      otherInviteeClient.booking.declineInvite({
+        bookingId: booking.id,
+        reason: "Cannot attend",
+      }),
+    ]);
+
+    expect(results).toEqual([{ declined: true }, { declined: true }]);
+    const fetched = await proposerClient.booking.get({ bookingId: booking.id });
+    expect(fetched.currentState).toBe("expired");
+    expect(fetched.confirmedHeadcount).toBe(1);
+
+    const participants = await db
+      .select({
+        userId: bookingParticipant.userId,
+        state: bookingParticipant.confirmationState,
+      })
+      .from(bookingParticipant)
+      .where(eq(bookingParticipant.bookingId, booking.id));
+    expect(
+      participants
+        .filter((participant) =>
+          [inviteeId, otherInviteeId].includes(participant.userId),
+        )
+        .map((participant) => participant.state)
+        .sort(),
+    ).toEqual(["declined", "declined"]);
+  });
 });

@@ -495,6 +495,54 @@ describe("Tutor Service", () => {
       );
     });
 
+    test("propagates audit failure through the profile update transaction", async () => {
+      const profile = makeProfile();
+      const updatedProfile = makeProfile({ shortBio: "New bio" });
+      const tx = { id: "tx" };
+      let profileReadCount = 0;
+      let rolledBack = false;
+      const transaction = mock(async (fn: any) => {
+        try {
+          return await fn(tx);
+        } catch (error) {
+          rolledBack = true;
+          throw error;
+        }
+      });
+      const record = mock(async () => {
+        throw new Error("audit failed");
+      });
+      const updateProfileWithVersion = mock(async () => [updatedProfile]);
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => {
+            profileReadCount += 1;
+            return profileReadCount === 1 ? profile : updatedProfile;
+          }),
+          updateProfileWithVersion,
+        },
+        auditPort: { record },
+        db: { transaction },
+      });
+      const service = createTutorService(deps as any);
+
+      await expect(
+        service.updateMyProfile("u1", { version: 1, shortBio: "New bio" }),
+      ).rejects.toThrow("audit failed");
+
+      expect(updateProfileWithVersion).toHaveBeenCalledWith(
+        tx,
+        "u1",
+        1,
+        expect.objectContaining({ shortBio: "New bio" }),
+      );
+      expect(record).toHaveBeenCalledWith(
+        expect.objectContaining({ db: tx, action: "tutor_profile_updated" }),
+      );
+      expect(rolledBack).toBe(true);
+    });
+
     test("audits canonical display name changes", async () => {
       const profile = makeProfile();
       const updatedProfile = makeProfile({
@@ -640,7 +688,7 @@ describe("Tutor Service", () => {
       });
 
       expect(updateProfileWithVersion).toHaveBeenCalledWith(
-        deps.db,
+        expect.anything(),
         "u1",
         1,
         expect.objectContaining({
@@ -678,12 +726,86 @@ describe("Tutor Service", () => {
       });
 
       expect(updateProfileWithVersion).toHaveBeenCalledWith(
-        deps.db,
+        expect.anything(),
         "u1",
         1,
         expect.objectContaining({
           pendingProfileChanges: { shortBio: "pending bio" },
           profileEditStatus: "pending_review",
+        }),
+      );
+    });
+
+    test("published profile stages a changed protected field edit", async () => {
+      const profile = makeProfile({
+        onboardingStatus: "published",
+        education: [],
+        pendingProfileChanges: {
+          bankName: "Pending bank",
+        },
+        profileEditStatus: "pending_review",
+      });
+      const updateProfileWithVersion = mock(async () => [profile]);
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => profile),
+          updateProfileWithVersion,
+        },
+      });
+      const service = createTutorService(deps as any);
+
+      await service.updateMyProfile("u1", {
+        version: 1,
+        education: [{ university: "University", degree: "Degree" }],
+      });
+
+      expect(updateProfileWithVersion).toHaveBeenCalledWith(
+        expect.anything(),
+        "u1",
+        1,
+        expect.objectContaining({
+          pendingProfileChanges: {
+            bankName: "Pending bank",
+            education: [{ university: "University", degree: "Degree" }],
+          },
+        }),
+      );
+    });
+
+    test("published profile removes an unchanged protected field edit", async () => {
+      const profile = makeProfile({
+        onboardingStatus: "published",
+        education: [],
+        pendingProfileChanges: {
+          bankName: "Pending bank",
+          education: [{ university: "Old University", degree: "Old Degree" }],
+        },
+        profileEditStatus: "pending_review",
+      });
+      const updateProfileWithVersion = mock(async () => [profile]);
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => profile),
+          updateProfileWithVersion,
+        },
+      });
+      const service = createTutorService(deps as any);
+
+      await service.updateMyProfile("u1", {
+        version: 1,
+        education: [],
+      });
+
+      expect(updateProfileWithVersion).toHaveBeenCalledWith(
+        expect.anything(),
+        "u1",
+        1,
+        expect.objectContaining({
+          pendingProfileChanges: {
+            bankName: "Pending bank",
+          },
         }),
       );
     });
@@ -728,7 +850,7 @@ describe("Tutor Service", () => {
       });
 
       expect(updateProfileWithVersion).toHaveBeenCalledWith(
-        deps.db,
+        expect.anything(),
         "u1",
         1,
         expect.objectContaining({
@@ -765,7 +887,7 @@ describe("Tutor Service", () => {
       });
 
       expect(updateProfileWithVersion).toHaveBeenCalledWith(
-        deps.db,
+        expect.anything(),
         "u1",
         1,
         expect.objectContaining({
@@ -811,7 +933,7 @@ describe("Tutor Service", () => {
       });
 
       expect(updateProfileWithVersion).toHaveBeenCalledWith(
-        deps.db,
+        expect.anything(),
         "u1",
         1,
         expect.objectContaining({
@@ -848,9 +970,14 @@ describe("Tutor Service", () => {
         baseRatesIdr: { online: 200_000 },
       });
 
-      expect(updateProfileWithVersion).toHaveBeenCalledWith(deps.db, "u1", 1, {
-        baseRatesIdr: { online: 200_000 },
-      });
+      expect(updateProfileWithVersion).toHaveBeenCalledWith(
+        expect.anything(),
+        "u1",
+        1,
+        {
+          baseRatesIdr: { online: 200_000 },
+        },
+      );
     });
 
     test("published profile clears a legacy pending honorarium proposal", async () => {
@@ -874,17 +1001,24 @@ describe("Tutor Service", () => {
 
       await service.updateMyProfile("u1", { version: 1 });
 
-      expect(updateProfileWithVersion).toHaveBeenCalledWith(deps.db, "u1", 1, {
-        baseRatesIdr: { online: 190_000 },
-        pendingProfileChanges: null,
-        profileEditStatus: "none",
-        profileEditAdminNote: null,
-      });
+      expect(updateProfileWithVersion).toHaveBeenCalledWith(
+        expect.anything(),
+        "u1",
+        1,
+        {
+          baseRatesIdr: { online: 190_000 },
+          pendingProfileChanges: null,
+          profileEditStatus: "none",
+          profileEditAdminNote: null,
+        },
+      );
     });
 
     test("published profile removes an unchanged subject edit", async () => {
       const profile = makeProfile({
         onboardingStatus: "published",
+        pendingProfileChanges: { subjectIds: ["child-2"] },
+        profileEditStatus: "pending_review",
         subjects: [
           {
             subjectId: "child-1",
@@ -908,7 +1042,16 @@ describe("Tutor Service", () => {
         subjectIds: ["child-1"],
       });
 
-      expect(updateProfileWithVersion).toHaveBeenCalledTimes(1);
+      expect(updateProfileWithVersion).toHaveBeenCalledWith(
+        expect.anything(),
+        "u1",
+        1,
+        expect.objectContaining({
+          pendingProfileChanges: null,
+          profileEditStatus: "none",
+          profileEditAdminNote: null,
+        }),
+      );
     });
 
     test("submitForReview throws TutorProfileNotFoundError for null profile", async () => {
@@ -929,6 +1072,31 @@ describe("Tutor Service", () => {
       const service = createTutorService(deps as any);
       const result = await service.submitForReview("u1", {});
       expect(result.id).toBe("tp1");
+    });
+
+    test("submitForReview audits the existing profile when status update returns no row", async () => {
+      const profile = makeProfile();
+      const auditRecord = mock(async () => {});
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => profile),
+          updateStatus: mock(async () => undefined),
+        },
+        auditPort: { record: auditRecord },
+      });
+      const service = createTutorService(deps as any);
+
+      await service.submitForReview("u1", {});
+
+      expect(auditRecord).toHaveBeenCalledWith(
+        expect.objectContaining({
+          afterState: expect.objectContaining({
+            displayName: "Dr. Smith",
+            onboardingStatus: "draft",
+          }),
+        }),
+      );
     });
 
     test("records terms acceptance when a tutor makes the first submission", async () => {

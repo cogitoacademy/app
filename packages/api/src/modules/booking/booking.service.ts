@@ -2951,7 +2951,7 @@ export function createBookingService(deps: {
     reason?: string,
   ) {
     return db.transaction(async (tx) => {
-      const b = await repo.findBookingById(tx, bookingId);
+      const b = await repo.findBookingById(tx, bookingId, { forUpdate: true });
       if (!b) throw new BookingNotFoundError(bookingId);
       if (b.currentState !== BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION) {
         throw new BookingNotAwaitingConfirmationError(
@@ -2987,7 +2987,7 @@ export function createBookingService(deps: {
     reason?: string,
   ) {
     return db.transaction(async (tx) => {
-      const b = await repo.findBookingById(tx, bookingId);
+      const b = await repo.findBookingById(tx, bookingId, { forUpdate: true });
       if (!b) throw new BookingNotFoundError(bookingId);
       if (b.currentState !== BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION) {
         throw new BookingNotAwaitingConfirmationError(

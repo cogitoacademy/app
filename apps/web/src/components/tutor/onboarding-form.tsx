@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { usePostHog } from "@posthog/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -67,7 +67,6 @@ import {
 } from "@tabler/icons-react";
 
 import { getUserFacingError } from "@/lib/error-message";
-import { authClient } from "@/lib/auth-client";
 import { resolveProfileImageUrl } from "@/lib/profile-image-url";
 import { ProfileImagePicker } from "@/components/profile/profile-image-picker";
 import { ProfilePhotoPreview } from "@/components/profile/profile-photo-preview";
@@ -508,34 +507,6 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     !hasRecordedTutorTermsAcceptance;
   const isTutorTermsBlockingSubmit =
     !hasRecordedTutorTermsAcceptance && !hasAcceptedTerms;
-  const savedNameRef = useRef(accountUser.name.trim());
-
-  const nameMutation = useMutation({
-    mutationFn: async (nextName: string) => {
-      const result = await authClient.updateUser({ name: nextName });
-      if (result.error) throw new Error(result.error.message);
-      return result.data;
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: orpc.auth.me.key() });
-    },
-    onError: (error: unknown) => {
-      toastManager.add({
-        title: "Name could not be saved",
-        description: getUserFacingError(error),
-        type: "error",
-      });
-    },
-  });
-
-  async function saveCanonicalName() {
-    const nextName = name.trim();
-    if (nextName !== savedNameRef.current) {
-      await nameMutation.mutateAsync(nextName);
-      savedNameRef.current = nextName;
-    }
-  }
-
   function clearError(field: string) {
     setErrors((prev) => {
       const next = { ...prev };
@@ -653,9 +624,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       prices?: Record<string, number>;
     } = { version: profile.version };
     const displayName = name.trim();
-    if (displayName !== savedNameRef.current) {
-      payload.displayName = displayName;
-    }
+    payload.displayName = displayName;
     const shortBio = form.shortBio.trim();
     const affiliation = form.affiliation.trim();
     const profileImageUrl = form.profileImageUrl.trim();
@@ -927,7 +896,6 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     setErrors({});
     try {
       await updateMutation.mutateAsync(getSavePayload());
-      await saveCanonicalName();
       showUpdateSuccess(false);
     } catch {
       // handled by mutation callbacks
@@ -941,12 +909,10 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
         // explicit submit action runs the complete form gate before putting
         // the latest pending values into the admin review queue.
         await updateMutation.mutateAsync(getSavePayload());
-        await saveCanonicalName();
         showUpdateSuccess(true);
         return;
       }
       await updateMutation.mutateAsync(getSavePayload());
-      await saveCanonicalName();
       await submitMutation.mutateAsync(
         acceptTerms ? { acceptTerms: true } : {},
       );
@@ -978,10 +944,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     profile.onboardingStatus === "draft" ||
     profile.onboardingStatus === "changes_requested";
   const isEditable = isDraft || profile.onboardingStatus === "published";
-  const isSubmitting =
-    nameMutation.isPending ||
-    updateMutation.isPending ||
-    submitMutation.isPending;
+  const isSubmitting = updateMutation.isPending || submitMutation.isPending;
   const statusBadge = TUTOR_STATUS_BADGES[profile.onboardingStatus] ?? {
     label: profile.onboardingStatus.replaceAll("_", " "),
     variant: "secondary" as const,
@@ -2168,11 +2131,9 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                   size="sm"
                   variant="secondary"
                   className="w-full sm:w-auto"
-                  progress={nameMutation.isPending || updateMutation.isPending}
+                  progress={updateMutation.isPending}
                   disabled={
-                    nameMutation.isPending ||
-                    updateMutation.isPending ||
-                    submitMutation.isPending
+                    updateMutation.isPending || submitMutation.isPending
                   }
                   onClick={handleSaveProgress}
                 >
@@ -2184,14 +2145,11 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                     size="sm"
                     className="w-full sm:w-auto"
                     progress={
-                      nameMutation.isPending
-                        ? true
-                        : isDraft
-                          ? submitMutation.isPending
-                          : updateMutation.isPending
+                      isDraft
+                        ? submitMutation.isPending
+                        : updateMutation.isPending
                     }
                     disabled={
-                      nameMutation.isPending ||
                       updateMutation.isPending ||
                       submitMutation.isPending ||
                       isTutorTermsBlockingSubmit
@@ -2265,7 +2223,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                   type="button"
                   block
                   variant="secondary"
-                  progress={nameMutation.isPending || updateMutation.isPending}
+                  progress={updateMutation.isPending}
                   disabled={isSubmitting}
                   onClick={handleSaveProgress}
                 >
@@ -2275,11 +2233,9 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                   type="button"
                   block
                   progress={
-                    nameMutation.isPending
-                      ? true
-                      : isDraft
-                        ? submitMutation.isPending
-                        : updateMutation.isPending
+                    isDraft
+                      ? submitMutation.isPending
+                      : updateMutation.isPending
                   }
                   disabled={isSubmitting || isTutorTermsBlockingSubmit}
                   onClick={handleSubmitForReview}

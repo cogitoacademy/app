@@ -348,6 +348,13 @@ export function createTutorService(deps: {
           pendingProfileChanges.profileImageUrl = profileImageUrl;
         }
       }
+      if (subjectIds !== undefined) {
+        if (haveSameSubjectIds(subjectIds, currentSubjectIds)) {
+          delete pendingProfileChanges.subjectIds;
+        } else {
+          pendingProfileChanges.subjectIds = [...subjectIds];
+        }
+      }
       if (Object.keys(pendingProfileChanges).length > 0) {
         directData.pendingProfileChanges = pendingProfileChanges;
         directData.profileEditStatus = "pending_review";
@@ -359,18 +366,6 @@ export function createTutorService(deps: {
         directData.pendingProfileChanges = null;
         directData.profileEditStatus = "none";
         directData.profileEditAdminNote = null;
-      }
-      if (subjectIds !== undefined) {
-        if (haveSameSubjectIds(subjectIds, currentSubjectIds)) {
-          delete pendingProfileChanges.subjectIds;
-        } else {
-          pendingProfileChanges.subjectIds = [...subjectIds];
-        }
-        if (Object.keys(pendingProfileChanges).length > 0) {
-          directData.pendingProfileChanges = pendingProfileChanges;
-          directData.profileEditStatus = "pending_review";
-          directData.profileEditAdminNote = null;
-        }
       }
     }
 
@@ -429,14 +424,7 @@ export function createTutorService(deps: {
       return projectTutorProfile(updated ?? rows[0]!);
     };
 
-    if (
-      (!isPublished &&
-        (subjectIds !== undefined || profileImageUrl !== undefined)) ||
-      displayNameChanged
-    ) {
-      return db.transaction(persist);
-    }
-    return persist(db);
+    return db.transaction(persist);
   }
 
   /**

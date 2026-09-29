@@ -127,7 +127,8 @@ function PendingChangeRow({
   subjectFieldSlugs?: ReadonlyMap<string, string>;
   idPrefix: string;
 }) {
-  const detailsId = `${idPrefix}-details`;
+  const fieldId = diff.field.replaceAll(/[^a-zA-Z0-9-]/g, "-");
+  const detailsId = `${idPrefix}-${fieldId}-details`;
   const currentSummary = formatTutorProfileValueSummary(
     diff.field,
     diff.current,
@@ -138,8 +139,6 @@ function PendingChangeRow({
     diff.proposed,
     subjectLabels,
   );
-  const fieldId = diff.field.replaceAll(/[^a-zA-Z0-9-]/g, "-");
-
   return (
     <Item
       variant="outline"

@@ -27,6 +27,14 @@ describe("tutor profile audit snapshots", () => {
     expect(snapshot).toHaveProperty("experiences", null);
   });
 
+  test("ignores malformed subject relations", () => {
+    const snapshot = createTutorProfileAuditSnapshot({
+      subjects: [null, { subjectId: 42 }, { subject: { id: "subject-2" } }],
+    });
+
+    expect(snapshot.subjectIds).toEqual(["subject-2"]);
+  });
+
   test("finds nested pending and top-level changes", () => {
     const before = createTutorProfileAuditSnapshot({
       shortBio: "Old bio",

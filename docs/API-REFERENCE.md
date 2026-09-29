@@ -1,6 +1,6 @@
 # Cogito API Reference
 
-Last updated: 2026-09-27
+Last updated: 2026-09-29
 
 ## Role-based dashboard analytics (2026-09-25)
 
@@ -503,7 +503,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `admin.getDashboardAnalytics`
 
 - **Auth:** Admin
-- **Input:** either `{ period?: "7d" | "30d" | "90d" }` (default `"30d"`) or `{ dateFrom: "YYYY-MM-DD", dateTo: "YYYY-MM-DD" }`; custom dates are inclusive WIB days, cannot be combined with `period`, and are capped at 366 days
+- **Input:** either `{ period?: "7d" | "30d" | "90d" }` (default `"30d"`) or `{ dateFrom: "YYYY-MM-DD", dateTo: "YYYY-MM-DD" }`; custom dates are inclusive WIB days, cannot be combined with `period`, are capped at 366 days, and reject impossible calendar dates
 - **Output:** `{ period, periodStart, periodEnd, summary, businessSummary, bookingTrend, userTrend, stateBreakdown, modalityBreakdown, categoryBreakdown }`
 - **Description:** Returns aggregate data used by admin Business insights. Selected-range metrics use WIB calendar boundaries. `businessSummary.signups`, `grossRevenueIdr`, `refundedIdr`, and `netRevenueIdr` follow the selected range; successful payment `updatedAt` is the available settlement-time proxy. Total accounts, student/tutor totals, current Marks ownership, and lifetime paid conversion are snapshots independent of the selected range. MAU counts unique accounts with auth-session activity in the latest rolling 30 days. Inactive users are accounts older than 30 days without such activity. Churn compares users active 31-60 days ago against those absent in the latest 30 days, so it is session-based operational churn rather than product-event retention. `summary.activeLearners` remains a distinct booking-proposer count. Locked booking-value fields represent operational booking value, not payment revenue. `stateBreakdown` is the live all-bookings state mix; modality/category breakdowns use the selected range; missing trend days are zero-filled.
 
@@ -775,6 +775,8 @@ All routes are admin-only. Package `code` is the stable business key used by
 - **Errors:** `OPTIMISTIC_LOCK` (409) on version mismatch, `INVALID_TUTOR_PRICING` (400) on floor-price violation, `INVALID_TUTOR_SUBJECT_SELECTION` (400) when ids are not active specializations or exceed 7; tutor domain validation errors include field-specific data such as `missingFields`, `pricingError`, or `subjectIds` where available
 - **Description:** Updates the tutor profile with optimistic locking and records a full profile audit snapshot pair when state changes. The tutor editor presents one combined Education, Achievements, and Experiences section plus one profile-image field; each experience stores a role, organization, start/end years, and a brief description. Affiliation stores a study program/university or professional role/organization and is required on review. Short bios are limited to 50 whitespace-delimited words (and 2,000 characters). Year values are plain integers, and an end year must be on or after its start year. Award titles normalize to the structured `awards` array. `achievementProofUrls` and `experienceProofUrls` accept bounded HTTP(S) URLs; `profileImageUrl` accepts bounded HTTP(S) URLs or a generated local `/uploads/...` storage path. The tutor-facing proof guidance recommends one Google Drive folder with the “Anyone with the link can view” setting. `profileImageUrl` is the canonical tutor profile image: draft/changes-requested updates write it to the account image, while published changes wait in `pendingProfileChanges` until admin review. `subjectIds` is the normalized specialization selection. Payout-account fields remain private. A published tutor's `baseRatesIdr` takes effect immediately for future bookings; existing bookings retain their stored price snapshot for payout. Trust-sensitive structured profile changes wait in `pendingProfileChanges`. The web editor exposes separate **Save draft**/**Save profile changes** and **Submit for review** actions: saving permits incomplete required top-level fields while still highlighting malformed values, while submission applies the complete required-field gate. Both client-side and API-side validation errors are shown beside the affected field and in the form summary.
 
+- **Consistency:** Profile, canonical account-name, subject, photo, and audit writes share one database transaction. Reverting the final pending proposal clears both `pendingProfileChanges` and `profileEditStatus`.
+
 `onlineMaxClassSize` and `offlineMaxClassSize` take effect immediately for new
 booking requests; size 1 means private-only for that modality. Existing
 bookings retain their stored target size and price snapshot.
@@ -943,16 +945,16 @@ The create/edit/correction form is presented as a bottom drawer on mobile and a 
 ### `achievement.adminList`
 
 - **Auth:** Admin
-- **Input:** `{ status?, limit?, offset? }` (`limit` default 50)
+- **Input:** `{ status?, deleted?, limit?, offset? }` (`limit` default 50; `deleted` defaults to `false`)
 - **Output:** `Achievement[]` for the requested page
-- **Description:** Returns a server-paginated moderation page. `status: "pending"` includes both `pending` and `pending_review` rows. The admin `/admin-achievements` page uses a `limit + 1` sentinel to detect the next page; aggregate status cards use `achievement.adminStats`.
+- **Description:** Returns a server-paginated moderation page. `status: "pending"` includes both `pending` and `pending_review` rows. Soft-deleted rows are excluded unless `deleted: true`. The admin `/admin-achievements` page uses a `limit + 1` sentinel to detect the next page; aggregate status cards use `achievement.adminStats`.
 
 ### `achievement.adminStats`
 
 - **Auth:** Admin
 - **Input:** None
 - **Output:** `{ total, approved, pending, rejected, archived }`
-- **Description:** Returns aggregate status counts across all achievement submissions. `pending` combines `pending` and `pending_review`.
+- **Description:** Returns aggregate status counts across active achievement submissions. Soft-deleted rows are excluded. `pending` combines `pending` and `pending_review`.
 
 ### `achievement.adminUpdate`
 
@@ -961,6 +963,22 @@ The create/edit/correction form is presented as a bottom drawer on mobile and a 
 - **Input:** `{ id, version, data: { eventName?, category?, award?, level?, issuer?, visibility?, awardingDate?, location?, description?, subjects?, evidenceUrl?, documentationUrl? } }`; nullable optional fields can be cleared
 - **Output:** `{ achievement }`
 - **Description:** Corrects a pending or legacy `pending_review` achievement before moderation. Admins can correct the submission fields and set or clear the public documentation image. The update uses optimistic compare-and-swap via `version`, records an `achievement_admin_updated` audit event with before/after content, and leaves the status unchanged so approval/rejection remains a separate action. A stale version returns `OPTIMISTIC_LOCK` (409); non-pending records return `ACHIEVEMENT_NOT_EDITABLE`.
+
+### `achievement.adminDelete`
+
+- **RPC path:** `/rpc/admin/achievements/delete`
+- **Auth:** Admin
+- **Input:** `{ achievementId }`
+- **Output:** `Achievement`
+- **Description:** Soft-deletes an achievement and records `achievement_deleted`. The row mutation and audit record commit atomically.
+
+### `achievement.adminRestore`
+
+- **RPC path:** `/rpc/admin/achievements/restore`
+- **Auth:** Admin
+- **Input:** `{ achievementId }`
+- **Output:** `Achievement`
+- **Description:** Restores a soft-deleted achievement and records `achievement_restored`. The row mutation and audit record commit atomically.
 
 ### `achievement.adminReview`
 
@@ -1200,14 +1218,14 @@ RPC contract.
 - **Auth:** Student (invitee)
 - **Input:** `{ bookingId, reason? }`
 - **Output:** `{ declined: true }`
-- **Description:** Declines one pending group or group-series invitation. When no pending invitees remain, the parent resolves immediately: fewer than two confirmed participants expires the booking and releases holds; a viable partial group enters `awaiting_reconfirmation` with a fresh response window; a full group enters `awaiting_tutor_review`.
+- **Description:** Locks the parent booking before changing the invitation and resolving remaining responses, preventing concurrent final invite decisions from racing. Declines one pending group or group-series invitation. When no pending invitees remain, the parent resolves immediately: fewer than two confirmed participants expires the booking and releases holds; a viable partial group enters `awaiting_reconfirmation` with a fresh response window; a full group enters `awaiting_tutor_review`.
 
 ### `booking.withdrawInvite`
 
 - **Auth:** Student (booking proposer)
 - **Input:** `{ bookingId, inviteeUserId, reason? }`
 - **Output:** `{ withdrawn: true, inviteeUserId }`
-- **Description:** Withdraws one pending group or group-series invitation before confirmation. The target participant is marked `withdrawn_pre_h2`, confirmed headcount is unchanged, and the invitee receives a booking notification. When no pending invitees remain, the same parent resolution as `booking.declineInvite` runs; undersized bookings release remaining holds and expire, while viable partial groups enter reconfirmation.
+- **Description:** Locks the parent booking before changing the invitation and resolving remaining responses, preventing concurrent final invite decisions from racing. Withdraws one pending group or group-series invitation before confirmation. The target participant is marked `withdrawn_pre_h2`, confirmed headcount is unchanged, and the invitee receives a booking notification. When no pending invitees remain, the same parent resolution as `booking.declineInvite` runs; undersized bookings release remaining holds and expire, while viable partial groups enter reconfirmation.
 
 ### `booking.reconfirm`
 

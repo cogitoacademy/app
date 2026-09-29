@@ -1,6 +1,6 @@
 # Cogito Module Reference
 
-Last updated: 2026-09-27
+Last updated: 2026-09-29
 
 ## Role-based dashboard analytics (2026-09-25)
 
@@ -19,6 +19,7 @@ is currently named **Active booking proposers** in the UI because the aggregate
 does not yet count group participants or login activity.
 
 `admin.getDashboardAnalytics` accepts preset or custom inclusive WIB ranges.
+Impossible custom calendar dates are rejected before query execution.
 Its account aggregate uses correlated auth-session existence checks: current
 MAU is activity in days 0-30, and churn is prior-window activity in days 31-60
 without current-window activity. Wallet health counts all student accounts,
@@ -384,9 +385,9 @@ active-grant override to `knowledgeBankEligible`.
 
 - `achievement.types.ts` — Zod schemas for student create/update, admin correction, list/admin filters
 - `achievement.errors.ts` — `AchievementNotFoundError`, `AchievementNotOwnedError`, `AchievementNotEditableError`, `OptimisticLockError`
-- `achievement.repo.ts` — CRUD with optimistic locking (`updateWithVersion`, `updateByIdWithVersion`, `deleteWithVersion`)
-- `achievement.service.ts` — Ownership checks, admin correction/review workflow, audit and optimistic lock handling
-- `achievement.handler.ts` — `list`, `stats`, `listApproved`, `create`, `update`, `remove`, `adminList`, `adminStats`, `adminUpdate`, `adminReview`
+- `achievement.repo.ts` — CRUD with optimistic locking (`updateWithVersion`, `updateByIdWithVersion`, `deleteWithVersion`), soft-delete/restore, and active-row aggregates
+- `achievement.service.ts` — Ownership checks, admin correction/review/delete/restore workflow, audit and optimistic lock handling
+- `achievement.handler.ts` — `list`, `stats`, `listApproved`, `create`, `update`, `remove`, `adminList`, `adminStats`, `adminUpdate`, `adminDelete`, `adminRestore`, `adminReview`
 - `achievement.router.ts` — Protected list/stats routes, admin list/stats/correction/review routes, public `listApproved` route
 
 **Service Methods:**
@@ -398,8 +399,9 @@ active-grant override to `knowledgeBankEligible`.
 - `update(userId, input)` — Updates with optimistic lock check (`input.version` + `input.data`)
 - `remove(userId, id, expectedVersion)` — Deletes with optimistic lock check
 - `adminList(input)` — Server-paginated list with optional status filter; `pending` includes `pending_review`
-- `adminStats()` — Returns aggregate moderation counts without a page limit
+- `adminStats()` — Returns aggregate moderation counts for non-deleted rows without a page limit
 - `adminUpdate(adminId, input)` — Corrects a `pending`/`pending_review` submission with optimistic locking, before/after audit content, and no status change; admins can also set or clear `documentationUrl`
+- `adminDelete(adminId, achievementId)` / `adminRestore(adminId, achievementId)` — Soft-delete or restore an achievement and write its audit record in the same transaction
 - `adminReview(id, status, adminNote?)` — Moderation action. **F12:** transition table — `pending`/`pending_review` → `approved`/`rejected`/`archived`; `approved`/`rejected` → `archived`; `archived` → `approved`/`rejected` (restore). Other transitions throw `AchievementNotEditableError`. Reads and updates inside one transaction using the current status/version as a compare-and-swap; a lost race throws `OptimisticLockError` before notification/audit side effects. Notifies the owner and writes an `achievement_{status}` audit record after success
 
 **Dependencies:** `AchievementRepo`
@@ -415,6 +417,7 @@ active-grant override to `knowledgeBankEligible`.
 - The student and admin achievement forms use a responsive Selia drawer: bottom with downward dismissal below `sm`, right-side with rightward dismissal at `sm` and above. Shared portal controls for Category, Level, and Awarding Date must remain above the drawer layer.
 - Optimistic locking prevents lost updates (`version` field)
 - Admin correction is allowed only for `pending`/`pending_review`, can update every submission field plus public documentation, writes an audit snapshot, and does not change status; admin review changes status to `approved` or `rejected`
+- Admin soft-delete/restore commits its row mutation and audit record atomically; aggregate moderation counts exclude soft-deleted rows unless an admin explicitly requests deleted rows
 - Student and admin list pages use database pagination; the UI may request one extra row as a `hasNext` sentinel, but never loads the complete achievement collection into the browser.
 
 **Web presentation:**
@@ -656,6 +659,10 @@ recipient consent.
 
 **Purpose:** Core booking lifecycle — solo, group, and series bookings with state machine transitions, reschedule approval, session notes, wallet holds, payouts, and meeting integration.
 
+Invitation-phase `declineInvite` and proposer-side `withdrawInvite` lock the
+parent booking row before mutating the participant and resolving the final
+pending response. Concurrent final responses therefore serialize.
+
 Reschedule proposals must include a non-blank reason, change the active booking or target-session start minute, and cannot repeat the pending proposal for the same target. `proposeReschedule` serializes replacements with a booking-scoped transaction advisory lock; `reschedule_booking_pending_uniq` independently guarantees at most one pending proposal per booking. The booking-detail proposal editor is presented in a height-constrained bottom Selia drawer on mobile and a right-side drawer on desktop. Tutors switch between published availability and a custom time through the shared two-option Selia Tabs component; availability windows are grouped by Jakarta calendar date and rendered as compact time chips, with four dates initially visible and an inline See more/Show less disclosure rather than nested scrolling. For series bookings (solo and group) the header-level reschedule action is hidden and each non-terminal session row exposes its own per-session `Propose new time` drawer that sends `sessionId`; solo/group single bookings keep the booking-level action. Tutor honorarium display sums across series sessions (`getTotalHonorariumIdr`, per-session snapshot fallback plus derived session-count fallback mirroring `aggregateTutorPayouts`), showing `Total honorarium (N sessions)` plus per-session breakdown; solo/group single bookings show the single-session honorarium.
 
 The create-booking module keeps all submit state in the parent form while presenting it through two responsive surfaces: a desktop right-rail summary and a mobile bottom summary drawer. Its single scheduling card starts with shared Selia Tabs for Online/Offline, paginates in seven consecutive Jakarta-local calendar dates on desktop and three on mobile with no-slot dates visible and disabled, then derives every valid 15-minute start within the selected availability window while preserving the fixed 90-minute duration. Starts are grouped into Morning, Afternoon, and Evening; selection is communicated by the button variant and `aria-pressed`, without a duplicate check icon. Each selection uses a composite availability-slot-and-start key, enabling multiple non-overlapping sessions on the same day while disabling choices that overlap an already selected 90-minute session. The separate Selected sessions tray summarizes and removes up to four choices without a second time-adjustment control. Card explanations use `CardInfoPreview` plus `InfoPreview`; Specialization and the optional focus prompt are grouped in one semantic Session details fieldset. The drawer button uses the form `id`, so there is no duplicate mutation path.
@@ -684,8 +691,8 @@ The Participants fieldset owns the derived Solo/Group badge; summaries represent
 - `createSeries(proposerId, input)` — Creates a solo series booking with sessions (2-4 sessions, each checked for overlaps)
 - `createGroupSeries(proposerId, input)` — Creates a group series (targetGroupSize 2-6, inviteeUserIds) with upfront per-participant holds for all sessions; rejects targets above the tutor's modality-specific capacity (FR-20, landed #46)
 - `confirmInvite(userId, bookingId)` — Invitee confirms participation; holds marks
-- `declineInvite(userId, bookingId, reason?)` — Invitee declines. If this consumes the last pending invitation, resolve from confirmed participants: `<2` expires and releases holds; `>=2` but below target reprices a one-off group and opens reconfirmation; full target advances to tutor review.
-- `withdrawInvite(proposerId, bookingId, inviteeUserId, reason?)` — Proposer withdraws one pending group invite; marks the invitee `withdrawn_pre_h2`, leaves confirmed headcount unchanged, notifies the invitee, and runs the same last-pending-invite resolution used by `declineInvite`. Expired group-series sessions are cancelled. The user-supplied `reason` is HTML-escaped (`escapeHtml`) before interpolation into the notification/email body (F5 convention — user-supplied text must not inject markup)
+- `declineInvite(userId, bookingId, reason?)` — Locks the parent booking, then declines. If this consumes the last pending invitation, resolve from confirmed participants: `<2` expires and releases holds; `>=2` but below target reprices a one-off group and opens reconfirmation; full target advances to tutor review.
+- `withdrawInvite(proposerId, bookingId, inviteeUserId, reason?)` — Locks the parent booking, then withdraws one pending group invite; marks the invitee `withdrawn_pre_h2`, leaves confirmed headcount unchanged, notifies the invitee, and runs the same last-pending-invite resolution used by `declineInvite`. Expired group-series sessions are cancelled. The user-supplied `reason` is HTML-escaped (`escapeHtml`) before interpolation into the notification/email body (F5 convention — user-supplied text must not inject markup)
 - `reconfirm(userId, bookingId, accept)` — Participant accepts/rejects the repriced offer after repricing. **F3 (headcount-change reprice):** when an accept lands and the confirmed headcount no longer matches the headcount the current snapshot was priced for (a participant declined or withdrew mid-cycle, e.g. withdrawing from `awaiting_reconfirmation` decrements the headcount without repricing), the booking does **not** finalize — all reconfirmed participants are reset to plain `confirmed` (`resetReconfirmedParticipants`), the group is repriced for the current headcount, every survivor gets a fresh 12h window, and a `reissue_reconfirm` notification is sent. The booking only moves to `AWAITING_TUTOR_REVIEW` when all confirmed participants reconfirm against the current snapshot. **N1:** when a flat or rounded price map produces the same per-student rate at two headcounts, `repriceGroupForHeadcount` still synchronizes `holdAmount` to the sum of participant-held amounts, preventing the reconfirmation mismatch from re-firing forever.
 - `withdraw(userId, bookingId, reason?)` — Participant withdrawal closes at `scheduledStartAt`; before then, pre-H2 releases hold and post-H2 forfeits it, with group survival/repricing rules unchanged. At/after start it throws `BOOKING_CANCELLATION_DEADLINE_PASSED`; group-series (`type === "series" && targetGroupSize > 1`) remains rejected with `BOOKING_SERIES_NO_OPT_OUT` (U4 no-opt-out rule).
 - `cancel(userId, bookingId, reason)` — Requires a non-blank student reason, then cancels a booking only before `scheduledStartAt`; releases holds before H-2, while a pre-start late cancel becomes `late_cancelled` and forfeits holds. At/after start it throws `BOOKING_CANCELLATION_DEADLINE_PASSED`, preserving the live booking for tutor completion and routing delivery disputes through support/admin review.
@@ -1180,7 +1187,7 @@ The authenticated dashboard shell is viewport-fixed. Its content pane exclusivel
 
 - `getMyProfile(userId)` — Returns tutor profile
 - `getMyProfileHistory(userId)` — Returns the newest profile/review audit entries for the tutor; changed saves include complete before/after snapshots, and actor identity is limited to id and display name so account emails are not exposed to tutors
-- `updateMyProfile(userId, input)` — Updates canonical account name and profile fields with optimistic locking (`version`) and records one full before/after snapshot pair when state changes. Canonical structured fields are `education`, `achievements`, and `experiences`. `affiliation` describes current study program/university or professional role/organization. Draft saves permit omission; review submission requires affiliation and non-empty achievements/experiences. Published-profile changes to affiliation and structured credentials enter pending admin review.
+- `updateMyProfile(userId, input)` — Updates canonical account name and profile fields with optimistic locking (`version`) and records one full before/after snapshot pair when state changes. Profile, account-name, subject, photo, and audit writes share one transaction. Reverting the final pending proposal clears both `pendingProfileChanges` and `profileEditStatus`. Canonical structured fields are `education`, `achievements`, and `experiences`. `affiliation` describes current study program/university or professional role/organization. Draft saves permit omission; review submission requires affiliation and non-empty achievements/experiences. Published-profile changes to affiliation and structured credentials enter pending admin review.
 - `onlineMaxClassSize` / `offlineMaxClassSize` — Immediate operational preferences from 1–6. Size 1 disables group requests for that modality; changes constrain new discovery/booking flows without rewriting existing bookings.
 - `submitForReview(userId, input = {})` — Requires affiliation, canonical achievements/experiences, complete pricing/profile fields, and first-submit Terms acceptance; then sets `onboardingStatus` to `pending_review` and records audit log.
 - `listAvailability(userId)` — Lists the tutor's active future availability slots
@@ -1202,6 +1209,7 @@ The authenticated dashboard shell is viewport-fixed. Its content pane exclusivel
 - `submitForReview` can only be called from `draft`/`changes_requested` status
 - A complete first tutor submission requires bilingual Terms of Service acceptance; the profile action area owns one **I agree to the Tutor Terms of Service** checkbox and opens the document through a read-only **Read terms** action. **Submit for review** and **Submit changes for review** remain disabled until the checkbox is checked, while draft/profile saving remains available. The acceptance timestamp/version is immutable after the first write and is not included in public tutor discovery. After acceptance the checkbox is checked/disabled and **Review Tutor Terms** remains available; the consent row and action controls wrap responsively without changing the service contract
 - Profile updates use optimistic locking (`version`)
+- Profile, account-name, subject, photo, and audit writes commit atomically; final pending-proposal reversion clears both pending payload and edit-review status
 - New tutor pricing is stored as IDR base honoraria by modality (`baseRatesIdr`) and validated against the active economy minimum and Rp5,000 increments; published tutors may change these rates at any time, new bookings use the new rate, and existing booking snapshots remain authoritative for payout. The legacy Marks map remains readable during migration
 - The tutor profile editor at `/profile` renders selected modalities in one combined six-row IDR group-size matrix using the same table structure as the student discovery drawer; this is presentation-only. The legacy `/onboarding` path redirects to `/profile` for tutors.
 - The tutor profile editor places the profile-photo upload first and uses a clickable avatar with the shared circular crop flow. Compact Selia `InfoPreview` popovers reveal the full submitted/current/proposed image on demand. For a published tutor it labels `user.image` as the current public photo and a differing `pendingProfileChanges.profileImageUrl` as the proposed photo. The admin review page compares both assets side by side; `approve_edits` remains the only operation that promotes the proposal into `user.image`.

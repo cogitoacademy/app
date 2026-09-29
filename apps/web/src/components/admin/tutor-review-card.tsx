@@ -507,6 +507,9 @@ export function TutorReviewCard({
         void queryClient.invalidateQueries({
           queryKey: orpc.adminTutor.listTutorProfiles.key(),
         });
+        void queryClient.invalidateQueries({
+          queryKey: orpc.adminTutor.listTutorProfileHistory.key(),
+        });
         toastManager.add({
           title: "Tutor achievements updated",
           description: "The corrected format is now ready for review.",
@@ -1324,7 +1327,7 @@ export function TutorReviewCard({
             setAchievementsEditOpen(open);
         }}
       >
-        <DialogPopup className="max-w-4xl">
+        <DialogPopup className="sm:max-w-4xl">
           <DialogHeader className="flex-col items-start gap-1.5">
             <DialogTitle>Edit tutor achievements</DialogTitle>
             <DialogDescription>

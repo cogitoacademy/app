@@ -1,6 +1,6 @@
 # Cogito Runbook
 
-Last updated: 2026-09-27
+Last updated: 2026-09-29
 
 ## Tutor profile history smoke check (2026-09-29)
 
@@ -9,6 +9,16 @@ save. Open the admin tutor review page and confirm one newest history row shows
 the complete before/after snapshots with `displayName` and the changed field in
 `details.changedFields`. For a published tutor, submit a photo or structured
 edit and confirm the pending proposal remains private until admin approval.
+Revert the only pending specialization to its current public value and confirm
+the edit-review status clears. Simulate an audit insert failure in integration
+testing and confirm no profile/account mutation commits.
+
+Submit the final two pending invitation decline/withdraw requests together and
+confirm the booking reaches exactly one resolved state, never participant
+confirmation with zero pending invitees. Impossible analytics dates such as
+`2026-02-31` must fail validation. Soft-delete an achievement and confirm it
+disappears from active moderation counts; restore it and confirm row plus audit
+history return atomically.
 
 ## Dashboard timezone and empty-state smoke check (2026-09-25)
 

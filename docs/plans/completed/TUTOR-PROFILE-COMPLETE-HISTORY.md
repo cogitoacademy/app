@@ -18,3 +18,6 @@ profile before/after snapshots and showing exact values for changed fields.
 - Render changed field Before/After values from the full snapshots in review history.
 - Rename pending panel to **Fields awaiting approval** so its scope is explicit.
 - Add snapshot/helper and service regression tests; sync API, module, context, and runbook docs.
+- Harden follow-up review: make every profile/audit save atomic, clear empty
+  pending proposals, remove the duplicate frontend account-name mutation, and
+  keep admin history fresh after achievement corrections.

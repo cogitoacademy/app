@@ -166,12 +166,14 @@ function bookingViewCondition(
 async function findBookingById(
   conn: DbOrTx,
   bookingId: string,
+  options: { forUpdate?: boolean } = {},
 ): Promise<BookingRow | null> {
-  const [b] = await conn
+  const query = conn
     .select({ ...getTableColumns(booking) })
     .from(booking)
     .where(eq(booking.id, bookingId))
     .limit(1);
+  const [b] = options.forUpdate ? await query.for("update") : await query;
   return (b as BookingRow | undefined) ?? null;
 }
 
