@@ -7,17 +7,28 @@ import {
   getTableColumns,
   gte,
   ilike,
+  lt,
   lte,
   or,
   sql,
 } from "drizzle-orm";
-import { booking, user } from "@cogito-app/db/schema";
+import {
+  booking,
+  paymentRecord,
+  refundRecord,
+  session,
+  user,
+  wallet,
+} from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
 import { USER_ROLE } from "../../shared/constants";
 
 export interface DashboardAnalyticsQuery {
   periodStart: Date;
   periodEnd: Date;
+  activeSince: Date;
+  previousActiveSince: Date;
+  now: Date;
 }
 
 export type UserRole = "student" | "tutor" | "admin";
@@ -143,6 +154,7 @@ export async function getDashboardAnalytics(
   )), 0)::bigint`;
   const studentCount = sql<number>`count(*) FILTER (WHERE ${user.role} = 'student')::int`;
   const tutorCount = sql<number>`count(*) FILTER (WHERE ${user.role} = 'tutor')::int`;
+  const successfulPayment = sql`${paymentRecord.status} in ('PAID', 'SETTLED')`;
 
   const [
     bookingSummaryRows,
@@ -152,6 +164,10 @@ export async function getDashboardAnalytics(
     stateBreakdown,
     modalityBreakdown,
     categoryBreakdown,
+    accountSummaryRows,
+    marksSummaryRows,
+    paymentSummaryRows,
+    refundSummaryRows,
   ] = await Promise.all([
     conn
       .select({
@@ -219,6 +235,74 @@ export async function getDashboardAnalytics(
       )
       .orderBy(desc(bookingCount))
       .limit(5),
+    conn
+      .select({
+        totalAccounts: sql<number>`count(*)::int`,
+        totalStudents: studentCount,
+        totalTutors: tutorCount,
+        signups: sql<number>`count(*) FILTER (WHERE ${and(gte(user.createdAt, query.periodStart), lte(user.createdAt, query.periodEnd))})::int`,
+        monthlyActiveUsers: sql<number>`count(*) FILTER (WHERE EXISTS (
+          SELECT 1 FROM ${session}
+          WHERE "session"."user_id" = "user"."id"
+            AND ${gte(session.updatedAt, query.activeSince)}
+            AND ${lte(session.updatedAt, query.now)}
+        ))::int`,
+        inactiveUsers: sql<number>`count(*) FILTER (
+          WHERE ${lt(user.createdAt, query.activeSince)}
+            AND NOT EXISTS (
+              SELECT 1 FROM ${session}
+              WHERE "session"."user_id" = "user"."id"
+                AND ${gte(session.updatedAt, query.activeSince)}
+                AND ${lte(session.updatedAt, query.now)}
+            )
+        )::int`,
+        previousActiveUsers: sql<number>`count(*) FILTER (WHERE EXISTS (
+          SELECT 1 FROM ${session}
+          WHERE "session"."user_id" = "user"."id"
+            AND ${gte(session.updatedAt, query.previousActiveSince)}
+            AND ${lt(session.updatedAt, query.activeSince)}
+        ))::int`,
+        churnedUsers: sql<number>`count(*) FILTER (
+          WHERE EXISTS (
+            SELECT 1 FROM ${session}
+            WHERE "session"."user_id" = "user"."id"
+              AND ${gte(session.updatedAt, query.previousActiveSince)}
+              AND ${lt(session.updatedAt, query.activeSince)}
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM ${session}
+            WHERE "session"."user_id" = "user"."id"
+              AND ${gte(session.updatedAt, query.activeSince)}
+              AND ${lte(session.updatedAt, query.now)}
+          )
+        )::int`,
+      })
+      .from(user),
+    conn
+      .select({
+        studentsWithMarks: sql<number>`count(*) FILTER (WHERE ${user.role} = 'student' AND coalesce(${wallet.totalBalance}, 0) > 0)::int`,
+        studentsWithoutMarks: sql<number>`count(*) FILTER (WHERE ${user.role} = 'student' AND coalesce(${wallet.totalBalance}, 0) = 0)::int`,
+      })
+      .from(user)
+      .leftJoin(wallet, eq(wallet.userId, user.id)),
+    conn
+      .select({
+        payingStudents: sql<number>`count(distinct ${paymentRecord.userId}) FILTER (WHERE ${successfulPayment})::int`,
+        grossRevenueIdr: sql<number>`coalesce(sum(${paymentRecord.amountIdr}) FILTER (
+          WHERE ${successfulPayment}
+            AND ${gte(paymentRecord.updatedAt, query.periodStart)}
+            AND ${lte(paymentRecord.updatedAt, query.periodEnd)}
+        ), 0)::bigint`,
+      })
+      .from(paymentRecord),
+    conn
+      .select({
+        refundedIdr: sql<number>`coalesce(sum(${refundRecord.amountIdr}) FILTER (
+          WHERE ${gte(refundRecord.createdAt, query.periodStart)}
+            AND ${lte(refundRecord.createdAt, query.periodEnd)}
+        ), 0)::bigint`,
+      })
+      .from(refundRecord),
   ]);
 
   return {
@@ -238,6 +322,25 @@ export async function getDashboardAnalytics(
     stateBreakdown,
     modalityBreakdown,
     categoryBreakdown,
+    accountSummary: accountSummaryRows[0] ?? {
+      totalAccounts: 0,
+      totalStudents: 0,
+      totalTutors: 0,
+      signups: 0,
+      monthlyActiveUsers: 0,
+      inactiveUsers: 0,
+      previousActiveUsers: 0,
+      churnedUsers: 0,
+    },
+    marksSummary: marksSummaryRows[0] ?? {
+      studentsWithMarks: 0,
+      studentsWithoutMarks: 0,
+    },
+    paymentSummary: paymentSummaryRows[0] ?? {
+      payingStudents: 0,
+      grossRevenueIdr: 0,
+    },
+    refundSummary: refundSummaryRows[0] ?? { refundedIdr: 0 },
   };
 }
 
