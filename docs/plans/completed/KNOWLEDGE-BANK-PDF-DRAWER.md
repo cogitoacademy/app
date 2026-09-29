@@ -29,4 +29,4 @@ preview.
 - Manual production smoke remains required for native PDF behavior across
   supported desktop and mobile browsers.
 - Root cause of the production blocked-content message: nginx `default-src
-  'self'` blocked the API-origin iframe before the API response was evaluated.
+'self'` blocked the API-origin iframe before the API response was evaluated.
