@@ -71,6 +71,7 @@ export type StudentAchievementTableItem = {
   evidenceUrl: string | null;
   documentationUrl?: string | null;
   status: string;
+  version: number;
   adminNote: string | null;
   deletedAt?: string | Date | null;
   userId?: string | null;

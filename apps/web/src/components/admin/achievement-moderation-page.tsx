@@ -88,6 +88,7 @@ const STATUS_CONFIG = {
   approved: { label: "Approved", variant: "success" },
   rejected: { label: "Rejected", variant: "danger" },
   archived: { label: "Archived", variant: "secondary" },
+  deleted: { label: "Deleted", variant: "danger" },
 } as const;
 
 export function AchievementModerationPage() {

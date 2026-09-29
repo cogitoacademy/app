@@ -257,7 +257,7 @@ function MarksValue({ value }: { value: unknown }) {
     );
   }
   const rows = Object.entries(value).filter(
-    ([, price]) => typeof price === "number",
+    (entry): entry is [string, number] => typeof entry[1] === "number",
   );
   if (rows.length === 0)
     return <Text className="text-sm text-dimmed">Not set</Text>;
