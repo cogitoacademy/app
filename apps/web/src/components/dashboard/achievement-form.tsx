@@ -35,6 +35,7 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import { IconPlus, IconX } from "@tabler/icons-react";
 import { useForm } from "@tanstack/react-form";
+import { cn } from "@cogito-app/ui/lib/utils";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { z } from "zod";
@@ -258,10 +259,7 @@ export function AchievementForm({
         isAdmin ? achievementFormSchema : studentAchievementFormSchema
       ).safeParse(value);
       if (!validation.success) {
-        setFormError(
-          validation.error.issues[0]?.message ??
-            "Check the form fields and try again.",
-        );
+        setFormError(null);
         return;
       }
 
@@ -403,6 +401,10 @@ export function AchievementForm({
                       value={field.state.value}
                       onBlur={field.handleBlur}
                       onChange={(e) => field.handleChange(e.target.value)}
+                      className={cn(
+                        field.state.meta.errors.length > 0 &&
+                          "ring-2 ring-danger",
+                      )}
                       placeholder="e.g. JoinMUN 2025"
                     />
                     {field.state.meta.errors.map((error) => (
@@ -427,7 +429,12 @@ export function AchievementForm({
                         )
                       }
                     >
-                      <SelectTrigger>
+                      <SelectTrigger
+                        className={cn(
+                          field.state.meta.errors.length > 0 &&
+                            "ring-2 ring-danger",
+                        )}
+                      >
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
                       <SelectPopup>
@@ -459,6 +466,10 @@ export function AchievementForm({
                       value={field.state.value}
                       onBlur={field.handleBlur}
                       onChange={(e) => field.handleChange(e.target.value)}
+                      className={cn(
+                        field.state.meta.errors.length > 0 &&
+                          "ring-2 ring-danger",
+                      )}
                       placeholder="e.g. Best Delegate, Juara 1"
                     />
                     {field.state.meta.errors.map((error) => (
@@ -489,6 +500,10 @@ export function AchievementForm({
                       value={field.state.value}
                       onBlur={field.handleBlur}
                       onChange={(e) => field.handleChange(e.target.value)}
+                      className={cn(
+                        field.state.meta.errors.length > 0 &&
+                          "ring-2 ring-danger",
+                      )}
                       placeholder={
                         isAdmin ? "https://..." : "https://drive.google.com/..."
                       }
@@ -512,7 +527,12 @@ export function AchievementForm({
                         field.handleChange(getSelectItemValue(value) ?? "")
                       }
                     >
-                      <SelectTrigger>
+                      <SelectTrigger
+                        className={cn(
+                          field.state.meta.errors.length > 0 &&
+                            "ring-2 ring-danger",
+                        )}
+                      >
                         <SelectValue placeholder="Select level" />
                       </SelectTrigger>
                       <SelectPopup>
@@ -552,6 +572,10 @@ export function AchievementForm({
                         value={field.state.value}
                         onBlur={field.handleBlur}
                         onChange={(e) => field.handleChange(e.target.value)}
+                        className={cn(
+                          field.state.meta.errors.length > 0 &&
+                            "ring-2 ring-danger",
+                        )}
                         placeholder="https://…"
                       />
                       {field.state.meta.errors.map((error) => (
@@ -591,6 +615,10 @@ export function AchievementForm({
                       value={field.state.value}
                       onBlur={field.handleBlur}
                       onChange={(e) => field.handleChange(e.target.value)}
+                      className={cn(
+                        field.state.meta.errors.length > 0 &&
+                          "ring-2 ring-danger",
+                      )}
                       placeholder="e.g. Jakarta, Indonesia"
                     />
                   </Field>

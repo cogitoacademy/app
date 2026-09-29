@@ -72,6 +72,7 @@ export type StudentAchievementTableItem = {
   documentationUrl?: string | null;
   status: string;
   adminNote: string | null;
+  deletedAt?: string | Date | null;
   userId?: string | null;
   student?: {
     id?: string | null;
@@ -90,6 +91,7 @@ const STATUS_CONFIG: Record<
   approved: { variant: "success", label: "Approved" },
   rejected: { variant: "danger", label: "Rejected" },
   archived: { variant: "secondary", label: "Archived" },
+  deleted: { variant: "danger", label: "Deleted" },
 };
 
 export function formatAchievementDate(value: string | null) {
@@ -248,6 +250,7 @@ export function AchievementDetailDrawer<T extends StudentAchievementTableItem>({
   onDelete,
   onApprove,
   onReject,
+  onArchive,
   mutationPending = false,
 }: {
   achievement: T | null;
@@ -258,6 +261,7 @@ export function AchievementDetailDrawer<T extends StudentAchievementTableItem>({
   onDelete?: (achievement: T) => void;
   onApprove?: (id: string, eventName: string) => void;
   onReject?: (id: string, eventName: string) => void;
+  onArchive?: (id: string, eventName: string) => void;
   mutationPending?: boolean;
 }) {
   const [isDesktop, setIsDesktop] = useState(false);
@@ -276,7 +280,9 @@ export function AchievementDetailDrawer<T extends StudentAchievementTableItem>({
   }, []);
 
   const status = achievement
-    ? (STATUS_CONFIG[achievement.status] ?? STATUS_CONFIG.pending)
+    ? achievement.deletedAt
+      ? STATUS_CONFIG.deleted
+      : (STATUS_CONFIG[achievement.status] ?? STATUS_CONFIG.pending)
     : STATUS_CONFIG.pending;
   const isPending =
     achievement?.status === "pending" ||
@@ -431,11 +437,6 @@ export function AchievementDetailDrawer<T extends StudentAchievementTableItem>({
         </DrawerBody>
 
         <DrawerFooter className="flex-wrap gap-2">
-          <DrawerClose
-            render={<Button variant="plain" aria-label="Close details" />}
-          >
-            Close
-          </DrawerClose>
           {mode === "student" && isPending && onEdit ? (
             <Button
               variant="secondary"
@@ -471,6 +472,35 @@ export function AchievementDetailDrawer<T extends StudentAchievementTableItem>({
               disabled={mutationPending}
             >
               <IconEdit /> Correct
+            </Button>
+          ) : null}
+          {mode === "admin" &&
+          achievement?.status === "approved" &&
+          onArchive ? (
+            <Button
+              variant="secondary"
+              onClick={() => {
+                if (!achievement) return;
+                onOpenChange(false);
+                onArchive(achievement.id, achievement.eventName);
+              }}
+              disabled={mutationPending}
+            >
+              Unpublish
+            </Button>
+          ) : null}
+          {mode === "admin" &&
+          achievement?.status === "archived" &&
+          onApprove ? (
+            <Button
+              onClick={() => {
+                if (!achievement) return;
+                onOpenChange(false);
+                onApprove(achievement.id, achievement.eventName);
+              }}
+              disabled={mutationPending}
+            >
+              <IconCheck /> Publish
             </Button>
           ) : null}
           {mode === "admin" && isPending && onReject && onApprove ? (

@@ -26,11 +26,15 @@ describe("achievementRouter", () => {
         stats: mock(async () => ({})),
         adminStats: mock(async () => ({})),
         adminReview: mock(async () => ({})),
+        adminDelete: mock(async () => ({})),
+        adminRestore: mock(async () => ({})),
       } as any,
     });
     const router = createAchievementRouter(handler);
     expect(Object.keys(router).toSorted()).toEqual([
+      "adminDelete",
       "adminList",
+      "adminRestore",
       "adminReview",
       "adminStats",
       "adminUpdate",

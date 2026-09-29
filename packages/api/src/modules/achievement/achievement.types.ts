@@ -101,6 +101,7 @@ export const achievementListInput = z
 export const adminListInput = z
   .object({
     status: achievementStatus.optional(),
+    deleted: z.boolean().default(false),
     limit: z.number().min(1).max(100).default(50),
     offset: z.number().min(0).default(0),
   })
@@ -112,4 +113,8 @@ export const adminReviewInput = z.object({
   achievementId: z.string().max(100),
   status: z.enum(["approved", "rejected", "archived"]),
   adminNote: z.string().max(2000).optional(),
+});
+
+export const adminDeleteInput = z.object({
+  achievementId: z.string().max(100),
 });

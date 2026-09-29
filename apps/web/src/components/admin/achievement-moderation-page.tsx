@@ -78,7 +78,7 @@ import { client, orpc } from "@/utils/orpc";
 type AdminAchievement = Awaited<
   ReturnType<typeof client.achievement.adminList>
 >[number];
-type StatusFilter = "all" | "pending" | "approved" | "rejected";
+type StatusFilter = "all" | "pending" | "approved" | "rejected" | "archived";
 
 const MODERATION_PAGE_SIZE = 10;
 
@@ -92,12 +92,13 @@ const STATUS_CONFIG = {
 
 export function AchievementModerationPage() {
   const queryClient = useQueryClient();
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("pending");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [showDeleted, setShowDeleted] = useState(false);
   const [page, setPage] = useState(0);
   const [reviewTarget, setReviewTarget] = useState<{
     id: string;
     eventName: string;
-    action: "approved" | "rejected";
+    action: "approved" | "rejected" | "archived";
   } | null>(null);
   const [editAchievement, setEditAchievement] =
     useState<AdminAchievement | null>(null);
@@ -109,12 +110,26 @@ export function AchievementModerationPage() {
         limit: MODERATION_PAGE_SIZE + 1,
         offset: page * MODERATION_PAGE_SIZE,
         ...(statusFilter !== "all" ? { status: statusFilter } : {}),
+        deleted: showDeleted,
       },
     }),
     placeholderData: keepPreviousData,
   });
   const statsQuery = useQuery(
     orpc.achievement.adminStats.queryOptions({ input: undefined }),
+  );
+  const deleteAchievement = useMutation(
+    orpc.achievement.adminDelete.mutationOptions({
+      onSuccess: () => {
+        void queryClient.invalidateQueries({
+          queryKey: orpc.achievement.adminList.key(),
+        });
+        void queryClient.invalidateQueries({
+          queryKey: orpc.achievement.adminStats.key(),
+        });
+        toastManager.add({ title: "Achievement deleted", type: "success" });
+      },
+    }),
   );
   const review = useMutation(
     orpc.achievement.adminReview.mutationOptions({
@@ -221,9 +236,21 @@ export function AchievementModerationPage() {
               <SelectItem value="pending">Pending review</SelectItem>
               <SelectItem value="approved">Approved</SelectItem>
               <SelectItem value="rejected">Rejected</SelectItem>
+              <SelectItem value="archived">Archived</SelectItem>
+              <SelectItem value="deleted">Deleted</SelectItem>
             </SelectList>
           </SelectPopup>
         </Select>
+        <Button
+          variant={showDeleted ? "secondary" : "plain"}
+          size="sm"
+          onClick={() => {
+            setShowDeleted((value) => !value);
+            setPage(0);
+          }}
+        >
+          {showDeleted ? "Hide deleted" : "Show deleted"}
+        </Button>
       </div>
 
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
@@ -268,12 +295,15 @@ export function AchievementModerationPage() {
       ) : (
         <ModerationTable
           achievements={visibleAchievements}
-          mutationPending={review.isPending}
+          mutationPending={review.isPending || deleteAchievement.isPending}
           onApprove={(id, eventName) =>
             setReviewTarget({ id, eventName, action: "approved" })
           }
           onReject={(id, eventName) =>
             setReviewTarget({ id, eventName, action: "rejected" })
+          }
+          onArchive={(id, eventName) =>
+            setReviewTarget({ id, eventName, action: "archived" })
           }
           onEdit={(item) => {
             setEditAchievement(item);
@@ -302,12 +332,16 @@ export function AchievementModerationPage() {
             <DialogTitle>
               {reviewTarget?.action === "rejected"
                 ? "Reject achievement?"
-                : "Approve achievement?"}
+                : reviewTarget?.action === "archived"
+                  ? "Unpublish achievement?"
+                  : "Approve achievement?"}
             </DialogTitle>
             <DialogDescription>
               {reviewTarget?.action === "rejected"
                 ? `Tell the student what needs to be corrected for “${reviewTarget.eventName}”.`
-                : `“${reviewTarget?.eventName ?? "This achievement"}” will be approved for the student's portfolio.`}
+                : reviewTarget?.action === "archived"
+                  ? `“${reviewTarget?.eventName ?? "This achievement"}” will be unpublished from Cogito Academy, but can be published again later.`
+                  : `“${reviewTarget?.eventName ?? "This achievement"}” will be approved for the student's portfolio.`}
             </DialogDescription>
           </DialogHeader>
           {reviewTarget?.action === "rejected" ? (
@@ -347,7 +381,11 @@ export function AchievementModerationPage() {
                 (reviewTarget?.action === "rejected" && !rejectionNote.trim())
               }
             >
-              {reviewTarget?.action === "rejected" ? "Reject" : "Approve"}
+              {reviewTarget?.action === "rejected"
+                ? "Reject"
+                : reviewTarget?.action === "archived"
+                  ? "Unpublish"
+                  : "Approve"}
             </Button>
           </DialogFooter>
         </DialogPopup>
@@ -387,6 +425,7 @@ function ModerationTable({
   mutationPending,
   onApprove,
   onReject,
+  onArchive,
   onEdit,
   page,
   pageSize,
@@ -399,6 +438,7 @@ function ModerationTable({
   mutationPending: boolean;
   onApprove: (id: string, eventName: string) => void;
   onReject: (id: string, eventName: string) => void;
+  onArchive: (id: string, eventName: string) => void;
   onEdit: (achievement: AdminAchievement) => void;
   page: number;
   pageSize: number;
@@ -527,6 +567,7 @@ function ModerationTable({
         mutationPending={mutationPending}
         onApprove={onApprove}
         onReject={onReject}
+        onArchive={onArchive}
         onEdit={onEdit}
       />
     </>
