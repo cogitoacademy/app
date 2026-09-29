@@ -630,6 +630,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
   function getSavePayload() {
     const payload: {
       version: number;
+      displayName?: string;
       shortBio?: string;
       affiliation?: string;
       achievementProofUrls?: string[];
@@ -651,6 +652,10 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       bankTransferDisclaimerAccepted?: boolean;
       prices?: Record<string, number>;
     } = { version: profile.version };
+    const displayName = name.trim();
+    if (displayName !== savedNameRef.current) {
+      payload.displayName = displayName;
+    }
     const shortBio = form.shortBio.trim();
     const affiliation = form.affiliation.trim();
     const profileImageUrl = form.profileImageUrl.trim();
@@ -921,8 +926,8 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
 
     setErrors({});
     try {
-      await saveCanonicalName();
       await updateMutation.mutateAsync(getSavePayload());
+      await saveCanonicalName();
       showUpdateSuccess(false);
     } catch {
       // handled by mutation callbacks
@@ -931,16 +936,17 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
 
   async function submitValidatedProfile(acceptTerms = false) {
     try {
-      await saveCanonicalName();
       if (profile.onboardingStatus === "published") {
         // Published profile edits are staged by updateMyProfile itself. The
         // explicit submit action runs the complete form gate before putting
         // the latest pending values into the admin review queue.
         await updateMutation.mutateAsync(getSavePayload());
+        await saveCanonicalName();
         showUpdateSuccess(true);
         return;
       }
       await updateMutation.mutateAsync(getSavePayload());
+      await saveCanonicalName();
       await submitMutation.mutateAsync(
         acceptTerms ? { acceptTerms: true } : {},
       );

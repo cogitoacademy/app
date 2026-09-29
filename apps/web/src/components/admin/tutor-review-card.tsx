@@ -9,14 +9,7 @@ import {
 } from "@cogito-app/ui/components/selia/avatar";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
-import { Chip } from "@cogito-app/ui/components/selia/chip";
-import {
-  Card,
-  CardBody,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@cogito-app/ui/components/selia/card";
+import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
 import {
   Dialog,
   DialogBody,
@@ -34,19 +27,6 @@ import {
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Input } from "@cogito-app/ui/components/selia/input";
 import {
-  InputGroup,
-  InputGroupAddon,
-} from "@cogito-app/ui/components/selia/input-group";
-import {
-  Item,
-  ItemAction,
-  ItemContent,
-  ItemDescription,
-  ItemMedia,
-  ItemTitle,
-} from "@cogito-app/ui/components/selia/item";
-import { Stack } from "@cogito-app/ui/components/selia/stack";
-import {
   Table,
   TableBody,
   TableCell,
@@ -56,19 +36,13 @@ import {
 } from "@cogito-app/ui/components/selia/table";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
-import {
-  IconAlertTriangle,
-  IconChevronDown,
-  IconInbox,
-  IconSearch,
-} from "@tabler/icons-react";
+import { IconAlertTriangle, IconInbox } from "@tabler/icons-react";
 
 import { getUserFacingError } from "@/lib/error-message";
 import { CogitoMarks } from "@/components/cogito-marks";
 import { EmptyState } from "@/components/empty-state";
 import { getCompetitionFieldClass } from "@/lib/competition-colors";
 import { resolveProfileImageUrl } from "@/lib/profile-image-url";
-import { cn } from "@cogito-app/ui/lib/utils";
 import { client, orpc } from "@/utils/orpc";
 import {
   TutorAchievementsDisplay,
@@ -77,21 +51,17 @@ import {
   type TutorEducationEntry,
   validateTutorAchievementDraft,
 } from "@/components/tutor/tutor-achievements";
-import {
-  TutorExperiencesDisplay,
-  type TutorExperience,
-} from "@/components/tutor/tutor-experiences";
-import { ProfilePhotoHistory } from "@/components/tutor/profile-photo-history";
+import { type TutorExperience } from "@/components/tutor/tutor-experiences";
+import { TutorProfileHistory } from "@/components/tutor/profile-history";
+import { TutorPendingChanges } from "@/components/admin/tutor-pending-changes";
+import { getTutorProfileFieldLabel } from "@/components/tutor/profile-field-presentation";
+import { cn } from "@cogito-app/ui/lib/utils";
 import {
   buildTutorReviewDiffs,
-  filterTutorReviewDiffs,
   getTutorReviewDiffStatus,
+  isActualTutorReviewChange,
   isTutorReviewValueEmpty,
-  summarizeTutorReviewDiffs,
-  TUTOR_REVIEW_DIFF_FILTERS,
   type TutorReviewDiff,
-  type TutorReviewDiffFilter,
-  type TutorReviewDiffStatus,
 } from "@/components/admin/tutor-review-diff";
 
 const FLOOR_ONLINE: Record<string, number> = {
@@ -294,76 +264,6 @@ function readAchievements(value: unknown): TutorAchievement[] | null {
   return entries;
 }
 
-function readExperiences(value: unknown): TutorExperience[] | null {
-  if (!Array.isArray(value)) return null;
-
-  const entries: TutorExperience[] = [];
-  for (const entry of value) {
-    if (
-      !isRecord(entry) ||
-      typeof entry.role !== "string" ||
-      typeof entry.organization !== "string" ||
-      typeof entry.startYear !== "number" ||
-      (entry.endYear !== null && typeof entry.endYear !== "number") ||
-      typeof entry.description !== "string"
-    ) {
-      return null;
-    }
-    entries.push({
-      role: entry.role,
-      organization: entry.organization,
-      startYear: entry.startYear,
-      endYear: entry.endYear,
-      description: entry.description,
-    });
-  }
-  return entries;
-}
-
-const PENDING_FIELD_LABELS: Record<string, string> = {
-  subjectIds: "Specializations",
-  baseRatesIdr: "Base rates",
-  displayName: "Display name",
-  shortBio: "Short bio",
-  affiliation: "Affiliation",
-  achievements: "Achievements",
-  experiences: "Experiences",
-  achievementProofUrls: "Achievement proof",
-  experienceProofUrls: "Experience proof",
-  proofUrls: "Proof links",
-  education: "Education",
-  modality: "Teaching mode",
-  prices: "Marks prices",
-  profileImageUrl: "Profile photo",
-};
-
-function formatPendingField(field: string) {
-  return PENDING_FIELD_LABELS[field] ?? field.replace(/([A-Z])/g, " $1").trim();
-}
-
-const DIFF_STATUS_META: Record<
-  TutorReviewDiffStatus,
-  {
-    label: string;
-    symbol: string;
-    variant: "secondary" | "success" | "warning" | "danger";
-  }
-> = {
-  added: { label: "Added", symbol: "+", variant: "success" },
-  modified: { label: "Changed", symbol: "~", variant: "warning" },
-  removed: { label: "Removed", symbol: "−", variant: "danger" },
-  filled: { label: "Filled", symbol: "✓", variant: "secondary" },
-  empty: { label: "Empty", symbol: "○", variant: "secondary" },
-};
-
-const DIFF_FILTER_LABELS: Record<TutorReviewDiffFilter, string> = {
-  all: "All",
-  added: "Added",
-  modified: "Changed",
-  removed: "Removed",
-  empty: "Empty",
-};
-
 const REVIEW_SECTION_FIELDS = {
   profile: ["shortBio", "affiliation", "displayName", "name"],
   teaching: ["modality", "subjectIds", "expertise"],
@@ -380,24 +280,7 @@ const REVIEW_SECTION_FIELDS = {
   ],
 } as const;
 
-const REVIEW_SECTION_TITLES: Record<
-  keyof typeof REVIEW_SECTION_FIELDS,
-  string
-> = {
-  profile: "Profile",
-  teaching: "Teaching setup",
-  credentials: "Credentials",
-  proofs: "Proofs",
-  marks: "Marks per student",
-  photo: "Profile photo",
-  payout: "Payout account",
-};
-
 type ReviewSectionStatus = "changes" | "empty" | undefined;
-
-function isActualTutorReviewChange(status: TutorReviewDiffStatus) {
-  return status === "added" || status === "modified" || status === "removed";
-}
 
 function getReviewSectionStatus(
   fields: readonly string[],
@@ -413,49 +296,6 @@ function getReviewSectionStatus(
     return "changes";
   }
   return isEmpty ? "empty" : undefined;
-}
-
-function sectionMatchesReviewFilters(
-  title: string,
-  fields: readonly string[],
-  status: ReviewSectionStatus,
-  diffs: readonly TutorReviewDiff[],
-  filter: TutorReviewDiffFilter,
-  search: string,
-) {
-  const query = search.trim().toLowerCase();
-  const sectionDiffs = diffs.filter((diff) => fields.includes(diff.field));
-  const sectionSearchText = [
-    title,
-    ...fields.map(formatPendingField),
-    ...sectionDiffs.map((diff) => diff.label),
-  ]
-    .join(" ")
-    .toLowerCase();
-
-  if (query && !sectionSearchText.includes(query)) return false;
-  if (filter === "all") return true;
-  if (filter === "empty") {
-    return (
-      status === "empty" || sectionDiffs.some((diff) => diff.status === "empty")
-    );
-  }
-  return sectionDiffs.some((diff) => diff.status === filter);
-}
-
-function DiffStatusBadge({ status }: { status: TutorReviewDiffStatus }) {
-  const meta = DIFF_STATUS_META[status];
-  return (
-    <Badge
-      variant={meta.variant}
-      size="sm"
-      pill
-      aria-label={`${meta.symbol} ${meta.label}`}
-    >
-      <span aria-hidden="true">{meta.symbol}</span>
-      {meta.label}
-    </Badge>
-  );
 }
 
 function ReviewEmptyState({
@@ -474,13 +314,6 @@ function ReviewEmptyState({
       size="inline"
       className="rounded-lg"
     />
-  );
-}
-
-function isPricesRecord(value: unknown): value is Record<string, number> {
-  if (!isRecord(value)) return false;
-  return Object.entries(value).every(
-    ([size, price]) => !Number.isNaN(Number(size)) && typeof price === "number",
   );
 }
 
@@ -508,399 +341,116 @@ function SpecBadges({ items }: { items: SpecializationItem[] }) {
   );
 }
 
-function UrlList({ urls }: { urls: unknown }) {
-  if (!Array.isArray(urls) || urls.length === 0) {
-    return <Text className="text-sm text-dimmed">—</Text>;
-  }
-  return (
-    <ul className="space-y-1">
-      {urls.map((url) => (
-        <li key={String(url)}>
-          <a
-            href={String(url)}
-            target="_blank"
-            rel="noreferrer"
-            className="break-all text-sm underline underline-offset-2"
-          >
-            {String(url)}
-          </a>
-        </li>
-      ))}
-    </ul>
-  );
-}
+type ReviewActionName =
+  | "request_changes"
+  | "approve_unpublished"
+  | "publish"
+  | "unpublish"
+  | "suspend"
+  | "approve_edits"
+  | "request_edit_changes";
 
-function PricesMini({ prices }: { prices: unknown }) {
-  if (!isPricesRecord(prices) || Object.keys(prices).length === 0) {
-    return <Text className="text-sm text-dimmed">—</Text>;
-  }
-  const rows = Object.entries(prices).toSorted(
-    ([a], [b]) => Number(a) - Number(b),
-  );
-  return (
-    <div className="overflow-hidden rounded-lg border border-item-border">
-      <Table className="text-sm">
-        <TableBody>
-          {rows.map(([size, price]) => (
-            <TableRow key={size}>
-              <TableCell className="py-1.5! text-muted">
-                {size} {size === "1" ? "student" : "students"}
-              </TableCell>
-              <TableCell className="py-1.5! text-right font-medium">
-                <CogitoMarks value={price} size="3" />
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  );
-}
-
-function formatBaseRates(value: unknown): string | null {
-  if (!isRecord(value)) return null;
-  const rates = Object.entries(value).filter(
-    ([, rate]) => typeof rate === "number",
-  );
-  if (rates.length === 0) return null;
-  return rates
-    .map(
-      ([mode, rate]) =>
-        `${mode === "online" ? "Online" : "Offline"} Rp${Number(rate).toLocaleString("id-ID")}`,
-    )
-    .join(" · ");
-}
-
-function modalityLabel(value: unknown): string {
-  if (typeof value !== "string" || !value) return "—";
-  if (value === "both") return "Online & offline sessions";
-  return `${value[0]?.toUpperCase()}${value.slice(1)} sessions`;
-}
-
-function plainText(value: unknown): string {
-  if (value === null || value === undefined) return "—";
-  if (typeof value === "string") return value.trim() ? value : "—";
-  if (Array.isArray(value)) {
-    return value.length > 0
-      ? value.map((entry) => String(entry)).join(", ")
-      : "—";
-  }
-  return "—";
-}
-
-type PendingPair = { current: ReactNode; proposed: ReactNode };
-
-function renderPendingChangePair({
-  field,
-  current,
-  proposed,
-  currentSpecializations,
-  subjectLabels,
-  subjectFieldSlugs,
-  idPrefix,
+function ReviewActions({
+  profile,
+  isPending,
+  reviewAction,
+  onAction,
+  onNoteAction,
 }: {
-  field: string;
-  current: unknown;
-  proposed: unknown;
-  currentSpecializations: SpecializationItem[];
-  subjectLabels: ReadonlyMap<string, string>;
-  subjectFieldSlugs?: ReadonlyMap<string, string>;
-  idPrefix: string;
-}): PendingPair {
-  if (field === "subjectIds" && Array.isArray(proposed)) {
-    return {
-      current: <SpecBadges items={currentSpecializations} />,
-      proposed: (
-        <SpecBadges
-          items={proposed.map((subjectId) => {
-            const id = String(subjectId);
-            return {
-              label: subjectLabels.get(id) ?? "Specialization unavailable",
-              field: subjectFieldSlugs?.get(id),
-            };
-          })}
-        />
-      ),
-    };
-  }
-
-  if (field === "education") {
-    const proposedEntries = readEducationEntries(proposed);
-    const currentEntries = readEducationEntries(current);
-    if (proposedEntries || currentEntries) {
-      return {
-        current: (
-          <TutorAchievementsDisplay
-            education={currentEntries ?? []}
-            achievements={[]}
-            idPrefix={`${idPrefix}-current-education`}
-          />
-        ),
-        proposed: (
-          <TutorAchievementsDisplay
-            education={proposedEntries ?? []}
-            achievements={[]}
-            idPrefix={`${idPrefix}-education`}
-          />
-        ),
-      };
-    }
-  }
-
-  if (field === "achievements") {
-    const proposedEntries = readAchievements(proposed);
-    const currentEntries = readAchievements(current);
-    if (proposedEntries || currentEntries) {
-      return {
-        current: (
-          <TutorAchievementsDisplay
-            education={[]}
-            achievements={currentEntries ?? []}
-            idPrefix={`${idPrefix}-current-competition`}
-          />
-        ),
-        proposed: (
-          <TutorAchievementsDisplay
-            education={[]}
-            achievements={proposedEntries ?? []}
-            idPrefix={`${idPrefix}-competition`}
-          />
-        ),
-      };
-    }
-  }
-
-  if (field === "experiences") {
-    const proposedEntries = readExperiences(proposed);
-    const currentEntries = readExperiences(current);
-    if (proposedEntries || currentEntries) {
-      return {
-        current: (
-          <TutorExperiencesDisplay
-            experiences={currentEntries ?? []}
-            emptyMessage="—"
-            idPrefix={`${idPrefix}-current-experiences`}
-          />
-        ),
-        proposed: (
-          <TutorExperiencesDisplay
-            experiences={proposedEntries ?? []}
-            emptyMessage="—"
-            idPrefix={`${idPrefix}-experiences`}
-          />
-        ),
-      };
-    }
-  }
-
-  if (field === "modality") {
-    return {
-      current: (
-        <Text className="text-sm text-muted">{modalityLabel(current)}</Text>
-      ),
-      proposed: (
-        <Text className="text-sm font-medium">{modalityLabel(proposed)}</Text>
-      ),
-    };
-  }
-
-  if (field === "prices") {
-    return {
-      current: <PricesMini prices={current} />,
-      proposed: <PricesMini prices={proposed} />,
-    };
-  }
-
-  if (field === "baseRatesIdr") {
-    return {
-      current: (
-        <Text className="text-sm text-muted">
-          {formatBaseRates(current) ?? "—"}
-        </Text>
-      ),
-      proposed: (
-        <Text className="text-sm font-medium">
-          {formatBaseRates(proposed) ?? "—"}
-        </Text>
-      ),
-    };
-  }
-
-  if (
-    field === "achievementProofUrls" ||
-    field === "experienceProofUrls" ||
-    field === "proofUrls"
-  ) {
-    return {
-      current: <UrlList urls={current} />,
-      proposed: <UrlList urls={proposed} />,
-    };
-  }
-
-  return {
-    current: (
-      <Text className="whitespace-pre-line break-words text-sm text-muted">
-        {plainText(current)}
-      </Text>
-    ),
-    proposed: (
-      <Text className="whitespace-pre-line break-words text-sm font-medium">
-        {plainText(proposed)}
-      </Text>
-    ),
-  };
-}
-
-function formatPendingValueSummary(field: string, value: unknown): string {
-  if (isTutorReviewValueEmpty(value)) return "Empty";
-
-  if (field === "subjectIds" && Array.isArray(value)) {
-    const count = value.length;
-    return `${count} specialization${count === 1 ? "" : "s"}`;
-  }
-
-  if (
-    field === "education" ||
-    field === "achievements" ||
-    field === "experiences"
-  ) {
-    const count = Array.isArray(value) ? value.length : 0;
-    const label =
-      field === "education"
-        ? "education entr"
-        : field === "achievements"
-          ? "achievement entr"
-          : "experience entr";
-    return `${count} ${label}${count === 1 ? "y" : "ies"}`;
-  }
-
-  if (
-    field === "achievementProofUrls" ||
-    field === "experienceProofUrls" ||
-    field === "proofUrls"
-  ) {
-    const count = Array.isArray(value) ? value.length : 0;
-    return `${count} proof link${count === 1 ? "" : "s"}`;
-  }
-
-  if (field === "prices" && isRecord(value)) {
-    const count = Object.keys(value).length;
-    return `${count} group-size price${count === 1 ? "" : "s"}`;
-  }
-
-  if (field === "baseRatesIdr") return formatBaseRates(value) ?? "Empty";
-  if (field === "modality") return modalityLabel(value);
-
-  const summary = plainText(value).replace(/\s+/g, " ").trim();
-  return summary.length > 120 ? `${summary.slice(0, 117)}…` : summary;
-}
-
-function PendingChangeRow({
-  diff,
-  expanded,
-  onToggle,
-  currentSpecializations,
-  subjectLabels,
-  subjectFieldSlugs,
-  idPrefix,
-}: {
-  diff: TutorReviewDiff;
-  expanded: boolean;
-  onToggle: () => void;
-  currentSpecializations: SpecializationItem[];
-  subjectLabels: ReadonlyMap<string, string>;
-  subjectFieldSlugs?: ReadonlyMap<string, string>;
-  idPrefix: string;
+  profile: TutorReviewCardProps["profile"];
+  isPending: boolean;
+  reviewAction?: ReviewActionName;
+  onAction: (action: ReviewActionName) => void;
+  onNoteAction: (
+    action: "request_changes" | "request_edit_changes" | "suspend",
+  ) => void;
 }) {
-  const pair = renderPendingChangePair({
-    field: diff.field,
-    current: diff.current,
-    proposed: diff.proposed,
-    currentSpecializations,
-    subjectLabels,
-    subjectFieldSlugs,
-    idPrefix,
-  });
-  const detailsId = `${idPrefix}-details`;
-  const meta = DIFF_STATUS_META[diff.status];
-  const currentSummary = formatPendingValueSummary(diff.field, diff.current);
-  const proposedSummary = formatPendingValueSummary(diff.field, diff.proposed);
-
   return (
-    <Item
-      variant="outline"
-      direction="column"
-      size="sm"
-      className="overflow-hidden gap-0! p-0!"
-    >
-      <button
-        type="button"
-        aria-expanded={expanded}
-        aria-controls={detailsId}
-        onClick={onToggle}
-        className="flex min-w-0 items-start gap-3 p-3 text-left focus-visible:z-1 focus-visible:outline-0 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
-      >
-        <ItemMedia className="pt-0.5">
-          <span
-            aria-hidden="true"
-            className="flex size-8 items-center justify-center rounded-full border border-border bg-background font-mono text-sm font-semibold"
+    <div className="flex flex-wrap justify-end gap-2">
+      {profile.onboardingStatus === "published" &&
+      profile.profileEditStatus === "pending_review" ? (
+        <>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => onNoteAction("request_edit_changes")}
+            disabled={isPending}
           >
-            {meta.symbol}
-          </span>
-        </ItemMedia>
-        <ItemContent className="min-w-0 flex-1">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <ItemTitle className="text-sm">{diff.label}</ItemTitle>
-            <DiffStatusBadge status={diff.status} />
-          </div>
-          <ItemDescription className="min-w-0 max-w-full truncate text-sm">
-            <span>{currentSummary}</span>
-            <span aria-hidden="true" className="mx-1.5 text-dimmed">
-              →
-            </span>
-            <span className="font-medium text-foreground">
-              {proposedSummary}
-            </span>
-          </ItemDescription>
-        </ItemContent>
-        <ItemAction className="shrink-0 pt-1">
-          <IconChevronDown
-            aria-hidden="true"
-            className={cn("size-4 text-dimmed", expanded && "rotate-180")}
-          />
-          <span className="sr-only">
-            {expanded ? `Collapse ${diff.label}` : `Expand ${diff.label}`}
-          </span>
-        </ItemAction>
-      </button>
-      <div
-        id={detailsId}
-        hidden={!expanded}
-        className="border-t border-item-border bg-background p-3"
-      >
-        {diff.status === "empty" ? (
-          <ReviewEmptyState
-            title="No value submitted"
-            description="This field is empty in both the current profile and the proposal."
-          />
-        ) : (
-          <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-            <div className="min-w-0 rounded-lg border border-item-border bg-item p-3">
-              <Text className="text-xs font-semibold uppercase tracking-wide text-muted">
-                Current
-              </Text>
-              <div className="mt-2 min-w-0">{pair.current}</div>
-            </div>
-            <div className="min-w-0 rounded-lg border border-warning-border/60 bg-warning/5 p-3">
-              <Text className="text-xs font-semibold uppercase tracking-wide text-warning">
-                Proposed
-              </Text>
-              <div className="mt-2 min-w-0">{pair.proposed}</div>
-            </div>
-          </div>
-        )}
-      </div>
-    </Item>
+            Request revision
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => onAction("approve_edits")}
+            progress={isPending && reviewAction === "approve_edits"}
+            disabled={isPending}
+          >
+            Approve changes
+          </Button>
+        </>
+      ) : null}
+      {profile.onboardingStatus === "pending_review" ? (
+        <>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => onNoteAction("request_changes")}
+            disabled={isPending}
+          >
+            Request changes
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => onAction("approve_unpublished")}
+            progress={isPending && reviewAction === "approve_unpublished"}
+            disabled={isPending}
+          >
+            Approve profile
+          </Button>
+        </>
+      ) : null}
+      {profile.onboardingStatus === "approved_unpublished" ? (
+        <>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => onNoteAction("request_changes")}
+            disabled={isPending}
+          >
+            Request changes
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => onAction("publish")}
+            progress={isPending && reviewAction === "publish"}
+            disabled={isPending}
+          >
+            Publish profile
+          </Button>
+        </>
+      ) : null}
+      {profile.onboardingStatus === "published" &&
+      profile.profileEditStatus !== "pending_review" ? (
+        <>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => onAction("unpublish")}
+            progress={isPending && reviewAction === "unpublish"}
+            disabled={isPending}
+          >
+            Unpublish
+          </Button>
+          <Button
+            size="sm"
+            variant="danger"
+            onClick={() => onNoteAction("suspend")}
+            disabled={isPending}
+          >
+            Suspend
+          </Button>
+        </>
+      ) : null}
+    </div>
   );
 }
 
@@ -922,11 +472,6 @@ export function TutorReviewCard({
   const [adminNote, setAdminNote] = useState("");
   const [profileImageUrl, setProfileImageUrl] = useState("");
   const [isUploadingProfilePhoto, setIsUploadingProfilePhoto] = useState(false);
-  const [diffFilter, setDiffFilter] = useState<TutorReviewDiffFilter>("all");
-  const [diffSearch, setDiffSearch] = useState("");
-  const [expandedDiffFields, setExpandedDiffFields] = useState<Set<string>>(
-    () => new Set(),
-  );
   const reviewMutation = useMutation(
     orpc.adminTutor.reviewTutorProfile.mutationOptions({
       onSuccess: () => {
@@ -1189,22 +734,8 @@ export function TutorReviewCard({
   const diffEntries = buildTutorReviewDiffs(
     pendingChangesWithoutPhoto,
     readCurrentPendingValue,
-    formatPendingField,
-  );
-  const diffSummary = summarizeTutorReviewDiffs(diffEntries);
-  const filteredDiffEntries = filterTutorReviewDiffs(
-    diffEntries,
-    diffFilter,
-    diffSearch,
-  );
-  function toggleDiffField(field: string) {
-    setExpandedDiffFields((current) => {
-      const next = new Set(current);
-      if (next.has(field)) next.delete(field);
-      else next.add(field);
-      return next;
-    });
-  }
+    getTutorProfileFieldLabel,
+  ).filter((diff) => isActualTutorReviewChange(diff.status));
   const hasEducation = Boolean(profile.education?.length);
   const hasAchievements = Boolean(profile.achievements?.length);
   const hasExperiences = Boolean(profile.experiences?.length);
@@ -1288,614 +819,438 @@ export function TutorReviewCard({
     ),
   } satisfies Record<keyof typeof REVIEW_SECTION_FIELDS, ReviewSectionStatus>;
   const showSectionStatus = (key: keyof typeof REVIEW_SECTION_FIELDS) =>
-    sectionMatchesReviewFilters(
-      REVIEW_SECTION_TITLES[key],
-      REVIEW_SECTION_FIELDS[key],
-      sectionStatuses[key],
-      diffEntries,
-      diffFilter,
-      diffSearch,
-    );
+    sectionStatuses[key] !== undefined;
 
   return (
     <>
-      <Card className="flex min-w-0 flex-col overflow-hidden">
-        <CardHeader>
-          <div className="flex min-w-0 gap-3.5">
-            <Avatar className="shrink-0">
-              <AvatarImage
-                src={resolveProfileImageUrl(currentProfileImageUrl)}
-                alt="Tutor profile"
-              />
-              <AvatarFallback>{getInitials(profile.user?.name)}</AvatarFallback>
-            </Avatar>
-            <div className="flex min-w-0 flex-col items-start justify-center">
-              <CardTitle className="truncate">
-                {profile.user?.name ?? "Unnamed tutor"}
-              </CardTitle>
-              {profile.user ? (
-                <div className="mt-1 flex items-center gap-1.5 text-muted">
-                  <Text className="truncate text-sm">{profile.user.email}</Text>
-                </div>
-              ) : null}
-            </div>
+      <header className="flex min-w-0 flex-col gap-4 border-b border-border pb-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex min-w-0 items-center gap-3.5">
+          <Avatar className="shrink-0">
+            <AvatarImage
+              src={resolveProfileImageUrl(currentProfileImageUrl)}
+              alt="Tutor profile"
+            />
+            <AvatarFallback>{getInitials(profile.user?.name)}</AvatarFallback>
+          </Avatar>
+          <div className="flex min-w-0 flex-col items-start justify-center">
+            <Heading size="lg" className="truncate">
+              {profile.user?.name ?? "Unnamed tutor"}
+            </Heading>
+            {profile.user ? (
+              <div className="mt-1 flex items-center gap-1.5 text-muted">
+                <Text className="truncate text-sm">{profile.user.email}</Text>
+              </div>
+            ) : null}
           </div>
+        </div>
+        <div className="flex min-w-0 flex-col items-start gap-3 lg:items-end">
           <Badge variant={badge.variant} className="shrink-0">
             {badge.label}
           </Badge>
-        </CardHeader>
+          <ReviewActions
+            profile={profile}
+            isPending={isPending}
+            reviewAction={reviewAction as ReviewActionName | undefined}
+            onAction={handleAction}
+            onNoteAction={setNoteAction}
+          />
+        </div>
+      </header>
 
-        <CardBody className="flex-1">
-          <Stack direction="column" spacing="md" className="m-0!">
-            {diffEntries.length > 0 ? (
-              <section className="rounded-lg border border-warning-border bg-warning/10 p-3">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <Text className="text-xs font-semibold uppercase tracking-wide text-warning">
-                      Proposed profile changes
-                    </Text>
-                    <Text className="mt-1 text-sm text-muted">
-                      Tutor profile <span aria-hidden="true">→</span> review
-                    </Text>
-                  </div>
-                  <div
-                    className="flex flex-wrap gap-1.5"
-                    aria-label={`${diffSummary.added} added, ${diffSummary.modified} changed, ${diffSummary.removed} removed, ${diffSummary.empty} empty`}
-                    aria-live="polite"
-                  >
-                    <Badge variant="success" size="sm" pill>
-                      +{diffSummary.added}
-                    </Badge>
-                    <Badge variant="warning" size="sm" pill>
-                      ~{diffSummary.modified}
-                    </Badge>
-                    <Badge variant="danger" size="sm" pill>
-                      −{diffSummary.removed}
-                    </Badge>
-                    <Badge variant="secondary" size="sm" pill>
-                      ○{diffSummary.empty}
-                    </Badge>
-                  </div>
-                </div>
-                <Text className="sr-only" aria-live="polite">
-                  {diffSummary.added} added, {diffSummary.modified} changed,{" "}
-                  {diffSummary.removed} removed, {diffSummary.empty} empty,{" "}
-                  {diffSummary.filled} already filled.
-                </Text>
-                <div className="mt-3 grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-                  <InputGroup className="min-w-0">
-                    <InputGroupAddon>
-                      <IconSearch aria-hidden="true" />
-                    </InputGroupAddon>
-                    <Input
-                      aria-label="Search proposed changes"
-                      value={diffSearch}
-                      onChange={(event) => setDiffSearch(event.target.value)}
-                      placeholder="Search fields"
-                    />
-                  </InputGroup>
-                  <div
-                    className="flex flex-wrap items-center gap-1.5"
-                    role="group"
-                    aria-label="Filter proposed changes"
-                  >
-                    {TUTOR_REVIEW_DIFF_FILTERS.map((filter) => (
-                      <Chip
-                        key={filter}
-                        variant={diffFilter === filter ? "primary" : "outline"}
-                        size="sm"
-                        render={
-                          <button
-                            type="button"
-                            aria-label={DIFF_FILTER_LABELS[filter]}
-                          />
-                        }
-                        aria-pressed={diffFilter === filter}
-                        onClick={() => setDiffFilter(filter)}
-                        className="cursor-pointer justify-center border-0 focus-visible:outline-0 focus-visible:ring-2 focus-visible:ring-primary"
-                      >
-                        {DIFF_FILTER_LABELS[filter]}
-                      </Chip>
-                    ))}
-                  </div>
-                </div>
-                <div className="mt-3 flex min-w-0 flex-col gap-2">
-                  {filteredDiffEntries.length > 0 ? (
-                    filteredDiffEntries.map((diff) => (
-                      <PendingChangeRow
-                        key={diff.field}
-                        diff={diff}
-                        expanded={expandedDiffFields.has(diff.field)}
-                        onToggle={() => toggleDiffField(diff.field)}
-                        currentSpecializations={specializationItems}
-                        subjectLabels={subjectLabels}
-                        subjectFieldSlugs={subjectFieldSlugs}
-                        idPrefix={`admin-${profile.id}-pending-${diff.field}`}
-                      />
-                    ))
-                  ) : (
-                    <ReviewEmptyState
-                      title="No matching changes"
-                      description="Try another field name or status filter."
-                    />
-                  )}
-                </div>
-              </section>
-            ) : null}
-
-            {profile.profileEditAdminNote ? (
-              <div className="rounded-lg border border-warning-border bg-warning/10 p-3">
-                <Text className="text-xs font-semibold uppercase tracking-wide text-warning">
-                  Tutor review note
-                </Text>
-                <Text className="mt-1 text-sm">
-                  {profile.profileEditAdminNote}
-                </Text>
-              </div>
-            ) : null}
-
-            {profile.adminReviewNote ? (
-              <div className="rounded-lg border border-warning-border bg-warning/10 p-3">
-                <Text className="text-xs font-semibold uppercase tracking-wide text-warning">
-                  Latest review note
-                </Text>
-                <Text className="mt-1 text-sm">{profile.adminReviewNote}</Text>
-              </div>
-            ) : null}
-
-            <ReviewSection
-              title="Profile"
-              status={sectionStatuses.profile}
-              showStatus={showSectionStatus("profile")}
-            >
-              {isTutorReviewValueEmpty(profile.shortBio) ? (
-                <div className="flex flex-col gap-2">
-                  <ReviewEmptyState
-                    title="No introduction provided"
-                    description="The tutor has not added a short profile introduction yet."
-                  />
-                  {profile.affiliation ? (
-                    <Text className="font-medium">{profile.affiliation}</Text>
-                  ) : null}
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  <Text className="leading-relaxed text-muted">
-                    {profile.shortBio?.trim()}
-                  </Text>
-                  {profile.affiliation ? (
-                    <Text className="font-medium">{profile.affiliation}</Text>
-                  ) : null}
-                </div>
-              )}
-            </ReviewSection>
-
-            <ReviewSection
-              title="Teaching setup"
-              status={sectionStatuses.teaching}
-              showStatus={showSectionStatus("teaching")}
-            >
-              {!hasTeachingSetup ? (
+      <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,28rem)]">
+        <main className="order-2 min-w-0 space-y-4 xl:order-1">
+          <ReviewSection
+            title="Profile"
+            status={sectionStatuses.profile}
+            showStatus={showSectionStatus("profile")}
+          >
+            {isTutorReviewValueEmpty(profile.shortBio) ? (
+              <div className="flex flex-col gap-2">
                 <ReviewEmptyState
-                  title="No teaching setup provided"
-                  description="Teaching mode and specializations have not been set yet."
+                  title="No introduction provided"
+                  description="The tutor has not added a short profile introduction yet."
                 />
-              ) : (
-                <div className="overflow-hidden rounded-lg border border-item-border">
-                  <Table className="text-sm">
-                    <TableBody>
-                      <TableRow>
-                        <TableCell className="py-2! align-top whitespace-nowrap text-muted">
-                          Teaching mode
-                        </TableCell>
-                        <TableCell className="py-2!">
-                          {profile.modality ? (
-                            <Badge
-                              variant={
-                                MODALITY_VARIANTS[profile.modality] ??
-                                "secondary"
-                              }
-                            >
-                              {MODALITY_LABELS[profile.modality] ??
-                                profile.modality}
-                            </Badge>
-                          ) : (
-                            <Text className="text-sm italic text-dimmed">
-                              Not specified
-                            </Text>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell className="py-2! align-top whitespace-nowrap text-muted">
-                          Specializations
-                        </TableCell>
-                        <TableCell className="py-2!">
-                          {specializationItems.length ? (
-                            <SpecBadges items={specializationItems} />
-                          ) : (
-                            <Text className="text-sm italic text-dimmed">
-                              No specializations listed.
-                            </Text>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </ReviewSection>
-
-            <ReviewSection
-              title="Credentials"
-              status={sectionStatuses.credentials}
-              showStatus={showSectionStatus("credentials")}
-              action={
-                <Button
-                  type="button"
-                  variant="plain"
-                  size="xs"
-                  onClick={openAchievementsEditor}
-                >
-                  Edit format
-                </Button>
-              }
-            >
-              {hasEducation || hasAchievements || hasExperiences ? (
-                <div className="flex flex-col gap-3">
-                  {hasEducation ? (
-                    <Card className="bg-accent shadow-none">
-                      <CardBody className="p-4">
-                        <TutorAchievementsDisplay
-                          education={profile.education}
-                          achievements={[]}
-                          idPrefix={`admin-${profile.id}-achievements`}
-                        />
-                      </CardBody>
-                    </Card>
-                  ) : null}
-                  {hasAchievements ? (
-                    <Card className="bg-accent shadow-none">
-                      <CardBody className="p-4">
-                        <TutorAchievementsDisplay
-                          education={[]}
-                          achievements={profile.achievements}
-                          idPrefix={`admin-${profile.id}-achievements`}
-                        />
-                      </CardBody>
-                    </Card>
-                  ) : null}
-                  {hasExperiences ? (
-                    <Card className="bg-accent shadow-none">
-                      <CardBody className="p-4">
-                        <TutorAchievementsDisplay
-                          education={[]}
-                          experiences={profile.experiences}
-                          idPrefix={`admin-${profile.id}-experiences`}
-                        />
-                      </CardBody>
-                    </Card>
-                  ) : null}
-                </div>
-              ) : (
-                <ReviewEmptyState
-                  title="No credentials provided"
-                  description="Education, achievements, and experience entries are empty."
-                />
-              )}
-            </ReviewSection>
-
-            <ReviewSection
-              title="Proofs"
-              status={sectionStatuses.proofs}
-              showStatus={showSectionStatus("proofs")}
-            >
-              {proofRows.length > 0 ? (
-                <div className="overflow-hidden rounded-lg border border-item-border">
-                  <Table className="text-sm">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="py-2!">Type</TableHead>
-                        <TableHead className="py-2!">Link</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {proofRows.map((row) => (
-                        <TableRow key={`${row.label}-${row.url}`}>
-                          <TableCell className="py-2! align-top whitespace-nowrap text-muted">
-                            {row.label}
-                          </TableCell>
-                          <TableCell className="py-2!">
-                            <a
-                              href={row.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="break-all underline underline-offset-2"
-                            >
-                              {row.url}
-                            </a>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              ) : (
-                <ReviewEmptyState
-                  title="No proof links provided"
-                  description="Achievement and experience evidence links are empty."
-                />
-              )}
-            </ReviewSection>
-
-            <ReviewSection
-              title="Marks per student"
-              status={sectionStatuses.marks}
-              showStatus={showSectionStatus("marks")}
-            >
-              {priceEntries.length ? (
-                <div className="overflow-hidden rounded-lg border border-item-border">
-                  <Table className="text-sm">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="py-2!">Group size</TableHead>
-                        <TableHead className="py-2! text-right">
-                          Marks
-                        </TableHead>
-                        <TableHead className="py-2! text-right">
-                          Minimum
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {priceEntries.map(([size, price]) => {
-                        const floor = floorPrices[size];
-                        const belowFloor = floor !== undefined && price < floor;
-                        return (
-                          <TableRow key={size}>
-                            <TableCell className="py-2!">
-                              {size} {size === "1" ? "student" : "students"}
-                            </TableCell>
-                            <TableCell className="py-2! text-right font-medium">
-                              <span className="inline-flex items-center justify-end gap-1.5">
-                                <CogitoMarks value={price} size="4" />
-                                {belowFloor ? (
-                                  <Badge variant="danger" size="sm" pill>
-                                    Below min
-                                  </Badge>
-                                ) : null}
-                              </span>
-                            </TableCell>
-                            <TableCell className="py-2! text-right text-muted">
-                              {floor ?? "—"}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-              ) : (
-                <ReviewEmptyState
-                  title="No price list provided"
-                  description="The tutor has not added a Marks price list yet."
-                />
-              )}
-              {priceEntries.some(([size, price]) => {
-                const floor = floorPrices[size];
-                return floor !== undefined && price < floor;
-              }) ? (
-                <Text className="mt-2 flex items-center gap-1 text-xs text-danger">
-                  <IconAlertTriangle className="size-3" />
-                  One or more sizes fall below the modality minimum. Confirm
-                  before approving.
-                </Text>
-              ) : null}
-            </ReviewSection>
-
-            <ReviewSection
-              title="Profile photo"
-              status={sectionStatuses.photo}
-              showStatus={showSectionStatus("photo")}
-            >
-              {currentProfileImageUrl || pendingProfileImageUrl ? (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <PhotoReviewPanel
-                    label="Current photo"
-                    description="Visible to students now"
-                    imageUrl={currentProfileImageUrl}
-                    fallback={getInitials(profile.user?.name)}
-                  />
-                  {pendingProfileImageUrl ? (
-                    <PhotoReviewPanel
-                      label="Proposed photo"
-                      description="Applies only after approval"
-                      imageUrl={pendingProfileImageUrl}
-                      fallback={getInitials(profile.user?.name)}
-                      proposed
-                    />
-                  ) : null}
-                </div>
-              ) : (
-                <ReviewEmptyState
-                  title="No profile photo provided"
-                  description="The tutor has not submitted a profile photo yet."
-                />
-              )}
-              <div className="mt-4 grid gap-3">
-                <Field>
-                  <FieldLabel htmlFor={`admin-${profile.id}-edited-photo`}>
-                    Upload edited photo
-                  </FieldLabel>
-                  <Input
-                    id={`admin-${profile.id}-edited-photo`}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    disabled={isUploadingProfilePhoto}
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      event.currentTarget.value = "";
-                      if (file) void uploadEditedProfilePhoto(file);
-                    }}
-                  />
-                  <FieldDescription>
-                    Upload the Cogito-standardized version. It will be applied
-                    only when the review action is approved.
-                  </FieldDescription>
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor={`admin-${profile.id}-edited-photo-url`}>
-                    Or paste edited photo URL
-                  </FieldLabel>
-                  <Input
-                    id={`admin-${profile.id}-edited-photo-url`}
-                    type="url"
-                    value={profileImageUrl}
-                    onChange={(event) => setProfileImageUrl(event.target.value)}
-                    placeholder="https://…"
-                  />
-                  <FieldDescription>
-                    Use this only when the edited asset is already hosted.
-                  </FieldDescription>
-                </Field>
-                {profileImageUrl.trim() ? (
-                  <div className="rounded-lg border border-success-border bg-success/5 p-3">
-                    <Text className="text-xs font-semibold uppercase tracking-wide text-success">
-                      Edited photo ready
-                    </Text>
-                    <Text className="mt-2 text-sm text-muted">
-                      The hosted photo will be applied when this review action
-                      is approved.
-                    </Text>
-                  </div>
+                {profile.affiliation ? (
+                  <Text className="font-medium">{profile.affiliation}</Text>
                 ) : null}
               </div>
-            </ReviewSection>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <Text className="leading-relaxed text-muted">
+                  {profile.shortBio?.trim()}
+                </Text>
+                {profile.affiliation ? (
+                  <Text className="font-medium">{profile.affiliation}</Text>
+                ) : null}
+              </div>
+            )}
+          </ReviewSection>
 
-            <ReviewSection
-              title="Payout account"
-              status={sectionStatuses.payout}
-              showStatus={showSectionStatus("payout")}
-            >
-              {payoutRows.length > 0 ? (
-                <div className="overflow-hidden rounded-lg border border-item-border">
-                  <Table className="text-sm">
-                    <TableBody>
-                      {payoutRows.map((row) => (
-                        <TableRow key={row.label}>
-                          <TableCell className="py-2! align-top whitespace-nowrap text-muted">
-                            {row.label}
+          <ReviewSection
+            title="Teaching setup"
+            status={sectionStatuses.teaching}
+            showStatus={showSectionStatus("teaching")}
+          >
+            {!hasTeachingSetup ? (
+              <ReviewEmptyState
+                title="No teaching setup provided"
+                description="Teaching mode and specializations have not been set yet."
+              />
+            ) : (
+              <div className="overflow-hidden rounded-lg border border-item-border">
+                <Table className="text-sm">
+                  <TableBody>
+                    <TableRow>
+                      <TableCell className="py-2! align-top whitespace-nowrap text-muted">
+                        Teaching mode
+                      </TableCell>
+                      <TableCell className="py-2!">
+                        {profile.modality ? (
+                          <Badge
+                            variant={
+                              MODALITY_VARIANTS[profile.modality] ?? "secondary"
+                            }
+                          >
+                            {MODALITY_LABELS[profile.modality] ??
+                              profile.modality}
+                          </Badge>
+                        ) : (
+                          <Text className="text-sm italic text-dimmed">
+                            Not specified
+                          </Text>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="py-2! align-top whitespace-nowrap text-muted">
+                        Specializations
+                      </TableCell>
+                      <TableCell className="py-2!">
+                        {specializationItems.length ? (
+                          <SpecBadges items={specializationItems} />
+                        ) : (
+                          <Text className="text-sm italic text-dimmed">
+                            No specializations listed.
+                          </Text>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </ReviewSection>
+
+          <ReviewSection
+            title="Credentials"
+            status={sectionStatuses.credentials}
+            showStatus={showSectionStatus("credentials")}
+            action={
+              <Button
+                type="button"
+                variant="plain"
+                size="xs"
+                onClick={openAchievementsEditor}
+              >
+                Edit format
+              </Button>
+            }
+          >
+            {hasEducation || hasAchievements || hasExperiences ? (
+              <div className="flex flex-col gap-3">
+                {hasEducation ? (
+                  <Card className="bg-accent shadow-none">
+                    <CardBody className="p-4">
+                      <TutorAchievementsDisplay
+                        education={profile.education}
+                        achievements={[]}
+                        idPrefix={`admin-${profile.id}-achievements`}
+                      />
+                    </CardBody>
+                  </Card>
+                ) : null}
+                {hasAchievements ? (
+                  <Card className="bg-accent shadow-none">
+                    <CardBody className="p-4">
+                      <TutorAchievementsDisplay
+                        education={[]}
+                        achievements={profile.achievements}
+                        idPrefix={`admin-${profile.id}-achievements`}
+                      />
+                    </CardBody>
+                  </Card>
+                ) : null}
+                {hasExperiences ? (
+                  <Card className="bg-accent shadow-none">
+                    <CardBody className="p-4">
+                      <TutorAchievementsDisplay
+                        education={[]}
+                        experiences={profile.experiences}
+                        idPrefix={`admin-${profile.id}-experiences`}
+                      />
+                    </CardBody>
+                  </Card>
+                ) : null}
+              </div>
+            ) : (
+              <ReviewEmptyState
+                title="No credentials provided"
+                description="Education, achievements, and experience entries are empty."
+              />
+            )}
+          </ReviewSection>
+
+          <ReviewSection
+            title="Proofs"
+            status={sectionStatuses.proofs}
+            showStatus={showSectionStatus("proofs")}
+          >
+            {proofRows.length > 0 ? (
+              <div className="overflow-hidden rounded-lg border border-item-border">
+                <Table className="text-sm">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="py-2!">Type</TableHead>
+                      <TableHead className="py-2!">Link</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {proofRows.map((row) => (
+                      <TableRow key={`${row.label}-${row.url}`}>
+                        <TableCell className="py-2! align-top whitespace-nowrap text-muted">
+                          {row.label}
+                        </TableCell>
+                        <TableCell className="py-2!">
+                          <a
+                            href={row.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="break-all underline underline-offset-2"
+                          >
+                            {row.url}
+                          </a>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : (
+              <ReviewEmptyState
+                title="No proof links provided"
+                description="Achievement and experience evidence links are empty."
+              />
+            )}
+          </ReviewSection>
+
+          <ReviewSection
+            title="Marks per student"
+            status={sectionStatuses.marks}
+            showStatus={showSectionStatus("marks")}
+          >
+            {priceEntries.length ? (
+              <div className="overflow-hidden rounded-lg border border-item-border">
+                <Table className="text-sm">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="py-2!">Group size</TableHead>
+                      <TableHead className="py-2! text-right">Marks</TableHead>
+                      <TableHead className="py-2! text-right">
+                        Minimum
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {priceEntries.map(([size, price]) => {
+                      const floor = floorPrices[size];
+                      const belowFloor = floor !== undefined && price < floor;
+                      return (
+                        <TableRow key={size}>
+                          <TableCell className="py-2!">
+                            {size} {size === "1" ? "student" : "students"}
                           </TableCell>
-                          <TableCell className="py-2! font-medium break-words">
-                            {row.value}
+                          <TableCell className="py-2! text-right font-medium">
+                            <span className="inline-flex items-center justify-end gap-1.5">
+                              <CogitoMarks value={price} size="4" />
+                              {belowFloor ? (
+                                <Badge variant="danger" size="sm" pill>
+                                  Below min
+                                </Badge>
+                              ) : null}
+                            </span>
+                          </TableCell>
+                          <TableCell className="py-2! text-right text-muted">
+                            {floor ?? "—"}
                           </TableCell>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              ) : (
-                <ReviewEmptyState
-                  title="No payout account provided"
-                  description="Private transfer details have not been added yet."
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : (
+              <ReviewEmptyState
+                title="No price list provided"
+                description="The tutor has not added a Marks price list yet."
+              />
+            )}
+            {priceEntries.some(([size, price]) => {
+              const floor = floorPrices[size];
+              return floor !== undefined && price < floor;
+            }) ? (
+              <Text className="mt-2 flex items-center gap-1 text-xs text-danger">
+                <IconAlertTriangle className="size-3" />
+                One or more sizes fall below the modality minimum. Confirm
+                before approving.
+              </Text>
+            ) : null}
+          </ReviewSection>
+
+          <ReviewSection
+            title="Profile photo"
+            status={sectionStatuses.photo}
+            showStatus={showSectionStatus("photo")}
+          >
+            {currentProfileImageUrl || pendingProfileImageUrl ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <PhotoReviewPanel
+                  label="Current photo"
+                  description="Visible to students now"
+                  imageUrl={currentProfileImageUrl}
+                  fallback={getInitials(profile.user?.name)}
                 />
-              )}
-            </ReviewSection>
-            <ProfilePhotoHistory
-              entries={profileHistory}
-              title="Review history"
-            />
-          </Stack>
-        </CardBody>
+                {pendingProfileImageUrl ? (
+                  <PhotoReviewPanel
+                    label="Proposed photo"
+                    description="Applies only after approval"
+                    imageUrl={pendingProfileImageUrl}
+                    fallback={getInitials(profile.user?.name)}
+                    proposed
+                  />
+                ) : null}
+              </div>
+            ) : (
+              <ReviewEmptyState
+                title="No profile photo provided"
+                description="The tutor has not submitted a profile photo yet."
+              />
+            )}
+            <div className="mt-4 grid gap-3">
+              <Field>
+                <FieldLabel htmlFor={`admin-${profile.id}-edited-photo`}>
+                  Upload edited photo
+                </FieldLabel>
+                <Input
+                  id={`admin-${profile.id}-edited-photo`}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  disabled={isUploadingProfilePhoto}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.currentTarget.value = "";
+                    if (file) void uploadEditedProfilePhoto(file);
+                  }}
+                />
+                <FieldDescription>
+                  Upload the Cogito-standardized version. It will be applied
+                  only when the review action is approved.
+                </FieldDescription>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor={`admin-${profile.id}-edited-photo-url`}>
+                  Or paste edited photo URL
+                </FieldLabel>
+                <Input
+                  id={`admin-${profile.id}-edited-photo-url`}
+                  type="url"
+                  value={profileImageUrl}
+                  onChange={(event) => setProfileImageUrl(event.target.value)}
+                  placeholder="https://…"
+                />
+                <FieldDescription>
+                  Use this only when the edited asset is already hosted.
+                </FieldDescription>
+              </Field>
+              {profileImageUrl.trim() ? (
+                <div className="rounded-lg border border-success-border bg-success/5 p-3">
+                  <Text className="text-xs font-semibold uppercase tracking-wide text-success">
+                    Edited photo ready
+                  </Text>
+                  <Text className="mt-2 text-sm text-muted">
+                    The hosted photo will be applied when this review action is
+                    approved.
+                  </Text>
+                </div>
+              ) : null}
+            </div>
+          </ReviewSection>
 
-        <CardFooter className="fixed inset-x-0 bottom-0 z-40 flex-wrap justify-center gap-2 pb-[max(0.875rem,env(safe-area-inset-bottom))] sm:justify-end lg:static lg:justify-end">
-          {profile.onboardingStatus === "published" &&
-          profile.profileEditStatus === "pending_review" ? (
-            <>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => setNoteAction("request_edit_changes")}
-                disabled={isPending}
-              >
-                Request revision
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => handleAction("approve_edits")}
-                progress={isPending && reviewAction === "approve_edits"}
-                disabled={isPending}
-              >
-                Approve changes
-              </Button>
-            </>
-          ) : null}
-          {profile.onboardingStatus === "pending_review" ? (
-            <>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => setNoteAction("request_changes")}
-                disabled={isPending}
-              >
-                Request changes
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => handleAction("approve_unpublished")}
-                progress={isPending && reviewAction === "approve_unpublished"}
-                disabled={isPending}
-              >
-                Approve profile
-              </Button>
-            </>
-          ) : null}
+          <ReviewSection
+            title="Payout account"
+            status={sectionStatuses.payout}
+            showStatus={showSectionStatus("payout")}
+          >
+            {payoutRows.length > 0 ? (
+              <div className="overflow-hidden rounded-lg border border-item-border">
+                <Table className="text-sm">
+                  <TableBody>
+                    {payoutRows.map((row) => (
+                      <TableRow key={row.label}>
+                        <TableCell className="py-2! align-top whitespace-nowrap text-muted">
+                          {row.label}
+                        </TableCell>
+                        <TableCell className="py-2! font-medium break-words">
+                          {row.value}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : (
+              <ReviewEmptyState
+                title="No payout account provided"
+                description="Private transfer details have not been added yet."
+              />
+            )}
+          </ReviewSection>
+        </main>
 
-          {profile.onboardingStatus === "approved_unpublished" ? (
-            <>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => setNoteAction("request_changes")}
-                disabled={isPending}
-              >
-                Request changes
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => handleAction("publish")}
-                progress={isPending && reviewAction === "publish"}
-                disabled={isPending}
-              >
-                Publish profile
-              </Button>
-            </>
+        <aside className="order-1 min-w-0 space-y-4 xl:order-2">
+          <TutorPendingChanges
+            profileId={profile.id}
+            pendingChanges={profile.pendingProfileChanges}
+            currentValues={currentPendingValues}
+            subjectLabels={subjectLabels}
+            subjectFieldSlugs={subjectFieldSlugs}
+          />
+          {profile.profileEditAdminNote ? (
+            <div className="rounded-lg border border-warning-border bg-warning/10 p-3">
+              <Text className="text-xs font-semibold uppercase tracking-wide text-warning">
+                Tutor review note
+              </Text>
+              <Text className="mt-1 text-sm">
+                {profile.profileEditAdminNote}
+              </Text>
+            </div>
           ) : null}
-
-          {profile.onboardingStatus === "published" &&
-          profile.profileEditStatus !== "pending_review" ? (
-            <>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => handleAction("unpublish")}
-                progress={isPending && reviewAction === "unpublish"}
-                disabled={isPending}
-              >
-                Unpublish
-              </Button>
-              <Button
-                size="sm"
-                variant="danger"
-                onClick={() => setNoteAction("suspend")}
-                disabled={isPending}
-              >
-                Suspend
-              </Button>
-            </>
+          {profile.adminReviewNote ? (
+            <div className="rounded-lg border border-warning-border bg-warning/10 p-3">
+              <Text className="text-xs font-semibold uppercase tracking-wide text-warning">
+                Latest review note
+              </Text>
+              <Text className="mt-1 text-sm">{profile.adminReviewNote}</Text>
+            </div>
           ) : null}
-        </CardFooter>
-      </Card>
+          <TutorProfileHistory
+            entries={profileHistory}
+            title="Full review history"
+            description="Every profile save and moderation decision, including direct-live fields."
+            subjectLabels={subjectLabels}
+            subjectFieldSlugs={subjectFieldSlugs}
+          />
+        </aside>
+      </div>
 
       <Dialog
         open={noteAction !== null}
@@ -2031,8 +1386,8 @@ function ReviewSection({
   showStatus?: boolean;
 }) {
   return (
-    <section>
-      <div className="mb-2 flex items-center justify-between gap-3">
+    <Card className="min-w-0 overflow-hidden shadow-none">
+      <div className="flex min-w-0 items-center justify-between gap-3 border-b border-card-border px-4 py-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Heading size="sm">{title}</Heading>
           {status && showStatus ? (
@@ -2047,7 +1402,7 @@ function ReviewSection({
         </div>
         {action}
       </div>
-      {children}
-    </section>
+      <CardBody className="min-w-0">{children}</CardBody>
+    </Card>
   );
 }

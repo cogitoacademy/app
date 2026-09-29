@@ -32,6 +32,10 @@ import {
   InvalidDateRangeError,
   WeeklyAvailabilityRangeError,
 } from "./tutor.errors";
+import {
+  createTutorProfileAuditSnapshot,
+  getChangedTutorProfileAuditFields,
+} from "./tutor-profile-audit";
 
 type TutorProfileRow = typeof tutorProfile.$inferSelect;
 type TutorProfileWithSubjectRelations = TutorProfileRow & {
@@ -266,7 +270,8 @@ export function createTutorService(deps: {
   async function updateMyProfile(userId: string, input: UpdateProfileInput) {
     const profile = await tutorRepo.getByUserId(db, userId);
     validateUpdateInput(profile, input, pricingPort);
-    const { version, subjectIds, profileImageUrl, ...data } = input;
+    const { version, displayName, subjectIds, profileImageUrl, ...data } =
+      input;
     if (subjectIds !== undefined) {
       const activeChildSubjects = await tutorRepo.listActiveChildSubjects(
         db,
@@ -276,12 +281,6 @@ export function createTutorService(deps: {
     }
     const isPublished =
       profile!.onboardingStatus === ONBOARDING_STATUS.PUBLISHED;
-    const previousProfileImageUrl = (
-      profile as TutorProfileWithSubjectRelations
-    ).user?.image;
-    const previousPendingProfileImageUrl = (
-      profile!.pendingProfileChanges as Record<string, unknown> | null
-    )?.profileImageUrl;
     const protectedFields = [
       "achievementProofUrls",
       "experienceProofUrls",
@@ -300,6 +299,11 @@ export function createTutorService(deps: {
       profileEditStatus?: string;
       profileEditAdminNote?: null;
     } = { ...data };
+    const currentSubjectIds = getSubjectRelations(profile!).map(
+      (relation) => relation.subjectId,
+    );
+    const displayNameChanged =
+      displayName !== undefined && displayName !== profile!.user?.name;
 
     if (isPublished) {
       const pendingProfileChanges = {
@@ -325,11 +329,12 @@ export function createTutorService(deps: {
         }>;
       }
       for (const field of protectedFields) {
-        if (
-          data[field] !== undefined &&
-          JSON.stringify(data[field]) !== JSON.stringify(profile![field])
-        ) {
-          pendingProfileChanges[field] = data[field];
+        if (data[field] !== undefined) {
+          if (JSON.stringify(data[field]) !== JSON.stringify(profile![field])) {
+            pendingProfileChanges[field] = data[field];
+          } else {
+            delete pendingProfileChanges[field];
+          }
         }
         delete directData[field];
       }
@@ -347,15 +352,15 @@ export function createTutorService(deps: {
         directData.pendingProfileChanges = pendingProfileChanges;
         directData.profileEditStatus = "pending_review";
         directData.profileEditAdminNote = null;
-      } else if (hadPendingBaseRatesIdr) {
+      } else if (
+        hadPendingBaseRatesIdr ||
+        Object.keys(profile!.pendingProfileChanges ?? {}).length > 0
+      ) {
         directData.pendingProfileChanges = null;
         directData.profileEditStatus = "none";
         directData.profileEditAdminNote = null;
       }
       if (subjectIds !== undefined) {
-        const currentSubjectIds = getSubjectRelations(profile!).map(
-          (relation) => relation.subjectId,
-        );
         if (haveSameSubjectIds(subjectIds, currentSubjectIds)) {
           delete pendingProfileChanges.subjectIds;
         } else {
@@ -385,28 +390,39 @@ export function createTutorService(deps: {
       if (!isPublished && profileImageUrl !== undefined) {
         await tutorRepo.updateProfileImage(conn, userId, profileImageUrl);
       }
+      if (displayNameChanged) {
+        await tutorRepo.updateProfileDisplayName(conn, userId, displayName!);
+      }
 
       const updated = await tutorRepo.getByUserId(conn, userId);
-      if (
-        isPublished &&
-        profileImageUrl !== undefined &&
-        profileImageUrl !== previousProfileImageUrl &&
-        profileImageUrl !== previousPendingProfileImageUrl
-      ) {
+      const beforeState = createTutorProfileAuditSnapshot(profile);
+      const afterState = createTutorProfileAuditSnapshot(updated ?? rows[0]!);
+      const changedFields = getChangedTutorProfileAuditFields(
+        beforeState,
+        afterState,
+      );
+      if (changedFields.length > 0) {
+        const hasPendingProposalChange = changedFields.some(
+          (field) =>
+            field === "pendingProfileChanges" ||
+            field.startsWith("pendingProfileChanges."),
+        );
+        const isProposal = isPublished && hasPendingProposalChange;
         await auditPort.record({
           db: conn,
           actorId: userId,
           actorType: ACTOR_TYPE.TUTOR,
-          action: "tutor_profile_photo_proposed",
+          action: isProposal
+            ? "tutor_profile_changes_proposed"
+            : "tutor_profile_updated",
           targetId: profile!.id,
           targetType: "tutor_profile",
-          beforeState: {
-            profileImageUrl: previousProfileImageUrl ?? null,
-          },
-          afterState: { profileImageUrl },
+          beforeState,
+          afterState,
           details: {
-            stage: "proposed",
-            reviewStatus: "pending_review",
+            changedFields,
+            stage: isProposal ? "proposed" : "saved",
+            reviewStatus: isProposal ? "pending_review" : null,
           },
         });
       }
@@ -414,8 +430,9 @@ export function createTutorService(deps: {
     };
 
     if (
-      !isPublished &&
-      (subjectIds !== undefined || profileImageUrl !== undefined)
+      (!isPublished &&
+        (subjectIds !== undefined || profileImageUrl !== undefined)) ||
+      displayNameChanged
     ) {
       return db.transaction(persist);
     }
@@ -456,6 +473,17 @@ export function createTutorService(deps: {
             }
           : undefined,
       );
+      const beforeState = createTutorProfileAuditSnapshot(profile);
+      const afterState = createTutorProfileAuditSnapshot(
+        row
+          ? {
+              ...profile,
+              ...row,
+              user: profile!.user,
+              subjects: profile!.subjects,
+            }
+          : profile,
+      );
 
       await auditPort.record({
         db: tx,
@@ -464,8 +492,8 @@ export function createTutorService(deps: {
         action: "tutor_profile_submitted_for_review",
         targetId: profile!.id,
         targetType: "tutor_profile",
-        beforeState: { onboardingStatus: profile!.onboardingStatus },
-        afterState: { onboardingStatus: ONBOARDING_STATUS.PENDING_REVIEW },
+        beforeState,
+        afterState,
         details: {
           profileImageUrl:
             (profile as TutorProfileWithSubjectRelations).user?.image ?? null,

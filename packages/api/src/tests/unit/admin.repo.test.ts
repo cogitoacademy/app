@@ -12,7 +12,15 @@ import {
 
 function makeQueryChain(resolvedValue: any) {
   const chain: any = {};
-  const methods = ["from", "where", "limit", "offset", "orderBy", "groupBy"];
+  const methods = [
+    "from",
+    "leftJoin",
+    "where",
+    "limit",
+    "offset",
+    "orderBy",
+    "groupBy",
+  ];
   const promise = Promise.resolve(resolvedValue);
 
   for (const method of methods) {
@@ -61,20 +69,42 @@ describe("getDashboardAnalytics", () => {
       [{ state: "completed", count: 2 }],
       [{ modality: "online", count: 4 }],
       [{ category: "Mathematics", bookings: 4, completed: 2 }],
+      [
+        {
+          totalAccounts: 20,
+          totalStudents: 16,
+          totalTutors: 3,
+          signups: 4,
+          monthlyActiveUsers: 8,
+          inactiveUsers: 5,
+          previousActiveUsers: 10,
+          churnedUsers: 2,
+        },
+      ],
+      [{ studentsWithMarks: 9, studentsWithoutMarks: 7 }],
+      [{ payingStudents: 6, grossRevenueIdr: 1_250_000 }],
+      [{ refundedIdr: 100_000 }],
     ]);
     const conn: any = { select };
 
     const result = await getDashboardAnalytics(conn, {
       periodStart: new Date("2026-08-01T00:00:00.000Z"),
       periodEnd: new Date("2026-08-31T00:00:00.000Z"),
+      activeSince: new Date("2026-08-01T00:00:00.000Z"),
+      previousActiveSince: new Date("2026-07-01T00:00:00.000Z"),
+      now: new Date("2026-08-31T00:00:00.000Z"),
     });
 
-    expect(select).toHaveBeenCalledTimes(7);
+    expect(select).toHaveBeenCalledTimes(11);
     expect(result.bookingSummary).toEqual(bookingSummary);
     expect(result.userSummary).toEqual({ newStudents: 3, newTutors: 1 });
     expect(result.categoryBreakdown).toEqual([
       { category: "Mathematics", bookings: 4, completed: 2 },
     ]);
+    expect(result.accountSummary.monthlyActiveUsers).toBe(8);
+    expect(result.marksSummary.studentsWithMarks).toBe(9);
+    expect(result.paymentSummary.grossRevenueIdr).toBe(1_250_000);
+    expect(result.refundSummary.refundedIdr).toBe(100_000);
   });
 });
 

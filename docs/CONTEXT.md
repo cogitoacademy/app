@@ -2,13 +2,31 @@
 
 Last updated: 2026-09-29
 
+## Complete tutor profile change history (2026-09-29)
+
+Every successful tutor profile save, including canonical account-name changes,
+writes one audit entry with complete
+`beforeState` and `afterState` snapshots of the profile, even when one small
+field changed. `details.changedFields` identifies changed leaf paths for quick
+scanning. This covers direct-live fields, review-gated proposals, specialization
+IDs, and profile photos. Revisions to an existing proposal compare against the
+previous proposed value rather than the public value. Admin approval history
+also snapshots the complete profile after promoting pending fields. The admin
+review timeline expands changed fields into exact before/after values and keeps
+photo previews in the same general history. The pending comparison panel is
+labeled **Fields awaiting approval**, lists only actual added/changed/removed
+review-gated fields, and distinguishes those proposals from direct-live edits.
+The full review history appears alongside the profile review sections and keeps
+direct-live edits, status transitions, and photo previews visible together.
+
 ## Knowledge Bank PDF drawer (2026-09-29)
 
 Knowledge Bank PDF previews now use a responsive Selia drawer: bottom sheet
 below `sm`, right-side drawer from `sm` upward. The browser-native PDF iframe
 is no longer sandboxed because sandboxing blocked native PDF viewers in some
 browsers. The protected file proxy, role and Marks checks, CSP frame allowlist,
-and new-tab fallback remain unchanged.
+and new-tab fallback remain unchanged. This drawer disables backdrop blur to
+avoid Chromium compositor artifacts after its native PDF viewer finishes loading.
 
 ## Automatic admin override financial policy (2026-09-28)
 
@@ -61,6 +79,18 @@ all-time/live, selected-period trends use WIB calendar days, and booked Marks
 plus platform take are locked booking snapshots rather than cash revenue.
 `activeLearners` remains proposer-based and is rendered as **Active booking
 proposers** until group-participant and login-activity definitions are approved.
+Admins can use 7/30/90-day presets or an inclusive custom WIB range of up to
+366 days. Account insights separate current/rolling snapshots from selected-
+range metrics: total accounts and current student Marks ownership are current;
+MAU, inactivity, and churn use rolling 30-day auth-session activity; signups and
+realized top-up revenue use the selected range. Paid conversion is lifetime
+students with a `PAID`/`SETTLED` top-up divided by all student accounts. Gross
+range revenue uses successful payment `updatedAt` as the available settlement-
+time proxy, while refund rows are reported separately and subtracted for net
+top-up revenue.
+During mixed frontend/API rollout, older analytics responses without
+`businessSummary` keep the existing admin dashboard usable; account and revenue
+cards appear once the updated API is active.
 No new RPC endpoint was added. Remaining plan work: tutor capacity/payout
 analytics and admin payment, funnel, supply-demand, and SLA aggregates.
 Booking date copy uses `WIB` for `Asia/Jakarta` instead of `GMT+7`; other
@@ -628,7 +658,10 @@ a separate `SEED_REVIEW_ADMIN_EMAIL` and refuses to reuse any address in
 `ADMIN_EMAILS`; local/test seed keeps `admin@cogitoacademy.id`. Its review
 student has verified local authentication and seeded Marks, while its review
 tutor has a published structured profile, normalized specializations, and future
-availability. Default launch identities are Diego by Cogito for the tutor and
+availability. The presentation booking seed creates an idempotent wallet hold
+for the review student and repairs older scheduled presentation rows that were
+created without that ledger entry, so tutor completion settles student-held
+Marks rather than failing with insufficient balance. Default launch identities are Diego by Cogito for the tutor and
 Andre, Argya, and Athena by Cogito for the three students, using
 `cogito.<name>@yopmail.com` addresses. The Google Calendar operator password is never part of reviewer
 credentials. Additional admins can still be granted through the existing admin
@@ -662,12 +695,13 @@ stays in normal document flow so the page ends without trailing scroll space.
 This is presentation-only.
 
 All roles use Better Auth `user.name` as the single canonical visible name.
-Tutor onboarding edits that account name directly and no longer submits
-`tutorProfile.displayName`; tutor
-discovery, booking, dashboards, sidebar, and admin review render `user.name`.
-The legacy tutor-profile column and compatible response key remain temporarily,
-but the response key is projected from `user.name` and new UI does not depend on
-the stored legacy value.
+Tutor onboarding sends a changed account name through the transport-only
+`displayName` input on `tutor.updateMyProfile`; the service updates `user.name`
+and its audit entry atomically, not a second `tutorProfile.displayName` value.
+Tutor discovery, booking, dashboards, sidebar, and admin review render
+`user.name`. The legacy tutor-profile column and compatible response key remain
+temporarily, but the response key is projected from `user.name` and new UI does
+not depend on the stored legacy value.
 
 Collection empty states use the shared presentation component at `apps/web/src/components/empty-state.tsx`. `EmptyStateCard` is used for page and card-level states, while `EmptyState` supports `default`, `compact`, and `inline` density for calendars, menus, dialogs, fields, and embedded lists. Empty copy distinguishes a genuinely empty collection from a filtered no-match state; the component uses Selia tokens and provides success, warning, secondary, and danger tones without changing any API or persistence contract. The audit covers calendar periods, resource and tutor discovery, bookings, notifications, session/activity history, Marks ledgers, specialization selection, tutor proof links, and availability previews.
 

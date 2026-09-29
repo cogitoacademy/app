@@ -18,6 +18,16 @@ booking-price snapshots, not payment cash or realized revenue. Active learners
 is currently named **Active booking proposers** in the UI because the aggregate
 does not yet count group participants or login activity.
 
+`admin.getDashboardAnalytics` accepts preset or custom inclusive WIB ranges.
+Its account aggregate uses correlated auth-session existence checks: current
+MAU is activity in days 0-30, and churn is prior-window activity in days 31-60
+without current-window activity. Wallet health counts all student accounts,
+treating a missing wallet as zero Marks. Lifetime paid conversion counts unique
+students with `PAID`/`SETTLED` payment rows. Selected-range gross revenue sums
+those successful rows by `payment_record.updated_at`; refunds are summed from
+`refund_record.created_at`, then subtracted for net top-up revenue. Reads run in
+parallel and return aggregates only, never user identities.
+
 `formatBookingDate` maps `Asia/Jakarta` to the user-facing `WIB` suffix while
 preserving native Intl short labels for other IANA zones. The shared
 `EmptyState` visual remains unchanged after reverting the dashed-border trial.
@@ -439,7 +449,7 @@ completion-time cutoff; it does not reset automatically each calendar week.
 
 **Service Methods:**
 
-- `getDashboardAnalytics(period?)` — Returns normalized 7/30/90-day booking and audience trends, a live booking-state portfolio, period modality/category breakdowns, and locked booking-value KPIs in both Marks and IDR; trend dates are filled with zero rows using WIB calendar boundaries
+- `getDashboardAnalytics(input?)` — Returns normalized preset/custom-range booking and signup trends, current/rolling account activity, student Marks ownership, lifetime paid conversion, selected-range payment/refund revenue, live booking-state portfolio, period modality/category breakdowns, and locked booking-value KPIs; trend dates are filled with zero rows using WIB boundaries
 - `listUsers(opts)` — Paginated user list
 - `searchUsers({ query, limit? })` — Returns a bounded identity projection for admin lookup, matching name, email, or user ID
 - `setRole(userId, role, adminId)` — Changes user role; throws `LastAdminError` if removing last admin; optimistic lock via `expectedRole`; records audit log
@@ -558,6 +568,7 @@ payment package codes stable.
 - `listTutorProfiles(opts)` — Paginated tutor profiles with status filter
 - `reviewTutorProfile(profileId, status, adminNote?, profileImageUrl?)` — Approve/reject tutor profile and optionally install the final background-standardized asset into the single canonical tutor profile image. Tutor-submitted published changes remain in `pendingProfileChanges` until approved; `profileImageUrl` accepts bounded HTTP(S) URLs or a generated local `/uploads/...` storage path. The profile status/version and image update are handled in one transaction, and a lost moderation race throws `TutorProfileOptimisticLockError` before image, subject, notification, or audit writes. **F25 state machine (`validateReviewAction`):** each action is only allowed from specific onboarding statuses — `request_changes`/`approve_unpublished`/`publish` from `pending_review`/`changes_requested` (publish also from `approved_unpublished`); `request_changes` and `approve_unpublished` also support `suspended` for explicit admin restoration; `unpublish`/`suspend`/`approve_edits`/`request_edit_changes` only from `published`.
 - `updateTutorAchievements(adminId, input)` — Replaces structured education and achievements with optimistic locking, mirrors matching pending edit fields, and records the before/after values in the audit log.
+- `listTutorProfileHistory(profileId)` — Returns newest profile audit entries. Changed tutor saves contain complete profile `beforeState`/`afterState` snapshots plus `details.changedFields`; pending-proposal revisions use the prior proposal as `beforeState`, and `approve_edits` snapshots the complete post-promotion profile.
 
 **Dependencies:** `AdminTutorRepo`, `EmailPort`
 
@@ -567,6 +578,7 @@ payment package codes stable.
 - The email states the exact account email required for claiming, shows expiry in UTC, and includes a plain fallback URL
 - Invitee-controlled display names, email addresses, and URLs are escaped before rendering into HTML
 - The Manage Tutors invitation table maps `invited` to a warning badge, `accepted` to success, and `expired`/`revoked` to danger; unknown status values use the secondary fallback
+- Admin review labels pending comparisons **Fields awaiting approval** and renders exact changed-field before/after values from complete snapshots for direct-live edits, pending proposals, approvals, and photo changes.
 - Approving published profile edits validates and applies pending `subjectIds` to the normalized tutor-subject join table in the same transaction as the profile update
 - The admin tutor review card maps pending `subjectIds` to active category/specialization labels and wraps long pending values; this is presentation-only and does not change the admin API payload
 - The focused admin tutor review card derives normalized added/changed/removed/filled/empty statuses, shows summary counts with composable search/status filters, expands each pending field into current/proposed panes, and marks each profile section as changed or empty when applicable; profile photos remain in the dedicated side-by-side comparison
@@ -1159,6 +1171,7 @@ The authenticated dashboard shell is viewport-fixed. Its content pane exclusivel
 - `availability.types.ts` — Availability slot types (`upsert`, atomic date-override batch create, weekly-create, weekly-replace, delete)
 - `tutor.errors.ts` — `TutorProfileNotFoundError`, `TutorNotAvailableError`, `AvailabilitySlotOverlapError`, `InvalidTutorPricingError`, `TutorTermsNotAcceptedError`, `OptimisticLockError`, `InvalidDateRangeError`, `WeeklyAvailabilityRangeError`
 - `tutor.repo.ts` — `findByUserId`, `create`, `update`, `listProfileHistory`, `upsertAvailability`
+- `tutor-profile-audit.ts` — canonical full profile snapshots and deterministic changed-path extraction
 - `tutor.service.ts` — `getMyProfile`, `getMyProfileHistory`, `updateMyProfile`, `submitForReview`, `listAvailability`, `upsertAvailability`, `createDateOverrides`, `createWeeklyAvailability`, `replaceWeeklyAvailability`, `deleteAvailability`, `getMyPayouts`
 - `tutor.handler.ts` — Maps handler context/input
 - `tutor.router.ts` — Tutor-guarded routes (`tutorProcedure`)
@@ -1166,8 +1179,8 @@ The authenticated dashboard shell is viewport-fixed. Its content pane exclusivel
 **Service Methods:**
 
 - `getMyProfile(userId)` — Returns tutor profile
-- `getMyProfileHistory(userId)` — Returns the newest profile/photo review audit entries for the tutor; actor identity is limited to id and display name so account emails are not exposed to tutors
-- `updateMyProfile(userId, input)` — Updates profile fields with optimistic locking (`version`). Canonical structured fields are `education`, `achievements`, and `experiences`. `affiliation` describes current study program/university or professional role/organization. Draft saves permit omission; review submission requires affiliation and non-empty achievements/experiences. Published-profile changes to affiliation and structured credentials enter pending admin review.
+- `getMyProfileHistory(userId)` — Returns the newest profile/review audit entries for the tutor; changed saves include complete before/after snapshots, and actor identity is limited to id and display name so account emails are not exposed to tutors
+- `updateMyProfile(userId, input)` — Updates canonical account name and profile fields with optimistic locking (`version`) and records one full before/after snapshot pair when state changes. Canonical structured fields are `education`, `achievements`, and `experiences`. `affiliation` describes current study program/university or professional role/organization. Draft saves permit omission; review submission requires affiliation and non-empty achievements/experiences. Published-profile changes to affiliation and structured credentials enter pending admin review.
 - `onlineMaxClassSize` / `offlineMaxClassSize` — Immediate operational preferences from 1–6. Size 1 disables group requests for that modality; changes constrain new discovery/booking flows without rewriting existing bookings.
 - `submitForReview(userId, input = {})` — Requires affiliation, canonical achievements/experiences, complete pricing/profile fields, and first-submit Terms acceptance; then sets `onboardingStatus` to `pending_review` and records audit log.
 - `listAvailability(userId)` — Lists the tutor's active future availability slots
@@ -1196,7 +1209,7 @@ The authenticated dashboard shell is viewport-fixed. Its content pane exclusivel
 - The tutor profile editor exposes canonical Education, Achievements, and Experiences sections. Education supports two entries; achievements and experiences support five entries each. Optional proof URL lists are protected by profile review and never enter public discovery. No legacy profile-text fallback remains.
 - The tutor profile editor uses the authenticated shell's page-level vertical scroll container, matching the student profile and avoiding a nested form scrollbar. Direct page children cannot flex-shrink, so the tutor wrapper and onboarding content share one natural height; specialization-category fieldsets keep their natural height and the final action card stays in normal document flow without trailing scroll space. This is presentation-only and does not change the tutor RPC contract.
 - The tutor profile editor keeps draft/save and submit-for-review as distinct actions. Missing required fields are allowed during draft/save, while submit requires the complete profile; malformed fields are surfaced beside their controls and in a validation summary. A published tutor can continue editing while a profile-change proposal is under review; saving updates the pending proposal and the explicit submit action queues the latest validated version.
-- Every role uses Better Auth `user.name` as the canonical visible name. Tutor onboarding edits that account field directly and does not submit `tutorProfile.displayName`; discovery search matches `user.name`, its backward-compatible `displayName` projection is populated from `user.name`, and tutor/sidebar/booking/admin surfaces render `user.name`. The tutor-profile column remains legacy compatibility data.
+- Every role uses Better Auth `user.name` as the canonical visible name. Tutor onboarding sends a changed account name through the transport-only `displayName` input on `tutor.updateMyProfile`; the service updates `user.name` and its audit entry atomically without persisting a second `tutorProfile.displayName` value. Discovery search matches `user.name`, its backward-compatible `displayName` projection is populated from `user.name`, and tutor/sidebar/booking/admin surfaces render `user.name`. The tutor-profile column remains legacy compatibility data.
 - Tutor payout calculations retain the internal split fields for accounting compatibility, but tutor-facing payout UI exposes only unpaid completed-session count and IDR honorarium. The private payout form collects bank name, account number, account-holder name, account-opening city/regency, ownership choice, and transfer-responsibility acknowledgment; submission requires all of them. Admin payout records advance the paid cutoff.
 - New tutor submissions must select at least one active specialization from the normalized catalog; categories cannot be selected directly
 - A normalized subject update replaces the tutor's join rows atomically and never accepts arbitrary legacy `expertise` strings as category ids

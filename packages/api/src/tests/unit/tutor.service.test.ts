@@ -369,6 +369,10 @@ describe("Tutor Service", () => {
             id: "u1",
             image: "https://example.com/profile-photo.jpg",
           })),
+          updateProfileDisplayName: mock(async () => ({
+            id: "u1",
+            name: "Dr. Smith",
+          })),
           updateStatus: mock(async () => mockProfile),
           listAvailability: mock(async () => []),
           upsertAvailability: mock(async () => ({ id: "slot1" })),
@@ -445,6 +449,138 @@ describe("Tutor Service", () => {
         version: 1,
       });
       expect(result.id).toBe("tp1");
+    });
+
+    test("records every changed profile field with before and after values", async () => {
+      const profile = makeProfile();
+      const updatedProfile = makeProfile({
+        shortBio: "New bio",
+        bankName: "Mandiri",
+      });
+      let profileReadCount = 0;
+      const record = mock(async () => {});
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => {
+            profileReadCount += 1;
+            return profileReadCount === 1 ? profile : updatedProfile;
+          }),
+        },
+        auditPort: { record },
+      });
+      const service = createTutorService(deps as any);
+
+      await service.updateMyProfile("u1", {
+        version: 1,
+        shortBio: "New bio",
+        bankName: "Mandiri",
+      });
+
+      expect(record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "tutor_profile_updated",
+          beforeState: expect.objectContaining({
+            shortBio: "Experienced tutor",
+            bankName: "BCA",
+          }),
+          afterState: expect.objectContaining({
+            shortBio: "New bio",
+            bankName: "Mandiri",
+          }),
+          details: expect.objectContaining({
+            changedFields: expect.arrayContaining(["shortBio", "bankName"]),
+          }),
+        }),
+      );
+    });
+
+    test("audits canonical display name changes", async () => {
+      const profile = makeProfile();
+      const updatedProfile = makeProfile({
+        user: { ...profile.user, name: "New Tutor Name" },
+      });
+      let profileReadCount = 0;
+      const record = mock(async () => {});
+      const updateProfileDisplayName = mock(async () => updatedProfile.user);
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => {
+            profileReadCount += 1;
+            return profileReadCount === 1 ? profile : updatedProfile;
+          }),
+          updateProfileDisplayName,
+        },
+        auditPort: { record },
+      });
+      const service = createTutorService(deps as any);
+
+      await service.updateMyProfile("u1", {
+        version: 1,
+        displayName: "New Tutor Name",
+      });
+
+      expect(updateProfileDisplayName).toHaveBeenCalledWith(
+        expect.anything(),
+        "u1",
+        "New Tutor Name",
+      );
+      expect(record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          beforeState: expect.objectContaining({ displayName: "Dr. Smith" }),
+          afterState: expect.objectContaining({
+            displayName: "New Tutor Name",
+          }),
+          details: expect.objectContaining({
+            changedFields: expect.arrayContaining(["displayName"]),
+          }),
+        }),
+      );
+    });
+
+    test("records pending proposal revisions against previous proposed values", async () => {
+      const profile = makeProfile({
+        onboardingStatus: "published",
+        shortBio: "Live bio",
+        pendingProfileChanges: { shortBio: "First proposal" },
+      });
+      const updatedProfile = makeProfile({
+        onboardingStatus: "published",
+        shortBio: "Live bio",
+        pendingProfileChanges: { shortBio: "Second proposal" },
+      });
+      let profileReadCount = 0;
+      const record = mock(async () => {});
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => {
+            profileReadCount += 1;
+            return profileReadCount === 1 ? profile : updatedProfile;
+          }),
+          updateProfileWithVersion: mock(async () => [profile]),
+        },
+        auditPort: { record },
+      });
+      const service = createTutorService(deps as any);
+
+      await service.updateMyProfile("u1", {
+        version: 1,
+        shortBio: "Second proposal",
+      });
+
+      expect(record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "tutor_profile_changes_proposed",
+          beforeState: expect.objectContaining({
+            pendingProfileChanges: { shortBio: "First proposal" },
+          }),
+          afterState: expect.objectContaining({
+            pendingProfileChanges: { shortBio: "Second proposal" },
+          }),
+        }),
+      );
     });
 
     test("draft profile writes the submitted photo to the canonical user image", async () => {

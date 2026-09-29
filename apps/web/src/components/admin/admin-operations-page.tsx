@@ -1711,7 +1711,7 @@ function OverrideDialog({
             progress={applyMutation.isPending}
             disabled={!preview || applyMutation.isPending}
           >
-            Apply override
+            Override
           </Button>
         </DrawerFooter>
       </DrawerPopup>

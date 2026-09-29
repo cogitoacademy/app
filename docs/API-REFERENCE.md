@@ -199,11 +199,13 @@ This is presentation-only; no RPC path, request envelope, response shape,
 schema, or persistence contract changed.
 
 All roles use Better Auth `user.name` as the canonical visible name. Tutor
-onboarding saves its single **Name** field through Better Auth and no longer
-sends tutor-profile `displayName`; discovery keeps its compatible
-`displayName` response key but projects that value from `user.name`. The legacy
-tutor-profile input/column remains accepted for compatibility and is not used by
-new web UI.
+onboarding sends a changed single **Name** field as the transport-only
+`displayName` input to `tutor.updateMyProfile`, allowing the service to update
+`user.name` and its audit entry atomically; it does not persist a second
+`tutorProfile.displayName` value. Discovery keeps its compatible `displayName`
+response key but projects that value from `user.name`. The legacy
+tutor-profile column remains accepted for compatibility and is not used as a
+separate visible-name source by new web UI.
 
 ## Tutor Terms of Service acceptance (2026-09-02)
 
@@ -501,9 +503,9 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `admin.getDashboardAnalytics`
 
 - **Auth:** Admin
-- **Input:** `{ period?: "7d" | "30d" | "90d" }` (default `"30d"`)
-- **Output:** `{ period, periodStart, periodEnd, summary, bookingTrend, userTrend, stateBreakdown, modalityBreakdown, categoryBreakdown }`
-- **Description:** Returns the aggregate data used by the admin Business insights section. Period metrics use booking/user creation time and WIB calendar days; `summary.activeLearners` is explicitly a distinct booking-proposer count, not a participant or login-active-user count. `summary.grossMarks`/`summary.platformTakeMarks` and `summary.grossIdr`/`summary.platformTakeIdr` are summed from each booking's locked pricing fields. They represent operational booking value at creation-time prices, not cash revenue or settlement. `stateBreakdown` is the live all-bookings state mix, while modality/category breakdowns are scoped to the selected period. Missing trend days are returned as zero rows so charts stay continuous.
+- **Input:** either `{ period?: "7d" | "30d" | "90d" }` (default `"30d"`) or `{ dateFrom: "YYYY-MM-DD", dateTo: "YYYY-MM-DD" }`; custom dates are inclusive WIB days, cannot be combined with `period`, and are capped at 366 days
+- **Output:** `{ period, periodStart, periodEnd, summary, businessSummary, bookingTrend, userTrend, stateBreakdown, modalityBreakdown, categoryBreakdown }`
+- **Description:** Returns aggregate data used by admin Business insights. Selected-range metrics use WIB calendar boundaries. `businessSummary.signups`, `grossRevenueIdr`, `refundedIdr`, and `netRevenueIdr` follow the selected range; successful payment `updatedAt` is the available settlement-time proxy. Total accounts, student/tutor totals, current Marks ownership, and lifetime paid conversion are snapshots independent of the selected range. MAU counts unique accounts with auth-session activity in the latest rolling 30 days. Inactive users are accounts older than 30 days without such activity. Churn compares users active 31-60 days ago against those absent in the latest 30 days, so it is session-based operational churn rather than product-event retention. `summary.activeLearners` remains a distinct booking-proposer count. Locked booking-value fields represent operational booking value, not payment revenue. `stateBreakdown` is the live all-bookings state mix; modality/category breakdowns use the selected range; missing trend days are zero-filled.
 
 ### `admin.listUsers`
 
@@ -728,8 +730,8 @@ All routes are admin-only. Package `code` is the stable business key used by
 
 - **Auth:** Admin
 - **Input:** `{ tutorProfileId }`
-- **Output:** Up to 50 newest audit entries for the tutor profile, including action, actor, timestamps, state snapshots, and photo workflow details
-- **Description:** Returns the review/photo history shown on the admin tutor review page. Admin-uploaded edited assets are applied to the canonical `user.image` only by an approve/publish action; requesting changes never changes the current public photo.
+- **Output:** Up to 50 newest audit entries for the tutor profile, including action, actor, timestamps, complete profile `beforeState`/`afterState` snapshots, `details.changedFields`, and photo workflow details
+- **Description:** Returns complete profile-change and moderation history shown on the admin tutor review page. Each changed tutor save records one full profile snapshot pair; `details.changedFields` lists changed leaf paths. Revisions to pending proposals compare against the previous proposal; approval records include the complete post-promotion snapshot. Admin-uploaded edited assets are applied to canonical `user.image` only by an approve/publish action; requesting changes never changes the current public photo.
 
 ### `adminTutor.reviewTutorProfile`
 
@@ -762,16 +764,16 @@ All routes are admin-only. Package `code` is the stable business key used by
 
 - **Auth:** Tutor
 - **Input:** None
-- **Output:** Up to 50 newest audit entries for the authenticated tutor profile, including action, actor identity (`id` and display name only), actor type, timestamps, and photo/review workflow details; account email is not returned
-- **Description:** Returns tutor profile audit history for audit-capable surfaces. The focused tutor photo editor no longer embeds this history. Published photo replacements remain proposals until an admin approves them.
+- **Output:** Up to 50 newest audit entries for the authenticated tutor profile, including action, actor identity (`id` and display name only), actor type, timestamps, complete profile `beforeState`/`afterState` snapshots, and photo/review workflow details; account email is not returned
+- **Description:** Returns tutor profile audit history for audit-capable surfaces. Each changed save includes complete profile snapshots plus `details.changedFields`; the focused tutor photo editor no longer embeds this history. Published photo replacements remain proposals until an admin approves them.
 
 ### `tutor.updateMyProfile`
 
 - **Auth:** Tutor
-- **Input:** `{ version, shortBio?, affiliation?, achievementProofUrls?, experienceProofUrls?, profileImageUrl?, education?, achievements?, experiences?, subjectIds?, modality?, baseRatesIdr?, onlineMaxClassSize?, offlineMaxClassSize?, bankName?, bankAccountNumber?, bankAccountHolderName?, bankAccountOpeningCity?, bankAccountOwnership?: "self" | "trusted_person", bankTransferDisclaimerAccepted?, prices? }`. `affiliation` is a trimmed string of 1–255 characters when supplied. `achievements` accepts up to 5 `{ competitionName, year, awards }` entries. `experiences` accepts up to 5 `{ role, organization, startYear, endYear, description }` entries; `endYear` may be null for ongoing work. Draft saves may omit affiliation.
+- **Input:** `{ version, displayName?, shortBio?, affiliation?, achievementProofUrls?, experienceProofUrls?, profileImageUrl?, education?, achievements?, experiences?, subjectIds?, modality?, baseRatesIdr?, onlineMaxClassSize?, offlineMaxClassSize?, bankName?, bankAccountNumber?, bankAccountHolderName?, bankAccountOpeningCity?, bankAccountOwnership?: "self" | "trusted_person", bankTransferDisclaimerAccepted?, prices? }`. `displayName` is a trimmed 1–255 character canonical account name and is audited with the profile save. `affiliation` is a trimmed string of 1–255 characters when supplied. `achievements` accepts up to 5 `{ competitionName, year, awards }` entries. `experiences` accepts up to 5 `{ role, organization, startYear, endYear, description }` entries; `endYear` may be null for ongoing work. Draft saves may omit affiliation.
 - **Output:** `{ profile, subjects: [{ id, slug, name, description?, isSelectable, parent: { id, slug, name } }] }`
 - **Errors:** `OPTIMISTIC_LOCK` (409) on version mismatch, `INVALID_TUTOR_PRICING` (400) on floor-price violation, `INVALID_TUTOR_SUBJECT_SELECTION` (400) when ids are not active specializations or exceed 7; tutor domain validation errors include field-specific data such as `missingFields`, `pricingError`, or `subjectIds` where available
-- **Description:** Updates the tutor profile with optimistic locking. The tutor editor presents one combined Education, Achievements, and Experiences section plus one profile-image field; each experience stores a role, organization, start/end years, and a brief description. Affiliation stores a study program/university or professional role/organization and is required on review. Short bios are limited to 50 whitespace-delimited words (and 2,000 characters). Year values are plain integers, and an end year must be on or after its start year. Award titles normalize to the structured `awards` array. `achievementProofUrls` and `experienceProofUrls` accept bounded HTTP(S) URLs; `profileImageUrl` accepts bounded HTTP(S) URLs or a generated local `/uploads/...` storage path. The tutor-facing proof guidance recommends one Google Drive folder with the “Anyone with the link can view” setting. `profileImageUrl` is the canonical tutor profile image: draft/changes-requested updates write it to the account image, while published changes wait in `pendingProfileChanges` until admin review. `subjectIds` is the normalized specialization selection. Payout-account fields remain private. A published tutor's `baseRatesIdr` takes effect immediately for future bookings; existing bookings retain their stored price snapshot for payout. Trust-sensitive structured profile changes wait in `pendingProfileChanges`. The web editor exposes separate **Save draft**/**Save profile changes** and **Submit for review** actions: saving permits incomplete required top-level fields while still highlighting malformed values, while submission applies the complete required-field gate. Both client-side and API-side validation errors are shown beside the affected field and in the form summary.
+- **Description:** Updates the tutor profile with optimistic locking and records a full profile audit snapshot pair when state changes. The tutor editor presents one combined Education, Achievements, and Experiences section plus one profile-image field; each experience stores a role, organization, start/end years, and a brief description. Affiliation stores a study program/university or professional role/organization and is required on review. Short bios are limited to 50 whitespace-delimited words (and 2,000 characters). Year values are plain integers, and an end year must be on or after its start year. Award titles normalize to the structured `awards` array. `achievementProofUrls` and `experienceProofUrls` accept bounded HTTP(S) URLs; `profileImageUrl` accepts bounded HTTP(S) URLs or a generated local `/uploads/...` storage path. The tutor-facing proof guidance recommends one Google Drive folder with the “Anyone with the link can view” setting. `profileImageUrl` is the canonical tutor profile image: draft/changes-requested updates write it to the account image, while published changes wait in `pendingProfileChanges` until admin review. `subjectIds` is the normalized specialization selection. Payout-account fields remain private. A published tutor's `baseRatesIdr` takes effect immediately for future bookings; existing bookings retain their stored price snapshot for payout. Trust-sensitive structured profile changes wait in `pendingProfileChanges`. The web editor exposes separate **Save draft**/**Save profile changes** and **Submit for review** actions: saving permits incomplete required top-level fields while still highlighting malformed values, while submission applies the complete required-field gate. Both client-side and API-side validation errors are shown beside the affected field and in the form summary.
 
 `onlineMaxClassSize` and `offlineMaxClassSize` take effect immediately for new
 booking requests; size 1 means private-only for that modality. Existing

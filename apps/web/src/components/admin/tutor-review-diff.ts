@@ -3,7 +3,6 @@ export const TUTOR_REVIEW_DIFF_FILTERS = [
   "added",
   "modified",
   "removed",
-  "empty",
 ] as const;
 
 export type TutorReviewDiffFilter = (typeof TUTOR_REVIEW_DIFF_FILTERS)[number];
@@ -100,6 +99,10 @@ export function getTutorReviewDiffStatus(
   return haveSameTutorReviewValue(current, proposed, field)
     ? "filled"
     : "modified";
+}
+
+export function isActualTutorReviewChange(status: TutorReviewDiffStatus) {
+  return status === "added" || status === "modified" || status === "removed";
 }
 
 export function buildTutorReviewDiffs(

@@ -78,12 +78,7 @@ import { client, orpc } from "@/utils/orpc";
 type AdminAchievement = Awaited<
   ReturnType<typeof client.achievement.adminList>
 >[number];
-type StatusFilter =
-  | "all"
-  | "pending"
-  | "approved"
-  | "rejected"
-  | "archived";
+type StatusFilter = "all" | "pending" | "approved" | "rejected" | "archived";
 
 const MODERATION_PAGE_SIZE = 10;
 
@@ -106,7 +101,9 @@ export function AchievementModerationPage() {
   } | null>(null);
   const [editAchievement, setEditAchievement] =
     useState<AdminAchievement | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<AdminAchievement | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AdminAchievement | null>(
+    null,
+  );
   const [editOpen, setEditOpen] = useState(false);
   const [rejectionNote, setRejectionNote] = useState("");
   const achievementsQuery = useQuery({
@@ -228,24 +225,24 @@ export function AchievementModerationPage() {
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
           <Select
             value={statusFilter}
-          onValueChange={(value) => {
-            setStatusFilter(value as StatusFilter);
-            setPage(0);
-          }}
-        >
-          <SelectTrigger className="w-full sm:w-48">
-            <SelectValue placeholder="Filter status" />
-          </SelectTrigger>
-          <SelectPopup align="end">
-            <SelectList>
-              <SelectItem value="all">All submissions</SelectItem>
-              <SelectItem value="pending">Pending review</SelectItem>
-              <SelectItem value="approved">Approved</SelectItem>
-              <SelectItem value="rejected">Rejected</SelectItem>
-              <SelectItem value="archived">Archived</SelectItem>
-            </SelectList>
-          </SelectPopup>
-        </Select>
+            onValueChange={(value) => {
+              setStatusFilter(value as StatusFilter);
+              setPage(0);
+            }}
+          >
+            <SelectTrigger className="w-full sm:w-48">
+              <SelectValue placeholder="Filter status" />
+            </SelectTrigger>
+            <SelectPopup align="end">
+              <SelectList>
+                <SelectItem value="all">All submissions</SelectItem>
+                <SelectItem value="pending">Pending review</SelectItem>
+                <SelectItem value="approved">Approved</SelectItem>
+                <SelectItem value="rejected">Rejected</SelectItem>
+                <SelectItem value="archived">Archived</SelectItem>
+              </SelectList>
+            </SelectPopup>
+          </Select>
         </div>
       </div>
 
@@ -325,7 +322,8 @@ export function AchievementModerationPage() {
           <DialogHeader>
             <DialogTitle>Delete achievement?</DialogTitle>
             <DialogDescription>
-              This will remove “{deleteTarget?.eventName ?? "this achievement"}” from the active lists. This action cannot be undone.
+              This will remove “{deleteTarget?.eventName ?? "this achievement"}”
+              from the active lists. This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -516,9 +514,9 @@ function ModerationTable({
                 {achievements.map((achievement) => {
                   const status = achievement.deletedAt
                     ? STATUS_CONFIG.deleted
-                    : STATUS_CONFIG[
+                    : (STATUS_CONFIG[
                         achievement.status as keyof typeof STATUS_CONFIG
-                      ] ?? STATUS_CONFIG.pending;
+                      ] ?? STATUS_CONFIG.pending);
                   const studentName =
                     achievement.student?.name ?? "Cogito student";
 

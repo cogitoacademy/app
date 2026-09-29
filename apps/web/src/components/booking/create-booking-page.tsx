@@ -1137,8 +1137,8 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                                   )}
                                 </Text>
                                 <Text className="text-sm text-muted">
-                                  {startTime} - {addMinutesToTime(startTime, 90)}{" "}
-                                  WIB
+                                  {startTime} -{" "}
+                                  {addMinutesToTime(startTime, 90)} WIB
                                 </Text>
                               </div>
                               <Button

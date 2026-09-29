@@ -19,11 +19,7 @@ import {
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Text } from "@cogito-app/ui/components/selia/text";
-import {
-  Tabs,
-  TabsItem,
-  TabsList,
-} from "@cogito-app/ui/components/selia/tabs";
+import { Tabs, TabsItem, TabsList } from "@cogito-app/ui/components/selia/tabs";
 import { useQuery } from "@tanstack/react-query";
 import {
   IconAlertTriangle,

@@ -60,7 +60,7 @@ export function createAdminHandler(adminService: AdminService) {
       input: DashboardAnalyticsInputZod;
     }) => {
       return withDomainMap(
-        () => adminService.getDashboardAnalytics(input?.period),
+        () => adminService.getDashboardAnalytics(input),
         mapAdminError,
       );
     },
