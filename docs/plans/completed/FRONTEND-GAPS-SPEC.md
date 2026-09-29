@@ -1059,6 +1059,7 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 - v1.66 (2026-09-04): Added the tutor dashboard payout-details `InfoPreview` popover so the unpaid-honorarium explanation is available from the compact card header. No RPC, schema, or persistence contract changed.
 
 - v1.65 (2026-09-03): Replaced the admin override form's comma-separated affected-participant user-ID input with a booking-roster name/avatar/role multi-select. Selected user IDs continue to populate the existing `affectedParticipants` payload; no RPC, schema, or persistence contract changed.
+- v1.66 (2026-09-29): Replaced the admin override modal with a responsive Selia drawer: bottom on mobile, right-side on desktop, independently scrolling body, and persistent action footer. No RPC or business-policy change.
 
 - v1.64 (2026-09-02): Matched the student achievement summary cards to the admin moderation queue's compact label-and-pill treatment; no RPC/schema/persistence contract changed.
 

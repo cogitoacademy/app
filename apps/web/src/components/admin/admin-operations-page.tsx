@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   keepPreviousData,
@@ -50,6 +50,16 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@cogito-app/ui/components/selia/dialog";
+import {
+  Drawer,
+  DrawerBody,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHandle,
+  DrawerHeader,
+  DrawerPopup,
+  DrawerTitle,
+} from "@cogito-app/ui/components/selia/drawer";
 import {
   Field,
   FieldDescription,
@@ -1247,6 +1257,15 @@ function OverrideDialog({
   const [userNote, setUserNote] = useState("");
   const [internalNote, setInternalNote] = useState("");
   const [preview, setPreview] = useState<PreviewResult | null>(null);
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 640px)");
+    const updateViewport = () => setIsDesktop(mediaQuery.matches);
+    updateViewport();
+    mediaQuery.addEventListener("change", updateViewport);
+    return () => mediaQuery.removeEventListener("change", updateViewport);
+  }, []);
   const participantQuery = useQuery({
     ...orpc.booking.get.queryOptions({
       input: { bookingId: booking?.id ?? "" },
@@ -1309,19 +1328,24 @@ function OverrideDialog({
       : "Run Preview first — Apply unlocks after a successful preview.";
 
   return (
-    <Dialog
+    <Drawer
       open={booking !== null}
       onOpenChange={(open) => !open && handleClose()}
+      swipeDirection={isDesktop ? "right" : "down"}
     >
-      <DialogPopup className="max-w-2xl">
-        <DialogHeader className="flex-col items-start gap-1 border-b border-border pb-4">
-          <DialogTitle>Emergency override</DialogTitle>
-          <DialogDescription>
+      <DrawerPopup
+        direction={isDesktop ? "right" : "bottom"}
+        className={isDesktop ? "w-full max-w-2xl" : undefined}
+      >
+        {!isDesktop ? <DrawerHandle /> : null}
+        <DrawerHeader className="flex-col items-start gap-1 border-b border-drawer-border pb-4">
+          <DrawerTitle>Emergency override</DrawerTitle>
+          <DrawerDescription>
             {booking?.id} · current state{" "}
             {booking ? getBookingStateLabel(booking.currentState) : ""}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogBody className="space-y-4">
+          </DrawerDescription>
+        </DrawerHeader>
+        <DrawerBody className="space-y-4">
           <div className="space-y-4">
             <Field>
               <FieldLabel>Category</FieldLabel>
@@ -1668,8 +1692,8 @@ function OverrideDialog({
           {previewHint ? (
             <Text className="text-sm text-muted">{previewHint}</Text>
           ) : null}
-        </DialogBody>
-        <DialogFooter>
+        </DrawerBody>
+        <DrawerFooter>
           <Button variant="secondary" onClick={handleClose}>
             Cancel
           </Button>
@@ -1689,9 +1713,9 @@ function OverrideDialog({
           >
             Apply override
           </Button>
-        </DialogFooter>
-      </DialogPopup>
-    </Dialog>
+        </DrawerFooter>
+      </DrawerPopup>
+    </Drawer>
   );
 }
 
