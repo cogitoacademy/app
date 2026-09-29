@@ -77,6 +77,41 @@ const CATEGORY_STATE_MAP: Record<OverrideCategory, string> = {
   force_cancel: BOOKING_STATE.CANCELLED,
 };
 
+/**
+ * Default financial outcome for each override category. The UI relies on this
+ * policy rather than asking an admin to make a second, error-prone decision.
+ * Explicit legacy API inputs remain supported for backwards compatibility.
+ */
+export const OVERRIDE_FINANCIAL_POLICY: Record<
+  OverrideCategory,
+  { studentMarksAction: MarksAction; tutorPayoutEligible: boolean }
+> = {
+  tutor_no_show: {
+    studentMarksAction: "release_holds",
+    tutorPayoutEligible: false,
+  },
+  medical_emergency: {
+    studentMarksAction: "release_holds",
+    tutorPayoutEligible: false,
+  },
+  technical_failure: {
+    studentMarksAction: "release_holds",
+    tutorPayoutEligible: false,
+  },
+  admin_correction: {
+    studentMarksAction: "release_holds",
+    tutorPayoutEligible: false,
+  },
+  student_no_show: {
+    studentMarksAction: "compensate_deduct",
+    tutorPayoutEligible: true,
+  },
+  force_cancel: {
+    studentMarksAction: "release_holds",
+    tutorPayoutEligible: false,
+  },
+};
+
 export interface WalletBalances {
   totalBalance: number;
   heldBalance: number;
@@ -221,7 +256,12 @@ export function createAdminBookingService(deps: {
    */
   async function planOverride(
     conn: DbOrTx,
-    bookingRow: { id: string; currentState: string; holdAmount: number },
+    bookingRow: {
+      id: string;
+      tutorId: string;
+      currentState: string;
+      holdAmount: number;
+    },
     input: OverrideInput,
   ) {
     const newState = CATEGORY_STATE_MAP[input.category];
@@ -235,9 +275,8 @@ export function createAdminBookingService(deps: {
       );
     }
 
-    // M1: a money action without affected participants would silently no-op —
-    // the state change would commit while the holds stay stranded in a
-    // terminal booking (skipped by the release job). Reject loudly instead.
+    // M1: an explicitly requested legacy money action without participants
+    // is invalid. New callers omit both fields and use the category policy.
     if (
       input.marksAction &&
       (!input.affectedParticipants || input.affectedParticipants.length === 0)
@@ -245,20 +284,33 @@ export function createAdminBookingService(deps: {
       throw new OverrideMarksParticipantsRequiredError(input.bookingId);
     }
 
-    const overrideMeta: Record<string, unknown> = {
-      category: input.category,
-      reason: input.reason,
-      marksAction: input.marksAction,
-      affectedParticipants: input.affectedParticipants,
-      userNote: input.userNote,
-      internalNote: input.internalNote,
-      overriddenAt: new Date().toISOString(),
-    };
-
     const participants = await repo.findParticipantsByBookingId(
       conn,
       input.bookingId,
     );
+    const policy = OVERRIDE_FINANCIAL_POLICY[input.category];
+    const usesAutomaticPolicy = !input.marksAction;
+    const resolvedMarksAction = input.marksAction ?? policy.studentMarksAction;
+    const resolvedAffectedParticipantIds = usesAutomaticPolicy
+      ? [
+          ...new Set([
+            ...participants.map((participant) => participant.userId),
+            bookingRow.tutorId,
+          ]),
+        ]
+      : (input.affectedParticipants ?? []);
+
+    const overrideMeta: Record<string, unknown> = {
+      category: input.category,
+      reason: input.reason,
+      marksAction: resolvedMarksAction,
+      affectedParticipants: resolvedAffectedParticipantIds,
+      tutorPayoutEligible: policy.tutorPayoutEligible,
+      financialPolicy: usesAutomaticPolicy ? "automatic" : "legacy_explicit",
+      userNote: input.userNote,
+      internalNote: input.internalNote,
+      overriddenAt: new Date().toISOString(),
+    };
     // F24: every affectedParticipant must be a real participant of this
     // booking. A typo'd or stale user id would otherwise be silently filtered
     // out — for a marksAction that silently skips the money movement for that
@@ -275,12 +327,12 @@ export function createAdminBookingService(deps: {
         );
       }
     }
-    const affectedParts =
-      input.affectedParticipants && input.affectedParticipants.length > 0
-        ? participants.filter((p) =>
-            input.affectedParticipants!.includes(p.userId),
-          )
-        : [];
+    const affectedParts = participants.filter((participant) =>
+      resolvedAffectedParticipantIds.includes(participant.userId),
+    );
+    const marksAffectedParts = usesAutomaticPolicy
+      ? affectedParts.filter((participant) => participant.role !== "tutor")
+      : affectedParts;
 
     const perParticipantImpact: PerParticipantImpact[] = [];
     // Gate the money action on actual participant holds (not the booking-level
@@ -290,8 +342,8 @@ export function createAdminBookingService(deps: {
       (sum, p) => sum + p.heldAmount,
       0,
     );
-    if (input.marksAction && totalParticipantHeld > 0) {
-      for (const participant of affectedParts) {
+    if (resolvedMarksAction && totalParticipantHeld > 0) {
+      for (const participant of marksAffectedParts) {
         if (participant.heldAmount <= 0) continue;
         // eslint-disable-next-line no-await-in-loop
         const participantWallet = await wallet.getByUserId(
@@ -304,7 +356,7 @@ export function createAdminBookingService(deps: {
           participantId: participant.id,
           heldAmount: participant.heldAmount,
           walletId: participantWallet.id,
-          action: input.marksAction,
+          action: resolvedMarksAction,
           before: {
             totalBalance: participantWallet.totalBalance,
             heldBalance: participantWallet.heldBalance,
@@ -312,7 +364,7 @@ export function createAdminBookingService(deps: {
           },
           after: projectWalletAfter(
             participantWallet,
-            input.marksAction,
+            resolvedMarksAction,
             participant.heldAmount,
           ),
         });
@@ -321,8 +373,9 @@ export function createAdminBookingService(deps: {
 
     return {
       newState,
-      affectedParticipantIds: affectedParts.map((p) => p.userId),
-      projectedMarksAction: input.marksAction ?? null,
+      affectedParticipantIds: resolvedAffectedParticipantIds,
+      projectedMarksAction: resolvedMarksAction,
+      tutorPayoutEligible: policy.tutorPayoutEligible,
       perParticipantImpact,
       overrideMeta,
     };
@@ -513,6 +566,7 @@ export function createAdminBookingService(deps: {
       projectedState: plan.newState,
       affectedParticipants: plan.affectedParticipantIds,
       marksAction: plan.projectedMarksAction,
+      tutorPayoutEligible: plan.tutorPayoutEligible,
       perParticipantImpact: plan.perParticipantImpact,
     };
   }

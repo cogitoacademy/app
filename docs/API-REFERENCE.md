@@ -1426,7 +1426,7 @@ The successful mutation also best-effort updates the existing offline Calendar e
 - **Output:** `{ booking }` — the updated booking; resolved financial policy is recorded in `overrideMeta`
 - **Errors:** `BOOKING_NOT_FOUND` (404), terminal-state override rejected (`TERMINAL_STATE_OVERRIDE`, 409 — message names the final status, e.g. "This booking is already completed and can no longer be overridden. Final bookings are locked — check state history or use a wallet correction if Marks need fixing.")
 - **Description:** Force state transition bypassing the state machine; optionally adjusts held Marks per participant; records audit log + state history + participant notification
-- **Frontend note:** The admin override form reads the booking roster through protected `booking.get` and presents names/roles in a multi-select. It submits the selected participant user IDs automatically in `affectedParticipants`; the API input remains unchanged.
+- **Frontend note:** The admin override form reads the booking roster through protected `booking.get` and presents a read-only student/tutor impact roster. The web client omits `affectedParticipants` and `marksAction`, so the selected category determines all wallet, payout, and notification effects automatically. Its review card presents booking-state, named wallet-balance, and tutor-payout outcomes before apply.
 
 ### `adminBooking.previewOverride`
 

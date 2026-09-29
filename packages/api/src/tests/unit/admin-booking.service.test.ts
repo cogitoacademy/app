@@ -26,6 +26,7 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
   return {
     findBookingById: mock(async () => ({
       id: "b1",
+      tutorId: "tutor-1",
       currentState: "confirmed",
       holdAmount: 100,
     })),
@@ -760,24 +761,83 @@ describe("AdminBookingService", () => {
       }
     });
 
-    test("no marksAction returns empty impact and null marksAction", async () => {
-      const repo = mockRepo();
+    test.each([
+      "tutor_no_show",
+      "medical_emergency",
+      "technical_failure",
+      "admin_correction",
+      "force_cancel",
+    ] as const)(
+      "%s automatically refunds students and withholds tutor payout",
+      async (category) => {
+        const repo = mockRepo({
+          findParticipantsByBookingId: mock(async () => [
+            {
+              id: "student-p",
+              userId: "student-1",
+              role: "proposer",
+              heldAmount: 50,
+            },
+          ]),
+        });
+        const service = createAdminBookingService({
+          db: makeDb(),
+          repo,
+          auditPort: makeAuditPort(),
+          wallet: makeWalletPort() as any,
+          refund: makeRefundPort(),
+        });
+
+        const result = await service.previewOverride({
+          bookingId: "b1",
+          category,
+          reason: "Preview",
+        });
+
+        expect(result.marksAction).toBe("release_holds");
+        expect(result.affectedParticipants).toEqual(["student-1", "tutor-1"]);
+        expect(result.tutorPayoutEligible).toBe(false);
+        expect(result.perParticipantImpact).toHaveLength(1);
+        expect(result.perParticipantImpact[0]).toMatchObject({
+          userId: "student-1",
+          action: "release_holds",
+        });
+      },
+    );
+
+    test("student_no_show automatically forfeits student Marks and keeps tutor payout", async () => {
+      const repo = mockRepo({
+        findParticipantsByBookingId: mock(async () => [
+          {
+            id: "student-p",
+            userId: "student-1",
+            role: "proposer",
+            heldAmount: 50,
+          },
+        ]),
+      });
       const service = createAdminBookingService({
         db: makeDb(),
         repo,
         auditPort: makeAuditPort(),
         wallet: makeWalletPort() as any,
         refund: makeRefundPort(),
-        meeting: { setManualLink: mock(async () => ({}) as any) },
       });
 
       const result = await service.previewOverride({
         bookingId: "b1",
-        category: "admin_correction",
-        reason: "Preview",
+        category: "student_no_show",
+        reason: "Student absent",
       });
-      expect(result.marksAction).toBeNull();
-      expect(result.perParticipantImpact).toEqual([]);
+
+      expect(result.marksAction).toBe("compensate_deduct");
+      expect(result.affectedParticipants).toEqual(["student-1", "tutor-1"]);
+      expect(result.tutorPayoutEligible).toBe(true);
+      expect(result.perParticipantImpact).toHaveLength(1);
+      expect(result.perParticipantImpact[0]).toMatchObject({
+        userId: "student-1",
+        action: "compensate_deduct",
+      });
     });
   });
 
@@ -813,7 +873,7 @@ describe("AdminBookingService", () => {
       ).rejects.toThrow(OverrideParticipantNotInBookingError);
     });
 
-    test("writes best-effort notification to affected participants", async () => {
+    test("automatic policy notifies students and assigned tutor without a tutor participant row", async () => {
       const notification = makeNotificationPort();
       const repo = mockRepo({
         findParticipantsByBookingId: mock(async () => [
@@ -837,7 +897,10 @@ describe("AdminBookingService", () => {
         affectedParticipants: ["u1", "u2"],
       });
 
-      expect(notification.writeBestEffort).toHaveBeenCalledTimes(2);
+      expect(notification.writeBestEffort).toHaveBeenCalledTimes(3);
+      expect(
+        notification.writeBestEffort.mock.calls.map(([input]) => input.userId),
+      ).toEqual(["u1", "u2", "tutor-1"]);
       const first = notification.writeBestEffort.mock.calls[0][0];
       expect(first).toMatchObject({
         userId: "u1",
