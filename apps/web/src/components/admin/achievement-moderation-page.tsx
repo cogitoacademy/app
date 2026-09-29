@@ -78,7 +78,12 @@ import { client, orpc } from "@/utils/orpc";
 type AdminAchievement = Awaited<
   ReturnType<typeof client.achievement.adminList>
 >[number];
-type StatusFilter = "all" | "pending" | "approved" | "rejected" | "archived";
+type StatusFilter =
+  | "all"
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "archived";
 
 const MODERATION_PAGE_SIZE = 10;
 
@@ -93,7 +98,6 @@ const STATUS_CONFIG = {
 export function AchievementModerationPage() {
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [showDeleted, setShowDeleted] = useState(false);
   const [page, setPage] = useState(0);
   const [reviewTarget, setReviewTarget] = useState<{
     id: string;
@@ -102,6 +106,7 @@ export function AchievementModerationPage() {
   } | null>(null);
   const [editAchievement, setEditAchievement] =
     useState<AdminAchievement | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AdminAchievement | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [rejectionNote, setRejectionNote] = useState("");
   const achievementsQuery = useQuery({
@@ -110,7 +115,7 @@ export function AchievementModerationPage() {
         limit: MODERATION_PAGE_SIZE + 1,
         offset: page * MODERATION_PAGE_SIZE,
         ...(statusFilter !== "all" ? { status: statusFilter } : {}),
-        deleted: showDeleted,
+        deleted: false,
       },
     }),
     placeholderData: keepPreviousData,
@@ -220,8 +225,9 @@ export function AchievementModerationPage() {
             Review student evidence and publish only trusted submissions.
           </Text>
         </div>
-        <Select
-          value={statusFilter}
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          <Select
+            value={statusFilter}
           onValueChange={(value) => {
             setStatusFilter(value as StatusFilter);
             setPage(0);
@@ -237,20 +243,10 @@ export function AchievementModerationPage() {
               <SelectItem value="approved">Approved</SelectItem>
               <SelectItem value="rejected">Rejected</SelectItem>
               <SelectItem value="archived">Archived</SelectItem>
-              <SelectItem value="deleted">Deleted</SelectItem>
             </SelectList>
           </SelectPopup>
         </Select>
-        <Button
-          variant={showDeleted ? "secondary" : "plain"}
-          size="sm"
-          onClick={() => {
-            setShowDeleted((value) => !value);
-            setPage(0);
-          }}
-        >
-          {showDeleted ? "Hide deleted" : "Show deleted"}
-        </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
@@ -305,6 +301,7 @@ export function AchievementModerationPage() {
           onArchive={(id, eventName) =>
             setReviewTarget({ id, eventName, action: "archived" })
           }
+          onDelete={(item) => setDeleteTarget(item)}
           onEdit={(item) => {
             setEditAchievement(item);
             setEditOpen(true);
@@ -317,6 +314,40 @@ export function AchievementModerationPage() {
           onNext={() => setPage((current) => current + 1)}
         />
       )}
+
+      <Dialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !deleteAchievement.isPending) setDeleteTarget(null);
+        }}
+      >
+        <DialogPopup>
+          <DialogHeader>
+            <DialogTitle>Delete achievement?</DialogTitle>
+            <DialogDescription>
+              This will remove “{deleteTarget?.eventName ?? "this achievement"}” from the active lists. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              progress={deleteAchievement.isPending}
+              onClick={() => {
+                if (!deleteTarget) return;
+                deleteAchievement.mutate(
+                  { achievementId: deleteTarget.id },
+                  { onSuccess: () => setDeleteTarget(null) },
+                );
+              }}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
 
       <Dialog
         open={reviewTarget !== null}
@@ -426,6 +457,7 @@ function ModerationTable({
   onApprove,
   onReject,
   onArchive,
+  onDelete,
   onEdit,
   page,
   pageSize,
@@ -439,6 +471,7 @@ function ModerationTable({
   onApprove: (id: string, eventName: string) => void;
   onReject: (id: string, eventName: string) => void;
   onArchive: (id: string, eventName: string) => void;
+  onDelete: (achievement: AdminAchievement) => void;
   onEdit: (achievement: AdminAchievement) => void;
   page: number;
   pageSize: number;
@@ -481,10 +514,11 @@ function ModerationTable({
               </TableHeader>
               <TableBody>
                 {achievements.map((achievement) => {
-                  const status =
-                    STATUS_CONFIG[
-                      achievement.status as keyof typeof STATUS_CONFIG
-                    ] ?? STATUS_CONFIG.pending;
+                  const status = achievement.deletedAt
+                    ? STATUS_CONFIG.deleted
+                    : STATUS_CONFIG[
+                        achievement.status as keyof typeof STATUS_CONFIG
+                      ] ?? STATUS_CONFIG.pending;
                   const studentName =
                     achievement.student?.name ?? "Cogito student";
 
@@ -568,6 +602,9 @@ function ModerationTable({
         onApprove={onApprove}
         onReject={onReject}
         onArchive={onArchive}
+        onDelete={(achievement) => {
+          onDelete(achievement);
+        }}
         onEdit={onEdit}
       />
     </>

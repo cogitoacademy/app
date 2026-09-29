@@ -126,7 +126,7 @@ export function AchievementTable({
 }: {
   achievements: readonly StudentAchievementTableItem[];
   onEdit: (id: string) => void;
-  onDelete: (id: string) => void;
+  onDelete: (achievement: StudentAchievementTableItem) => void;
   page: number;
   pageSize: number;
   hasNext: boolean;
@@ -234,7 +234,7 @@ export function AchievementTable({
         }}
         onDelete={(achievement) => {
           setSelectedAchievement(null);
-          onDelete(achievement.id);
+          onDelete(achievement);
         }}
       />
     </>
@@ -287,6 +287,7 @@ export function AchievementDetailDrawer<T extends StudentAchievementTableItem>({
   const isPending =
     achievement?.status === "pending" ||
     achievement?.status === "pending_review";
+  const canDelete = mode === "student" || mode === "admin";
   const studentName = achievement?.student?.name ?? "Cogito student";
   const hasAttachments = Boolean(
     achievement?.evidenceUrl || achievement?.documentationUrl,
@@ -449,7 +450,7 @@ export function AchievementDetailDrawer<T extends StudentAchievementTableItem>({
               <IconEdit /> Edit
             </Button>
           ) : null}
-          {mode === "student" && isPending && onDelete ? (
+          {canDelete && achievement && onDelete ? (
             <Button
               variant="danger"
               onClick={() => {

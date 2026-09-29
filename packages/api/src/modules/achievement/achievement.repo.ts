@@ -312,7 +312,9 @@ async function adminList(conn: DbOrTx, input: AdminListInput) {
     .leftJoin(user, eq(achievement.userId, user.id))
     .where(
       and(
-        deleted ? sql`true` : isNull(achievement.deletedAt),
+        deleted
+          ? sql`${achievement.deletedAt} IS NOT NULL`
+          : isNull(achievement.deletedAt),
         status === "pending"
           ? inArray(achievement.status, ["pending", "pending_review"])
           : status

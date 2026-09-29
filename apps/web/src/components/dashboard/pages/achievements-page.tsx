@@ -168,9 +168,11 @@ export function AchievementsPage() {
           isFetching={achievements.isFetching}
           onPrevious={() => setPage((current) => Math.max(0, current - 1))}
           onNext={() => setPage((current) => current + 1)}
-          onDelete={(id) => {
-            const found = items.find((item) => item.id === id);
-            if (found) deleteMutation.mutate({ id, version: found.version });
+          onDelete={(achievement) => {
+            deleteMutation.mutate({
+              id: achievement.id,
+              version: achievement.version,
+            });
           }}
           onEdit={(id) => {
             const found = items.find((item) => item.id === id);
