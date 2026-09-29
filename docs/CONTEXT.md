@@ -2,6 +2,16 @@
 
 Last updated: 2026-09-29
 
+## Production Knowledge Bank iframe CSP (2026-09-29)
+
+Production serves the Knowledge Bank PDF from `api.cogitoacademy.id` inside
+the web app at `app.cogitoacademy.id`. The web nginx CSP must therefore allow
+that API origin in `frame-src`; the API response separately restricts its
+allowed parent with `frame-ancestors https://app.cogitoacademy.id` and omits
+`X-Frame-Options` only for the protected file route. Without the parent
+`frame-src` entry, Chromium reports that the PDF content is blocked even when
+the authenticated API response and PDF are valid.
+
 ## Complete tutor profile change history (2026-09-29)
 
 Every successful tutor profile save, including canonical account-name changes,

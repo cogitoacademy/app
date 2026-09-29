@@ -16,6 +16,9 @@ preview.
 - Preview opens from bottom below `sm` and from right at `sm` and above.
 - Preserved protected proxy URL, access checks, CSP frame restriction, close
   action, and new-tab fallback.
+- Added the production web CSP `frame-src` allowlist for the API origin; the
+  parent web page must allow the cross-origin iframe in addition to the API
+  response's `frame-ancestors` policy.
 - Updated architecture, API, module, and runbook documentation.
 
 ## Verification
@@ -25,3 +28,5 @@ preview.
   `apps/server/src/seed/seed.ts` (`eventKey` is unused).
 - Manual production smoke remains required for native PDF behavior across
   supported desktop and mobile browsers.
+- Root cause of the production blocked-content message: nginx `default-src
+  'self'` blocked the API-origin iframe before the API response was evaluated.
