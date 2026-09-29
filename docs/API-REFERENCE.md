@@ -303,7 +303,7 @@ Sanity is queried only by the API server. The browser receives normalized conten
 - **Auth:** Protected (student, tutor, or admin)
 - **Input:** None
 - **Output:** `{ items: [{ id, title, description, category }], access: { eligible, balance, threshold, overrideExpiresAt? } }`
-- **Description:** Returns published Knowledge Bank metadata for the authenticated `/knowledge-bank` app route. Students must meet the 35-Mark total-balance threshold (held Marks count toward eligibility), unless they have an active admin grant; below both conditions, `items` is empty and the access state explains the lock. Tutors and admins are eligible regardless of wallet balance. `overrideExpiresAt` is returned only while a student grant is active. `category` remains the Sanity slug in the API response; the web UI maps known slugs and title-cases hyphenated or underscored slugs for display while retaining the raw value for filtering.
+- **Description:** Returns published Knowledge Bank metadata for the authenticated `/knowledge-bank` app route. Students must meet the 35-Mark total-balance threshold (held Marks count toward eligibility), unless they have an active admin grant; below both conditions, `items` is empty and the access state explains the lock. Tutors and admins are eligible regardless of wallet balance. `overrideExpiresAt` is returned only while a student grant is active. `category` remains the Sanity slug in the API response; the web UI maps known slugs and title-cases hyphenated or underscored slugs for display while retaining the raw value for filtering. Preview presentation is frontend-only: an unsandboxed native PDF iframe opens in a bottom drawer on mobile and a right-side drawer on desktop.
 
 ### `GET /content/knowledge-bank/:resourceId/file`
 
