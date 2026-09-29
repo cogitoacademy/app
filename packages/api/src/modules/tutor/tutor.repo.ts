@@ -26,6 +26,7 @@ import type {
 
 export interface UpdateProfileInput {
   version: number;
+  displayName?: string;
   shortBio?: string;
   affiliation?: string;
   achievementProofUrls?: string[];
@@ -117,6 +118,19 @@ export async function updateProfileImage(
   const [updated] = await conn
     .update(user)
     .set({ image })
+    .where(eq(user.id, userId))
+    .returning();
+  return updated;
+}
+
+export async function updateProfileDisplayName(
+  conn: DbOrTx,
+  userId: string,
+  name: string,
+) {
+  const [updated] = await conn
+    .update(user)
+    .set({ name })
     .where(eq(user.id, userId))
     .returning();
   return updated;
@@ -355,6 +369,7 @@ export function createTutorRepo() {
     listActiveChildSubjects,
     replaceProfileSubjects,
     updateProfileImage,
+    updateProfileDisplayName,
     updateProfileWithVersion,
     updateStatus,
     listAvailability,

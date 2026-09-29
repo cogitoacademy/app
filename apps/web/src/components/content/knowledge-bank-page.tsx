@@ -1,7 +1,7 @@
 "use client";
 
 import { IconBook2, IconEye, IconLock, IconSearch } from "@tabler/icons-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
@@ -15,15 +15,16 @@ import {
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import {
-  Dialog,
-  DialogBody,
-  DialogClose,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogPopup,
-  DialogTitle,
-} from "@cogito-app/ui/components/selia/dialog";
+  Drawer,
+  DrawerBody,
+  DrawerClose,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHandle,
+  DrawerHeader,
+  DrawerPopup,
+  DrawerTitle,
+} from "@cogito-app/ui/components/selia/drawer";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Input } from "@cogito-app/ui/components/selia/input";
 import {
@@ -63,6 +64,7 @@ export function KnowledgeBankPage() {
   const [selectedResource, setSelectedResource] = useState<Resource | null>(
     null,
   );
+  const [isDesktop, setIsDesktop] = useState(false);
   const resources = useQuery(orpc.content.listStudentResources.queryOptions());
   const { role, isLoading: isRoleLoading } = useRole();
   const isAdmin = !isRoleLoading && role === "admin";
@@ -89,6 +91,15 @@ export function KnowledgeBankPage() {
     });
   }, [category, items, search]);
   const hasFilters = category !== "all" || search.trim().length > 0;
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 640px)");
+    const updateViewport = () => setIsDesktop(mediaQuery.matches);
+
+    updateViewport();
+    mediaQuery.addEventListener("change", updateViewport);
+    return () => mediaQuery.removeEventListener("change", updateViewport);
+  }, []);
 
   if (resources.isPending) return <Loader />;
 
@@ -242,33 +253,46 @@ export function KnowledgeBankPage() {
         )}
       </Stack>
 
-      <Dialog
+      <Drawer
         open={selectedResource !== null}
         onOpenChange={(open) => {
           if (!open) setSelectedResource(null);
         }}
+        swipeDirection={isDesktop ? "right" : "down"}
       >
-        <DialogPopup className="max-w-5xl">
+        <DrawerPopup
+          direction={isDesktop ? "right" : "bottom"}
+          backdropBlur={false}
+          className={
+            isDesktop
+              ? "w-full max-w-3xl"
+              : "h-[85dvh] max-h-[calc(85dvh+3rem)]"
+          }
+        >
           {selectedResource ? (
             <>
-              <DialogHeader className="items-start">
+              {!isDesktop ? <DrawerHandle /> : null}
+              <DrawerHeader className="items-start">
                 <div className="min-w-0">
-                  <DialogTitle>{selectedResource.title}</DialogTitle>
-                  <DialogDescription>
+                  <DrawerTitle>{selectedResource.title}</DrawerTitle>
+                  <DrawerDescription>
                     {getCategoryLabel(selectedResource.category)} resource
-                  </DialogDescription>
+                  </DrawerDescription>
                 </div>
-              </DialogHeader>
-              <DialogBody className="min-h-0">
+              </DrawerHeader>
+              <DrawerBody className="flex h-full flex-col p-4.5! sm:p-6!">
+                {/* Native browser PDF viewers do not run reliably in sandboxed frames. */}
+                {/* oxlint-disable react/iframe-missing-sandbox */}
+                {/* react-doctor-disable-next-line react-doctor/iframe-missing-sandbox */}
                 <iframe
                   title={selectedResource.title}
                   src={resourceFileUrl(selectedResource.id)}
-                  sandbox="allow-same-origin"
-                  className="h-[60svh] min-h-96 w-full rounded border border-border bg-background"
+                  className="min-h-0 w-full flex-1 rounded border border-border bg-background"
                 />
-              </DialogBody>
-              <DialogFooter>
-                <DialogClose>Close</DialogClose>
+                {/* oxlint-enable react/iframe-missing-sandbox */}
+              </DrawerBody>
+              <DrawerFooter>
+                <DrawerClose>Close</DrawerClose>
                 <Button
                   nativeButton={false}
                   render={
@@ -282,11 +306,11 @@ export function KnowledgeBankPage() {
                 >
                   Open in new tab
                 </Button>
-              </DialogFooter>
+              </DrawerFooter>
             </>
           ) : null}
-        </DialogPopup>
-      </Dialog>
+        </DrawerPopup>
+      </Drawer>
     </>
   );
 }

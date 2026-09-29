@@ -1,8 +1,49 @@
 import { z } from "zod";
 
+const dashboardDateKey = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine((value) => {
+    const date = new Date(`${value}T00:00:00.000Z`);
+    return (
+      !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
+    );
+  }, "invalid calendar date");
+
 export const dashboardAnalyticsInput = z
   .object({
-    period: z.enum(["7d", "30d", "90d"]).default("30d"),
+    period: z.enum(["7d", "30d", "90d"]).optional(),
+    dateFrom: dashboardDateKey.optional(),
+    dateTo: dashboardDateKey.optional(),
+  })
+  .superRefine((input, context) => {
+    const hasCustomDate =
+      input.dateFrom !== undefined || input.dateTo !== undefined;
+    if (hasCustomDate && (!input.dateFrom || !input.dateTo)) {
+      context.addIssue({
+        code: "custom",
+        message: "dateFrom and dateTo must be provided together",
+      });
+      return;
+    }
+    if (hasCustomDate && input.period) {
+      context.addIssue({
+        code: "custom",
+        message: "period cannot be combined with a custom date range",
+      });
+      return;
+    }
+    if (!input.dateFrom || !input.dateTo) return;
+    const from = new Date(`${input.dateFrom}T00:00:00Z`);
+    const to = new Date(`${input.dateTo}T00:00:00Z`);
+    const rangeDays =
+      Math.floor((to.getTime() - from.getTime()) / 86_400_000) + 1;
+    if (rangeDays < 1 || rangeDays > 366) {
+      context.addIssue({
+        code: "custom",
+        message: "date range must be between 1 and 366 days",
+      });
+    }
   })
   .optional();
 

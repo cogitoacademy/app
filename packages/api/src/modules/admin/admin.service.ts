@@ -17,6 +17,13 @@ import type { EconomyService } from "../economy";
 export const DASHBOARD_ANALYTICS_PERIODS = ["7d", "30d", "90d"] as const;
 export type DashboardAnalyticsPeriod =
   (typeof DASHBOARD_ANALYTICS_PERIODS)[number];
+export type DashboardAnalyticsSelection = DashboardAnalyticsPeriod | "custom";
+
+export interface DashboardAnalyticsInput {
+  period?: DashboardAnalyticsPeriod;
+  dateFrom?: string;
+  dateTo?: string;
+}
 
 const DASHBOARD_PERIOD_DAYS: Record<DashboardAnalyticsPeriod, number> = {
   "7d": 7,
@@ -28,7 +35,7 @@ const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface DashboardAnalytics {
-  period: DashboardAnalyticsPeriod;
+  period: DashboardAnalyticsSelection;
   periodStart: string;
   periodEnd: string;
   summary: {
@@ -41,6 +48,8 @@ export interface DashboardAnalytics {
     newTutors: number;
     grossMarks: number;
     platformTakeMarks: number;
+    grossIdr: number;
+    platformTakeIdr: number;
   };
   bookingTrend: Array<{
     date: string;
@@ -57,6 +66,24 @@ export interface DashboardAnalytics {
     bookings: number;
     completed: number;
   }>;
+  businessSummary: {
+    totalAccounts: number;
+    totalStudents: number;
+    totalTutors: number;
+    signups: number;
+    monthlyActiveUsers: number;
+    inactiveUsers: number;
+    churnedUsers: number;
+    churnRate: number;
+    studentsWithMarks: number;
+    studentsWithoutMarks: number;
+    studentsWithMarksRate: number;
+    payingStudents: number;
+    paidConversionRate: number;
+    grossRevenueIdr: number;
+    refundedIdr: number;
+    netRevenueIdr: number;
+  };
 }
 
 export interface ListUsersInput {
@@ -152,15 +179,27 @@ function buildPeriodDateKeys(periodStart: Date, periodEnd: Date): string[] {
 }
 
 function toAnalyticsWindow(
-  period: DashboardAnalyticsPeriod,
+  input: DashboardAnalyticsInput = {},
   now = new Date(),
-): { periodStart: Date; periodEnd: Date } {
+): {
+  period: DashboardAnalyticsSelection;
+  periodStart: Date;
+  periodEnd: Date;
+} {
+  if (input.dateFrom && input.dateTo) {
+    return {
+      period: "custom",
+      periodStart: new Date(`${input.dateFrom}T00:00:00+07:00`),
+      periodEnd: new Date(`${input.dateTo}T23:59:59.999+07:00`),
+    };
+  }
+  const period = input.period ?? "30d";
   const periodEnd = new Date(now);
   const periodStart = new Date(
     getWibDayStart(periodEnd).getTime() -
       (DASHBOARD_PERIOD_DAYS[period] - 1) * DAY_MS,
   );
-  return { periodStart, periodEnd };
+  return { period, periodStart, periodEnd };
 }
 
 export interface GetTutorPayoutsInput {
@@ -211,12 +250,18 @@ export function createAdminService(deps: {
   }
 
   async function getDashboardAnalytics(
-    period: DashboardAnalyticsPeriod = "30d",
+    input: DashboardAnalyticsInput = {},
   ): Promise<DashboardAnalytics> {
-    const { periodStart, periodEnd } = toAnalyticsWindow(period);
+    const now = new Date();
+    const { period, periodStart, periodEnd } = toAnalyticsWindow(input, now);
+    const activeSince = new Date(now.getTime() - 30 * DAY_MS);
+    const previousActiveSince = new Date(now.getTime() - 60 * DAY_MS);
     const raw = await adminRepo.getDashboardAnalytics(db, {
       periodStart,
       periodEnd,
+      activeSince,
+      previousActiveSince,
+      now,
     });
     const bookingSummary = raw.bookingSummary;
     const userSummary = raw.userSummary;
@@ -224,6 +269,19 @@ export function createAdminService(deps: {
     const completedBookings = toNumber(bookingSummary.completed);
     const exceptionBookings = toNumber(bookingSummary.exceptions);
     const resolvedBookings = completedBookings + exceptionBookings;
+    const totalStudents = toNumber(raw.accountSummary.totalStudents);
+    const previousActiveUsers = toNumber(
+      raw.accountSummary.previousActiveUsers,
+    );
+    const churnedUsers = toNumber(raw.accountSummary.churnedUsers);
+    const studentsWithMarks = toNumber(raw.marksSummary.studentsWithMarks);
+    const studentsWithoutMarks = toNumber(
+      raw.marksSummary.studentsWithoutMarks,
+    );
+    const studentsWithWalletState = studentsWithMarks + studentsWithoutMarks;
+    const payingStudents = toNumber(raw.paymentSummary.payingStudents);
+    const grossRevenueIdr = toNumber(raw.paymentSummary.grossRevenueIdr);
+    const refundedIdr = toNumber(raw.refundSummary.refundedIdr);
     const dateKeys = buildPeriodDateKeys(periodStart, periodEnd);
     const bookingTrendByDate = new Map(
       raw.bookingTrend.map((row) => [row.date, row]),
@@ -249,6 +307,8 @@ export function createAdminService(deps: {
         newTutors: toNumber(userSummary.newTutors),
         grossMarks: toNumber(bookingSummary.grossMarks),
         platformTakeMarks: toNumber(bookingSummary.platformTakeMarks),
+        grossIdr: toNumber(bookingSummary.grossIdr),
+        platformTakeIdr: toNumber(bookingSummary.platformTakeIdr),
       },
       bookingTrend: dateKeys.map((date) => {
         const row = bookingTrendByDate.get(date);
@@ -281,6 +341,34 @@ export function createAdminService(deps: {
         bookings: toNumber(row.bookings),
         completed: toNumber(row.completed),
       })),
+      businessSummary: {
+        totalAccounts: toNumber(raw.accountSummary.totalAccounts),
+        totalStudents,
+        totalTutors: toNumber(raw.accountSummary.totalTutors),
+        signups: toNumber(raw.accountSummary.signups),
+        monthlyActiveUsers: toNumber(raw.accountSummary.monthlyActiveUsers),
+        inactiveUsers: toNumber(raw.accountSummary.inactiveUsers),
+        churnedUsers,
+        churnRate:
+          previousActiveUsers > 0
+            ? Math.round((churnedUsers / previousActiveUsers) * 1000) / 10
+            : 0,
+        studentsWithMarks,
+        studentsWithoutMarks,
+        studentsWithMarksRate:
+          studentsWithWalletState > 0
+            ? Math.round((studentsWithMarks / studentsWithWalletState) * 1000) /
+              10
+            : 0,
+        payingStudents,
+        paidConversionRate:
+          totalStudents > 0
+            ? Math.round((payingStudents / totalStudents) * 1000) / 10
+            : 0,
+        grossRevenueIdr,
+        refundedIdr,
+        netRevenueIdr: grossRevenueIdr - refundedIdr,
+      },
     };
   }
 

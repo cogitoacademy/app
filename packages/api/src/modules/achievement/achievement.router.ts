@@ -12,6 +12,7 @@ import {
   achievementListInput,
   adminListInput,
   adminReviewInput,
+  adminDeleteInput,
   achievementStatsInput,
 } from "./achievement.types";
 import type { AchievementHandler } from "./achievement.handler";
@@ -119,6 +120,26 @@ export function createAchievementRouter(handler: AchievementHandler) {
       })
       .input(adminUpdateAchievementInput)
       .handler(handler.adminUpdate),
+
+    adminDelete: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/achievements/delete",
+        tags: ["Admin", "Achievements"],
+        summary: "Delete achievement",
+      })
+      .input(adminDeleteInput)
+      .handler(handler.adminDelete),
+
+    adminRestore: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/achievements/restore",
+        tags: ["Admin", "Achievements"],
+        summary: "Restore achievement",
+      })
+      .input(adminDeleteInput)
+      .handler(handler.adminRestore),
 
     adminReview: adminProcedure
       .route({

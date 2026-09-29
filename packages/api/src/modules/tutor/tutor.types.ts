@@ -17,6 +17,7 @@ export function countTutorShortBioWords(value: string) {
 
 export const updateMyProfileInput = z.object({
   version: z.number().int(),
+  displayName: z.string().trim().min(1).max(255).optional(),
   shortBio: z
     .string()
     .max(2000)

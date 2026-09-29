@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { usePostHog } from "@posthog/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -11,6 +11,15 @@ import {
 } from "@cogito-app/ui/components/selia/avatar";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
+import {
+  Drawer,
+  DrawerBody,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerPopup,
+  DrawerTitle,
+} from "@cogito-app/ui/components/selia/drawer";
 import {
   Card,
   CardBody,
@@ -53,11 +62,11 @@ import {
   IconPhoto,
   IconSchool,
   IconChalkboardTeacher,
+  IconChevronUp,
   IconUser,
 } from "@tabler/icons-react";
 
 import { getUserFacingError } from "@/lib/error-message";
-import { authClient } from "@/lib/auth-client";
 import { resolveProfileImageUrl } from "@/lib/profile-image-url";
 import { ProfileImagePicker } from "@/components/profile/profile-image-picker";
 import { ProfilePhotoPreview } from "@/components/profile/profile-photo-preview";
@@ -488,6 +497,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isTutorTermsOpen, setIsTutorTermsOpen] = useState(false);
+  const [isMobileActionsOpen, setIsMobileActionsOpen] = useState(false);
   const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
   const hasRecordedTutorTermsAcceptance = Boolean(
     profile.termsOfServiceAcceptedAt,
@@ -497,34 +507,6 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     !hasRecordedTutorTermsAcceptance;
   const isTutorTermsBlockingSubmit =
     !hasRecordedTutorTermsAcceptance && !hasAcceptedTerms;
-  const savedNameRef = useRef(accountUser.name.trim());
-
-  const nameMutation = useMutation({
-    mutationFn: async (nextName: string) => {
-      const result = await authClient.updateUser({ name: nextName });
-      if (result.error) throw new Error(result.error.message);
-      return result.data;
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: orpc.auth.me.key() });
-    },
-    onError: (error: unknown) => {
-      toastManager.add({
-        title: "Name could not be saved",
-        description: getUserFacingError(error),
-        type: "error",
-      });
-    },
-  });
-
-  async function saveCanonicalName() {
-    const nextName = name.trim();
-    if (nextName !== savedNameRef.current) {
-      await nameMutation.mutateAsync(nextName);
-      savedNameRef.current = nextName;
-    }
-  }
-
   function clearError(field: string) {
     setErrors((prev) => {
       const next = { ...prev };
@@ -619,6 +601,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
   function getSavePayload() {
     const payload: {
       version: number;
+      displayName?: string;
       shortBio?: string;
       affiliation?: string;
       achievementProofUrls?: string[];
@@ -640,6 +623,8 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       bankTransferDisclaimerAccepted?: boolean;
       prices?: Record<string, number>;
     } = { version: profile.version };
+    const displayName = name.trim();
+    payload.displayName = displayName;
     const shortBio = form.shortBio.trim();
     const affiliation = form.affiliation.trim();
     const profileImageUrl = form.profileImageUrl.trim();
@@ -910,7 +895,6 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
 
     setErrors({});
     try {
-      await saveCanonicalName();
       await updateMutation.mutateAsync(getSavePayload());
       showUpdateSuccess(false);
     } catch {
@@ -920,7 +904,6 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
 
   async function submitValidatedProfile(acceptTerms = false) {
     try {
-      await saveCanonicalName();
       if (profile.onboardingStatus === "published") {
         // Published profile edits are staged by updateMyProfile itself. The
         // explicit submit action runs the complete form gate before putting
@@ -939,6 +922,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
   }
 
   function openTutorTerms() {
+    setIsMobileActionsOpen(false);
     setIsTutorTermsOpen(true);
   }
 
@@ -960,10 +944,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     profile.onboardingStatus === "draft" ||
     profile.onboardingStatus === "changes_requested";
   const isEditable = isDraft || profile.onboardingStatus === "published";
-  const isSubmitting =
-    nameMutation.isPending ||
-    updateMutation.isPending ||
-    submitMutation.isPending;
+  const isSubmitting = updateMutation.isPending || submitMutation.isPending;
   const statusBadge = TUTOR_STATUS_BADGES[profile.onboardingStatus] ?? {
     label: profile.onboardingStatus.replaceAll("_", " "),
     variant: "secondary" as const,
@@ -1196,7 +1177,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
             event.stopPropagation();
             handleSaveProgress();
           }}
-          className="flex flex-col gap-6"
+          className="flex flex-col gap-6 pb-24 sm:pb-0"
         >
           <div className="flex flex-col gap-6">
             <Card className="min-w-0">
@@ -2120,7 +2101,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
             </CardBody>
           </Card>
 
-          <Card className="sticky bottom-0 z-10 overflow-hidden *:border-none">
+          <Card className="sticky bottom-0 z-10 hidden overflow-hidden *:border-none sm:block">
             <CardFooter className="flex-col items-stretch gap-4 3xl:flex-row 3xl:items-center 3xl:justify-between">
               <div className="min-w-0 flex-1">
                 <Text className="font-medium">
@@ -2150,11 +2131,9 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                   size="sm"
                   variant="secondary"
                   className="w-full sm:w-auto"
-                  progress={nameMutation.isPending || updateMutation.isPending}
+                  progress={updateMutation.isPending}
                   disabled={
-                    nameMutation.isPending ||
-                    updateMutation.isPending ||
-                    submitMutation.isPending
+                    updateMutation.isPending || submitMutation.isPending
                   }
                   onClick={handleSaveProgress}
                 >
@@ -2166,14 +2145,11 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                     size="sm"
                     className="w-full sm:w-auto"
                     progress={
-                      nameMutation.isPending
-                        ? true
-                        : isDraft
-                          ? submitMutation.isPending
-                          : updateMutation.isPending
+                      isDraft
+                        ? submitMutation.isPending
+                        : updateMutation.isPending
                     }
                     disabled={
-                      nameMutation.isPending ||
                       updateMutation.isPending ||
                       submitMutation.isPending ||
                       isTutorTermsBlockingSubmit
@@ -2188,6 +2164,87 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
               </div>
             </CardFooter>
           </Card>
+
+          <div className="fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-30 sm:hidden">
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-auto w-full justify-between rounded-xl! px-4! py-3! shadow-popover"
+              onClick={() => setIsMobileActionsOpen(true)}
+            >
+              <span className="flex min-w-0 flex-col items-start gap-0.5">
+                <span className="font-medium">
+                  {isSubmitting
+                    ? "Saving…"
+                    : editedProfileSections.length > 0
+                      ? "Unsaved changes"
+                      : "Profile updates"}
+                </span>
+                <span className="text-xs font-normal text-muted">
+                  Review and submit profile
+                </span>
+              </span>
+              <IconChevronUp aria-hidden="true" />
+            </Button>
+          </div>
+
+          <Drawer
+            open={isMobileActionsOpen}
+            onOpenChange={setIsMobileActionsOpen}
+            swipeDirection="down"
+          >
+            <DrawerPopup direction="bottom" className="z-50 sm:hidden">
+              <DrawerHeader className="flex-col items-start gap-1.5 border-b border-drawer-border pb-4.5">
+                <DrawerTitle>
+                  {isDraft
+                    ? "Ready to move your profile forward?"
+                    : "Profile updates"}
+                </DrawerTitle>
+                <DrawerDescription>
+                  {isDraft
+                    ? "Save a draft while you work, or submit the completed profile for admin review."
+                    : "Save changes while you work, or submit the latest version for admin review."}
+                </DrawerDescription>
+              </DrawerHeader>
+              <DrawerBody>
+                <TutorTermsConsent
+                  accepted={hasRecordedTutorTermsAcceptance || hasAcceptedTerms}
+                  disabled={hasRecordedTutorTermsAcceptance || isSubmitting}
+                  error={errors.termsOfService}
+                  onAcceptedChange={(accepted) => {
+                    setHasAcceptedTerms(accepted);
+                    clearError("termsOfService");
+                  }}
+                  onOpenTerms={openTutorTerms}
+                />
+              </DrawerBody>
+              <DrawerFooter className="flex-col gap-3">
+                <Button
+                  type="button"
+                  block
+                  variant="secondary"
+                  progress={updateMutation.isPending}
+                  disabled={isSubmitting}
+                  onClick={handleSaveProgress}
+                >
+                  {isDraft ? "Save draft" : "Save profile changes"}
+                </Button>
+                <Button
+                  type="button"
+                  block
+                  progress={
+                    isDraft
+                      ? submitMutation.isPending
+                      : updateMutation.isPending
+                  }
+                  disabled={isSubmitting || isTutorTermsBlockingSubmit}
+                  onClick={handleSubmitForReview}
+                >
+                  {isDraft ? "Submit for review" : "Submit changes for review"}
+                </Button>
+              </DrawerFooter>
+            </DrawerPopup>
+          </Drawer>
         </form>
       ) : null}
 

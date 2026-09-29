@@ -615,15 +615,6 @@ describe("AdminTutor Service", () => {
           education: [{ university: "Old University", degree: "Old Degree" }],
         },
       };
-      const updated = { ...profile, version: 3 };
-      const deps = makeDeps({
-        adminTutorRepo: {
-          ...makeDeps().adminTutorRepo,
-          getTutorProfileById: mock(async () => profile),
-          updateTutorProfileWithVersion: mock(async () => [updated]),
-        },
-      });
-      const service = createAdminTutorService(deps as any);
       const education = [
         { university: "Universitas Gadjah Mada", degree: "Bachelor of Law" },
       ];
@@ -634,6 +625,26 @@ describe("AdminTutor Service", () => {
           awards: ["Diplomatic Commendation", "Best Delegate"],
         },
       ];
+      const updated = {
+        ...profile,
+        version: 3,
+        achievements,
+        pendingProfileChanges: {
+          education,
+        },
+      };
+      let profileReadCount = 0;
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getTutorProfileById: mock(async () => {
+            profileReadCount += 1;
+            return profileReadCount === 1 ? profile : updated;
+          }),
+          updateTutorProfileWithVersion: mock(async () => [updated]),
+        },
+      });
+      const service = createAdminTutorService(deps as any);
 
       await expect(
         service.updateTutorAchievements("admin1", {
@@ -666,6 +677,21 @@ describe("AdminTutor Service", () => {
           action: "tutor_achievements_updated",
           actorId: "admin1",
           targetId: "p1",
+          beforeState: expect.objectContaining({
+            education: profile.education,
+            achievements: profile.achievements,
+          }),
+          afterState: expect.objectContaining({
+            education: profile.education,
+            achievements,
+            pendingProfileChanges: { education },
+          }),
+          details: expect.objectContaining({
+            changedFields: expect.arrayContaining([
+              "achievements",
+              "pendingProfileChanges.education",
+            ]),
+          }),
         }),
       );
     });

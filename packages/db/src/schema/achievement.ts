@@ -43,6 +43,7 @@ export const achievement = pgTable(
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
   (table) => [
     check(
@@ -55,6 +56,7 @@ export const achievement = pgTable(
     ),
     index("achievement_userId_idx").on(table.userId),
     index("achievement_status_idx").on(table.status),
+    index("achievement_deletedAt_idx").on(table.deletedAt),
   ],
 );
 

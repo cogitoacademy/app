@@ -22,7 +22,7 @@ export function createAdminRouter(handler: AdminHandler) {
         tags: ["Admin", "Analytics"],
         summary: "Get admin dashboard analytics",
         description:
-          "Returns aggregate booking, audience, portfolio, and category metrics for the admin dashboard",
+          "Returns booking, account activity, wallet health, payment, portfolio, and demand metrics for the admin dashboard",
       })
       .input(dashboardAnalyticsInput)
       .handler(handler.getDashboardAnalytics),

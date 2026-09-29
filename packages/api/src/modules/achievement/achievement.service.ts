@@ -245,8 +245,57 @@ export function createAchievementService(deps: {
       limit: input?.limit ?? 50,
       offset: input?.offset ?? 0,
       status: input?.status,
+      deleted: input?.deleted ?? false,
     };
     return achievementRepo.adminList(db, withDefaults);
+  }
+
+  async function adminDelete(adminId: string, achievementId: string) {
+    return db.transaction(async (tx) => {
+      const existing = await achievementRepo.getById(tx, achievementId);
+      if (!existing) throw new AchievementNotFoundError(achievementId);
+      const updated = await achievementRepo.softDelete(
+        tx,
+        achievementId,
+        existing.version,
+      );
+      if (!updated)
+        throw new OptimisticLockError(achievementId, existing.version);
+      await auditPort.record({
+        db: tx,
+        actorId: adminId,
+        actorType: ACTOR_TYPE.ADMIN,
+        action: "achievement_deleted",
+        targetId: achievementId,
+        targetType: "achievement",
+        details: { previousStatus: existing.status },
+      });
+      return updated;
+    });
+  }
+
+  async function adminRestore(adminId: string, achievementId: string) {
+    return db.transaction(async (tx) => {
+      const existing = await achievementRepo.getById(tx, achievementId);
+      if (!existing) throw new AchievementNotFoundError(achievementId);
+      const updated = await achievementRepo.restore(
+        tx,
+        achievementId,
+        existing.version,
+      );
+      if (!updated)
+        throw new OptimisticLockError(achievementId, existing.version);
+      await auditPort.record({
+        db: tx,
+        actorId: adminId,
+        actorType: ACTOR_TYPE.ADMIN,
+        action: "achievement_restored",
+        targetId: achievementId,
+        targetType: "achievement",
+        details: { previousStatus: existing.status },
+      });
+      return updated;
+    });
   }
 
   async function adminStats() {
@@ -327,6 +376,8 @@ export function createAchievementService(deps: {
     adminList,
     adminStats,
     adminReview,
+    adminDelete,
+    adminRestore,
   };
 }
 

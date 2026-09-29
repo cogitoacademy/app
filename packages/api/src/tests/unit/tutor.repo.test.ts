@@ -2,6 +2,7 @@ import { describe, expect, mock, test } from "bun:test";
 import {
   deactivateFutureRecurringAvailability,
   listProfileHistory,
+  updateProfileDisplayName,
   updateStatus,
 } from "../../modules/tutor/tutor.repo";
 
@@ -69,5 +70,18 @@ describe("TutorRepo", () => {
     const values = set.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(values.termsOfServiceAcceptedAt).toBeDefined();
     expect(values.termsOfServiceVersion).toBeDefined();
+  });
+
+  test("updates the canonical profile display name", async () => {
+    const returning = mock(async () => [{ id: "user-1", name: "New Name" }]);
+    const where = mock(() => ({ returning }));
+    const set = mock(() => ({ where }));
+    const update = mock(() => ({ set }));
+    const conn = { update } as any;
+
+    await expect(
+      updateProfileDisplayName(conn, "user-1", "New Name"),
+    ).resolves.toEqual({ id: "user-1", name: "New Name" });
+    expect(set).toHaveBeenCalledWith({ name: "New Name" });
   });
 });

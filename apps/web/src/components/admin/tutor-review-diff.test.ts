@@ -4,6 +4,7 @@ import {
   buildTutorReviewDiffs,
   filterTutorReviewDiffs,
   getTutorReviewDiffStatus,
+  isActualTutorReviewChange,
   isTutorReviewValueEmpty,
   summarizeTutorReviewDiffs,
 } from "./tutor-review-diff";
@@ -85,5 +86,13 @@ describe("tutor review diff filtering", () => {
       filled: 1,
       empty: 0,
     });
+  });
+
+  test("identifies only real review changes", () => {
+    expect(isActualTutorReviewChange("added")).toBe(true);
+    expect(isActualTutorReviewChange("modified")).toBe(true);
+    expect(isActualTutorReviewChange("removed")).toBe(true);
+    expect(isActualTutorReviewChange("filled")).toBe(false);
+    expect(isActualTutorReviewChange("empty")).toBe(false);
   });
 });

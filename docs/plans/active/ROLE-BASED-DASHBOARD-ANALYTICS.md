@@ -1,6 +1,6 @@
 # Role-Based Dashboard Analytics
 
-Status: **Implementation in progress - dashboard read/widgets and semantic/ops slice landed locally (2026-09-25)**
+Status: **Implementation in progress - account/payment BI, dashboard read/widgets, and semantic/ops slice landed locally (2026-09-29)**
 
 ## Objective
 
@@ -38,13 +38,18 @@ Completed in current worktree:
   exceptions, tutor review, and achievement review.
 - Admin labels distinguish locked booking snapshots, proposer-based active
   counts, and the live all-time state portfolio.
+- Admin analytics supports 7/30/90-day presets plus a 366-day custom WIB range,
+  with current/rolling account activity, current Marks ownership, lifetime paid
+  conversion, and selected-range gross/refund/net top-up revenue.
 - Dashboard booking dates use `WIB` for `Asia/Jakarta`; the shared empty-state
   dashed-border experiment was reverted.
 
 Still pending:
 
 - Tutor period payout/capacity/request-outcome aggregates.
-- Admin realized payment/payout, funnel, supply-demand, and SLA aggregates.
+- Admin payout, booking funnel, supply-demand, and SLA aggregates. Realized
+  top-up payment/refund reporting is now present; accounting-grade recognition
+  still needs a dedicated settlement timestamp/model.
 - Group-participant active-user definition, retention cohorts, and event-based
   conversion analytics.
 

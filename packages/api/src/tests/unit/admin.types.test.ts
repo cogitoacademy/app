@@ -17,6 +17,49 @@ describe("Admin Types (Zod schemas)", () => {
     );
   });
 
+  test("dashboardAnalyticsInput validates custom ranges", () => {
+    expect(
+      dashboardAnalyticsInput.safeParse({
+        dateFrom: "2026-01-01",
+        dateTo: "2026-12-31",
+      }).success,
+    ).toBe(true);
+    expect(
+      dashboardAnalyticsInput.safeParse({ dateFrom: "2026-01-01" }).success,
+    ).toBe(false);
+    expect(
+      dashboardAnalyticsInput.safeParse({
+        period: "30d",
+        dateFrom: "2026-01-01",
+        dateTo: "2026-01-31",
+      }).success,
+    ).toBe(false);
+    expect(
+      dashboardAnalyticsInput.safeParse({
+        dateFrom: "2026-12-31",
+        dateTo: "2026-01-01",
+      }).success,
+    ).toBe(false);
+    expect(
+      dashboardAnalyticsInput.safeParse({
+        dateFrom: "2026-02-31",
+        dateTo: "2026-03-01",
+      }).success,
+    ).toBe(false);
+    expect(
+      dashboardAnalyticsInput.safeParse({
+        dateFrom: "2026-13-01",
+        dateTo: "2026-13-02",
+      }).success,
+    ).toBe(false);
+    expect(
+      dashboardAnalyticsInput.safeParse({
+        dateFrom: "2028-02-29",
+        dateTo: "2028-03-01",
+      }).success,
+    ).toBe(true);
+  });
+
   test("listUsersInput defaults limit and offset", () => {
     const result = listUsersInput.safeParse(undefined);
     expect(result.success).toBe(true);

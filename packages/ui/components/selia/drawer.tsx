@@ -107,11 +107,13 @@ export function DrawerPopup({
   direction = "right",
   portalContainer,
   backdrop = true,
+  backdropBlur = true,
   ...props
 }: React.ComponentProps<typeof BaseDrawer.Popup> &
   VariantProps<typeof drawerPopupVariants> & {
     portalContainer?: HTMLElement | null;
     backdrop?: boolean;
+    backdropBlur?: boolean;
   }) {
   const inlined = portalContainer !== undefined;
 
@@ -124,18 +126,17 @@ export function DrawerPopup({
             "inset-0 min-h-dvh",
             inlined ? "absolute" : "fixed",
             inlined
-              ? [
-                  "bg-[rgb(0_0_0/calc(0.2*(1-var(--drawer-swipe-progress,0))))]",
-                  "[backdrop-filter:blur(calc(4px*(1-var(--drawer-swipe-progress,0))))]",
-                ]
+              ? ["bg-[rgb(0_0_0/calc(0.2*(1-var(--drawer-swipe-progress,0))))]"]
               : [
                   "bg-[rgb(0_0_0/calc(0.6*(1-var(--drawer-swipe-progress,0))))]",
-                  "[backdrop-filter:blur(calc(4px*(1-var(--drawer-swipe-progress,0))))]",
                 ],
+            backdropBlur &&
+              "[backdrop-filter:blur(calc(4px*(1-var(--drawer-swipe-progress,0))))]",
             "transition-[background-color,backdrop-filter] duration-[450ms] ease-[cubic-bezier(0.32,0.72,0,1)]",
             "data-[swiping]:duration-0",
-            "data-[starting-style]:bg-transparent data-[starting-style]:[backdrop-filter:blur(0px)]",
-            "data-[ending-style]:bg-transparent data-[ending-style]:[backdrop-filter:blur(0px)]",
+            "data-[starting-style]:bg-transparent data-[ending-style]:bg-transparent",
+            backdropBlur &&
+              "data-[starting-style]:[backdrop-filter:blur(0px)] data-[ending-style]:[backdrop-filter:blur(0px)]",
             "data-[ending-style]:duration-[calc(var(--drawer-swipe-strength)*400ms)]",
           )}
         />

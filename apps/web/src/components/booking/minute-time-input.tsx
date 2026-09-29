@@ -71,6 +71,7 @@ export function MinuteTimeInput({
   disabled,
   minTime,
   maxTime,
+  showIcon = true,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -79,6 +80,7 @@ export function MinuteTimeInput({
   disabled?: boolean;
   minTime?: string;
   maxTime?: string;
+  showIcon?: boolean;
 }) {
   const [focused, setFocused] = useState(false);
   const suggestions = useMemo(() => {
@@ -98,7 +100,9 @@ export function MinuteTimeInput({
 
   return (
     <div data-slot="minute-time-input" className="relative">
-      <IconClock className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted" />
+      {showIcon ? (
+        <IconClock className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted" />
+      ) : null}
       <Input
         id={id}
         aria-label={ariaLabel}
@@ -111,7 +115,7 @@ export function MinuteTimeInput({
         aria-invalid={invalid}
         aria-autocomplete="list"
         aria-controls={id ? `${id}-suggestions` : undefined}
-        className="pl-9 font-mono"
+        className={showIcon ? "pl-9 font-mono" : "font-mono"}
         maxLength={5}
         onChange={(event) => {
           let next = event.target.value.replace(/[^\d:]/g, "").slice(0, 5);

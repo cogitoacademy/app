@@ -1,6 +1,40 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-09-27
+Last updated: 2026-09-29
+
+## Complete tutor profile change history (2026-09-29)
+
+Every successful tutor profile save, including canonical account-name changes,
+writes one audit entry with complete
+`beforeState` and `afterState` snapshots of the profile, even when one small
+field changed. `details.changedFields` identifies changed leaf paths for quick
+scanning. This covers direct-live fields, review-gated proposals, specialization
+IDs, and profile photos. Revisions to an existing proposal compare against the
+previous proposed value rather than the public value. Admin approval history
+also snapshots the complete profile after promoting pending fields. The admin
+review timeline expands changed fields into exact before/after values and keeps
+photo previews in the same general history. The pending comparison panel is
+labeled **Fields awaiting approval**, lists only actual added/changed/removed
+review-gated fields, and distinguishes those proposals from direct-live edits.
+The full review history appears alongside the profile review sections and keeps
+direct-live edits, status transitions, and photo previews visible together.
+Profile, account-name, subject, photo, and audit writes share one database
+transaction. Reverting the final pending proposal clears both
+`pendingProfileChanges` and `profileEditStatus` instead of leaving an empty
+review task.
+
+## Knowledge Bank PDF drawer (2026-09-29)
+
+Knowledge Bank PDF previews now use a responsive Selia drawer: bottom sheet
+below `sm`, right-side drawer from `sm` upward. The browser-native PDF iframe
+is no longer sandboxed because sandboxing blocked native PDF viewers in some
+browsers. The protected file proxy, role and Marks checks, CSP frame allowlist,
+and new-tab fallback remain unchanged. This drawer disables backdrop blur to
+avoid Chromium compositor artifacts after its native PDF viewer finishes loading.
+
+## Automatic admin override financial policy (2026-09-28)
+
+Emergency overrides now derive their financial outcome from the selected category instead of asking the admin to separately choose Marks handling or participants. `student_no_show` forfeits every student's held Marks and keeps the tutor eligible for the booking's normal payout. `tutor_no_show`, `medical_emergency`, `technical_failure`, `admin_correction`, and `force_cancel` return student holds and make the tutor ineligible for payment. Every student participant and the booking's assigned tutor are included in notifications automatically, even when no tutor participant row exists. The responsive drawer presents the category policy in an info/warning notice, separates student wallet effects from tutor payout effects, and shows a read-only participant roster with avatars, roles, confirmation state, and held Marks. It opens from the bottom on mobile and from the right on desktop, with an independently scrolling body and fixed action footer. The review card exposes booking-state, wallet-balance, and tutor-payout before/after outcomes through a compact info preview. Override metadata records the resolved policy. Legacy API callers may still send explicit `marksAction` and `affectedParticipants`, but the web flow always uses the category policy.
 
 ## PostHog browser analytics and auth attribution (2026-09-27)
 
@@ -33,6 +67,14 @@ from protected `booking.listMine` counts: needs action, upcoming, completed,
 and problem outcomes. Students also see verified achievement count from
 `achievement.stats` and a wallet-readiness CTA; tutors see active availability
 windows from `tutor.listAvailability` and the nearest available action deadline.
+Tutor dashboard's **Needs action** queue uses `booking.listMine({ view: "action" })`,
+matching the Bookings page instead of locally selecting only tutor-review requests.
+Admin **Booked value** displays IDR as the primary amount, Marks as its supporting
+equivalent, and platform share in both units. Values come from pricing locked when
+each booking was created; later economy changes do not rewrite historical totals.
+During a mixed frontend/API rollout where locked IDR aggregate fields are absent,
+the card temporarily estimates IDR from Marks using the active economy rate and
+labels that fallback explicitly instead of rendering an invalid amount.
 Admin `/dashboard` shows queue counts for escalated bookings, booking
 exceptions, tutor reviews, and achievement reviews using existing admin reads.
 
@@ -41,6 +83,19 @@ all-time/live, selected-period trends use WIB calendar days, and booked Marks
 plus platform take are locked booking snapshots rather than cash revenue.
 `activeLearners` remains proposer-based and is rendered as **Active booking
 proposers** until group-participant and login-activity definitions are approved.
+Admins can use 7/30/90-day presets or an inclusive custom WIB range of up to
+366 valid calendar days; impossible dates are rejected at the RPC boundary.
+Account insights separate current/rolling snapshots from selected-
+range metrics: total accounts and current student Marks ownership are current;
+MAU, inactivity, and churn use rolling 30-day auth-session activity; signups and
+realized top-up revenue use the selected range. Paid conversion is lifetime
+students with a `PAID`/`SETTLED` top-up divided by all student accounts. Gross
+range revenue uses successful payment `updatedAt` as the available settlement-
+time proxy, while refund rows are reported separately and subtracted for net
+top-up revenue.
+During mixed frontend/API rollout, older analytics responses without
+`businessSummary` keep the existing admin dashboard usable; account and revenue
+cards appear once the updated API is active.
 No new RPC endpoint was added. Remaining plan work: tutor capacity/payout
 analytics and admin payment, funnel, supply-demand, and SLA aggregates.
 Booking date copy uses `WIB` for `Asia/Jakarta` instead of `GMT+7`; other
@@ -210,7 +265,8 @@ actions card is removed; Student notes and tutor Session feedback live in the
 Session overview, while support reports remain in the main flow. Lateness
 reporting is an accessible icon-only secondary action. This
 supersedes older placement notes below that refer to contextual booking actions
-in the sticky rail.
+in the sticky rail. The user-facing state timeline is labeled **History**;
+internal state-history and activity component names remain unchanged.
 
 ## Competition field color tokens (2026-09-08)
 
@@ -607,7 +663,10 @@ a separate `SEED_REVIEW_ADMIN_EMAIL` and refuses to reuse any address in
 `ADMIN_EMAILS`; local/test seed keeps `admin@cogitoacademy.id`. Its review
 student has verified local authentication and seeded Marks, while its review
 tutor has a published structured profile, normalized specializations, and future
-availability. Default launch identities are Diego by Cogito for the tutor and
+availability. The presentation booking seed creates an idempotent wallet hold
+for the review student and repairs older scheduled presentation rows that were
+created without that ledger entry, so tutor completion settles student-held
+Marks rather than failing with insufficient balance. Default launch identities are Diego by Cogito for the tutor and
 Andre, Argya, and Athena by Cogito for the three students, using
 `cogito.<name>@yopmail.com` addresses. The Google Calendar operator password is never part of reviewer
 credentials. Additional admins can still be granted through the existing admin
@@ -641,12 +700,13 @@ stays in normal document flow so the page ends without trailing scroll space.
 This is presentation-only.
 
 All roles use Better Auth `user.name` as the single canonical visible name.
-Tutor onboarding edits that account name directly and no longer submits
-`tutorProfile.displayName`; tutor
-discovery, booking, dashboards, sidebar, and admin review render `user.name`.
-The legacy tutor-profile column and compatible response key remain temporarily,
-but the response key is projected from `user.name` and new UI does not depend on
-the stored legacy value.
+Tutor onboarding sends a changed account name through the transport-only
+`displayName` input on `tutor.updateMyProfile`; the service updates `user.name`
+and its audit entry atomically, not a second `tutorProfile.displayName` value.
+Tutor discovery, booking, dashboards, sidebar, and admin review render
+`user.name`. The legacy tutor-profile column and compatible response key remain
+temporarily, but the response key is projected from `user.name` and new UI does
+not depend on the stored legacy value.
 
 Collection empty states use the shared presentation component at `apps/web/src/components/empty-state.tsx`. `EmptyStateCard` is used for page and card-level states, while `EmptyState` supports `default`, `compact`, and `inline` density for calendars, menus, dialogs, fields, and embedded lists. Empty copy distinguishes a genuinely empty collection from a filtered no-match state; the component uses Selia tokens and provides success, warning, secondary, and danger tones without changing any API or persistence contract. The audit covers calendar periods, resource and tutor discovery, bookings, notifications, session/activity history, Marks ledgers, specialization selection, tutor proof links, and availability previews.
 
@@ -699,7 +759,7 @@ Competition Calendar and Knowledge Bank content are now delivered inside the aut
 
 - `content.listCompetitions` is protected for every authenticated role and powers `/_app/calendar`. Admins see an `Edit competitions` button that opens the `competition` list in Sanity Studio (`https://cogitoacademy.sanity.studio`).
 - The authenticated calendar keeps the academy's read-only interaction model: month view with multi-day event spans and overflow popup, a flat 30-day agenda list that shows each overlapping competition once in first-event-date order, keyboard shortcuts (`M`/`A`), period navigation, a responsive event-details drawer (right-side on desktop, bottom sheet on mobile), and a toolbar type filter (multi-select across the seven competition fields, all-on by default) that narrows both the month and agenda views. Its colors, controls, and icons use the app's Selia design system; the academy's bilingual copy is not carried into the English-only app. The calendar route uses a contained viewport shell: the page heading and calendar toolbar stay in place while the calendar body owns vertical scrolling, and the month grid owns horizontal scrolling. A month with no events still renders the normal calendar grid so users can navigate dates; only the page-level no-competition state and event-free agenda period use empty-state messaging.
-- `content.listStudentResources` powers the authenticated `/knowledge-bank` route for students, tutors, and admins. Admins see an `Edit resources` button that opens the `studentResource` list in Sanity Studio. Students receive resources after `wallet.knowledgeBankEligible` confirms the existing 35-Mark total-balance threshold (held Marks count) or an active admin grant; tutors and admins bypass that wallet threshold. Resource category slugs are presented as readable labels in the UI without changing the API values used for filtering.
+- `content.listStudentResources` powers the authenticated `/knowledge-bank` route for students, tutors, and admins. Admins see an `Edit resources` button that opens the `studentResource` list in Sanity Studio. Students receive resources after `wallet.knowledgeBankEligible` confirms the existing 35-Mark total-balance threshold (held Marks count) or an active admin grant; tutors and admins bypass that wallet threshold. Resource category slugs are presented as readable labels in the UI without changing the API values used for filtering. PDF previews use an unsandboxed browser-native iframe inside a bottom drawer on mobile and a right-side drawer on desktop, with a new-tab fallback.
 - Knowledge Bank list responses never expose Sanity asset URLs. `GET /content/knowledge-bank/:resourceId/file` rechecks the student/tutor/admin role and wallet threshold, with the threshold bypassed for tutors and admins or while a student's admin grant is unexpired, fetches the published Sanity asset server-side, and streams it with private/no-store cache headers. The file response may be framed only by the configured app origin so the cross-subdomain PDF preview works; every other API route retains `X-Frame-Options: DENY` and `frame-ancestors 'none'`. The proxy is hardened (`apps/server/src/content-proxy.ts`): host allowlist (`cdn.sanity.io` / `*.sanity.io` — anything else is a 502 before any fetch), a 10s `AbortController` timeout, and a 5MB cap enforced on `content-length` and on the streamed body; the route is rate-limited 30/min per IP (`content` kind, `rate-limit-paths.ts`).
 - The academy landing site remains bilingual. Its calendar and Knowledge Bank navigation uses app-login CTAs with an internal redirect target; the old localized URLs remain compatibility redirects rather than public content pages.
 
@@ -745,6 +805,7 @@ Booking detail also renders the current response window for deadline-bound state
 ## Email notifications (P1/P2, PRD notification matrix)
 
 - **Group/group-series invitee email (P1):** the invitee notification written by `booking.service.ts` (`createGroup`/`createGroupSeries`) carries the PRD-mandated content in its body — full schedule, per-student price, total Marks hold, the no-opt-out disclaimer (series only), and a direct in-platform CTA (`${CORS_ORIGIN}/bookings/{bookingId}`). Because `notification.write` uses `notif.body` as the email `html`, the CTA is present in both the in-app notification and the dispatched email.
+- **Invitation-phase closure:** `declineInvite` and proposer-side `withdrawInvite` lock the parent booking before mutating an invitation, then query remaining pending invitees. Concurrent final responses therefore serialize. While any remain, participant confirmation continues. Once none remain, fewer than two confirmed participants causes hold release and expiry (plus group-series session cancellation), a viable partial group enters fresh reconfirmation, and a full group advances to tutor review.
 - **Signup verification/welcome email (P2/G2):** a new email/password signup receives one `auth` email through Better Auth's email-OTP signup hook. The combined template includes the welcome/onboarding entry point, login link, brief platform intro, and six-digit verification OTP, saving one provider delivery compared with separate messages. Resends, legacy-account verification, sign-in OTPs, and password/change-email OTPs remain scoped to their existing authentication purpose; an existing-user sign-in never re-sends signup welcome copy.
 
 ## Tutor invite flow
@@ -1075,6 +1136,7 @@ The tutor `/profile` editor presents Education, Achievements, and Experiences in
 - Student achievement levels are presented in this order: `International`, `National`, `Province/State`, `City/Regency`, `School`. The student proof field gives Google Drive guidance (upload proof, set General access to “Anyone with the link” + Viewer, then paste the link); students do not provide the public documentation image.
 - The student form uses one clear Location value (for example `Jakarta, Indonesia`, `Geneva, Switzerland`, or `Online`) and a long-answer `Brief Description` field with a ranked-result example. The public documentation image is an admin-only correction field.
 - `adminUpdate` lets admins correct all submission fields plus the public documentation image while a record is `pending`/`pending_review`; it uses the row version as a compare-and-swap, writes an `achievement_admin_updated` audit record, and leaves status unchanged until the separate review action.
+- Admin soft-delete/restore commits its row mutation and audit record atomically. Aggregate moderation counts exclude soft-deleted rows.
 - The achievement form uses the shared Selia calendar; selected/today states are drawn on the rounded day button rather than its square grid cell. Add, edit, and admin-correction forms open as swipe-down bottom drawers below the `sm` breakpoint and right-side drawers at `sm` and above. Their portal-based date picker and Category/Level selects render above the drawer so every popup control remains interactive.
 
 ### Wallet Module (protected)
@@ -1187,6 +1249,7 @@ Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded
 
 | Plan                                                              | Branch                                                                              | Status                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `docs/plans/completed/KNOWLEDGE-BANK-PDF-DRAWER.md`               | working tree                                                                        | **Completed (2026-09-29)** — restored native PDF rendering by removing iframe sandbox and replaced centered preview modal with responsive bottom/mobile and right/desktop drawer                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `docs/plans/completed/KNOWLEDGE-BANK-ACCESS-OVERRIDE.md`          | working tree                                                                        | **Completed (2026-09-18)** — admin-managed student Knowledge Bank access grants with expiry, audit trail, UI, and read-time threshold enforcement                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `docs/plans/completed/WEBSITE-AUDIT-P1-HARDENING.md`              | working tree                                                                        | **Completed (2026-08-29)** — cross-booking no-show ownership guard, locked/stale-safe reschedule decisions, database-backed room overlap prevention, and sidebar type-gate repair                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `docs/plans/completed/WEBSITE-AUDIT-P2-HARDENING.md`              | `f/website-audit-hardening`                                                         | **Completed (2026-08-29)** — HTTP(S)-only external links, final-attempt DLQ routing, and optimistic concurrency for achievement/tutor moderation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |

@@ -29,6 +29,8 @@ describe("Admin Service", () => {
             activeLearners: "3",
             grossMarks: "120",
             platformTakeMarks: "24",
+            grossIdr: "600000",
+            platformTakeIdr: "120000",
           },
           userSummary: { newStudents: "3", newTutors: "1" },
           bookingTrend: [
@@ -46,6 +48,25 @@ describe("Admin Service", () => {
           categoryBreakdown: [
             { category: "Mathematics", bookings: "4", completed: "2" },
           ],
+          accountSummary: {
+            totalAccounts: "20",
+            totalStudents: "16",
+            totalTutors: "3",
+            signups: "4",
+            monthlyActiveUsers: "8",
+            inactiveUsers: "5",
+            previousActiveUsers: "10",
+            churnedUsers: "2",
+          },
+          marksSummary: {
+            studentsWithMarks: "9",
+            studentsWithoutMarks: "7",
+          },
+          paymentSummary: {
+            payingStudents: "6",
+            grossRevenueIdr: "1250000",
+          },
+          refundSummary: { refundedIdr: "100000" },
         })),
       };
       const service = createAdminService({
@@ -56,7 +77,7 @@ describe("Admin Service", () => {
         payout: {} as any,
       });
 
-      const result = await service.getDashboardAnalytics("7d");
+      const result = await service.getDashboardAnalytics({ period: "7d" });
 
       expect(result.period).toBe("7d");
       expect(result.bookingTrend).toHaveLength(7);
@@ -77,14 +98,37 @@ describe("Admin Service", () => {
         newTutors: 1,
         grossMarks: 120,
         platformTakeMarks: 24,
+        grossIdr: 600000,
+        platformTakeIdr: 120000,
       });
       expect(result.bookingTrend.some((row) => row.bookings === 0)).toBe(true);
       expect(result.stateBreakdown).toEqual([{ state: "completed", count: 2 }]);
+      expect(result.businessSummary).toEqual({
+        totalAccounts: 20,
+        totalStudents: 16,
+        totalTutors: 3,
+        signups: 4,
+        monthlyActiveUsers: 8,
+        inactiveUsers: 5,
+        churnedUsers: 2,
+        churnRate: 20,
+        studentsWithMarks: 9,
+        studentsWithoutMarks: 7,
+        studentsWithMarksRate: 56.3,
+        payingStudents: 6,
+        paidConversionRate: 37.5,
+        grossRevenueIdr: 1_250_000,
+        refundedIdr: 100_000,
+        netRevenueIdr: 1_150_000,
+      });
       expect(repo.getDashboardAnalytics).toHaveBeenCalledWith(
         expect.anything(),
         {
           periodStart: expect.any(Date),
           periodEnd: expect.any(Date),
+          activeSince: expect.any(Date),
+          previousActiveSince: expect.any(Date),
+          now: expect.any(Date),
         },
       );
     });
@@ -99,6 +143,10 @@ describe("Admin Service", () => {
           stateBreakdown: [],
           modalityBreakdown: [],
           categoryBreakdown: [],
+          accountSummary: {},
+          marksSummary: {},
+          paymentSummary: {},
+          refundSummary: {},
         })),
       };
       const service = createAdminService({
@@ -114,6 +162,41 @@ describe("Admin Service", () => {
       expect(result.period).toBe("30d");
       expect(result.bookingTrend).toHaveLength(30);
       expect(result.summary.completionRate).toBe(0);
+    });
+
+    test("uses an inclusive custom WIB date range", async () => {
+      const repo = {
+        getDashboardAnalytics: mock(async () => ({
+          bookingSummary: {},
+          userSummary: {},
+          bookingTrend: [],
+          userTrend: [],
+          stateBreakdown: [],
+          modalityBreakdown: [],
+          categoryBreakdown: [],
+          accountSummary: {},
+          marksSummary: {},
+          paymentSummary: {},
+          refundSummary: {},
+        })),
+      };
+      const service = createAdminService({
+        adminRepo: repo as any,
+        auditPort: {} as any,
+        db: {} as any,
+        wallet: {} as any,
+        payout: {} as any,
+      });
+
+      const result = await service.getDashboardAnalytics({
+        dateFrom: "2026-08-01",
+        dateTo: "2026-08-03",
+      });
+
+      expect(result.period).toBe("custom");
+      expect(result.periodStart).toBe("2026-07-31T17:00:00.000Z");
+      expect(result.periodEnd).toBe("2026-08-03T16:59:59.999Z");
+      expect(result.bookingTrend).toHaveLength(3);
     });
   });
 

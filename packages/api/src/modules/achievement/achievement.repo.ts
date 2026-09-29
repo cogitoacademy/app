@@ -5,6 +5,7 @@ import {
   eq,
   getTableColumns,
   inArray,
+  isNull,
   sql,
 } from "drizzle-orm";
 import { achievement, user } from "@cogito-app/db/schema";
@@ -43,6 +44,7 @@ export interface UpdateAchievementData {
 
 export interface AdminListInput {
   status?: string;
+  deleted?: boolean;
   limit: number;
   offset: number;
 }
@@ -66,7 +68,10 @@ async function listByUserId(
   userId: string,
   input?: AchievementListInput,
 ) {
-  const conditions = [eq(achievement.userId, userId)];
+  const conditions = [
+    eq(achievement.userId, userId),
+    isNull(achievement.deletedAt),
+  ];
   if (input?.category) {
     conditions.push(eq(achievement.category, input.category));
   }
@@ -100,6 +105,7 @@ async function countAll(conn: DbOrTx) {
   return conn
     .select({ status: achievement.status, count: count() })
     .from(achievement)
+    .where(isNull(achievement.deletedAt))
     .groupBy(achievement.status);
 }
 
@@ -127,7 +133,11 @@ export async function listApprovedPublic(conn: DbOrTx) {
     .from(achievement)
     .innerJoin(user, eq(user.id, achievement.userId))
     .where(
-      and(eq(achievement.status, "approved"), eq(achievement.visibility, true)),
+      and(
+        eq(achievement.status, "approved"),
+        eq(achievement.visibility, true),
+        isNull(achievement.deletedAt),
+      ),
     )
     .orderBy(desc(achievement.awardingDate), desc(achievement.createdAt))
     .limit(100);
@@ -288,7 +298,7 @@ async function deleteWithVersion(
  * @returns the matching achievement rows, newest first
  */
 async function adminList(conn: DbOrTx, input: AdminListInput) {
-  const { limit, offset, status } = input;
+  const { limit, offset, status, deleted = false } = input;
   return conn
     .select({
       ...getTableColumns(achievement),
@@ -302,11 +312,16 @@ async function adminList(conn: DbOrTx, input: AdminListInput) {
     .from(achievement)
     .leftJoin(user, eq(achievement.userId, user.id))
     .where(
-      status === "pending"
-        ? inArray(achievement.status, ["pending", "pending_review"])
-        : status
-          ? eq(achievement.status, status)
-          : undefined,
+      and(
+        deleted
+          ? sql`${achievement.deletedAt} IS NOT NULL`
+          : isNull(achievement.deletedAt),
+        status === "pending"
+          ? inArray(achievement.status, ["pending", "pending_review"])
+          : status
+            ? eq(achievement.status, status)
+            : sql`true`,
+      ),
     )
     .orderBy(desc(achievement.createdAt))
     .limit(limit)
@@ -320,6 +335,26 @@ async function adminList(conn: DbOrTx, input: AdminListInput) {
  * @param id - the achievement id
  * @returns the achievement row, or null when not found
  */
+async function softDelete(conn: DbOrTx, id: string, expectedVersion: number) {
+  return conn
+    .update(achievement)
+    .set({ deletedAt: new Date(), version: sql`${achievement.version} + 1` })
+    .where(
+      and(eq(achievement.id, id), eq(achievement.version, expectedVersion)),
+    )
+    .returning();
+}
+
+async function restore(conn: DbOrTx, id: string, expectedVersion: number) {
+  return conn
+    .update(achievement)
+    .set({ deletedAt: null, version: sql`${achievement.version} + 1` })
+    .where(
+      and(eq(achievement.id, id), eq(achievement.version, expectedVersion)),
+    )
+    .returning();
+}
+
 async function getById(conn: DbOrTx, id: string) {
   const [existing] = await conn
     .select({ ...getTableColumns(achievement) })
@@ -379,6 +414,8 @@ export function createAchievementRepo() {
     deleteWithVersion,
     adminList,
     getById,
+    softDelete,
+    restore,
     updateStatus,
   };
 }

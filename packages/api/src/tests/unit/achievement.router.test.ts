@@ -26,11 +26,15 @@ describe("achievementRouter", () => {
         stats: mock(async () => ({})),
         adminStats: mock(async () => ({})),
         adminReview: mock(async () => ({})),
+        adminDelete: mock(async () => ({})),
+        adminRestore: mock(async () => ({})),
       } as any,
     });
     const router = createAchievementRouter(handler);
     expect(Object.keys(router).toSorted()).toEqual([
+      "adminDelete",
       "adminList",
+      "adminRestore",
       "adminReview",
       "adminStats",
       "adminUpdate",
@@ -151,6 +155,36 @@ describe("achievementRouter", () => {
 });
 
 describe("achievementHandler", () => {
+  describe("admin lifecycle", () => {
+    test("calls adminDelete with admin and achievement ids", async () => {
+      const adminDelete = mock(async () => ({ id: "a1" }));
+      const handler = createAchievementHandler({
+        achievementService: { adminDelete } as any,
+      });
+
+      await handler.adminDelete({
+        context: { session: { user: { id: "admin1" } } } as any,
+        input: { achievementId: "a1" },
+      });
+
+      expect(adminDelete).toHaveBeenCalledWith("admin1", "a1");
+    });
+
+    test("calls adminRestore with admin and achievement ids", async () => {
+      const adminRestore = mock(async () => ({ id: "a1" }));
+      const handler = createAchievementHandler({
+        achievementService: { adminRestore } as any,
+      });
+
+      await handler.adminRestore({
+        context: { session: { user: { id: "admin1" } } } as any,
+        input: { achievementId: "a1" },
+      });
+
+      expect(adminRestore).toHaveBeenCalledWith("admin1", "a1");
+    });
+  });
+
   describe("list", () => {
     test("calls achievementService.list with userId", async () => {
       const list = mock(async () => [{ id: "a1" }]);

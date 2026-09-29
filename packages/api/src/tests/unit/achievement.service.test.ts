@@ -263,6 +263,96 @@ describe("Achievement Service", () => {
     });
   });
 
+  describe("admin soft deletion", () => {
+    test("deletes and audits in the same transaction", async () => {
+      const tx = { id: "tx" };
+      const transaction = mock(async (fn: any) => fn(tx));
+      const softDelete = mock(async () => ({
+        id: "a1",
+        deletedAt: new Date(),
+      }));
+      const record = mock(async () => {});
+      const service = createAchievementService({
+        achievementRepo: {
+          getById: mock(async () => makeAchievement()),
+          softDelete,
+        } as any,
+        auditPort: { record } as any,
+        notificationPort: { writeBestEffort: mock(async () => {}) } as any,
+        db: { transaction } as any,
+      });
+
+      await service.adminDelete("admin1", "a1");
+
+      expect(softDelete).toHaveBeenCalledWith(tx, "a1", undefined);
+      expect(record).toHaveBeenCalledWith(
+        expect.objectContaining({ db: tx, action: "achievement_deleted" }),
+      );
+    });
+
+    test("propagates audit failure through the delete transaction", async () => {
+      const tx = { id: "tx" };
+      let rolledBack = false;
+      const transaction = mock(async (fn: any) => {
+        try {
+          return await fn(tx);
+        } catch (error) {
+          rolledBack = true;
+          throw error;
+        }
+      });
+      const softDelete = mock(async () => ({
+        id: "a1",
+        deletedAt: new Date(),
+      }));
+      const record = mock(async () => {
+        throw new Error("audit failed");
+      });
+      const service = createAchievementService({
+        achievementRepo: {
+          getById: mock(async () => makeAchievement()),
+          softDelete,
+        } as any,
+        auditPort: { record } as any,
+        notificationPort: { writeBestEffort: mock(async () => {}) } as any,
+        db: { transaction } as any,
+      });
+
+      await expect(service.adminDelete("admin1", "a1")).rejects.toThrow(
+        "audit failed",
+      );
+
+      expect(softDelete).toHaveBeenCalledWith(tx, "a1", undefined);
+      expect(record).toHaveBeenCalledWith(
+        expect.objectContaining({ db: tx, action: "achievement_deleted" }),
+      );
+      expect(rolledBack).toBe(true);
+    });
+
+    test("restores and audits in the same transaction", async () => {
+      const tx = { id: "tx" };
+      const transaction = mock(async (fn: any) => fn(tx));
+      const restore = mock(async () => ({ id: "a1", deletedAt: null }));
+      const record = mock(async () => {});
+      const service = createAchievementService({
+        achievementRepo: {
+          getById: mock(async () => makeAchievement()),
+          restore,
+        } as any,
+        auditPort: { record } as any,
+        notificationPort: { writeBestEffort: mock(async () => {}) } as any,
+        db: { transaction } as any,
+      });
+
+      await service.adminRestore("admin1", "a1");
+
+      expect(restore).toHaveBeenCalledWith(tx, "a1", undefined);
+      expect(record).toHaveBeenCalledWith(
+        expect.objectContaining({ db: tx, action: "achievement_restored" }),
+      );
+    });
+  });
+
   describe("adminUpdate", () => {
     test("updates pending content and records before/after audit state", async () => {
       const auditPort = {

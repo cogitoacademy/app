@@ -1,6 +1,6 @@
 # Cogito API Reference
 
-Last updated: 2026-09-27
+Last updated: 2026-09-29
 
 ## Role-based dashboard analytics (2026-09-25)
 
@@ -199,11 +199,13 @@ This is presentation-only; no RPC path, request envelope, response shape,
 schema, or persistence contract changed.
 
 All roles use Better Auth `user.name` as the canonical visible name. Tutor
-onboarding saves its single **Name** field through Better Auth and no longer
-sends tutor-profile `displayName`; discovery keeps its compatible
-`displayName` response key but projects that value from `user.name`. The legacy
-tutor-profile input/column remains accepted for compatibility and is not used by
-new web UI.
+onboarding sends a changed single **Name** field as the transport-only
+`displayName` input to `tutor.updateMyProfile`, allowing the service to update
+`user.name` and its audit entry atomically; it does not persist a second
+`tutorProfile.displayName` value. Discovery keeps its compatible `displayName`
+response key but projects that value from `user.name`. The legacy
+tutor-profile column remains accepted for compatibility and is not used as a
+separate visible-name source by new web UI.
 
 ## Tutor Terms of Service acceptance (2026-09-02)
 
@@ -303,7 +305,7 @@ Sanity is queried only by the API server. The browser receives normalized conten
 - **Auth:** Protected (student, tutor, or admin)
 - **Input:** None
 - **Output:** `{ items: [{ id, title, description, category }], access: { eligible, balance, threshold, overrideExpiresAt? } }`
-- **Description:** Returns published Knowledge Bank metadata for the authenticated `/knowledge-bank` app route. Students must meet the 35-Mark total-balance threshold (held Marks count toward eligibility), unless they have an active admin grant; below both conditions, `items` is empty and the access state explains the lock. Tutors and admins are eligible regardless of wallet balance. `overrideExpiresAt` is returned only while a student grant is active. `category` remains the Sanity slug in the API response; the web UI maps known slugs and title-cases hyphenated or underscored slugs for display while retaining the raw value for filtering.
+- **Description:** Returns published Knowledge Bank metadata for the authenticated `/knowledge-bank` app route. Students must meet the 35-Mark total-balance threshold (held Marks count toward eligibility), unless they have an active admin grant; below both conditions, `items` is empty and the access state explains the lock. Tutors and admins are eligible regardless of wallet balance. `overrideExpiresAt` is returned only while a student grant is active. `category` remains the Sanity slug in the API response; the web UI maps known slugs and title-cases hyphenated or underscored slugs for display while retaining the raw value for filtering. Preview presentation is frontend-only: an unsandboxed native PDF iframe opens in a bottom drawer on mobile and a right-side drawer on desktop.
 
 ### `GET /content/knowledge-bank/:resourceId/file`
 
@@ -501,9 +503,9 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 ### `admin.getDashboardAnalytics`
 
 - **Auth:** Admin
-- **Input:** `{ period?: "7d" | "30d" | "90d" }` (default `"30d"`)
-- **Output:** `{ period, periodStart, periodEnd, summary, bookingTrend, userTrend, stateBreakdown, modalityBreakdown, categoryBreakdown }`
-- **Description:** Returns the aggregate data used by the admin Business insights section. Period metrics use booking/user creation time and WIB calendar days; `summary.activeLearners` is explicitly a distinct booking-proposer count, not a participant or login-active-user count. `summary.grossMarks` and `summary.platformTakeMarks` are locked booking-price snapshots, not cash revenue or settlement. `stateBreakdown` is the live all-bookings state mix, while modality/category breakdowns are scoped to the selected period. Missing trend days are returned as zero rows so charts stay continuous.
+- **Input:** either `{ period?: "7d" | "30d" | "90d" }` (default `"30d"`) or `{ dateFrom: "YYYY-MM-DD", dateTo: "YYYY-MM-DD" }`; custom dates are inclusive WIB days, cannot be combined with `period`, are capped at 366 days, and reject impossible calendar dates
+- **Output:** `{ period, periodStart, periodEnd, summary, businessSummary, bookingTrend, userTrend, stateBreakdown, modalityBreakdown, categoryBreakdown }`
+- **Description:** Returns aggregate data used by admin Business insights. Selected-range metrics use WIB calendar boundaries. `businessSummary.signups`, `grossRevenueIdr`, `refundedIdr`, and `netRevenueIdr` follow the selected range; successful payment `updatedAt` is the available settlement-time proxy. Total accounts, student/tutor totals, current Marks ownership, and lifetime paid conversion are snapshots independent of the selected range. MAU counts unique accounts with auth-session activity in the latest rolling 30 days. Inactive users are accounts older than 30 days without such activity. Churn compares users active 31-60 days ago against those absent in the latest 30 days, so it is session-based operational churn rather than product-event retention. `summary.activeLearners` remains a distinct booking-proposer count. Locked booking-value fields represent operational booking value, not payment revenue. `stateBreakdown` is the live all-bookings state mix; modality/category breakdowns use the selected range; missing trend days are zero-filled.
 
 ### `admin.listUsers`
 
@@ -728,8 +730,8 @@ All routes are admin-only. Package `code` is the stable business key used by
 
 - **Auth:** Admin
 - **Input:** `{ tutorProfileId }`
-- **Output:** Up to 50 newest audit entries for the tutor profile, including action, actor, timestamps, state snapshots, and photo workflow details
-- **Description:** Returns the review/photo history shown on the admin tutor review page. Admin-uploaded edited assets are applied to the canonical `user.image` only by an approve/publish action; requesting changes never changes the current public photo.
+- **Output:** Up to 50 newest audit entries for the tutor profile, including action, actor, timestamps, complete profile `beforeState`/`afterState` snapshots, `details.changedFields`, and photo workflow details
+- **Description:** Returns complete profile-change and moderation history shown on the admin tutor review page. Each changed tutor save records one full profile snapshot pair; `details.changedFields` lists changed leaf paths. Revisions to pending proposals compare against the previous proposal; approval records include the complete post-promotion snapshot. Admin-uploaded edited assets are applied to canonical `user.image` only by an approve/publish action; requesting changes never changes the current public photo.
 
 ### `adminTutor.reviewTutorProfile`
 
@@ -762,16 +764,18 @@ All routes are admin-only. Package `code` is the stable business key used by
 
 - **Auth:** Tutor
 - **Input:** None
-- **Output:** Up to 50 newest audit entries for the authenticated tutor profile, including action, actor identity (`id` and display name only), actor type, timestamps, and photo/review workflow details; account email is not returned
-- **Description:** Returns tutor profile audit history for audit-capable surfaces. The focused tutor photo editor no longer embeds this history. Published photo replacements remain proposals until an admin approves them.
+- **Output:** Up to 50 newest audit entries for the authenticated tutor profile, including action, actor identity (`id` and display name only), actor type, timestamps, complete profile `beforeState`/`afterState` snapshots, and photo/review workflow details; account email is not returned
+- **Description:** Returns tutor profile audit history for audit-capable surfaces. Each changed save includes complete profile snapshots plus `details.changedFields`; the focused tutor photo editor no longer embeds this history. Published photo replacements remain proposals until an admin approves them.
 
 ### `tutor.updateMyProfile`
 
 - **Auth:** Tutor
-- **Input:** `{ version, shortBio?, affiliation?, achievementProofUrls?, experienceProofUrls?, profileImageUrl?, education?, achievements?, experiences?, subjectIds?, modality?, baseRatesIdr?, onlineMaxClassSize?, offlineMaxClassSize?, bankName?, bankAccountNumber?, bankAccountHolderName?, bankAccountOpeningCity?, bankAccountOwnership?: "self" | "trusted_person", bankTransferDisclaimerAccepted?, prices? }`. `affiliation` is a trimmed string of 1–255 characters when supplied. `achievements` accepts up to 5 `{ competitionName, year, awards }` entries. `experiences` accepts up to 5 `{ role, organization, startYear, endYear, description }` entries; `endYear` may be null for ongoing work. Draft saves may omit affiliation.
+- **Input:** `{ version, displayName?, shortBio?, affiliation?, achievementProofUrls?, experienceProofUrls?, profileImageUrl?, education?, achievements?, experiences?, subjectIds?, modality?, baseRatesIdr?, onlineMaxClassSize?, offlineMaxClassSize?, bankName?, bankAccountNumber?, bankAccountHolderName?, bankAccountOpeningCity?, bankAccountOwnership?: "self" | "trusted_person", bankTransferDisclaimerAccepted?, prices? }`. `displayName` is a trimmed 1–255 character canonical account name and is audited with the profile save. `affiliation` is a trimmed string of 1–255 characters when supplied. `achievements` accepts up to 5 `{ competitionName, year, awards }` entries. `experiences` accepts up to 5 `{ role, organization, startYear, endYear, description }` entries; `endYear` may be null for ongoing work. Draft saves may omit affiliation.
 - **Output:** `{ profile, subjects: [{ id, slug, name, description?, isSelectable, parent: { id, slug, name } }] }`
 - **Errors:** `OPTIMISTIC_LOCK` (409) on version mismatch, `INVALID_TUTOR_PRICING` (400) on floor-price violation, `INVALID_TUTOR_SUBJECT_SELECTION` (400) when ids are not active specializations or exceed 7; tutor domain validation errors include field-specific data such as `missingFields`, `pricingError`, or `subjectIds` where available
-- **Description:** Updates the tutor profile with optimistic locking. The tutor editor presents one combined Education, Achievements, and Experiences section plus one profile-image field; each experience stores a role, organization, start/end years, and a brief description. Affiliation stores a study program/university or professional role/organization and is required on review. Short bios are limited to 50 whitespace-delimited words (and 2,000 characters). Year values are plain integers, and an end year must be on or after its start year. Award titles normalize to the structured `awards` array. `achievementProofUrls` and `experienceProofUrls` accept bounded HTTP(S) URLs; `profileImageUrl` accepts bounded HTTP(S) URLs or a generated local `/uploads/...` storage path. The tutor-facing proof guidance recommends one Google Drive folder with the “Anyone with the link can view” setting. `profileImageUrl` is the canonical tutor profile image: draft/changes-requested updates write it to the account image, while published changes wait in `pendingProfileChanges` until admin review. `subjectIds` is the normalized specialization selection. Payout-account fields remain private. A published tutor's `baseRatesIdr` takes effect immediately for future bookings; existing bookings retain their stored price snapshot for payout. Trust-sensitive structured profile changes wait in `pendingProfileChanges`. The web editor exposes separate **Save draft**/**Save profile changes** and **Submit for review** actions: saving permits incomplete required top-level fields while still highlighting malformed values, while submission applies the complete required-field gate. Both client-side and API-side validation errors are shown beside the affected field and in the form summary.
+- **Description:** Updates the tutor profile with optimistic locking and records a full profile audit snapshot pair when state changes. The tutor editor presents one combined Education, Achievements, and Experiences section plus one profile-image field; each experience stores a role, organization, start/end years, and a brief description. Affiliation stores a study program/university or professional role/organization and is required on review. Short bios are limited to 50 whitespace-delimited words (and 2,000 characters). Year values are plain integers, and an end year must be on or after its start year. Award titles normalize to the structured `awards` array. `achievementProofUrls` and `experienceProofUrls` accept bounded HTTP(S) URLs; `profileImageUrl` accepts bounded HTTP(S) URLs or a generated local `/uploads/...` storage path. The tutor-facing proof guidance recommends one Google Drive folder with the “Anyone with the link can view” setting. `profileImageUrl` is the canonical tutor profile image: draft/changes-requested updates write it to the account image, while published changes wait in `pendingProfileChanges` until admin review. `subjectIds` is the normalized specialization selection. Payout-account fields remain private. A published tutor's `baseRatesIdr` takes effect immediately for future bookings; existing bookings retain their stored price snapshot for payout. Trust-sensitive structured profile changes wait in `pendingProfileChanges`. The web editor exposes separate **Save draft**/**Save profile changes** and **Submit for review** actions: saving permits incomplete required top-level fields while still highlighting malformed values, while submission applies the complete required-field gate. Both client-side and API-side validation errors are shown beside the affected field and in the form summary.
+
+- **Consistency:** Profile, canonical account-name, subject, photo, and audit writes share one database transaction. Reverting the final pending proposal clears both `pendingProfileChanges` and `profileEditStatus`.
 
 `onlineMaxClassSize` and `offlineMaxClassSize` take effect immediately for new
 booking requests; size 1 means private-only for that modality. Existing
@@ -941,16 +945,16 @@ The create/edit/correction form is presented as a bottom drawer on mobile and a 
 ### `achievement.adminList`
 
 - **Auth:** Admin
-- **Input:** `{ status?, limit?, offset? }` (`limit` default 50)
+- **Input:** `{ status?, deleted?, limit?, offset? }` (`limit` default 50; `deleted` defaults to `false`)
 - **Output:** `Achievement[]` for the requested page
-- **Description:** Returns a server-paginated moderation page. `status: "pending"` includes both `pending` and `pending_review` rows. The admin `/admin-achievements` page uses a `limit + 1` sentinel to detect the next page; aggregate status cards use `achievement.adminStats`.
+- **Description:** Returns a server-paginated moderation page. `status: "pending"` includes both `pending` and `pending_review` rows. Soft-deleted rows are excluded unless `deleted: true`. The admin `/admin-achievements` page uses a `limit + 1` sentinel to detect the next page; aggregate status cards use `achievement.adminStats`.
 
 ### `achievement.adminStats`
 
 - **Auth:** Admin
 - **Input:** None
 - **Output:** `{ total, approved, pending, rejected, archived }`
-- **Description:** Returns aggregate status counts across all achievement submissions. `pending` combines `pending` and `pending_review`.
+- **Description:** Returns aggregate status counts across active achievement submissions. Soft-deleted rows are excluded. `pending` combines `pending` and `pending_review`.
 
 ### `achievement.adminUpdate`
 
@@ -959,6 +963,22 @@ The create/edit/correction form is presented as a bottom drawer on mobile and a 
 - **Input:** `{ id, version, data: { eventName?, category?, award?, level?, issuer?, visibility?, awardingDate?, location?, description?, subjects?, evidenceUrl?, documentationUrl? } }`; nullable optional fields can be cleared
 - **Output:** `{ achievement }`
 - **Description:** Corrects a pending or legacy `pending_review` achievement before moderation. Admins can correct the submission fields and set or clear the public documentation image. The update uses optimistic compare-and-swap via `version`, records an `achievement_admin_updated` audit event with before/after content, and leaves the status unchanged so approval/rejection remains a separate action. A stale version returns `OPTIMISTIC_LOCK` (409); non-pending records return `ACHIEVEMENT_NOT_EDITABLE`.
+
+### `achievement.adminDelete`
+
+- **RPC path:** `/rpc/admin/achievements/delete`
+- **Auth:** Admin
+- **Input:** `{ achievementId }`
+- **Output:** `Achievement`
+- **Description:** Soft-deletes an achievement and records `achievement_deleted`. The row mutation and audit record commit atomically.
+
+### `achievement.adminRestore`
+
+- **RPC path:** `/rpc/admin/achievements/restore`
+- **Auth:** Admin
+- **Input:** `{ achievementId }`
+- **Output:** `Achievement`
+- **Description:** Restores a soft-deleted achievement and records `achievement_restored`. The row mutation and audit record commit atomically.
 
 ### `achievement.adminReview`
 
@@ -1198,13 +1218,14 @@ RPC contract.
 - **Auth:** Student (invitee)
 - **Input:** `{ bookingId, reason? }`
 - **Output:** `{ declined: true }`
+- **Description:** Locks the parent booking before changing the invitation and resolving remaining responses, preventing concurrent final invite decisions from racing. Declines one pending group or group-series invitation. When no pending invitees remain, the parent resolves immediately: fewer than two confirmed participants expires the booking and releases holds; a viable partial group enters `awaiting_reconfirmation` with a fresh response window; a full group enters `awaiting_tutor_review`.
 
 ### `booking.withdrawInvite`
 
 - **Auth:** Student (booking proposer)
 - **Input:** `{ bookingId, inviteeUserId, reason? }`
 - **Output:** `{ withdrawn: true, inviteeUserId }`
-- **Description:** Withdraws one pending group or group-series invitation before confirmation. The target participant is marked `withdrawn_pre_h2`; confirmed headcount and Marks holds are unchanged, and the invitee receives a booking notification.
+- **Description:** Locks the parent booking before changing the invitation and resolving remaining responses, preventing concurrent final invite decisions from racing. Withdraws one pending group or group-series invitation before confirmation. The target participant is marked `withdrawn_pre_h2`, confirmed headcount is unchanged, and the invitee receives a booking notification. When no pending invitees remain, the same parent resolution as `booking.declineInvite` runs; undersized bookings release remaining holds and expire, while viable partial groups enter reconfirmation.
 
 ### `booking.reconfirm`
 
@@ -1421,17 +1442,17 @@ The successful mutation also best-effort updates the existing offline Calendar e
 ### `adminBooking.applyOverride`
 
 - **Auth:** Admin
-- **Input:** `{ bookingId, category, reason, affectedParticipants?, marksAction?, userNote?, internalNote? }` (`category` one of tutor_no_show/medical_emergency/technical_failure/admin_correction/student_no_show/force_cancel; `marksAction` one of release_holds/compensate_credit/compensate_deduct)
-- **Output:** `{ booking }` — the updated booking
+- **Input:** `{ bookingId, category, reason, affectedParticipants?, marksAction?, userNote?, internalNote? }` (`category` one of tutor_no_show/medical_emergency/technical_failure/admin_correction/student_no_show/force_cancel). Omit `affectedParticipants` and `marksAction` to use the automatic category policy (the web client always does this): `student_no_show` forfeits student holds and preserves tutor payout eligibility; every other category returns student holds and withholds tutor payout. Explicit legacy values remain accepted for backwards compatibility (`marksAction`: release_holds/compensate_credit/compensate_deduct).
+- **Output:** `{ booking }` — the updated booking; resolved financial policy is recorded in `overrideMeta`
 - **Errors:** `BOOKING_NOT_FOUND` (404), terminal-state override rejected (`TERMINAL_STATE_OVERRIDE`, 409 — message names the final status, e.g. "This booking is already completed and can no longer be overridden. Final bookings are locked — check state history or use a wallet correction if Marks need fixing.")
 - **Description:** Force state transition bypassing the state machine; optionally adjusts held Marks per participant; records audit log + state history + participant notification
-- **Frontend note:** The admin override form reads the booking roster through protected `booking.get` and presents names/roles in a multi-select. It submits the selected participant user IDs automatically in `affectedParticipants`; the API input remains unchanged.
+- **Frontend note:** The admin override form reads the booking roster through protected `booking.get` and presents a read-only student/tutor impact roster in a bottom drawer on mobile and a right-side drawer on desktop. The independently scrolling body keeps Preview/Override actions available in the fixed footer. The web client omits `affectedParticipants` and `marksAction`, so the selected category determines all wallet, payout, and notification effects automatically. Its review card presents booking-state, named wallet-balance, and tutor-payout outcomes before apply.
 
 ### `adminBooking.previewOverride`
 
 - **Auth:** Admin
 - **Input:** Same as `applyOverride`
-- **Output:** `{ bookingId, currentState, projectedState, affectedParticipants, marksAction, perParticipantImpact }` — no persistence
+- **Output:** `{ bookingId, currentState, projectedState, affectedParticipants, marksAction, tutorPayoutEligible, perParticipantImpact }` — no persistence. `affectedParticipants` includes students and tutor for notifications; `perParticipantImpact` contains student wallet movements.
 - **Errors:** Same terminal-state rejection as `applyOverride` (`TERMINAL_STATE_OVERRIDE`, 409)
 - **Description:** Returns the projected booking state and per-participant wallet impact before applying
 

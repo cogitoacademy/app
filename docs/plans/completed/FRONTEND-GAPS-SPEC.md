@@ -526,7 +526,7 @@ The PRD §Product Surfaces and Permissions (prd.tex:317-375) defines required sc
 > - **F1 → Closed** — `/_app/admin` is the admin workspace entry point; the operations queue exposes category/urgency/SLA filters, reported reason/source/time-since-report, business-hours deadline/status, and a WhatsApp escalation link. The booking detail loads the full booking read model plus each participant's wallet and booking-scoped ledger entries.
 > - **F9 → Closed** — completed-booking notes now use a toolbar editor for paragraphs/headings, emphasis, lists, and links. Both preview and persisted note rendering pass through a DOMPurify allow-list, with the existing server sanitizer remaining authoritative.
 > - **F12 → Closed** — `admin-operations-page.tsx` now consumes `room.listPendingApprovals` for offline bookings in `awaiting_admin_room_approval`; admins can assign the requested room, load a booking to choose another room (or use the existing relocate operation), and cancel the pending approval. The backend queue also includes requested-room conflicts with no `room_booking` row.
-> - **F18 → Closed (2026-08-22 follow-up)** — invitee confirm/decline/reconfirm plus proposer-side pending-invite withdrawal are wired. The new `booking.withdrawInvite` procedure marks only a pending invitee `withdrawn_pre_h2`, preserves headcount/holds, and notifies the target.
+> - **F18 → Closed (2026-08-22 follow-up; lifecycle correction 2026-09-28)** — invitee confirm/decline/reconfirm plus proposer-side pending-invite withdrawal are wired. `booking.withdrawInvite` marks only a pending invitee `withdrawn_pre_h2`, preserves confirmed headcount, and notifies the target. Decline/withdraw also resolve the parent after the final pending invitation: expire below minimum headcount, reconfirm a viable partial group, or advance a full group to tutor review.
 > - **J2 → Closed** — the shell warns during the final 30 minutes and retains the 401/403 redirect fallback.
 > - **J2 → Closed** — the shell warns during the final 30 minutes and retains the 401/403 redirect fallback.
 > - **Dead components → Closed** — the previously unused `chart.tsx`, `data.ts`, and `user-menu.tsx` files were removed; no references remain in `apps/web/src`.
@@ -1059,6 +1059,7 @@ Card, Button, Badge, Heading, Text, Stack, Input, Textarea, NumberField, DatePic
 - v1.66 (2026-09-04): Added the tutor dashboard payout-details `InfoPreview` popover so the unpaid-honorarium explanation is available from the compact card header. No RPC, schema, or persistence contract changed.
 
 - v1.65 (2026-09-03): Replaced the admin override form's comma-separated affected-participant user-ID input with a booking-roster name/avatar/role multi-select. Selected user IDs continue to populate the existing `affectedParticipants` payload; no RPC, schema, or persistence contract changed.
+- v1.66 (2026-09-29): Replaced the admin override modal with a responsive Selia drawer: bottom on mobile, right-side on desktop, independently scrolling body, and persistent action footer. No RPC or business-policy change.
 
 - v1.64 (2026-09-02): Matched the student achievement summary cards to the admin moderation queue's compact label-and-pill treatment; no RPC/schema/persistence contract changed.
 

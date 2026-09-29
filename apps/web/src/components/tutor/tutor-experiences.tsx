@@ -115,7 +115,7 @@ export function validateTutorExperienceDraft(
 }
 
 function formatExperiencePeriod(entry: TutorExperience) {
-  return `${entry.startYear}–${entry.endYear ?? "Present"}`;
+  return `${entry.startYear} - ${entry.endYear ?? "Present"}`;
 }
 
 type TutorExperiencesDisplayProps = {

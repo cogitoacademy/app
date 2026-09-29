@@ -233,7 +233,7 @@ export function TutorAchievementsDisplay({
                     {entry.role} · {entry.organization}
                   </Text>
                   <Text className="mt-0.5 text-sm text-muted">
-                    {entry.startYear}–{entry.endYear ?? "Present"}
+                    {entry.startYear} - {entry.endYear ?? "Present"}
                   </Text>
                   <Text className="mt-1 whitespace-pre-line text-muted">
                     {entry.description}

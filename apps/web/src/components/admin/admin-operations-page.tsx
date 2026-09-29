@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   keepPreviousData,
@@ -19,6 +19,7 @@ import {
   IconChevronDown,
   IconClock,
   IconCoins,
+  IconInfoCircle,
   IconPlus,
   IconRefresh,
   IconSearch,
@@ -50,9 +51,18 @@ import {
   DialogTitle,
 } from "@cogito-app/ui/components/selia/dialog";
 import {
+  Drawer,
+  DrawerBody,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHandle,
+  DrawerHeader,
+  DrawerPopup,
+  DrawerTitle,
+} from "@cogito-app/ui/components/selia/drawer";
+import {
   Field,
   FieldDescription,
-  FieldError,
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
@@ -70,7 +80,6 @@ import {
 import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import {
   getSelectItemValue,
-  getSelectItemValues,
   Select,
   SelectItem,
   SelectList,
@@ -167,29 +176,63 @@ const MARKS_ACTION_COPY: Record<
       "Consume the reserved Marks as a penalty. The participant does not receive a refund.",
   },
 };
-const MARKS_ACTION_OPTIONS = ["none", ...MARKS_ACTIONS] as const;
+const AUTOMATIC_OVERRIDE_COPY: Record<
+  OverrideCategory,
+  { student: string; tutor: string }
+> = {
+  tutor_no_show: {
+    student: "Students receive their held Marks back.",
+    tutor: "The tutor is not eligible for payment.",
+  },
+  medical_emergency: {
+    student: "Students receive their held Marks back.",
+    tutor: "The tutor is not eligible for payment.",
+  },
+  technical_failure: {
+    student: "Students receive their held Marks back.",
+    tutor: "The tutor is not eligible for payment.",
+  },
+  admin_correction: {
+    student: "Students receive their held Marks back.",
+    tutor: "The tutor is not eligible for payment.",
+  },
+  student_no_show: {
+    student: "Students forfeit their held Marks.",
+    tutor: "The tutor remains eligible for payment.",
+  },
+  force_cancel: {
+    student: "Students receive their held Marks back.",
+    tutor: "The tutor is not eligible for payment.",
+  },
+};
 
-function MarksActionInfo() {
+function AutomaticPolicyInfo({ category }: { category: OverrideCategory }) {
+  const policy = AUTOMATIC_OVERRIDE_COPY[category];
+
   return (
     <InfoPreview
-      title="How Marks handling works"
-      description="Choose the wallet outcome that matches the correction you want to make."
-      label="About Marks handling"
+      title="How automatic settlement works"
+      description="Override category determines student Marks and tutor payment automatically."
+      label="About automatic settlement"
     >
-      <div className="space-y-2.5">
-        {MARKS_ACTION_OPTIONS.map((value) => (
-          <div key={value} className="space-y-0.5">
-            <Text className="text-sm font-medium">
-              {MARKS_ACTION_COPY[value].label}
-            </Text>
-            <Text className="text-xs leading-relaxed text-muted">
-              {MARKS_ACTION_COPY[value].description}
-            </Text>
-          </div>
-        ))}
-        <Text className="pt-1 text-xs leading-relaxed text-muted">
-          These actions apply to the currently held Marks of the selected
-          participant(s).
+      <div className="space-y-3">
+        <div>
+          <Text className="text-sm font-medium">Students</Text>
+          <Text className="mt-0.5 text-xs leading-relaxed text-muted">
+            {policy.student} Only held Marks are changed; available Marks
+            already spent elsewhere are not touched.
+          </Text>
+        </div>
+        <div>
+          <Text className="text-sm font-medium">Tutor</Text>
+          <Text className="mt-0.5 text-xs leading-relaxed text-muted">
+            {policy.tutor} This decision is recorded with the override for
+            payout reporting.
+          </Text>
+        </div>
+        <Text className="border-t border-border pt-3 text-xs leading-relaxed text-muted">
+          Preview verifies the state transition and exact wallet balances before
+          Apply override becomes available.
         </Text>
       </div>
     </InfoPreview>
@@ -1210,12 +1253,19 @@ function OverrideDialog({
 }) {
   const [category, setCategory] =
     useState<OverrideCategory>("admin_correction");
-  const [marksAction, setMarksAction] = useState<MarksAction | "none">("none");
   const [reason, setReason] = useState("");
-  const [participantIds, setParticipantIds] = useState<string[]>([]);
   const [userNote, setUserNote] = useState("");
   const [internalNote, setInternalNote] = useState("");
   const [preview, setPreview] = useState<PreviewResult | null>(null);
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 640px)");
+    const updateViewport = () => setIsDesktop(mediaQuery.matches);
+    updateViewport();
+    mediaQuery.addEventListener("change", updateViewport);
+    return () => mediaQuery.removeEventListener("change", updateViewport);
+  }, []);
   const participantQuery = useQuery({
     ...orpc.booking.get.queryOptions({
       input: { bookingId: booking?.id ?? "" },
@@ -1223,12 +1273,20 @@ function OverrideDialog({
     enabled: booking !== null,
   });
   const participants = participantQuery.data?.participants ?? [];
+  const studentParticipants = participants.filter(
+    (participant) => participant.role !== "tutor",
+  );
+  const tutor = participantQuery.data?.tutor;
+  const participantNames = new Map(
+    studentParticipants.map((participant) => [
+      participant.userId,
+      participant.user?.name ?? "Student",
+    ]),
+  );
 
   function resetForm() {
     setCategory("admin_correction");
-    setMarksAction("none");
     setReason("");
-    setParticipantIds([]);
     setUserNote("");
     setInternalNote("");
     setPreview(null);
@@ -1243,8 +1301,6 @@ function OverrideDialog({
     bookingId: booking!.id,
     category,
     reason: reason.trim(),
-    affectedParticipants: participantIds,
-    ...(marksAction !== "none" ? { marksAction } : {}),
     userNote: userNote.trim() || undefined,
     internalNote: internalNote.trim() || undefined,
   });
@@ -1269,24 +1325,27 @@ function OverrideDialog({
     ? null
     : !reason.trim()
       ? "Reason required — fill it to unlock Preview."
-      : marksAction !== "none" && participantIds.length === 0
-        ? "Select at least one participant to unlock Preview."
-        : "Run Preview first — Apply unlocks after a successful preview.";
+      : "Run Preview first — Apply unlocks after a successful preview.";
 
   return (
-    <Dialog
+    <Drawer
       open={booking !== null}
       onOpenChange={(open) => !open && handleClose()}
+      swipeDirection={isDesktop ? "right" : "down"}
     >
-      <DialogPopup className="max-w-2xl">
-        <DialogHeader className="flex-col items-start gap-1">
-          <DialogTitle>Emergency override</DialogTitle>
-          <DialogDescription>
+      <DrawerPopup
+        direction={isDesktop ? "right" : "bottom"}
+        className={isDesktop ? "w-full max-w-2xl" : undefined}
+      >
+        {!isDesktop ? <DrawerHandle /> : null}
+        <DrawerHeader className="flex-col items-start gap-1 border-b border-drawer-border pb-4">
+          <DrawerTitle>Emergency override</DrawerTitle>
+          <DrawerDescription>
             {booking?.id} · current state{" "}
             {booking ? getBookingStateLabel(booking.currentState) : ""}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogBody className="space-y-4">
+          </DrawerDescription>
+        </DrawerHeader>
+        <DrawerBody className="space-y-4">
           <div className="space-y-4">
             <Field>
               <FieldLabel>Category</FieldLabel>
@@ -1311,39 +1370,49 @@ function OverrideDialog({
                 </SelectPopup>
               </Select>
             </Field>
-            <Field>
-              <div className="flex items-center gap-2">
-                <FieldLabel>
-                  How should the participant's Marks be handled?
-                </FieldLabel>
-                <MarksActionInfo />
+            <div
+              role="status"
+              className={`flex items-start gap-3 rounded-lg border px-3.5 py-3 ${
+                category === "student_no_show"
+                  ? "border-warning-border bg-warning/10"
+                  : "border-info-border bg-info/10"
+              }`}
+            >
+              {category === "student_no_show" ? (
+                <IconAlertTriangle
+                  className="mt-0.5 size-4.5 shrink-0 text-warning"
+                  aria-hidden="true"
+                />
+              ) : (
+                <IconInfoCircle
+                  className="mt-0.5 size-4.5 shrink-0 text-info"
+                  aria-hidden="true"
+                />
+              )}
+              <div className="min-w-0 space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <Text className="font-medium">Automatic settlement</Text>
+                  <AutomaticPolicyInfo category={category} />
+                </div>
+                <div className="grid gap-1 text-sm sm:grid-cols-2 sm:gap-4">
+                  <Text className="text-sm leading-relaxed">
+                    <span className="font-medium">Students</span>
+                    <span className="block text-muted">
+                      {AUTOMATIC_OVERRIDE_COPY[category].student}
+                    </span>
+                  </Text>
+                  <Text className="text-sm leading-relaxed">
+                    <span className="font-medium">Tutor</span>
+                    <span className="block text-muted">
+                      {AUTOMATIC_OVERRIDE_COPY[category].tutor}
+                    </span>
+                  </Text>
+                </div>
+                <Text className="text-xs leading-relaxed text-muted">
+                  The selected category sets this outcome automatically.
+                </Text>
               </div>
-              <Select
-                value={marksAction}
-                onValueChange={(value) => {
-                  setMarksAction(
-                    getSelectItemValue(value) as MarksActionOption,
-                  );
-                  setPreview(null);
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectPopup>
-                  <SelectList>
-                    <SelectItem value="none">
-                      {MARKS_ACTION_COPY.none.label}
-                    </SelectItem>
-                    {MARKS_ACTIONS.map((value) => (
-                      <SelectItem key={value} value={value}>
-                        {MARKS_ACTION_COPY[value].label}
-                      </SelectItem>
-                    ))}
-                  </SelectList>
-                </SelectPopup>
-              </Select>
-            </Field>
+            </div>
           </div>
           <Field>
             <FieldLabel htmlFor="override-reason">
@@ -1360,95 +1429,156 @@ function OverrideDialog({
             />
           </Field>
           <Field>
-            <FieldLabel>
-              {marksAction !== "none" ? (
-                <>
-                  Affected participants <span className="text-danger">*</span>
-                </>
-              ) : (
-                "Affected participants (optional)"
-              )}
-            </FieldLabel>
-            <Select
-              multiple
-              value={participantIds}
-              disabled={
-                participantQuery.isPending ||
-                participantQuery.isError ||
-                participants.length === 0
-              }
-              onValueChange={(value) => {
-                setParticipantIds(getSelectItemValues(value));
-                setPreview(null);
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue
-                  className="min-w-0 flex-1 truncate text-left"
-                  placeholder={
-                    participantQuery.isPending
-                      ? "Loading participants…"
-                      : participants.length > 0
-                        ? "Choose participants"
-                        : "No participants available"
-                  }
-                />
-              </SelectTrigger>
-              <SelectPopup>
-                <SelectList>
-                  {participants.map((participant) => {
+            <div className="flex items-center gap-2">
+              <FieldLabel>Participant settlement</FieldLabel>
+              <InfoPreview
+                title="Who is affected?"
+                description="All students and assigned tutor are included automatically."
+                label="About participant settlement"
+              >
+                <Text className="text-xs leading-relaxed text-muted">
+                  Student rows show current confirmation and held Marks. Only
+                  students with a positive hold produce wallet changes. Tutor
+                  payment eligibility is recorded separately and does not move
+                  Marks through a tutor wallet.
+                </Text>
+              </InfoPreview>
+            </div>
+            <div className="overflow-hidden rounded-lg border border-item-border bg-item">
+              {participantQuery.isPending ? (
+                <Text className="p-3.5 text-sm text-muted">
+                  Loading participants…
+                </Text>
+              ) : participantQuery.isError ? (
+                <div className="flex items-center justify-between gap-3 p-3.5">
+                  <Text className="text-sm text-danger">
+                    Participants could not be loaded.
+                  </Text>
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="underline"
+                    onClick={() => void participantQuery.refetch()}
+                  >
+                    Try again
+                  </Button>
+                </div>
+              ) : studentParticipants.length > 0 || tutor ? (
+                <div className="divide-y divide-border">
+                  {studentParticipants.map((participant) => {
                     const name = participant.user?.name ?? "Participant";
+                    const outcomeLabel =
+                      category === "student_no_show"
+                        ? "Marks forfeited"
+                        : "Marks returned";
+
                     return (
-                      <SelectItem
+                      <Item
                         key={participant.userId}
-                        value={participant.userId}
+                        variant="plain"
+                        size="sm"
+                        className="items-center rounded-none"
                       >
-                        <span className="flex min-w-0 items-center gap-2.5">
-                          <Avatar size="sm" aria-hidden="true">
+                        <ItemMedia>
+                          <Avatar size="sm">
                             {participant.user?.image ? (
                               <AvatarImage
                                 src={participant.user.image}
-                                alt=""
+                                alt={`${name} avatar`}
                               />
                             ) : null}
                             <AvatarFallback>
                               {getUserInitials(name)}
                             </AvatarFallback>
                           </Avatar>
-                          <span className="min-w-0">
-                            <span className="block truncate">{name}</span>
-                            <span className="block truncate text-xs text-muted">
-                              {humanize(participant.role)} ·{" "}
-                              {humanize(participant.confirmationState)}
-                            </span>
-                          </span>
-                        </span>
-                      </SelectItem>
+                        </ItemMedia>
+                        <ItemContent className="min-w-0 flex-1">
+                          <ItemTitle className="max-w-full truncate text-sm">
+                            {name}
+                          </ItemTitle>
+                          <ItemDescription className="text-xs">
+                            <span className="capitalize">
+                              {humanize(participant.role)}
+                            </span>{" "}
+                            · {humanize(participant.confirmationState)} ·{" "}
+                            <CogitoMarks
+                              value={formatMarksValue(participant.heldAmount)}
+                              size="3"
+                            />{" "}
+                            held
+                          </ItemDescription>
+                        </ItemContent>
+                        <ItemAction className="shrink-0">
+                          <Badge
+                            variant={
+                              category === "student_no_show"
+                                ? "warning"
+                                : "success"
+                            }
+                            size="sm"
+                            pill
+                          >
+                            {outcomeLabel}
+                          </Badge>
+                        </ItemAction>
+                      </Item>
                     );
                   })}
-                </SelectList>
-              </SelectPopup>
-            </Select>
-            <FieldDescription>
-              Choose who should receive the override notification. If a Marks
-              option is selected, the adjustment applies only to these
-              participants. User IDs are handled automatically.
+                  {tutor ? (
+                    <Item
+                      variant="plain"
+                      size="sm"
+                      className="items-center rounded-none"
+                    >
+                      <ItemMedia>
+                        <Avatar size="sm">
+                          {tutor.image ? (
+                            <AvatarImage
+                              src={tutor.image}
+                              alt={`${tutor.name} avatar`}
+                            />
+                          ) : null}
+                          <AvatarFallback>
+                            {getUserInitials(tutor.name)}
+                          </AvatarFallback>
+                        </Avatar>
+                      </ItemMedia>
+                      <ItemContent className="min-w-0 flex-1">
+                        <ItemTitle className="max-w-full truncate text-sm">
+                          {tutor.name}
+                        </ItemTitle>
+                        <ItemDescription className="text-xs">
+                          Tutor · payment decision only
+                        </ItemDescription>
+                      </ItemContent>
+                      <ItemAction className="shrink-0">
+                        <Badge
+                          variant={
+                            category === "student_no_show"
+                              ? "success"
+                              : "secondary"
+                          }
+                          size="sm"
+                          pill
+                        >
+                          {category === "student_no_show"
+                            ? "Payout eligible"
+                            : "No payout"}
+                        </Badge>
+                      </ItemAction>
+                    </Item>
+                  ) : null}
+                </div>
+              ) : (
+                <Text className="p-3.5 text-sm text-muted">
+                  No participants available.
+                </Text>
+              )}
+            </div>
+            <FieldDescription className="text-xs leading-relaxed">
+              Student wallet changes use each row&apos;s held amount.
+              Notifications go to every student and the assigned tutor.
             </FieldDescription>
-            {marksAction !== "none" && participantIds.length === 0 ? (
-              <FieldError>
-                Select at least one participant when a Marks action is selected.
-              </FieldError>
-            ) : null}
-            {participantQuery.isError ? (
-              <Button
-                type="button"
-                size="xs"
-                variant="underline"
-                onClick={() => void participantQuery.refetch()}
-              >
-                Try loading participants again
-              </Button>
-            ) : null}
           </Field>
           <Field>
             <FieldLabel htmlFor="user-note">
@@ -1474,34 +1604,96 @@ function OverrideDialog({
           </Field>
           {preview ? (
             <Card className="border-info-border bg-info/5">
-              <CardBody className="space-y-2">
-                <Text className="font-medium">Before → after</Text>
-                <Text>
-                  {getBookingStateLabel(preview.currentState)} →{" "}
-                  {getBookingStateLabel(preview.projectedState)}
-                </Text>
-                <Text className="text-muted">
-                  {preview.perParticipantImpact.length} participant wallet
-                  change(s) ·{" "}
-                  {preview.marksAction
-                    ? getMarksActionLabel(preview.marksAction)
-                    : MARKS_ACTION_COPY.none.label}
-                </Text>
-                {preview.perParticipantImpact.map((impact) => (
-                  <Text key={impact.userId} className="text-sm">
-                    {impact.userId}: available {impact.before.availableBalance}{" "}
-                    → {impact.after.availableBalance}, held{" "}
-                    {impact.before.heldBalance} → {impact.after.heldBalance}
+              <CardHeader className="py-3">
+                <CardTitle>
+                  Review changes
+                  <CardInfoPreview>
+                    <InfoPreview
+                      title="Before you apply"
+                      description="This preview is recalculated during Apply. If booking state changed meanwhile, the override is rejected instead of overwriting newer work."
+                      label="About override preview"
+                    />
+                  </CardInfoPreview>
+                </CardTitle>
+              </CardHeader>
+              <CardBody className="space-y-4">
+                <div className="grid gap-3 rounded-lg bg-background/70 p-3 sm:grid-cols-2">
+                  <div>
+                    <Text className="text-xs text-muted">Booking state</Text>
+                    <Text className="mt-1 font-medium">
+                      {getBookingStateLabel(preview.currentState)} →{" "}
+                      {getBookingStateLabel(preview.projectedState)}
+                    </Text>
+                  </div>
+                  <div>
+                    <Text className="text-xs text-muted">Tutor payment</Text>
+                    <Text className="mt-1 font-medium">
+                      {preview.tutorPayoutEligible
+                        ? "Eligible"
+                        : "Not eligible"}
+                    </Text>
+                  </div>
+                </div>
+
+                <div>
+                  <Text className="text-sm font-medium">Student wallets</Text>
+                  <Text className="mt-0.5 text-xs text-muted">
+                    {preview.perParticipantImpact.length === 0
+                      ? "No student currently has held Marks to settle."
+                      : `${preview.perParticipantImpact.length} wallet ${preview.perParticipantImpact.length === 1 ? "change" : "changes"} · ${preview.marksAction ? getMarksActionLabel(preview.marksAction) : MARKS_ACTION_COPY.none.label}`}
                   </Text>
-                ))}
+                  {preview.perParticipantImpact.length > 0 ? (
+                    <div className="mt-2 divide-y divide-border overflow-hidden rounded-lg border border-item-border bg-item">
+                      {preview.perParticipantImpact.map((impact) => (
+                        <div
+                          key={impact.userId}
+                          className="grid gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                        >
+                          <div className="min-w-0">
+                            <Text className="truncate text-sm font-medium">
+                              {participantNames.get(impact.userId) ?? "Student"}
+                            </Text>
+                            <Text className="text-xs text-muted">
+                              <CogitoMarks
+                                size="3"
+                                value={formatMarksValue(impact.heldAmount)}
+                              />{" "}
+                              {impact.action === "compensate_deduct"
+                                ? "forfeited"
+                                : "returned"}
+                            </Text>
+                          </div>
+                          <div className="grid grid-cols-2 gap-x-5 text-left sm:text-right">
+                            <div>
+                              <Text className="text-xs text-muted">
+                                Available
+                              </Text>
+                              <Text className="text-sm font-medium">
+                                {impact.before.availableBalance} →{" "}
+                                {impact.after.availableBalance}
+                              </Text>
+                            </div>
+                            <div>
+                              <Text className="text-xs text-muted">Held</Text>
+                              <Text className="text-sm font-medium">
+                                {impact.before.heldBalance} →{" "}
+                                {impact.after.heldBalance}
+                              </Text>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
               </CardBody>
             </Card>
           ) : null}
           {previewHint ? (
             <Text className="text-sm text-muted">{previewHint}</Text>
           ) : null}
-        </DialogBody>
-        <DialogFooter>
+        </DrawerBody>
+        <DrawerFooter>
           <Button variant="secondary" onClick={handleClose}>
             Cancel
           </Button>
@@ -1509,11 +1701,7 @@ function OverrideDialog({
             variant="outline"
             onClick={() => previewMutation.mutate(buildInput())}
             progress={previewMutation.isPending}
-            disabled={
-              !reason.trim() ||
-              (marksAction !== "none" && participantIds.length === 0) ||
-              previewMutation.isPending
-            }
+            disabled={!reason.trim() || previewMutation.isPending}
           >
             Preview
           </Button>
@@ -1523,11 +1711,11 @@ function OverrideDialog({
             progress={applyMutation.isPending}
             disabled={!preview || applyMutation.isPending}
           >
-            Apply override
+            Override
           </Button>
-        </DialogFooter>
-      </DialogPopup>
-    </Dialog>
+        </DrawerFooter>
+      </DrawerPopup>
+    </Drawer>
   );
 }
 

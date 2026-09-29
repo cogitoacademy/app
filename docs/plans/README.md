@@ -10,6 +10,10 @@
 
 ## Completed (merged to main)
 
+| [TUTOR-PROFILE-COMPLETE-HISTORY.md](completed/TUTOR-PROFILE-COMPLETE-HISTORY.md) | working tree | **Completed locally 2026-09-29** — full profile before/after snapshots plus exact changed-field history for tutor profile saves |
+
+| [KNOWLEDGE-BANK-PDF-DRAWER.md](completed/KNOWLEDGE-BANK-PDF-DRAWER.md) | working tree | **Completed locally 2026-09-29** — native PDF preview sandbox removed; responsive bottom/mobile and right/desktop drawer added |
+
 | [POSTHOG-BROWSER-ANALYTICS.md](completed/POSTHOG-BROWSER-ANALYTICS.md) | working tree | **Completed locally 2026-09-27** — browser analytics, identity-safe auth/booking events, exception capture, explicit Logs, and Google/email auth outcome attribution |
 
 | [TUTOR-PROFILE-CANONICAL-FIELDS.md](completed/TUTOR-PROFILE-CANONICAL-FIELDS.md) | working tree | **Completed locally 2026-09-25** — canonical tutor achievements/experiences, required-on-review affiliation, moderation/discovery wiring, and migration |

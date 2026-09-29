@@ -1,4 +1,4 @@
-import { asc, eq, isNotNull } from "drizzle-orm";
+import { and as drizzleAnd, asc, eq, isNotNull } from "drizzle-orm";
 
 import { auth } from "@cogito-app/auth";
 import { db } from "@cogito-app/db";
@@ -8,6 +8,9 @@ import {
   user,
   account,
   tutorInvite,
+  booking,
+  bookingParticipant,
+  bookingSession,
   tutorProfile,
   availabilitySlot,
   markPackage,
@@ -255,6 +258,146 @@ async function ensureSeedTutorSubjects(profileId: string) {
   );
 }
 
+async function seedPresentationBooking(tutorId: string, studentId: string) {
+  const existing = await db
+    .select({
+      id: booking.id,
+      currentState: booking.currentState,
+      sessionId: bookingSession.id,
+    })
+    .from(booking)
+    .leftJoin(bookingSession, eq(bookingSession.seriesBookingId, booking.id))
+    .where(
+      drizzleAnd(
+        eq(booking.proposerId, studentId),
+        eq(booking.type, "solo"),
+        eq(booking.stateReason, "Presentation demo booking"),
+      ),
+    );
+
+  const existingPresentation = existing.find((row) => row.sessionId);
+  if (existingPresentation) {
+    if (existingPresentation.currentState === "scheduled") {
+      const { services } = await import("@cogito-app/api/services");
+      const wallet = await services.wallet.getByUserId(db, studentId);
+      if (!wallet) throw new Error("Presentation student wallet not found");
+      const holdEventKey = `seed.presentation_booking.${existingPresentation.id}.hold`;
+      const existingHold = await db.query.ledgerEntry.findFirst({
+        where: (ledger, { eq: eqOp, and }) =>
+          and(
+            eqOp(ledger.walletId, wallet.id),
+            eqOp(ledger.eventKey, holdEventKey),
+          ),
+      });
+      if (!existingHold) {
+        await services.wallet.hold(db, {
+          walletId: wallet.id,
+          amount: 50,
+          eventKey: holdEventKey,
+          sourceReference: existingPresentation.id,
+          bookingId: existingPresentation.id,
+          actorType: "system",
+          reason: "Presentation demo booking hold repair",
+        });
+      }
+    }
+    console.log(
+      "Presentation booking already exists:",
+      existingPresentation.id,
+    );
+    return existingPresentation.id;
+  }
+
+  const scheduledStartAt = new Date(Date.now() - 30 * 60 * 1000);
+  const scheduledEndAt = new Date(scheduledStartAt.getTime() + 90 * 60 * 1000);
+  const bookingId = crypto.randomUUID();
+  const sessionId = crypto.randomUUID();
+  const priceSnapshot = {
+    perStudent: 50,
+    baseline: 50,
+    tutorShare: 35,
+    cogitoTake: 15,
+    baselineCogitoTake: 15,
+    baselineTutorShare: 35,
+    extraTotal: 0,
+    cogitoExtraTake: 0,
+    tutorExtraShare: 0,
+    totalMarks: 50,
+  };
+
+  const { services } = await import("@cogito-app/api/services");
+  await db.transaction(async (tx) => {
+    const wallet = await services.wallet.getByUserId(tx, studentId);
+    if (!wallet) throw new Error("Presentation student wallet not found");
+
+    await tx.insert(booking).values({
+      id: bookingId,
+      type: "solo",
+      modality: "online",
+      tutorId,
+      proposerId: studentId,
+      targetGroupSize: 1,
+      minConfirmedHeadcount: 1,
+      confirmedHeadcount: 1,
+      currentState: "scheduled",
+      previousState: "confirmed",
+      stateReason: "Presentation demo booking",
+      scheduledStartAt,
+      scheduledEndAt,
+      timezone: "Asia/Jakarta",
+      priceSnapshot,
+      originalMarks: 50,
+      holdAmount: 50,
+      learningGoal: "Presentation demo: complete a finished session",
+    });
+
+    await services.wallet.hold(tx, {
+      walletId: wallet.id,
+      amount: 50,
+      eventKey: `seed.presentation_booking.${bookingId}.hold`,
+      sourceReference: bookingId,
+      bookingId,
+      actorType: "system",
+      reason: "Presentation demo booking hold",
+    });
+
+    await tx.insert(bookingParticipant).values([
+      {
+        id: crypto.randomUUID(),
+        bookingId,
+        userId: studentId,
+        role: "proposer",
+        confirmationState: "confirmed",
+        heldAmount: 50,
+        confirmedAt: new Date(),
+        attendanceState: "unknown",
+      },
+      {
+        id: crypto.randomUUID(),
+        bookingId,
+        userId: tutorId,
+        role: "tutor",
+        confirmationState: "confirmed",
+        confirmedAt: new Date(),
+        attendanceState: "unknown",
+      },
+    ]);
+
+    await tx.insert(bookingSession).values({
+      id: sessionId,
+      seriesBookingId: bookingId,
+      scheduledStartAt,
+      scheduledEndAt,
+      currentState: "scheduled",
+      holdAmount: 50,
+      priceSnapshot,
+    });
+  });
+
+  console.log("Presentation booking ready:", bookingId, "session:", sessionId);
+  return bookingId;
+}
+
 async function resetTestEconomy() {
   if (env.NODE_ENV !== "test") return;
 
@@ -445,12 +588,14 @@ async function seed() {
 
   await ensureSeedAvailability(tutorUser.id);
 
-  await seedDemoStudent(
+  const reviewStudent = await seedDemoStudent(
     process.env.SEED_REVIEW_STUDENT_EMAIL?.trim().toLowerCase() ||
       DEFAULT_SEED_STUDENTS[0].email,
     demoPassword(process.env.SEED_STUDENT_PASSWORD, "student123"),
     DEFAULT_SEED_STUDENTS[0].name,
   );
+
+  await seedPresentationBooking(tutorUser.id, reviewStudent.id);
 
   const friendPassword = demoPassword(
     process.env.SEED_STUDENT_PASSWORD,

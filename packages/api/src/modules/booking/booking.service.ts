@@ -497,6 +497,79 @@ export function createBookingService(deps: {
     }
   }
 
+  async function resolveCompletedInvitationPhase(
+    tx: DbOrTx,
+    b: BookingRow,
+    actorId: string,
+  ): Promise<void> {
+    const pendingInvitees = await repo.findPendingInvitees(tx, b.id);
+    if (pendingInvitees.length > 0) return;
+
+    const confirmed = await repo.findConfirmedParticipants(tx, b.id);
+    if (confirmed.length < MIN_GROUP_HEADCOUNT) {
+      await releaseAllParticipantHolds(
+        tx,
+        b.id,
+        "Group expired: invitation phase ended below minimum headcount",
+        ACTOR_TYPE.STUDENT,
+      );
+      await repo.updateBookingHoldAmount(tx, b.id, 0);
+      if (b.type === BOOKING_TYPE.SERIES) {
+        await repo.cancelAllSessions(tx, b.id);
+      }
+      await transition(tx, b.id, BOOKING_STATE.EXPIRED, {
+        actorId,
+        actorType: ACTOR_TYPE.STUDENT,
+        reason: "Invitation phase ended below minimum headcount",
+      });
+      return;
+    }
+
+    if (confirmed.length < b.targetGroupSize) {
+      await repriceGroupForHeadcount(tx, b, confirmed, ACTOR_TYPE.STUDENT);
+      await transition(tx, b.id, BOOKING_STATE.AWAITING_RECONFIRMATION, {
+        actorId,
+        actorType: ACTOR_TYPE.STUDENT,
+        reason: "Invitation phase ended with a partial group",
+      });
+      await repo.updateBookingDeadline(
+        tx,
+        b.id,
+        new Date(Date.now() + RESPONSE_WINDOW_MS),
+      );
+
+      for (const participant of confirmed) {
+        // eslint-disable-next-line no-await-in-loop
+        await notification.writeBestEffort({
+          db: tx,
+          userId: participant.userId,
+          bookingId: b.id,
+          category: NOTIFICATION_CATEGORY.BOOKING,
+          severity: NOTIFICATION_SEVERITY.ACTION,
+          title: "Group confirmation required",
+          body: "The invitation phase ended with fewer participants. Please reconfirm the updated group within 12 hours.",
+          eventKey: `booking.${b.id}.partial_group_reconfirm.${participant.userId}`,
+          emailRequired: true,
+        });
+      }
+      return;
+    }
+
+    await transition(tx, b.id, BOOKING_STATE.AWAITING_TUTOR_REVIEW, {
+      actorId,
+      actorType: ACTOR_TYPE.STUDENT,
+      reason: "Invitation phase completed",
+    });
+    await refreshDeadlineForState(
+      tx,
+      b.id,
+      BOOKING_STATE.AWAITING_TUTOR_REVIEW,
+      b.modality,
+      b.scheduledStartAt,
+      b.scheduledEndAt,
+    );
+  }
+
   function computeDisclaimer(b: {
     type: string;
     targetGroupSize: number;
@@ -2878,7 +2951,7 @@ export function createBookingService(deps: {
     reason?: string,
   ) {
     return db.transaction(async (tx) => {
-      const b = await repo.findBookingById(tx, bookingId);
+      const b = await repo.findBookingById(tx, bookingId, { forUpdate: true });
       if (!b) throw new BookingNotFoundError(bookingId);
       if (b.currentState !== BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION) {
         throw new BookingNotAwaitingConfirmationError(
@@ -2901,6 +2974,8 @@ export function createBookingService(deps: {
         withdrawnReason: reason,
       });
 
+      await resolveCompletedInvitationPhase(tx, b, userId);
+
       return { declined: true };
     });
   }
@@ -2912,7 +2987,7 @@ export function createBookingService(deps: {
     reason?: string,
   ) {
     return db.transaction(async (tx) => {
-      const b = await repo.findBookingById(tx, bookingId);
+      const b = await repo.findBookingById(tx, bookingId, { forUpdate: true });
       if (!b) throw new BookingNotFoundError(bookingId);
       if (b.currentState !== BOOKING_STATE.AWAITING_PARTICIPANT_CONFIRMATION) {
         throw new BookingNotAwaitingConfirmationError(
@@ -2949,6 +3024,7 @@ export function createBookingService(deps: {
         withdrawnAt: new Date(),
         withdrawnReason: reason,
       });
+      await resolveCompletedInvitationPhase(tx, b, proposerId);
       await notification.writeBestEffort({
         db: tx,
         userId: inviteeUserId,

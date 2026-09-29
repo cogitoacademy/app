@@ -11,6 +11,7 @@ import type {
   adminListInput,
   achievementStatsInput,
   adminReviewInput,
+  adminDeleteInput,
 } from "./achievement.types";
 import type { AchievementService } from "./achievement.service";
 
@@ -22,6 +23,7 @@ type AchievementListInput = z.infer<typeof achievementListInput>;
 type AdminListInput = z.infer<typeof adminListInput>;
 type AchievementStatsInput = z.infer<typeof achievementStatsInput>;
 type AdminReviewInput = z.infer<typeof adminReviewInput>;
+type AdminDeleteInput = z.infer<typeof adminDeleteInput>;
 
 export function createAchievementHandler(deps: {
   achievementService: AchievementService;
@@ -120,6 +122,40 @@ export function createAchievementHandler(deps: {
     );
   }
 
+  async function adminDelete({
+    context,
+    input,
+  }: {
+    context: Context;
+    input: AdminDeleteInput;
+  }) {
+    return withDomainMap(
+      () =>
+        achievementService.adminDelete(
+          context.session!.user.id,
+          input.achievementId,
+        ),
+      mapAchievementError,
+    );
+  }
+
+  async function adminRestore({
+    context,
+    input,
+  }: {
+    context: Context;
+    input: AdminDeleteInput;
+  }) {
+    return withDomainMap(
+      () =>
+        achievementService.adminRestore(
+          context.session!.user.id,
+          input.achievementId,
+        ),
+      mapAchievementError,
+    );
+  }
+
   async function adminList({
     input,
   }: {
@@ -163,6 +199,8 @@ export function createAchievementHandler(deps: {
     adminList,
     adminStats,
     adminReview,
+    adminDelete,
+    adminRestore,
   };
 }
 

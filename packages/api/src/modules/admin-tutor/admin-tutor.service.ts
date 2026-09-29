@@ -35,6 +35,10 @@ import type { EmailPort } from "../email/email.service";
 import { escapeHtml } from "../../lib/sanitize";
 import { log } from "../../lib/logger";
 import { validateTutorSubjectIds } from "../tutor-subjects/subject-selection";
+import {
+  createTutorProfileAuditSnapshot,
+  getChangedTutorProfileAuditFields,
+} from "../tutor/tutor-profile-audit";
 
 export type { ReviewAction };
 
@@ -361,10 +365,7 @@ export function createAdminTutorService(deps: {
     });
     // Stored tokens are digests, not shareable links — never surface them in
     // list responses (M10); plaintext is returned once at create/resend.
-    return rows.map((row) => ({
-      ...row,
-      token: undefined,
-    }));
+    return rows.map(({ token: _token, ...row }) => row);
   }
 
   async function resendInvite(
@@ -579,6 +580,13 @@ export function createAdminTutorService(deps: {
         );
       }
 
+      const updatedProfile = await adminTutorRepo.getTutorProfileById(
+        tx,
+        input.tutorProfileId,
+      );
+      const beforeState = createTutorProfileAuditSnapshot(profile);
+      const afterState = createTutorProfileAuditSnapshot(updatedProfile ?? row);
+
       await auditPort.record({
         db: tx,
         actorId: adminId,
@@ -586,18 +594,13 @@ export function createAdminTutorService(deps: {
         action: `tutor_profile_${input.action}`,
         targetId: input.tutorProfileId,
         targetType: "tutor_profile",
-        beforeState: {
-          onboardingStatus: existing.onboardingStatus,
-          publishedAt: existing.publishedAt,
-        },
-        afterState: {
-          onboardingStatus: newStatus,
-          publishedAt:
-            updates.publishedAt === undefined
-              ? existing.publishedAt
-              : updates.publishedAt,
-        },
+        beforeState,
+        afterState,
         details: {
+          changedFields: getChangedTutorProfileAuditFields(
+            beforeState,
+            afterState,
+          ),
           adminNote: input.adminNote,
           profileImageUpdated: Boolean(profileImageUrl && appliesProfileImage),
           profileImageUrl:
@@ -682,6 +685,15 @@ export function createAdminTutorService(deps: {
         );
       }
 
+      const updatedProfile = await adminTutorRepo.getTutorProfileById(
+        tx,
+        input.tutorProfileId,
+      );
+      const beforeState = createTutorProfileAuditSnapshot(existing);
+      const afterState = createTutorProfileAuditSnapshot(
+        updatedProfile ?? updated,
+      );
+
       await auditPort.record({
         db: tx,
         actorId: adminId,
@@ -689,13 +701,13 @@ export function createAdminTutorService(deps: {
         action: "tutor_achievements_updated",
         targetId: input.tutorProfileId,
         targetType: "tutor_profile",
-        beforeState: {
-          education: existing.education ?? [],
-          achievements: existing.achievements ?? [],
-        },
-        afterState: {
-          education: input.education,
-          achievements: input.achievements,
+        beforeState,
+        afterState,
+        details: {
+          changedFields: getChangedTutorProfileAuditFields(
+            beforeState,
+            afterState,
+          ),
         },
       });
 

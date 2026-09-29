@@ -30,9 +30,9 @@ describe("dashboard greetings", () => {
 
   test("surfaces relevant role workload", () => {
     expect(
-      createDashboardGreeting("tutor", "Bima", 12, 0, { reviewCount: 2 })
+      createDashboardGreeting("tutor", "Bima", 12, 0, { actionCount: 2 })
         .description,
-    ).toContain("2 student requests");
+    ).toContain("2 booking items");
     expect(
       createDashboardGreeting("admin", "Citra", 12, 0, { priorityCount: 1 })
         .description,
