@@ -6,6 +6,8 @@ import type {
 } from "@cogito-app/api/modules/admin/admin.service";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
+import { DatePicker } from "@cogito-app/ui/components/selia/date-picker";
+import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
 import {
   Card,
   CardBody,
@@ -17,16 +19,27 @@ import {
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import { Text } from "@cogito-app/ui/components/selia/text";
+import {
+  Tabs,
+  TabsItem,
+  TabsList,
+} from "@cogito-app/ui/components/selia/tabs";
 import { useQuery } from "@tanstack/react-query";
 import {
   IconAlertTriangle,
+  IconCalendarStats,
+  IconCash,
   IconChartAreaLine,
   IconChartBar,
   IconChartHistogram,
   IconInfoSquareRounded,
+  IconCoins,
   IconRefresh,
   IconTargetArrow,
+  IconTrendingDown,
+  IconUserOff,
   IconUserPlus,
+  IconUsers,
 } from "@tabler/icons-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
@@ -48,6 +61,7 @@ import {
 
 import { orpc } from "@/utils/orpc";
 import { InfoPreview } from "@/components/info-preview";
+import { getBusinessSummary } from "./admin-analytics-compat";
 
 const PERIOD_OPTIONS: Array<{
   value: DashboardAnalyticsPeriod;
@@ -119,12 +133,33 @@ const numberFormatter = new Intl.NumberFormat("id-ID");
 const percentageFormatter = new Intl.NumberFormat("id-ID", {
   maximumFractionDigits: 1,
 });
+const dateRangeFormatter = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  timeZone: "Asia/Jakarta",
+});
+const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 function formatIdr(value: unknown) {
   const amount = Number(value);
   return Number.isFinite(amount)
     ? `Rp${numberFormatter.format(amount)}`
     : "Unavailable";
+}
+
+function toDateKey(value: Date) {
+  return new Date(value.getTime() + WIB_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+function shiftDateKey(value: string, days: number) {
+  const date = new Date(`${value}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function formatDateRangeLabel(value: string) {
+  return dateRangeFormatter.format(new Date(`${value}T00:00:00+07:00`));
 }
 const tooltipStyle = {
   backgroundColor: "var(--popover)",
@@ -170,14 +205,44 @@ function chartTooltipFormatter(value: ChartValue, name: ChartName) {
 }
 
 export function AdminAnalytics() {
-  const [period, setPeriod] = useState<DashboardAnalyticsPeriod>("30d");
+  const today = toDateKey(new Date());
+  const [selection, setSelection] = useState<
+    { period: DashboardAnalyticsPeriod } | { dateFrom: string; dateTo: string }
+  >({ period: "30d" });
+  const [showCustomRange, setShowCustomRange] = useState(false);
+  const [draftFrom, setDraftFrom] = useState(() => shiftDateKey(today, -29));
+  const [draftTo, setDraftTo] = useState(today);
   const analytics = useQuery(
-    orpc.admin.getDashboardAnalytics.queryOptions({ input: { period } }),
+    orpc.admin.getDashboardAnalytics.queryOptions({ input: selection }),
   );
   const economy = useQuery(orpc.admin.getEconomySettings.queryOptions());
-  const selectedPeriod = PERIOD_OPTIONS.find(
-    (option) => option.value === period,
-  );
+  const selectedPeriod =
+    "period" in selection
+      ? PERIOD_OPTIONS.find((option) => option.value === selection.period)
+      : undefined;
+  const periodDescription =
+    selectedPeriod?.description ??
+    ("dateFrom" in selection
+      ? `${formatDateRangeLabel(selection.dateFrom)} - ${formatDateRangeLabel(selection.dateTo)}`
+      : "Selected period");
+  const customRangeDays =
+    Math.floor(
+      (new Date(`${draftTo}T00:00:00Z`).getTime() -
+        new Date(`${draftFrom}T00:00:00Z`).getTime()) /
+        86_400_000,
+    ) + 1;
+  const customRangeInvalid =
+    !draftFrom || !draftTo || draftFrom > draftTo || customRangeDays > 366;
+
+  function selectPreset(period: DashboardAnalyticsPeriod) {
+    setSelection({ period });
+    setShowCustomRange(false);
+  }
+
+  function applyCustomRange() {
+    if (customRangeInvalid) return;
+    setSelection({ dateFrom: draftFrom, dateTo: draftTo });
+  }
 
   return (
     <section aria-labelledby="admin-analytics-heading">
@@ -196,25 +261,70 @@ export function AdminAnalytics() {
             booking activity. All period metrics use WIB calendar days.
           </Text>
         </div>
-        <div
-          className="inline-flex w-fit max-w-full flex-wrap rounded-lg bg-accent p-1"
-          role="group"
-          aria-label="Analytics period"
+        <Tabs
+          value={"dateFrom" in selection ? "custom" : selection.period}
+          onValueChange={(value) => {
+            if (value === "custom") {
+              setShowCustomRange(true);
+              return;
+            }
+            selectPreset(value as DashboardAnalyticsPeriod);
+          }}
+          className="w-fit max-w-full whitespace-nowrap"
         >
-          {PERIOD_OPTIONS.map((option) => (
-            <Button
-              key={option.value}
-              type="button"
-              variant={option.value === period ? "secondary" : "plain"}
-              size="sm"
-              aria-pressed={option.value === period}
-              onClick={() => setPeriod(option.value)}
-            >
-              {option.label}
-            </Button>
-          ))}
-        </div>
+          <TabsList
+            aria-label="Analytics period"
+            className="max-w-full flex-nowrap overflow-x-auto overscroll-x-contain scrollbar-hidden whitespace-nowrap"
+          >
+            {PERIOD_OPTIONS.map((option) => (
+              <TabsItem key={option.value} value={option.value}>
+                {option.label}
+              </TabsItem>
+            ))}
+            <TabsItem value="custom">Custom</TabsItem>
+          </TabsList>
+        </Tabs>
       </div>
+
+      {showCustomRange ? (
+        <Card className="mb-4">
+          <CardBody className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
+            <Field>
+              <FieldLabel htmlFor="admin-analytics-from">Start date</FieldLabel>
+              <DatePicker
+                id="admin-analytics-from"
+                value={draftFrom}
+                onChange={setDraftFrom}
+                minDate={shiftDateKey(today, -365)}
+                maxDate={draftTo || today}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="admin-analytics-to">End date</FieldLabel>
+              <DatePicker
+                id="admin-analytics-to"
+                value={draftTo}
+                onChange={setDraftTo}
+                minDate={draftFrom}
+                maxDate={today}
+              />
+            </Field>
+            <Button
+              type="button"
+              className="w-full lg:w-auto"
+              disabled={customRangeInvalid}
+              onClick={applyCustomRange}
+            >
+              Apply range
+            </Button>
+            {customRangeDays > 366 ? (
+              <Text className="sm:col-span-2 lg:col-span-3 text-sm text-danger">
+                Custom range cannot exceed 366 days.
+              </Text>
+            ) : null}
+          </CardBody>
+        </Card>
+      ) : null}
 
       {analytics.isPending ? (
         <Loader />
@@ -223,7 +333,7 @@ export function AdminAnalytics() {
       ) : (
         <AnalyticsContent
           data={analytics.data}
-          periodDescription={selectedPeriod?.description ?? "Selected period"}
+          periodDescription={periodDescription}
           fallbackMarkValueIdr={economy.data?.markValueIdr}
         />
       )}
@@ -240,6 +350,7 @@ function AnalyticsContent({
   periodDescription: string;
   fallbackMarkValueIdr?: number;
 }) {
+  const businessSummary = getBusinessSummary(data);
   const stateData = STATE_ORDER.map((state) => {
     const row = data.stateBreakdown.find(
       (candidate) => candidate.state === state,
@@ -322,8 +433,86 @@ function AnalyticsContent({
         />
       </div>
 
-      <div className="mt-4 grid items-start gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.65fr)]">
-        <Card>
+      {businessSummary ? (
+        <>
+          <AnalyticsSection
+            title="Accounts & activity"
+            description="Account growth and rolling 30-day session activity."
+          >
+            <AnalyticsMetric
+              icon={<IconUsers />}
+              label="Total accounts"
+              value={numberFormatter.format(businessSummary.totalAccounts)}
+              helper={`${numberFormatter.format(businessSummary.totalStudents)} students · ${numberFormatter.format(businessSummary.totalTutors)} tutors`}
+              tone="primary-subtle"
+              scope="Current"
+            />
+            <AnalyticsMetric
+              icon={<IconUserPlus />}
+              label="New signups"
+              value={numberFormatter.format(businessSummary.signups)}
+              helper={periodDescription}
+              tone="info-subtle"
+            />
+            <AnalyticsMetric
+              icon={<IconCalendarStats />}
+              label="Monthly active users"
+              value={numberFormatter.format(businessSummary.monthlyActiveUsers)}
+              helper="Unique accounts with session activity"
+              tone="success-subtle"
+              scope="Rolling 30 days"
+            />
+            <AnalyticsMetric
+              icon={<IconUserOff />}
+              label="Inactive users"
+              value={numberFormatter.format(businessSummary.inactiveUsers)}
+              helper="Accounts older than 30 days with no recent session"
+              tone="warning-subtle"
+              scope="Rolling 30 days"
+            />
+          </AnalyticsSection>
+
+          <AnalyticsSection
+            title="Marks & revenue"
+            description="Current student wallet health and realized top-up payments."
+          >
+            <AnalyticsMetric
+              icon={<IconCoins />}
+              label="Students holding Marks"
+              value={`${percentageFormatter.format(businessSummary.studentsWithMarksRate)}%`}
+              helper={`${numberFormatter.format(businessSummary.studentsWithMarks)} with Marks · ${numberFormatter.format(businessSummary.studentsWithoutMarks)} without`}
+              tone="primary-subtle"
+              scope="Current"
+            />
+            <AnalyticsMetric
+              icon={<IconTrendingDown />}
+              label="User churn"
+              value={`${percentageFormatter.format(businessSummary.churnRate)}%`}
+              helper={`${numberFormatter.format(businessSummary.churnedUsers)} previously active users became inactive`}
+              tone="warning-subtle"
+              scope="Rolling 30 days"
+            />
+            <AnalyticsMetric
+              icon={<IconTargetArrow />}
+              label="Paid conversion"
+              value={`${percentageFormatter.format(businessSummary.paidConversionRate)}%`}
+              helper={`${numberFormatter.format(businessSummary.payingStudents)} students have completed a top-up`}
+              tone="success-subtle"
+              scope="Lifetime"
+            />
+            <AnalyticsMetric
+              icon={<IconCash />}
+              label="Net top-up revenue"
+              value={formatIdr(businessSummary.netRevenueIdr)}
+              helper={`Gross ${formatIdr(businessSummary.grossRevenueIdr)} · refunds ${formatIdr(businessSummary.refundedIdr)}`}
+              tone="info-subtle"
+            />
+          </AnalyticsSection>
+        </>
+      ) : null}
+
+      <div className="mt-4 grid items-stretch gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.65fr)]">
+        <Card className="h-full">
           <CardHeader>
             <IconBox variant="primary-subtle">
               <IconChartAreaLine />
@@ -435,7 +624,7 @@ function AnalyticsContent({
           </CardBody>
         </Card>
 
-        <Card>
+        <Card className="h-full">
           <CardHeader>
             <CardTitle>Current booking portfolio</CardTitle>
             <CardHeaderAction>
@@ -501,8 +690,8 @@ function AnalyticsContent({
         </Card>
       </div>
 
-      <div className="mt-4 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,1fr)]">
-        <Card>
+      <div className="mt-4 grid items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,1fr)] lg:[&>[data-slot=card]]:flex lg:[&>[data-slot=card]]:flex-col lg:[&>[data-slot=card-body]]:flex-1">
+        <Card className="h-full">
           <CardHeader>
             <IconBox variant="info-subtle">
               <IconUserPlus />
@@ -517,7 +706,7 @@ function AnalyticsContent({
               </CardInfoPreview>
             </CardTitle>
           </CardHeader>
-          <CardBody>
+          <CardBody className="flex flex-1 flex-col justify-center">
             {hasUserTrend ? (
               <div
                 className="h-64 w-full"
@@ -585,7 +774,7 @@ function AnalyticsContent({
           </CardBody>
         </Card>
 
-        <Card>
+        <Card className="h-full">
           <CardHeader>
             <IconBox variant="warning-subtle">
               <IconChartHistogram />
@@ -600,7 +789,7 @@ function AnalyticsContent({
               </CardInfoPreview>
             </CardTitle>
           </CardHeader>
-          <CardBody className="space-y-6">
+          <CardBody className="flex flex-1 flex-col justify-center space-y-6">
             <div>
               <div className="mb-3 flex items-center justify-between gap-3">
                 <Text className="text-sm font-medium">Session format</Text>
@@ -705,21 +894,21 @@ function AnalyticsMetric({
   value,
   helper,
   tone,
+  scope = "Selected period",
 }: {
   icon: React.ReactNode;
   label: string;
   value: ReactNode;
   helper: ReactNode;
   tone: "primary-subtle" | "success-subtle" | "info-subtle" | "warning-subtle";
+  scope?: string;
 }) {
   return (
-    <Card>
-      <CardBody className="min-w-0 p-5">
+    <Card className="h-full">
+      <CardBody className="flex h-full min-w-0 flex-col p-5">
         <div className="flex items-start justify-between gap-3">
           <IconBox variant={tone}>{icon}</IconBox>
-          <Text className="text-right text-xs text-dimmed">
-            Selected period
-          </Text>
+          <Text className="text-right text-xs text-dimmed">{scope}</Text>
         </div>
         <Text className="mt-5 text-sm text-muted">{label}</Text>
         <Heading size="sm" className="mt-1 break-words text-2xl">
@@ -728,6 +917,35 @@ function AnalyticsMetric({
         <div className="mt-2 text-xs text-dimmed">{helper}</div>
       </CardBody>
     </Card>
+  );
+}
+
+function AnalyticsSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: ReactNode;
+}) {
+  return (
+    <section
+      className="mt-6"
+      aria-labelledby={`analytics-${title.toLowerCase().replaceAll(" ", "-")}`}
+    >
+      <Heading
+        id={`analytics-${title.toLowerCase().replaceAll(" ", "-")}`}
+        level={3}
+        size="sm"
+      >
+        {title}
+      </Heading>
+      <Text className="mt-1 text-sm text-muted">{description}</Text>
+      <div className="mt-3 grid items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {children}
+      </div>
+    </section>
   );
 }
 
