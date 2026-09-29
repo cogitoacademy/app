@@ -532,7 +532,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
     selectedSlots.length > 1
       ? `${selectedSlots.length} of 2–4 sessions selected`
       : selectedSlot
-        ? `${formatBookingDateOnly(selectedSlot.startDate, BOOKING_TIMEZONE)} · ${selectedSlot.time}–${addMinutesToTime(selectedSlot.time, 90)} WIB`
+        ? `${formatBookingDateOnly(selectedSlot.startDate, BOOKING_TIMEZONE)} · ${selectedSlot.time} - ${addMinutesToTime(selectedSlot.time, 90)} WIB`
         : "Choose a time";
 
   function submitBooking(event: React.FormEvent<HTMLFormElement>) {
@@ -1137,7 +1137,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                                   )}
                                 </Text>
                                 <Text className="text-sm text-muted">
-                                  {startTime}–{addMinutesToTime(startTime, 90)}{" "}
+                                  {startTime} - {addMinutesToTime(startTime, 90)}{" "}
                                   WIB
                                 </Text>
                               </div>
@@ -1484,7 +1484,7 @@ function BookingScheduleSummary({
     return (
       <SummaryRow
         label="Date & time"
-        value={`${formatBookingDateOnly(slot.startDate, BOOKING_TIMEZONE)} · ${slot.time}–${addMinutesToTime(slot.time, 90)} WIB`}
+        value={`${formatBookingDateOnly(slot.startDate, BOOKING_TIMEZONE)} · ${slot.time} - ${addMinutesToTime(slot.time, 90)} WIB`}
       />
     );
   }
@@ -1502,7 +1502,7 @@ function BookingScheduleSummary({
               {formatBookingDateOnly(slot.startDate, BOOKING_TIMEZONE)}
             </Text>
             <Text className="shrink-0 text-right font-medium">
-              {slot.time}–{addMinutesToTime(slot.time, 90)} WIB
+              {slot.time} - {addMinutesToTime(slot.time, 90)} WIB
             </Text>
           </div>
         ))}

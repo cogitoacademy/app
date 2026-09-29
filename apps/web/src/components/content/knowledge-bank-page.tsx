@@ -262,6 +262,7 @@ export function KnowledgeBankPage() {
       >
         <DrawerPopup
           direction={isDesktop ? "right" : "bottom"}
+          backdropBlur={false}
           className={
             isDesktop
               ? "w-full max-w-3xl"
