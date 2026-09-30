@@ -1,11 +1,11 @@
 # Backup CRLF Hardening
 
-| Field      | Value                                                                                     |
-| ---------- | ----------------------------------------------------------------------------------------- |
+| Field      | Value                                                                                                   |
+| ---------- | ------------------------------------------------------------------------------------------------------- |
 | Status     | **Completed (merged #282, 2026-09-30)** — fix live, backup green, R2 confirmed; follow-ups below remain |
-| Created    | 2026-09-30                                                                                |
-| Depends on | #278 (vault edit that introduced CRLF)                                                    |
-| Scope      | Backup cron + disk watchdog (infra only; no app code, RPC, schema, or persistence change) |
+| Created    | 2026-09-30                                                                                              |
+| Depends on | #278 (vault edit that introduced CRLF)                                                                  |
+| Scope      | Backup cron + disk watchdog (infra only; no app code, RPC, schema, or persistence change)               |
 
 ## Root cause
 
