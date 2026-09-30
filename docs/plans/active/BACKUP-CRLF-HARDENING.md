@@ -1,10 +1,10 @@
 # Backup CRLF Hardening
 
-| Field      | Value                                  |
-| ---------- | -------------------------------------- |
-| Status     | Active — fix applied 2026-09-30, PR open; follow-ups below remain |
-| Created    | 2026-09-30                             |
-| Depends on | #278 (vault edit that introduced CRLF) |
+| Field      | Value                                                                                     |
+| ---------- | ----------------------------------------------------------------------------------------- |
+| Status     | Active — fix applied 2026-09-30, PR open; follow-ups below remain                         |
+| Created    | 2026-09-30                                                                                |
+| Depends on | #278 (vault edit that introduced CRLF)                                                    |
 | Scope      | Backup cron + disk watchdog (infra only; no app code, RPC, schema, or persistence change) |
 
 ## Root cause
@@ -43,8 +43,8 @@ resolution — that mechanism stays.
   key names + lengths only, no values printed), fixed via
   `sed -i 's/\r$//'`, re-verified CR-free (`file`: ASCII text).
 - VPS manual run (cron-equivalent wrapper: `set -a; . backup.env; set +a;
-  cogito-backup.sh >> log`): green — `==> Done: uploaded
-  backups/2026-09-30.sql.gz`, 27K dump, prune deleted 4 stale
+cogito-backup.sh >> log`): green — `==> Done: uploaded
+backups/2026-09-30.sql.gz`, 27K dump, prune deleted 4 stale
   `pre-migrate-*` snapshots (newest 7 kept), 0 daily objects pruned.
 - R2: `head-object backups/2026-09-30.sql.gz` → 26725 bytes, ETag present.
 - Repo: `bash -n` clean (both scripts), `shellcheck -S warning` clean,
