@@ -53,6 +53,21 @@ set -euo pipefail
 # the apt package); root cron PATH does not include it.
 export PATH="${PATH}:/opt/cogito-actions-tools/bin"
 
+# --- CRLF defense (2026-09-30) -------------------------------------------------
+# /etc/cogito/backup.env once shipped CRLF line endings (a vault edit); bash
+# `source` keeps the trailing \r inside values, so pg_dump asked for database
+# "postgres\r" and the nightly backup failed. The playbook now strips \r at
+# decrypt time; this guard makes the script immune even if a future env file
+# is CRLF-poisoned again. Must run before any use of these values (the AWS
+# mapping below, the required-env check, defaults, R2_ENDPOINT).
+for _env_var in DATABASE_URL R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BACKUP_BUCKET RETENTION_DAYS PRE_MIGRATE_KEEP DISCORD_WEBHOOK_URL; do
+  _env_val="${!_env_var:-}"
+  if [[ -n "${_env_val}" ]]; then
+    printf -v "${_env_var}" '%s' "${_env_val%$'\r'}"
+  fi
+done
+unset _env_var _env_val
+
 # The AWS CLI reads AWS_* names; the vault/env file uses R2_* (same mapping
 # as infra/apply.sh). Without this the upload silently fails auth.
 export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-${R2_ACCESS_KEY_ID:-}}"

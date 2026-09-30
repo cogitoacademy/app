@@ -56,9 +56,14 @@
     # P0 fix (2026-09-02): the full vault breaks bash sourcing (multi-line
     # PEM + EMAIL_FROM with spaces) — the watchdog env never loaded and the
     # 03:30 cron never ran. Filter to exactly the keys the watchdog reads.
+    # CRLF guard (2026-09-30): same class as the backup-cron incident — a
+    # vault edit shipped \r line endings, which bash `source` keeps inside
+    # values. Strip \r here; infra/disk-watchdog.sh also sanitizes its own
+    # values as defense-in-depth.
     - name: Decrypt prod env on the control node (SOPS; age key stays local)
       ansible.builtin.shell: >-
         sops -d {{ watchdog_env_src }} |
+        tr -d '\r' |
         grep -E '^(DISCORD_WEBHOOK_URL|WARN_THRESHOLD|PRUNE_THRESHOLD)='
       delegate_to: localhost
       become: false

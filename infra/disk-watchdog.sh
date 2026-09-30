@@ -56,6 +56,21 @@ for arg in "$@"; do
   esac
 done
 
+# --- CRLF defense (2026-09-30) -------------------------------------------------
+# Same CRLF-poisoned-env class as the backup-cron incident (a vault edit
+# shipped \r line endings, which bash `source` keeps inside values). A \r in
+# WARN/PRUNE_THRESHOLD breaks the integer comparisons below and a \r in the
+# webhook URL breaks the Discord post. The playbook now strips \r at decrypt
+# time; this guard keeps the script safe regardless. Must run before any use
+# of these values (defaults are applied in Main below).
+for _env_var in DISCORD_WEBHOOK_URL WARN_THRESHOLD PRUNE_THRESHOLD; do
+  _env_val="${!_env_var:-}"
+  if [[ -n "${_env_val}" ]]; then
+    printf -v "${_env_var}" '%s' "${_env_val%$'\r'}"
+  fi
+done
+unset _env_var _env_val
+
 log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >>"$LOG"; }
 
 # --- Discord post (never echoes the URL; --fail so failures are loud) ------

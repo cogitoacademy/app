@@ -95,9 +95,14 @@
     # vault onto the VPS in plaintext). DISCORD_WEBHOOK_URL powers the
     # failure self-check (2026-09-05); without it failures stay loud on
     # stderr + exit 1 but post no Discord alert.
+    # CRLF guard (2026-09-30): a vault edit shipped \r line endings, which
+    # bash `source` keeps inside values (pg_dump asked for "postgres\r").
+    # Strip \r here so the cron env file is always LF-only; infra/backup.sh
+    # additionally sanitizes its own values as defense-in-depth.
     - name: Decrypt prod env on the control node (SOPS; age key stays local)
       ansible.builtin.shell: >-
         sops -d {{ backup_env_src }} |
+        tr -d '\r' |
         grep -E '^(DATABASE_URL|R2_ACCOUNT_ID|R2_ACCESS_KEY_ID|R2_SECRET_ACCESS_KEY|R2_BACKUP_BUCKET|RETENTION_DAYS|DISCORD_WEBHOOK_URL)='
       delegate_to: localhost
       become: false
