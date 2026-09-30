@@ -1,6 +1,20 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-09-29
+Last updated: 2026-09-30
+
+## Nightly backup CRLF incident + hardening (2026-09-30)
+
+The nightly backup failed Sep 28–30 during `dump` (`pg_dump: FATAL:
+database "postgres\r" does not exist`). Root cause: the Sep 27 Infra Apply
+run for PR #278 rewrote `/etc/cogito/backup.env` with CRLF line endings (a
+vault edit), and bash `source` keeps the trailing `\r` inside values. Fix
+was VPS-side `sed -i 's/\r$//'` plus a manual green run (`backups/2026-09-30.sql.gz`,
+27K, R2 head-object confirmed). Hardened in-repo: `sops -d | tr -d '\r' |
+grep -E` in `infra/ansible/backup-cron.yml` + `disk-watchdog.yml`, and a
+one-spot trailing-`\r` sanitize guard at the top of `infra/backup.sh` +
+`infra/disk-watchdog.sh` (before any use of the values). Detail + remaining `sops -d | grep` follow-ups: `docs/plans/active/BACKUP-CRLF-HARDENING.md`.
+Not a container-IP problem: the vault keeps the private hostname and the
+script resolves it at runtime (see Vault note in Deployment wave state).
 
 ## Production Knowledge Bank iframe CSP (2026-09-29)
 
@@ -573,7 +587,7 @@ stack/wrap responsively across mobile, tablet, and desktop widths.
 - **Observability stack PLG (APPLIED live 2026-09-05):** `infra/ansible/observability.yml` declares Coolify services `cogito-loki` / `cogito-prometheus` / `cogito-grafana` / `cogito-alloy` (all tailnet-only). Verified live: Loki ingesting (`{service="cogito-api"}` traceId search works), all 3 Prometheus targets UP, Grafana at loopback `:3000` with provisioned datasources/dashboards/alert rules (DLQFresh/DiskWarn/DiskCrit/ApiErrors → `Discord-ops`), 2G swap live. Gotchas fixed during apply (all in git): base64 `docker_compose_raw`, `loki.source.docker` (not `docker_logs`), Loki 3.x `delete_request_store`, 720h old-sample window, 0644 metrics token, cAdvisor → loopback `:8081`, shared `cogito-obs` network (services are network-isolated by default), suffix-stripped `service` labels, dashboard label `cogito-api`. Grafana admin password in vault (`GRAFANA_ADMIN_PASSWORD`, SOPS-encrypted since 2026-09-06 rotation — live reset verified, Coolify `GF_SECURITY_ADMIN_PASSWORD` UI value still pending operator update). Logs carry `userId`, never email.
 - **Observability No-Data wave (2026-09-06, branch `fix/obs-grafana-no-data`):** live audit found three healthy-but-empty panels — 5xx error-rate exprs (empty numerator when zero 5xx) made zero-safe with `or vector(0)` (App RED, Delivery, ApiErrors alert), `breaker_state` panels made healthy-safe (`or on() vector(0)` / `max(...) or vector(0)`; healthy exposition omits the section when no `cogito:cb:*` keys exist). Container-memory panel root cause: cAdvisor `v0.52.1` predates containerd-snapshotter support (upstream #3709, fixed in `v0.54.0`) and Docker 29.7.2 uses the containerd image store, so cAdvisor drops every Docker container (only `id/instance/job` labels, no `name`/`container_label_*`); fix is image bump to `ghcr.io/google/cadvisor:v0.60.5` in `observability.yml` — compose PATCHed into Coolify by the pipeline on 2026-09-07 (drift-detection repair); pipeline auto-redeployed the same day (restart latest:true) and container labels returned — Infra memory panel rendering (see `docs/plans/completed/OBS-GRAFANA-NODATA.md`). Folders reunified 2026-09-07 (boards + rules in afxfpsyn1jldse, duplicate deleted).
 - **Drizzle Studio (owned + healthy 2026-09-05):** Coolify service `cogito-studio` (app `drizzle-gateway`) was unhealthy 11 days (wedged vendor healthcheck + dead sslip.io domain); revived via service restart + loopback publish `127.0.0.1:4983` (PATCHed compose) — status `healthy`, UI 200. Access: `ssh -L 4983:127.0.0.1:4983`; credentials in Coolify service env; writes only in maintenance windows. See RUNBOOK → Monitoring & Alerting → Drizzle Studio ownership.
-- **Vault**: R2/Coolify tokens rotated 2026-08-31; `DATABASE_URL` uses the container IP `10.0.1.8` (host-reachable for the cron; the app keeps the private hostname).
+- **Vault**: R2/Coolify tokens rotated 2026-08-31; `DATABASE_URL` keeps the Coolify-private hostname (e.g. `noxeaeuxfreq0axa9unpew5r`) and `infra/backup.sh` resolves it to the container IP at runtime (`getent` → `docker inspect` on the `coolify` network, e.g. `10.0.1.8`); the operator never hand-maintains a container IP (dynamic since 2026-09-05; see RUNBOOK → Backup & Restore).
 
 **Remaining (see `docs/plans/active/`):** drills (DEPLOYMENT-PLAN Phase 5), payment-provider Live Mode E2E (Midtrans), and `ACTIONS_BOT_PAT` keep-or-drop (operator). p95 baseline via the App-RED dashboard after 7 days.
 
