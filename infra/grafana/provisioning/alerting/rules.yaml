@@ -68,6 +68,10 @@ groups:
       # underlying mismatch persists instead of flapping. Resolve (!firing)
       # means "no event in 30m", NOT "reconciled" — always check
       # refund_record + audit partial_refund_reconciliation before closing.
+      # max (not sum): both the public and the internal Prometheus jobs
+      # scrape the same single replica, so sum counts every event twice once
+      # cogito-api-internal is UP (B read ~2x single-event value 2026-10-01).
+      # Revisit if a second app replica ever lands.
       - uid: payment-integrity-event
         title: PaymentIntegrityEvent
         condition: C
@@ -79,7 +83,7 @@ groups:
               to: 0
             datasourceUid: prometheus
             model:
-              expr: "sum(increase(payment_integrity_events_total[30m])) or vector(0)"
+              expr: "max(increase(payment_integrity_events_total[30m])) or vector(0)"
               refId: A
           - refId: B
             relativeTimeRange:

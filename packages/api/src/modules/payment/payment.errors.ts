@@ -120,8 +120,8 @@ export class UnknownPaymentStatusError extends DomainError {
 
 export class PaymentWebhookMismatchError extends DomainError {
   readonly domain = "payment";
-  constructor(message: string) {
-    super("PAYMENT_WEBHOOK_MISMATCH", message);
+  constructor(message: string, details?: Record<string, unknown>) {
+    super("PAYMENT_WEBHOOK_MISMATCH", message, details);
   }
 }
 

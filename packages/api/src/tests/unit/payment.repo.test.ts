@@ -161,6 +161,7 @@ describe("findPaymentsForReconciliation", () => {
       "midtrans",
       olderThan,
       25,
+      new Date("2026-09-18T00:00:00.000Z"),
     );
 
     expect(result).toEqual(rows);
@@ -409,6 +410,7 @@ describe("createPaymentRepo", () => {
       "midtrans",
       new Date("2026-09-25T00:00:00.000Z"),
       10,
+      new Date("2026-09-18T00:00:00.000Z"),
       conn,
     );
     expect(result).toEqual(rows);

@@ -1363,7 +1363,12 @@ describe("PaymentService", () => {
         },
       ];
       const findPaymentsForReconciliation = mock(
-        async (_provider: string, _olderThan: Date, limit: number) => {
+        async (
+          _provider: string,
+          _olderThan: Date,
+          limit: number,
+          _createdAfter: Date,
+        ) => {
           expect(limit).toBe(100);
           return records;
         },
@@ -1414,9 +1419,41 @@ describe("PaymentService", () => {
         "midtrans",
         expect.any(Date),
         100,
+        expect.any(Date),
       );
       expect(getPaymentRequestStatus).toHaveBeenCalledTimes(3);
       expect(updatePaymentStatus).toHaveBeenCalledTimes(1);
+    });
+
+    test("bounds reconciliation to recently created attempts (no infinite retry)", async () => {
+      const seen: Date[] = [];
+      const findPaymentsForReconciliation = mock(
+        async (
+          _provider: string,
+          _olderThan: Date,
+          _limit: number,
+          createdAfter: Date,
+        ) => {
+          seen.push(createdAfter);
+          return [];
+        },
+      );
+      const repo = makeRepo({ findPaymentsForReconciliation });
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "midtrans",
+      });
+
+      await service.reconcilePendingPayments();
+
+      expect(seen).toHaveLength(1);
+      const ageMs = Date.now() - seen[0]!.getTime();
+      const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+      expect(ageMs).toBeGreaterThan(sevenDaysMs - 60_000);
+      expect(ageMs).toBeLessThan(sevenDaysMs + 60_000);
     });
   });
 
@@ -1515,6 +1552,85 @@ describe("PaymentService", () => {
           amountIdr: 1,
         }),
       ).rejects.toMatchObject({ code: "PAYMENT_WEBHOOK_MISMATCH" });
+    });
+
+    test("amount mismatch error carries expected/received amounts for diagnosis", async () => {
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay1",
+          status: PAYMENT_STATUS.PENDING,
+          provider: "midtrans",
+          amountIdr: 50000,
+          providerReference: "midtrans:user1:pkg1",
+        })),
+      });
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "midtrans",
+      });
+
+      const err = await service
+        .confirmFromWebhook({
+          provider: "midtrans",
+          providerReference: "midtrans:user1:pkg1",
+          providerEventId: "evt_amount_details",
+          status: PAYMENT_STATUS.PAID as PaymentStatus,
+          amountIdr: 1,
+        })
+        .then(
+          () => null,
+          (e: any) => e,
+        );
+      expect(err).toMatchObject({ code: "PAYMENT_WEBHOOK_MISMATCH" });
+      expect(err.details).toMatchObject({
+        expectedAmountIdr: 50000,
+        receivedAmountIdr: 1,
+      });
+    });
+
+    test("provider expiry with a fee-inflated gross transitions to EXPIRED without an integrity event", async () => {
+      // Regression: Midtrans gross_amount includes the channel fee
+      // (e.g. 2004440 vs stored 2000000), so enforcing amount equality on
+      // non-crediting statuses stranded EXPIRED rows in PENDING forever.
+      const updatePaymentStatus = mock(async () => {});
+      const wallet = makeWallet();
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay1",
+          status: PAYMENT_STATUS.PENDING,
+          provider: "midtrans",
+          amountIdr: 2000000,
+          walletId: "w1",
+          marks: 400,
+          providerEventId: null,
+          providerReference: "midtrans:user1:pkg1",
+        })),
+        updatePaymentStatus,
+      });
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: wallet as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "midtrans",
+      });
+
+      const result = await service.confirmFromWebhook({
+        provider: "midtrans",
+        providerReference: "midtrans:user1:pkg1",
+        providerEventId: "evt_expire_fee",
+        status: PAYMENT_STATUS.EXPIRED as PaymentStatus,
+        amountIdr: 2004440,
+        currency: "IDR",
+        failureReason: "Success, transaction is found",
+      });
+
+      expect(result.status).toBe(PAYMENT_STATUS.EXPIRED);
+      expect(updatePaymentStatus).toHaveBeenCalledTimes(1);
+      expect(wallet.credit).toHaveBeenCalledTimes(0);
     });
 
     test("records a partial refund for manual reconciliation", async () => {
