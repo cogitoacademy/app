@@ -539,7 +539,7 @@ describe("AchievementService", () => {
       }
     });
 
-    test("throws AchievementNotEditableError when achievement status is not pending", async () => {
+    test("allows deleting a reviewed achievement", async () => {
       const repo = makeAchievementRepo({
         findByIdForUser: mock(async () => ({
           id: "a1",
@@ -547,6 +547,7 @@ describe("AchievementService", () => {
           status: ACHIEVEMENT_STATUS.REJECTED,
           version: 1,
         })),
+        deleteWithVersion: mock(async () => [{ id: "a1" }]),
       });
       const service = createAchievementService({
         achievementRepo: repo as any,
@@ -555,12 +556,14 @@ describe("AchievementService", () => {
         db: makeDb(),
       });
 
-      try {
-        await service.remove("u1", "a1", 1);
-        expect(true).toBe(false);
-      } catch (e: any) {
-        expect(e).toBeInstanceOf(AchievementNotEditableError);
-      }
+      await service.remove("u1", "a1", 1);
+
+      expect(repo.deleteWithVersion).toHaveBeenCalledWith(
+        expect.anything(),
+        "a1",
+        "u1",
+        1,
+      );
     });
   });
 
@@ -848,13 +851,13 @@ describe("AchievementService validation", () => {
       ).toThrow(AchievementNotEditableError);
     });
 
-    test("throws AchievementNotEditableError for archived achievement", () => {
+    test("allows deleting an archived achievement", () => {
       expect(() =>
         validateDelete({
           id: "a1",
           status: ACHIEVEMENT_STATUS.ARCHIVED,
         } as any),
-      ).toThrow(AchievementNotEditableError);
+      ).not.toThrow();
     });
   });
 });
