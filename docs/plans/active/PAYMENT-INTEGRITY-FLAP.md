@@ -83,6 +83,16 @@ first (#1 then auto-expires via reconcile; #2 gets manual EXPIRED after).
   Confirm with `max(increase(payment_integrity_events_total[30m]))` → 0,
   or wait for the Resolved notification (no flap-follow).
 
+## Wave 3 (branch `fix/payment-fee-tolerance`, in progress 2026-10-01)
+
+Follow-up hazard from wave 2: the money-gated check still demands exact
+equality on PAID/SETTLED, so a genuine bank-VA payment (gross = package +
+fee) would be rejected at credit time — paying customer, no Marks. Fix:
+fee-tolerant acceptance `0 <= overpaid <= max(Rp10k, 3%)` (VA Rp4,440 /
+outlet Rp5k / QRIS 0.7% / wallets ~2% / cards 2.9%+2k per Midtrans pricing);
+underpayment always throws; Rp1M overpay throws (explicit regression test);
+credit still uses stored package Marks unconditionally.
+
 ## Open follow-ups (not in this wave)
 
 1. ~~Reconcile retry double-counts integrity events~~ — fixed in wave 2
