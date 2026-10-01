@@ -19,6 +19,11 @@ import {
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
 import { Input } from "@cogito-app/ui/components/selia/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupText,
+} from "@cogito-app/ui/components/selia/input-group";
 import { DatePicker } from "@cogito-app/ui/components/selia/date-picker";
 import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import {
@@ -143,9 +148,15 @@ const studentAchievementFormSchema = achievementFormSchema
     }
   });
 
+function withHttpsPrefix(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed || /^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
 function isValidHttpUrl(value: string) {
   try {
-    const url = new URL(value);
+    const url = new URL(withHttpsPrefix(value));
     return url.protocol === "http:" || url.protocol === "https:";
   } catch {
     return false;
@@ -277,7 +288,9 @@ export function AchievementForm({
             location: value.location || null,
             description: value.description || null,
             subjects: value.subjects,
-            evidenceUrl: value.evidenceUrl || null,
+            evidenceUrl: value.evidenceUrl
+              ? withHttpsPrefix(value.evidenceUrl)
+              : null,
             ...(isAdmin
               ? { documentationUrl: value.documentationUrl || null }
               : {}),
@@ -306,7 +319,9 @@ export function AchievementForm({
             location: value.location || undefined,
             description: value.description || undefined,
             subjects: value.subjects,
-            evidenceUrl: value.evidenceUrl || undefined,
+            evidenceUrl: value.evidenceUrl
+              ? withHttpsPrefix(value.evidenceUrl)
+              : undefined,
           });
         }
       } catch {
@@ -493,21 +508,39 @@ export function AchievementForm({
                         ? "The link the student provided for verification. Keep it separate from the public documentation image."
                         : "Upload your certificate or proof to Google Drive, set General access to Anyone with the link and Viewer, then paste the link here. This link is only used to verify your achievement."}
                     </FieldDescription>
-                    <Input
-                      id={field.name}
-                      name={field.name}
-                      type="url"
-                      value={field.state.value}
-                      onBlur={field.handleBlur}
-                      onChange={(e) => field.handleChange(e.target.value)}
+                    <InputGroup
                       className={cn(
                         field.state.meta.errors.length > 0 &&
                           "ring-2 ring-danger",
                       )}
-                      placeholder={
-                        isAdmin ? "https://..." : "https://drive.google.com/..."
-                      }
-                    />
+                    >
+                      <InputGroupAddon>
+                        <InputGroupText>https://</InputGroupText>
+                      </InputGroupAddon>
+                      <Input
+                        id={field.name}
+                        name={field.name}
+                        type="text"
+                        inputMode="url"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        value={field.state.value.replace(/^https?:\/\//i, "")}
+                        onBlur={() => {
+                          field.handleChange(
+                            withHttpsPrefix(field.state.value),
+                          );
+                          field.handleBlur();
+                        }}
+                        onChange={(event) =>
+                          field.handleChange(
+                            event.target.value.replace(/^https?:\/\//i, ""),
+                          )
+                        }
+                        placeholder={
+                          isAdmin ? "example.com/proof" : "drive.google.com/..."
+                        }
+                      />
+                    </InputGroup>
                     {field.state.meta.errors.map((error) => (
                       <FieldError key={String(error)}>
                         {String(error)}

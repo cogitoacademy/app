@@ -22,6 +22,8 @@ import {
   IconCircleCheck,
   IconSchool,
   IconTrophy,
+  IconUsers,
+  IconWallet,
 } from "@tabler/icons-react";
 
 import {
@@ -79,22 +81,12 @@ export function StudentDashboardPage({ studentName }: { studentName: string }) {
             heldBalance={wallet.data?.heldBalance ?? 0}
             totalBalance={wallet.data?.totalBalance ?? 0}
             isLoading={wallet.isPending}
-            actionLabel={
-              wallet.isPending
-                ? "Check balance"
-                : wallet.data?.availableBalance
-                  ? "Find a tutor"
-                  : wallet.data?.heldBalance
-                    ? "Review bookings"
-                    : "Top up"
-            }
-            actionHref={
-              wallet.data?.availableBalance
-                ? "/tutors"
-                : wallet.data?.heldBalance
-                  ? "/bookings"
-                  : "/balance"
-            }
+            actionLabel="Find a tutor"
+            actionHref="/tutors"
+            actionIcon={<IconUsers />}
+            secondaryActionLabel="Top up"
+            secondaryActionHref="/balance"
+            secondaryActionIcon={<IconWallet />}
           />
           <CompetitionCalendarCard />
         </div>
