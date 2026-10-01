@@ -57,9 +57,20 @@ describe("Achievement Service", () => {
       );
     });
 
-    test("throws AchievementNotEditableError for approved achievement", () => {
+    test("allows deleting reviewed achievements owned by the student", () => {
+      for (const status of [
+        "pending_review",
+        "approved",
+        "rejected",
+        "archived",
+      ]) {
+        expect(() => validateDelete(makeAchievement({ status }))).not.toThrow();
+      }
+    });
+
+    test("rejects unsupported achievement states", () => {
       expect(() =>
-        validateDelete(makeAchievement({ status: "approved" })),
+        validateDelete(makeAchievement({ status: "draft" })),
       ).toThrow(AchievementNotEditableError);
     });
   });

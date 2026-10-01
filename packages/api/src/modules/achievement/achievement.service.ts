@@ -106,7 +106,21 @@ export function validateAdminUpdate(
 }
 
 export function validateDelete(existing: AchievementRow | undefined): void {
-  if (!existing || existing.status !== ACHIEVEMENT_STATUS.PENDING) {
+  if (
+    !existing ||
+    ![
+      ACHIEVEMENT_STATUS.PENDING,
+      ACHIEVEMENT_STATUS.PENDING_REVIEW,
+      ACHIEVEMENT_STATUS.APPROVED,
+      ACHIEVEMENT_STATUS.REJECTED,
+      ACHIEVEMENT_STATUS.ARCHIVED,
+    ].includes(
+      existing.status as Exclude<
+        (typeof ACHIEVEMENT_STATUS)[keyof typeof ACHIEVEMENT_STATUS],
+        "draft"
+      >,
+    )
+  ) {
     throw new AchievementNotEditableError(existing?.id ?? "unknown");
   }
 }

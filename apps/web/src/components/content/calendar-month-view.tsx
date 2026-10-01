@@ -90,7 +90,7 @@ export function CalendarMonthView({
   }
 
   return (
-    <div className="relative overflow-x-auto overscroll-x-none">
+    <div className="relative">
       <div className="min-w-[720px] lg:min-w-0">
         <div className="grid grid-cols-7 border-y border-border bg-accent/40">
           {weekdays.map((weekday) => (

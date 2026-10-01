@@ -73,11 +73,7 @@ export function CompetitionCalendarPage() {
   }
 
   return (
-    <Stack
-      direction="column"
-      spacing="lg"
-      className="min-h-0 flex-1 flex-nowrap"
-    >
+    <Stack direction="column" spacing="lg" className="min-h-0 flex-nowrap">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <Heading>Your Gateway to the World Stage</Heading>
