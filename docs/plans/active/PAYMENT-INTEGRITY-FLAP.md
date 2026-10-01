@@ -73,10 +73,10 @@ first (#1 then auto-expires via reconcile; #2 gets manual EXPIRED after).
 - `fe5b0e7f` **auto-expired via reconcile** at 12:50:49 with the fixed code
   (amount check no longer blocks) — the root fix works in production.
 - `df500c27` manually expired (guarded `UPDATE ... WHERE status='PENDING'`
-  + `payment_admin_expired` audit row; pre-verified zero ledger refs, zero
-  holds). Tearful lessons: ops.sh `db` quoting breaks on `"` (use
-  single-quotes + `jsonb_build_object`); `audit_log.id` has no default
-  (pass `gen_random_uuid()`).
+  - `payment_admin_expired` audit row; pre-verified zero ledger refs, zero
+    holds). Tearful lessons: ops.sh `db` quoting breaks on `"` (use
+    single-quotes + `jsonb_build_object`); `audit_log.id` has no default
+    (pass `gen_random_uuid()`).
 - Post-deploy `payment_integrity_events_total` instant query is **empty**
   (in-memory counter reset by the deploy, zero new increments) — growth stopped.
 - Expected: alert resolves after 30m quiet (last increment ~12:50).
