@@ -6,6 +6,14 @@ import { useState } from "react";
 
 import { Button } from "@cogito-app/ui/components/selia/button";
 import { Card } from "@cogito-app/ui/components/selia/card";
+import {
+  Dialog,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogPopup,
+  DialogTitle,
+} from "@cogito-app/ui/components/selia/dialog";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
@@ -19,6 +27,7 @@ import { AchievementFilters } from "../achievement-filters";
 import { AchievementForm, type AchievementCategory } from "../achievement-form";
 import { AchievementStats } from "../achievement-stats";
 import { AchievementTable } from "../achievement-table";
+import { getUserFacingError } from "@/lib/error-message";
 import { orpc } from "@/utils/orpc";
 import { TablePagination } from "@/components/table-pagination";
 
@@ -33,6 +42,9 @@ export function AchievementsPage() {
   >(null);
   const [editOpen, setEditOpen] = useState(false);
   const [page, setPage] = useState(0);
+  const [deleteTarget, setDeleteTarget] = useState<
+    (typeof items)[number] | null
+  >(null);
 
   const category =
     categoryFilter === "All"
@@ -60,8 +72,16 @@ export function AchievementsPage() {
   const deleteMutation = useMutation(
     orpc.achievement.delete.mutationOptions({
       onSuccess: () => {
+        setDeleteTarget(null);
         void Promise.all([achievements.refetch(), achievementStats.refetch()]);
         toastManager.add({ title: "Achievement deleted", type: "success" });
+      },
+      onError: (error: Error) => {
+        toastManager.add({
+          title: "Achievement could not be deleted",
+          description: getUserFacingError(error),
+          type: "error",
+        });
       },
     }),
   );
@@ -105,26 +125,45 @@ export function AchievementsPage() {
       />
 
       {total > 0 && (
-        <AchievementStats total={total} approved={approved} pending={pending} />
+        <div className="flex items-stretch gap-3">
+          <AchievementStats
+            total={total}
+            approved={approved}
+            pending={pending}
+            actions={
+              <AchievementFilters
+                category={categoryFilter}
+                status={statusFilter}
+                onCategoryChange={(value) => {
+                  setCategoryFilter(value);
+                  setPage(0);
+                }}
+                onStatusChange={(value) => {
+                  setStatusFilter(value);
+                  setPage(0);
+                }}
+              />
+            }
+          />
+          <div className="hidden shrink-0 items-center md:flex">
+            <AchievementFilters
+              category={categoryFilter}
+              status={statusFilter}
+              onCategoryChange={(value) => {
+                setCategoryFilter(value);
+                setPage(0);
+              }}
+              onStatusChange={(value) => {
+                setStatusFilter(value);
+                setPage(0);
+              }}
+            />
+          </div>
+        </div>
       )}
 
       {showPendingBanner && <AchievementBanner type="pending" />}
       {showAllApprovedBanner && <AchievementBanner type="allApproved" />}
-
-      {total > 0 && (
-        <AchievementFilters
-          category={categoryFilter}
-          status={statusFilter}
-          onCategoryChange={(value) => {
-            setCategoryFilter(value);
-            setPage(0);
-          }}
-          onStatusChange={(value) => {
-            setStatusFilter(value);
-            setPage(0);
-          }}
-        />
-      )}
 
       {achievements.isPending || achievementStats.isPending ? (
         <Loader />
@@ -169,10 +208,8 @@ export function AchievementsPage() {
           onPrevious={() => setPage((current) => Math.max(0, current - 1))}
           onNext={() => setPage((current) => current + 1)}
           onDelete={(achievement) => {
-            deleteMutation.mutate({
-              id: achievement.id,
-              version: achievement.version,
-            });
+            const target = items.find((item) => item.id === achievement.id);
+            if (target) setDeleteTarget(target);
           }}
           onEdit={(id) => {
             const found = items.find((item) => item.id === id);
@@ -183,6 +220,46 @@ export function AchievementsPage() {
           }}
         />
       )}
+
+      <Dialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !deleteMutation.isPending) setDeleteTarget(null);
+        }}
+      >
+        <DialogPopup>
+          <DialogHeader className="flex-col! items-start! gap-1.5!">
+            <DialogTitle>Delete achievement?</DialogTitle>
+            <DialogDescription>
+              This will permanently delete “
+              {deleteTarget?.eventName ?? "this achievement"}”. This action
+              cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              onClick={() => setDeleteTarget(null)}
+              disabled={deleteMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              progress={deleteMutation.isPending}
+              onClick={() => {
+                if (!deleteTarget) return;
+                deleteMutation.mutate({
+                  id: deleteTarget.id,
+                  version: deleteTarget.version,
+                });
+              }}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
 
       {editAchievement && (
         <AchievementForm

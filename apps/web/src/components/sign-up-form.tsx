@@ -40,7 +40,6 @@ import {
   signUpPasswordPolicySchema,
   signUpSchema,
 } from "./auth-form-validation";
-import Loader from "./loader";
 
 export default function SignUpForm({
   onSwitchToSignIn,
@@ -52,7 +51,6 @@ export default function SignUpForm({
   const navigate = useNavigate({
     from: "/",
   });
-  const { isPending } = authClient.useSession();
   const [isAuthTransitioning, setIsAuthTransitioning] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -137,14 +135,6 @@ export default function SignUpForm({
       onSubmit: signUpSchema,
     },
   });
-
-  if (isPending && !isAuthTransitioning) {
-    return (
-      <div className="flex w-full justify-center py-12">
-        <Loader />
-      </div>
-    );
-  }
 
   return (
     <Card className="w-full">

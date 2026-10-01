@@ -17,6 +17,9 @@ export type BalanceWidgetProps = {
   actionLabel?: string;
   actionHref?: "/balance" | "/bookings" | "/tutors";
   actionIcon?: ReactNode;
+  secondaryActionLabel?: string;
+  secondaryActionHref?: "/balance" | "/bookings" | "/tutors";
+  secondaryActionIcon?: ReactNode;
 };
 
 export function BalanceWidget({
@@ -27,6 +30,9 @@ export function BalanceWidget({
   actionLabel = "Top up",
   actionHref = "/balance",
   actionIcon,
+  secondaryActionLabel,
+  secondaryActionHref,
+  secondaryActionIcon,
 }: BalanceWidgetProps) {
   return (
     <div className="w-full min-w-0 max-w-full overflow-hidden rounded-3xl bg-accent p-2">
@@ -63,16 +69,34 @@ export function BalanceWidget({
             </div>
           </div>
 
-          <Button
-            className="mt-4"
-            size="md"
-            block
-            nativeButton={false}
-            render={<Link to={actionHref} aria-label={actionLabel} />}
-          >
-            {actionIcon ?? <IconWallet />}
-            {actionLabel}
-          </Button>
+          <div className="mt-4 flex gap-2">
+            <Button
+              size="md"
+              block
+              nativeButton={false}
+              render={<Link to={actionHref} aria-label={actionLabel} />}
+            >
+              {actionIcon ?? <IconWallet />}
+              {actionLabel}
+            </Button>
+            {secondaryActionLabel && secondaryActionHref ? (
+              <Button
+                variant="secondary"
+                size="md"
+                block
+                nativeButton={false}
+                render={
+                  <Link
+                    to={secondaryActionHref}
+                    aria-label={secondaryActionLabel}
+                  />
+                }
+              >
+                {secondaryActionIcon ?? <IconWallet />}
+                {secondaryActionLabel}
+              </Button>
+            ) : null}
+          </div>
         </CardBody>
       </Card>
     </div>
