@@ -43,6 +43,7 @@ critical without a hold):
 ## Wave 2 (branch `fix/payment-integrity-root-cause`, in progress 2026-10-01)
 
 Live Midtrans read-only probe (authorized, 2 GET `/v2/{order}/status`, live mode):
+
 - `fe5b0e7f` (pioneer Rp2,000,000 PENDING): Midtrans `expire`, gross `2004440.00`
   echannel — the +4440 channel fee is the entire `amount_mismatch`. Stored
   amounts match the catalog, so the app-side comparison was wrong, not the data.
