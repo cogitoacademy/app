@@ -121,6 +121,16 @@ function isInactiveSimulationError(error: unknown): boolean {
 const RECONCILE_ATTEMPT_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
+ * Channel-fee tolerance for PAID/SETTLED gross validation. The provider
+ * charges the customer package price + channel fee (VA Rp4,000 + 11% VAT =
+ * Rp4,440 observed; outlets ~Rp5k; QRIS 0.7%; wallets ~2%; cards 2.9%+2k),
+ * so exact equality false-rejects real fee-bearing payments. Anything
+ * beyond the cap (e.g. a Rp1M overpay) is anomalous and still throws.
+ */
+const MAX_CHANNEL_FEE_FLAT_IDR = 10_000;
+const MAX_CHANNEL_FEE_RATE = 0.03;
+
+/**
  * Creates the payment service for purchase intents, webhook confirmation, and purchase lookups.
  *
  * @param deps - the dependency ports (db, wallet, repo, provider, providerName)
@@ -497,12 +507,18 @@ export function createPaymentService(deps: {
           recordPaymentIntegrity("midtrans", "provider_mismatch");
         throw new PaymentWebhookMismatchError("Payment provider mismatch");
       }
-      // Currency/amount equality only guards money movement: the provider
-      // gross includes channel fees (e.g. Midtrans echannel reports 2004440
-      // for a 2000000 package), so enforcing it on EXPIRED/FAILED/REFUNDED
+      // Currency/amount checks only guard money movement: the provider gross
+      // includes channel fees (e.g. Midtrans echannel reports 2004440 for a
+      // 2000000 package), so enforcing equality on EXPIRED/FAILED/REFUNDED
       // statuses strands rows in PENDING forever — each reconcile retry
       // re-records amount_mismatch and the terminal status never lands.
-      // PAID/SETTLED still enforce strictly before any credit.
+      // On PAID/SETTLED the gross must still match within channel-fee
+      // tolerance: any underpayment throws (fees never reduce gross), and
+      // overpayment beyond the cap throws (a Rp1M overpay is not a fee).
+      // Tolerance gates ACCEPTANCE only — the credit below always uses the
+      // stored package Marks, never the received gross, so it cannot
+      // over-credit. Cap = max(Rp10k, 3%): covers VA Rp4,440 / outlet Rp5k /
+      // QRIS 0.7% / wallets ~2% / cards 2.9%+2k per Midtrans pricing.
       const creditsMoney =
         input.status === PAYMENT_STATUS.PAID ||
         input.status === PAYMENT_STATUS.SETTLED;
@@ -517,17 +533,22 @@ export function createPaymentService(deps: {
           receivedCurrency: input.currency,
         });
       }
-      if (
-        creditsMoney &&
-        input.amountIdr !== undefined &&
-        input.amountIdr !== record.amountIdr
-      ) {
-        if (providerName === "midtrans")
-          recordPaymentIntegrity("midtrans", "amount_mismatch");
-        throw new PaymentWebhookMismatchError("Payment amount mismatch", {
-          expectedAmountIdr: record.amountIdr,
-          receivedAmountIdr: input.amountIdr,
-        });
+      if (creditsMoney && input.amountIdr !== undefined) {
+        const overpaid = input.amountIdr - record.amountIdr;
+        const feeTolerance = Math.max(
+          MAX_CHANNEL_FEE_FLAT_IDR,
+          Math.ceil(record.amountIdr * MAX_CHANNEL_FEE_RATE),
+        );
+        if (overpaid < 0 || overpaid > feeTolerance) {
+          if (providerName === "midtrans")
+            recordPaymentIntegrity("midtrans", "amount_mismatch");
+          throw new PaymentWebhookMismatchError("Payment amount mismatch", {
+            expectedAmountIdr: record.amountIdr,
+            receivedAmountIdr: input.amountIdr,
+            overpaidAmountIdr: overpaid,
+            feeToleranceIdr: feeTolerance,
+          });
+        }
       }
 
       if (input.refundKind === "partial") {

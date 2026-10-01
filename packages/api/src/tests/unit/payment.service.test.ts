@@ -1633,6 +1633,116 @@ describe("PaymentService", () => {
       expect(wallet.credit).toHaveBeenCalledTimes(0);
     });
 
+    test("PAID with a channel-fee-inflated gross credits the package Marks", async () => {
+      // Midtrans VA gross = package + Rp4,000 fee + 11% VAT on the fee
+      // (observed 2004440 vs 2000000). The fee goes to the bank/state, so
+      // the package credit is exact — tolerance gates acceptance, never size.
+      const updatePaymentStatus = mock(async () => {});
+      const wallet = makeWallet();
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay1",
+          userId: "user1",
+          walletId: "w1",
+          status: PAYMENT_STATUS.PENDING,
+          provider: "midtrans",
+          amountIdr: 2000000,
+          marks: 400,
+          providerReference: "midtrans:user1:pkg1",
+        })),
+        findPaymentByProviderEventId: mock(async () => null),
+        updatePaymentStatus,
+      });
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: wallet as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "midtrans",
+      });
+
+      const result = await service.confirmFromWebhook({
+        provider: "midtrans",
+        providerReference: "midtrans:user1:pkg1",
+        providerEventId: "evt_fee_paid",
+        status: PAYMENT_STATUS.PAID as PaymentStatus,
+        amountIdr: 2004440,
+        currency: "IDR",
+      });
+
+      expect(result.status).toBe(PAYMENT_STATUS.PAID);
+      expect(updatePaymentStatus).toHaveBeenCalledTimes(1);
+      expect(wallet.credit).toHaveBeenCalledTimes(1);
+    });
+
+    test("PAID overpaid by 1M beyond any channel fee still throws", async () => {
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay1",
+          status: PAYMENT_STATUS.PENDING,
+          provider: "midtrans",
+          amountIdr: 2000000,
+          providerReference: "midtrans:user1:pkg1",
+        })),
+      });
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "midtrans",
+      });
+
+      const err = await service
+        .confirmFromWebhook({
+          provider: "midtrans",
+          providerReference: "midtrans:user1:pkg1",
+          providerEventId: "evt_big_overpay",
+          status: PAYMENT_STATUS.PAID as PaymentStatus,
+          amountIdr: 3000000,
+          currency: "IDR",
+        })
+        .then(
+          () => null,
+          (e: any) => e,
+        );
+      expect(err).toMatchObject({ code: "PAYMENT_WEBHOOK_MISMATCH" });
+      expect(err.details).toMatchObject({
+        expectedAmountIdr: 2000000,
+        receivedAmountIdr: 3000000,
+      });
+    });
+
+    test("PAID underpaid by Rp1 throws (fees never reduce gross)", async () => {
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay1",
+          status: PAYMENT_STATUS.PENDING,
+          provider: "midtrans",
+          amountIdr: 2000000,
+          providerReference: "midtrans:user1:pkg1",
+        })),
+      });
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "midtrans",
+      });
+
+      await expect(
+        service.confirmFromWebhook({
+          provider: "midtrans",
+          providerReference: "midtrans:user1:pkg1",
+          providerEventId: "evt_underpay",
+          status: PAYMENT_STATUS.PAID as PaymentStatus,
+          amountIdr: 1999999,
+          currency: "IDR",
+        }),
+      ).rejects.toMatchObject({ code: "PAYMENT_WEBHOOK_MISMATCH" });
+    });
+
     test("records a partial refund for manual reconciliation", async () => {
       const audit = { record: mock(async () => {}) };
       const refundRecord = { insertRefundRecord: mock(async () => {}) };
