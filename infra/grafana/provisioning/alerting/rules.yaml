@@ -58,18 +58,28 @@ groups:
         noDataState: OK
         execErrState: Error
 
+      # 2026-10-01 flap fix: was for 0m + [5m] window, which fired for ~5m
+      # per event then resolved, re-firing on the next event. The 15m
+      # reconcile-payments job retries the same failing PENDING rows, each
+      # retry re-incrementing the counter via confirmFromWebhook, so the
+      # alert flapped Firing(B~1.1)/Resolved(B=0) every cycle. for 5m (like
+      # every other critical) absorbs the 30s-scrape/1m-eval jitter; the 30m
+      # window (2x the reconcile interval) holds firing steady while the
+      # underlying mismatch persists instead of flapping. Resolve (!firing)
+      # means "no event in 30m", NOT "reconciled" — always check
+      # refund_record + audit partial_refund_reconciliation before closing.
       - uid: payment-integrity-event
         title: PaymentIntegrityEvent
         condition: C
-        for: 0m
+        for: 5m
         data:
           - refId: A
             relativeTimeRange:
-              from: 300
+              from: 1800
               to: 0
             datasourceUid: prometheus
             model:
-              expr: "sum(increase(payment_integrity_events_total[5m])) or vector(0)"
+              expr: "sum(increase(payment_integrity_events_total[30m])) or vector(0)"
               refId: A
           - refId: B
             relativeTimeRange:

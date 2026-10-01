@@ -1105,6 +1105,7 @@ emergency restore against the actual object list first.
 | Discord: "VPS disk at N%"                                                                  | disk watchdog        | Disk ≥ 85%                                                        | `./ops.sh disk`; plan cleanup                                 |
 | Discord: "CRITICAL: VPS disk still at N% after auto-prune"                                 | disk watchdog        | Disk ≥ 92% **after** the prune ladder                             | Operator action required — see below                          |
 | Grafana: DLQFresh / DiskWarn / DiskCrit / ApiErrors / ProdOnStub / TestModeRestrictedSpike | Grafana alert rules  | Same signals as above, evaluated from Prometheus/Loki (1m)        | Same responses; Grafana is the second pair of eyes            |
+| Grafana: PaymentIntegrityEvent (critical, `for: 5m`)                                 | Grafana alert rules  | `sum(increase(payment_integrity_events_total[30m])) > 0` — a Midtrans webhook/reconcile amount, currency, provider mismatch or partial refund needs reconciliation | Identify the type: PromQL `sum by(type) (increase(payment_integrity_events_total[1h]))`; check `./ops.sh db "SELECT * FROM refund_record ORDER BY created_at DESC LIMIT 5"` + audit `partial_refund_reconciliation`; reconcile via admin refund flow. NOTE: resolve means "quiet 30m", not "reconciled". Flap history (2026-10-01): the 15m `reconcile-payments` job retries the same failing PENDING rows, re-firing the alert each cycle — steady firing while mismatches persist is expected |
 
 ### Observability stack (LIVE 2026-09-05 — Loki + Prometheus + tailnet Grafana)
 
@@ -1143,8 +1144,8 @@ ubuntu@cogito-vps.tail674634.ts.net`, then `http://localhost:3000` (admin user `
   `http://cogito-vps.tail674634.ts.net:3000` also resolves via MagicDNS with no
   tunnel; `./infra/ops.sh trace` defaults `GRAFANA_URL` to it. Provisioned:
   datasources (Loki default + Prometheus), 6 dashboards (App RED, Logs &
-  Traces, Infra, Delivery, Saturation, Important Logs), 14 alert rules (DLQFresh/DiskWarn/DiskCrit/ApiErrors/TargetDown/CpuHigh/CpuCrit/MemHigh/MemCrit/DiskForecast/ContainerRestartBurst/BackupStale
-  - ProdOnStub/TestModeRestrictedSpike → `Discord-ops` contact point).
+  Traces, Infra, Delivery, Saturation, Important Logs), 15 alert rules (DLQFresh/DiskWarn/DiskCrit/ApiErrors/TargetDown/CpuHigh/CpuCrit/MemHigh/MemCrit/DiskForecast/ContainerRestartBurst/BackupStale
+  - ProdOnStub/TestModeRestrictedSpike/PaymentIntegrityEvent → `Discord-ops` contact point).
 - **Grafana password rotation (2026-09-06 pattern):** `GRAFANA_ADMIN_PASSWORD`
   is SOPS-encrypted in `infra/secrets/prod.env` (never plaintext). Rotate by
   setting a fresh value in the vault, then applying live without needing the
