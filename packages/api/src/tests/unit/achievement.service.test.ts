@@ -58,7 +58,12 @@ describe("Achievement Service", () => {
     });
 
     test("allows deleting reviewed achievements owned by the student", () => {
-      for (const status of ["pending_review", "approved", "rejected", "archived"]) {
+      for (const status of [
+        "pending_review",
+        "approved",
+        "rejected",
+        "archived",
+      ]) {
         expect(() => validateDelete(makeAchievement({ status }))).not.toThrow();
       }
     });
