@@ -97,10 +97,10 @@ export function Calendar({
         dropdown_root: "inline-flex",
         dropdowns: "flex items-center gap-1.5",
         button_previous:
-          "col-start-1 size-7 grid place-items-center rounded hover:bg-accent transition-colors",
+          "col-start-1 size-7 grid place-items-center rounded text-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
         button_next:
-          "col-start-3 size-7 grid place-items-center rounded hover:bg-accent transition-colors",
-        chevron: "size-4 text-foreground",
+          "col-start-3 size-7 grid place-items-center rounded text-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
+        chevron: "size-4 fill-current text-popover-foreground stroke-[2.5]",
         month_grid: "col-span-3 w-full border-collapse",
         weekdays: "flex",
         weekday:

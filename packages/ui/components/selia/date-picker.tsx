@@ -67,10 +67,16 @@ export function DatePicker({
         </span>
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Positioner align="start" sideOffset={4} className="z-[1000]">
+        <Popover.Positioner
+          align="start"
+          sideOffset={4}
+          collisionPadding={8}
+          collisionAvoidance={{ align: "shift", side: "flip" }}
+          className="z-[1000] max-w-(--available-width)"
+        >
           <Popover.Popup
             className={cn(
-              "z-[1000] bg-popover text-popover-foreground",
+              "z-[1000] max-w-(--available-width) bg-popover text-popover-foreground",
               "border border-popover-border rounded-xl",
               "shadow-popover outline-none",
               "data-[starting-style]:opacity-0 data-[ending-style]:opacity-0",
