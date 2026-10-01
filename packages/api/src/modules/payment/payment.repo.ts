@@ -7,6 +7,7 @@ import {
   getTableColumns,
   isNotNull,
   lt,
+  gte,
 } from "drizzle-orm";
 import { paymentRecord, markPackage } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
@@ -99,6 +100,7 @@ export async function findPaymentsForReconciliation(
   provider: string,
   olderThan: Date,
   limit: number,
+  createdAfter: Date,
 ) {
   return conn
     .select({ ...getTableColumns(paymentRecord) })
@@ -113,6 +115,11 @@ export async function findPaymentsForReconciliation(
         ]),
         isNotNull(paymentRecord.providerRequestId),
         lt(paymentRecord.updatedAt, olderThan),
+        // Dead-checkout guard: provider links expire on their own, so an
+        // attempt older than the lookback is never going to settle — retrying
+        // it every cycle only inflates the integrity counters. Such rows need
+        // manual disposition, not reconciliation.
+        gte(paymentRecord.createdAt, createdAfter),
       ),
     )
     .orderBy(asc(paymentRecord.updatedAt), asc(paymentRecord.id))
@@ -243,6 +250,7 @@ export function createPaymentRepo(db: DbType) {
       provider: string,
       olderThan: Date,
       limit: number,
+      createdAfter: Date,
       conn?: DbOrTx,
     ) {
       return findPaymentsForReconciliation(
@@ -250,6 +258,7 @@ export function createPaymentRepo(db: DbType) {
         provider,
         olderThan,
         limit,
+        createdAfter,
       );
     },
     findPaymentByProviderEventId(providerEventId: string, conn?: DbOrTx) {

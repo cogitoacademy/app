@@ -113,6 +113,14 @@ function isInactiveSimulationError(error: unknown): boolean {
 }
 
 /**
+ * Reconciliation lookback: attempts older than this are never going to
+ * settle (provider checkouts expire on their own within hours-days), so the
+ * 15m scheduler skips them instead of retrying forever. Stale rows need
+ * manual disposition to EXPIRED via the admin flow.
+ */
+const RECONCILE_ATTEMPT_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
  * Creates the payment service for purchase intents, webhook confirmation, and purchase lookups.
  *
  * @param deps - the dependency ports (db, wallet, repo, provider, providerName)
@@ -429,6 +437,11 @@ export function createPaymentService(deps: {
       providerName,
       new Date(Date.now() - 5 * 60 * 1000),
       Math.min(Math.max(limit, 1), 100),
+      // Dead-checkout guard: provider links expire on their own, so an
+      // attempt older than this is never going to settle. Retrying it every
+      // 15m forever only inflates the integrity/reconciliation counters —
+      // such rows need manual disposition, not reconciliation.
+      new Date(Date.now() - RECONCILE_ATTEMPT_LOOKBACK_MS),
     );
     let reconciled = 0;
     let pending = 0;
@@ -484,18 +497,37 @@ export function createPaymentService(deps: {
           recordPaymentIntegrity("midtrans", "provider_mismatch");
         throw new PaymentWebhookMismatchError("Payment provider mismatch");
       }
-      if (input.currency !== undefined && input.currency !== "IDR") {
+      // Currency/amount equality only guards money movement: the provider
+      // gross includes channel fees (e.g. Midtrans echannel reports 2004440
+      // for a 2000000 package), so enforcing it on EXPIRED/FAILED/REFUNDED
+      // statuses strands rows in PENDING forever — each reconcile retry
+      // re-records amount_mismatch and the terminal status never lands.
+      // PAID/SETTLED still enforce strictly before any credit.
+      const creditsMoney =
+        input.status === PAYMENT_STATUS.PAID ||
+        input.status === PAYMENT_STATUS.SETTLED;
+      if (
+        creditsMoney &&
+        input.currency !== undefined &&
+        input.currency !== "IDR"
+      ) {
         if (providerName === "midtrans")
           recordPaymentIntegrity("midtrans", "currency_mismatch");
-        throw new PaymentWebhookMismatchError("Payment currency mismatch");
+        throw new PaymentWebhookMismatchError("Payment currency mismatch", {
+          receivedCurrency: input.currency,
+        });
       }
       if (
+        creditsMoney &&
         input.amountIdr !== undefined &&
         input.amountIdr !== record.amountIdr
       ) {
         if (providerName === "midtrans")
           recordPaymentIntegrity("midtrans", "amount_mismatch");
-        throw new PaymentWebhookMismatchError("Payment amount mismatch");
+        throw new PaymentWebhookMismatchError("Payment amount mismatch", {
+          expectedAmountIdr: record.amountIdr,
+          receivedAmountIdr: input.amountIdr,
+        });
       }
 
       if (input.refundKind === "partial") {

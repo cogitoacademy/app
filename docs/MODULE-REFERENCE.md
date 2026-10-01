@@ -938,6 +938,8 @@ chat directory.
 - `simulatePurchase` never credits Marks directly; provider-confirmed status must pass through the transactional confirmation service.
 - Structured provider non-2xx responses are reduced to a single-line, bounded `status + error_code + message` diagnostic. That detail is safe to return as the `PAYMENT_PROVIDER_ERROR` message; arbitrary response bodies and credentials are never echoed.
 - Test-mode status polling is a recovery path: `getPurchase` checks the active provider's authoritative status for approved UAT users. If the provider reports a terminal status, it delegates to the same transactional/idempotent `confirmFromWebhook` logic, so a missing sandbox webhook cannot leave a completed payment stuck forever.
+- Payment integrity checks are money-movement gated (2026-10-01): provider identity is always verified, but currency/amount equality is enforced only when the remote status is PAID/SETTLED (the only path that credits). Provider grosses include channel fees (Midtrans echannel reports gross = package + fee), so enforcing equality on EXPIRED/FAILED/REFUNDED stranded rows in PENDING with a per-retry `amount_mismatch`. Mismatch errors carry `{ expectedAmountIdr, receivedAmountIdr }` / `{ receivedCurrency }` details for Loki diagnosis.
+- `reconcilePendingPayments` only attempts created within the last 7 days (`RECONCILE_ATTEMPT_LOOKBACK_MS`): provider checkouts expire on their own, so older rows are never going to settle and need manual disposition to EXPIRED instead of infinite 15m retries.
 
 ---
 
