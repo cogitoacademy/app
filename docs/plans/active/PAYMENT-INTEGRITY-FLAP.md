@@ -65,6 +65,24 @@ Sequencing note: manual EXPIRED disposition alone cannot stop the counter —
 EXPIRED rows are still reconcile-selected — so the code fix must deploy
 first (#1 then auto-expires via reconcile; #2 gets manual EXPIRED after).
 
+## Wave 2 completion record (2026-10-01 ~13:10 WIB)
+
+- PR #287 merged (`611c141b`), CI fully green (incl. coverage + E2E);
+  Deploy Production + Infra Apply (auto) both success on the merge sha.
+- Deploy live (`/health.version = 611c141b`); Grafana live expr is `max(...)`.
+- `fe5b0e7f` **auto-expired via reconcile** at 12:50:49 with the fixed code
+  (amount check no longer blocks) — the root fix works in production.
+- `df500c27` manually expired (guarded `UPDATE ... WHERE status='PENDING'`
+  + `payment_admin_expired` audit row; pre-verified zero ledger refs, zero
+  holds). Tearful lessons: ops.sh `db` quoting breaks on `"` (use
+  single-quotes + `jsonb_build_object`); `audit_log.id` has no default
+  (pass `gen_random_uuid()`).
+- Post-deploy `payment_integrity_events_total` instant query is **empty**
+  (in-memory counter reset by the deploy, zero new increments) — growth stopped.
+- Expected: alert resolves after 30m quiet (last increment ~12:50).
+  Confirm with `max(increase(payment_integrity_events_total[30m]))` → 0,
+  or wait for the Resolved notification (no flap-follow).
+
 ## Open follow-ups (not in this wave)
 
 1. ~~Reconcile retry double-counts integrity events~~ — fixed in wave 2
