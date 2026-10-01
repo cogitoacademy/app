@@ -35,12 +35,12 @@ export function AchievementFilters({
   onStatusChange,
 }: AchievementFiltersProps) {
   return (
-    <div className="flex gap-3">
+    <div className="grid w-full grid-cols-2 gap-2 lg:w-auto">
       <Select
         value={category}
         onValueChange={(v) => onCategoryChange(v as string)}
       >
-        <SelectTrigger>
+        <SelectTrigger className="w-full lg:min-w-36">
           <SelectValue placeholder="Category" />
         </SelectTrigger>
         <SelectPopup>
@@ -54,7 +54,7 @@ export function AchievementFilters({
         </SelectPopup>
       </Select>
       <Select value={status} onValueChange={(v) => onStatusChange(v as string)}>
-        <SelectTrigger>
+        <SelectTrigger className="w-full lg:min-w-32">
           <SelectValue placeholder="Status" />
         </SelectTrigger>
         <SelectPopup>

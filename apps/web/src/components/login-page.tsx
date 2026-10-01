@@ -4,13 +4,27 @@ import { useState } from "react";
 import { useSearch } from "@tanstack/react-router";
 import { TextLink } from "@cogito-app/ui/components/selia/text";
 
+import Loader from "@/components/loader";
 import { ModeToggle } from "@/components/mode-toggle";
+import { authClient } from "@/lib/auth-client";
 import SignInForm from "@/components/sign-in-form";
 import SignUpForm from "@/components/sign-up-form";
 
 export function LoginPage() {
   const [showSignIn, setShowSignIn] = useState(true);
   const { redirect } = useSearch({ from: "/login" });
+  const { isPending } = authClient.useSession();
+
+  if (isPending) {
+    return (
+      <main
+        className="flex min-h-svh items-center justify-center"
+        aria-busy="true"
+      >
+        <Loader />
+      </main>
+    );
+  }
 
   return (
     <main className="relative mx-auto flex min-h-svh w-full flex-col p-4 sm:p-6 lg:p-8 justify-center">

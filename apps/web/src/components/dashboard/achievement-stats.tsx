@@ -8,19 +8,32 @@ type AchievementStatsProps = {
   total: number;
   approved: number;
   pending: number;
+  actions?: React.ReactNode;
 };
 
 export function AchievementStats({
   total,
   approved,
   pending,
+  actions,
 }: AchievementStatsProps) {
   return (
-    <Card>
-      <CardBody className="grid grid-cols-3 p-0">
-        <AchievementStat label="Total" value={total} variant="info" />
-        <AchievementStat label="Approved" value={approved} variant="success" />
-        <AchievementStat label="Pending" value={pending} variant="warning" />
+    <Card className="min-w-0 flex-1">
+      <CardBody className="flex flex-col p-0">
+        <div className="grid min-w-0 grid-cols-3">
+          <AchievementStat label="Total" value={total} variant="info" />
+          <AchievementStat
+            label="Approved"
+            value={approved}
+            variant="success"
+          />
+          <AchievementStat label="Pending" value={pending} variant="warning" />
+        </div>
+        {actions ? (
+          <div className="flex items-center border-t border-border p-2.5 md:hidden">
+            {actions}
+          </div>
+        ) : null}
       </CardBody>
     </Card>
   );
