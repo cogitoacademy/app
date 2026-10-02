@@ -48,6 +48,10 @@ on desktop. Existing wallet data and routes are reused without an API change.
 The Balance-page CTA is labeled **Find a tutor** and links to `/tutors`; the
 student dashboard keeps the widget's **Top up** action.
 
+The compact dashboard layout keeps **Find a tutor** on one line and renders
+dashboard **Top up** as an icon-only cash-plus link with an accessible label;
+the Balance page keeps its labeled CTA.
+
 **Mobile containment follow-up:** the page grid and reusable widget expose
 shrinkable, width-bounded columns; transaction amounts move below their details
 on mobile so populated Marks history cannot widen the page; and the QRIS code

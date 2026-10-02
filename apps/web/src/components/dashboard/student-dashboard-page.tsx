@@ -20,10 +20,10 @@ import {
   IconAlertCircle,
   IconCalendarEvent,
   IconCircleCheck,
+  IconCashPlus,
   IconSchool,
   IconTrophy,
   IconUsers,
-  IconWallet,
 } from "@tabler/icons-react";
 
 import {
@@ -86,7 +86,8 @@ export function StudentDashboardPage({ studentName }: { studentName: string }) {
             actionIcon={<IconUsers />}
             secondaryActionLabel="Top up"
             secondaryActionHref="/balance"
-            secondaryActionIcon={<IconWallet />}
+            secondaryActionIcon={<IconCashPlus aria-hidden />}
+            secondaryActionIconOnly
           />
           <CompetitionCalendarCard />
         </div>

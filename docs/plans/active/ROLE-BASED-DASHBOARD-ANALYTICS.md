@@ -113,6 +113,11 @@ Plan:
 - Link to Balance or Bookings based on state.
 - Do not estimate future affordability without a defined pricing basis.
 
+Presentation follow-up (2026-10-02): the dashboard widget keeps the primary
+**Find a tutor** CTA on one line in its compact desktop grid. Its secondary
+**Top up** action uses an icon-only cash-plus link with an accessible label;
+the Balance page retains its labeled CTA.
+
 Priority: **P0**. Wallet and booking data exist.
 
 ### S4 - "Is my learner record moving forward?"

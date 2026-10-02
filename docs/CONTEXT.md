@@ -1,6 +1,15 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-09-30
+Last updated: 2026-10-02
+
+## Student dashboard balance CTA fit (2026-10-02)
+
+The compact student dashboard balance widget keeps **Find a tutor** on one line
+by giving the primary CTA the available flexible width. Its secondary dashboard
+CTA remains a 38px icon-only link using Tabler's `IconCashPlus`; the link keeps
+the accessible name and native tooltip title **Top up**. The Balance page still
+renders its labeled CTA because it has no competing secondary action. This is
+frontend-only and changes no RPC, schema, or persistence contract.
 
 ## Nightly backup CRLF incident + hardening (2026-09-30)
 
