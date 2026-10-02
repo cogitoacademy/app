@@ -20,6 +20,7 @@ export type BalanceWidgetProps = {
   secondaryActionLabel?: string;
   secondaryActionHref?: "/balance" | "/bookings" | "/tutors";
   secondaryActionIcon?: ReactNode;
+  secondaryActionIconOnly?: boolean;
 };
 
 export function BalanceWidget({
@@ -33,6 +34,7 @@ export function BalanceWidget({
   secondaryActionLabel,
   secondaryActionHref,
   secondaryActionIcon,
+  secondaryActionIconOnly = false,
 }: BalanceWidgetProps) {
   return (
     <div className="w-full min-w-0 max-w-full overflow-hidden rounded-3xl bg-accent p-2">
@@ -73,6 +75,7 @@ export function BalanceWidget({
             <Button
               size="md"
               block
+              className="min-w-0 flex-1 whitespace-nowrap"
               nativeButton={false}
               render={<Link to={actionHref} aria-label={actionLabel} />}
             >
@@ -82,18 +85,22 @@ export function BalanceWidget({
             {secondaryActionLabel && secondaryActionHref ? (
               <Button
                 variant="secondary"
-                size="md"
-                block
+                size={secondaryActionIconOnly ? "icon" : "md"}
+                block={!secondaryActionIconOnly}
+                className={secondaryActionIconOnly ? "shrink-0" : undefined}
                 nativeButton={false}
                 render={
                   <Link
                     to={secondaryActionHref}
                     aria-label={secondaryActionLabel}
+                    title={
+                      secondaryActionIconOnly ? secondaryActionLabel : undefined
+                    }
                   />
                 }
               >
                 {secondaryActionIcon ?? <IconWallet />}
-                {secondaryActionLabel}
+                {secondaryActionIconOnly ? null : secondaryActionLabel}
               </Button>
             ) : null}
           </div>

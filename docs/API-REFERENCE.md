@@ -1,6 +1,14 @@
 # Cogito API Reference
 
-Last updated: 2026-09-29
+Last updated: 2026-10-02
+
+## Student dashboard balance CTA fit (2026-10-02)
+
+The compact dashboard CTA adjustment is frontend-only. **Find a tutor** remains
+a labeled link to `/tutors`; the dashboard's secondary icon-only cash-plus link
+keeps the accessible name **Top up** and links to `/balance`. No RPC path,
+request envelope, response shape, authentication rule, schema, or persistence
+contract changed.
 
 ## Role-based dashboard analytics (2026-09-25)
 

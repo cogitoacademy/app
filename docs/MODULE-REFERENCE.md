@@ -1,6 +1,14 @@
 # Cogito Module Reference
 
-Last updated: 2026-09-29
+Last updated: 2026-10-02
+
+## Student dashboard balance CTA fit (2026-10-02)
+
+`BalanceWidget` gives its primary action flexible no-wrap width. The student
+dashboard configures the secondary `/balance` action as an icon-only
+`IconCashPlus` link with the accessible label **Top up**; the Balance page keeps
+the existing labeled CTA. This is presentation-only: no service, repository,
+event key, or business rule changed.
 
 ## Role-based dashboard analytics (2026-09-25)
 

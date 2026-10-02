@@ -1,6 +1,16 @@
 # Cogito Runbook
 
-Last updated: 2026-09-29
+Last updated: 2026-10-02
+
+## Student dashboard balance CTA fit (2026-10-02)
+
+Open `/dashboard` as a student at the desktop layout width. Confirm the balance
+widget keeps **Find a tutor** on one line and renders the secondary **cash-plus**
+icon at the same height as the primary CTA. Keyboard focus and assistive
+technology must announce the icon-only link as **Top up**; hover should expose
+the native tooltip. Confirm activating it opens `/balance`. On the Balance page,
+confirm the reusable widget still renders its labeled **Find a tutor** CTA.
+No environment, migration, job, or deployment configuration is required.
 
 ## Tutor profile history smoke check (2026-09-29)
 
@@ -125,8 +135,9 @@ open `/knowledge-bank`; below the threshold it must offer a top-up path. Confirm
 the Balance page places the widget beside Knowledge Bank Access on desktop and
 stacks them cleanly on narrow screens. On the student dashboard, confirm the
 widget's **Find a tutor** action opens `/tutors`; its dashboard counterpart keeps
-**Top up** and opens `/balance`. Confirm the widget remains contained beside the
-Competition Calendar card on the student dashboard. At 320 px and 390 px wide,
+the icon-only **Top up** action and opens `/balance`. Confirm the widget remains
+contained beside the Competition Calendar card on the student dashboard. At 320
+px and 390 px wide,
 confirm the Balance page has no page-level horizontal clipping before and after
 creating a QRIS purchase; the QR code must scale within its nested payment card.
 Test with populated Marks history as well: mobile amounts should sit below their
