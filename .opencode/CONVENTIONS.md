@@ -50,8 +50,9 @@ origin/main..HEAD` must be 0 before pushing a PR).
 - Every PR that changes behavior updates the affected docs in the same PR:
   `docs/CONTEXT.md` (architecture, modules, known bugs, plans table),
   `docs/API-REFERENCE.md`, `docs/MODULE-REFERENCE.md`, `docs/RUNBOOK.md`, and
-  the relevant plan in `docs/plans/` (move completed plans to `completed/`,
-  keep statuses accurate). A PR whose docs are stale is not done.
+  the relevant plan in `docs/plans/active/` (keep statuses accurate;
+  completed one-shot plans are deleted on merge — the PR + CONTEXT are the
+  record). A PR whose docs are stale is not done.
 - Planning-first: any concern/finding/open question discovered during a wave
   goes into `docs/plans/active/` as part of the wave's PR.
 - Wave finalization (wave-finalization skill): after all wave PRs merge,

@@ -59,16 +59,16 @@ Rules:
 
 For every merged PR this wave:
 
-1. Move the plan from `docs/plans/active/` → `docs/plans/completed/` (if it's a one-shot plan): `git mv`.
-2. Update the plan's status header: `Status: Active` → `Status: Completed (merged #<PR>, <date>)`; correct the branch column.
-3. Update `docs/plans/README.md`:
+1. Delete the plan doc from `docs/plans/active/` if it's a completed one-shot
+   plan (policy since 2026-10-09: `git rm` — the merge PR, commit message, and
+   `docs/CONTEXT.md` dated entries are the permanent record). Keep editing it
+   only if the plan is still live.
+2. Update `docs/plans/README.md`
    - Remove the plan from the Active table.
-   - Add it to the Completed table with branch + PR + one-line summary.
-4. Update `docs/CONTEXT.md`:
-   - The Plans table row for the plan.
-   - The Execution Order list (append `N. <plan> → merged #<PR>`).
-   - The Known Bugs / audit-findings section: mark findings `Fixed (merged #<PR>)`, move `docs/plans/active/...` references to `completed/`.
-5. Commit: `docs(plans): mark <plan> completed (merged #<PR>)`.
+3. Update `docs/CONTEXT.md`:
+   - The Plans table row for the plan (drop the row when the plan is deleted).
+   - The Known Bugs / audit-findings section: mark findings `Fixed (merged #<PR>)`.
+4. Commit: `docs(plans): remove <plan> (completed, merged #<PR>)`.
 
 Push: `git push origin main`. If the pre-push hook fails (lefthook typecheck), run `bun install` first (merged PRs may have changed the lockfile) and re-push.
 

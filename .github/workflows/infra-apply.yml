@@ -1,6 +1,7 @@
 # Infra apply automation — Terraform + Ansible applies on merge to main.
 #
-# Design: docs/plans/completed/INFRA-AUTOMATION.md (user-approved 2026-09-01:
+# Design: the INFRA-AUTOMATION wave (user-approved 2026-09-01; the plan doc
+# was removed on completion — see the merge-PR history of 2026-09):
 # full automation; the SOPS Age private key lives as the SOPS_AGE_KEY secret
 # because collaborators are internal-only and secret scanning + push
 # protection + branch protection are enabled).

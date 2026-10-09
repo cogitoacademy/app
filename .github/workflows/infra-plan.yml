@@ -120,7 +120,7 @@ jobs:
               echo "  R2_STATE_ENDPOINT         https://<accountid>.r2.cloudflarestorage.com"
               echo ""
               echo "A silently skipped plan is a false green: the 2026-08-31 403-on-state-bucket"
-              echo "breakage (docs/plans/active/CI-SANITY.md F1/F2) must fail this job, not skip it."
+              echo "breakage (CI-SANITY F1/F2) must fail this job, not skip it."
             } >&2
             exit 1
           fi

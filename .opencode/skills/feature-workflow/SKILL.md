@@ -179,7 +179,7 @@ PR must include:
 - migration/configuration notes;
 - rollback considerations when relevant.
 
-**Docs must follow code (project rule 11 in AGENTS.md).** Before opening the PR, update every doc the change affects — `docs/CONTEXT.md` (architecture, modules, known-bugs table, plans table), `docs/API-REFERENCE.md`, `docs/MODULE-REFERENCE.md`, `docs/RUNBOOK.md` — plus the relevant plan in `docs/plans/` (statuses, completed moves, new plan entries). The PR diff should contain the doc changes alongside the code changes. A PR whose docs are stale is not done.
+**Docs must follow code (project rule 11 in AGENTS.md).** Before opening the PR, update every doc the change affects — `docs/CONTEXT.md` (architecture, modules, known-bugs table, plans table), `docs/API-REFERENCE.md`, `docs/MODULE-REFERENCE.md`, `docs/RUNBOOK.md` — plus the relevant plan in `docs/plans/active/` (statuses, new plan entries; a completed one-shot plan is deleted on merge). The PR diff should contain the doc changes alongside the code changes. A PR whose docs are stale is not done.
 
 ## 11. CI Gate
 
