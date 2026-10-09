@@ -1306,12 +1306,12 @@ file are the permanent record; plan-file archives are not maintained.
 > ledgers are no longer committed (supersedes the 2026-08-17 keep-and-commit
 > decision). Fresh clones need no `.superpowers/` content.
 
-| Plan | Status |
-| --- | --- |
-| `docs/plans/active/DEFERRED-OPS-TASKS.md` | Active — code gaps done, §3/§4 operator-console items pending |
-| `docs/plans/active/DEPLOYMENT-PLAN.md` | Active — applied 2026-08-31; remaining scope tracked in the plan |
-| `docs/plans/active/PAYMENT-INTEGRITY-FLAP.md` | Active — payment-integrity alert stability |
-| `docs/plans/active/ROLE-BASED-DASHBOARD-ANALYTICS.md` | Active — tutor capacity/payout + admin aggregates remaining |
+| Plan                                                  | Status                                                           |
+| ----------------------------------------------------- | ---------------------------------------------------------------- |
+| `docs/plans/active/DEFERRED-OPS-TASKS.md`             | Active — code gaps done, §3/§4 operator-console items pending    |
+| `docs/plans/active/DEPLOYMENT-PLAN.md`                | Active — applied 2026-08-31; remaining scope tracked in the plan |
+| `docs/plans/active/PAYMENT-INTEGRITY-FLAP.md`         | Active — payment-integrity alert stability                       |
+| `docs/plans/active/ROLE-BASED-DASHBOARD-ANALYTICS.md` | Active — tutor capacity/payout + admin aggregates remaining      |
 
 Also see [`docs/MIDTRANS-MIGRATION.md`](MIDTRANS-MIGRATION.md) — the active
 production payment-provider guide.
