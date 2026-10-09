@@ -1,7 +1,7 @@
 #!/bin/bash
 # cogito-disk-watchdog.sh — nightly VPS disk watchdog with Discord alerting
 # and a SAFE auto-prune ladder. Installed by infra/ansible/disk-watchdog.yml
-# as /usr/local/bin/cogito-disk-watchdog.sh (root cron, 03:30 WIB).
+# as /usr/local/bin/cogito-disk-watchdog.sh (root cron, 03:30 UTC / 10:30 WIB).
 #
 # Behavior:
 #   - Reads the root filesystem usage from `df -h /`.

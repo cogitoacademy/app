@@ -416,7 +416,7 @@ offline or missing the `production` label. If private DB resolution fails, check
 that the database container remains attached to Docker network `coolify`; do not
 work around it by exposing PostgreSQL publicly.
 
-A nightly PostgreSQL backup runs on the VPS at 02:00 WIB and uploads to
+A nightly PostgreSQL backup runs on the VPS at 02:00 UTC (09:00 WIB) and uploads to
 Cloudflare R2 (`cogito-backups`, the **private** `R2_BACKUP_BUCKET`) with
 30-day retention — see [Backup & Restore](./RUNBOOK.md#backup--restore) for
 the restore drill. App uploads use the separate **public** `cogito-bucket`

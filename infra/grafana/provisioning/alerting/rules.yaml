@@ -593,7 +593,7 @@ groups:
         execErrState: Error
 
       # Fires when ZERO nightly-backup success lines land in Loki over the
-      # trailing 25h (daily 02:00 WIB cron + 1h margin + 30m for). Success line
+      # trailing 25h (daily 02:00 UTC / 09:00 WIB cron + 1h margin + 30m for). Success line
       # (infra/backup.sh): `==> Done: uploaded backups/YYYY-MM-DD.sql.gz, …`.
       # Host log /var/log/cogito-backup.log tails to Loki as
       # {service="cogito-backup",job="backup"} (Alloy file mount, read-only).

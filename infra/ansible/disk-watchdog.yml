@@ -8,7 +8,7 @@
 #      key lives on the operator machine, never on the VPS) and writes
 #      /etc/cogito/disk.env (root:root 0600) as the cron's environment. The
 #      file contains DISCORD_WEBHOOK_URL (and the threshold overrides).
-#   3. Installs the nightly cron: 03:30 Asia/Jakarta (WIB), logs to
+#   3. Installs the nightly cron: 03:30 server time / UTC (10:30 WIB), logs to
 #      /var/log/cogito-disk-gc.log.
 #   4. Logrotate config so the log file cannot grow unbounded (7 kept).
 #
@@ -116,7 +116,7 @@
           This playbook never invents or echoes the URL.
       when: discord_key_check.rc != 0
 
-    - name: Install the nightly cron (03:30 Asia/Jakarta)
+    - name: Install the nightly cron (03:30 server time / UTC = 10:30 WIB)
       ansible.builtin.cron:
         name: cogito-disk-watchdog
         minute: "30"
@@ -126,14 +126,10 @@
           {{ watchdog_script_dest }} >> {{ watchdog_log }} 2>&1'
         state: present
 
-    # Debian/Ubuntu vixie-cron honors CRON_TZ, so the job above always fires
-    # at 03:30 WIB even if the host clock is set to UTC.
-    - name: Set cron timezone to Asia/Jakarta
-      ansible.builtin.cron:
-        name: CRON_TZ
-        env: true
-        job: Asia/Jakarta
-        state: present
+    # Debian/Ubuntu's cron does NOT honor CRON_TZ (verified live 2026-10-09:
+    # the job fires at 03:30 UTC despite CRON_TZ=Asia/Jakarta being set), so
+    # the schedule is expressed in UTC directly and no timezone env line is
+    # installed.
 
     - name: Rotate the watchdog log (keep 7 days)
       ansible.builtin.copy:

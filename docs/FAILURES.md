@@ -238,6 +238,23 @@
 - Recovery: `sudo docker ps` on the VPS → restart `coolify-proxy` /
   `coolify` containers; verify `curl -sI https://api.cogitoacademy.id`
 
+### 4.7 Grafana alerting eval-storm (`DatasourceError` burst)
+
+- Detect: Discord burst of `alertname=DatasourceError` notifications carrying
+  the *rule names* (e.g. `rulename=BackupStale`) — these are evaluation
+  failures, NOT the rules firing; `docker logs cogito-grafana | grep -c
+  "database is locked"`
+- Meaning: Grafana's internal SQLite could not serve a rule evaluation
+  (datasource lookup, evaluator build, or state save) within its retry budget.
+  Since 2026-10-09 Grafana runs SQLite in WAL mode with 3 query retries, which
+  decouples rule-eval reads from long write transactions; residual bursts mean
+  a long write transaction is exhausted the retry budget — enable
+  `[database] log_queries` for one day to name the transaction
+- Recovery: usually self-resolves when the lock clears (notifications arrive
+  Firing+Resolved in pairs). Persistent storms: check the `grafana-data`
+  volume is on a local filesystem (WAL requirement), then restart
+  `cogito-grafana` if the DB wedged; never hand-prune `grafana.db-wal`
+
 ## 5. Deployment failures
 
 ### 5.1 CD red at build/push

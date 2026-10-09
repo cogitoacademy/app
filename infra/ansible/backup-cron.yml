@@ -6,7 +6,7 @@
 #   3. Decrypts infra/secrets/prod.env with SOPS on the CONTROL NODE (the age
 #      key lives on the operator machine, never on the VPS) and writes
 #      /etc/cogito/backup.env (root:root 0600) as the cron's environment.
-#   4. Installs the nightly cron: 02:00 Asia/Jakarta (WIB), logs to
+#   4. Installs the nightly cron: 02:00 server time / UTC (09:00 WIB), logs to
 #      /var/log/cogito-backup.log, rotated daily (7 kept).
 #   5. Logrotate config so the log file cannot grow unbounded.
 #
@@ -133,7 +133,7 @@
         mode: "{{ backup_env_file_mode }}"
       no_log: true
 
-    - name: Install the nightly cron (02:00 Asia/Jakarta)
+    - name: Install the nightly cron (02:00 server time / UTC = 09:00 WIB)
       ansible.builtin.cron:
         name: cogito-nightly-backup
         minute: "0"
@@ -143,15 +143,10 @@
           {{ backup_script_dest }} >> {{ backup_log }} 2>&1'
         state: present
 
-    # Debian/Ubuntu vixie-cron honors CRON_TZ, so the job above always fires at
-    # 02:00 WIB even if the host clock is set to UTC. The entry is its own
-    # env line (name = variable, job = value).
-    - name: Set cron timezone to Asia/Jakarta
-      ansible.builtin.cron:
-        name: CRON_TZ
-        env: true
-        job: Asia/Jakarta
-        state: present
+    # Debian/Ubuntu's cron does NOT honor CRON_TZ (verified live 2026-10-09:
+    # the job fires at 02:00 UTC = 09:00 WIB despite CRON_TZ=Asia/Jakarta
+    # being set), so the schedule above is expressed in UTC directly and no
+    # timezone env line is installed.
 
     - name: Rotate the backup log (keep 7 days)
       ansible.builtin.copy:

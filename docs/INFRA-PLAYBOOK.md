@@ -184,8 +184,8 @@ recipient (`sops updatekeys`).
 
 | Job                                            | When                         | Where it lives                     |
 | ---------------------------------------------- | ---------------------------- | ---------------------------------- |
-| Postgres backup → R2 (30-day retention)        | 02:00 WIB cron               | `infra/ansible/backup-cron.yml`    |
-| Disk watchdog (warn 85% / prune 92% → Discord) | 03:30 WIB cron               | `infra/ansible/disk-watchdog.yml`  |
+| Postgres backup → R2 (30-day retention)        | 02:00 UTC (09:00 WIB) cron   | `infra/ansible/backup-cron.yml`    |
+| Disk watchdog (warn 85% / prune 92% → Discord) | 03:30 UTC (10:30 WIB) cron   | `infra/ansible/disk-watchdog.yml`  |
 | CD migrate+deploy                              | every merge to main          | `.github/workflows/cd-prod.yml`    |
 | CI audit on infra PRs                          | every PR touching `infra/**` | `.github/workflows/infra-plan.yml` |
 

@@ -219,6 +219,14 @@
                 GF_AUTH_ANONYMOUS_ENABLED: "false"
                 GF_SERVER_HTTP_PORT: "3000"
                 GF_PATHS_PROVISIONING: /etc/grafana/provisioning
+                # SQLite WAL journaling: rule-eval reads never block on (or get
+                # blocked by) a long write transaction. In DELETE mode a daily
+                # ~17:52 UTC in-process write locked the DB for ~4 minutes and
+                # every 1m rule evaluation failed with 'database is locked'
+                # (DatasourceError notification storms, 76-237 errors/day).
+                # query_retries rides out residual write contention.
+                GF_DATABASE_WAL: "true"
+                GF_DATABASE_QUERY_RETRIES: "3"
               # Loopback UI access: ssh -L 3000:127.0.0.1:3000 ubuntu@<tailnet-ip>.
               ports:
                 - "127.0.0.1:3000:3000"
