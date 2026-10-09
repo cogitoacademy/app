@@ -1,8 +1,8 @@
 ---
 description: Review worker — reviews code/diffs/PRs using the code-review skill only
 mode: primary
-model: opencode-go/muse-spark-1.3-contributor
-variant: xhigh
+model: opencode-go/deepseek-v4.1-flash
+variant: max
 permission:
   edit: deny
   read: allow
