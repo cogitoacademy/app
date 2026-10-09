@@ -241,9 +241,9 @@
 ### 4.7 Grafana alerting eval-storm (`DatasourceError` burst)
 
 - Detect: Discord burst of `alertname=DatasourceError` notifications carrying
-  the *rule names* (e.g. `rulename=BackupStale`) — these are evaluation
+  the _rule names_ (e.g. `rulename=BackupStale`) — these are evaluation
   failures, NOT the rules firing; `docker logs cogito-grafana | grep -c
-  "database is locked"`
+"database is locked"`
 - Meaning: Grafana's internal SQLite could not serve a rule evaluation
   (datasource lookup, evaluator build, or state save) within its retry budget.
   Since 2026-10-09 Grafana runs SQLite in WAL mode with 3 query retries, which
