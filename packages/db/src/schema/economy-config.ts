@@ -5,7 +5,7 @@ import { sql } from "drizzle-orm";
 import { user } from "./auth";
 
 /**
- * The active Phase 0 economy parameters. There is one active row so that a
+ * The active economy parameters. There is one active row so that a
  * booking can read a consistent set of parameters and snapshot them at
  * creation time. Historical booking snapshots remain authoritative after an
  * admin changes this row.

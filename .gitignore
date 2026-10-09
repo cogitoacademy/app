@@ -91,3 +91,10 @@ docs/*.fdb_latexmk
 docs/*.toc
 docs/*.out
 docs/*.synctex.gz
+
+# Agent-process artifacts (SDD ledgers/briefs/reports, agent plans+specs) and
+# offline document sources. Local workspace only — never committed. Plan
+# documents live in docs/plans/; docs/*.md are the canonical documentation.
+.superpowers/
+docs/superpowers/
+*.docx

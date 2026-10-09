@@ -1,7 +1,7 @@
 /**
  * Minimal HTML sanitizer for session notes.
  *
- * Phase 0 scope is plain text + markdown-safe content. We do not run a
+ * Session notes are plain text + markdown-safe content. We do not run a
  * rich-text editor, so a lightweight whitelist sanitizer is sufficient:
  *   - strips <script>/<style> blocks (with their content)
  *   - drops disallowed/embedded tags (iframe, object, embed, img, ...)

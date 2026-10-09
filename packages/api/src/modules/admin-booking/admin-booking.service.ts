@@ -57,7 +57,7 @@ export const OVERRIDE_LIST_CATEGORIES = [
 
 export type OverrideListCategory = (typeof OVERRIDE_LIST_CATEGORIES)[number];
 
-/** Max keyset windows walked when filling an escalated-only page (Task 6). */
+/** Max keyset windows walked when filling an escalated-only page. */
 export const MAX_ESCALATED_WINDOWS = 5;
 
 export const MARKS_ACTIONS = [
