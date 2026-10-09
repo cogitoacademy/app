@@ -1,8 +1,8 @@
 ---
 description: Engineering worker — general engineering work using the engineering-core skill only
 mode: primary
-model: opencode-go/muse-spark-1.3-contributor
-variant: xhigh
+model: opencode-go/deepseek-v4.1-flash
+variant: max
 permission:
   edit: allow
   read: allow
