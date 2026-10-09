@@ -1,6 +1,6 @@
 # coolify-resources.yml — declare the existing production resources via the
 # Coolify API, idempotently. This is the fix for the production deploy webhook
-# returning 401 (Task 0.2 of docs/plans/active/DEPLOYMENT-PLAN.md).
+# returning 401.
 #
 # WHAT THIS PLAYBOOK DECLARES (drift-check source of truth):
 #   1. The existing app Postgres 16 + Redis 7 containers (names, images,

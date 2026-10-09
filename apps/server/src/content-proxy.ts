@@ -1,5 +1,5 @@
 /**
- * Sanity content file proxy hardening (backend finalization Task 3/4):
+ * Sanity content file proxy hardening:
  *
  * The Knowledge Bank file route proxies the Sanity asset URL server-side.
  * The upstream URL comes from the Sanity API (a trusted datasource), but

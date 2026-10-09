@@ -17,7 +17,7 @@ export type EconomyParameters = Pick<
   | "offlineCogitoIncrementIdr"
 >;
 
-/** Client-approved defaults from the Phase 0 Marks Economy blueprint. */
+/** Client-approved defaults for the marks economy. */
 export const DEFAULT_ECONOMY_CONFIG = {
   id: ECONOMY_CONFIG_ID,
   markValueIdr: 5_000,

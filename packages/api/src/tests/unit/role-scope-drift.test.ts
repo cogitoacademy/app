@@ -9,16 +9,16 @@ import {
 } from "../helpers/test-client";
 
 /**
- * Task 17 (F16–F19): role-scope drift guards.
+ * Role-scope drift guards.
  *
- * - `auth.searchStudents` must be student-only (F16) — tutors/admins get FORBIDDEN
- * - `achievement.create/update/delete` must be student-only (F17)
- * - `payment.createPurchase` must be verified-student-only (F18 — wired in Part A)
- * - `upload.createUploadUrl` stays `protectedProcedure` (F19 — any authenticated
- *   role may mint a bounded upload URL; the tutor proof-file path needs it)
+ * - `auth.searchStudents` must be student-only — tutors/admins get FORBIDDEN
+ * - `achievement.create/update/delete` must be student-only
+ * - `payment.createPurchase` must be verified-student-only
+ * - `upload.createUploadUrl` stays `protectedProcedure` — any authenticated
+ *   role may mint a bounded upload URL; the tutor proof-file path needs it
  * - tutor discovery and booking creation remain student-only for tutors/admins
  */
-describe("role-scope guards (F16–F19)", () => {
+describe("role-scope drift guards", () => {
   beforeAll(async () => {
     await resetDatabase();
   });

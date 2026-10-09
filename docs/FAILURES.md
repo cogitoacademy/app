@@ -121,8 +121,8 @@
 ### 3.1 Circuit breaker open (Resend / Google Meet / Midtrans)
 
 - Detect: `./infra/ops.sh logs | grep circuit_breaker_state_change` (state
-  `open` = error level); `./infra/ops.sh cb` (new command, added by this
-  wave); `/health` `checks.circuitBreakers` (added by this wave)
+  `open` = error level); `./infra/ops.sh cb`; `/health`
+  `checks.circuitBreakers`
 - Meaning: provider failing repeatedly (thresholds: Resend 3, Meet 5,
   Midtrans 5; resets: 120s/60s/30s; half-open probe: 1 attempt)
 - Note: the Resend and Google Meet breakers share the Redis key
@@ -382,18 +382,18 @@ device` (Coolify `application_deployment_queues.logs`); the deploy
 
 ## 7. Detection matrix (one-glance)
 
-| Failure        | Log action / field                                                     | Kuma monitor                        | ops.sh command            |
-| -------------- | ---------------------------------------------------------------------- | ----------------------------------- | ------------------------- |
-| 500s           | `"level":"error"`                                                      | api-health                          | `logs \| grep error`      |
-| DLQ fresh      | `scheduler_dlq_job`                                                    | DLQ DEPTH                           | `dlq`                     |
-| Breaker open   | `circuit_breaker_state_change`                                         | — (this wave adds /health)          | `cb` (added by this wave) |
-| Disk ≥85%      | watchdog log (`heartbeat disk_pct=N verdict=ok\|warn\|pruned` per run) | —                                   | `disk`                    |
-| Backup failed  | Discord CRITICAL self-check + `/var/log/cogito-backup.log`             | —                                   | `backup`                  |
-| API down       | —                                                                      | api-health                          | `health`                  |
-| Cert expiring  | —                                                                      | api-cert/app-cert (not yet created) | `curl -vI`                |
-| Scheduler dead | `checks.scheduler`                                                     | api-health (503)                    | `health`                  |
-| Redis down     | `checks.redis`                                                         | api-health (503)                    | `redis PING`              |
-| Postgres down  | `checks.database`                                                      | api-health (503)                    | `db "SELECT 1"`           |
+| Failure        | Log action / field                                                     | Kuma monitor                        | ops.sh command       |
+| -------------- | ---------------------------------------------------------------------- | ----------------------------------- | -------------------- |
+| 500s           | `"level":"error"`                                                      | api-health                          | `logs \| grep error` |
+| DLQ fresh      | `scheduler_dlq_job`                                                    | DLQ DEPTH                           | `dlq`                |
+| Breaker open   | `circuit_breaker_state_change`                                         | — (see `/health` checks)            | `cb`                 |
+| Disk ≥85%      | watchdog log (`heartbeat disk_pct=N verdict=ok\|warn\|pruned` per run) | —                                   | `disk`               |
+| Backup failed  | Discord CRITICAL self-check + `/var/log/cogito-backup.log`             | —                                   | `backup`             |
+| API down       | —                                                                      | api-health                          | `health`             |
+| Cert expiring  | —                                                                      | api-cert/app-cert (not yet created) | `curl -vI`           |
+| Scheduler dead | `checks.scheduler`                                                     | api-health (503)                    | `health`             |
+| Redis down     | `checks.redis`                                                         | api-health (503)                    | `redis PING`         |
+| Postgres down  | `checks.database`                                                      | api-health (503)                    | `db "SELECT 1"`      |
 
 ## 8. The daily operator rhythm
 

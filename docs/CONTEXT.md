@@ -1,6 +1,6 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-10-02
+Last updated: 2026-10-09
 
 ## Student dashboard balance CTA fit (2026-10-02)
 
@@ -1278,7 +1278,13 @@ Internal-only modules with no RPC procedures: `audit`, `economy`, `email`, `meet
 
 Plans live in `docs/plans/` (active + completed) and `docs/archive/` (superseded/historical). See `docs/plans/README.md` for the index.
 
-> **`.superpowers/sdd/` disposition (2026-08-17):** kept as the execution ledger — worktree paths, commit ranges, test counts, and merge reconciliation live in `.superpowers/sdd/{PLAN}/progress.md`; the durable plans stay in `docs/plans/`. The two-file-per-plan rule applies: plan in `docs/plans/`, ledger in `.superpowers/sdd/{PLAN}/progress.md`. The `.superpowers/sdd/.gitignore` tracks `**/progress.md` plus the archived `BACKEND-HARDENING/` + `BACKEND-HARDENING-PHASE2/` histories (formerly untracked local files, now committed).
+> **`.superpowers/sdd/` disposition (updated 2026-10-09):** the SDD execution
+> ledger (worktree paths, commit ranges, test counts, merge reconciliation) is a
+> **local-only workspace** — `.superpowers/` is gitignored and its historical
+> ledgers are no longer committed (supersedes the 2026-08-17 keep-and-commit
+> decision). The durable plans stay in `docs/plans/`; fresh clones need no
+> `.superpowers/` content. Historical ledger references inside completed plans
+> describe their original commit evidence and are left as written.
 
 | Plan                                                              | Branch                                                                              | Status                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

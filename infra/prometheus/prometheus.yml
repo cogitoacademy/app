@@ -21,7 +21,7 @@ global:
   evaluation_interval: 15s
 
 scrape_configs:
-  # The app exposition (Task 3): Prometheus text 0.0.4 at GET /metrics,
+  # The app exposition: Prometheus text 0.0.4 at GET /metrics,
   # Bearer-gated. Counters http_requests_total{path,method,status}, the
   # http_request_duration_ms_* histogram, dlq_fresh_depth and
   # breaker_state{name} gauges. Per-process semantics: instance="single".
