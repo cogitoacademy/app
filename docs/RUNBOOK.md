@@ -1648,7 +1648,7 @@ money/DB writes in booking/wallet paths (parallelizing would risk money
 correctness), plus `consistent-function-scoping` and `no-underscore-dangle`
 style conventions. Known legacy React compiler errors are tracked in
 `.github/lint/baseline.txt`; new errors fail `.github/lint/check-baseline.ts`.
-They are triaged, not regressions — see `docs/plans/active/CI-SANITY.md` F13.
+They are triaged, not regressions (CI-SANITY F13, plan closed 2026-09-05).
 The local pre-push hook invokes this same baseline gate; `bun run lint` remains
 the raw diagnostic command and is expected to report the baselined errors.
 Do not "fix" the warnings by parallelizing the loops or by silencing the rules
