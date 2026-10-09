@@ -36,7 +36,7 @@ Run in this order (the same order `infra/apply.sh all` enforces):
    files changed.
 5. **`backup-cron.yml`** — install the nightly backup cron
    (`/usr/local/bin/cogito-backup.sh` from `../backup.sh`, env at
-   `/etc/cogito/backup.env`, 02:00 WIB). `DATABASE_URL` in the vault must
+   `/etc/cogito/backup.env`, 02:00 UTC / 09:00 WIB). `DATABASE_URL` in the vault must
    resolve from the VPS host.
 6. **`drift-check.yml`** — read-only verification half of
    `coolify-resources.yml` **plus** the PLG/studio services (existence,
@@ -46,10 +46,10 @@ Run in this order (the same order `infra/apply.sh all` enforces):
 
 ## Other playbooks
 
-| Playbook                                   | What it does                                                                                                                                       |
-| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`disk-watchdog.yml`](./disk-watchdog.yml) | Installs the nightly disk watchdog (`/usr/local/bin/cogito-disk-watchdog.sh` from `../disk-watchdog.sh`, env at `/etc/cogito/disk.env`, 03:30 WIB) |
-| [`uptime-kuma.yml`](./uptime-kuma.yml)     | Declares the Uptime Kuma monitoring service via the Coolify API (`status.cogitoacademy.id`), control-node driven                                   |
+| Playbook                                   | What it does                                                                                                                                                   |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`disk-watchdog.yml`](./disk-watchdog.yml) | Installs the nightly disk watchdog (`/usr/local/bin/cogito-disk-watchdog.sh` from `../disk-watchdog.sh`, env at `/etc/cogito/disk.env`, 03:30 UTC / 10:30 WIB) |
+| [`uptime-kuma.yml`](./uptime-kuma.yml)     | Declares the Uptime Kuma monitoring service via the Coolify API (`status.cogitoacademy.id`), control-node driven                                               |
 
 ## Tasks
 

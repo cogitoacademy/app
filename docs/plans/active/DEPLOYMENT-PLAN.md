@@ -204,9 +204,9 @@ VPS (OVH 2vCPU/3.7GB/38GB, Ubuntu; ufw: 80/443 public, 22+8000+6001+6002 tailnet
 ### Task 3.1: Nightly backup → R2 (repo script + Ansible cron)
 
 - [x] `infra/backup.sh`: `pg_dump -Fc` via the Coolify Postgres container → gzip → R2 (`backups/$(date +%F).sql.gz`) → prune 30 days — **#117**.
-- [x] Ansible installs the cron (nightly 02:00 WIB) — **#117** (`infra/ansible/backup-cron.yml`). Restore drill documented in RUNBOOK.
+- [x] Ansible installs the cron (nightly 02:00 UTC / 09:00 WIB) — **#117** (`infra/ansible/backup-cron.yml`). Restore drill documented in RUNBOOK.
 - Commit: `feat(ops): nightly postgres backup to R2 with retention` — **merged via #117**
-- [x] **Apply** the cron playbook on the VPS (operator; needs SOPS vault + host-reachable `DATABASE_URL`). **DONE 2026-08-31 — nightly 02:00 WIB cron installed (`/etc/cogito/backup.env`, 30-day retention).**
+- [x] **Apply** the cron playbook on the VPS (operator; needs SOPS vault + host-reachable `DATABASE_URL`). **DONE 2026-08-31 — nightly 02:00 UTC / 09:00 WIB cron installed (`/etc/cogito/backup.env`, 30-day retention).**
 
 ### Task 3.2: Migration strategy in CD (repo work)
 

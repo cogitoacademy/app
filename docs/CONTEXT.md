@@ -2,6 +2,27 @@
 
 Last updated: 2026-10-09
 
+## Grafana SQLite eval-storm + WAL fix (2026-10-09)
+
+Daily `alertname=DatasourceError` notification bursts for BackupStale, MemCrit,
+and the other Cogito rules were rule-evaluation failures, not condition firings:
+Grafana's internal SQLite ran in default DELETE journal mode, a silent in-process
+write transaction started ~17:52 UTC daily (76–237 lock errors in the
+17:52–17:57 UTC window from Oct 4; nothing Oct 1–3), and with a ~1-retry budget
+every 1-minute rule evaluation failed with `database is locked`. Host
+diagnostics ruled out resource pressure (sar calm at the window), external lock
+holders (only the Grafana process mounts `grafana-data`), and data growth (DB is
+~1.5 MB); the holder is an internal Grafana transaction, exact origin unverified.
+Fix: `GF_DATABASE_WAL=true` + `GF_DATABASE_QUERY_RETRIES=3` on `cogito-grafana`
+(`infra/ansible/observability.yml`) — WAL lets rule-evaluation reads proceed
+during any long write and retries absorb residual contention (the Grafana
+staff-recommended fix for the identical grafana#68941 signature). If nightly
+residual errors appear, enable `[database] log_queries` for one day to name the
+transaction. The same change corrected the backup/watchdog cron documentation:
+Debian cron ignores `CRON_TZ`, so the crons fire in UTC (02:00/03:30 UTC =
+09:00/10:30 WIB), and the no-op `CRON_TZ` env lines were removed from the
+playbooks.
+
 ## Student dashboard balance CTA fit (2026-10-02)
 
 The compact student dashboard balance widget keeps **Find a tutor** on one line
@@ -591,8 +612,8 @@ stack/wrap responsively across mobile, tablet, and desktop widths.
 - **Terraform**: 7 resources in state (R2 buckets `cogito-infra-state`/`cogito-backups`/`cogito-bucket` + DNS `api.`/`app.`/`status.`/`cl.`), zero drift, state in R2. The `r2bucket.cogitoacademy.id` custom domain is console-managed (provider v5 has no import for it — #133).
 - **Tailscale + hardening**: VPS joined the tailnet (`cogito-vps`), UFW tailnet-only for 22/8000/6001/6002, fail2ban + unattended-upgrades on.
 - **Coolify resources**: project `cogito` / env `production` declared; databases `cogito-prod-db` (postgres:16-alpine) + `cogito-prod-redis` (redis:7.2) drift-checked; applications `cogito-api` + `cogito-web` declared; **47 env vars applied to cogito-api from the SOPS vault**; env sync refreshes the live env list after creating missing rows before its uniqueness guard; deploy-webhook route live on `cl.cogitoacademy.id` (probe returns 401 = auth-required form; CD sends `Authorization: Bearer`).
-- **Backup cron**: nightly 02:00 WIB `pg_dump -Fc` → `cogito-backups` (30-day retention), env at `/etc/cogito/backup.env`, log `/var/log/cogito-backup.log`. AWS CLI v2 detected at `/opt/cogito-actions-tools/bin/aws` (noble dropped the apt package — #137).
-- **Monitoring (2026-09-01)**: Uptime Kuma declared as a Coolify service (`cogito-uptime-kuma`, `louislam/uptime-kuma:2`, port 3001, volume `uptime-kuma-data:/app/data`) at `status.cogitoacademy.id` via `infra/ansible/uptime-kuma.yml` (Coolify API, control-node driven, idempotent); disk watchdog `infra/ansible/disk-watchdog.yml` installs `/usr/local/bin/cogito-disk-watchdog.sh` (nightly 03:30 WIB, warn ≥ 85%, auto-prune ≥ 92% — never volumes/active images/postgres data, newest 1–2 cogitoacademy/app images kept for rollback); `ops.sh disk` + `deploy-retry` added. **Kuma wired 2026-09-02** (operator): 4 monitors + `COGITO ALERT` Discord attached + `cogito` status page — see `docs/KUMA-RUNBOOK.md`.
+- **Backup cron**: nightly 02:00 UTC (09:00 WIB) `pg_dump -Fc` → `cogito-backups` (30-day retention), env at `/etc/cogito/backup.env`, log `/var/log/cogito-backup.log`. AWS CLI v2 detected at `/opt/cogito-actions-tools/bin/aws` (noble dropped the apt package — #137).
+- **Monitoring (2026-09-01)**: Uptime Kuma declared as a Coolify service (`cogito-uptime-kuma`, `louislam/uptime-kuma:2`, port 3001, volume `uptime-kuma-data:/app/data`) at `status.cogitoacademy.id` via `infra/ansible/uptime-kuma.yml` (Coolify API, control-node driven, idempotent); disk watchdog `infra/ansible/disk-watchdog.yml` installs `/usr/local/bin/cogito-disk-watchdog.sh` (nightly 03:30 UTC / 10:30 WIB, warn ≥ 85%, auto-prune ≥ 92% — never volumes/active images/postgres data, newest 1–2 cogitoacademy/app images kept for rollback); `ops.sh disk` + `deploy-retry` added. **Kuma wired 2026-09-02** (operator): 4 monitors + `COGITO ALERT` Discord attached + `cogito` status page — see `docs/KUMA-RUNBOOK.md`.
 - **Observability stack PLG (APPLIED live 2026-09-05):** `infra/ansible/observability.yml` declares Coolify services `cogito-loki` / `cogito-prometheus` / `cogito-grafana` / `cogito-alloy` (all tailnet-only). Verified live: Loki ingesting (`{service="cogito-api"}` traceId search works), all 3 Prometheus targets UP, Grafana at loopback `:3000` with provisioned datasources/dashboards/alert rules (DLQFresh/DiskWarn/DiskCrit/ApiErrors → `Discord-ops`), 2G swap live. Gotchas fixed during apply (all in git): base64 `docker_compose_raw`, `loki.source.docker` (not `docker_logs`), Loki 3.x `delete_request_store`, 720h old-sample window, 0644 metrics token, cAdvisor → loopback `:8081`, shared `cogito-obs` network (services are network-isolated by default), suffix-stripped `service` labels, dashboard label `cogito-api`. Grafana admin password in vault (`GRAFANA_ADMIN_PASSWORD`, SOPS-encrypted since 2026-09-06 rotation — live reset verified, Coolify `GF_SECURITY_ADMIN_PASSWORD` UI value still pending operator update). Logs carry `userId`, never email.
 - **Observability No-Data wave (2026-09-06, branch `fix/obs-grafana-no-data`):** live audit found three healthy-but-empty panels — 5xx error-rate exprs (empty numerator when zero 5xx) made zero-safe with `or vector(0)` (App RED, Delivery, ApiErrors alert), `breaker_state` panels made healthy-safe (`or on() vector(0)` / `max(...) or vector(0)`; healthy exposition omits the section when no `cogito:cb:*` keys exist). Container-memory panel root cause: cAdvisor `v0.52.1` predates containerd-snapshotter support (upstream #3709, fixed in `v0.54.0`) and Docker 29.7.2 uses the containerd image store, so cAdvisor drops every Docker container (only `id/instance/job` labels, no `name`/`container_label_*`); fix is image bump to `ghcr.io/google/cadvisor:v0.60.5` in `observability.yml` — compose PATCHed into Coolify by the pipeline on 2026-09-07 (drift-detection repair); pipeline auto-redeployed the same day (restart latest:true) and container labels returned — Infra memory panel rendering (see `docs/plans/completed/OBS-GRAFANA-NODATA.md`). Folders reunified 2026-09-07 (boards + rules in afxfpsyn1jldse, duplicate deleted).
 - **Drizzle Studio (owned + healthy 2026-09-05):** Coolify service `cogito-studio` (app `drizzle-gateway`) was unhealthy 11 days (wedged vendor healthcheck + dead sslip.io domain); revived via service restart + loopback publish `127.0.0.1:4983` (PATCHed compose) — status `healthy`, UI 200. Access: `ssh -L 4983:127.0.0.1:4983`; credentials in Coolify service env; writes only in maintenance windows. See RUNBOOK → Monitoring & Alerting → Drizzle Studio ownership.

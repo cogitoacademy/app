@@ -914,8 +914,8 @@ bun run db:studio        # Opens Drizzle Studio on port 4983
 
 ### How the nightly backup works
 
-Every night at **02:00 WIB** (`Asia/Jakarta`) a cron job on the VPS runs
-[`infra/backup.sh`](../infra/backup.sh), which:
+Every night at **02:00 server time (UTC — 09:00 WIB)** a cron job on the VPS
+runs [`infra/backup.sh`](../infra/backup.sh), which:
 
 1. Dumps the production database with `pg_dump --no-owner --no-acl -Fc` (custom
    format, gzip-compressed — the file is still named `backups-YYYY-MM-DD.sql.gz`).
@@ -1143,6 +1143,17 @@ coolify_api_token="$(sops -d infra/secrets/prod.env | grep
 COOLIFY_API_TOKEN | cut -d= -f2-)"` (tunnel up; exit 0 = no drift —
   covers existence + tailnet-only `urls == []` + image pins for all 5
   PLG/studio services).
+
+- **Grafana SQLite WAL (2026-10-09):** the `cogito-grafana` compose sets
+  `GF_DATABASE_WAL=true` + `GF_DATABASE_QUERY_RETRIES=3`. Before this, Grafana's
+  delete-journal SQLite locked the metadata DB for ~4 minutes once a day (an
+  in-process write transaction starting ~17:52 UTC) and every 1-minute alert
+  evaluation failed with `database is locked`, emitting bursts of mislabeled
+  `DatasourceError` notifications (the grafana#64692/#68941 signature). WAL lets
+  rule-evaluation reads proceed during any long write; retries absorb residual
+  contention. The `grafana.db-wal`/`-shm` files live in the `grafana-data`
+  volume: to inspect the DB, copy it with `sqlite3 grafana.db ".backup …"` — a
+  plain `cp`/`cat` yields a snapshot that may lag the last committed WAL frames.
 
 - **Logs without SSH:** Grafana → Explore → Loki datasource →
   `{service="cogito-api"} |= "<traceId>"` (the stable Coolify resource names:
