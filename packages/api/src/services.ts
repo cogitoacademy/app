@@ -11,6 +11,7 @@ import { createAdminModule } from "./modules/admin";
 import { createAdminTutorModule } from "./modules/admin-tutor";
 import { createAdminMarkPackageModule } from "./modules/admin-mark-package";
 import { createAdminKnowledgeBankModule } from "./modules/admin-knowledge-bank";
+import { createCompetitionCatalogModule } from "./modules/competition-catalog";
 import { createTutorModule } from "./modules/tutor";
 import { createDiscoveryModule } from "./modules/tutor-discovery";
 import { createInviteModule } from "./modules/invite";
@@ -26,6 +27,10 @@ import { createMeetingModule } from "./modules/meeting";
 import type { MeetingModule } from "./modules/meeting";
 import { createContentModule } from "./modules/content";
 import type { ContentService } from "./modules/content/content.service";
+import { createPublicContentModule } from "./modules/public-content";
+import type { PublicContentService } from "./modules/public-content";
+import { createFaqModule } from "./modules/faq";
+import type { FaqService } from "./modules/faq/faq.service";
 import { createSupportModule } from "./modules/support";
 import { createUploadModule } from "./modules/upload";
 import { createContactModule } from "./modules/contact";
@@ -40,6 +45,7 @@ import type { AdminService } from "./modules/admin/admin.service";
 import type { AdminTutorService } from "./modules/admin-tutor/admin-tutor.service";
 import type { AdminMarkPackageService } from "./modules/admin-mark-package/admin-mark-package.service";
 import type { AdminKnowledgeBankService } from "./modules/admin-knowledge-bank/admin-knowledge-bank.service";
+import type { CompetitionCatalogService } from "./modules/competition-catalog/competition-catalog.service";
 import type { TutorService } from "./modules/tutor/tutor.service";
 import type { InviteService } from "./modules/invite/invite.service";
 import type { AchievementService } from "./modules/achievement/achievement.service";
@@ -62,6 +68,7 @@ import type { AdminHandler } from "./modules/admin/admin.handler";
 import type { AdminTutorHandler } from "./modules/admin-tutor/admin-tutor.handler";
 import type { AdminMarkPackageHandler } from "./modules/admin-mark-package/admin-mark-package.handler";
 import type { AdminKnowledgeBankHandler } from "./modules/admin-knowledge-bank/admin-knowledge-bank.handler";
+import type { CompetitionCatalogHandler } from "./modules/competition-catalog/competition-catalog.handler";
 import type { TutorHandler } from "./modules/tutor/tutor.handler";
 import type { DiscoveryHandler } from "./modules/tutor-discovery/discovery.handler";
 import type { InviteHandler } from "./modules/invite/invite.handler";
@@ -74,6 +81,8 @@ import type { SupportHandler } from "./modules/support/support.handler";
 import type { UploadService } from "./modules/upload/upload.service";
 import type { UploadHandler } from "./modules/upload/upload.handler";
 import type { ContentHandler } from "./modules/content/content.handler";
+import type { PublicContentHandler } from "./modules/public-content";
+import type { FaqHandler } from "./modules/faq/faq.handler";
 import type { ContactService } from "./modules/contact/contact.service";
 import type { ContactHandler } from "./modules/contact/contact.handler";
 
@@ -86,6 +95,7 @@ export interface ServiceRegistry {
   adminTutor: AdminTutorService;
   adminMarkPackage: AdminMarkPackageService;
   adminKnowledgeBank: AdminKnowledgeBankService;
+  competitionCatalog: CompetitionCatalogService;
   tutor: TutorService;
   invite: InviteService;
   achievement: AchievementService;
@@ -99,6 +109,8 @@ export interface ServiceRegistry {
   support: SupportService;
   upload: UploadService;
   content: ContentService;
+  publicContent: PublicContentService;
+  faq: FaqService;
   meeting: MeetingModule;
   contact: ContactService;
 }
@@ -109,6 +121,7 @@ export interface HandlerRegistry {
   adminTutor: AdminTutorHandler;
   adminMarkPackage: AdminMarkPackageHandler;
   adminKnowledgeBank: AdminKnowledgeBankHandler;
+  competitionCatalog: CompetitionCatalogHandler;
   tutor: TutorHandler;
   discovery: DiscoveryHandler;
   invite: InviteHandler;
@@ -124,6 +137,8 @@ export interface HandlerRegistry {
   support: SupportHandler;
   upload: UploadHandler;
   content: ContentHandler;
+  publicContent: PublicContentHandler;
+  faq: FaqHandler;
   contact: ContactHandler;
 }
 
@@ -242,6 +257,11 @@ function createServices() {
     db,
     economy: economy.service,
   });
+  const competitionCatalog = createCompetitionCatalogModule({
+    db,
+    audit: audit.service,
+    economy: economy.service,
+  });
   const email = createEmailModule({
     resendApiKey: env.RESEND_API_KEY,
     emailFrom: env.EMAIL_FROM,
@@ -263,7 +283,12 @@ function createServices() {
     db,
     knowledgeBankAccess: adminKnowledgeBank.service,
   });
-  const content = createContentModule({ wallet: wallet.service });
+  const content = createContentModule({
+    wallet: wallet.service,
+    competitionPalette: competitionCatalog.service,
+  });
+  const publicContent = createPublicContentModule({ db });
+  const faq = createFaqModule({ db });
   const auth = createAuthModule({ db, wallet: wallet.service });
   const notification = createNotificationModule({ db, email: email.service });
   const contact = createContactModule({
@@ -301,6 +326,7 @@ function createServices() {
     wallet: wallet.service,
     pricing: pricing.service,
     audit: audit.service,
+    competitionPalette: competitionCatalog.service,
     notification: notification.service,
     meeting,
     roomPort: room.service,
@@ -312,6 +338,7 @@ function createServices() {
     wallet: wallet.service,
     payout: booking.service,
     economy: economy.service,
+    competitionCatalog: competitionCatalog.service,
   });
   const adminTutor = createAdminTutorModule({
     db,
@@ -345,6 +372,7 @@ function createServices() {
 
   const payment = createPaymentModule({
     db,
+    economy: economy.service,
     wallet: wallet.service,
     provider: env.PAYMENT_PROVIDER,
     midtransConfig: resolveMidtransConfig({
@@ -405,6 +433,7 @@ function createServices() {
     adminTutor: adminTutor.service,
     adminMarkPackage: adminMarkPackage.service,
     adminKnowledgeBank: adminKnowledgeBank.service,
+    competitionCatalog: competitionCatalog.service,
     tutor: tutor.service,
     invite: invite.service,
     achievement: achievement.service,
@@ -418,6 +447,8 @@ function createServices() {
     support: support.service,
     upload: upload.service,
     content: content.service,
+    publicContent: publicContent.service,
+    faq: faq.service,
     meeting,
     contact: contact.service,
   };
@@ -428,6 +459,7 @@ function createServices() {
     adminTutor: adminTutor.handler,
     adminMarkPackage: adminMarkPackage.handler,
     adminKnowledgeBank: adminKnowledgeBank.handler,
+    competitionCatalog: competitionCatalog.handler,
     tutor: tutor.handler,
     discovery: discovery.handler,
     invite: invite.handler,
@@ -443,6 +475,8 @@ function createServices() {
     support: support.handler,
     upload: upload.handler,
     content: content.handler,
+    publicContent: publicContent.handler,
+    faq: faq.handler,
     contact: contact.handler,
   };
 

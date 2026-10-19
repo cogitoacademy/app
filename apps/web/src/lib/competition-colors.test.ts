@@ -1,42 +1,49 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  getCompetitionField,
-  getCompetitionFieldClass,
+  competitionPaletteClassName,
+  getCompetitionPalette,
+  getCompetitionPaletteStyle,
 } from "./competition-colors";
 
-describe("competition field colors", () => {
-  test.each([
-    ["competition-model-united-nations", "mun"],
-    ["competition-world-scholars-cup", "wsc"],
-    ["competition-essay-writing", "kti"],
-    ["competition-debate", "debat"],
-    ["competition-business", "business"],
-    ["competition-olympiad", "olimpiade"],
-    ["competition-public-speaking", "pidato"],
-  ] as const)("maps taxonomy slug %s", (slug, expected) => {
-    expect(getCompetitionField(slug)).toBe(expected);
+describe("competition palette presentation", () => {
+  const palette = {
+    lightTextColor: "oklch(0.2 0.02 250)",
+    lightBackgroundColor: "oklch(0.96 0.03 250)",
+    darkTextColor: "oklch(0.92 0.02 250)",
+    darkBackgroundColor: "oklch(0.25 0.04 250)",
+  };
+
+  test("accepts complete palettes without normalizing stored precision", () => {
+    expect(getCompetitionPalette(palette)).toEqual(palette);
   });
 
-  test("supports legacy specialization slugs", () => {
-    expect(getCompetitionField("mun-writing")).toBe("mun");
-    expect(getCompetitionField("science-olympiad")).toBe("olimpiade");
-    expect(getCompetitionField("public-speaking-storytelling")).toBe("pidato");
+  test("rejects incomplete palette projections", () => {
+    expect(
+      getCompetitionPalette({ lightTextColor: palette.lightTextColor }),
+    ).toBe(null);
   });
 
-  test("falls back to research for unknown fields", () => {
-    expect(getCompetitionField("unknown-field")).toBe("kti");
-    expect(getCompetitionFieldClass("unknown-field", "solid")).toContain(
-      "bg-competition-research",
+  test("applies opaque catalog colors through light and dark variables", () => {
+    expect(competitionPaletteClassName).toContain(
+      "bg-[color:var(--competition-light-background)]",
     );
+    expect(competitionPaletteClassName).toContain(
+      "dark:text-[color:var(--competition-dark-text)]",
+    );
+    const style = getCompetitionPaletteStyle(palette) as unknown as Record<
+      string,
+      string
+    >;
+    expect(style).toEqual({
+      "--competition-light-text": palette.lightTextColor,
+      "--competition-light-background": palette.lightBackgroundColor,
+      "--competition-dark-text": palette.darkTextColor,
+      "--competition-dark-background": palette.darkBackgroundColor,
+    });
   });
 
-  test("provides solid classes for competition badges", () => {
-    expect(getCompetitionFieldClass("mun", "solid")).toContain(
-      "text-competition-mun-foreground",
-    );
-    expect(getCompetitionFieldClass("business", "solid")).toContain(
-      "text-competition-business-foreground",
-    );
+  test("leaves missing palette styling to a neutral caller fallback", () => {
+    expect(getCompetitionPaletteStyle(null)).toBeUndefined();
   });
 });

@@ -36,6 +36,7 @@ import {
   TutorProfileValue,
 } from "@/components/tutor/profile-value";
 import { cn } from "@cogito-app/ui/lib/utils";
+import type { CompetitionPalette } from "@/lib/competition-colors";
 
 const DIFF_STATUS_META: Record<
   TutorReviewDiffStatus,
@@ -117,14 +118,14 @@ function PendingChangeRow({
   expanded,
   onToggle,
   subjectLabels,
-  subjectFieldSlugs,
+  subjectPalettes,
   idPrefix,
 }: {
   diff: TutorReviewDiff;
   expanded: boolean;
   onToggle: () => void;
   subjectLabels?: ReadonlyMap<string, string>;
-  subjectFieldSlugs?: ReadonlyMap<string, string>;
+  subjectPalettes?: ReadonlyMap<string, CompetitionPalette>;
   idPrefix: string;
 }) {
   const fieldId = diff.field.replaceAll(/[^a-zA-Z0-9-]/g, "-");
@@ -201,7 +202,7 @@ function PendingChangeRow({
                 path={diff.field}
                 value={diff.current}
                 subjectLabels={subjectLabels}
-                subjectFieldSlugs={subjectFieldSlugs}
+                subjectPalettes={subjectPalettes}
                 idPrefix={`${idPrefix}-${fieldId}-current`}
               />
             </div>
@@ -215,7 +216,7 @@ function PendingChangeRow({
                 path={diff.field}
                 value={diff.proposed}
                 subjectLabels={subjectLabels}
-                subjectFieldSlugs={subjectFieldSlugs}
+                subjectPalettes={subjectPalettes}
                 idPrefix={`${idPrefix}-${fieldId}-proposed`}
               />
             </div>
@@ -231,13 +232,13 @@ export function TutorPendingChanges({
   pendingChanges,
   currentValues,
   subjectLabels,
-  subjectFieldSlugs,
+  subjectPalettes,
 }: {
   profileId: string;
   pendingChanges: Record<string, unknown> | null;
   currentValues: Record<string, unknown>;
   subjectLabels?: ReadonlyMap<string, string>;
-  subjectFieldSlugs?: ReadonlyMap<string, string>;
+  subjectPalettes?: ReadonlyMap<string, CompetitionPalette>;
 }) {
   const [diffFilter, setDiffFilter] = useState<TutorReviewDiffFilter>("all");
   const [diffSearch, setDiffSearch] = useState("");
@@ -344,7 +345,7 @@ export function TutorPendingChanges({
                 })
               }
               subjectLabels={subjectLabels}
-              subjectFieldSlugs={subjectFieldSlugs}
+              subjectPalettes={subjectPalettes}
               idPrefix={`admin-${profileId}-pending`}
             />
           ))

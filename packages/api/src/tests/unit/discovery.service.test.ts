@@ -8,6 +8,7 @@ import { TutorProfileNotFoundError } from "../../modules/tutor-discovery/discove
 import type { DiscoveryRepo } from "../../modules/tutor-discovery/discovery.repo";
 import { createPricingService } from "../../modules/pricing/pricing.service";
 import { DEFAULT_ECONOMY_CONFIG } from "../../modules/economy";
+import { DEFAULT_V3_ECONOMY_CONFIG } from "../../modules/pricing/v3-economy.config";
 
 function makeProfile(
   overrides: Partial<ProfileWithUser> = {},
@@ -41,6 +42,34 @@ function makeRepo(overrides: Partial<DiscoveryRepo> = {}): DiscoveryRepo {
     listFutureAvailability: mock(async () => []),
     ...overrides,
   } as DiscoveryRepo;
+}
+
+function makeSubject(parentSlug: string) {
+  return [
+    {
+      subjectId: "subject-1",
+      subject: {
+        id: "subject-1",
+        slug: "specialization-one",
+        name: "Specialization One",
+        description: null,
+        parentId: "parent-1",
+        isActive: true,
+        parent: {
+          id: "parent-1",
+          slug: parentSlug,
+          name: parentSlug,
+          description: null,
+          parentId: null,
+          isActive: true,
+          lightTextColor: null,
+          lightBackgroundColor: null,
+          darkTextColor: null,
+          darkBackgroundColor: null,
+        },
+      },
+    },
+  ] as any;
 }
 
 describe("Discovery Service", () => {
@@ -226,6 +255,80 @@ describe("Discovery Service", () => {
       ]);
       expect(Object.keys(result!.pricesByModality!.offline!)).toEqual(["1"]);
     });
+
+    test("uses active dynamic competition rates for selected catalog subjects", async () => {
+      const config = structuredClone(DEFAULT_V3_ECONOMY_CONFIG);
+      config.competitionRates["competition-policy-debate"] = {
+        soloMarks: 41,
+        soloFeeIdr: 123000,
+      };
+      const profile = makeProfile({
+        subjects: makeSubject("competition-policy-debate"),
+        baseRatesIdr: { online: 175_000, offline: 225_000 },
+      });
+      const repo = makeRepo({ listPublished: mock(async () => [profile]) });
+      const pricing = {
+        ...createPricingService(),
+        getActiveV3Config: mock(async () => ({ version: 9, values: config })),
+      };
+
+      const [result] = await createDiscoveryService({
+        repo,
+        pricing,
+      }).listPublished();
+
+      expect(result?.pricingRevision).toBe(9);
+      expect(result?.prices).toBeNull();
+      expect(result?.pricesByModality).toBeNull();
+      expect(
+        result?.pricesByCompetition?.["competition-policy-debate"]?.online,
+      ).toMatchObject({ "1": 41, "2": 27 });
+    });
+
+    test("does not use legacy tutor rates for a dynamic subject without active V3", async () => {
+      const profile = makeProfile({
+        subjects: makeSubject("competition-policy-debate"),
+        baseRatesIdr: { online: 175_000 },
+      });
+      const repo = makeRepo({ listPublished: mock(async () => [profile]) });
+      const pricing = {
+        ...createPricingService(),
+        getActiveV3Config: mock(async () => null),
+        getEconomyConfig: mock(async () => DEFAULT_ECONOMY_CONFIG),
+      };
+
+      const [result] = await createDiscoveryService({
+        repo,
+        pricing,
+      }).listPublished();
+
+      expect(result?.prices).toBeNull();
+      expect(result?.pricesByModality).toBeNull();
+      expect(result?.pricesByCompetition).toEqual({});
+    });
+
+    test("keeps the seven legacy parent prices while inactive V3 stays compatible", async () => {
+      const profile = makeProfile({
+        subjects: makeSubject("competition-debate"),
+        baseRatesIdr: { online: 175_000 },
+      });
+      const repo = makeRepo({ listPublished: mock(async () => [profile]) });
+      const pricing = {
+        ...createPricingService(),
+        getActiveV3Config: mock(async () => null),
+        getEconomyConfig: mock(async () => DEFAULT_ECONOMY_CONFIG),
+      };
+
+      const [result] = await createDiscoveryService({
+        repo,
+        pricing,
+      }).listPublished();
+
+      expect(
+        result?.pricesByCompetition?.["competition-debate"]?.online?.["1"],
+      ).toBe(45);
+      expect(result?.pricesByModality).toBeNull();
+    });
   });
 
   describe("getProfile", () => {
@@ -302,6 +405,7 @@ describe("Discovery Service", () => {
           slug: "math",
           name: "Math",
           description: null,
+          parentColors: null,
           children: [],
         },
       ]);

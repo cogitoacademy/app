@@ -14,5 +14,8 @@ export * from "./booking";
 export * from "./contact-request";
 export * from "./support-ticket";
 export * from "./economy-config";
+export * from "./economy-v3-revision";
+export * from "./economy-v3-activation";
 export * from "./tutor-payout";
 export * from "./knowledge-bank-access";
+export * from "./faq";

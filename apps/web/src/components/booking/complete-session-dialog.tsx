@@ -17,16 +17,17 @@ import {
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
 import { SessionFeedbackBulletInput } from "./session-feedback-bullet-input";
+import {
+  normalizeFeedbackBullets,
+  countFeedbackCharacters,
+  MAX_FEEDBACK_CHARACTERS,
+} from "@cogito-app/api/modules/booking/feedback-rules";
 
 export type CompletionFeedbackDraft = {
   discussion: string[];
   strengths: string[];
   improvements: string[];
 };
-
-function clean(bullets: string[]) {
-  return bullets.map((s) => s.trim()).filter(Boolean);
-}
 
 function FeedbackSection({
   id,
@@ -78,13 +79,16 @@ export function CompleteSessionDialog({
   const [strengths, setStrengths] = useState<string[]>([""]);
   const [improvements, setImprovements] = useState<string[]>([""]);
 
-  const cleanDiscussion = clean(discussion);
-  const cleanStrengths = clean(strengths);
-  const cleanImprovements = clean(improvements);
+  const cleanDiscussion = normalizeFeedbackBullets(discussion);
+  const cleanStrengths = normalizeFeedbackBullets(strengths);
+  const cleanImprovements = normalizeFeedbackBullets(improvements);
   const valid =
     cleanDiscussion.length > 0 &&
     cleanStrengths.length > 0 &&
-    cleanImprovements.length > 0;
+    cleanImprovements.length > 0 &&
+    [discussion, strengths, improvements].every(
+      (items) => countFeedbackCharacters(items) <= MAX_FEEDBACK_CHARACTERS,
+    );
 
   function reset() {
     setDiscussion([""]);

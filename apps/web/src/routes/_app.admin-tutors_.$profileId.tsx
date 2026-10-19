@@ -11,6 +11,7 @@ import { client } from "@/utils/orpc";
 import { TutorReviewCard } from "@/components/admin/tutor-review-card";
 import { EmptyState } from "@/components/empty-state";
 import { useSubjectTaxonomy } from "@/components/tutor/subject-taxonomy";
+import type { CompetitionPalette } from "@/lib/competition-colors";
 
 export const Route = createFileRoute("/_app/admin-tutors_/$profileId")({
   head: () => ({
@@ -42,14 +43,16 @@ function RouteComponent() {
     }
     return labels;
   }, [subjectCategories]);
-  const subjectFieldSlugs = useMemo(() => {
-    const slugs = new Map<string, string>();
+  const subjectPalettes = useMemo(() => {
+    const palettes = new Map<string, CompetitionPalette>();
     for (const category of subjectCategories) {
       for (const subject of category.children) {
-        slugs.set(subject.id, category.slug);
+        if (category.parentColors) {
+          palettes.set(subject.id, category.parentColors);
+        }
       }
     }
-    return slugs;
+    return palettes;
   }, [subjectCategories]);
 
   const {
@@ -114,7 +117,7 @@ function RouteComponent() {
               : null,
         }}
         subjectLabels={subjectLabels}
-        subjectFieldSlugs={subjectFieldSlugs}
+        subjectPalettes={subjectPalettes}
         onAction={() => {
           void refetch();
           void queryClient.invalidateQueries({

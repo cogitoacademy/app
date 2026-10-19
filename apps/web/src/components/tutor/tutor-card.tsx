@@ -22,7 +22,10 @@ import { Separator } from "@cogito-app/ui/components/selia/separator";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { IconChevronRight } from "@tabler/icons-react";
 import { CogitoMarks } from "@/components/cogito-marks";
-import { getCompetitionFieldClass } from "@/lib/competition-colors";
+import {
+  competitionPaletteClassName,
+  getCompetitionPaletteStyle,
+} from "@/lib/competition-colors";
 import { groupTutorSubjects, type TutorSubject } from "./subject-taxonomy";
 
 const MODALITY_LABELS: Record<string, string> = {
@@ -58,6 +61,11 @@ export type TutorSummaryData = {
   pricesByModality?: Partial<
     Record<"online" | "offline", Record<string, number>>
   > | null;
+  pricesByCompetition?: Record<
+    string,
+    Partial<Record<"online" | "offline", Record<string, number>>>
+  > | null;
+  pricingRevision?: number | null;
   user: { name: string | null; image: string | null } | null;
 };
 
@@ -66,7 +74,12 @@ type TutorCardProps = {
   onClick: () => void;
 };
 
+function hasCompetitionPricing(tutor: TutorSummaryData) {
+  return tutor.pricesByCompetition != null || tutor.pricingRevision != null;
+}
+
 function getStartingPrice(tutor: TutorSummaryData) {
+  if (hasCompetitionPricing(tutor)) return null;
   const allPrices = tutor.pricesByModality
     ? Object.values(tutor.pricesByModality).flatMap((prices) =>
         prices ? Object.values(prices) : [],
@@ -84,11 +97,11 @@ function getTutorSubjectLabels(
   return groupTutorSubjects(tutor.subjects).flatMap((group) =>
     group.children.map((child) => ({
       id: child.id,
-      field: group.parent?.slug ?? child.slug,
       label:
         includeCategory && group.parent
           ? `${group.parent.name}: ${child.name}`
           : child.name,
+      parentColors: group.parent?.parentColors,
     })),
   );
 }
@@ -141,27 +154,30 @@ export function TutorSummary({
         <ItemMeta className="flex w-fit max-w-full min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden">
           {subjectLabels[0] ? (
             <Badge
-              variant="tertiary"
+              variant="secondary"
               size="sm"
-              className={`min-w-0 max-w-[12rem] shrink truncate whitespace-nowrap ${getCompetitionFieldClass(subjectLabels[0].field, "solid")}`}
+              className={`min-w-0 max-w-[12rem] shrink truncate whitespace-nowrap ${subjectLabels[0].parentColors ? competitionPaletteClassName : ""}`}
+              style={getCompetitionPaletteStyle(subjectLabels[0].parentColors)}
             >
               {subjectLabels[0].label}
             </Badge>
           ) : null}
           {subjectLabels[1] ? (
             <Badge
-              variant="tertiary"
+              variant="secondary"
               size="sm"
-              className={`hidden min-w-0 max-w-[12rem] shrink truncate whitespace-nowrap lg:inline-flex ${getCompetitionFieldClass(subjectLabels[1].field, "solid")}`}
+              className={`hidden min-w-0 max-w-[12rem] shrink truncate whitespace-nowrap lg:inline-flex ${subjectLabels[1].parentColors ? competitionPaletteClassName : ""}`}
+              style={getCompetitionPaletteStyle(subjectLabels[1].parentColors)}
             >
               {subjectLabels[1].label}
             </Badge>
           ) : null}
           {subjectLabels[2] ? (
             <Badge
-              variant="tertiary"
+              variant="secondary"
               size="sm"
-              className={`hidden min-w-0 max-w-[12rem] shrink truncate whitespace-nowrap 2xl:inline-flex ${getCompetitionFieldClass(subjectLabels[2].field, "solid")}`}
+              className={`hidden min-w-0 max-w-[12rem] shrink truncate whitespace-nowrap 2xl:inline-flex ${subjectLabels[2].parentColors ? competitionPaletteClassName : ""}`}
+              style={getCompetitionPaletteStyle(subjectLabels[2].parentColors)}
             >
               {subjectLabels[2].label}
             </Badge>
@@ -254,9 +270,10 @@ function MobileTutorCardContent({ tutor }: { tutor: TutorSummaryData }) {
       {subjectLabels.length > 0 ? (
         <div className="mt-3 flex min-w-0 items-center gap-1.5">
           <Badge
-            variant="tertiary"
+            variant="secondary"
             size="sm"
-            className={`min-w-0 max-w-full truncate ${getCompetitionFieldClass(subjectLabels[0]?.field, "solid")}`}
+            className={`min-w-0 max-w-full truncate ${subjectLabels[0]?.parentColors ? competitionPaletteClassName : ""}`}
+            style={getCompetitionPaletteStyle(subjectLabels[0]?.parentColors)}
           >
             {subjectLabels[0]?.label}
           </Badge>
@@ -278,6 +295,10 @@ function MobileTutorCardContent({ tutor }: { tutor: TutorSummaryData }) {
         <div className="ml-auto flex items-center gap-1 font-semibold tabular-nums">
           {startingPrice !== null ? (
             <CogitoMarks value={startingPrice} size="3" />
+          ) : hasCompetitionPricing(tutor) ? (
+            <Text className="text-xs text-muted">
+              Choose a competition to see pricing
+            </Text>
           ) : (
             <Text className="text-sm text-muted">View pricing</Text>
           )}

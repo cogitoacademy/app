@@ -9,6 +9,14 @@ import {
   PaymentProviderError,
   PaymentSimulationUnavailableError,
   PaymentWebhookMismatchError,
+  V3TopUpUnavailableError,
+  V3PackagePurchaseDisabledError,
+  TopUpQuoteNotFoundError,
+  TopUpQuoteExpiredError,
+  TopUpQuoteRequestConflictError,
+  TopUpQuoteChoiceConflictError,
+  V3TopUpChoiceUnavailableError,
+  TopUpAmountOutOfRangeError,
 } from "./payment.errors";
 import type { PaymentWalletPort } from "./index";
 import type { PaymentAuditPort } from "./index";
@@ -19,6 +27,8 @@ import {
 } from "../../lib/metrics";
 import type { PaymentRepo } from "./payment.repo";
 import { lockPaymentIntent } from "../../lib/locks";
+import type { EconomyService } from "../economy/economy.service";
+import { calculateV3TopUpPrice } from "../pricing/v3-rate-card";
 
 export type PaymentStatus =
   | "PENDING"
@@ -72,7 +82,113 @@ export type PaymentPort = PaymentProvider;
 export interface CreateIntentResult {
   paymentId: string;
   providerReference: string;
-  checkoutUrl: string;
+  checkoutUrl: string | null;
+  status?: PaymentStatus;
+  recoveryRequired?: boolean;
+}
+
+type TopUpChoice = "package" | "custom" | "recommended";
+
+interface TopUpPackageTerms {
+  code: string;
+  marks: number;
+  priceIdr: number;
+}
+
+interface TopUpTermsSnapshot {
+  packages: TopUpPackageTerms[];
+  exactSurchargeIdr: number;
+  exactPackageCode: string | null;
+  customAmountIdr: number;
+  recommendation: TopUpPackageTerms | null;
+}
+
+const V3_TOP_UP_QUOTE_TTL_MS = 15 * 60 * 1000;
+
+function topUpPackageDto(pkg: TopUpPackageTerms) {
+  return {
+    code: pkg.code,
+    label: `${pkg.code
+      .split("-")
+      .map((part) => part[0]?.toUpperCase() + part.slice(1))
+      .join(" ")} package`,
+    marks: pkg.marks,
+    priceIdr: pkg.priceIdr,
+  };
+}
+
+function getTopUpTerms(snapshot: unknown): TopUpTermsSnapshot {
+  const value = snapshot as Partial<TopUpTermsSnapshot>;
+  if (
+    !value ||
+    !Array.isArray(value.packages) ||
+    typeof value.exactSurchargeIdr !== "number" ||
+    typeof value.customAmountIdr !== "number" ||
+    (value.exactPackageCode !== null &&
+      typeof value.exactPackageCode !== "string") ||
+    (value.recommendation !== null && typeof value.recommendation !== "object")
+  ) {
+    throw new Error("Stored V3 top-up quote terms are invalid");
+  }
+  return value as TopUpTermsSnapshot;
+}
+
+function topUpQuoteDto(quote: {
+  id: string;
+  revision: number;
+  requestedMarks: number;
+  termsSnapshot: unknown;
+  expiresAt: Date;
+}) {
+  const terms = getTopUpTerms(quote.termsSnapshot);
+  const exactPackage = terms.exactPackageCode
+    ? terms.packages.find((item) => item.code === terms.exactPackageCode)
+    : null;
+  return {
+    quoteId: quote.id,
+    revision: quote.revision,
+    marks: quote.requestedMarks,
+    customAmountIdr: terms.customAmountIdr,
+    exactPackage: exactPackage ? topUpPackageDto(exactPackage) : null,
+    recommendedPackage: terms.recommendation
+      ? topUpPackageDto(terms.recommendation)
+      : null,
+    expiresAt: quote.expiresAt.toISOString(),
+  };
+}
+
+function selectTopUpTerms(
+  quote: { requestedMarks: number; termsSnapshot: unknown },
+  choice: TopUpChoice,
+) {
+  const terms = getTopUpTerms(quote.termsSnapshot);
+  if (choice === "package") {
+    const pkg = terms.exactPackageCode
+      ? terms.packages.find((item) => item.code === terms.exactPackageCode)
+      : null;
+    if (!pkg) throw new V3TopUpChoiceUnavailableError();
+    return {
+      marks: pkg.marks,
+      amountIdr: pkg.priceIdr,
+      label: `${topUpPackageDto(pkg).label} · ${pkg.marks} Marks`,
+    };
+  }
+  if (choice === "custom") {
+    if (terms.exactPackageCode) throw new V3TopUpChoiceUnavailableError();
+    return {
+      marks: quote.requestedMarks,
+      amountIdr: terms.customAmountIdr,
+      label: `Custom top-up · ${quote.requestedMarks} Marks`,
+    };
+  }
+  if (choice === "recommended" && terms.recommendation) {
+    return {
+      marks: terms.recommendation.marks,
+      amountIdr: terms.recommendation.priceIdr,
+      label: `Recommended ${topUpPackageDto(terms.recommendation).label} · ${terms.recommendation.marks} Marks`,
+    };
+  }
+  throw new V3TopUpChoiceUnavailableError();
 }
 
 export interface ConfirmInput {
@@ -138,6 +254,7 @@ const MAX_CHANNEL_FEE_RATE = 0.03;
  */
 export function createPaymentService(deps: {
   db: DbType;
+  economy?: Pick<EconomyService, "getActiveV3Config">;
   wallet: PaymentWalletPort;
   repo: PaymentRepo;
   provider: PaymentProvider;
@@ -148,6 +265,7 @@ export function createPaymentService(deps: {
 }) {
   const {
     db,
+    economy,
     wallet,
     repo,
     provider,
@@ -156,6 +274,225 @@ export function createPaymentService(deps: {
     audit,
     refundRecord,
   } = deps;
+
+  async function getTopUpCatalog() {
+    const active = economy ? await economy.getActiveV3Config(db) : null;
+    if (!active) {
+      return {
+        active: false as const,
+        revision: null,
+        packages: [],
+        exactSurchargeIdr: 0,
+        quoteTtlSeconds: 900 as const,
+      };
+    }
+    return {
+      active: true as const,
+      revision: active.version,
+      packages: active.values.packages.map(topUpPackageDto),
+      exactSurchargeIdr: active.values.exactSurchargeIdr,
+      quoteTtlSeconds: 900 as const,
+    };
+  }
+
+  async function createTopUpQuote(
+    userId: string,
+    input: { requestKey: string; marks: number },
+  ) {
+    return db.transaction(async (tx) => {
+      const existing = await repo.findTopUpQuoteByRequestKey(
+        userId,
+        input.requestKey,
+        tx,
+      );
+      if (existing) {
+        if (existing.requestedMarks !== input.marks) {
+          throw new TopUpQuoteRequestConflictError();
+        }
+        return topUpQuoteDto(existing);
+      }
+
+      const active = economy ? await economy.getActiveV3Config(tx) : null;
+      if (!active) throw new V3TopUpUnavailableError();
+      const calculation = calculateV3TopUpPrice(input.marks, active.values);
+      if (calculation.amountIdr > 2_147_483_647) {
+        throw new TopUpAmountOutOfRangeError();
+      }
+      const termsSnapshot: TopUpTermsSnapshot = {
+        packages: active.values.packages.map(({ code, marks, priceIdr }) => ({
+          code,
+          marks,
+          priceIdr,
+        })),
+        exactSurchargeIdr: active.values.exactSurchargeIdr,
+        exactPackageCode: calculation.packageCode,
+        customAmountIdr: calculation.amountIdr,
+        recommendation: calculation.recommendation,
+      };
+      const inserted = await repo.insertTopUpQuote(
+        {
+          id: crypto.randomUUID(),
+          userId,
+          requestKey: input.requestKey,
+          revision: active.version,
+          requestedMarks: input.marks,
+          termsSnapshot,
+          expiresAt: new Date(Date.now() + V3_TOP_UP_QUOTE_TTL_MS),
+        },
+        tx,
+      );
+      if (inserted) return topUpQuoteDto(inserted);
+
+      const winner = await repo.findTopUpQuoteByRequestKey(
+        userId,
+        input.requestKey,
+        tx,
+      );
+      if (!winner) throw new Error("Top-up quote could not be saved");
+      if (winner.requestedMarks !== input.marks) {
+        throw new TopUpQuoteRequestConflictError();
+      }
+      return topUpQuoteDto(winner);
+    });
+  }
+
+  function topUpPurchaseResult(
+    record: NonNullable<Awaited<ReturnType<typeof repo.findPaymentById>>>,
+  ) {
+    return {
+      paymentId: record.id,
+      providerReference: record.providerReference,
+      checkoutUrl: record.checkoutUrl,
+      status: record.status as PaymentStatus,
+      recoveryRequired:
+        record.status === PAYMENT_STATUS.PENDING && !record.checkoutUrl,
+      quoteId: record.quoteId!,
+      choice: record.quoteChoice as TopUpChoice,
+      purchaseLabel: record.purchaseLabel ?? `Top-up · ${record.marks} Marks`,
+    };
+  }
+
+  async function createPurchaseFromTopUpQuote(
+    userId: string,
+    walletId: string,
+    quoteId: string,
+    choice: TopUpChoice,
+  ) {
+    const outcome = await db.transaction(async (tx) => {
+      const quote = await repo.findTopUpQuoteById(userId, quoteId, tx, true);
+      if (!quote) throw new TopUpQuoteNotFoundError();
+
+      const existing = await repo.findPaymentByQuote(quote.id, tx);
+      if (existing) {
+        if (existing.quoteChoice !== choice) {
+          throw new TopUpQuoteChoiceConflictError();
+        }
+        return { kind: "existing" as const, record: existing };
+      }
+
+      if (quote.expiresAt.getTime() <= Date.now()) {
+        throw new TopUpQuoteExpiredError();
+      }
+      const selected = selectTopUpTerms(quote, choice);
+      const paymentId = crypto.randomUUID();
+      const providerReference = `${providerName}:v3:${paymentId}`;
+      const pricingSnapshot = {
+        schema: "v3-top-up-v1",
+        quoteId: quote.id,
+        revision: quote.revision,
+        choice,
+        marks: selected.marks,
+        amountIdr: selected.amountIdr,
+        label: selected.label,
+        terms: quote.termsSnapshot,
+      };
+      const inserted = await repo.insertPayment(
+        {
+          id: paymentId,
+          userId,
+          walletId,
+          packageId: null,
+          quoteId: quote.id,
+          quoteChoice: choice,
+          purchaseLabel: selected.label,
+          pricingSnapshot,
+          provider: providerName,
+          providerReference,
+          // Midtrans order_id is this stable UUID. Save it before network I/O
+          // so an uncertain response can be reconciled without a new order.
+          providerRequestId:
+            providerName === "midtrans" ? paymentId : undefined,
+          providerIntentState: "CREATING",
+          amountIdr: selected.amountIdr,
+          marks: selected.marks,
+          status: PAYMENT_STATUS.PENDING,
+        },
+        tx,
+      );
+      if (!inserted) {
+        const winner = await repo.findPaymentByQuote(quote.id, tx);
+        if (!winner) throw new Error("Top-up payment could not be saved");
+        if (winner.quoteChoice !== choice) {
+          throw new TopUpQuoteChoiceConflictError();
+        }
+        return { kind: "existing" as const, record: winner };
+      }
+      return { kind: "create" as const, record: inserted };
+    });
+
+    if (outcome.kind === "existing") {
+      if (
+        outcome.record.status === PAYMENT_STATUS.PENDING &&
+        !outcome.record.checkoutUrl &&
+        outcome.record.providerRequestId &&
+        provider.getPaymentRequestStatus
+      ) {
+        try {
+          await reconcilePurchase(outcome.record.id, userId);
+        } catch {
+          // An absent/uncertain provider response never authorizes a second
+          // createIntent call for this quote.
+        }
+      }
+      const current = await repo.findPaymentById(outcome.record.id);
+      if (!current) throw new PaymentNotFoundError(outcome.record.id);
+      return topUpPurchaseResult(current);
+    }
+
+    try {
+      const intent = await provider.createIntent({
+        paymentId: outcome.record.id,
+        amountIdr: outcome.record.amountIdr,
+        providerReference: outcome.record.providerReference,
+      });
+      await repo.updatePaymentIntent(outcome.record.id, {
+        providerRequestId:
+          intent.paymentRequestId ??
+          outcome.record.providerRequestId ??
+          undefined,
+        checkoutUrl: intent.checkoutUrl,
+        providerIntentState: "READY",
+      });
+    } catch {
+      await repo.updatePaymentIntent(outcome.record.id, {
+        providerIntentState: "UNCERTAIN",
+      });
+      if (
+        outcome.record.providerRequestId &&
+        provider.getPaymentRequestStatus
+      ) {
+        try {
+          await reconcilePurchase(outcome.record.id, userId);
+        } catch {
+          // Keep the same payment identity available for status recovery.
+        }
+      }
+    }
+
+    const current = await repo.findPaymentById(outcome.record.id);
+    if (!current) throw new PaymentNotFoundError(outcome.record.id);
+    return topUpPurchaseResult(current);
+  }
 
   /**
    * Creates a payment intent for a mark package purchase.
@@ -177,6 +514,24 @@ export function createPaymentService(deps: {
     walletId: string,
     packageCode: string,
   ): Promise<CreateIntentResult> {
+    const activeV3 = economy ? await economy.getActiveV3Config(db) : null;
+    if (activeV3) {
+      const pending = await repo.findLatestPaymentByUserAndPackageCode(
+        userId,
+        packageCode,
+        providerName,
+      );
+      if (pending?.status === PAYMENT_STATUS.PENDING) {
+        return {
+          paymentId: pending.id,
+          providerReference: pending.providerReference,
+          checkoutUrl: pending.checkoutUrl,
+          status: pending.status as PaymentStatus,
+          recoveryRequired: !pending.checkoutUrl,
+        };
+      }
+      throw new V3PackagePurchaseDisabledError();
+    }
     const pkg = await repo.findPackageByCode(packageCode);
     if (!pkg || !pkg.isActive) throw new PackageNotFoundError(packageCode);
 
@@ -226,13 +581,21 @@ export function createPaymentService(deps: {
         existingByPackage ??
         (await repo.findPaymentByProviderReference(baseProviderReference, tx));
 
+      if (
+        existing?.status !== PAYMENT_STATUS.PENDING &&
+        economy &&
+        (await economy.getActiveV3Config(tx))
+      ) {
+        throw new V3PackagePurchaseDisabledError();
+      }
       const persistIntent = async (
         paymentId: string,
         providerReference: string,
+        amountIdr = pkg.priceIdr,
       ) => {
         const intent = await provider.createIntent({
           paymentId,
-          amountIdr: pkg.priceIdr,
+          amountIdr,
           providerReference,
         });
         const update: {
@@ -270,7 +633,11 @@ export function createPaymentService(deps: {
         try {
           return {
             ok: true as const,
-            value: await persistIntent(existing.id, existing.providerReference),
+            value: await persistIntent(
+              existing.id,
+              existing.providerReference,
+              existing.amountIdr ?? pkg.priceIdr,
+            ),
           };
         } catch (error) {
           await repo.updatePaymentStatus(
@@ -327,6 +694,7 @@ export function createPaymentService(deps: {
               value: await persistIntent(
                 existingRow.id,
                 existingRow.providerReference,
+                existingRow.amountIdr ?? pkg.priceIdr,
               ),
             };
           } catch (error) {
@@ -654,7 +1022,7 @@ export function createPaymentService(deps: {
             amount: record.marks,
             eventKey: `purchase.${record.id}`,
             sourceReference: record.id,
-            reason: `Purchase: ${record.marks} Marks`,
+            reason: record.purchaseLabel ?? `Purchase: ${record.marks} Marks`,
           });
         }
 
@@ -834,6 +1202,9 @@ export function createPaymentService(deps: {
   }
 
   return {
+    getTopUpCatalog,
+    createTopUpQuote,
+    createPurchaseFromTopUpQuote,
     createIntent,
     simulatePurchase,
     reconcilePurchase,

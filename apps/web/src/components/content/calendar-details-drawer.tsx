@@ -25,6 +25,7 @@ import {
   getEducationLevelLabel,
 } from "./calendar-utils";
 import type { CalendarCompetition } from "./calendar-types";
+import { getCompetitionPaletteStyle } from "@/lib/competition-colors";
 
 function formatScale(scale: string) {
   return scale.charAt(0).toUpperCase() + scale.slice(1).toLowerCase();
@@ -47,9 +48,10 @@ function CategoryBadges({ event }: { event: CalendarCompetition }) {
           key={`${event.id}-${category.coreCategory}`}
           variant="secondary"
           size="md"
-          className={getCategoryBadgeClass(category.coreCategory)}
+          className={getCategoryBadgeClass(category)}
+          style={getCompetitionPaletteStyle(category.parentColors)}
         >
-          {getCategoryLabel(category.coreCategory)}
+          {category.name || getCategoryLabel(category.coreCategory)}
         </Badge>
       ))}
     </div>

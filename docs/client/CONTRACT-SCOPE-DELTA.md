@@ -1,0 +1,81 @@
+# Perbandingan scope kontrak awal dengan tambahan release v3
+
+Tanggal: 18 Oktober 2026. Status: **baseline dikonfirmasi user: PRD 1.7, kontrak awal Rp10.500.000**. Tujuan: menentukan perubahan yang layak menjadi change request, bukan menghitung semua fitur yang belum ada di kode sebagai pekerjaan tambahan.
+
+## Acuan dan batas
+
+- Baseline dokumen: `docs/prd.tex`, versi 1.7, riwayat revisi 23 Agustus 2026. Bagian Document Governance menyatakan PRD mengatur Phase 0 / Package 2 plus notification dan achievements yang disetujui. PDF pendamping `docs/prd.pdf` juga menyatakan versi 1.7; bagian Commercial Notes, Scope, Functional Requirements dan Session Notes diperiksa.
+- Target baru: `output/pdf/RELEASE-SCOPE-POST-MEETING.pdf` / sumber pendamping `docs/client/RELEASE-SCOPE-POST-MEETING.md`, 18 Oktober 2026.
+- Konfirmasi langsung user pada 18 Oktober 2026: PRD 1.7 adalah baseline kontrak awal dengan nilai **Rp10.500.000**. Ini mengoreksi angka Rp1.500.000 yang disebut sebelumnya. Signup OTP sudah termasuk dari awal. **OTP diperlakukan sebagai kewajiban awal**, walaupun PRD versi 1.7 tidak menyebut istilah OTP secara eksplisit.
+- Baseline dan nominal dikonfirmasi melalui chat user; belum diperiksa dokumen kontrak bertanda tangan, proposal komersial Package 2, lampiran harga atau daftar change request berbayar/gratis. Tidak perlu meminta ulang konfirmasi baseline yang sudah diberikan.
+- `docs/cogito-product-brief.md` adalah dossier produk, bukan kontrak; bagian source of truth-nya merujuk implementasi. Dokumen itu **tidak digunakan sebagai bukti bahwa suatu fitur boleh ditagih**. Scope draft 11 Oktober juga membandingkan kondisi kode dengan rencana, sehingga bukan bukti batas kontrak awal.
+- Perbandingan ini tidak membuka source code untuk menentukan entitlement pembayaran. Tidak mengubah persetujuan scope, mengirim penawaran, atau memutuskan kewajiban hukum.
+
+## Prinsip penagihan
+
+**Sudah dijanjikan -> termasuk kontrak awal**, meskipun belum dikerjakan atau masih ada bug. **Aturan/alur/deliverable yang baru diminta -> calon tambahan**, hanya atas delta-nya. **Sudah diberikan/disepakati sebelum cutoff kontrak -> jangan dijual ulang**, meskipun belum masuk PRD lama. Untuk item campuran, pisahkan bagian lama dan perubahan spesifiknya. Implementasi internal yang dipilih developer bukan otomatis fitur tambahan.
+
+## Matriks scope
+
+| Area | Scope awal tertulis / konfirmasi user | Perubahan release v3 | Perlakuan komersial yang disarankan |
+| --- | --- | --- | --- |
+| Signup, login, role, email OTP | FR-01 authentication student/tutor/admin; OTP sudah termasuk menurut user | Kode referral saat registrasi, saved choice dan Google resume; target juga mendetailkan OTP dalam form/pre-create proof | **Jangan tagih signup/OTP baru.** Tagih integrasi referral saja. Perubahan urutan/layout OTP jangan dijadikan item mandiri tanpa bukti perubahan di luar acceptance awal |
+| Google sign-in / warning | Auth termasuk; extent Google consent setup tidak rinci pada FR-01 | Investigasi pesan unverified | Tidak otomatis tambahan. Bila ini defect/penyelesaian auth yang dijanjikan, bagian kontrak awal; pekerjaan baru di console/provider harus dijelaskan terpisah jika ada |
+| Wallet, history, ledger | FR-03/FR-04: saldo, hold/release/deduct/history, provider purchase; idempotency/audit pada NFR | Bonus nonexpiring, class allocation/session settlement | **Wallet/ledger/payment dasar bukan baru.** Hanya integrasi program referral dan enrollment baru yang dihitung |
+| Paket Marks | FR-04 + Purchase package UI + tabel approved: 50/120/200/400 pada harga lama | 50/150/250/500 dan harga baru | **Perubahan nilai paket**, bukan membangun sistem top-up lagi. Pembaruan angka/display kecil; migrasi harus menjaga transaksi lama sebagai bagian perubahan |
+| Exact/custom top-up | Purchase package UI secara eksplisit melarang custom amount di Phase 0 kecuali diubah/disetujui (`prd.tex:629`) | Custom Marks, tier+surcharge, offer better package, quote dan checkout | **Tambahan jelas**. Payment integration lama direuse, tidak ditagih ulang sebagai gateway baru |
+| Economy admin | FR-05 + clarification dan revisi1.6: admin economy, empat take fields, versioning/audit, future snapshots | Central rate card per competition, Marks/IDR independen, lebih banyak settings; tutor read-only | **Perubahan aturan dan perluasan existing admin**, bukan seluruh admin economy baru. Preview, permission dan snapshot hanya delta yang terdampak |
+| Tutor pricing / discovery | FR-06/FR-19/FR-24: tutor IDR base, prices1-6, availability, approval | Harga ditentukan rate card competition dan fee tidak lagi diedit tutor | **Change request atas cara penetapan harga**, bukan katalog tutor/onboarding baru |
+| Solo/group bookings | FR-07/08/14/15: lifecycle, invite/reprice, H-2, tutor reschedule, admin exception | On-demand tetap; hitungan v3 diganti | Booking yang tetap berlaku adalah kontrak awal. Tidak menagih ulang booking/cancellation lama; hitung hanya adaptasi rate card |
+| Series vs cohort | FR-20/DL-17: maksimal4 sesi, tutor/group sama, hold upfront, tutor accept seluruh paket | Public cohorts dengan curriculum, sesi banyak, tutor per sesi, seat, full/half/single enrollment | **Cohort merupakan tambahan jelas**, bukan sekadar mengganti nama series. Jangan masukkan pembangunan series lama dalam tambahan |
+| Masterclass | Tidak ada requirement seat-based public masterclass. Kata masterclass di contoh ekonomi tidak mendefinisikan lifecycle produk | One-session public class, cover/capacity/enrollment, flat fee | **Tambahan jelas** menggunakan shared model cohort; bukan dihitung dua sistem terpisah penuh |
+| Installment / reservation | Series lama semua Marks upfront; hold/release sudah ada | Half plan, invoice/reminder, seat lock15m, nonpayment roster removal, latejoin/rejoin | **Tambahan jelas**, mencakup aturan/alur enrollment baru; bukan biaya membangun wallet lagi |
+| Cancel/refund/no-show | FR-10/14, DL-12/24, cancellation rules: H-2, late penalty, Marks-only returns, audited overrides | Cohort/masterclass24h/20%, withdrawal, postpone3d, reschedule dan capacity release | **Hanya kebijakan/alur baru untuk big class** yang ditagih. Marks-only/no cash dan admin audit sudah lama, bukan fitur baru sendiri |
+| Google Meet dan notifikasi | FR-21 + FR-17/notification matrix: Meet setelah confirm, critical email/in-app, manual fallback; DL-05 | Publish-class creates Meet per session; installment/report reminders; roster audience | **Ekstensi ke kelas/event baru**, bukan integrasi Meet/email dari nol. Kegagalan memenuhi integrasi lama bukan tambahan |
+| Reports / session notes | FR-09/DL-18/Session Notes: tutor notes, sanitized rich text; structured assessment deferred | Tiga field, limit600, reminder pending, admin report correction, semua class types | **Campuran**. Catatan sesi dasar termasuk. User menyatakan cutoff sampai latest commit: tiga field yang sudah diterima sebelum cutoff tidak dijual ulang. Tagih hanya perubahan limit/workflow/admin/cross-class yang baru; minta bukti acceptance lama bila diperdebatkan |
+| Student report PDF | Tidak ditemukan requirement downloadable three-month branded student PDF dalam PRD lama; rich progress reporting deferred | Download3bulan, satu sesi/page, template brand, admin export | **Deliverable tambahan jelas**, dengan reuse isi laporan lama; pembuatan ulang isi/report input bukan otomatis masuk harga PDF |
+| Tutor honor/payout dasar | Included Scope, DL-11/DL-28, tutor surfaces/FR-19: IDR honorarium breakdown, payout-request/payroll-support visibility | Tax status/rates/override, monthly tax sheet, explicit per-session coverage, void and richer snapshots/actual transfer evidence | **Jangan menyebut seluruh payout sebagai fitur baru.** Tambahan adalah tax/accounting/reconciliation extension. Extent payment-record/history/CSV yang sudah disepakati sebelum cutoff tidak ditagih ulang |
+| NIK/NPWP dan tax withholding | Profil/onboarding awal tidak mensyaratkan tax identity/rates; tidak ada tax CSV AC | NIK/legal name/optional NPWP, rates2.5/3%, overrides, stored tax calculation | **Tambahan jelas**, bukan membuat ulang profil tutor/bank |
+| Friend referral | Document Governance/DL-14 + Non-Goals: referral deferred; DL-10: promotional/free Marks excluded | Code/welcome/reward/cap semester/history/settings | **Tambahan eksplisit di luar Phase 0.** Ledger/auth digunakan ulang; OTP tidak dijual lagi |
+| KOL | Tidak didefinisikan sebagai Phase 0 feature; referral deferred | Campaign, attribution, first IDR top-up commission, settlement/correction/monthly CSV | **Tambahan jelas**, terpisah aturan dari friend namun shared referral foundation tidak ditagih dua kali |
+| Knowledge Bank / Calendar dasar | FR-11/FR-12 + DL-03/16: app access, Sanity authoritative, gating/return-path; second editorial DB explicitly deferred | Source diganti ke app DB/API; content admin, migration/re-entry, file/relation/URL preservation | **Migrasi sumber dan admin content tambahan jelas.** Menampilkan calendar/KB dan gating awal bukan fitur baru |
+| Agenda duplicate | Calendar usable termasuk FR-11; target menyebut fix repeated agenda entries | Perbaikan duplikasi event/date | **Default bug fix kontrak awal**, bukan tambahan otomatis. Jika ternyata permintaan perubahan representasi data yang sebelumnya sudah accepted, jelaskan delta dahulu; jangan taruh tiket bug umum di penawaran baru |
+| Public tutor website | PRD awal mencakup tutor discovery dalam platform; existing bilingual site dipertahankan; tidak eksplisit mewajibkan website mengganti sumber tutor | Website memakai approved app profiles, no legacy fallback, empty state | **Calon tambahan integrasi website**, bukan membangun ulang app profiles/discovery; bergantung apakah sinkronisasi ini sudah dijanjikan di proposal website terpisah |
+| Activities page | Tidak didefinisikan sebagai shared app class/Other activity content admin pada PRD Phase 0 | One page Masterclasses/Cohorts/Other, app source/cards, redirects | **Calon tambahan website**, dengan syarat tidak sudah tercakup kontrak website lain. Reuse class data; jangan menagih data model cohort dua kali |
+| FAQ admin + dedicated page | Tidak ada requirement FAQ DB/admin/landing flags/full-page pada PRD lama | English/optional Indonesian, active/order/landing, safe expandable answers, full page | **Calon tambahan CMS/website**, perlu cek proposal website lain jika ada; existing FAQ text/display tidak dibangun ulang sebagai proyek terpisah |
+| Landing tweaks / app showcase | Phase0 operating core; existing bilingual landing CTA/achievements disebut, bukan full redesign | Logos drag/touch, testimonial autoplay, targeted motion/spacing, removal sections, showcase | **Perubahan website terbatas**, bukan harga full redesign. Video belum berbatas brief, jadi terpisah. Perbaikan bug UI lama tetap bagian scope awal |
+| Bahasa | FR-11/PRD sudah menyebut bilingual public academy site dan English app calendar; belum menyatakan semua content-entry wajib dua input | User: website English wajib/ID optional, dua input; app English | **Tidak menagih seluruh bilingual website/app English sebagai fitur baru.** Hanya field/admin/data-migration locale tambahan untuk modul content baru, sesuai kebutuhan |
+| QA, security, audit, rollout | NFR, TDD/release governance, history/idempotency/authorization sudah diwajibkan | Pengujian alur tambahan dan migrasi baru | QA fitur baru boleh masuk biaya tambahan; QA/perbaikan kewajiban awal tidak dibebankan ulang. Jangan menagih audit/permission/idempotency sebagai fitur terpisah yang sejak awal wajib |
+
+## Daftar yang aman dikeluarkan dari penawaran tambahan
+
+1. Signup/OTP/auth dasar dan role/login yang sudah dijanjikan.
+2. Wallet, ledger, package checkout, payment gateway dasar.
+3. Solo/group/series booking, availability dan admin exception dasar.
+4. Email/in-app infrastructure dan Meet integration dasar.
+5. Tutor profile/discovery/approval, honorarium/payout visibility dasar.
+6. Session notes/report yang sudah masuk scope/diterima sebelum cutoff.
+7. Calendar/Knowledge Bank access/gating dasar dan bilingual website yang sudah dijanjikan.
+8. Bug fix dan acceptance testing pekerjaan kontrak awal.
+
+## Dasar penawaran baru yang defensible
+
+Kelompokkan hanya delta menjadi:
+
+1. **Economy changes + exact top-up:** formula/otoritas rate card baru, custom quotes dan perubahan paket; bukan payment system baru.
+2. **Cohort/masterclass:** public classes/curriculum/per-session tutor, seats/plans/latejoin/cancellation khusus kelas baru; shared model dibayar sekali.
+3. **Finance extension:** tax identity/withholding, payout session allocations/void/reconciliation/tax exports; bukan payout dasar.
+4. **Report extension:** PDF brand/export dan workflow baru di atas report yang sudah disepakati.
+5. **Friend + KOL:** rules/campaigns/commissions/settlement dan integrasi registrasi; tanpa item signup OTP.
+6. **Website/content change request:** source migration/admin content/Activities/FAQ/targeted landing integration, setelah memastikan tidak masuk kontrak website terpisah. Video berdasarkan brief terpisah.
+
+Harga sebelumnya Rp8 juta kemudian Rp7,5 juta pada percakapan **belum dihitung dari delta kontrak** dan tidak boleh dianggap hasil estimasi terukur. Tidak ada dasar untuk otomatis mengurangi tepat Rp500 ribu karena OTP dikeluarkan. Harga final perlu mengikuti delta yang dipastikan, volume konten/migrasi, acceptance/revision limits dan brief video. Besarnya kode/bug yang masih tersisa bukan dasar menambah tagihan.
+
+## Yang perlu dipastikan untuk memfinalkan nilai, bukan mengulang tanya fitur
+
+- **Selesai dikonfirmasi:** PRD1.7 adalah baseline kontrak Rp10,5 juta. Angka ini tidak menentukan harga tambahan secara otomatis; tambahan dihitung dari delta pada matriks di atas.
+- Mana pekerjaan tambahan sebelum cutoff latest commit yang sudah dianggap termasuk/diterima gratis? Khusus report tiga field dan detailed payout history/CSV: PRD lama hanya mendefinisikan notes/payroll visibility; jangan mengisi kekosongan dengan asumsi boleh tagih.
+- Apakah perubahan main website berada di kontrak terpisah yang sudah dibayar? Jika ya, keluarkan overlap.
+- Video dan volume migrasi/entry konten dipisahkan agar tidak menjadi kewajiban tak berbatas.
+
+Ini bukan permintaan agar client mengulang persetujuan fitur lama. Gunakan dokumen/proposal/chat yang sudah ada; cukup konfirmasi gap bukti komersialnya.

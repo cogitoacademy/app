@@ -56,10 +56,10 @@ describe("getDashboardAnalytics", () => {
       completed: 2,
       exceptions: 1,
       activeLearners: 3,
-      grossMarks: 120,
-      platformTakeMarks: 24,
-      grossIdr: 600_000,
-      platformTakeIdr: 120_000,
+      v3SnapshotCount: 1,
+      legacySnapshotCount: 2,
+      otherSnapshotCount: 0,
+      missingSnapshotCount: 1,
     };
     const select = makeSelectSequence([
       [bookingSummary],

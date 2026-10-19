@@ -13,6 +13,7 @@ import {
   getCategoryEventClass,
 } from "./calendar-utils";
 import type { CalendarCompetition } from "./calendar-types";
+import { getCompetitionPaletteStyle } from "@/lib/competition-colors";
 
 type CalendarEventView = "month" | "agenda";
 
@@ -32,8 +33,9 @@ export function CalendarEventItem({
   onClick?: (event: MouseEvent<HTMLButtonElement>) => void;
 }) {
   const isEventInPast = isPast(new Date(event.end));
-  const category = event.categories[0]?.coreCategory;
+  const category = event.categories[0];
   const eventClass = getCategoryEventClass(category);
+  const eventStyle = getCompetitionPaletteStyle(category?.parentColors);
 
   if (view === "month") {
     return (
@@ -41,12 +43,13 @@ export function CalendarEventItem({
         type="button"
         aria-label={`View details for ${event.title}`}
         className={cn(
-          "relative mt-(--event-gap) flex h-(--event-height) w-full select-none items-center overflow-hidden px-1 text-left text-[9px] font-medium outline-none backdrop-blur-sm transition focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary sm:px-2 sm:text-xs text-foreground!",
+          "relative mt-(--event-gap) flex h-(--event-height) w-full select-none items-center overflow-hidden px-1 text-left text-[9px] font-medium outline-none backdrop-blur-sm transition focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary sm:px-2 sm:text-xs",
           eventClass,
           getBorderRadiusClass(isFirstDay, isLastDay),
           isFirstDay && "border-l-4",
           isEventInPast && "opacity-100",
         )}
+        style={eventStyle}
         onClick={onClick}
       >
         {isContinuation ? (
@@ -67,6 +70,7 @@ export function CalendarEventItem({
         eventClass,
         isEventInPast && "opacity-70",
       )}
+      style={eventStyle}
       onClick={onClick}
     >
       <div className="flex items-start justify-between gap-3">

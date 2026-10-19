@@ -27,10 +27,10 @@ describe("Admin Service", () => {
             completed: "2",
             exceptions: "1",
             activeLearners: "3",
-            grossMarks: "120",
-            platformTakeMarks: "24",
-            grossIdr: "600000",
-            platformTakeIdr: "120000",
+            v3SnapshotCount: "1",
+            legacySnapshotCount: "2",
+            otherSnapshotCount: "0",
+            missingSnapshotCount: "1",
           },
           userSummary: { newStudents: "3", newTutors: "1" },
           bookingTrend: [
@@ -38,8 +38,6 @@ describe("Admin Service", () => {
               date: "2026-08-31",
               bookings: "2",
               completed: "1",
-              grossMarks: "60",
-              platformTakeMarks: "12",
             },
           ],
           userTrend: [{ date: "2026-08-31", students: "3", tutors: "1" }],
@@ -85,8 +83,6 @@ describe("Admin Service", () => {
         date: expect.any(String),
         bookings: expect.any(Number),
         completed: expect.any(Number),
-        grossMarks: expect.any(Number),
-        platformTakeMarks: expect.any(Number),
       });
       expect(result.summary).toEqual({
         bookings: 4,
@@ -96,10 +92,12 @@ describe("Admin Service", () => {
         activeLearners: 3,
         newStudents: 3,
         newTutors: 1,
-        grossMarks: 120,
-        platformTakeMarks: 24,
-        grossIdr: 600000,
-        platformTakeIdr: 120000,
+        pricingSnapshotBreakdown: {
+          v3: 1,
+          legacy: 2,
+          other: 0,
+          missing: 1,
+        },
       });
       expect(result.bookingTrend.some((row) => row.bookings === 0)).toBe(true);
       expect(result.stateBreakdown).toEqual([{ state: "completed", count: 2 }]);

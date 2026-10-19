@@ -6,7 +6,11 @@ import { Checkbox } from "@cogito-app/ui/components/selia/checkbox";
 import { Chip, ChipButton } from "@cogito-app/ui/components/selia/chip";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { orpc } from "@/utils/orpc";
-import { getCompetitionFieldClass } from "@/lib/competition-colors";
+import {
+  competitionPaletteClassName,
+  getCompetitionPaletteStyle,
+  type CompetitionPalette,
+} from "@/lib/competition-colors";
 import { IconX } from "@tabler/icons-react";
 
 export const MAX_TUTOR_SUBJECTS = 7;
@@ -15,6 +19,7 @@ export type SubjectOption = {
   id: string;
   slug: string;
   name: string;
+  parentColors?: CompetitionPalette | null;
 };
 
 export type SubjectCategory = SubjectOption & {
@@ -80,21 +85,24 @@ export function SubjectSelector({
   const { data: categories, isPending, isError } = useSubjectTaxonomy();
 
   const selectedSubjectMeta = useMemo(() => {
-    const metadata = new Map<string, { field: string; label: string }>();
+    const metadata = new Map<
+      string,
+      { label: string; parentColors?: CompetitionPalette | null }
+    >();
 
     for (const subject of selectedSubjects ?? []) {
       metadata.set(subject.id, {
-        field: subject.parent?.slug ?? subject.slug,
         label: subject.parent
           ? `${subject.parent.name} · ${subject.name}`
           : subject.name,
+        parentColors: subject.parent?.parentColors,
       });
     }
     for (const category of categories) {
       for (const child of category.children) {
         metadata.set(child.id, {
-          field: category.slug,
           label: `${category.name} · ${child.name}`,
+          parentColors: category.parentColors,
         });
       }
     }
@@ -157,9 +165,13 @@ export function SubjectSelector({
               variant="primary"
               pill
               size="sm"
-              className={getCompetitionFieldClass(
-                selectedSubjectMeta.get(subjectId)?.field,
-                "solid",
+              className={
+                selectedSubjectMeta.get(subjectId)?.parentColors
+                  ? competitionPaletteClassName
+                  : undefined
+              }
+              style={getCompetitionPaletteStyle(
+                selectedSubjectMeta.get(subjectId)?.parentColors,
               )}
             >
               {selectedSubjectMeta.get(subjectId)?.label ??
@@ -190,7 +202,18 @@ export function SubjectSelector({
             aria-label="Previously selected legacy specializations"
           >
             {legacySelectedSubjects.map((subject) => (
-              <Chip key={subject.id} variant="outline" pill size="sm">
+              <Chip
+                key={subject.id}
+                variant="outline"
+                pill
+                size="sm"
+                className={
+                  subject.parent?.parentColors
+                    ? competitionPaletteClassName
+                    : undefined
+                }
+                style={getCompetitionPaletteStyle(subject.parent?.parentColors)}
+              >
                 {subject.parent
                   ? `${subject.parent.name} · ${subject.name}`
                   : subject.name}

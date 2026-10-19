@@ -1,0 +1,224 @@
+import { randomUUID } from "node:crypto";
+import {
+  expect,
+  request,
+  test,
+  type APIRequestContext,
+  type Page,
+} from "@playwright/test";
+
+import { ADMIN_EMAIL, ADMIN_PASSWORD } from "../fixtures/test-accounts";
+
+type CatalogEntry = {
+  id: string;
+  version: number;
+  slug: string;
+  name: string;
+  parentId: string | null;
+  isActive: boolean;
+  rateConfigured: boolean;
+  lightBackgroundColor?: string | null;
+};
+
+async function loginAsAdmin(page: Page) {
+  await page.context().clearCookies();
+  await page.goto("/login");
+  await page.locator("input#email").fill(ADMIN_EMAIL);
+  await page.locator("input#password").fill(ADMIN_PASSWORD);
+  await page.getByRole("button", { name: "Sign In", exact: true }).click();
+  await page.waitForURL(/\/(dashboard|profile)(?:$|\/)/);
+}
+
+async function createAdminApiContext() {
+  const serverUrl = process.env.SERVER_URL ?? "http://localhost:3101";
+  const context = await request.newContext({ baseURL: serverUrl });
+  try {
+    const response = await context.post("/api/auth/sign-in/email", {
+      data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
+    });
+    if (!response.ok()) {
+      throw new Error(`Admin API sign-in returned ${response.status()}`);
+    }
+    return context;
+  } catch (error) {
+    await context.dispose();
+    throw error;
+  }
+}
+
+async function adminRpc<T>(
+  context: APIRequestContext,
+  procedure: string,
+  input: unknown,
+) {
+  const response = await context.post(`/rpc/admin/${procedure}`, {
+    data: { json: input },
+  });
+  if (!response.ok()) {
+    throw new Error(
+      `${procedure} at ${response.url()} returned ${response.status()}: ${await response.text()}`,
+    );
+  }
+  const result = (await response.json()) as { json: T };
+  return result.json;
+}
+
+async function deleteEntry(
+  context: APIRequestContext,
+  id: string,
+  reason: string,
+) {
+  const current = await adminRpc<CatalogEntry>(
+    context,
+    "getCompetitionCatalogEntry",
+    { id },
+  );
+  await adminRpc(context, "deleteCompetitionCatalogEntry", {
+    id,
+    expectedVersion: current.version,
+    reason,
+  });
+}
+
+test("admin can archive, restore, and move an unused specialization", async ({
+  page,
+}) => {
+  const adminApi = await createAdminApiContext();
+
+  const suffix = randomUUID().slice(0, 8);
+  const destinationSlug = `e2e-catalog-destination-${suffix}`;
+  const childSlug = `e2e-catalog-specialization-${suffix}`;
+  let destinationId: string | undefined;
+  let childId: string | undefined;
+
+  try {
+    await loginAsAdmin(page);
+    const entries = await adminRpc<CatalogEntry[]>(
+      adminApi,
+      "listCompetitionCatalog",
+      { includeArchived: true },
+    );
+    const sourceParent = entries.find(
+      (entry) =>
+        entry.parentId === null && entry.isActive && entry.rateConfigured,
+    );
+    expect(
+      sourceParent,
+      "a rate-ready active parent is required",
+    ).toBeDefined();
+
+    const destination = await adminRpc<CatalogEntry>(
+      adminApi,
+      "createCompetitionParent",
+      {
+        slug: destinationSlug,
+        name: `E2E destination ${suffix}`,
+        lightTextColor: "oklch(1 0 0)",
+        lightBackgroundColor: "oklch(0.52 0.14 250)",
+        darkTextColor: "oklch(1 0 0)",
+        darkBackgroundColor: "oklch(0.38 0.12 250)",
+        sortOrder: 900,
+        reason: "Create destination for catalog browser coverage",
+      },
+    );
+    destinationId = destination.id;
+
+    const child = await adminRpc<CatalogEntry>(
+      adminApi,
+      "createCompetitionSpecialization",
+      {
+        parentId: sourceParent!.id,
+        slug: childSlug,
+        name: `E2E specialization ${suffix}`,
+        sortOrder: 900,
+        reason: "Create specialization for catalog browser coverage",
+      },
+    );
+    childId = child.id;
+    expect(child.isActive).toBe(true);
+
+    await page.goto("/admin-competitions");
+    await expect(
+      page.getByRole("heading", { name: "Competition catalog", exact: true }),
+    ).toBeVisible();
+    const search = page.getByLabel("Search competition catalog");
+    await search.fill(childSlug);
+    await page.getByRole("button", { name: new RegExp(childSlug) }).click();
+    await expect(
+      page.getByRole("heading", { name: child.name, exact: true }),
+    ).toBeVisible();
+
+    await page.getByRole("button", { name: "Archive", exact: true }).click();
+    const archiveDialog = page.getByRole("dialog");
+    await expect(archiveDialog.getByText("Impact preview")).toBeVisible();
+    await expect(
+      archiveDialog.getByText("0 specializations · 0 references", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await archiveDialog
+      .locator("#catalog-action-reason")
+      .fill("Verify archive preview and confirmation in the browser");
+    await archiveDialog
+      .getByRole("button", { name: "Archive", exact: true })
+      .click();
+    await expect(page.getByText("Catalog entry archived")).toBeVisible();
+
+    await page.getByRole("button", { name: "Restore", exact: true }).click();
+    const restoreDialog = page.getByRole("dialog");
+    await expect(
+      restoreDialog.getByText(/Restoring makes this entry available/),
+    ).toBeVisible();
+    await restoreDialog
+      .locator("#catalog-action-reason")
+      .fill("Verify restore confirmation in the browser");
+    await restoreDialog
+      .getByRole("button", { name: "Restore", exact: true })
+      .click();
+    await expect(page.getByText("Catalog entry restored")).toBeVisible();
+
+    await search.fill("");
+    await page.getByRole("button", { name: new RegExp(childSlug) }).click();
+    await page.getByLabel("Destination").click();
+    await page
+      .getByRole("option", { name: destination.name, exact: true })
+      .click();
+    await page
+      .locator("#move-reason")
+      .fill("Verify moving an unused specialization in the browser");
+    await page.getByRole("button", { name: "Move", exact: true }).click();
+    await expect(page.getByText("Specialization moved")).toBeVisible();
+
+    const movedRow = page.getByRole("button", { name: new RegExp(childSlug) });
+    const destinationGroup = movedRow.locator("xpath=..");
+    await expect(
+      destinationGroup.getByRole("button", {
+        name: new RegExp(destinationSlug),
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(`Background: ${destination.lightBackgroundColor}`, {
+        exact: true,
+      }),
+    ).toBeVisible();
+  } finally {
+    try {
+      if (childId) {
+        await deleteEntry(
+          adminApi,
+          childId,
+          "Clean up catalog browser coverage",
+        );
+      }
+      if (destinationId) {
+        await deleteEntry(
+          adminApi,
+          destinationId,
+          "Clean up catalog browser coverage",
+        );
+      }
+    } finally {
+      await adminApi.dispose();
+    }
+  }
+});

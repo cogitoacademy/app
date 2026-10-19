@@ -6,10 +6,14 @@ import {
   notification,
   tutorInvite,
   tutorProfile,
+  economyV3Revision,
 } from "@cogito-app/db/schema";
 
 import { db } from "@cogito-app/db";
 import { services } from "../../services";
+import { DEFAULT_V3_ECONOMY_CONFIG } from "../../modules/pricing/v3-economy.config";
+import { createAdminService } from "../../modules/admin/admin.service";
+import { createEconomyService } from "../../modules/economy/economy.service";
 import {
   createTestClient,
   createTestContext,
@@ -213,6 +217,83 @@ describe("Economy settings role safety", () => {
       perStudent: 46,
       actualMarksPooled: 46,
     });
+  });
+
+  test("V3 concurrent saves create one immutable revision and audit", async () => {
+    const activeBefore = await adminClient.admin.getEconomySettings();
+    const initial = await adminClient.admin.getV3EconomySettings();
+    expect(initial.version).toBe(0);
+    const first = structuredClone(DEFAULT_V3_ECONOMY_CONFIG);
+    const second = structuredClone(DEFAULT_V3_ECONOMY_CONFIG);
+    second.competitionRates["competition-debate"].soloMarks = 46;
+    const outcomes = await Promise.allSettled([
+      adminClient.admin.saveV3EconomySettings({
+        expectedVersion: 0,
+        reason: "First admin rates",
+        values: first,
+      }),
+      adminClient.admin.saveV3EconomySettings({
+        expectedVersion: 0,
+        reason: "Concurrent admin rates",
+        values: second,
+      }),
+    ]);
+    expect(
+      outcomes.filter((result) => result.status === "fulfilled"),
+    ).toHaveLength(1);
+    expect(
+      outcomes.filter((result) => result.status === "rejected"),
+    ).toHaveLength(1);
+    const [revisionOne] = await db
+      .select()
+      .from(economyV3Revision)
+      .where(eq(economyV3Revision.version, 1));
+    expect(revisionOne).toBeDefined();
+    const audits = await db
+      .select()
+      .from(auditLog)
+      .where(eq(auditLog.action, "economy_v3_revision_created"));
+    expect(audits).toHaveLength(1);
+    expect(audits[0]!.actorId).toBe(adminId);
+    await adminClient.admin.saveV3EconomySettings({
+      expectedVersion: 1,
+      reason: "Second revision",
+      values: first,
+    });
+    const [preserved] = await db
+      .select()
+      .from(economyV3Revision)
+      .where(eq(economyV3Revision.version, 1));
+    expect(preserved).toEqual(revisionOne);
+    expect((await adminClient.admin.getV3EconomySettings()).version).toBe(2);
+    expect(await adminClient.admin.getEconomySettings()).toEqual(activeBefore);
+  });
+
+  test("V3 audit failure rolls back the new revision in Postgres", async () => {
+    const service = createAdminService({
+      db,
+      economy: createEconomyService({ db }),
+      competitionCatalog: services.competitionCatalog,
+      auditPort: {
+        record: async () => {
+          throw new Error("forced audit failure");
+        },
+      },
+    } as Parameters<typeof createAdminService>[0]);
+    await expect(
+      service.saveV3EconomySettings(adminId, {
+        expectedVersion: 2,
+        reason: "Must roll back",
+        values: DEFAULT_V3_ECONOMY_CONFIG,
+      }),
+    ).rejects.toThrow("forced audit failure");
+    expect(
+      await db
+        .select()
+        .from(economyV3Revision)
+        .where(eq(economyV3Revision.version, 3)),
+    ).toHaveLength(0);
+    expect((await adminClient.admin.getV3EconomySettings()).version).toBe(2);
   });
 
   test("stale admin writes are rejected", async () => {

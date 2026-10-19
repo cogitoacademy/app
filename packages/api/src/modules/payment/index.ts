@@ -20,6 +20,7 @@ import { createMidtransPaymentProvider } from "./midtrans-payment.provider";
 import type { MidtransMode } from "./midtrans-payment.provider";
 import type { PaymentService } from "./payment.service";
 import type { PaymentHandler } from "./payment.handler";
+import type { EconomyService } from "../economy/economy.service";
 
 export type PaymentModule = ReturnType<typeof createPaymentModule>;
 
@@ -60,6 +61,7 @@ export type PaymentProviderName = "midtrans" | "stub";
 
 export function createPaymentModule(deps: {
   db: DbType;
+  economy?: Pick<EconomyService, "getActiveV3Config">;
   wallet: PaymentWalletPort;
   provider: PaymentProviderName;
   midtransConfig?: {
@@ -130,6 +132,7 @@ export function createPaymentModule(deps: {
 
   const service = createPaymentService({
     db: deps.db,
+    economy: deps.economy,
     wallet: deps.wallet,
     repo,
     provider,

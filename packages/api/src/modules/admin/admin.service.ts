@@ -10,9 +10,17 @@ import {
   WalletNotFoundError,
   InvalidLedgerFilterError,
   EconomyConfigConflictError,
+  EconomyCompetitionNotInCatalogError,
   TutorPayoutNotAvailableError,
 } from "./admin.errors";
 import type { EconomyService } from "../economy";
+import type { CompetitionCatalogService } from "../competition-catalog";
+import { lockCompetitionCatalog } from "../competition-catalog/catalog-lock";
+import {
+  adminSaveV3EconomyInput,
+  adminPreviewV3EconomyInput,
+} from "./admin.types";
+import type { z } from "zod";
 
 export const DASHBOARD_ANALYTICS_PERIODS = ["7d", "30d", "90d"] as const;
 export type DashboardAnalyticsPeriod =
@@ -46,17 +54,17 @@ export interface DashboardAnalytics {
     activeLearners: number;
     newStudents: number;
     newTutors: number;
-    grossMarks: number;
-    platformTakeMarks: number;
-    grossIdr: number;
-    platformTakeIdr: number;
+    pricingSnapshotBreakdown: {
+      v3: number;
+      legacy: number;
+      other: number;
+      missing: number;
+    };
   };
   bookingTrend: Array<{
     date: string;
     bookings: number;
     completed: number;
-    grossMarks: number;
-    platformTakeMarks: number;
   }>;
   userTrend: Array<{ date: string; students: number; tutors: number }>;
   stateBreakdown: Array<{ state: string; count: number }>;
@@ -228,6 +236,7 @@ export function createAdminService(deps: {
   wallet: AdminWalletPort;
   payout: BookingPayoutPort;
   economy?: EconomyService;
+  competitionCatalog?: Pick<CompetitionCatalogService, "listParents">;
 }) {
   const { adminRepo, auditPort, db, wallet, payout, economy } = deps;
 
@@ -305,10 +314,12 @@ export function createAdminService(deps: {
         activeLearners: toNumber(bookingSummary.activeLearners),
         newStudents: toNumber(userSummary.newStudents),
         newTutors: toNumber(userSummary.newTutors),
-        grossMarks: toNumber(bookingSummary.grossMarks),
-        platformTakeMarks: toNumber(bookingSummary.platformTakeMarks),
-        grossIdr: toNumber(bookingSummary.grossIdr),
-        platformTakeIdr: toNumber(bookingSummary.platformTakeIdr),
+        pricingSnapshotBreakdown: {
+          v3: toNumber(bookingSummary.v3SnapshotCount),
+          legacy: toNumber(bookingSummary.legacySnapshotCount),
+          other: toNumber(bookingSummary.otherSnapshotCount),
+          missing: toNumber(bookingSummary.missingSnapshotCount),
+        },
       },
       bookingTrend: dateKeys.map((date) => {
         const row = bookingTrendByDate.get(date);
@@ -316,8 +327,6 @@ export function createAdminService(deps: {
           date,
           bookings: toNumber(row?.bookings),
           completed: toNumber(row?.completed),
-          grossMarks: toNumber(row?.grossMarks),
-          platformTakeMarks: toNumber(row?.platformTakeMarks),
         };
       }),
       userTrend: dateKeys.map((date) => {
@@ -537,6 +546,75 @@ export function createAdminService(deps: {
     return economy.getConfig(db);
   }
 
+  async function getV3EconomySettings() {
+    if (!economy) throw new Error("Economy service is not configured");
+    if (!deps.competitionCatalog)
+      throw new Error("Competition catalog service is not configured");
+    const [settings, parents] = await Promise.all([
+      economy.getV3Config(db),
+      deps.competitionCatalog.listParents(db),
+    ]);
+    return {
+      ...settings,
+      competitions: parents.map((parent) => ({
+        id: parent.id,
+        slug: parent.slug,
+        name: parent.name,
+        isActive: parent.isActive,
+        rateConfigured: parent.rateConfigured,
+        rate: settings.values.competitionRates[parent.slug] ?? null,
+      })),
+    };
+  }
+
+  function previewV3EconomySettings(
+    input: z.infer<typeof adminPreviewV3EconomyInput>,
+  ) {
+    if (!economy) throw new Error("Economy service is not configured");
+    const parsed = adminPreviewV3EconomyInput.parse(input);
+    return economy.previewV3Config(parsed.values, parsed.exactMarks);
+  }
+
+  async function saveV3EconomySettings(
+    adminId: string,
+    input: z.infer<typeof adminSaveV3EconomyInput>,
+  ) {
+    if (!economy) throw new Error("Economy service is not configured");
+    if (!deps.competitionCatalog)
+      throw new Error("Competition catalog service is not configured");
+    const competitionCatalog = deps.competitionCatalog;
+    const parsed = adminSaveV3EconomyInput.parse(input);
+    return db.transaction(async (tx) => {
+      await lockCompetitionCatalog(tx);
+      const parentSlugs = new Set(
+        (await competitionCatalog.listParents(tx)).map((parent) => parent.slug),
+      );
+      for (const slug of Object.keys(parsed.values.competitionRates)) {
+        if (!parentSlugs.has(slug)) {
+          throw new EconomyCompetitionNotInCatalogError(slug);
+        }
+      }
+      const before = await economy.getV3Config(tx);
+      const result = await economy.saveV3Config(tx, {
+        ...parsed,
+        createdBy: adminId,
+      });
+      if (!result) throw new EconomyConfigConflictError(parsed.expectedVersion);
+      await auditPort.record({
+        db: tx,
+        actorId: adminId,
+        actorType: USER_ROLE.ADMIN,
+        action: "economy_v3_revision_created",
+        targetType: "economy_v3_revision",
+        targetId: String(result.version),
+        beforeState: { version: before.version, values: before.values },
+        afterState: { version: result.version, values: result.values },
+        details: { reason: parsed.reason, status: "draft" },
+      });
+      return { ...result, status: "draft" as const };
+    });
+  }
+
   async function updateEconomySettings(
     adminId: string,
     input: UpdateEconomySettingsInput,
@@ -611,6 +689,9 @@ export function createAdminService(deps: {
     getPendingTutorPayouts,
     markTutorPayoutPaid,
     getEconomySettings,
+    getV3EconomySettings,
+    previewV3EconomySettings,
+    saveV3EconomySettings,
     updateEconomySettings,
   };
 }

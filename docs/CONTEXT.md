@@ -1,6 +1,170 @@
 # Cogito App — Codebase Context
 
-Last updated: 2026-10-09
+## Competition catalog language
+
+**Parent competition**: A competition type, such as Debate, that owns the
+on-demand pricing agreement inherited by its specializations.
+
+**Child specialization**: A selectable topic under exactly one parent
+competition, used to describe tutor expertise and the booked session topic.
+
+**Archived competition/specialization**: A retained classification unavailable
+for new selections; its existing assignments and agreements remain recognizable.
+
+Owner-requested CRUD is specified in PRD S04 / REQ-COMP-01..07 and task T00A.
+Implementation is in progress on the working branch; TASKS records verification
+and remaining integration gates. The domain terms above do not imply release.
+
+## Marketing landing checkpoint (2026-10-19)
+
+The separate `C:\.Projects\cogito-acad` branch `f/release-v3-nonvideo` has a
+partial T11 implementation: the homepage Activities section and Activities /
+Start Learning navigation are removed; existing `/events/[category]` routes
+remain. School logos use a manually controlled horizontal strip with mouse,
+keyboard and touch support. Testimonials use one responsive autoplay carousel;
+compact screens add swipe while keeping arrows and dots. Hover/focus pauses it,
+and reduced-motion settings disable autoplay and transitions. The methods-card
+pulse is also motion-safe. A headless Edge production run checked 1280px,
+1024px, 1023px, 768px, 470px, 469px, 390px and 320px, plus reduced motion. The
+testimonial card surface fits its frame across those widths (including the
+470px breakpoint), its controls remain below and separated from the card, and
+the page has no horizontal overflow or client errors. Mobile navigation was
+checked in `/en` and `/id`; touch hold pauses autoplay and swipe advances the
+card. The browser pass exposed and fixed a mobile FAQ hydration mismatch by
+deferring viewport detection until after the first render. Typecheck,
+changed-file lint/format, diff check and production build pass. Static generation logged
+connection-refused errors for the existing approved-achievements endpoint but
+completed. Physical-device, screen-reader and client visual acceptance are still
+pending; Why Cogito spacing is refined (16px from label to heading, 32px from
+heading to cards) and checked at desktop and mobile widths in English and
+Indonesian. The approved feature showcase remains open (M02/Q14). Track this
+work in the T11 row and checkpoint in
+`docs/plans/active/RELEASE-V3-TASKS.md`; do not infer release readiness from the
+build.
+
+## V3 checkout and booking snapshot checkpoint (2026-10-18)
+
+Migration 0055 adds a nullable, separate customer activation pointer, immutable
+15-minute student top-up quotes and payment quote/choice/label/pricing/provider
+intent fields. Missing/null activation keeps legacy pricing. No activation UI or
+RPC exists; draft saves never activate customer prices. New V3 top-ups lock the
+quote before creating one payment, commit before provider I/O and retain its
+identity on uncertain responses. Provider metadata writes cannot overwrite a
+webhook's payment status. Custom and recommended choices both remain available.
+Legacy purchases retain their existing retry flow while V3 is inactive; missing
+checkout retries now use the payment's stored amount. Active V3 blocks new legacy
+package sales while allowing existing owned pending attempts to be resumed.
+
+Booking snapshots now distinguish untagged legacy fields from `engine:"v3"`
+revision/competition/mode/headcount/Marks/IDR honorarium. New solo, group and solo
+series creation uses the server-resolved parent slug; group repricing loads the
+exact immutable revision pinned by the booking. Discovery and create-booking
+preview project prices by the selected parent slug from the active revision. A
+new parent slug without an active rate is rejected and cannot fall through to a
+tutor's legacy base rate. With the activation pointer unset, the seven legacy
+competition paths remain compatible. Active V3 group-series prices at target
+headcount and pins the active revision; a viable partial group recalculates from
+that pinned revision at confirmed headcount, adjusts each confirmed participant's
+remaining scheduled-session hold, and updates booking/session snapshots before
+reconfirmation. Activation-null legacy group-series and target-size-one solo
+series remain unchanged. Tutor profiles
+now return an active-revision fee projection for assigned parent competitions;
+changed legacy `baseRatesIdr`/`prices` writes are rejected only while V3 is active,
+and admin edit approval discards queued `baseRatesIdr`. Review submission reads
+the pointer inside its status-update transaction: active V3 removes the legacy
+fee requirement; a null pointer preserves it. With a null pointer, the projection
+is null and legacy tutor rate writes remain compatible. Legacy
+analytics fields are not V3 profitability; **do not activate customer pricing**
+until the remaining acceptance gates are resolved.
+
+Group-series slice verification: `bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests/unit/booking.service.test.ts` passes **303 tests, 0 failures, 755 expectations**, including target-size creation, pinned partial-group repricing, reconfirmation and underfunded top-up preflight. The guarded integration command `bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests/integration/booking-group-series.test.ts` passes **9 tests, 0 failures, 55 expectations**, including a scheduled-session-only repository update check. Neither command sets the V3 activation pointer. The broader checkpoint below predates this slice. Earlier focused verification: 487 unit tests pass (1,391 expectations) across
+pricing, booking, discovery and catalog behavior; 14 PostgreSQL integration
+tests pass (93 expectations) across economy roles, catalog CRUD, top-up and
+dynamic-parent admin. Coverage includes immutable replay, choice locking,
+uncertain provider outcomes, early webhook, concurrent purchases, late credit,
+dynamic active-rate selection and pinned-revision repricing. Web typecheck and
+build pass. New balance UI has not yet received browser QA. Production and live
+payment providers were untouched.
+
+## V3 report-field character limits (2026-10-18)
+
+REQ-REPORT-01 now applies to new on-demand/series completion submissions:
+600 Unicode code points total per field across all normalized bullets, counting
+one LF between nonempty lines. Shared `booking/feedback-rules.ts` normalizes CRLF,
+strips UI bullet prefixes, trims line edges and removes empty lines. UI counters,
+submit gating, RPC schema and direct service validation use the same rules.
+The service rejects overlong input before settlement instead of silently slicing
+30 bullets/1000 characters; existing HTML escaping remains, without truncating
+the escaped result. Old stored reports/read APIs remain unchanged. PDF export,
+reminders and shared cohort report settlement are still pending T07/T02.
+Focused report + booking regression: 295 tests pass; web typecheck passes.
+
+## V3 draft economy editor and revision storage (2026-10-18)
+
+Branch `f/release-v3` starts at `14dc4486`, verified equal to fetched origin/main.
+T01 includes editable packages/surcharge/competition/session adjustments, pure
+pricing calculations, admin get/preview/save RPCs and an English Selia draft
+editor in `/admin-economy`. Migration 0054 adds immutable revision storage.
+Save uses transaction advisory lock, expectedVersion and transactional audit.
+Reads return virtual defaults at revision 0 before first save. Q13 is resolved
+by the project owner: custom and recommended package remain selectable, with
+tiers following package Marks and unit prices plus surcharge.
+
+All catalog parents now appear in the Economy editor; additional parent rates
+are blank until both values are entered, then saved only in an immutable draft
+revision. A PostgreSQL integration case verifies this admin path and confirms
+the activation pointer remains unset. Active booking/discovery code now reads
+the selected competition rate, rejects unconfigured new slugs, and reprices V3
+bookings from their pinned revision. Customer prices still use the legacy path
+while the pointer is unset. Tutor profile reads now project active V3 fees by
+assigned parent and group size; tutor writes to changed legacy rates are rejected
+only after activation, while admin approval ignores queued legacy base-rate
+proposals. Active V3 group-series pricing and partial-group repricing are
+implemented in the later checkpoint above. Analytics interpretation, website
+catalog projection, release acceptance and explicit customer activation remain
+pending. No historical records were repriced and no provider or production
+write was made.
+
+Tests: 487 focused unit cases pass (1,391 expectations) across V3 math/config,
+booking, discovery, catalog, pricing and admin regression. Web tsgo passes with
+GOMAXPROCS=2/GOMEMLIMIT=768MiB. PostgreSQL suites pass: economy roles 7/26,
+catalog CRUD 4/53, V3 top-up 2/9 and dynamic parent-rate admin 1/5. They verify
+single-winner CAS, immutable history, audit rollback, legacy pricing unchanged,
+role denial, catalog palette/readiness behavior and a saved dynamic rate with no
+activation. Migrations 0054–0057 were applied only to isolated `cogito-test`;
+no production migration was run. Browser QA verified
+draft load/save/reload, missing-reason and invalid-rate save gating, stale-version
+conflict recovery, 440 Marks equality recommendation, and 390px card/table fit.
+The report dialog was checked at exact 600 and over-limit 601 code points; no
+report was submitted. Screenshots: `tmp/v3-admin-440.png`,
+`tmp/v3-admin-mobile-fixed.png`, `tmp/v3-report-600.png`,
+`tmp/v3-report-601.png`. Customer pricing remains on legacy economy because the
+activation pointer is unset. Booking/payment snapshot code and dynamic price
+reads are implemented, while analytics, website catalog projection, release
+acceptance and activation remain pending.
+Evidence: docs/plans/active/RELEASE-V3-TASKS.md.
+
+Latest combined focused verification: **642 API unit tests, 0 failures, 1,667
+expectations across 10 files**; web typecheck/build and the narrow V3 pricing
+TypeScript project pass. The API package-wide typecheck remains unverified;
+existing test-fixture diagnostics fall outside that narrow check. No activation
+pointer was written.
+
+## SnapCN video tooling (2026-10-18)
+
+`apps/video` is an isolated Remotion workspace for SnapCN video compositions.
+It registers the 3-second `CogitoIntro` starter using vendored `text-reveal`
+and core source (revision/license recorded inside the workspace), shares
+Cogito CSS tokens/fonts, and configures `@/` in TypeScript and the bundler.
+The project-local catalogue skill lives in `.agents/skills/snapcn/`.
+Root `video:studio`, `video:still`, and `video:render` delegate through Turbo.
+Video exports stay in ignored `apps/video/out/`. Application UI remains Selia.
+Shared UI now declares the font packages imported by its own global CSS.
+Typecheck passed; bundle/render verification is blocked by a full C: drive
+(ENOSPC during first Chromium download). Re-run after freeing space.
+Setup/verification status: `docs/plans/active/SNAPCN-SETUP.md`.
+
+Last updated: 2026-10-19
 
 ## Grafana SQLite eval-storm + WAL fix (2026-10-09)
 
@@ -123,18 +287,21 @@ and problem outcomes. Students also see verified achievement count from
 windows from `tutor.listAvailability` and the nearest available action deadline.
 Tutor dashboard's **Needs action** queue uses `booking.listMine({ view: "action" })`,
 matching the Bookings page instead of locally selecting only tutor-review requests.
-Admin **Booked value** displays IDR as the primary amount, Marks as its supporting
-equivalent, and platform share in both units. Values come from pricing locked when
-each booking was created; later economy changes do not rewrite historical totals.
-During a mixed frontend/API rollout where locked IDR aggregate fields are absent,
-the card temporarily estimates IDR from Marks using the active economy rate and
-labels that fallback explicitly instead of rendering an invalid amount.
+Admin Business insights show selected-period counts by saved pricing engine
+(V3, legacy, other, or missing). Booking-derived money totals are omitted because
+parent booking and per-session snapshots use different units across solo, group,
+and series records, and V3 does not snapshot a gross service IDR or platform take.
+Counts use booking creation date and include all booking states. Do not estimate
+service totals using the current Marks rate. The finance card below uses successful
+top-up payment and refund records for realized top-up revenue.
 Admin `/dashboard` shows queue counts for escalated bookings, booking
 exceptions, tutor reviews, and achievement reviews using existing admin reads.
 
 Admin Business insights labels are explicit: the booking-state portfolio is
-all-time/live, selected-period trends use WIB calendar days, and booked Marks
-plus platform take are locked booking snapshots rather than cash revenue.
+all-time/live, selected-period trends use WIB calendar days, and the pricing
+snapshot mix counts booking records rather than sessions. Booking-derived Marks,
+IDR, and platform-share totals remain gated on Q15; successful top-up payments
+less refunds remain the cash-revenue source.
 `activeLearners` remains proposer-based and is rendered as **Active booking
 proposers** until group-participant and login-activity definitions are approved.
 Admins can use 7/30/90-day presets or an inclusive custom WIB range of up to
@@ -321,9 +488,81 @@ supersedes older placement notes below that refer to contextual booking actions
 in the sticky rail. The user-facing state timeline is labeled **History**;
 internal state-history and activity component names remain unchanged.
 
-## Competition field color tokens (2026-09-08)
+## Competition field palette and catalog CRUD (2026-10-18)
 
-The authenticated app now uses the academy's canonical competition palette rather than approximating fields with generic status colors. The shared UI theme exposes paired background/foreground tokens for MUN, Olympiad, WSC, Research & Essay, Debate, Business Plan, and Speech. App surfaces can consume the tokens directly, while `apps/web/src/lib/competition-colors.ts` maps Sanity `coreCategory`, current subject-taxonomy parent slugs, and legacy category slugs to reusable soft and solid class sets; unknown categories fall back to Research & Essay. Competition-field badges in tutor discovery cards, the tutor drawer, onboarding selections, and calendar details use the solid treatment. Their foreground is white for every field except Business Plan, which uses the academy's dark foreground. Calendar event surfaces remain soft for readability in the calendar grid and agenda.
+The working branch adds versioned admin CRUD to the existing two-level subject
+catalog. Parents own four configurable OKLCH values: light text/background and
+dark text/background. Children inherit all four and cannot store overrides.
+Creating a parent requires all four colors; patching a subset preserves omitted
+values. Migrations 0056 and 0057 were exercised against the guarded local test
+database, preserving existing IDs/slugs/active flags and the seven current plus
+seven legacy 0027 palettes. Production migration and complete UI acceptance remain
+release gates.
+
+Admin writes use a transaction-only shared catalog lock, optimistic row versions,
+and before/after audit records with a required reason. New parents begin inactive
+and cannot sell until dynamic pricing is configured. Archiving a parent preserves
+child flags and historical assignments, labels, booking/session price snapshots,
+and financial terms. Delete and child-move eligibility includes historical tutor
+profile audit snapshots. The guarded Postgres suite proves both assignment/delete
+orders: assignment-first makes deletion conflict on the resulting reference, and
+delete-first makes the queued assignment fail selection validation. It also
+proves both booking/archive orders over `booking.sessionTopic`: booking-first
+preserves category/specialization IDs and slugs and appears in archive impact;
+archive-first makes the queued booking fail with `BOOKING_NOT_EDITABLE`. A
+stale concurrent admin edit waits behind the first versioned update and returns
+`CONFLICT`, leaving one mutation audit. `bun test --timeout 30000 --env-file
+apps/server/.env.test packages/api/src/tests/integration/competition-catalog.test.ts`
+passed 6 tests/72 expectations. Sequentially,
+`bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests/integration/v3-dynamic-competition.test.ts`
+passed 1 test/5 expectations and left the V3 activation pointer unset. The
+focused Chromium browser journey in `packages/e2e/src/specs/competition-catalog.spec.ts`
+passed child-slug search, archive impact preview/confirmation, restore, and
+moving an unused child while checking its inherited destination palette. It
+exposed that a child-only search result was omitted from the parent-grouped
+tree; the admin catalog now includes the matching child's parent as context.
+Full app regression and website projection remain in T00A/T10/T12 acceptance.
+
+The focused palette resolver uses stable catalog IDs first and exact stored slugs
+second, including archived entries for historical displays. Only the content
+boundary maps the seven known legacy Sanity aliases. Unknown historical content
+uses the neutral compatibility palette. API projections provide parent colors to
+calendar and booking read models without changing their saved names, prices, or
+other financial terms. App surfaces now receive configured light/dark values
+instead of relying on the fixed seven-type class map; see T00A for the remaining
+typecheck, browser and release acceptance gates.
+The separate `C:\.Projects\cogito-acad` marketing site uses app catalog parent
+palettes for public tutor specialization badges. Its calendar migration remains
+part of the planned T12 content work; do not expose inactive catalog rows through
+a new broad public endpoint to bridge that gap.
+
+## Public tutor website source (2026-10-19)
+
+The app exposes anonymous `publicContent.tutors.list` for the marketing site's
+server-side tutor directory and landing cards. It filters on the existing published tutor
+status and maps a strict profile/catalog DTO with optional Indonesian catalog
+names and the parent category's light/dark palette inherited by each subject.
+Inactive child or parent catalog rows are filtered from the public projection;
+empty results remain `[]`, while API/database errors remain errors. The selection and mapper exclude account
+IDs/emails, prices, payout and tax details, consent, review state, and unknown
+future fields. `profileImageUrl` is the canonical `user.image`; `modality` is
+teaching format. The tutor schema has no physical tutor-city field, so the API
+does not emit `locations` or derive a location from modality. The marketing site
+now filters by Online/Offline modality, with `both` matching either choice, and
+builds its competition-field filters from active parent categories in the public
+tutor results. Public tutor pages use a no-store API adapter and show an
+unavailable state on request failure; they do not fall back to Sanity. Tutor
+profile copy follows the current app's English-only fields, while Indonesian
+catalog labels are used when available and otherwise fall back to English. See
+[T10 public tutor API checkpoint](plans/active/T10-PUBLIC-TUTORS-API.md). Before
+release, reconcile the intended public tutor roster with published app profiles;
+the website read does not migrate or fall back to Sanity tutor data.
+
+## FAQ admin and public API slice (2026-10-19)
+
+FAQ entries are owned by the app database and edited by admins at `/admin-faq`. English question/answer fields are required; Indonesian fields are optional and fall back per field on public reads. Answers use strict paragraph/list blocks rather than HTML. The anonymous `publicContent.faq.list` endpoint returns active entries in sort order for either `full` or `landing`; the landing surface also filters to `showOnLanding`. Admin list/create/update stay behind admin authorization, and updates use expected-version checks. Public responses exclude admin visibility/version fields; request/database failures remain errors. The marketing site reads full and landing FAQ through a server-only, `no-store` API adapter with strict oRPC-envelope validation. Empty results render a localized empty state; API/configuration errors render a separate localized retry state and do not replace the landing page. No FAQ copy was seeded and neither Sanity nor legacy FAQ fallback is used.
+
+Migration 0058 and FAQ integration fixtures were exercised only on local `cogito-test`. Development/production migration and initial FAQ copy remain release gates. See [T10 FAQ checkpoint](plans/active/T10-FAQ-CHECKPOINT.md).
 
 ## Tutor specialization selector layout (2026-09-09)
 
@@ -782,7 +1021,7 @@ metadata on wider layouts. On narrow screens, the price moves below the avatar
 so the content column remains available for the tutor name, modality, bio, and
 subject badges.
 
-The authenticated `/dashboard` route is role-specific. Students retain the learning-first dashboard (next lesson, Knowledge Bank eligibility, competition calendar, and tutor recommendations). Tutors see booking decisions, next lesson, upcoming sessions, availability, profile status, and payout totals. The tutor dashboard prioritizes a two-row action-first layout: welcome and teaching setup share the first row, while requests to review and next lesson share the second row before metrics and payout details. The payout details card keeps the main metrics compact and exposes the unpaid-honorarium and transfer-fee explanations through shared accessible `InfoPreview` popovers. Student and tutor dashboards share the same `DashboardWelcomeCard` visual, including its SVG illustration, minimum height, spacing, and CTA structure, while keeping role-specific copy and destinations. Both student and tutor next-lesson sections reuse the same `BookingListCard` composition as the shared booking list, including its date tile, participant metadata, role-appropriate financial treatment (Marks for students, IDR honorarium for tutors), status tooltip, and detail action; the compact next-lesson card hides financial details to keep the overview focused. Admins see escalated booking operations plus pending tutor-profile and achievement review queues, as well as a Business insights section backed by the admin-only `admin.getDashboardAnalytics` aggregate procedure. That section offers 7/30/90-day WIB booking and audience trends, a live booking-state portfolio, modality/category signals, and Marks-based summary KPIs. All roles share the role-aware `/bookings` list/detail surface; the page keeps the same layout while adapting people, Marks, status, and permitted actions to the viewer. The authenticated shell uses the profile image in the sidebar user avatar when available and falls back to initials. Its theme menu supports Light, Dark, and System, and pressing `D` outside editable fields toggles between the currently rendered light and dark themes; the explicit selection remains persisted by `next-themes`. Booking rows use the Cogito mark icon as the Marks prefix, keep time/location/tutor in the booking metadata column, show student participants (not the tutor) in the avatar stack, use the per-student amount for a single-session group's `You pay` value, place financial/status metadata beside participant avatars, and expose status explanations through hover/focus tooltips. These dashboards are frontend compositions of their relevant oRPC procedures, with the admin analytics read documented in `docs/API-REFERENCE.md`.
+The authenticated `/dashboard` route is role-specific. Students retain the learning-first dashboard (next lesson, Knowledge Bank eligibility, competition calendar, and tutor recommendations). Tutors see booking decisions, next lesson, upcoming sessions, availability, profile status, and payout totals. The tutor dashboard prioritizes a two-row action-first layout: welcome and teaching setup share the first row, while requests to review and next lesson share the second row before metrics and payout details. The payout details card keeps the main metrics compact and exposes the unpaid-honorarium and transfer-fee explanations through shared accessible `InfoPreview` popovers. Student and tutor dashboards share the same `DashboardWelcomeCard` visual, including its SVG illustration, minimum height, spacing, and CTA structure, while keeping role-specific copy and destinations. Both student and tutor next-lesson sections reuse the same `BookingListCard` composition as the shared booking list, including its date tile, participant metadata, role-appropriate financial treatment (Marks for students, IDR honorarium for tutors), status tooltip, and detail action; the compact next-lesson card hides financial details to keep the overview focused. Admins see escalated booking operations plus pending tutor-profile and achievement review queues, as well as a Business insights section backed by the admin-only `admin.getDashboardAnalytics` aggregate procedure. That section offers 7/30/90-day WIB booking and audience trends, a live booking-state portfolio, modality/category signals, and counts of parent booking records by V3, legacy, other, or missing pricing snapshot. Booking-derived Marks, IDR, and platform-share totals remain omitted until their population, participant, session, and date basis is defined; top-up cash reporting remains based on payment/refund records. All roles share the role-aware `/bookings` list/detail surface; the page keeps the same layout while adapting people, Marks, status, and permitted actions to the viewer. The authenticated shell uses the profile image in the sidebar user avatar when available and falls back to initials. Its theme menu supports Light, Dark, and System, and pressing `D` outside editable fields toggles between the currently rendered light and dark themes; the explicit selection remains persisted by `next-themes`. Booking rows use the Cogito mark icon as the Marks prefix, keep time/location/tutor in the booking metadata column, show student participants (not the tutor) in the avatar stack, use the per-student amount for a single-session group's `You pay` value, place financial/status metadata beside participant avatars, and expose status explanations through hover/focus tooltips. These dashboards are frontend compositions of their relevant oRPC procedures, with the admin analytics read documented in `docs/API-REFERENCE.md`.
 
 The authenticated `/notifications` route is a focused inbox for durable in-app notifications. It uses cursor pagination, a category label badge, an exact date/time plus relative age, visible unread treatment, row selection, select-all for the currently loaded rows, and batch read/unread updates. Selected IDs are sent through the protected `notification.updateReadStatus` procedure, which scopes the database update to the authenticated user. The existing mark-all-read action and notification-bell unread count remain available. Bell items mark unread notifications as read and then navigate to the associated booking, balance, achievements, calendar, or notifications page; they no longer stop after changing read state. Retired economy rate-change rows are omitted from the inbox and unread count.
 
@@ -810,7 +1049,7 @@ safe display identity; meeting attendee email arrays remain server-only.
 Competition Calendar and Knowledge Bank content are now delivered inside the authenticated app. Sanity remains the editorial source of truth; content is not duplicated into PostgreSQL. The API uses a server-side Sanity client with the `published` perspective and projects English values from the academy's bilingual competition fields. The app UI is English-only. Knowledge Bank category slugs are mapped to known labels or title-cased when rendered, while their raw values remain the filter keys.
 
 - `content.listCompetitions` is protected for every authenticated role and powers `/_app/calendar`. Admins see an `Edit competitions` button that opens the `competition` list in Sanity Studio (`https://cogitoacademy.sanity.studio`).
-- The authenticated calendar keeps the academy's read-only interaction model: month view with multi-day event spans and overflow popup, a flat 30-day agenda list that shows each overlapping competition once in first-event-date order, keyboard shortcuts (`M`/`A`), period navigation, a responsive event-details drawer (right-side on desktop, bottom sheet on mobile), and a toolbar type filter (multi-select across the seven competition fields, all-on by default) that narrows both the month and agenda views. Its colors, controls, and icons use the app's Selia design system; the academy's bilingual copy is not carried into the English-only app. The calendar route uses a contained viewport shell: the page heading and calendar toolbar stay in place while the calendar body owns vertical scrolling, and the month grid owns horizontal scrolling. A month with no events still renders the normal calendar grid so users can navigate dates; only the page-level no-competition state and event-free agenda period use empty-state messaging.
+- The authenticated calendar keeps the academy's read-only interaction model: month view with multi-day event spans and overflow popup, a flat 30-day agenda list that shows each overlapping competition once in first-event-date order, keyboard shortcuts (`M`/`A`), period navigation, a responsive event-details drawer (right-side on desktop, bottom sheet on mobile), and a toolbar type filter built from the loaded competition categories. Filter keys use each category's parent `coreCategory` slug and labels use its English `name`, with the seven legacy labels as fallbacks when a name is missing. All current types are selected by default, newly loaded types are selected unless explicitly excluded, uncategorized events remain visible when no filter is active, and Reset restores all current options. The filter narrows both month and agenda views. Its colors, controls, and icons use the app's Selia design system; the academy's bilingual copy is not carried into the English-only app. The calendar route uses a contained viewport shell: the page heading and calendar toolbar stay in place while the calendar body owns vertical scrolling, and the month grid owns horizontal scrolling. A month with no events still renders the normal calendar grid so users can navigate dates; only the page-level no-competition state and event-free agenda period use empty-state messaging.
 - `content.listStudentResources` powers the authenticated `/knowledge-bank` route for students, tutors, and admins. Admins see an `Edit resources` button that opens the `studentResource` list in Sanity Studio. Students receive resources after `wallet.knowledgeBankEligible` confirms the existing 35-Mark total-balance threshold (held Marks count) or an active admin grant; tutors and admins bypass that wallet threshold. Resource category slugs are presented as readable labels in the UI without changing the API values used for filtering. PDF previews use an unsandboxed browser-native iframe inside a bottom drawer on mobile and a right-side drawer on desktop, with a new-tab fallback.
 - Knowledge Bank list responses never expose Sanity asset URLs. `GET /content/knowledge-bank/:resourceId/file` rechecks the student/tutor/admin role and wallet threshold, with the threshold bypassed for tutors and admins or while a student's admin grant is unexpired, fetches the published Sanity asset server-side, and streams it with private/no-store cache headers. The file response may be framed only by the configured app origin so the cross-subdomain PDF preview works; every other API route retains `X-Frame-Options: DENY` and `frame-ancestors 'none'`. The proxy is hardened (`apps/server/src/content-proxy.ts`): host allowlist (`cdn.sanity.io` / `*.sanity.io` — anything else is a 502 before any fetch), a 10s `AbortController` timeout, and a 5MB cap enforced on `content-length` and on the streamed body; the route is rate-limited 30/min per IP (`content` kind, `rate-limit-paths.ts`).
 - The academy landing site remains bilingual. Its calendar and Knowledge Bank navigation uses app-login CTAs with an internal redirect target; the old localized URLs remain compatibility redirects rather than public content pages.
@@ -1295,6 +1534,19 @@ Internal-only modules with no RPC procedures: `audit`, `economy`, `email`, `meet
 
 ## Plans
 
+### Release v3 planning baseline (2026-10-18)
+
+The Post-Meeting Release Scope has a development planning package in
+`docs/plans/active/RELEASE-V3-PRD.md`, `RELEASE-V3-SPEC.md`, and
+`RELEASE-V3-TASKS.md`. The source/code audit and consolidated open decisions are
+in `docs/client/RELEASE-V3-AUDIT.md` and `RELEASE-V3-DECISIONS.md`.
+Status: draft specifications, not implemented functionality. Baseline app HEAD:
+`14dc4486`; website checkout reviewed: `ab43c2fc`. Financial/enrollment decisions
+remain gated as recorded in the decision register. User clarification on
+2026-10-18: website content requires English, Indonesian is optional, both inputs
+must be available; the app interface stays entirely English. This is a planned
+content contract, not a claim that all current forms already enforce it.
+
 Active plans live in `docs/plans/active/` (indexed in `docs/plans/README.md`).
 Completed plan documents are deleted when their work merges (policy set
 2026-10-09) — the merge PR, its commit message, and the dated entries in this
@@ -1306,12 +1558,13 @@ file are the permanent record; plan-file archives are not maintained.
 > ledgers are no longer committed (supersedes the 2026-08-17 keep-and-commit
 > decision). Fresh clones need no `.superpowers/` content.
 
-| Plan                                                  | Status                                                           |
-| ----------------------------------------------------- | ---------------------------------------------------------------- |
-| `docs/plans/active/DEFERRED-OPS-TASKS.md`             | Active — code gaps done, §3/§4 operator-console items pending    |
-| `docs/plans/active/DEPLOYMENT-PLAN.md`                | Active — applied 2026-08-31; remaining scope tracked in the plan |
-| `docs/plans/active/PAYMENT-INTEGRITY-FLAP.md`         | Active — payment-integrity alert stability                       |
-| `docs/plans/active/ROLE-BASED-DASHBOARD-ANALYTICS.md` | Active — tutor capacity/payout + admin aggregates remaining      |
+| Plan                                                  | Status                                                                                                                                                                                                                          |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `docs/plans/active/RELEASE-V3-PRD.md` + SPEC/TASKS    | T00A catalog CRUD/palette and T01 dynamic rates/tutor guard/group-series repricing implemented; pricing-snapshot counts are available, but booked-service analytics Q15, website cutover, and activation acceptance remain open |
+| `docs/plans/active/DEFERRED-OPS-TASKS.md`             | Active — code gaps done, §3/§4 operator-console items pending                                                                                                                                                                   |
+| `docs/plans/active/DEPLOYMENT-PLAN.md`                | Active — applied 2026-08-31; remaining scope tracked in the plan                                                                                                                                                                |
+| `docs/plans/active/PAYMENT-INTEGRITY-FLAP.md`         | Active — payment-integrity alert stability                                                                                                                                                                                      |
+| `docs/plans/active/ROLE-BASED-DASHBOARD-ANALYTICS.md` | Active — tutor capacity/payout + admin aggregates remaining                                                                                                                                                                     |
 
 Also see [`docs/MIDTRANS-MIGRATION.md`](MIDTRANS-MIGRATION.md) — the active
 production payment-provider guide.

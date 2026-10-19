@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { resolveProfileImageUrl } from "@/lib/profile-image-url";
+import type { CompetitionPalette } from "@/lib/competition-colors";
 import {
   getTutorProfileFieldLabel,
   getTutorStatusLabel,
@@ -113,14 +114,14 @@ function HistoryFieldChanges({
   after,
   changedFields,
   subjectLabels,
-  subjectFieldSlugs,
+  subjectPalettes,
   idPrefix,
 }: {
   before: unknown;
   after: unknown;
   changedFields: string[];
   subjectLabels?: ReadonlyMap<string, string>;
-  subjectFieldSlugs?: ReadonlyMap<string, string>;
+  subjectPalettes?: ReadonlyMap<string, CompetitionPalette>;
   idPrefix: string;
 }) {
   const changes = changedFields.length
@@ -165,7 +166,7 @@ function HistoryFieldChanges({
                   path={path}
                   value={previous}
                   subjectLabels={subjectLabels}
-                  subjectFieldSlugs={subjectFieldSlugs}
+                  subjectPalettes={subjectPalettes}
                   idPrefix={`${idPrefix}-before`}
                 />
               </div>
@@ -177,7 +178,7 @@ function HistoryFieldChanges({
                   path={path}
                   value={next}
                   subjectLabels={subjectLabels}
-                  subjectFieldSlugs={subjectFieldSlugs}
+                  subjectPalettes={subjectPalettes}
                   idPrefix={`${idPrefix}-after`}
                 />
               </div>
@@ -286,13 +287,13 @@ export function TutorProfileHistory({
   title = "Tutor profile history",
   description,
   subjectLabels,
-  subjectFieldSlugs,
+  subjectPalettes,
 }: {
   entries: TutorProfileHistoryEntry[];
   title?: string;
   description?: string;
   subjectLabels?: ReadonlyMap<string, string>;
-  subjectFieldSlugs?: ReadonlyMap<string, string>;
+  subjectPalettes?: ReadonlyMap<string, CompetitionPalette>;
 }) {
   const [expandedEntries, setExpandedEntries] = useState<Set<string>>(
     () => new Set(),
@@ -382,7 +383,7 @@ export function TutorProfileHistory({
                     after={entry.afterState}
                     changedFields={changedFields}
                     subjectLabels={subjectLabels}
-                    subjectFieldSlugs={subjectFieldSlugs}
+                    subjectPalettes={subjectPalettes}
                     idPrefix={detailsId}
                   />
                   <HistoryPhotoChange

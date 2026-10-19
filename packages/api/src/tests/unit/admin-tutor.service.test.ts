@@ -14,6 +14,7 @@ import {
   InviteNotFoundError,
   TutorProfileOptimisticLockError,
 } from "../../modules/admin-tutor/admin-tutor.errors";
+import { InvalidTutorSubjectSelectionError } from "../../modules/tutor-subjects/subject-selection";
 
 function makeProfile(
   overrides: Partial<TutorProfileSnapshot> = {},
@@ -68,7 +69,16 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
     appBaseUrl: "https://app.cogito.test",
     db: {
       transaction: mock(async (fn: any) => {
-        const tx = {};
+        const tx = {
+          execute: mock(async () => {}),
+          query: {
+            subjectCategory: {
+              findFirst: mock(async () => ({
+                parent: { parentId: null, isActive: true },
+              })),
+            },
+          },
+        };
         return fn(tx);
       }),
     },
@@ -658,7 +668,7 @@ describe("AdminTutor Service", () => {
       expect(
         deps.adminTutorRepo.updateTutorProfileWithVersion,
       ).toHaveBeenCalledWith(
-        {},
+        expect.anything(),
         "p1",
         2,
         expect.objectContaining({
@@ -766,7 +776,7 @@ describe("AdminTutor Service", () => {
       expect(
         deps.adminTutorRepo.updateTutorProfileWithVersion,
       ).toHaveBeenCalledWith(
-        {},
+        expect.anything(),
         "p1",
         2,
         expect.objectContaining({
@@ -830,7 +840,7 @@ describe("AdminTutor Service", () => {
       });
       expect(result.onboardingStatus).toBe("approved_unpublished");
       expect(updateTutorProfile).toHaveBeenCalledWith(
-        {},
+        expect.anything(),
         "p1",
         expect.objectContaining({
           onboardingStatus: "approved_unpublished",
@@ -938,7 +948,9 @@ describe("AdminTutor Service", () => {
     });
 
     test("approves pending profile edits and replaces subjects", async () => {
-      const listActiveChildSubjects = mock(async () => [{ id: "s1" }]);
+      const listActiveChildSubjects = mock(async () => [
+        { id: "s1", parentId: "parent-1" },
+      ]);
       const replaceTutorProfileSubjects = mock(async () => []);
       const updateTutorProfile = mock(async () =>
         makeProfile({
@@ -982,7 +994,7 @@ describe("AdminTutor Service", () => {
         ["s1"],
       );
       expect(updateTutorProfile).toHaveBeenCalledWith(
-        {},
+        expect.anything(),
         "p1",
         expect.objectContaining({
           onboardingStatus: "published",
@@ -998,7 +1010,68 @@ describe("AdminTutor Service", () => {
       );
     });
 
-    test("does not approve a legacy queued tutor honorarium", async () => {
+    test("keeps an existing archived specialization when approving pending edits", async () => {
+      const replaceTutorProfileSubjects = mock(async () => []);
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getTutorProfileById: mock(async () =>
+            makeProfile({
+              onboardingStatus: "published",
+              pendingProfileChanges: { subjectIds: ["archived-child"] },
+              subjects: [{ subjectId: "archived-child" }],
+            }),
+          ),
+          listActiveChildSubjects: mock(async () => []),
+          replaceTutorProfileSubjects,
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+
+      await service.reviewTutorProfile("admin1", {
+        tutorProfileId: "p1",
+        action: "approve_edits",
+      });
+
+      expect(replaceTutorProfileSubjects).toHaveBeenCalledWith(
+        expect.anything(),
+        "p1",
+        ["archived-child"],
+      );
+    });
+
+    test("rejects a newly proposed archived specialization during approval", async () => {
+      const updateTutorProfile = mock(async () => makeProfile());
+      const replaceTutorProfileSubjects = mock(async () => []);
+      const deps = makeDeps({
+        adminTutorRepo: {
+          ...makeDeps().adminTutorRepo,
+          getTutorProfileById: mock(async () =>
+            makeProfile({
+              onboardingStatus: "published",
+              pendingProfileChanges: { subjectIds: ["new-archived-child"] },
+              subjects: [{ subjectId: "old-child" }],
+            }),
+          ),
+          listActiveChildSubjects: mock(async () => []),
+          updateTutorProfile,
+          replaceTutorProfileSubjects,
+        },
+      });
+      const service = createAdminTutorService(deps as any);
+
+      await expect(
+        service.reviewTutorProfile("admin1", {
+          tutorProfileId: "p1",
+          action: "approve_edits",
+        }),
+      ).rejects.toBeInstanceOf(InvalidTutorSubjectSelectionError);
+
+      expect(updateTutorProfile).not.toHaveBeenCalled();
+      expect(replaceTutorProfileSubjects).not.toHaveBeenCalled();
+    });
+
+    test("does not apply a stale queued tutor honorarium when approving other edits", async () => {
       const updateTutorProfile = mock(async () =>
         makeProfile({ onboardingStatus: "published" }),
       );
@@ -1009,6 +1082,7 @@ describe("AdminTutor Service", () => {
             makeProfile({
               onboardingStatus: "published",
               pendingProfileChanges: {
+                shortBio: "Updated profile bio",
                 baseRatesIdr: { online: 190_000 },
               },
             }),
@@ -1024,10 +1098,11 @@ describe("AdminTutor Service", () => {
       });
 
       expect(updateTutorProfile).toHaveBeenCalledWith(
-        {},
+        expect.anything(),
         "p1",
         expect.objectContaining({
           onboardingStatus: "published",
+          shortBio: "Updated profile bio",
           pendingProfileChanges: null,
         }),
         1,

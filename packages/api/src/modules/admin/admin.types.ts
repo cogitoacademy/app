@@ -1,4 +1,20 @@
 import { z } from "zod";
+import { v3EconomyConfigSchema } from "../pricing/v3-economy.config";
+
+export const adminPreviewV3EconomyInput = z
+  .object({
+    values: v3EconomyConfigSchema,
+    exactMarks: z.number().int().min(1).max(1_000_000).optional(),
+  })
+  .strict();
+
+export const adminSaveV3EconomyInput = z
+  .object({
+    expectedVersion: z.number().int().min(0).max(2_000_000_000),
+    values: v3EconomyConfigSchema,
+    reason: z.string().trim().min(1).max(2000),
+  })
+  .strict();
 
 const dashboardDateKey = z
   .string()

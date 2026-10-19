@@ -348,7 +348,22 @@ describe("paymentHandler", () => {
   describe("getPurchase", () => {
     test("calls payment.getPurchase with paymentId and userId", async () => {
       const payment = {
-        getPurchase: mock(async () => ({ id: "pay1", status: "paid" })),
+        getPurchase: mock(async () => ({
+          id: "pay1",
+          status: "PAID",
+          provider: "stub",
+          providerReference: "order1",
+          amountIdr: 5_000,
+          marks: 1,
+          receiptUrl: null,
+          checkoutUrl: null,
+          failureReason: null,
+          purchaseLabel: "Top-up",
+          quoteId: null,
+          quoteChoice: null,
+          providerIntentState: null,
+          createdAt: new Date("2026-10-18T00:00:00.000Z"),
+        })),
       };
       const wallet = {} as any;
       const handler = createPaymentHandler(payment as any, wallet);
@@ -361,13 +376,36 @@ describe("paymentHandler", () => {
       });
 
       expect(payment.getPurchase).toHaveBeenCalledWith("pay1", "u1");
-      expect(result).toEqual({ id: "pay1", status: "paid" });
+      expect(result).toMatchObject({
+        id: "pay1",
+        status: "PAID",
+        provider: "stub",
+        providerReference: "order1",
+        amountIdr: 5_000,
+        marks: 1,
+        createdAt: "2026-10-18T00:00:00.000Z",
+      });
     });
 
     test("reconciles an approved Test Mode purchase before returning it", async () => {
       const payment = {
         reconcilePurchase: mock(async () => ({ status: "PAID" })),
-        getPurchase: mock(async () => ({ id: "pay1", status: "PAID" })),
+        getPurchase: mock(async () => ({
+          id: "pay1",
+          status: "PAID",
+          provider: "stub",
+          providerReference: "order1",
+          amountIdr: 5_000,
+          marks: 1,
+          receiptUrl: null,
+          checkoutUrl: null,
+          failureReason: null,
+          purchaseLabel: "Top-up",
+          quoteId: null,
+          quoteChoice: null,
+          providerIntentState: null,
+          createdAt: new Date("2026-10-18T00:00:00.000Z"),
+        })),
       };
       const handler = createPaymentHandler(payment as any, {} as any, {
         providerMode: "test",

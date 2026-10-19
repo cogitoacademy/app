@@ -87,6 +87,65 @@ function makeDb() {
 
 describe("PaymentService", () => {
   describe("createIntent", () => {
+    test("resumes a missing checkout using stored payment IDR after package price changes", async () => {
+      const provider = makeProvider();
+      const repo = makeRepo({
+        findPackageByCode: mock(async () => ({
+          id: "pkg1",
+          code: "pkg1",
+          isActive: true,
+          priceIdr: 350000,
+          marks: 50,
+        })) as any,
+        findPaymentByProviderReference: mock(async () => ({
+          id: "old",
+          status: "PENDING",
+          providerReference: "old-reference",
+          amountIdr: 312500,
+        })) as any,
+      });
+      const service = createPaymentService({
+        db: makeDb(),
+        wallet: makeWallet() as any,
+        repo,
+        provider: provider as any,
+        providerName: "stub",
+      });
+      await service.createIntent("user1", "w1", "pkg1");
+      expect(provider.createIntent).toHaveBeenCalledWith({
+        paymentId: "old",
+        providerReference: "old-reference",
+        amountIdr: 312500,
+      });
+    });
+
+    test("active V3 can resume an old pending checkout without loading its inactive package", async () => {
+      const provider = makeProvider();
+      const repo = makeRepo({
+        findLatestPaymentByUserAndPackageCode: mock(async () => ({
+          id: "old",
+          status: "PENDING",
+          providerReference: "old-reference",
+          checkoutUrl: "https://checkout.test/old",
+        })) as any,
+      });
+      const service = createPaymentService({
+        db: makeDb(),
+        economy: {
+          getActiveV3Config: mock(async () => ({ version: 1, values: {} })),
+        } as any,
+        wallet: makeWallet() as any,
+        repo,
+        provider: provider as any,
+        providerName: "stub",
+      });
+      expect(
+        (await service.createIntent("user1", "w1", "pkg1")).checkoutUrl,
+      ).toBe("https://checkout.test/old");
+      expect(repo.findPackageByCode).not.toHaveBeenCalled();
+      expect(provider.createIntent).not.toHaveBeenCalled();
+    });
+
     test("throws PackageNotFoundError when package does not exist", async () => {
       const repo = makeRepo({
         findPackageByCode: mock(async () => null),

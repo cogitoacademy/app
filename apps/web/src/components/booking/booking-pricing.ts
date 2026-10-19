@@ -1,6 +1,8 @@
 const LEGACY_TUTOR_PAYOUT_RATE_IDR = 7_000;
 
 export type HonorariumSnapshotInput = {
+  engine?: "v3";
+  perStudentMarks?: number;
   perStudent?: number;
   tutorShare?: number;
   tutorHonorariumIdr?: number;
@@ -69,7 +71,10 @@ export function getSeriesSessionCount(
 ): number {
   if (sessions && sessions.length > 0) return sessions.length;
   if (booking.type !== "series") return 1;
-  const perStudent = booking.priceSnapshot?.perStudent ?? 0;
+  const perStudent =
+    (booking.priceSnapshot?.engine === "v3"
+      ? booking.priceSnapshot.perStudentMarks
+      : booking.priceSnapshot?.perStudent) ?? 0;
   if (perStudent > 0 && booking.originalMarks > 0) {
     return Math.max(1, Math.round(booking.originalMarks / perStudent));
   }

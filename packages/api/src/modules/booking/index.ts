@@ -11,6 +11,8 @@ import type {
   Modality,
   PriceSnapshot,
   EconomyPriceSnapshot,
+  V3SessionPrice,
+  V3ConfigRevision,
 } from "../pricing/pricing.service";
 import type { EconomyParameters } from "../economy";
 import type { NotificationWriteParams } from "../notification/notification.service";
@@ -28,6 +30,7 @@ import {
 } from "./booking.handler";
 import type { BookingService } from "./booking.service";
 import type { BookingHandler, TutorActionsHandler } from "./booking.handler";
+import type { BookingCompetitionPalettePort } from "./booking-topic-palette";
 
 export type BookingModule = ReturnType<typeof createBookingModule>;
 
@@ -51,6 +54,19 @@ export interface BookingPricingPort {
     config: EconomyParameters,
   ): EconomyPriceSnapshot;
   getEconomyConfig?(conn?: DbOrTx): Promise<EconomyParameters>;
+  calculateV3SessionPrice?(
+    input: {
+      competition: string;
+      modality: "online" | "offline";
+      headcount: GroupSize;
+    },
+    values: V3ConfigRevision["values"],
+  ): V3SessionPrice;
+  getActiveV3Config?(conn?: DbOrTx): Promise<V3ConfigRevision | null>;
+  getV3ConfigByVersion?(
+    version: number,
+    conn?: DbOrTx,
+  ): Promise<V3ConfigRevision | null>;
 }
 
 export interface BookingAuditPort {
@@ -192,6 +208,7 @@ export function createBookingModule(deps: {
   audit: BookingAuditPort;
   notification: BookingNotificationPort;
   meeting: BookingMeetingPort;
+  competitionPalette?: BookingCompetitionPalettePort;
   roomPort?: BookingRoomPort;
 }) {
   const repo = createBookingRepo(deps.db);
@@ -203,6 +220,7 @@ export function createBookingModule(deps: {
     audit: deps.audit,
     notification: deps.notification,
     meeting: deps.meeting,
+    competitionPalette: deps.competitionPalette,
     roomPort: deps.roomPort,
   });
   const handler = createBookingHandler(service);

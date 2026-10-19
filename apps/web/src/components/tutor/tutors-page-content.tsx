@@ -58,6 +58,11 @@ type PublishedTutor = {
   pricesByModality?: Partial<
     Record<"online" | "offline", Record<string, number>>
   > | null;
+  pricesByCompetition?: Record<
+    string,
+    Partial<Record<"online" | "offline", Record<string, number>>>
+  > | null;
+  pricingRevision?: number | null;
   publishedAt: Date | null;
   user: { name: string | null; image: string | null } | null;
 };

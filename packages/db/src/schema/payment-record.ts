@@ -5,6 +5,7 @@ import {
   integer,
   timestamp,
   index,
+  jsonb,
   check,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
@@ -13,6 +14,7 @@ import { sql } from "drizzle-orm";
 import { uuidPrimaryKey, user } from "./auth";
 import { wallet } from "./wallet";
 import { markPackage } from "./mark-package";
+import { economyV3TopUpQuote } from "./economy-v3-activation";
 
 export const paymentRecord = pgTable(
   "payment_record",
@@ -27,6 +29,13 @@ export const paymentRecord = pgTable(
     packageId: text("package_id").references(() => markPackage.id, {
       onDelete: "set null",
     }),
+    quoteId: text("quote_id").references(() => economyV3TopUpQuote.id, {
+      onDelete: "restrict",
+    }),
+    quoteChoice: text("quote_choice"),
+    purchaseLabel: text("purchase_label"),
+    pricingSnapshot: jsonb("pricing_snapshot"),
+    providerIntentState: text("provider_intent_state"),
     provider: text("provider").notNull(),
     providerReference: text("provider_reference").notNull(),
     providerEventId: text("provider_event_id"),
@@ -57,12 +66,23 @@ export const paymentRecord = pgTable(
     ),
     check("payment_amount_positive", sql`${table.amountIdr} > 0`),
     check("payment_marks_positive", sql`${table.marks} > 0`),
+    check(
+      "payment_provider_intent_state_check",
+      sql`${table.providerIntentState} IS NULL OR ${table.providerIntentState} IN ('CREATING','READY','UNCERTAIN')`,
+    ),
+    check(
+      "payment_quote_choice_check",
+      sql`${table.quoteChoice} IS NULL OR ${table.quoteChoice} IN ('package','custom','recommended')`,
+    ),
     uniqueIndex("payment_provider_event_id_idx").on(table.providerEventId),
     index("payment_userId_idx").on(table.userId),
     // B6: the provider reference is the idempotency key — a unique index
     // (not just an index) prevents concurrent check-then-insert races from
     // creating zombie PENDING rows.
     uniqueIndex("payment_provider_reference_idx").on(table.providerReference),
+    uniqueIndex("payment_quote_id_idx")
+      .on(table.quoteId)
+      .where(sql`${table.quoteId} IS NOT NULL`),
     index("payment_status_idx").on(table.status),
     index("payment_userId_status_idx").on(table.userId, table.status),
     index("payment_reconciliation_idx")

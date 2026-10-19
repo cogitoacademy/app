@@ -18,7 +18,11 @@ import {
   TutorExperiencesDisplay,
   type TutorExperience,
 } from "./tutor-experiences";
-import { getCompetitionFieldClass } from "@/lib/competition-colors";
+import {
+  competitionPaletteClassName,
+  getCompetitionPaletteStyle,
+  type CompetitionPalette,
+} from "@/lib/competition-colors";
 import { resolveProfileImageUrl } from "@/lib/profile-image-url";
 import {
   getTutorProfileFieldKind,
@@ -28,7 +32,7 @@ import {
 
 type SubjectLabelMaps = {
   subjectLabels?: ReadonlyMap<string, string>;
-  subjectFieldSlugs?: ReadonlyMap<string, string>;
+  subjectPalettes?: ReadonlyMap<string, CompetitionPalette>;
 };
 
 export type TutorProfileValueProps = SubjectLabelMaps & {
@@ -164,11 +168,11 @@ function formatScalar(path: string, value: unknown) {
 function SubjectValue({
   value,
   subjectLabels,
-  subjectFieldSlugs,
+  subjectPalettes,
 }: {
   value: unknown;
   subjectLabels?: ReadonlyMap<string, string>;
-  subjectFieldSlugs?: ReadonlyMap<string, string>;
+  subjectPalettes?: ReadonlyMap<string, CompetitionPalette>;
 }) {
   if (!Array.isArray(value) || value.length === 0) {
     return <Text className="text-sm text-dimmed">No specializations</Text>;
@@ -179,12 +183,13 @@ function SubjectValue({
         const id = String(subjectId);
         const label =
           subjectLabels?.get(id) ?? `Specialization unavailable (${id})`;
-        const field = subjectFieldSlugs?.get(id);
+        const parentColors = subjectPalettes?.get(id);
         return (
           <Badge
             key={id}
             variant="secondary"
-            className={getCompetitionFieldClass(field ?? "", "solid")}
+            className={parentColors ? competitionPaletteClassName : undefined}
+            style={getCompetitionPaletteStyle(parentColors)}
           >
             {label}
           </Badge>
@@ -322,7 +327,7 @@ export function TutorProfileValue({
   path,
   value,
   subjectLabels,
-  subjectFieldSlugs,
+  subjectPalettes,
   emptyLabel = "Not set",
   idPrefix = "tutor-profile-value",
 }: TutorProfileValueProps) {
@@ -336,7 +341,7 @@ export function TutorProfileValue({
         <SubjectValue
           value={value}
           subjectLabels={subjectLabels}
-          subjectFieldSlugs={subjectFieldSlugs}
+          subjectPalettes={subjectPalettes}
         />
       );
     case "education": {

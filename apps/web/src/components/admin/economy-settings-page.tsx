@@ -45,6 +45,7 @@ import Loader from "@/components/loader";
 import { InfoPreview } from "@/components/info-preview";
 import { TutorPricingTable } from "@/components/tutor/tutor-pricing-table";
 import { orpc } from "@/utils/orpc";
+import { V3EconomySettings } from "./v3-economy-settings";
 
 type FormValues = {
   onlineCogitoBaseIdr: string;
@@ -294,9 +295,9 @@ export function EconomySettingsPage() {
         <div>
           <Text className="font-medium">Safe change policy</Text>
           <Text className="mt-1 text-sm text-foreground">
-            Every booking snapshots the active economy version. Saving this page
-            changes future bookings only; existing holds, payouts, and refunds
-            keep their original snapshot.
+            Every booking snapshots the active economy version. Saving the take
+            schedule changes future bookings only; existing holds, payouts, and
+            refunds keep their original snapshot.
           </Text>
         </div>
       </div>
@@ -507,6 +508,7 @@ export function EconomySettingsPage() {
           </CardBody>
         </Card>
       </div>
+      <V3EconomySettings />
     </Stack>
   );
 }

@@ -9,7 +9,11 @@ import {
   lt,
   gte,
 } from "drizzle-orm";
-import { paymentRecord, markPackage } from "@cogito-app/db/schema";
+import {
+  economyV3TopUpQuote,
+  paymentRecord,
+  markPackage,
+} from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
 import { PAYMENT_STATUS } from "../../shared/constants";
@@ -75,6 +79,87 @@ export async function findLatestPaymentByUserAndPackage(
       ),
     )
     .orderBy(desc(paymentRecord.createdAt), desc(paymentRecord.id))
+    .limit(1);
+  return record ?? null;
+}
+
+export async function findLatestPaymentByUserAndPackageCode(
+  conn: DbOrTx,
+  userId: string,
+  packageCode: string,
+  provider: string,
+) {
+  const [record] = await conn
+    .select({ ...getTableColumns(paymentRecord) })
+    .from(paymentRecord)
+    .innerJoin(markPackage, eq(paymentRecord.packageId, markPackage.id))
+    .where(
+      and(
+        eq(paymentRecord.userId, userId),
+        eq(markPackage.code, packageCode),
+        eq(paymentRecord.provider, provider),
+      ),
+    )
+    .orderBy(desc(paymentRecord.createdAt), desc(paymentRecord.id))
+    .limit(1);
+  return record ?? null;
+}
+
+export async function findTopUpQuoteByRequestKey(
+  conn: DbOrTx,
+  userId: string,
+  requestKey: string,
+) {
+  const [quote] = await conn
+    .select()
+    .from(economyV3TopUpQuote)
+    .where(
+      and(
+        eq(economyV3TopUpQuote.userId, userId),
+        eq(economyV3TopUpQuote.requestKey, requestKey),
+      ),
+    )
+    .limit(1);
+  return quote ?? null;
+}
+
+export async function findTopUpQuoteById(
+  conn: DbOrTx,
+  userId: string,
+  quoteId: string,
+  lock = false,
+) {
+  const query = conn
+    .select()
+    .from(economyV3TopUpQuote)
+    .where(
+      and(
+        eq(economyV3TopUpQuote.userId, userId),
+        eq(economyV3TopUpQuote.id, quoteId),
+      ),
+    )
+    .limit(1);
+  const [quote] = lock ? await query.for("update") : await query;
+  return quote ?? null;
+}
+
+export async function insertTopUpQuote(
+  conn: DbOrTx,
+  values: typeof economyV3TopUpQuote.$inferInsert,
+) {
+  const [quote] = await conn
+    .insert(economyV3TopUpQuote)
+    .values(values)
+    .onConflictDoNothing()
+    .returning();
+  return quote ?? null;
+}
+
+export async function findPaymentByQuote(conn: DbOrTx, quoteId: string) {
+  const [record] = await conn
+    .select({ ...getTableColumns(paymentRecord) })
+    .from(paymentRecord)
+    .where(eq(paymentRecord.quoteId, quoteId))
     .limit(1);
   return record ?? null;
 }
@@ -187,6 +272,19 @@ export async function updatePaymentStatus(
   await conn.update(paymentRecord).set(data).where(eq(paymentRecord.id, id));
 }
 
+/** Saves the provider token/request state without overwriting webhook status. */
+export async function updatePaymentIntent(
+  conn: DbOrTx,
+  id: string,
+  data: {
+    providerRequestId?: string;
+    checkoutUrl?: string | null;
+    providerIntentState: "CREATING" | "READY" | "UNCERTAIN";
+  },
+) {
+  await conn.update(paymentRecord).set(data).where(eq(paymentRecord.id, id));
+}
+
 /**
  * Conditionally updates a payment to a new status, but only when the row is
  * still in a credit state (PAID/SETTLED). Returns the updated row, or null
@@ -243,6 +341,43 @@ export function createPaymentRepo(db: DbType) {
         provider,
       );
     },
+    findLatestPaymentByUserAndPackageCode(
+      userId: string,
+      packageCode: string,
+      provider: string,
+      conn?: DbOrTx,
+    ) {
+      return findLatestPaymentByUserAndPackageCode(
+        conn ?? db,
+        userId,
+        packageCode,
+        provider,
+      );
+    },
+    findTopUpQuoteByRequestKey(
+      userId: string,
+      requestKey: string,
+      conn?: DbOrTx,
+    ) {
+      return findTopUpQuoteByRequestKey(conn ?? db, userId, requestKey);
+    },
+    findTopUpQuoteById(
+      userId: string,
+      quoteId: string,
+      conn?: DbOrTx,
+      lock = false,
+    ) {
+      return findTopUpQuoteById(conn ?? db, userId, quoteId, lock);
+    },
+    insertTopUpQuote(
+      values: typeof economyV3TopUpQuote.$inferInsert,
+      conn?: DbOrTx,
+    ) {
+      return insertTopUpQuote(conn ?? db, values);
+    },
+    findPaymentByQuote(quoteId: string, conn?: DbOrTx) {
+      return findPaymentByQuote(conn ?? db, quoteId);
+    },
     findPaymentById(id: string, conn?: DbOrTx) {
       return findPaymentById(conn ?? db, id);
     },
@@ -276,10 +411,22 @@ export function createPaymentRepo(db: DbType) {
         checkoutUrl?: string | null;
         receiptUrl?: string | null;
         failureReason?: string | null;
+        providerIntentState?: string | null;
       },
       conn?: DbOrTx,
     ) {
       return updatePaymentStatus(conn ?? db, id, data);
+    },
+    updatePaymentIntent(
+      id: string,
+      data: {
+        providerRequestId?: string;
+        checkoutUrl?: string | null;
+        providerIntentState: "CREATING" | "READY" | "UNCERTAIN";
+      },
+      conn?: DbOrTx,
+    ) {
+      return updatePaymentIntent(conn ?? db, id, data);
     },
     updatePaymentStatusIfInCreditState(
       id: string,

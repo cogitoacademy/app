@@ -1,6 +1,152 @@
 # Cogito Module Reference
 
-Last updated: 2026-10-02
+## Competition catalog ownership — implementation in progress
+
+T00A / REQ-COMP-01..07 extends the existing subject-category hierarchy with
+admin parent/child CRUD on the working branch. The catalog owns identity,
+labels, hierarchy/order and selection lifecycle. Pricing owns immutable parent
+rate agreements; children inherit them. Tutor assignment, discovery, booking,
+classes, reports and website projections consume that same catalog. See SPEC
+§2 for compatibility and transaction design; do not create a parallel taxonomy.
+
+The focused `competition-catalog` module composes into the `admin` RPC namespace.
+All catalog mutations acquire a transaction-only shared advisory lock, enforce
+expectedVersion and record before/after/reason through the audit port before
+commit. Reference writers must acquire that same lock before final eligibility
+validation/persistence. PostgreSQL tests cover both assignment/delete orders,
+both booking/archive orders, and stale simultaneous edits: deletion-first makes
+the queued assignment fail selection validation; assignment-first leaves the
+specialization referenced and blocks deletion; booking-first persists the
+category/specialization IDs and slugs in `booking.sessionTopic` and archive
+counts that reference; archive-first makes the queued booking fail with
+`BOOKING_NOT_EDITABLE`; and only the first edit using a shared expectedVersion
+commits/audits, while the queued stale edit returns `CONFLICT`. English uses
+existing name/description columns; optional Indonesian and version columns are
+additive. Parent archive preserves child flags; public selectability requires
+both levels active. Reference counts include current tutor FK assignments,
+pending profile JSON, historical tutor-profile audit snapshots, booking/session
+snapshots, economy revisions and static default rates. The guarded catalog suite
+passed 6 tests/72 expectations; see TASKS for the exact command and remaining
+dynamic-pricing/website integration gates. A focused Chromium browser journey
+also verifies child-only search, archive/restore confirmations and moving an
+unused specialization with its inherited destination palette. The catalog tree
+keeps a matching child's parent visible as context during child-only searches.
+
+Parent appearance has four independent validated OKLCH fields: light text and
+background, dark text and background. Children inherit `parentColors`; they
+cannot store overrides. New parent creation requires a complete palette, while
+patches retain omitted colors. Render the safe values through semantic CSS
+variables. Only the seven known Sanity category aliases map at the content
+boundary; unknown references use the neutral compatibility palette.
+Current appearance projection is separate from immutable booking names/prices.
+
+## V3 customer pricing boundaries (2026-10-18)
+
+`economy.getActiveV3Config` reads only the separate activation pointer;
+`getV3ConfigByVersion` reads exact immutable history. Neither selects the latest
+draft as an implicit fallback. Missing activation means legacy operation.
+Payment quote snapshots contain top-up terms only, excluding tutor fee tables.
+Quote owner/request key uniqueness and a locked quote row plus unique payment
+quote ID prevent concurrent duplicate checkout. Payment intent metadata updates
+only provider request ID/URL/intent state, preserving financial status when a
+webhook arrives first. CREATING/UNCERTAIN retries reconcile the same identity;
+they never automatically POST another V3 provider intent. Late success credits
+stored Marks via existing `purchase.<paymentId>` wallet idempotency.
+
+Booking JSONB snapshots are a union: old untagged economics or explicit V3
+revision/competition/modality/headcount/perStudentMarks/collectedMarks and
+tutorHonorariumIdr. V3 records contain no synthetic tutorShare/cogitoTake or
+Marks-to-IDR conversion. Group repricing uses the pinned revision; old/null
+snapshots stay on the legacy path. Payout IDR uses the saved V3 honorarium.
+Legacy payout Marks/take accumulators exclude V3; consumers must not present
+those partial values as whole-period profitability. Analytics presentation
+remains an unfinished activation gate. With an active revision, group-series
+starts at target headcount and pins that revision; a partial group recalculates
+at confirmed headcount and updates remaining participant holds plus booking and
+scheduled-session snapshots before reconfirmation. Activation-null group-series
+and target-size-one solo-series retain legacy behavior. Tutor profile
+reads consult the same active pointer: `null` returns no V3 fee projection and
+preserves legacy base-rate updates; an active revision returns read-only online
+and offline IDR fee rows for headcounts 1–6 for each assigned parent competition.
+Changed legacy `baseRatesIdr` or `prices` updates are rejected, unchanged stale
+values are ignored, and admin edit approval discards queued legacy base rates.
+These projections do not change saved booking snapshots.
+
+## V3 report input contract (2026-10-18)
+
+`booking/feedback-rules.ts` is shared by input schema and English completion UI.
+`normalizeFeedbackBullets` splits CRLF/CR/LF, removes leading UI bullets, trims
+and discards empty lines. `countFeedbackCharacters` counts code points in the
+normalized lines joined by LF, at most 600 per report field. The editor preserves
+invalid drafts and shows an over-limit count rather than silently truncating;
+completion is disabled until all three fields are nonempty and within the limit.
+Direct service completion revalidates through the same schema before deductions
+or report persistence. Existing HTML escaping is applied after validation and is
+not truncated; encoded entities can therefore occupy more than 600 stored code
+units. No migration rewrites old reports. Completion settlement/authorization,
+reminders and future PDF export are otherwise unchanged by this slice.
+
+## V3 economy draft revisions (2026-10-18)
+
+Pricing's `v3-economy.config.ts` owns validated defaults and editable configuration.
+Session calculations use the booking competition's canonical slug, online/offline
+and integer headcount 1–6. Marks round upward per student; tutor fees remain IDR.
+Q13 was approved by the project owner: preserve custom top-ups and recommend
+the next larger package when cheaper/equal. Tiers follow configured package Marks.
+Below the first threshold use the first package's unit price; thereafter use the
+largest threshold not exceeding the requested Marks, plus surcharge per Mark.
+Exact package Marks use package price without surcharge. Rational unit prices
+round the full custom purchase upward once to whole IDR using integer arithmetic.
+Package validation requires ascending Marks/prices and decreasing unit rates.
+
+`competitionRates` is keyed by stable parent catalog slugs, not a seven-value
+runtime enum. All seven legacy parent rates remain required; additional current
+parents may have a configured solo rate, while missing rates remain unconfigured.
+Children inherit the parent rate. Admin settings return every parent and its
+rate readiness; save validates keys against the catalog under the catalog lock.
+Session preview enumerates configured parents, both modalities and headcounts
+1–6. The calculator accepts any configured parent slug.
+
+`economy_v3_revision` retains version PK, JSON values, required reason, actor FK
+(set null on account deletion) and timestamp. Reads return latest or virtual
+version 0 without writing. Repository append runs inside the admin transaction,
+takes an advisory transaction lock, checks expectedVersion, and inserts the next
+revision without updating earlier versions. Admin audit event
+`economy_v3_revision_created` stores before/after/reason in that same transaction.
+Audit failure aborts save. The real-Postgres integration suite passed against the
+isolated `cogito-test` database: 7 tests/26 expectations verify one-winner CAS,
+immutable prior revisions, audit rollback, unchanged active legacy settings and
+role denial. This does not verify production migration or pricing activation.
+
+`V3EconomySettings` adds an English Selia draft editor and six-headcount
+online/offline preview to `/admin-economy`, plus exact top-up and better-value
+preview. It lists all catalog parents, leaves unconfigured parent rates blank,
+and saves only complete rate pairs. Invalid configurations block save;
+stale-version failures retain edits with cancel/reload recovery.
+
+The nullable activation pointer remains separate from saved draft revisions.
+When unset, existing legacy pricing remains in force for the seven legacy parent
+slugs, while a new parent without an active V3 rate is rejected rather than
+falling back to a tutor's legacy base rate. With an active revision, discovery
+projects rates by the selected parent slug and new solo/group/solo-series
+booking snapshots pin that revision. Group-series creation also prices at target
+headcount and pins the revision. When invitations resolve to a partial group,
+repricing loads that exact revision at confirmed headcount, adjusts each
+confirmed participant's remaining scheduled-session hold, and updates booking
+and scheduled-session snapshots before reconfirmation. Target-size-one solo-series
+and activation-null legacy group-series retain their existing behavior. Legacy
+analytics interpretation, customer activation and production migration remain
+gated; draft saves do not enable any of them.
+
+## SnapCN video tooling (2026-10-18)
+
+`@cogito-app/video` (`apps/video`) registers Remotion compositions in
+`src/root.tsx` via `src/index.ts`. SnapCN source lives in
+`src/components/snap-cn/`; its core lives in `src/lib/snap-cn-ui/`.
+It consumes shared UI CSS tokens/fonts, independently of the web runtime.
+No services, event keys, database writes, or business rules are introduced.
+
+Last updated: 2026-10-18
 
 ## Student dashboard balance CTA fit (2026-10-02)
 
@@ -21,10 +167,17 @@ reuse admin booking/tutor/achievement moderation reads. Balance readiness is
 derived from the wallet snapshot without claiming future affordability.
 
 Admin Business insights labels distinguish selected-period metrics from the
-live all-time state portfolio. Booked Marks and platform take remain locked
-booking-price snapshots, not payment cash or realized revenue. Active learners
-is currently named **Active booking proposers** in the UI because the aggregate
-does not yet count group participants or login activity.
+live all-time state portfolio. The selected-period pricing snapshot breakdown
+counts booking records by V3, legacy, other, or missing snapshot; V3 is
+engine-tagged, legacy requires the known untagged numeric shape, other includes
+unknown or malformed non-null snapshots, and missing is SQL NULL. It does not
+count sessions or estimate money, and includes all states in the booking-created
+date range. Booking-derived Marks, IDR, and platform-take
+totals are omitted pending Q15 because parent and per-session snapshots have
+different units across booking types. Top-up revenue is separately aggregated
+from successful payment and refund rows. Active learners is currently named
+**Active booking proposers** because the aggregate does not yet count group
+participants or login activity.
 
 `admin.getDashboardAnalytics` accepts preset or custom inclusive WIB ranges.
 Impossible custom calendar dates are rejected before query execution.
@@ -311,6 +464,38 @@ Editorial content integration is also read-only: Sanity remains the source of tr
 
 ---
 
+## Public Content Module
+
+**Purpose:** Provide the marketing site a public tutor read from the app's published tutor profiles without returning private profile or account data.
+
+**Files:**
+
+- `public-content.repo.ts` — published-only query with positive profile, account, and catalog column allowlists; inactive subject or parent categories are filtered out
+- `public-content.service.ts` — strict DTO mapper for public identity, profile copy, structured education/achievements/experience, subject catalog labels, and teaching modality
+- `public-content.handler.ts` and `public-content.router.ts` — anonymous `publicContent.tutors.list` procedure with a strict empty-object input
+- `index.ts` — module composition factory
+
+**Service method:**
+
+- `listTutors()` — returns the public DTO list; an empty database result remains `[]`, while database/mapping failures propagate as RPC errors
+
+The DTO exposes only `id` (tutor profile ID), `name`, `profileImageUrl`, `shortBio`, `affiliation`, `education`, `achievements`, `experiences`, `subjects`, and `modality`. Subject rows expose app-catalog `id`, `slug`, English `name`, nullable `nameId`, and a parent with the same identity/name fields plus the four explicit light/dark text/background palette values; each child receives its parent's palette. Inactive child or parent categories are filtered from the query and checked again by the mapper; activity flags are never public. JSON profile entries and related catalog rows are mapped field by field, so new database or JSON properties do not flow through. The repository selects only the fields used by that DTO. `modality` describes teaching format; the tutor schema has no physical city/location field. `tutors.listPublished` remains student-authenticated and retains its existing booking-discovery projection.
+
+## FAQ Module
+
+**Purpose:** Manage bilingual FAQ content in the app and provide request-time public projections for the marketing website without exposing admin fields.
+
+**Files:**
+
+- `faq.types.ts` — strict locale/surface inputs and paragraph/list answer block validation
+- `faq.repo.ts` — ordered admin reads, active public reads, create, and version-checked update
+- `faq.service.ts` — English fallback for each missing Indonesian question/answer field and strict admin/public DTO mapping
+- `faq.handler.ts` and `faq.router.ts` — anonymous `publicContent.faq.list` and admin-only `adminFaq.list/create/update` RPC procedures
+- `packages/db/src/schema/faq.ts` and migration `0058_faq_entries.sql` — localized fields, JSON answer blocks, visibility/order, and optimistic version
+- `apps/web/src/components/admin/faq-page.tsx` and `/admin-faq` — English-chrome Selia editor with optional Indonesian copy
+
+English question and answer are required. Answers are stored as plain paragraph/list blocks and rendered as text; raw HTML is not accepted. The landing projection includes active rows marked `showOnLanding`; full FAQ includes every active row. Admin updates use `expectedVersion`; deactivation retains a row for editing and hides it from public reads. The separate marketing site fetches both surfaces server-side with no-store caching and strict response validation; it keeps localized empty and API-error states distinct and does not use Sanity/legacy fallback. Migration 0058 has been applied only to local `cogito-test`; it has not been applied to development or production.
+
 ## Content Module
 
 **Purpose:** Deliver published Competition Calendar and Knowledge Bank content from Sanity to authenticated app users without duplicating editorial documents into PostgreSQL.
@@ -330,7 +515,7 @@ Editorial content integration is also read-only: Sanity remains the source of tr
 - `listStudentResources()` — returns resource metadata without asset URLs
 - `getStudentResourceFile(resourceId)` — resolves the published asset URL and file metadata for the already-authorized proxy
 
-The calendar frontend consumes `listCompetitions()` as a read-only projection. It mirrors the academy's month interaction model (multi-day spans and overflow popup) and uses a flat 30-day agenda list that renders each overlapping competition once in first-event-date order, plus an event-details modal, while using Cogito App Selia components, design tokens, and Tabler icons. Month-view event lanes are allocated per week and remain stable for every day an event spans; an ended event's lane may be reused by the next non-overlapping event. Its authenticated route is viewport-contained: the calendar card body owns vertical scrolling, while the month grid owns horizontal scrolling so the page shell and calendar toolbar do not scroll with the grid. The month view always keeps the standard grid visible, including for an event-free selected month; the page-level empty state remains reserved for a response with no competitions at all. The Knowledge Bank frontend is available at the authenticated `/knowledge-bank` route and renders resource category slugs as mapped or title-cased labels while keeping raw slugs for filtering. Its unsandboxed browser-native PDF iframe targets the protected API file route and sits in a responsive Selia drawer: bottom on mobile, right-side on desktop. The production web CSP allows the API origin in `frame-src`; the file route separately permits `frame-ancestors` from configured app origin and omits `X-Frame-Options`, while all other API routes deny framing. Admins get `Edit resources` (`studentResource`) and `Edit competitions` (`competition`) buttons on the Knowledge Bank and calendar pages; both open the matching document-type list in Sanity Studio in a new tab.
+The calendar frontend consumes `listCompetitions()` as a read-only projection. It mirrors the academy's month interaction model (multi-day spans and overflow popup) and uses a flat 30-day agenda list that renders each overlapping competition once in first-event-date order, plus an event-details modal, while using Cogito App Selia components, design tokens, and Tabler icons. The type filter derives its options from loaded competition categories, keys each option by the parent `coreCategory` slug, and uses the category's English `name` with the seven legacy labels as missing-name fallbacks. All current types are selected by default; new types become selected after data refresh unless explicitly excluded; uncategorized events stay visible with no active filter; Reset selects all current options. The filter applies to both calendar views. Month-view event lanes are allocated per week and remain stable for every day an event spans; an ended event's lane may be reused by the next non-overlapping event. Its authenticated route is viewport-contained: the calendar card body owns vertical scrolling, while the month grid owns horizontal scrolling so the page shell and calendar toolbar do not scroll with the grid. The month view always keeps the standard grid visible, including for an event-free selected month; the page-level empty state remains reserved for a response with no competitions at all. The Knowledge Bank frontend is available at the authenticated `/knowledge-bank` route and renders resource category slugs as mapped or title-cased labels while keeping raw slugs for filtering. Its unsandboxed browser-native PDF iframe targets the protected API file route and sits in a responsive Selia drawer: bottom on mobile, right-side on desktop. The production web CSP allows the API origin in `frame-src`; the file route separately permits `frame-ancestors` from configured app origin and omits `X-Frame-Options`, while all other API routes deny framing. Admins get `Edit resources` (`studentResource`) and `Edit competitions` (`competition`) buttons on the Knowledge Bank and calendar pages; both open the matching document-type list in Sanity Studio in a new tab.
 
 When the page-level no-competition state is rendered, its calendar glyph uses
 the Cogito orange token; this accent is scoped to the Competition Calendar and
@@ -460,7 +645,7 @@ completion-time cutoff; it does not reset automatically each calendar week.
 
 **Service Methods:**
 
-- `getDashboardAnalytics(input?)` — Returns normalized preset/custom-range booking and signup trends, current/rolling account activity, student Marks ownership, lifetime paid conversion, selected-range payment/refund revenue, live booking-state portfolio, period modality/category breakdowns, and locked booking-value KPIs; trend dates are filled with zero rows using WIB boundaries
+- `getDashboardAnalytics(input?)` — Returns normalized preset/custom-range booking and signup trends, current/rolling account activity, student Marks ownership, lifetime paid conversion, selected-range payment/refund revenue, live booking-state portfolio, period modality/category breakdowns, and selected-period booking-record counts by saved pricing engine (`v3`, `legacy`, `other`, `missing`); trend dates are filled with zero rows using WIB boundaries
 - `listUsers(opts)` — Paginated user list
 - `searchUsers({ query, limit? })` — Returns a bounded identity projection for admin lookup, matching name, email, or user ID
 - `setRole(userId, role, adminId)` — Changes user role; throws `LastAdminError` if removing last admin; optimistic lock via `expectedRole`; records audit log
@@ -477,7 +662,7 @@ completion-time cutoff; it does not reset automatically each calendar week.
 **Business Rules:**
 
 - Dashboard period metrics are based on booking/user creation time; the live state portfolio is intentionally all-time so it reflects current admin workload
-- The completion rate is `completed / (completed + terminal exception bookings)` for bookings created in the selected period, and Marks figures come from locked booking price snapshots
+- The completion rate is `completed / (completed + terminal exception bookings)` for bookings created in the selected period. The pricing-snapshot breakdown counts parent booking records created in the selected period and includes every booking state. It classifies V3 by engine tag, legacy by the known untagged numeric shape, unknown/malformed non-null snapshots as other, and SQL `NULL` as missing; it does not represent sessions or financial value. Booking-derived Marks, IDR, and platform-share totals remain omitted until their population, participant, session, and date basis is defined; top-up cash totals come from successful payment and refund records instead of booking snapshots
 - Cannot remove the last admin role from the system
 - Role changes are audit-logged
 - User lookup is case-insensitive and bounded; exact email/ID matches rank first, and wildcard characters are treated literally
@@ -697,11 +882,11 @@ The Participants fieldset owns the derived Solo/Group badge; summaries represent
 - `createSolo(proposerId, input)` — Creates solo booking with wallet hold, overlap check, and notification
 - `createGroup(proposerId, input)` — Creates group booking with invitees and temporarily holds the target headcount total from the proposer; rejects a target above the tutor's online/offline maximum before any hold or write, and releases excess hold as invitees confirm
 - `createSeries(proposerId, input)` — Creates a solo series booking with sessions (2-4 sessions, each checked for overlaps)
-- `createGroupSeries(proposerId, input)` — Creates a group series (targetGroupSize 2-6, inviteeUserIds) with upfront per-participant holds for all sessions; rejects targets above the tutor's modality-specific capacity (FR-20, landed #46)
+- `createGroupSeries(proposerId, input)` — Creates a group series (targetGroupSize 2-6, inviteeUserIds) with upfront per-participant holds for all sessions; rejects targets above the tutor's modality-specific capacity (FR-20, landed #46). Active V3 requires a supported topic, prices at target headcount and pins the revision on the booking and session snapshots. A viable partial group is repriced from that pinned revision at confirmed headcount; each participant's remaining hold is per-session Marks times scheduled sessions, and booking/scheduled-session snapshots update before reconfirmation. A null activation pointer preserves legacy behavior.
 - `confirmInvite(userId, bookingId)` — Invitee confirms participation; holds marks
-- `declineInvite(userId, bookingId, reason?)` — Locks the parent booking, then declines. If this consumes the last pending invitation, resolve from confirmed participants: `<2` expires and releases holds; `>=2` but below target reprices a one-off group and opens reconfirmation; full target advances to tutor review.
-- `withdrawInvite(proposerId, bookingId, inviteeUserId, reason?)` — Locks the parent booking, then withdraws one pending group invite; marks the invitee `withdrawn_pre_h2`, leaves confirmed headcount unchanged, notifies the invitee, and runs the same last-pending-invite resolution used by `declineInvite`. Expired group-series sessions are cancelled. The user-supplied `reason` is HTML-escaped (`escapeHtml`) before interpolation into the notification/email body (F5 convention — user-supplied text must not inject markup)
-- `reconfirm(userId, bookingId, accept)` — Participant accepts/rejects the repriced offer after repricing. **F3 (headcount-change reprice):** when an accept lands and the confirmed headcount no longer matches the headcount the current snapshot was priced for (a participant declined or withdrew mid-cycle, e.g. withdrawing from `awaiting_reconfirmation` decrements the headcount without repricing), the booking does **not** finalize — all reconfirmed participants are reset to plain `confirmed` (`resetReconfirmedParticipants`), the group is repriced for the current headcount, every survivor gets a fresh 12h window, and a `reissue_reconfirm` notification is sent. The booking only moves to `AWAITING_TUTOR_REVIEW` when all confirmed participants reconfirm against the current snapshot. **N1:** when a flat or rounded price map produces the same per-student rate at two headcounts, `repriceGroupForHeadcount` still synchronizes `holdAmount` to the sum of participant-held amounts, preventing the reconfirmation mismatch from re-firing forever.
+- `declineInvite(userId, bookingId, reason?)` — Locks the parent booking, then declines. If this consumes the last pending invitation, resolve from confirmed participants: `<2` expires and releases holds; `>=2` but below target reprices a one-off group and opens reconfirmation; full target advances to tutor review. Active V3 group-series uses its pinned revision at confirmed headcount and adjusts holds/snapshots before reconfirmation.
+- `withdrawInvite(proposerId, bookingId, inviteeUserId, reason?)` — Locks the parent booking, then withdraws one pending group invite; marks the invitee `withdrawn_pre_h2`, leaves confirmed headcount unchanged, notifies the invitee, and runs the same last-pending-invite resolution used by `declineInvite`. Active V3 group-series repricing uses the pinned revision at confirmed headcount. Expired group-series sessions are cancelled. The user-supplied `reason` is HTML-escaped (`escapeHtml`) before interpolation into the notification/email body (F5 convention — user-supplied text must not inject markup)
+- `reconfirm(userId, bookingId, accept)` — Participant accepts/rejects the repriced offer after repricing. **F3 (headcount-change reprice):** when an accept lands and the confirmed headcount no longer matches the headcount the current snapshot was priced for (a participant declined or withdrew mid-cycle, e.g. withdrawing from `awaiting_reconfirmation` decrements the headcount without repricing), the booking does **not** finalize — all reconfirmed participants are reset to plain `confirmed` (`resetReconfirmedParticipants`), the group is repriced for the current headcount, every survivor gets a fresh 12h window, and a `reissue_reconfirm` notification is sent. For active V3 group-series, the snapshot headcount comes from its pinned price snapshot; recalculation also updates remaining scheduled-session holds and snapshots. The booking only moves to `AWAITING_TUTOR_REVIEW` when all confirmed participants reconfirm against the current snapshot. **N1:** when a flat or rounded price map produces the same per-student rate at two headcounts, `repriceGroupForHeadcount` still synchronizes `holdAmount` to the sum of participant-held amounts, preventing the reconfirmation mismatch from re-firing forever.
 - `withdraw(userId, bookingId, reason?)` — Participant withdrawal closes at `scheduledStartAt`; before then, pre-H2 releases hold and post-H2 forfeits it, with group survival/repricing rules unchanged. At/after start it throws `BOOKING_CANCELLATION_DEADLINE_PASSED`; group-series (`type === "series" && targetGroupSize > 1`) remains rejected with `BOOKING_SERIES_NO_OPT_OUT` (U4 no-opt-out rule).
 - `cancel(userId, bookingId, reason)` — Requires a non-blank student reason, then cancels a booking only before `scheduledStartAt`; releases holds before H-2, while a pre-start late cancel becomes `late_cancelled` and forfeits holds. At/after start it throws `BOOKING_CANCELLATION_DEADLINE_PASSED`, preserving the live booking for tutor completion and routing delivery disputes through support/admin review.
 - `tutorAccept(bookingId, tutorId)` — Tutor accepts booking; attempts meeting creation for online bookings and schedules on success, while a provider failure leaves the booking `CONFIRMED` for scheduler retry; sets room approval for offline. **F6:** whenever meeting creation fails (provider throw or `status === "failed"`), `finalizeMeetingSchedule` bumps `deadlineAt` to `scheduledEndAt + 24h` so the 5-minute retry window is respected — the old tutor-review `now+12h` deadline can never expire the booking (release holds) or no-show the session while a meeting retry is pending. The proposer notification distinguishes `scheduled` from `confirmed`/meeting-setup attention, so a provider failure is not presented as a scheduled session. The booking-detail UI confirms the scheduled date/time, modality, and attendance before invoking this method; cancel/complete actions use the same in-app confirmation pattern.
@@ -1199,7 +1384,7 @@ The authenticated dashboard shell is viewport-fixed. Its content pane exclusivel
 - `getMyProfileHistory(userId)` — Returns the newest profile/review audit entries for the tutor; changed saves include complete before/after snapshots, and actor identity is limited to id and display name so account emails are not exposed to tutors
 - `updateMyProfile(userId, input)` — Updates canonical account name and profile fields with optimistic locking (`version`) and records one full before/after snapshot pair when state changes. Profile, account-name, subject, photo, and audit writes share one transaction. Reverting the final pending proposal clears both `pendingProfileChanges` and `profileEditStatus`. Canonical structured fields are `education`, `achievements`, and `experiences`. `affiliation` describes current study program/university or professional role/organization. Draft saves permit omission; review submission requires affiliation and non-empty achievements/experiences. Published-profile changes to affiliation and structured credentials enter pending admin review.
 - `onlineMaxClassSize` / `offlineMaxClassSize` — Immediate operational preferences from 1–6. Size 1 disables group requests for that modality; changes constrain new discovery/booking flows without rewriting existing bookings.
-- `submitForReview(userId, input = {})` — Requires affiliation, canonical achievements/experiences, complete pricing/profile fields, and first-submit Terms acceptance; then sets `onboardingStatus` to `pending_review` and records audit log.
+- `submitForReview(userId, input = {})` — Reads the active V3 pointer and profile in the status-update transaction. Requires affiliation, canonical achievements/experiences, complete profile fields, and first-submit Terms acceptance; legacy fee fields are required/validated only while V3 is inactive. Then sets `onboardingStatus` to `pending_review` and records audit log.
 - `listAvailability(userId)` — Lists the tutor's active future availability slots
 - `upsertAvailability(userId, input)` — Creates/updates a slot, rejecting overlaps
 - `createDateOverrides(userId, input)` — Atomically creates up to 56 one-off windows across selected dates, including today when each start is still in the future; deactivates conflicting recurring occurrences and rejects the whole batch on an intra-batch or existing one-off conflict
@@ -1220,7 +1405,7 @@ The authenticated dashboard shell is viewport-fixed. Its content pane exclusivel
 - A complete first tutor submission requires bilingual Terms of Service acceptance; the profile action area owns one **I agree to the Tutor Terms of Service** checkbox and opens the document through a read-only **Read terms** action. **Submit for review** and **Submit changes for review** remain disabled until the checkbox is checked, while draft/profile saving remains available. The acceptance timestamp/version is immutable after the first write and is not included in public tutor discovery. After acceptance the checkbox is checked/disabled and **Review Tutor Terms** remains available; the consent row and action controls wrap responsively without changing the service contract
 - Profile updates use optimistic locking (`version`)
 - Profile, account-name, subject, photo, and audit writes commit atomically; final pending-proposal reversion clears both pending payload and edit-review status
-- New tutor pricing is stored as IDR base honoraria by modality (`baseRatesIdr`) and validated against the active economy minimum and Rp5,000 increments; published tutors may change these rates at any time, new bookings use the new rate, and existing booking snapshots remain authoritative for payout. The legacy Marks map remains readable during migration
+- With the V3 activation pointer unset, tutor fee projection is `null` and legacy IDR base honoraria remain writable/required for review submission; writes use the economy minimum and Rp5,000 increments. With an active pointer, profile reads project read-only IDR fees by assigned parent competition and headcount 1–6, changed legacy `baseRatesIdr`/`prices` writes fail, and review submission does not require legacy fee fields. Unchanged stale client values are ignored. Admin approval always drops queued legacy `baseRatesIdr`, including when approving unrelated edits. Existing booking snapshots remain authoritative for payout.
 - The tutor profile editor at `/profile` renders selected modalities in one combined six-row IDR group-size matrix using the same table structure as the student discovery drawer; this is presentation-only. The legacy `/onboarding` path redirects to `/profile` for tutors.
 - The tutor profile editor places the profile-photo upload first and uses a clickable avatar with the shared circular crop flow. Compact Selia `InfoPreview` popovers reveal the full submitted/current/proposed image on demand. For a published tutor it labels `user.image` as the current public photo and a differing `pendingProfileChanges.profileImageUrl` as the proposed photo. The admin review page compares both assets side by side; `approve_edits` remains the only operation that promotes the proposal into `user.image`.
 - The admin tutor index derives the status badge from `onboardingStatus` plus `profileEditStatus`; published tutors with `pending_review` edits show **Edit review**, and edits returned with `changes_requested` show **Revision requested**, making review-needed rows visible before opening the full-page review workspace.

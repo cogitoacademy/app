@@ -10,11 +10,40 @@ import {
   adminGetTutorPayoutReportInput,
   adminMarkTutorPayoutPaidInput,
   adminUpdateEconomySettingsInput,
+  adminPreviewV3EconomyInput,
+  adminSaveV3EconomyInput,
 } from "./admin.types";
 import type { AdminHandler } from "./admin.handler";
 
 export function createAdminRouter(handler: AdminHandler) {
   return {
+    getV3EconomySettings: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/economy/v3/get",
+        tags: ["Admin", "Economy"],
+        summary: "Get latest V3 draft economy revision",
+      })
+      .handler(handler.getV3EconomySettings),
+    previewV3EconomySettings: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/economy/v3/preview",
+        tags: ["Admin", "Economy"],
+        summary: "Preview V3 session and exact top-up rates",
+      })
+      .input(adminPreviewV3EconomyInput)
+      .handler(handler.previewV3EconomySettings),
+    saveV3EconomySettings: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/economy/v3/save",
+        tags: ["Admin", "Economy"],
+        summary:
+          "Append an audited V3 draft economy revision without activation",
+      })
+      .input(adminSaveV3EconomyInput)
+      .handler(handler.saveV3EconomySettings),
     getDashboardAnalytics: adminProcedure
       .route({
         method: "POST",

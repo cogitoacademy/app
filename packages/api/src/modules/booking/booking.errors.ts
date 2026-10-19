@@ -22,6 +22,48 @@ export class BookingNotEditableError extends DomainError {
   }
 }
 
+export class BookingV3CompetitionRequiredError extends DomainError {
+  readonly domain = "booking";
+  constructor() {
+    super(
+      "BOOKING_V3_COMPETITION_REQUIRED",
+      "A supported competition topic must be selected for V3 pricing",
+    );
+  }
+}
+
+export class BookingV3CompetitionUnavailableError extends DomainError {
+  readonly domain = "booking";
+  constructor(categorySlug: string) {
+    super(
+      "BOOKING_V3_COMPETITION_UNAVAILABLE",
+      "This topic is not available for V3 pricing",
+      { categorySlug },
+    );
+  }
+}
+
+export class BookingV3GroupSeriesNotReadyError extends DomainError {
+  readonly domain = "booking";
+  constructor() {
+    super(
+      "BOOKING_V3_GROUP_SERIES_NOT_READY",
+      "V3 group-series bookings are not available yet",
+    );
+  }
+}
+
+export class BookingV3PricingRevisionUnavailableError extends DomainError {
+  readonly domain = "booking";
+  constructor(version: number) {
+    super(
+      "BOOKING_V3_PRICING_REVISION_UNAVAILABLE",
+      "The V3 price revision for this booking is unavailable",
+      { version },
+    );
+  }
+}
+
 export class BookingSessionNotEndedError extends DomainError {
   readonly domain = "booking";
   constructor(id: string, scheduledEndAt: Date) {
@@ -305,6 +347,17 @@ export class BookingSeriesNoOptOutError extends DomainError {
   }
 }
 
+export class BookingCompletionFeedbackTooLongError extends DomainError {
+  readonly domain = "booking";
+  constructor(id: string) {
+    super(
+      "REPORT_TOO_LONG",
+      "Each feedback field must contain at most 600 characters in total, including line breaks",
+      { id },
+    );
+  }
+}
+
 export class BookingCompletionFeedbackRequiredError extends DomainError {
   readonly domain = "booking";
   constructor(id: string) {
@@ -380,5 +433,17 @@ export function mapBookingError(
     return conflict(err.message, err);
   if (err instanceof BookingCompletionFeedbackRequiredError)
     return badRequest(err.message, err);
+  if (err instanceof BookingCompletionFeedbackTooLongError)
+    return badRequest(err.message, err);
+  if (
+    err instanceof BookingV3CompetitionRequiredError ||
+    err instanceof BookingV3CompetitionUnavailableError
+  )
+    return badRequest(err.message, err);
+  if (
+    err instanceof BookingV3GroupSeriesNotReadyError ||
+    err instanceof BookingV3PricingRevisionUnavailableError
+  )
+    return conflict(err.message, err);
   return internalServerError(err.message, err);
 }

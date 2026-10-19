@@ -58,6 +58,17 @@ export class EconomyConfigConflictError extends DomainError {
   }
 }
 
+export class EconomyCompetitionNotInCatalogError extends DomainError {
+  readonly domain = "admin";
+  constructor(slug: string) {
+    super(
+      "ECONOMY_COMPETITION_NOT_IN_CATALOG",
+      "Competition rates must use a parent slug from the competition catalog",
+      { slug },
+    );
+  }
+}
+
 export class TutorPayoutNotAvailableError extends DomainError {
   readonly domain = "admin";
   constructor(tutorId: string) {
@@ -80,6 +91,8 @@ export function mapAdminError(err: DomainError): ORPCError<string, undefined> {
     return badRequest(err.message, err);
   if (err instanceof EconomyConfigConflictError)
     return conflict(err.message, err);
+  if (err instanceof EconomyCompetitionNotInCatalogError)
+    return badRequest(err.message, err);
   if (err instanceof TutorPayoutNotAvailableError)
     return badRequest(err.message, err);
   return internalServerError(err.message, err);

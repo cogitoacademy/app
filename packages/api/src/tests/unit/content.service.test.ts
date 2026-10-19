@@ -36,7 +36,11 @@ describe("content service", () => {
             title: "English Competition",
             description: null,
             location: null,
-            categories: [],
+            categories: [
+              { id: "sanity-category", name: "Other", coreCategory: "other" },
+              { id: "sanity-mun", name: "MUN", coreCategory: " mun " },
+              null,
+            ],
             educationLevels: [],
             startDate: "2026-09-01T00:00:00.000Z",
             endDate: "2026-09-02T00:00:00.000Z",
@@ -46,12 +50,52 @@ describe("content service", () => {
             registrationLink: null,
             socialMediaLink: null,
           },
+          {
+            id: "competition-uncategorized",
+            title: "Uncategorized Competition",
+            description: null,
+            location: null,
+            categories: null,
+            educationLevels: [],
+            startDate: "2026-10-01T00:00:00.000Z",
+            endDate: "2026-10-02T00:00:00.000Z",
+            scale: null,
+            organizer: null,
+            registrationDeadline: null,
+            registrationLink: null,
+            socialMediaLink: null,
+          },
         ];
       },
     );
-    const service = createContentService({ client: { fetch } as any });
+    const resolveCompetitionPalettes = mock(
+      async (
+        references: readonly { id?: string | null; slug?: string | null }[],
+      ) => references.map(() => null),
+    );
+    const service = createContentService({
+      client: { fetch } as any,
+      competitionPalette: {
+        resolveCompetitionPalettes,
+        resolveCompetitionPalette: async () => null,
+      },
+    });
 
-    await expect(service.listCompetitions()).resolves.toHaveLength(1);
+    const competitions = await service.listCompetitions();
+    expect(competitions).toHaveLength(2);
+    expect(competitions[0]?.categories).toHaveLength(2);
+    expect(competitions[0]?.categories[1]?.coreCategory).toBe(" mun ");
+    expect(resolveCompetitionPalettes.mock.calls[0]?.[0]).toEqual([
+      { slug: "other" },
+      { slug: "competition-model-united-nations" },
+    ]);
+    expect(competitions[0]?.categories[0]?.parentColors).toEqual({
+      lightTextColor: "oklch(0.2036 0.0029 247.97)",
+      lightBackgroundColor: "oklch(0.9616 0.0011 247.83)",
+      darkTextColor: "oklch(0.977 0.0007 247.83)",
+      darkBackgroundColor: "oklch(0.2888 0.0039 264.5)",
+    });
+    expect(competitions[1]?.categories).toEqual([]);
     await expect(service.listStudentResources()).resolves.toHaveLength(1);
     await expect(service.getStudentResourceFile("resource-1")).resolves.toEqual(
       {

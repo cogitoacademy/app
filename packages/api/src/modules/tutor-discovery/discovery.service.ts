@@ -3,6 +3,8 @@ import type { DiscoveryRepo } from "./discovery.repo";
 import { TutorProfileNotFoundError } from "./discovery.errors";
 import type { EconomyParameters } from "../economy";
 import type { GroupSize, PricingPort } from "../pricing/pricing.service";
+import { V3_COMPETITIONS } from "../pricing/v3-economy.config";
+import type { V3ConfigRevision } from "../pricing/pricing.service";
 import {
   toNormalizedTutorSubjects,
   toSubjectCategoryGroup,
@@ -17,6 +19,7 @@ type SupportedModality = "online" | "offline";
 type PricesByModality = Partial<
   Record<SupportedModality, Record<string, number>>
 >;
+type PricesByCompetition = Record<string, PricesByModality>;
 
 export interface ProfileWithUser extends Omit<
   TutorProfileRow,
@@ -48,6 +51,8 @@ export interface ProfileProjection {
   offlineMaxClassSize: number;
   prices: Record<string, number> | null;
   pricesByModality: PricesByModality | null;
+  pricesByCompetition: PricesByCompetition | null;
+  pricingRevision: number | null;
   publishedAt: Date | null;
   user: { name: string | null; image: string | null } | null;
 }
@@ -84,6 +89,8 @@ export function buildProjection(profile: ProfileWithUser): ProfileProjection {
     offlineMaxClassSize,
     prices: limitPrices(profile.prices, preferredMaxClassSize),
     pricesByModality: null,
+    pricesByCompetition: null,
+    pricingRevision: null,
     publishedAt: profile.publishedAt,
     user: profile.user
       ? { name: profile.user.name, image: profile.user.image }
@@ -139,6 +146,93 @@ function buildEconomyPrices(
   };
 }
 
+function buildLegacyCompetitionPrices(
+  profile: ProfileWithUser,
+  projection: ProfileProjection,
+  pricing: PricingPort,
+  config: EconomyParameters,
+): ProfileProjection {
+  const legacySlugs = new Set<string>(V3_COMPETITIONS);
+  const pricesByCompetition: PricesByCompetition = {};
+  for (const subject of projection.subjects) {
+    const slug = subject.parent.slug;
+    if (!subject.isSelectable || !legacySlugs.has(slug)) continue;
+    const pricesByModality: PricesByModality = {};
+    for (const modality of getSupportedModalities(profile.modality)) {
+      const baseRateIdr = profile.baseRatesIdr?.[modality];
+      if (typeof baseRateIdr !== "number") continue;
+      const maxClassSize =
+        modality === "offline"
+          ? (profile.offlineMaxClassSize ?? 6)
+          : (profile.onlineMaxClassSize ?? 6);
+      const prices: Record<string, number> = {};
+      for (const size of [1, 2, 3, 4, 5, 6] as GroupSize[]) {
+        if (size > maxClassSize) break;
+        prices[String(size)] = pricing.computeEconomics(
+          modality,
+          baseRateIdr,
+          size,
+          config,
+        ).perStudent;
+      }
+      pricesByModality[modality] = prices;
+    }
+    pricesByCompetition[slug] = pricesByModality;
+  }
+
+  return {
+    ...projection,
+    // A tutor with catalog subjects must be priced against the selected
+    // subject's parent. Keep the unscoped legacy price only for uncategorized
+    // profiles that predate the catalog.
+    prices: null,
+    pricesByModality: null,
+    pricesByCompetition,
+  };
+}
+
+function buildV3CompetitionPrices(
+  profile: ProfileWithUser,
+  projection: ProfileProjection,
+  pricing: PricingPort,
+  active: V3ConfigRevision,
+): ProfileProjection {
+  const pricesByCompetition: PricesByCompetition = {};
+  for (const subject of projection.subjects) {
+    const slug = subject.parent.slug;
+    if (
+      !subject.isSelectable ||
+      !Object.hasOwn(active.values.competitionRates, slug)
+    )
+      continue;
+    const pricesByModality: PricesByModality = {};
+    for (const modality of getSupportedModalities(profile.modality)) {
+      const maxClassSize =
+        modality === "offline"
+          ? (profile.offlineMaxClassSize ?? 6)
+          : (profile.onlineMaxClassSize ?? 6);
+      const prices: Record<string, number> = {};
+      for (const size of [1, 2, 3, 4, 5, 6] as GroupSize[]) {
+        if (size > maxClassSize) break;
+        prices[String(size)] = pricing.calculateV3SessionPrice(
+          { competition: slug, modality, headcount: size },
+          active.values,
+        ).perStudentMarks;
+      }
+      pricesByModality[modality] = prices;
+    }
+    pricesByCompetition[slug] = pricesByModality;
+  }
+
+  return {
+    ...projection,
+    prices: null,
+    pricesByModality: null,
+    pricesByCompetition,
+    pricingRevision: active.version,
+  };
+}
+
 export type DiscoveryService = ReturnType<typeof createDiscoveryService>;
 
 export function createDiscoveryService(deps: {
@@ -149,25 +243,39 @@ export function createDiscoveryService(deps: {
 
   async function projectProfiles(profiles: ProfileWithUser[]) {
     const projections = profiles.map(buildProjection);
-    if (!pricing || !profiles.some((profile) => profile.baseRatesIdr)) {
-      return projections;
+    if (!pricing) return projections;
+    const active = await pricing.getActiveV3Config();
+    if (active) {
+      return profiles.map((profile, index) =>
+        buildV3CompetitionPrices(profile, projections[index]!, pricing, active),
+      );
     }
-
+    const legacyPriced = profiles.filter((profile) => profile.baseRatesIdr);
+    if (legacyPriced.length === 0) return projections;
     const config = await pricing.getEconomyConfig();
     return profiles.map((profile, index) =>
-      buildEconomyPrices(profile, projections[index]!, pricing, config),
+      profile.subjects?.length
+        ? buildLegacyCompetitionPrices(
+            profile,
+            projections[index]!,
+            pricing,
+            config,
+          )
+        : buildEconomyPrices(profile, projections[index]!, pricing, config),
     );
   }
 
   async function projectProfile(profile: ProfileWithUser) {
     const projection = buildProjection(profile);
-    if (!pricing || !profile.baseRatesIdr) return projection;
-    return buildEconomyPrices(
-      profile,
-      projection,
-      pricing,
-      await pricing.getEconomyConfig(),
-    );
+    if (!pricing) return projection;
+    const active = await pricing.getActiveV3Config();
+    if (active)
+      return buildV3CompetitionPrices(profile, projection, pricing, active);
+    if (!profile.baseRatesIdr) return projection;
+    const config = await pricing.getEconomyConfig();
+    return profile.subjects?.length
+      ? buildLegacyCompetitionPrices(profile, projection, pricing, config)
+      : buildEconomyPrices(profile, projection, pricing, config);
   }
 
   async function listPublished(opts?: {

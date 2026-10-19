@@ -465,25 +465,43 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
         toSessionStart(b.startDate, b.time, BOOKING_TIMEZONE).getTime(),
     );
   const selectedSlot = selectedSlots[0] ?? null;
-  const pricesForModality =
-    profile.pricesByModality?.[effectiveModality] ?? profile.prices;
-  const perSessionPrice = Number(
-    pricesForModality?.["1"] ?? DEFAULT_SOLO_PRICE,
-  );
+  const selectedCompetitionPrices = selectedSubject
+    ? profile.pricesByCompetition?.[selectedSubject.parent.slug]?.[
+        effectiveModality
+      ]
+    : undefined;
+  const hasCatalogSubjects = subjects.length > 0;
+  const hasCompetitionPricing =
+    profile.pricesByCompetition != null || profile.pricingRevision != null;
+  const pricesForModality = selectedSubject
+    ? selectedCompetitionPrices
+    : hasCatalogSubjects || hasCompetitionPricing
+      ? undefined
+      : (profile.pricesByModality?.[effectiveModality] ?? profile.prices);
+  const perSessionPrice =
+    selectedSubject || hasCatalogSubjects || hasCompetitionPricing
+      ? pricesForModality?.["1"]
+      : (pricesForModality?.["1"] ?? DEFAULT_SOLO_PRICE);
   const baseSessionPrice = isGroupBooking
-    ? Number(
-        pricesForModality?.[String(invitees.length + 1)] ?? perSessionPrice,
-      )
+    ? (pricesForModality?.[String(invitees.length + 1)] ?? perSessionPrice)
     : perSessionPrice;
-  const { displayPrice: price, requiredHold } = getBookingPriceSummary({
-    perStudentPrice: baseSessionPrice,
-    sessionCount: selectedSlots.length,
-    isGroupBooking,
-    groupSize: invitees.length + 1,
-    isGroupSeries: isGroupBooking && selectedSlots.length > 1,
-  });
+  const priceAvailable =
+    typeof baseSessionPrice === "number" &&
+    Number.isSafeInteger(baseSessionPrice) &&
+    baseSessionPrice > 0;
+  const priceSummary = priceAvailable
+    ? getBookingPriceSummary({
+        perStudentPrice: baseSessionPrice,
+        sessionCount: selectedSlots.length,
+        isGroupBooking,
+        groupSize: invitees.length + 1,
+        isGroupSeries: isGroupBooking && selectedSlots.length > 1,
+      })
+    : null;
+  const price = priceSummary?.displayPrice ?? null;
+  const requiredHold = priceSummary?.requiredHold ?? 0;
   const availableBalance = walletQuery.data?.availableBalance ?? 0;
-  const hasEnoughMarks = availableBalance >= requiredHold;
+  const hasEnoughMarks = priceAvailable && availableBalance >= requiredHold;
   const tutorName = profile.user?.name ?? "Cogito tutor";
   const subjectSummary = selectedSubject
     ? `${selectedSubject.parent.name} — ${selectedSubject.name}`
@@ -519,6 +537,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
     !selectedSlot ||
     hasInvalidStartTime ||
     createPending ||
+    !priceAvailable ||
     !sessionNotes.trim() ||
     (subjects.length > 0 && !effectiveSubjectId) ||
     invitees.length > maxInvitees;
@@ -1204,6 +1223,12 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
               />
               <BookingScheduleSummary selectedSlots={selectedSlots} />
               <Separator />
+              {selectedSubject && !priceAvailable ? (
+                <Text role="status" className="text-sm text-warning">
+                  Pricing is unavailable for this competition until a valid rate
+                  is active.
+                </Text>
+              ) : null}
               <SummaryRow
                 label={
                   selectedSlots.length > 1
@@ -1212,11 +1237,23 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                       ? "Price per student"
                       : "Session price"
                 }
-                value={<CogitoMarks value={price} size="3" />}
+                value={
+                  price === null ? (
+                    "Unavailable"
+                  ) : (
+                    <CogitoMarks value={price} size="3" />
+                  )
+                }
               />
               <SummaryRow
                 label="Reserved now"
-                value={<CogitoMarks value={requiredHold} size="3" />}
+                value={
+                  priceAvailable ? (
+                    <CogitoMarks value={requiredHold} size="3" />
+                  ) : (
+                    "—"
+                  )
+                }
               />
               <SummaryRow
                 label="Available balance"
@@ -1229,7 +1266,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                 }
                 icon={<IconWallet />}
               />
-              {!walletQuery.isPending && hasEnoughMarks ? (
+              {!walletQuery.isPending && priceAvailable && hasEnoughMarks ? (
                 <SummaryRow
                   label="Balance after reserve"
                   value={<CogitoMarks value={balanceAfterHold} size="3" />}
@@ -1247,7 +1284,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                   cover their share.
                 </Text>
               ) : null}
-              {!walletQuery.isPending && !hasEnoughMarks ? (
+              {!walletQuery.isPending && priceAvailable && !hasEnoughMarks ? (
                 <div className="rounded-lg border border-danger-border bg-danger/10 p-3">
                   <Text className="flex flex-wrap items-center gap-1 text-sm text-danger">
                     <span>You need</span>
@@ -1264,6 +1301,10 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
               {walletQuery.isPending ? (
                 <Button block size="md" disabled progress>
                   Checking balance…
+                </Button>
+              ) : !priceAvailable ? (
+                <Button block size="md" disabled>
+                  Pricing unavailable
                 </Button>
               ) : hasEnoughMarks ? (
                 <Button
@@ -1312,7 +1353,11 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
               {scheduleSummary}
             </Text>
             <Text className="font-semibold">
-              <CogitoMarks value={price} />
+              {price === null ? (
+                "Pricing unavailable"
+              ) : (
+                <CogitoMarks value={price} />
+              )}
             </Text>
           </div>
           <Button
@@ -1360,6 +1405,12 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
             />
             <BookingScheduleSummary selectedSlots={selectedSlots} />
             <Separator />
+            {selectedSubject && !priceAvailable ? (
+              <Text role="status" className="text-sm text-warning">
+                Pricing is unavailable for this competition until a valid rate
+                is active.
+              </Text>
+            ) : null}
             <SummaryRow
               label={
                 selectedSlots.length > 1
@@ -1368,11 +1419,15 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                     ? "Price per student"
                     : "Session price"
               }
-              value={<CogitoMarks value={price} />}
+              value={
+                price === null ? "Unavailable" : <CogitoMarks value={price} />
+              }
             />
             <SummaryRow
               label="Reserved now"
-              value={<CogitoMarks value={requiredHold} />}
+              value={
+                priceAvailable ? <CogitoMarks value={requiredHold} /> : "—"
+              }
             />
             <SummaryRow
               label="Available balance"
@@ -1385,7 +1440,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
               }
               icon={<IconWallet />}
             />
-            {!walletQuery.isPending && hasEnoughMarks ? (
+            {!walletQuery.isPending && priceAvailable && hasEnoughMarks ? (
               <SummaryRow
                 label="Balance after reserve"
                 value={<CogitoMarks value={balanceAfterHold} />}
@@ -1403,7 +1458,7 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
                 cover their share.
               </Text>
             ) : null}
-            {!walletQuery.isPending && !hasEnoughMarks ? (
+            {!walletQuery.isPending && priceAvailable && !hasEnoughMarks ? (
               <div className="rounded-lg border border-danger-border bg-danger/10 p-3">
                 <Text className="flex flex-wrap items-center gap-1 text-sm text-danger">
                   <span>You need</span>
@@ -1417,6 +1472,10 @@ export function CreateBookingPage({ tutorId }: { tutorId: string }) {
             {walletQuery.isPending ? (
               <Button block size="lg" disabled progress>
                 Checking balance…
+              </Button>
+            ) : !priceAvailable ? (
+              <Button block size="lg" disabled>
+                Pricing unavailable
               </Button>
             ) : hasEnoughMarks ? (
               <Button

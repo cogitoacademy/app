@@ -43,6 +43,45 @@ export type BookingSessionTopic = {
   subcategoryName: string;
 };
 
+export type LegacyBookingPriceSnapshot = {
+  engine?: undefined;
+  perStudent: number;
+  baseline: number;
+  tutorShare: number;
+  cogitoTake: number;
+  baselineCogitoTake: number;
+  baselineTutorShare: number;
+  extraTotal: number;
+  cogitoExtraTake: number;
+  tutorExtraShare: number;
+  economyVersion?: number;
+  markValueIdr?: number;
+  tutorBaseRateIdr?: number;
+  tutorIncrementIdr?: number;
+  tutorHonorariumIdr?: number;
+  cogitoBaseTakeIdr?: number;
+  cogitoIncrementIdr?: number;
+  cogitoTakeIdr?: number;
+  totalIdr?: number;
+  totalMarks?: number;
+  actualMarksPooled?: number;
+};
+
+export type V3BookingPriceSnapshot = {
+  engine: "v3";
+  v3Revision: number;
+  competition: string;
+  modality: "online" | "offline";
+  headcount: number;
+  perStudentMarks: number;
+  collectedMarks: number;
+  tutorHonorariumIdr: number;
+};
+
+export type BookingPriceSnapshot =
+  | LegacyBookingPriceSnapshot
+  | V3BookingPriceSnapshot;
+
 export const booking = pgTable(
   "booking",
   {
@@ -81,28 +120,7 @@ export const booking = pgTable(
     // for WIB countdown/display.
     timezone: text("timezone").notNull().default("Asia/Jakarta"),
     roomId: text("room_id"),
-    priceSnapshot: jsonb("price_snapshot").$type<{
-      perStudent: number;
-      baseline: number;
-      tutorShare: number;
-      cogitoTake: number;
-      baselineCogitoTake: number;
-      baselineTutorShare: number;
-      extraTotal: number;
-      cogitoExtraTake: number;
-      tutorExtraShare: number;
-      economyVersion?: number;
-      markValueIdr?: number;
-      tutorBaseRateIdr?: number;
-      tutorIncrementIdr?: number;
-      tutorHonorariumIdr?: number;
-      cogitoBaseTakeIdr?: number;
-      cogitoIncrementIdr?: number;
-      cogitoTakeIdr?: number;
-      totalIdr?: number;
-      totalMarks?: number;
-      actualMarksPooled?: number;
-    }>(),
+    priceSnapshot: jsonb("price_snapshot").$type<BookingPriceSnapshot>(),
     originalMarks: integer("original_marks").notNull(),
     holdAmount: integer("hold_amount").notNull().default(0),
     refundedAmount: integer("refunded_amount").notNull().default(0),
@@ -294,28 +312,7 @@ export const bookingSession = pgTable(
     completedAt: timestamp("completed_at", { withTimezone: true }),
     currentState: text("current_state").notNull().default("scheduled"),
     holdAmount: integer("hold_amount").notNull().default(0),
-    priceSnapshot: jsonb("price_snapshot").$type<{
-      perStudent: number;
-      baseline: number;
-      tutorShare: number;
-      cogitoTake: number;
-      baselineCogitoTake: number;
-      baselineTutorShare: number;
-      extraTotal: number;
-      cogitoExtraTake: number;
-      tutorExtraShare: number;
-      economyVersion?: number;
-      markValueIdr?: number;
-      tutorBaseRateIdr?: number;
-      tutorIncrementIdr?: number;
-      tutorHonorariumIdr?: number;
-      cogitoBaseTakeIdr?: number;
-      cogitoIncrementIdr?: number;
-      cogitoTakeIdr?: number;
-      totalIdr?: number;
-      totalMarks?: number;
-      actualMarksPooled?: number;
-    }>(),
+    priceSnapshot: jsonb("price_snapshot").$type<BookingPriceSnapshot>(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()

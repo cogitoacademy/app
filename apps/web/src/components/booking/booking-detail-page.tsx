@@ -75,6 +75,10 @@ import { useNow } from "@/hooks/use-now";
 import { InfoPreview } from "@/components/info-preview";
 import { getUserFacingError } from "@/lib/error-message";
 import {
+  competitionPaletteClassName,
+  getCompetitionPaletteStyle,
+} from "@/lib/competition-colors";
+import {
   canCancelBooking,
   formatBookingEventTitle,
   formatBookingDate,
@@ -458,7 +462,10 @@ export function BookingDetailPage({
         userId: participant.userId,
         name: participant.user?.name ?? "Participant",
       })),
-    perStudentMarks: booking.priceSnapshot?.perStudent,
+    perStudentMarks:
+      booking.priceSnapshot?.engine === "v3"
+        ? booking.priceSnapshot.perStudentMarks
+        : booking.priceSnapshot?.perStudent,
     activeProposalId: activeRescheduleProposal?.id,
     isRescheduleProposer: activeRescheduleProposal?.proposedBy === viewerId,
     viewerRescheduleDecision,
@@ -477,7 +484,10 @@ export function BookingDetailPage({
   const seriesSessionCount = getSeriesSessionCount(booking, seriesSessions);
   const perSessionHonorariumIdr =
     booking.priceSnapshot?.tutorHonorariumIdr ??
-    (booking.priceSnapshot?.tutorShare ?? 0) * LEGACY_TUTOR_PAYOUT_RATE_IDR;
+    (booking.priceSnapshot?.engine === "v3"
+      ? 0
+      : (booking.priceSnapshot?.tutorShare ?? 0)) *
+      LEGACY_TUTOR_PAYOUT_RATE_IDR;
   const completionFeedbacks = feedbackQuery.data ?? [];
   const sessionLabels: Record<string, string> = {};
   for (const s of seriesSessions ?? []) {
@@ -562,6 +572,22 @@ export function BookingDetailPage({
               </Text>
             </div>
             <Heading className="break-words text-2xl">{eventTitle}</Heading>
+            {booking.sessionTopic ? (
+              <Badge
+                variant="secondary"
+                className={
+                  booking.sessionTopic.parentColors
+                    ? competitionPaletteClassName
+                    : undefined
+                }
+                style={getCompetitionPaletteStyle(
+                  booking.sessionTopic.parentColors,
+                )}
+              >
+                {booking.sessionTopic.categoryName} ·{" "}
+                {booking.sessionTopic.subcategoryName}
+              </Badge>
+            ) : null}
             <Text className="mt-2 max-w-2xl text-muted">
               {lifecycleContext ??
                 getBookingStateDescription(booking.currentState)}
@@ -1129,7 +1155,11 @@ export function BookingDetailPage({
                         label="Per participant"
                         value={
                           <CogitoMarks
-                            value={booking.priceSnapshot.perStudent}
+                            value={
+                              booking.priceSnapshot.engine === "v3"
+                                ? booking.priceSnapshot.perStudentMarks
+                                : booking.priceSnapshot.perStudent
+                            }
                             size="4"
                           />
                         }

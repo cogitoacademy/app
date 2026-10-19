@@ -15,6 +15,8 @@ import {
   OptimisticLockError,
   InvalidDateRangeError,
 } from "../../modules/tutor/tutor.errors";
+import { InvalidTutorSubjectSelectionError } from "../../modules/tutor-subjects/subject-selection";
+import { DEFAULT_V3_ECONOMY_CONFIG } from "../../modules/pricing/v3-economy.config";
 
 function makeProfile(overrides: Record<string, unknown> = {}) {
   return {
@@ -62,8 +64,10 @@ function makeProfile(overrides: Record<string, unknown> = {}) {
           parentId: "mother-1",
           parent: {
             id: "mother-1",
+            parentId: null,
             slug: "olympiad",
             name: "Olympiad",
+            isActive: true,
           },
         },
       },
@@ -178,6 +182,44 @@ describe("Tutor Service", () => {
           },
         ),
       ).toThrow(InvalidTutorPricingError);
+    });
+
+    test("rejects changed legacy rates only while V3 pricing is active", () => {
+      const profile = makeProfile({
+        baseRatesIdr: { online: 175_000 },
+        prices: { "1": 50 },
+      });
+      expect(() =>
+        validateUpdateInput(
+          profile,
+          { baseRatesIdr: { online: 180_000 } },
+          idrPricingPort,
+          true,
+        ),
+      ).toThrow(InvalidTutorPricingError);
+      expect(() =>
+        validateUpdateInput(
+          profile,
+          { prices: { "1": 60 } },
+          mockPricingPort,
+          true,
+        ),
+      ).toThrow(InvalidTutorPricingError);
+      expect(() =>
+        validateUpdateInput(
+          profile,
+          { baseRatesIdr: { online: 175_000 } },
+          idrPricingPort,
+          true,
+        ),
+      ).not.toThrow();
+      expect(() =>
+        validateUpdateInput(
+          profile,
+          { baseRatesIdr: { online: 180_000 } },
+          idrPricingPort,
+        ),
+      ).not.toThrow();
     });
   });
 
@@ -355,6 +397,18 @@ describe("Tutor Service", () => {
         validateSubmitForReview(makeProfile(), failPricingPort),
       ).toThrow(InvalidTutorPricingError);
     });
+
+    test("does not require or validate legacy rates while V3 pricing is active", () => {
+      expect(() =>
+        validateSubmitForReview(
+          makeProfile({ baseRatesIdr: null, prices: null }),
+          failPricingPort,
+          undefined,
+          false,
+          true,
+        ),
+      ).not.toThrow();
+    });
   });
 
   describe("createTutorService", () => {
@@ -365,6 +419,7 @@ describe("Tutor Service", () => {
           getByUserId: mock(async () => mockProfile),
           listProfileHistory: mock(async () => []),
           updateProfileWithVersion: mock(async () => [mockProfile]),
+          replaceProfileSubjects: mock(async () => []),
           updateProfileImage: mock(async () => ({
             id: "u1",
             image: "https://example.com/profile-photo.jpg",
@@ -383,7 +438,16 @@ describe("Tutor Service", () => {
         auditPort: { record: mock(async () => {}) },
         db: {
           transaction: mock(async (fn: any) => {
-            const tx = { execute: mock(async () => {}) };
+            const tx = {
+              execute: mock(async () => {}),
+              query: {
+                subjectCategory: {
+                  findFirst: mock(async () => ({
+                    parent: { parentId: null, isActive: true },
+                  })),
+                },
+              },
+            };
             return fn(tx);
           }),
         },
@@ -410,6 +474,101 @@ describe("Tutor Service", () => {
       const service = createTutorService(deps as any);
       const result = await service.getMyProfile("u1");
       expect(result.id).toBe("tp1");
+      expect(result.v3FeeProjection).toBeNull();
+    });
+
+    test("getMyProfile projects active V3 fees for assigned parent competitions", async () => {
+      const profile = makeProfile();
+      profile.subjects[0].subject.parent.slug = "competition-olympiad";
+      const getActiveV3Config = mock(async () => ({
+        version: 4,
+        values: DEFAULT_V3_ECONOMY_CONFIG,
+      }));
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => profile),
+        },
+        pricingPort: { ...idrPricingPort, getActiveV3Config },
+      });
+      const service = createTutorService(deps as any);
+
+      const result = await service.getMyProfile("u1");
+
+      expect(result.v3FeeProjection).toEqual({
+        revision: 4,
+        competitions: [
+          {
+            slug: "competition-olympiad",
+            name: "Olympiad",
+            rates: [
+              { headcount: 1, online: 180_000, offline: 255_000 },
+              { headcount: 2, online: 210_000, offline: 305_000 },
+              { headcount: 3, online: 240_000, offline: 355_000 },
+              { headcount: 4, online: 270_000, offline: 405_000 },
+              { headcount: 5, online: 300_000, offline: 455_000 },
+              { headcount: 6, online: 330_000, offline: 505_000 },
+            ],
+          },
+        ],
+      });
+    });
+
+    test("active V3 pricing rejects changed legacy rates before persistence", async () => {
+      const profile = makeProfile({ baseRatesIdr: { online: 175_000 } });
+      const updateProfileWithVersion = mock(async () => [profile]);
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => profile),
+          updateProfileWithVersion,
+        },
+        pricingPort: {
+          ...idrPricingPort,
+          getActiveV3Config: mock(async () => ({
+            version: 4,
+            values: DEFAULT_V3_ECONOMY_CONFIG,
+          })),
+        },
+      });
+      const service = createTutorService(deps as any);
+
+      await expect(
+        service.updateMyProfile("u1", {
+          version: 1,
+          baseRatesIdr: { online: 180_000 },
+        }),
+      ).rejects.toThrow(InvalidTutorPricingError);
+      expect(updateProfileWithVersion).not.toHaveBeenCalled();
+    });
+
+    test("activation-null keeps legacy base-rate writes available", async () => {
+      const profile = makeProfile({ baseRatesIdr: { online: 175_000 } });
+      const updateProfileWithVersion = mock(async () => [profile]);
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => profile),
+          updateProfileWithVersion,
+        },
+        pricingPort: {
+          ...idrPricingPort,
+          getActiveV3Config: mock(async () => null),
+        },
+      });
+      const service = createTutorService(deps as any);
+
+      await service.updateMyProfile("u1", {
+        version: 1,
+        baseRatesIdr: { online: 180_000 },
+      });
+
+      expect(updateProfileWithVersion).toHaveBeenCalledWith(
+        expect.anything(),
+        "u1",
+        1,
+        expect.objectContaining({ baseRatesIdr: { online: 180_000 } }),
+      );
     });
 
     test("getMyProfileHistory returns audit rows for the tutor profile", async () => {
@@ -498,7 +657,7 @@ describe("Tutor Service", () => {
     test("propagates audit failure through the profile update transaction", async () => {
       const profile = makeProfile();
       const updatedProfile = makeProfile({ shortBio: "New bio" });
-      const tx = { id: "tx" };
+      const tx = { id: "tx", execute: mock(async () => {}) };
       let profileReadCount = 0;
       let rolledBack = false;
       const transaction = mock(async (fn: any) => {
@@ -838,7 +997,9 @@ describe("Tutor Service", () => {
         tutorRepo: {
           ...makeDeps().tutorRepo,
           getByUserId: mock(async () => profile),
-          listActiveChildSubjects: mock(async () => [{ id: "child-2" }]),
+          listActiveChildSubjects: mock(async () => [
+            { id: "child-2", parentId: "mother-1" },
+          ]),
           updateProfileWithVersion,
         },
       });
@@ -858,6 +1019,81 @@ describe("Tutor Service", () => {
           profileEditStatus: "pending_review",
         }),
       );
+    });
+
+    test("preserves an archived assignment when adding a currently selectable specialization", async () => {
+      const archivedSubject = {
+        ...makeProfile().subjects[0].subject,
+        id: "archived-child",
+        isActive: false,
+        parent: {
+          ...makeProfile().subjects[0].subject.parent,
+          isActive: false,
+        },
+      };
+      const profile = makeProfile({
+        subjects: [{ subjectId: "archived-child", subject: archivedSubject }],
+      });
+      const replaceProfileSubjects = mock(async () => []);
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => profile),
+          listActiveChildSubjects: mock(async () => [
+            { id: "child-2", parentId: "active-parent" },
+          ]),
+          replaceProfileSubjects,
+        },
+      });
+      const service = createTutorService(deps as any);
+
+      await service.updateMyProfile("u1", {
+        version: 1,
+        subjectIds: ["archived-child", "child-2"],
+      });
+
+      expect(replaceProfileSubjects).toHaveBeenCalledWith(
+        expect.anything(),
+        "tp1",
+        ["archived-child", "child-2"],
+      );
+    });
+
+    test("rejects a new specialization whose parent is archived", async () => {
+      const updateProfileWithVersion = mock(async () => [makeProfile()]);
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          listActiveChildSubjects: mock(async () => [
+            { id: "child-2", parentId: "archived-parent" },
+          ]),
+          updateProfileWithVersion,
+        },
+        db: {
+          transaction: mock(async (fn: any) =>
+            fn({
+              execute: mock(async () => {}),
+              query: {
+                subjectCategory: {
+                  findFirst: mock(async () => ({
+                    parent: { parentId: null, isActive: false },
+                  })),
+                },
+              },
+            }),
+          ),
+        },
+      });
+      const service = createTutorService(deps as any);
+
+      await expect(
+        service.updateMyProfile("u1", {
+          version: 1,
+          subjectIds: ["child-2"],
+        }),
+      ).rejects.toBeInstanceOf(InvalidTutorSubjectSelectionError);
+
+      expect(updateProfileWithVersion).not.toHaveBeenCalled();
     });
 
     test("published profile stores structured achievements as pending edits", async () => {
@@ -1031,7 +1267,9 @@ describe("Tutor Service", () => {
         tutorRepo: {
           ...makeDeps().tutorRepo,
           getByUserId: mock(async () => profile),
-          listActiveChildSubjects: mock(async () => [{ id: "child-1" }]),
+          listActiveChildSubjects: mock(async () => [
+            { id: "child-1", parentId: "mother-1" },
+          ]),
           updateProfileWithVersion,
         },
       });
@@ -1072,6 +1310,53 @@ describe("Tutor Service", () => {
       const service = createTutorService(deps as any);
       const result = await service.submitForReview("u1", {});
       expect(result.id).toBe("tp1");
+    });
+
+    test("submitForReview allows a tutor without legacy rates under active V3", async () => {
+      const profile = makeProfile({ baseRatesIdr: null, prices: null });
+      const updateStatus = mock(async () => profile);
+      const getActiveV3Config = mock(async () => ({
+        version: 4,
+        values: DEFAULT_V3_ECONOMY_CONFIG,
+      }));
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => profile),
+          updateStatus,
+        },
+        pricingPort: { ...idrPricingPort, getActiveV3Config },
+      });
+      const service = createTutorService(deps as any);
+
+      await expect(service.submitForReview("u1", {})).resolves.toMatchObject({
+        id: "tp1",
+      });
+
+      expect(getActiveV3Config).toHaveBeenCalledTimes(1);
+      expect(getActiveV3Config.mock.calls[0]?.[0]).toHaveProperty("execute");
+      expect(updateStatus).toHaveBeenCalledTimes(1);
+    });
+
+    test("submitForReview still requires legacy rates when activation is null", async () => {
+      const profile = makeProfile({ baseRatesIdr: null, prices: null });
+      const updateStatus = mock(async () => profile);
+      const getActiveV3Config = mock(async () => null);
+      const deps = makeDeps({
+        tutorRepo: {
+          ...makeDeps().tutorRepo,
+          getByUserId: mock(async () => profile),
+          updateStatus,
+        },
+        pricingPort: { ...idrPricingPort, getActiveV3Config },
+      });
+      const service = createTutorService(deps as any);
+
+      await expect(service.submitForReview("u1", {})).rejects.toThrow(
+        TutorProfileIncompleteError,
+      );
+      expect(getActiveV3Config).toHaveBeenCalledTimes(1);
+      expect(updateStatus).not.toHaveBeenCalled();
     });
 
     test("submitForReview audits the existing profile when status update returns no row", async () => {

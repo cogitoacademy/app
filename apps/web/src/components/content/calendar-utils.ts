@@ -10,7 +10,7 @@ import {
 } from "date-fns";
 
 import type { CalendarCompetition } from "./calendar-types";
-import { getCompetitionFieldClass } from "@/lib/competition-colors";
+import { competitionPaletteClassName } from "@/lib/competition-colors";
 
 export const EVENT_HEIGHT = 24;
 export const EVENT_GAP = 4;
@@ -41,12 +41,18 @@ export function getEducationLevelLabel(level: string) {
   return educationLevelLabels[level] ?? level;
 }
 
-export function getCategoryEventClass(coreCategory?: string) {
-  return getCompetitionFieldClass(coreCategory, "soft");
+export function getCategoryEventClass(
+  category?: CalendarCompetition["categories"][number],
+) {
+  if (category?.parentColors) return competitionPaletteClassName;
+  return "bg-accent/30 text-foreground border-border";
 }
 
-export function getCategoryBadgeClass(coreCategory?: string) {
-  return getCompetitionFieldClass(coreCategory, "solid");
+export function getCategoryBadgeClass(
+  category?: CalendarCompetition["categories"][number],
+) {
+  if (category?.parentColors) return competitionPaletteClassName;
+  return "bg-accent/30 text-foreground border-border";
 }
 
 export function getBorderRadiusClass(isFirstDay: boolean, isLastDay: boolean) {
@@ -149,21 +155,48 @@ export function formatCompetitionDates(event: CalendarCompetition) {
   return `${format(event.start, "d MMM yyyy")} – ${format(event.end, "d MMM yyyy")}`;
 }
 
-export const competitionTypeOptions = [
-  "mun",
-  "olimpiade",
-  "wsc",
-  "kti",
-  "debat",
-  "business",
-  "pidato",
-] as const;
+export type CompetitionTypeOption = {
+  value: string;
+  label: string;
+};
+
+export function getCompetitionTypeOptions(
+  events: CalendarCompetition[],
+): CompetitionTypeOption[] {
+  const labels = new Map<string, string>();
+
+  for (const event of events) {
+    for (const category of event.categories) {
+      if (!category.coreCategory) continue;
+      if (!labels.has(category.coreCategory)) {
+        labels.set(
+          category.coreCategory,
+          category.name.trim() || getCategoryLabel(category.coreCategory),
+        );
+      }
+    }
+  }
+
+  return [...labels].map(([value, label]) => ({ value, label }));
+}
+
+export function getSelectedCompetitionTypes(
+  options: CompetitionTypeOption[],
+  excludedTypes: ReadonlySet<string>,
+): ReadonlySet<string> {
+  return new Set(
+    options
+      .map(({ value }) => value)
+      .filter((value) => !excludedTypes.has(value)),
+  );
+}
 
 export function filterEventsByCompetitionType(
   events: CalendarCompetition[],
   selected: ReadonlySet<string>,
 ): CalendarCompetition[] {
-  if (selected.size >= competitionTypeOptions.length) return events;
+  const options = getCompetitionTypeOptions(events);
+  if (options.every(({ value }) => selected.has(value))) return events;
   return events.filter((event) =>
     event.categories.some((category) => selected.has(category.coreCategory)),
   );

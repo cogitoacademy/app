@@ -140,18 +140,26 @@ export async function getDashboardAnalytics(
   const bookingCount = sql<number>`count(*)::int`;
   const completedCount = sql<number>`count(*) FILTER (WHERE ${booking.currentState} = 'completed')::int`;
   const exceptionCount = sql<number>`count(*) FILTER (WHERE ${booking.currentState} IN ('declined', 'cancelled', 'late_cancelled', 'no_show', 'expired'))::int`;
-  const grossMarks = sql<number>`coalesce(sum(${booking.originalMarks}), 0)::int`;
-  const platformTakeMarks = sql<number>`coalesce(sum(coalesce(nullif(${booking.priceSnapshot}->>'cogitoTake', '')::numeric, 0)), 0)::int`;
-  const grossIdr = sql<number>`coalesce(sum(coalesce(
-    nullif(${booking.priceSnapshot}->>'totalIdr', '')::numeric,
-    ${booking.originalMarks} * nullif(${booking.priceSnapshot}->>'markValueIdr', '')::numeric,
-    0
-  )), 0)::bigint`;
-  const platformTakeIdr = sql<number>`coalesce(sum(coalesce(
-    nullif(${booking.priceSnapshot}->>'cogitoTakeIdr', '')::numeric,
-    nullif(${booking.priceSnapshot}->>'cogitoTake', '')::numeric * nullif(${booking.priceSnapshot}->>'markValueIdr', '')::numeric,
-    0
-  )), 0)::bigint`;
+  const legacySnapshot = sql`jsonb_typeof(${booking.priceSnapshot}) = 'object'
+    AND ${booking.priceSnapshot}->>'engine' IS NULL
+    AND jsonb_typeof(${booking.priceSnapshot}->'perStudent') = 'number'
+    AND jsonb_typeof(${booking.priceSnapshot}->'baseline') = 'number'
+    AND jsonb_typeof(${booking.priceSnapshot}->'tutorShare') = 'number'
+    AND jsonb_typeof(${booking.priceSnapshot}->'cogitoTake') = 'number'`;
+  const v3SnapshotCount = sql<number>`count(*) FILTER (
+    WHERE ${booking.priceSnapshot}->>'engine' = 'v3'
+  )::int`;
+  const legacySnapshotCount = sql<number>`count(*) FILTER (
+    WHERE ${legacySnapshot}
+  )::int`;
+  const otherSnapshotCount = sql<number>`count(*) FILTER (
+    WHERE ${booking.priceSnapshot} IS NOT NULL
+      AND ${booking.priceSnapshot}->>'engine' IS DISTINCT FROM 'v3'
+      AND NOT COALESCE((${legacySnapshot}), false)
+  )::int`;
+  const missingSnapshotCount = sql<number>`count(*) FILTER (
+    WHERE ${booking.priceSnapshot} IS NULL
+  )::int`;
   const studentCount = sql<number>`count(*) FILTER (WHERE ${user.role} = 'student')::int`;
   const tutorCount = sql<number>`count(*) FILTER (WHERE ${user.role} = 'tutor')::int`;
   const successfulPayment = sql`${paymentRecord.status} in ('PAID', 'SETTLED')`;
@@ -175,10 +183,10 @@ export async function getDashboardAnalytics(
         completed: completedCount,
         exceptions: exceptionCount,
         activeLearners: sql<number>`count(distinct ${booking.proposerId})::int`,
-        grossMarks,
-        platformTakeMarks,
-        grossIdr,
-        platformTakeIdr,
+        v3SnapshotCount,
+        legacySnapshotCount,
+        otherSnapshotCount,
+        missingSnapshotCount,
       })
       .from(booking)
       .where(periodFilter),
@@ -194,8 +202,6 @@ export async function getDashboardAnalytics(
         date: bookingDay,
         bookings: bookingCount,
         completed: completedCount,
-        grossMarks,
-        platformTakeMarks,
       })
       .from(booking)
       .where(periodFilter)
@@ -311,10 +317,10 @@ export async function getDashboardAnalytics(
       completed: 0,
       exceptions: 0,
       activeLearners: 0,
-      grossMarks: 0,
-      platformTakeMarks: 0,
-      grossIdr: 0,
-      platformTakeIdr: 0,
+      v3SnapshotCount: 0,
+      legacySnapshotCount: 0,
+      otherSnapshotCount: 0,
+      missingSnapshotCount: 0,
     },
     userSummary: userSummaryRows[0] ?? { newStudents: 0, newTutors: 0 },
     bookingTrend,

@@ -19,7 +19,10 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import { IconX } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import { CogitoMarks } from "@/components/cogito-marks";
-import { getCompetitionFieldClass } from "@/lib/competition-colors";
+import {
+  competitionPaletteClassName,
+  getCompetitionPaletteStyle,
+} from "@/lib/competition-colors";
 import { groupTutorSubjects, type TutorSubject } from "./subject-taxonomy";
 import { TutorPricingTable } from "./tutor-pricing-table";
 import {
@@ -73,6 +76,11 @@ type TutorDrawerProps = {
     pricesByModality?: Partial<
       Record<"online" | "offline", Record<string, number>>
     > | null;
+    pricesByCompetition?: Record<
+      string,
+      Partial<Record<"online" | "offline", Record<string, number>>>
+    > | null;
+    pricingRevision?: number | null;
     publishedAt: Date | null;
     user: { name: string | null; image: string | null } | null;
   } | null;
@@ -137,17 +145,29 @@ export function TutorDrawer({
   const selectedTutor = t;
   const tutorName = selectedTutor.user?.name ?? "Tutor";
 
+  const subjectGroups = groupTutorSubjects(selectedTutor.subjects);
   const { modalities: priceModalities, rows: priceRows } = getPricingTableData(
     selectedTutor.pricesByModality,
     selectedTutor.prices,
     selectedTutor.modality,
   );
-  const subjectGroups = groupTutorSubjects(selectedTutor.subjects);
+  const competitionPriceTables = subjectGroups.flatMap((group) => {
+    const parent = group.parent;
+    const prices = parent
+      ? selectedTutor.pricesByCompetition?.[parent.slug]
+      : undefined;
+    if (!parent || !prices) return [];
+    const table = getPricingTableData(prices, null, selectedTutor.modality);
+    return [{ slug: parent.slug, name: parent.name, ...table }];
+  });
+  const hasCompetitionPricing =
+    selectedTutor.pricesByCompetition != null ||
+    selectedTutor.pricingRevision != null;
   const subjectLabels = subjectGroups.flatMap((group) =>
     group.children.map((subject) => ({
       id: subject.id,
-      field: group.parent?.slug ?? subject.slug,
       label: subject.name,
+      parentColors: group.parent?.parentColors,
     })),
   );
   const heroSubjects = subjectLabels.slice(0, 3);
@@ -192,7 +212,8 @@ export function TutorDrawer({
                   key={subject.id}
                   variant="secondary"
                   size="md"
-                  className={`shrink-0 max-w-[45%] truncate whitespace-nowrap shadow-sm ${getCompetitionFieldClass(subject.field, "solid")}`}
+                  className={`shrink-0 max-w-[45%] truncate whitespace-nowrap shadow-sm ${subject.parentColors ? competitionPaletteClassName : ""}`}
+                  style={getCompetitionPaletteStyle(subject.parentColors)}
                 >
                   {subject.label}
                 </Badge>
@@ -244,29 +265,59 @@ export function TutorDrawer({
             </div>
           )}
 
-          {priceRows.length > 0 && (
+          {(priceRows.length > 0 ||
+            competitionPriceTables.length > 0 ||
+            hasCompetitionPricing) && (
             <div className="mt-5">
               <Heading size="sm" className="mb-2">
                 Pricing
               </Heading>
-              <Text className="mb-3 text-sm text-muted">
-                {selectedTutor.modality === "both"
-                  ? `Maximum class size: ${formatClassSize(selectedTutor.onlineMaxClassSize)} online · ${formatClassSize(selectedTutor.offlineMaxClassSize)} offline`
-                  : `Maximum class size: ${formatClassSize(
-                      selectedTutor.modality === "offline"
-                        ? selectedTutor.offlineMaxClassSize
-                        : selectedTutor.onlineMaxClassSize,
-                    )}`}
-              </Text>
-              <TutorPricingTable
-                modalities={priceModalities}
-                rows={priceRows}
-                columnLabels={{
-                  online: "Online",
-                  offline: "Offline",
-                }}
-                renderValue={(value) => <CogitoMarks size="3" value={value} />}
-              />
+              {competitionPriceTables.length > 0 ? (
+                <div className="flex flex-col gap-4">
+                  {competitionPriceTables.map((table) => (
+                    <section key={table.slug}>
+                      <Heading size="sm" level={4} className="mb-2">
+                        {table.name}
+                      </Heading>
+                      <TutorPricingTable
+                        modalities={table.modalities}
+                        rows={table.rows}
+                        columnLabels={{ online: "Online", offline: "Offline" }}
+                        renderValue={(value) => (
+                          <CogitoMarks size="3" value={value} />
+                        )}
+                      />
+                    </section>
+                  ))}
+                </div>
+              ) : hasCompetitionPricing ? (
+                <Text className="text-sm text-muted">
+                  Pricing is unavailable for the selected competition.
+                </Text>
+              ) : (
+                <>
+                  <Text className="mb-3 text-sm text-muted">
+                    {selectedTutor.modality === "both"
+                      ? `Maximum class size: ${formatClassSize(selectedTutor.onlineMaxClassSize)} online · ${formatClassSize(selectedTutor.offlineMaxClassSize)} offline`
+                      : `Maximum class size: ${formatClassSize(
+                          selectedTutor.modality === "offline"
+                            ? selectedTutor.offlineMaxClassSize
+                            : selectedTutor.onlineMaxClassSize,
+                        )}`}
+                  </Text>
+                  <TutorPricingTable
+                    modalities={priceModalities}
+                    rows={priceRows}
+                    columnLabels={{
+                      online: "Online",
+                      offline: "Offline",
+                    }}
+                    renderValue={(value) => (
+                      <CogitoMarks size="3" value={value} />
+                    )}
+                  />
+                </>
+              )}
             </div>
           )}
 

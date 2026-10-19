@@ -1,3 +1,5 @@
+import type { CompetitionPalette } from "@/lib/competition-colors";
+
 export type CalendarCompetition = {
   id: string;
   title: string;
@@ -10,6 +12,7 @@ export type CalendarCompetition = {
     id?: string;
     name: string;
     coreCategory: string;
+    parentColors?: CompetitionPalette | null;
   }>;
   educationLevels: string[];
   scale: string | null;

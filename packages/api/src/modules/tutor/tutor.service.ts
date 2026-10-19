@@ -1,6 +1,7 @@
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
 import { lockTutorForBooking } from "../../lib/locks";
+import { lockCompetitionCatalog } from "../competition-catalog/catalog-lock";
 import {
   ONBOARDING_STATUS,
   MODALITY,
@@ -10,6 +11,8 @@ import type { TutorRepo, UpdateProfileInput } from "./tutor.repo";
 import type { tutorProfile } from "@cogito-app/db/schema";
 import type { TutorAuditPort, TutorPricingPort } from "./index";
 import type { BookingPayoutPort } from "../booking";
+import { calculateV3SessionPrice } from "../pricing/v3-rate-card";
+import type { V3ConfigRevision } from "../pricing/pricing.service";
 import {
   TUTOR_TERMS_OF_SERVICE_VERSION,
   type SubmitForReviewInput,
@@ -19,7 +22,7 @@ import {
   toNormalizedTutorSubjects,
   type NormalizedTutorSubject,
   type TutorSubjectRelation,
-  validateTutorSubjectIds,
+  validateTutorSubjectIdsInCatalog,
 } from "../tutor-subjects/subject-selection";
 import {
   TutorProfileNotFoundError,
@@ -45,6 +48,20 @@ type TutorProfileWithSubjectRelations = TutorProfileRow & {
 type TutorProfileProjection = TutorProfileRow & {
   user?: { name: string; image: string | null } | null;
   subjects: NormalizedTutorSubject[];
+  v3FeeProjection: TutorV3FeeProjection | null;
+};
+
+export type TutorV3FeeProjection = {
+  revision: number;
+  competitions: Array<{
+    slug: string;
+    name: string;
+    rates: Array<{
+      headcount: 1 | 2 | 3 | 4 | 5 | 6;
+      online: number;
+      offline: number;
+    }>;
+  }>;
 };
 
 function getSubjectRelations(
@@ -55,11 +72,53 @@ function getSubjectRelations(
 
 function projectTutorProfile(
   profile: TutorProfileWithSubjectRelations,
+  activeV3Config: V3ConfigRevision | null,
 ): TutorProfileProjection {
+  const subjects = toNormalizedTutorSubjects(getSubjectRelations(profile));
+  const competitionNames = new Map(
+    subjects.map((subject) => [subject.parent.slug, subject.parent.name]),
+  );
+  const v3FeeProjection = activeV3Config
+    ? {
+        revision: activeV3Config.version,
+        competitions: [...competitionNames].flatMap(([slug, name]) => {
+          if (!Object.hasOwn(activeV3Config.values.competitionRates, slug)) {
+            return [];
+          }
+          return [
+            {
+              slug,
+              name,
+              rates: ([1, 2, 3, 4, 5, 6] as const).map((headcount) => ({
+                headcount,
+                online: calculateV3SessionPrice(
+                  { competition: slug, modality: "online", headcount },
+                  activeV3Config.values,
+                ).tutorFeeIdr,
+                offline: calculateV3SessionPrice(
+                  { competition: slug, modality: "offline", headcount },
+                  activeV3Config.values,
+                ).tutorFeeIdr,
+              })),
+            },
+          ];
+        }),
+      }
+    : null;
   return {
     ...profile,
-    subjects: toNormalizedTutorSubjects(getSubjectRelations(profile)),
+    subjects,
+    v3FeeProjection,
   };
+}
+
+function hasChangedValues(
+  current: Record<string, unknown> | null | undefined,
+  incoming: Record<string, unknown>,
+) {
+  return Object.entries(incoming).some(
+    ([key, value]) => current?.[key] !== value,
+  );
 }
 
 function utcDateKey(date: Date) {
@@ -79,12 +138,24 @@ export function validateUpdateInput(
   profile: TutorProfileRow | undefined,
   input: UpdateProfileInput,
   pricingPort: TutorPricingPort,
+  v3PricingActive = false,
 ): void {
   if (!profile) {
     throw new TutorProfileNotFoundError("unknown");
   }
 
-  if (input.prices) {
+  const hasLegacyRateChange =
+    (input.prices && hasChangedValues(profile.prices, input.prices)) ||
+    (input.baseRatesIdr &&
+      hasChangedValues(profile.baseRatesIdr, input.baseRatesIdr));
+  if (v3PricingActive && hasLegacyRateChange) {
+    throw new InvalidTutorPricingError(
+      profile.id,
+      "Tutor fee tables are read-only while V3 pricing is active",
+    );
+  }
+
+  if (input.prices && !v3PricingActive) {
     const modality = (input.modality ?? profile.modality ?? MODALITY.ONLINE) as
       | "online"
       | "offline"
@@ -94,7 +165,7 @@ export function validateUpdateInput(
       throw new InvalidTutorPricingError(profile.id, error);
     }
   }
-  if (input.baseRatesIdr) {
+  if (input.baseRatesIdr && !v3PricingActive) {
     const modality = (input.modality ?? profile.modality ?? MODALITY.ONLINE) as
       | "online"
       | "offline"
@@ -126,6 +197,7 @@ export function validateSubmitForReview(
   pricingPort: TutorPricingPort,
   profileImageUrl?: string | null,
   acceptTerms = false,
+  v3PricingActive = false,
 ): void {
   if (!profile) {
     throw new TutorProfileNotFoundError("unknown");
@@ -165,10 +237,14 @@ export function validateSubmitForReview(
       key: "bankTransferDisclaimerAccepted",
       value: profile.bankTransferDisclaimerAccepted,
     },
-    {
-      key: "baseRatesIdr",
-      value: profile.baseRatesIdr ?? profile.prices,
-    },
+    ...(!v3PricingActive
+      ? [
+          {
+            key: "baseRatesIdr",
+            value: profile.baseRatesIdr ?? profile.prices,
+          },
+        ]
+      : []),
   ];
   const missingFields = requiredFields
     .filter((f) => !f.value)
@@ -189,7 +265,7 @@ export function validateSubmitForReview(
     throw new TutorProfileIncompleteError(profile.id, ["subjectIds"]);
   }
 
-  if (profile.baseRatesIdr) {
+  if (!v3PricingActive && profile.baseRatesIdr) {
     const modality = (profile.modality ?? MODALITY.ONLINE) as
       | "online"
       | "offline"
@@ -203,7 +279,7 @@ export function validateSubmitForReview(
     if (error) {
       throw new InvalidTutorPricingError(profile.id, error);
     }
-  } else if (profile.prices) {
+  } else if (!v3PricingActive && profile.prices) {
     const modality = (profile.modality ?? MODALITY.ONLINE) as
       | "online"
       | "offline"
@@ -250,7 +326,8 @@ export function createTutorService(deps: {
   async function getMyProfile(userId: string) {
     const profile = await tutorRepo.getByUserId(db, userId);
     if (!profile) throw new TutorProfileNotFoundError(userId);
-    return projectTutorProfile(profile);
+    const activeV3Config = (await pricingPort.getActiveV3Config?.(db)) ?? null;
+    return projectTutorProfile(profile, activeV3Config);
   }
 
   async function getMyProfileHistory(userId: string) {
@@ -268,163 +345,180 @@ export function createTutorService(deps: {
    * @throws {OptimisticLockError} if the version does not match
    */
   async function updateMyProfile(userId: string, input: UpdateProfileInput) {
-    const profile = await tutorRepo.getByUserId(db, userId);
-    validateUpdateInput(profile, input, pricingPort);
-    const { version, displayName, subjectIds, profileImageUrl, ...data } =
-      input;
-    if (subjectIds !== undefined) {
-      const activeChildSubjects = await tutorRepo.listActiveChildSubjects(
-        db,
-        subjectIds,
+    return db.transaction(async (tx) => {
+      await lockCompetitionCatalog(tx);
+      const profile = await tutorRepo.getByUserId(tx, userId);
+      const activeV3Config =
+        (await pricingPort.getActiveV3Config?.(tx)) ?? null;
+      validateUpdateInput(profile, input, pricingPort, activeV3Config !== null);
+      const { version, displayName, subjectIds, profileImageUrl, ...data } =
+        input;
+      const isPublished =
+        profile!.onboardingStatus === ONBOARDING_STATUS.PUBLISHED;
+      const currentSubjectIds = getSubjectRelations(profile!).map(
+        (relation) => relation.subjectId,
       );
-      validateTutorSubjectIds(subjectIds, activeChildSubjects);
-    }
-    const isPublished =
-      profile!.onboardingStatus === ONBOARDING_STATUS.PUBLISHED;
-    const protectedFields = [
-      "achievementProofUrls",
-      "experienceProofUrls",
-      "education",
-      "affiliation",
-      "achievements",
-      "experiences",
-      "modality",
-      "prices",
-    ] as const;
-    const directData: Omit<
-      UpdateProfileInput,
-      "version" | "subjectIds" | "profileImageUrl"
-    > & {
-      pendingProfileChanges?: Record<string, unknown> | null;
-      profileEditStatus?: string;
-      profileEditAdminNote?: null;
-    } = { ...data };
-    const currentSubjectIds = getSubjectRelations(profile!).map(
-      (relation) => relation.subjectId,
-    );
-    const displayNameChanged =
-      displayName !== undefined && displayName !== profile!.user?.name;
-
-    if (isPublished) {
-      const pendingProfileChanges = {
-        ...(profile!.pendingProfileChanges as Record<string, unknown> | null),
-      };
-      // Tutor honoraria are effective immediately for future bookings. Older
-      // versions routed this field through profile review; promote any such
-      // leftover proposal to the live rate and remove it from the review
-      // payload so an admin cannot later overwrite a newer tutor-set fee.
-      const pendingBaseRatesIdr = pendingProfileChanges.baseRatesIdr;
-      const hadPendingBaseRatesIdr = Object.prototype.hasOwnProperty.call(
-        pendingProfileChanges,
-        "baseRatesIdr",
-      );
-      delete pendingProfileChanges.baseRatesIdr;
-      if (
-        data.baseRatesIdr === undefined &&
-        pendingBaseRatesIdr !== undefined
-      ) {
-        directData.baseRatesIdr = pendingBaseRatesIdr as Partial<{
-          online: number;
-          offline: number;
-        }>;
+      if (subjectIds !== undefined) {
+        const activeChildSubjects = await tutorRepo.listActiveChildSubjects(
+          tx,
+          subjectIds,
+        );
+        await validateTutorSubjectIdsInCatalog(
+          tx,
+          subjectIds,
+          activeChildSubjects,
+          currentSubjectIds,
+        );
       }
-      for (const field of protectedFields) {
-        if (data[field] !== undefined) {
-          if (JSON.stringify(data[field]) !== JSON.stringify(profile![field])) {
-            pendingProfileChanges[field] = data[field];
+      const protectedFields = [
+        "achievementProofUrls",
+        "experienceProofUrls",
+        "education",
+        "affiliation",
+        "achievements",
+        "experiences",
+        "modality",
+        "prices",
+      ] as const;
+      const directData: Omit<
+        UpdateProfileInput,
+        "version" | "subjectIds" | "profileImageUrl"
+      > & {
+        pendingProfileChanges?: Record<string, unknown> | null;
+        profileEditStatus?: string;
+        profileEditAdminNote?: null;
+      } = { ...data };
+      if (activeV3Config) {
+        delete directData.baseRatesIdr;
+        delete directData.prices;
+      }
+      const displayNameChanged =
+        displayName !== undefined && displayName !== profile!.user?.name;
+
+      if (isPublished) {
+        const pendingProfileChanges = {
+          ...(profile!.pendingProfileChanges as Record<string, unknown> | null),
+        };
+        // Tutor honoraria are effective immediately for future bookings. Older
+        // versions routed this field through profile review; promote any such
+        // leftover proposal to the live rate and remove it from the review
+        // payload so an admin cannot later overwrite a newer tutor-set fee.
+        const pendingBaseRatesIdr = pendingProfileChanges.baseRatesIdr;
+        const hadPendingBaseRatesIdr = Object.prototype.hasOwnProperty.call(
+          pendingProfileChanges,
+          "baseRatesIdr",
+        );
+        delete pendingProfileChanges.baseRatesIdr;
+        if (
+          !activeV3Config &&
+          data.baseRatesIdr === undefined &&
+          pendingBaseRatesIdr !== undefined
+        ) {
+          directData.baseRatesIdr = pendingBaseRatesIdr as Partial<{
+            online: number;
+            offline: number;
+          }>;
+        }
+        for (const field of protectedFields) {
+          if (data[field] !== undefined) {
+            if (
+              JSON.stringify(data[field]) !== JSON.stringify(profile![field])
+            ) {
+              pendingProfileChanges[field] = data[field];
+            } else {
+              delete pendingProfileChanges[field];
+            }
+          }
+          delete directData[field];
+        }
+        if (profileImageUrl !== undefined) {
+          const currentProfileImageUrl = (
+            profile as TutorProfileWithSubjectRelations
+          ).user?.image;
+          if (profileImageUrl === currentProfileImageUrl) {
+            delete pendingProfileChanges.profileImageUrl;
           } else {
-            delete pendingProfileChanges[field];
+            pendingProfileChanges.profileImageUrl = profileImageUrl;
           }
         }
-        delete directData[field];
-      }
-      if (profileImageUrl !== undefined) {
-        const currentProfileImageUrl = (
-          profile as TutorProfileWithSubjectRelations
-        ).user?.image;
-        if (profileImageUrl === currentProfileImageUrl) {
-          delete pendingProfileChanges.profileImageUrl;
-        } else {
-          pendingProfileChanges.profileImageUrl = profileImageUrl;
+        if (subjectIds !== undefined) {
+          if (haveSameSubjectIds(subjectIds, currentSubjectIds)) {
+            delete pendingProfileChanges.subjectIds;
+          } else {
+            pendingProfileChanges.subjectIds = [...subjectIds];
+          }
+        }
+        if (Object.keys(pendingProfileChanges).length > 0) {
+          directData.pendingProfileChanges = pendingProfileChanges;
+          directData.profileEditStatus = "pending_review";
+          directData.profileEditAdminNote = null;
+        } else if (
+          hadPendingBaseRatesIdr ||
+          Object.keys(profile!.pendingProfileChanges ?? {}).length > 0
+        ) {
+          directData.pendingProfileChanges = null;
+          directData.profileEditStatus = "none";
+          directData.profileEditAdminNote = null;
         }
       }
-      if (subjectIds !== undefined) {
-        if (haveSameSubjectIds(subjectIds, currentSubjectIds)) {
-          delete pendingProfileChanges.subjectIds;
-        } else {
-          pendingProfileChanges.subjectIds = [...subjectIds];
-        }
-      }
-      if (Object.keys(pendingProfileChanges).length > 0) {
-        directData.pendingProfileChanges = pendingProfileChanges;
-        directData.profileEditStatus = "pending_review";
-        directData.profileEditAdminNote = null;
-      } else if (
-        hadPendingBaseRatesIdr ||
-        Object.keys(profile!.pendingProfileChanges ?? {}).length > 0
-      ) {
-        directData.pendingProfileChanges = null;
-        directData.profileEditStatus = "none";
-        directData.profileEditAdminNote = null;
-      }
-    }
 
-    const persist = async (conn: DbOrTx) => {
-      const rows = await tutorRepo.updateProfileWithVersion(
-        conn,
-        userId,
-        version,
-        directData,
-      );
-      if (rows.length === 0)
-        throw new OptimisticLockError(profile!.id, version);
-
-      if (!isPublished && subjectIds !== undefined) {
-        await tutorRepo.replaceProfileSubjects(conn, profile!.id, subjectIds);
-      }
-      if (!isPublished && profileImageUrl !== undefined) {
-        await tutorRepo.updateProfileImage(conn, userId, profileImageUrl);
-      }
-      if (displayNameChanged) {
-        await tutorRepo.updateProfileDisplayName(conn, userId, displayName!);
-      }
-
-      const updated = await tutorRepo.getByUserId(conn, userId);
-      const beforeState = createTutorProfileAuditSnapshot(profile);
-      const afterState = createTutorProfileAuditSnapshot(updated ?? rows[0]!);
-      const changedFields = getChangedTutorProfileAuditFields(
-        beforeState,
-        afterState,
-      );
-      if (changedFields.length > 0) {
-        const hasPendingProposalChange = changedFields.some(
-          (field) =>
-            field === "pendingProfileChanges" ||
-            field.startsWith("pendingProfileChanges."),
+      const persist = async (conn: DbOrTx) => {
+        const rows = await tutorRepo.updateProfileWithVersion(
+          conn,
+          userId,
+          version,
+          directData,
         );
-        const isProposal = isPublished && hasPendingProposalChange;
-        await auditPort.record({
-          db: conn,
-          actorId: userId,
-          actorType: ACTOR_TYPE.TUTOR,
-          action: isProposal
-            ? "tutor_profile_changes_proposed"
-            : "tutor_profile_updated",
-          targetId: profile!.id,
-          targetType: "tutor_profile",
+        if (rows.length === 0)
+          throw new OptimisticLockError(profile!.id, version);
+
+        if (!isPublished && subjectIds !== undefined) {
+          await tutorRepo.replaceProfileSubjects(conn, profile!.id, subjectIds);
+        }
+        if (!isPublished && profileImageUrl !== undefined) {
+          await tutorRepo.updateProfileImage(conn, userId, profileImageUrl);
+        }
+        if (displayNameChanged) {
+          await tutorRepo.updateProfileDisplayName(conn, userId, displayName!);
+        }
+
+        const updated = await tutorRepo.getByUserId(conn, userId);
+        const beforeState = createTutorProfileAuditSnapshot(profile);
+        const afterState = createTutorProfileAuditSnapshot(updated ?? rows[0]!);
+        const changedFields = getChangedTutorProfileAuditFields(
           beforeState,
           afterState,
-          details: {
-            changedFields,
-            stage: isProposal ? "proposed" : "saved",
-            reviewStatus: isProposal ? "pending_review" : null,
-          },
-        });
-      }
-      return projectTutorProfile(updated ?? rows[0]!);
-    };
+        );
+        if (changedFields.length > 0) {
+          const hasPendingProposalChange = changedFields.some(
+            (field) =>
+              field === "pendingProfileChanges" ||
+              field.startsWith("pendingProfileChanges."),
+          );
+          const isProposal = isPublished && hasPendingProposalChange;
+          await auditPort.record({
+            db: conn,
+            actorId: userId,
+            actorType: ACTOR_TYPE.TUTOR,
+            action: isProposal
+              ? "tutor_profile_changes_proposed"
+              : "tutor_profile_updated",
+            targetId: profile!.id,
+            targetType: "tutor_profile",
+            beforeState,
+            afterState,
+            details: {
+              changedFields,
+              stage: isProposal ? "proposed" : "saved",
+              reviewStatus: isProposal ? "pending_review" : null,
+            },
+          });
+        }
+        return projectTutorProfile(updated ?? rows[0]!, activeV3Config);
+      };
 
-    return db.transaction(persist);
+      return persist(tx);
+    });
   }
 
   /**
@@ -439,17 +533,20 @@ export function createTutorService(deps: {
     userId: string,
     input: SubmitForReviewInput = {},
   ) {
-    const profile = await tutorRepo.getByUserId(db, userId);
-    const acceptsTermsForFirstSubmission =
-      input.acceptTerms === true && !profile?.termsOfServiceAcceptedAt;
-    validateSubmitForReview(
-      profile,
-      pricingPort,
-      (profile as TutorProfileWithSubjectRelations | undefined)?.user?.image,
-      acceptsTermsForFirstSubmission,
-    );
-
     return db.transaction(async (tx) => {
+      const profile = await tutorRepo.getByUserId(tx, userId);
+      const activeV3Config =
+        (await pricingPort.getActiveV3Config?.(tx)) ?? null;
+      const acceptsTermsForFirstSubmission =
+        input.acceptTerms === true && !profile?.termsOfServiceAcceptedAt;
+      validateSubmitForReview(
+        profile,
+        pricingPort,
+        (profile as TutorProfileWithSubjectRelations | undefined)?.user?.image,
+        acceptsTermsForFirstSubmission,
+        activeV3Config !== null,
+      );
+
       const row = await tutorRepo.updateStatus(
         tx,
         userId,

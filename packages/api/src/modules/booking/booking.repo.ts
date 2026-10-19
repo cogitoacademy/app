@@ -34,6 +34,7 @@ import {
   tutorPayout,
   type booking as bookingTable,
   type BookingSessionTopic,
+  type BookingPriceSnapshot,
 } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
@@ -255,6 +256,31 @@ async function findTutorSubjectTopic(
     return topics.find((topic) => topic.subcategoryId === subjectId) ?? null;
   }
   return topics.length === 1 ? topics[0]! : null;
+}
+
+/** Distinguishes legacy uncategorized tutors from archived catalog tracks. */
+async function getTutorSubjectAssignmentState(conn: DbOrTx, tutorId: string) {
+  const profile = await conn.query.tutorProfile.findFirst({
+    where: eq(tutorProfile.userId, tutorId),
+    columns: { id: true },
+    with: {
+      subjects: {
+        with: { subject: { with: { parent: true } } },
+      },
+    },
+  });
+  const subjects = profile?.subjects ?? [];
+  return {
+    hasAssignments: subjects.length > 0,
+    hasActiveAssignments: subjects.some(({ subject }) =>
+      Boolean(
+        subject?.isActive &&
+        subject.parentId &&
+        subject.parent?.isActive &&
+        subject.parent.parentId === null,
+      ),
+    ),
+  };
 }
 
 /**
@@ -516,18 +542,7 @@ async function updateBookingPriceSnapshot(
   conn: DbOrTx,
   bookingId: string,
   values: {
-    priceSnapshot: {
-      perStudent: number;
-      baseline: number;
-      tutorShare: number;
-      cogitoTake: number;
-
-      baselineCogitoTake: number;
-      baselineTutorShare: number;
-      extraTotal: number;
-      cogitoExtraTake: number;
-      tutorExtraShare: number;
-    };
+    priceSnapshot: BookingPriceSnapshot;
     holdAmount: number;
   },
 ) {
@@ -697,17 +712,7 @@ async function insertBookingSession(
     scheduledEndAt: Date;
     currentState: string;
     holdAmount: number;
-    priceSnapshot: {
-      perStudent: number;
-      baseline: number;
-      tutorShare: number;
-      cogitoTake: number;
-      baselineCogitoTake: number;
-      baselineTutorShare: number;
-      extraTotal: number;
-      cogitoExtraTake: number;
-      tutorExtraShare: number;
-    };
+    priceSnapshot: BookingPriceSnapshot;
   },
 ) {
   await conn.insert(bookingSession).values(values);
@@ -729,6 +734,22 @@ export async function listSessionsBySeriesId(
     .from(bookingSession)
     .where(eq(bookingSession.seriesBookingId, seriesBookingId))
     .orderBy(bookingSession.scheduledStartAt);
+}
+
+async function updateScheduledSeriesPriceSnapshot(
+  conn: DbOrTx,
+  seriesBookingId: string,
+  values: { priceSnapshot: BookingPriceSnapshot; holdAmount: number },
+) {
+  await conn
+    .update(bookingSession)
+    .set(values)
+    .where(
+      and(
+        eq(bookingSession.seriesBookingId, seriesBookingId),
+        eq(bookingSession.currentState, BOOKING_STATE.SCHEDULED),
+      ),
+    );
 }
 
 async function findSessionById(conn: DbOrTx, sessionId: string) {
@@ -1506,6 +1527,7 @@ export function createBookingRepo(db: DbType) {
     countBookingsForAccess,
     findTutorProfile,
     findTutorSubjectTopic,
+    getTutorSubjectAssignmentState,
     findAvailabilitySlot,
     findAvailabilityWindowContaining,
     listActiveTutorAvailability,
@@ -1538,6 +1560,7 @@ export function createBookingRepo(db: DbType) {
     listCompletionFeedbackByBooking,
     findCompletionFeedback,
     listSessionsBySeriesId,
+    updateScheduledSeriesPriceSnapshot,
     updateBookingPriceSnapshot,
     updateBookingSchedule,
     findBookingsExpiringByDeadline,

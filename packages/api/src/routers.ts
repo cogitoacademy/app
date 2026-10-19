@@ -6,6 +6,7 @@ import { createAdminRouter } from "./modules/admin/admin.router";
 import { createAdminTutorRouter } from "./modules/admin-tutor/admin-tutor.router";
 import { createAdminMarkPackageRouter } from "./modules/admin-mark-package/admin-mark-package.router";
 import { createAdminKnowledgeBankRouter } from "./modules/admin-knowledge-bank/admin-knowledge-bank.router";
+import { createCompetitionCatalogRouter } from "./modules/competition-catalog/competition-catalog.router";
 import { createTutorRouter } from "./modules/tutor/tutor.router";
 import { createDiscoveryRouter } from "./modules/tutor-discovery/discovery.router";
 import { createInviteRouter } from "./modules/invite/invite.router";
@@ -24,10 +25,15 @@ import { createSupportRouter } from "./modules/support/support.router";
 import { createUploadRouter } from "./modules/upload/upload.router";
 import { createContentRouter } from "./modules/content/content.router";
 import { createContactRouter } from "./modules/contact/contact.router";
+import { createPublicContentRouter } from "./modules/public-content/public-content.router";
+import { createFaqRouter } from "./modules/faq";
 import { handlers } from "./services";
 
 const authRouter = createAuthRouter(handlers.auth);
-const adminRouter = createAdminRouter(handlers.admin);
+const adminRouter = {
+  ...createAdminRouter(handlers.admin),
+  ...createCompetitionCatalogRouter(handlers.competitionCatalog),
+};
 const adminTutorRouter = createAdminTutorRouter(handlers.adminTutor);
 const adminMarkPackageRouter = createAdminMarkPackageRouter(
   handlers.adminMarkPackage,
@@ -51,6 +57,11 @@ const supportRouter = createSupportRouter(handlers.support);
 const uploadRouter = createUploadRouter(handlers.upload);
 const contentRouter = createContentRouter(handlers.content);
 const contactRouter = createContactRouter(handlers.contact);
+const faqRouter = createFaqRouter(handlers.faq);
+const publicContentRouter = {
+  ...createPublicContentRouter(handlers.publicContent),
+  ...faqRouter.publicContent,
+};
 
 export const appRouter = {
   healthCheck: publicProcedure
@@ -69,6 +80,7 @@ export const appRouter = {
   adminTutor: adminTutorRouter,
   adminMarkPackage: adminMarkPackageRouter,
   adminKnowledgeBank: adminKnowledgeBankRouter,
+  adminFaq: faqRouter.adminFaq,
   tutor: tutorRouter,
   tutors: discoveryRouter,
   invite: inviteRouter,
@@ -84,6 +96,7 @@ export const appRouter = {
   support: supportRouter,
   upload: uploadRouter,
   content: contentRouter,
+  publicContent: publicContentRouter,
   contact: contactRouter,
 };
 

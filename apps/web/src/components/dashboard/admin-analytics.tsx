@@ -39,7 +39,6 @@ import {
 } from "@tabler/icons-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
-import { CogitoMarks } from "@/components/cogito-marks";
 import Loader from "@/components/loader";
 import {
   Area,
@@ -211,7 +210,6 @@ export function AdminAnalytics() {
   const analytics = useQuery(
     orpc.admin.getDashboardAnalytics.queryOptions({ input: selection }),
   );
-  const economy = useQuery(orpc.admin.getEconomySettings.queryOptions());
   const selectedPeriod =
     "period" in selection
       ? PERIOD_OPTIONS.find((option) => option.value === selection.period)
@@ -330,7 +328,6 @@ export function AdminAnalytics() {
         <AnalyticsContent
           data={analytics.data}
           periodDescription={periodDescription}
-          fallbackMarkValueIdr={economy.data?.markValueIdr}
         />
       )}
     </section>
@@ -340,11 +337,9 @@ export function AdminAnalytics() {
 function AnalyticsContent({
   data,
   periodDescription,
-  fallbackMarkValueIdr,
 }: {
   data: DashboardAnalytics;
   periodDescription: string;
-  fallbackMarkValueIdr?: number;
 }) {
   const businessSummary = getBusinessSummary(data);
   const stateData = STATE_ORDER.map((state) => {
@@ -355,6 +350,7 @@ function AnalyticsContent({
   }).filter((row) => row.count > 0);
   const hasBookingTrend = data.summary.bookings > 0;
   const hasUserTrend = data.summary.newStudents + data.summary.newTutors > 0;
+  const pricingSnapshots = data.summary.pricingSnapshotBreakdown;
   const totalModalityBookings = data.modalityBreakdown.reduce(
     (total, row) => total + row.count,
     0,
@@ -363,21 +359,6 @@ function AnalyticsContent({
     1,
     ...data.categoryBreakdown.map((row) => row.bookings),
   );
-  const lockedGrossIdr = Number(data.summary.grossIdr);
-  const lockedPlatformTakeIdr = Number(data.summary.platformTakeIdr);
-  const usesCurrentRateFallback =
-    !Number.isFinite(lockedGrossIdr) || !Number.isFinite(lockedPlatformTakeIdr);
-  const grossIdr = Number.isFinite(lockedGrossIdr)
-    ? lockedGrossIdr
-    : fallbackMarkValueIdr
-      ? data.summary.grossMarks * fallbackMarkValueIdr
-      : undefined;
-  const platformTakeIdr = Number.isFinite(lockedPlatformTakeIdr)
-    ? lockedPlatformTakeIdr
-    : fallbackMarkValueIdr
-      ? data.summary.platformTakeMarks * fallbackMarkValueIdr
-      : undefined;
-
   return (
     <>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -397,26 +378,16 @@ function AnalyticsContent({
         />
         <AnalyticsMetric
           icon={<IconChartHistogram />}
-          label="Booked value (locked at booking)"
-          value={formatIdr(grossIdr)}
+          label="V3 bookings"
+          value={
+            pricingSnapshots
+              ? numberFormatter.format(pricingSnapshots.v3)
+              : "Unavailable"
+          }
           helper={
-            <div className="space-y-1">
-              <div className="flex flex-wrap items-center gap-x-1">
-                Equivalent to
-                <CogitoMarks
-                  value={numberFormatter.format(data.summary.grossMarks)}
-                  size="3"
-                />
-              </div>
-              <div>
-                Platform share: {formatIdr(platformTakeIdr)} (
-                <CogitoMarks
-                  value={numberFormatter.format(data.summary.platformTakeMarks)}
-                  size="3"
-                />
-                )
-              </div>
-            </div>
+            pricingSnapshots
+              ? `${numberFormatter.format(pricingSnapshots.legacy)} legacy · ${numberFormatter.format(pricingSnapshots.other)} other · ${numberFormatter.format(pricingSnapshots.missing)} missing`
+              : "Pricing snapshot counts are not available from this API version."
           }
           tone="info-subtle"
         />
@@ -875,10 +846,10 @@ function AnalyticsContent({
       </div>
 
       <Text className="mt-3 text-xs text-dimmed">
-        {usesCurrentRateFallback
-          ? "IDR estimates use the active Marks rate because this API response predates locked IDR totals. "
-          : "Booked value and platform share use IDR amounts locked when each booking was created. Later price changes do not alter these figures. "}
-        This is an operational booking value, not cash revenue received.
+        Snapshot counts use booking creation date and include all booking
+        states. Booking-money totals are unavailable until their Marks, session,
+        and participant basis is defined. Net top-up revenue below uses paid or
+        settled payments less recorded refunds.
       </Text>
     </>
   );

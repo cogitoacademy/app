@@ -24,6 +24,11 @@ import { Separator } from "@cogito-app/ui/components/selia/separator";
 import { Text } from "@cogito-app/ui/components/selia/text";
 
 import { cn } from "@cogito-app/ui/lib/utils";
+import {
+  competitionPaletteClassName,
+  getCompetitionPaletteStyle,
+  type CompetitionPalette,
+} from "@/lib/competition-colors";
 import { getTotalHonorariumIdr } from "./booking-pricing";
 
 import {
@@ -65,6 +70,8 @@ export type BookingCardData = {
   sessionTopic?: {
     categorySlug: string;
     categoryName: string;
+    subcategoryName?: string;
+    parentColors?: CompetitionPalette;
   } | null;
   participants?: Array<{
     userId: string;
@@ -152,6 +159,25 @@ export function BookingListCard({
             {title}
           </Text>
           <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+            {booking.sessionTopic ? (
+              <Badge
+                variant="secondary"
+                size="sm"
+                className={
+                  booking.sessionTopic.parentColors
+                    ? competitionPaletteClassName
+                    : undefined
+                }
+                style={getCompetitionPaletteStyle(
+                  booking.sessionTopic.parentColors,
+                )}
+              >
+                {booking.sessionTopic.categoryName}
+                {booking.sessionTopic.subcategoryName
+                  ? ` · ${booking.sessionTopic.subcategoryName}`
+                  : ""}
+              </Badge>
+            ) : null}
             <AvatarStack people={people} />
             {showFinancialInfo ? (
               <>

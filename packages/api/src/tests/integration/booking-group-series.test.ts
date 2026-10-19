@@ -9,7 +9,9 @@ import {
   tutorInvite,
   tutorProfile,
   availabilitySlot,
+  type BookingPriceSnapshot,
 } from "@cogito-app/db/schema";
+import { createBookingRepo } from "../../modules/booking/booking.repo";
 
 import {
   createTestContext,
@@ -413,6 +415,71 @@ describe("Booking group series flow (FR-20)", () => {
     expect(body).toMatch(/schedule/i);
     expect(body).toContain("/bookings/");
     expect(inviteNotifs[0]!.severity).toBe("action");
+  });
+
+  test("scheduled series sessions accept updated price snapshots in the repository", async () => {
+    const sessionsBefore = await db
+      .select()
+      .from(bookingSession)
+      .where(eq(bookingSession.seriesBookingId, bookingId));
+    expect(sessionsBefore.length).toBe(3);
+
+    const replacementSnapshot: BookingPriceSnapshot = {
+      engine: "v3",
+      v3Revision: 7,
+      competition: "mathematics",
+      modality: "online",
+      headcount: 2,
+      perStudentMarks: 27,
+      collectedMarks: 54,
+      tutorHonorariumIdr: 1000,
+    };
+    const skippedSession = sessionsBefore[0]!;
+
+    try {
+      await db
+        .update(bookingSession)
+        .set({ currentState: "completed" })
+        .where(eq(bookingSession.id, skippedSession.id));
+
+      await createBookingRepo(db).updateScheduledSeriesPriceSnapshot(
+        db,
+        bookingId,
+        { priceSnapshot: replacementSnapshot, holdAmount: 27 },
+      );
+
+      const sessionsAfter = await db
+        .select()
+        .from(bookingSession)
+        .where(eq(bookingSession.seriesBookingId, bookingId));
+      const scheduledSessions = sessionsAfter.filter(
+        (session) => session.currentState === "scheduled",
+      );
+      const skippedAfter = sessionsAfter.find(
+        (session) => session.id === skippedSession.id,
+      );
+
+      expect(scheduledSessions).toHaveLength(2);
+      for (const session of scheduledSessions) {
+        expect(session.priceSnapshot).toEqual(replacementSnapshot);
+        expect(session.holdAmount).toBe(27);
+      }
+      expect(skippedAfter?.priceSnapshot).toEqual(skippedSession.priceSnapshot);
+      expect(skippedAfter?.holdAmount).toBe(skippedSession.holdAmount);
+    } finally {
+      await Promise.all(
+        sessionsBefore.map((session) =>
+          db
+            .update(bookingSession)
+            .set({
+              currentState: session.currentState,
+              priceSnapshot: session.priceSnapshot,
+              holdAmount: session.holdAmount,
+            })
+            .where(eq(bookingSession.id, session.id)),
+        ),
+      );
+    }
   });
 
   test("invitee confirms the full-series package (hold is the whole package)", async () => {

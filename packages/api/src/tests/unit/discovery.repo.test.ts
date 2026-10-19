@@ -17,6 +17,22 @@ function makeConn(
   } as any;
 }
 
+function renderSql(chunk: unknown): string {
+  if (typeof chunk === "string") return chunk;
+  if (Array.isArray(chunk)) return chunk.map(renderSql).join("");
+  if (typeof chunk !== "object" || chunk === null) return "";
+  const value = chunk as {
+    queryChunks?: unknown[];
+    value?: unknown;
+    name?: string;
+  };
+  if (Array.isArray(value.value)) return value.value.map(renderSql).join("");
+  if (value.value !== undefined) return String(value.value);
+  if (value.name !== undefined) return value.name;
+  if (value.queryChunks) return value.queryChunks.map(renderSql).join("");
+  return "";
+}
+
 describe("DiscoveryRepo", () => {
   describe("listPublished", () => {
     test("returns profiles with no filters", async () => {
@@ -64,6 +80,13 @@ describe("DiscoveryRepo", () => {
       expect(findMany).toHaveBeenCalledTimes(1);
       const callArg = findMany.mock.calls[0]![0];
       expect(callArg.where).toBeDefined();
+      const sqlText = renderSql(callArg.where).replace(/\s+/g, " ");
+      expect(sqlText).toContain(
+        '"subjectCategoryParentFilter"."is_active" = true',
+      );
+      expect(sqlText).toContain(
+        '"subjectCategoryParentFilter"."parent_id" is null',
+      );
     });
 
     test("filters by subject ids", async () => {
@@ -82,6 +105,13 @@ describe("DiscoveryRepo", () => {
       expect(findMany).toHaveBeenCalledTimes(1);
       const callArg = findMany.mock.calls[0]![0];
       expect(callArg.where).toBeDefined();
+      const sqlText = renderSql(callArg.where).replace(/\s+/g, " ");
+      expect(sqlText).toContain(
+        '"subjectCategoryParentFilter"."is_active" = true',
+      );
+      expect(sqlText).toContain(
+        '"subjectCategoryParentFilter"."parent_id" is null',
+      );
     });
 
     test("filters by multiple categories and subjects", async () => {

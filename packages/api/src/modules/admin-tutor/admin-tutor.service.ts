@@ -32,9 +32,11 @@ import {
 } from "./admin-tutor.types";
 import type { AdminTutorAuditPort } from "./index";
 import type { EmailPort } from "../email/email.service";
+import type { tutorProfileSubject } from "@cogito-app/db/schema";
 import { escapeHtml } from "../../lib/sanitize";
 import { log } from "../../lib/logger";
-import { validateTutorSubjectIds } from "../tutor-subjects/subject-selection";
+import { lockCompetitionCatalog } from "../competition-catalog/catalog-lock";
+import { validateTutorSubjectIdsInCatalog } from "../tutor-subjects/subject-selection";
 import {
   createTutorProfileAuditSnapshot,
   getChangedTutorProfileAuditFields,
@@ -145,6 +147,7 @@ export interface TutorProfileSnapshot {
   publishedAt: Date | null;
   pendingProfileChanges?: Record<string, unknown> | null;
   profileEditStatus?: string;
+  subjects?: Array<Pick<typeof tutorProfileSubject.$inferSelect, "subjectId">>;
 }
 
 export interface ReviewUpdates {
@@ -468,6 +471,7 @@ export function createAdminTutorService(deps: {
     input: ReviewTutorProfileInput,
   ): Promise<TutorProfileRow> {
     return db.transaction(async (tx) => {
+      await lockCompetitionCatalog(tx);
       const profile = await adminTutorRepo.getTutorProfileById(
         tx,
         input.tutorProfileId,
@@ -520,7 +524,15 @@ export function createAdminTutorService(deps: {
           pendingSubjectIds = [...rawSubjectIds];
           const activeChildSubjects =
             await adminTutorRepo.listActiveChildSubjects(tx, pendingSubjectIds);
-          validateTutorSubjectIds(pendingSubjectIds, activeChildSubjects);
+          const currentSubjectIds = (existing.subjects ?? []).map(
+            (relation) => relation.subjectId,
+          );
+          await validateTutorSubjectIdsInCatalog(
+            tx,
+            pendingSubjectIds,
+            activeChildSubjects,
+            currentSubjectIds,
+          );
           delete pendingProfileChanges.subjectIds;
         }
         updates = {

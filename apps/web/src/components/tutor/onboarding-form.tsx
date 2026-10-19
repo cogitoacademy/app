@@ -73,6 +73,10 @@ import { ProfilePhotoPreview } from "@/components/profile/profile-photo-preview"
 import { orpc } from "@/utils/orpc";
 import { TutorPricingFields } from "./tutor-pricing-fields";
 import {
+  getTutorSubjectIdsForSave,
+  requiresActiveTutorSubjectSelection,
+} from "./onboarding-subjects";
+import {
   TutorAchievementsDisplay,
   TutorAchievementsEditor,
   type TutorAchievement,
@@ -125,6 +129,18 @@ interface OnboardingFormProps {
     achievements: TutorAchievement[] | null;
     experiences: TutorExperience[] | null;
     subjects?: TutorSubject[] | null;
+    v3FeeProjection: {
+      revision: number;
+      competitions: Array<{
+        slug: string;
+        name: string;
+        rates: Array<{
+          headcount: 1 | 2 | 3 | 4 | 5 | 6;
+          online: number;
+          offline: number;
+        }>;
+      }>;
+    } | null;
     modality: string | null;
     baseRatesIdr: Partial<{ online: number; offline: number }> | null;
     onlineMaxClassSize: number;
@@ -157,12 +173,6 @@ interface OnboardingFormProps {
     profileEditAdminNote: string | null;
     version: number;
   };
-}
-
-function haveSameSubjectIds(left: readonly string[], right: readonly string[]) {
-  if (left.length !== right.length) return false;
-  const rightSet = new Set(right);
-  return left.every((subjectId) => rightSet.has(subjectId));
 }
 
 function haveSameStructuredValue(left: unknown, right: unknown) {
@@ -657,12 +667,12 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     payload.education = education;
     payload.achievements = achievements;
     payload.experiences = experiences;
-    if (
-      form.subjectIds.length > 0 &&
-      !haveSameSubjectIds(form.subjectIds, initialSubjectIds)
-    ) {
-      payload.subjectIds = form.subjectIds;
-    }
+    const subjectIds = getTutorSubjectIdsForSave(
+      form.subjectIds,
+      initialSubjectIds,
+      [...legacySubjectIds],
+    );
+    if (subjectIds) payload.subjectIds = subjectIds;
     if (form.modality) payload.modality = form.modality;
     if (bankName) payload.bankName = bankName;
     if (bankAccountNumber) payload.bankAccountNumber = bankAccountNumber;
@@ -676,7 +686,11 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       form.bankTransferDisclaimerAccepted;
     payload.onlineMaxClassSize = form.maxClassSize.online;
     payload.offlineMaxClassSize = form.maxClassSize.offline;
-    if (form.baseRatesIdr && Object.keys(form.baseRatesIdr).length > 0) {
+    if (
+      !profile.v3FeeProjection &&
+      form.baseRatesIdr &&
+      Object.keys(form.baseRatesIdr).length > 0
+    ) {
       const cleanBaseRates = Object.fromEntries(
         Object.entries(form.baseRatesIdr).filter(([, value]) => value > 0),
       );
@@ -827,12 +841,21 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
         "subjects",
         `Select no more than ${MAX_TUTOR_SUBJECTS} specializations.`,
       );
-    } else if (requireComplete && form.subjectIds.length === 0) {
+    } else if (
+      requireComplete &&
+      requiresActiveTutorSubjectSelection({
+        isPublished: profile.onboardingStatus === "published",
+        selectedSubjectIds: form.subjectIds,
+        initialSubjectIds,
+        preservedArchivedSubjectIds: [...legacySubjectIds],
+      })
+    ) {
       addError("subjects", "Select at least one specialization.");
     }
 
-    const ratesToCheck =
-      form.modality === "both"
+    const ratesToCheck = profile.v3FeeProjection
+      ? ([] as const)
+      : form.modality === "both"
         ? (["online", "offline"] as const)
         : form.modality === "online" || form.modality === "offline"
           ? ([form.modality] as const)
@@ -1581,6 +1604,7 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                     <TutorPricingFields
                       modality={form.modality}
                       baseRatesIdr={form.baseRatesIdr}
+                      v3FeeProjection={profile.v3FeeProjection}
                       maxClassSize={form.maxClassSize}
                       onChange={(baseRatesIdr) => {
                         setForm((current) => ({ ...current, baseRatesIdr }));

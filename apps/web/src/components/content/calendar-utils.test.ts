@@ -1,16 +1,24 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  competitionTypeOptions,
   filterEventsByCompetitionType,
   getCategoryLabel,
+  getCategoryBadgeClass,
+  getCategoryEventClass,
   getAgendaEventsForPeriod,
+  getCompetitionTypeOptions,
+  getSelectedCompetitionTypes,
   getWeekEventLanes,
   sortDayEvents,
 } from "./calendar-utils";
 import type { CalendarCompetition } from "./calendar-types";
+import { competitionPaletteClassName } from "@/lib/competition-colors";
 
-function makeEvent(id: string, coreCategories: string[]): CalendarCompetition {
+function makeEvent(
+  id: string,
+  coreCategories: string[],
+  categoryNames = coreCategories,
+): CalendarCompetition {
   return {
     id,
     title: id,
@@ -18,8 +26,8 @@ function makeEvent(id: string, coreCategories: string[]): CalendarCompetition {
     start: new Date("2026-10-01T09:00:00+07:00"),
     end: new Date("2026-10-01T10:30:00+07:00"),
     location: null,
-    categories: coreCategories.map((coreCategory) => ({
-      name: coreCategory,
+    categories: coreCategories.map((coreCategory, index) => ({
+      name: categoryNames[index] ?? "",
       coreCategory,
     })),
     educationLevels: [],
@@ -31,30 +39,100 @@ function makeEvent(id: string, coreCategories: string[]): CalendarCompetition {
   };
 }
 
-const ALL = new Set(competitionTypeOptions);
+describe("getCompetitionTypeOptions", () => {
+  test("uses English category names for new slugs", () => {
+    expect(
+      getCompetitionTypeOptions([
+        makeEvent("new", ["robotics"], ["Robotics & AI"]),
+      ]),
+    ).toEqual([{ value: "robotics", label: "Robotics & AI" }]);
+  });
 
-describe("competitionTypeOptions", () => {
-  test("exposes the fixed 7 types with resolving labels", () => {
-    expect([...competitionTypeOptions]).toEqual([
-      "mun",
-      "olimpiade",
-      "wsc",
-      "kti",
-      "debat",
-      "business",
-      "pidato",
-    ]);
+  test("keeps every legacy label as a fallback when category names are missing", () => {
+    const fallbacks = [
+      ["mun", "Model United Nations"],
+      ["olimpiade", "Olympiad"],
+      ["wsc", "World Scholar's Cup"],
+      ["kti", "Research & Essay"],
+      ["debat", "Debate"],
+      ["business", "Business Plan"],
+      ["pidato", "Speech"],
+    ] as const;
+
+    expect(
+      getCompetitionTypeOptions([
+        ...fallbacks.map(([slug]) => makeEvent(slug, [slug], [""])),
+        makeEvent("unresolved", [""], ["Unresolved"]),
+      ]),
+    ).toEqual(fallbacks.map(([value, label]) => ({ value, label })));
     expect(getCategoryLabel("mun")).toBe("Model United Nations");
-    for (const value of competitionTypeOptions) {
-      expect(getCategoryLabel(value)).not.toBe(value);
-    }
+  });
+
+  test("defaults new options on, preserves exclusions, and resets to current options", () => {
+    const existingEvents = [
+      makeEvent("debate", ["debat"]),
+      makeEvent("mun", ["mun"]),
+    ] as const;
+    const refreshedEvents = [
+      ...existingEvents,
+      makeEvent("robotics", ["robotics"], ["Robotics & AI"]),
+    ];
+    const excludedTypes = new Set(["mun"]);
+    const options = getCompetitionTypeOptions(refreshedEvents);
+
+    expect([...getSelectedCompetitionTypes(options, excludedTypes)]).toEqual([
+      "debat",
+      "robotics",
+    ]);
+    expect([...getSelectedCompetitionTypes(options, new Set())]).toEqual([
+      "debat",
+      "mun",
+      "robotics",
+    ]);
+  });
+});
+
+describe("competition category colors", () => {
+  const palette = {
+    lightTextColor: "oklch(0.2 0.02 250)",
+    lightBackgroundColor: "oklch(0.96 0.03 250)",
+    darkTextColor: "oklch(0.92 0.02 250)",
+    darkBackgroundColor: "oklch(0.25 0.04 250)",
+  };
+
+  test("uses catalog palettes for both calendar events and detail badges", () => {
+    const category = {
+      id: "catalog-category",
+      name: "Current label",
+      coreCategory: "unknown-slug",
+      parentColors: palette,
+    };
+    expect(getCategoryEventClass(category)).toBe(competitionPaletteClassName);
+    expect(getCategoryBadgeClass(category)).toBe(competitionPaletteClassName);
+  });
+
+  test("uses neutral colors for unresolved catalog rows", () => {
+    const category = {
+      id: "catalog-category",
+      name: "Current label",
+      coreCategory: "mun",
+    };
+    expect(getCategoryEventClass(category)).toContain("bg-accent/30");
+    expect(getCategoryBadgeClass(category)).toContain("bg-accent/30");
   });
 });
 
 describe("filterEventsByCompetitionType", () => {
   test("returns all events when every type is selected", () => {
-    const events = [makeEvent("a", ["mun"]), makeEvent("b", ["debat"])];
-    expect(filterEventsByCompetitionType(events, ALL)).toBe(events);
+    const events = [
+      makeEvent("a", ["mun"]),
+      makeEvent("b", ["debat"]),
+      makeEvent("c", []),
+      makeEvent("d", [""], ["Unresolved"]),
+    ];
+    expect(
+      filterEventsByCompetitionType(events, new Set(["mun", "debat"])),
+    ).toBe(events);
   });
 
   test("keeps events matching any selected type", () => {
@@ -68,7 +146,11 @@ describe("filterEventsByCompetitionType", () => {
   });
 
   test("hides events with no categories under a partial selection", () => {
-    const events = [makeEvent("a", []), makeEvent("b", ["mun"])];
+    const events = [
+      makeEvent("a", []),
+      makeEvent("b", ["mun"]),
+      makeEvent("c", ["wsc"]),
+    ];
     const result = filterEventsByCompetitionType(events, new Set(["mun"]));
     expect(result.map((event) => event.id)).toEqual(["b"]);
   });
@@ -82,6 +164,19 @@ describe("filterEventsByCompetitionType", () => {
   test("empty selection matches nothing", () => {
     const events = [makeEvent("a", ["mun"])];
     expect(filterEventsByCompetitionType(events, new Set())).toEqual([]);
+  });
+
+  test("filters newly configured slugs by their parent category key", () => {
+    const events = [
+      makeEvent("legacy", ["mun"], ["Model United Nations"]),
+      makeEvent("new", ["robotics"], ["Robotics & AI"]),
+    ];
+
+    expect(
+      filterEventsByCompetitionType(events, new Set(["robotics"])).map(
+        (event) => event.id,
+      ),
+    ).toEqual(["new"]);
   });
 });
 

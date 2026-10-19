@@ -1,6 +1,139 @@
 # Cogito API Reference
 
-Last updated: 2026-10-02
+## Competition catalog CRUD — working branch (2026-10-18)
+
+T00A / REQ-COMP-01..07 implementation is in progress; verification is recorded in
+TASKS. Admin-only procedure keys below use `/rpc/admin/<key>` and the standard
+`{"json": <input>}` envelope. Existing discovery subject reads remain public.
+
+| Procedure key                                                       | Input / behavior                                                                                                                                           |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `listCompetitionCatalog`                                            | `{query?,includeArchived?}`; searchable entries, default includes inactive                                                                                 |
+| `getCompetitionCatalogEntry`                                        | `{id}`; entry, parent and children                                                                                                                         |
+| `previewCompetitionCatalogImpact`                                   | `{id}`; entry, child count and reference counts; mutation rechecks                                                                                         |
+| `createCompetitionParent`                                           | `{slug,name,nameId?,description?,descriptionId?,sortOrder?,lightTextColor,lightBackgroundColor,darkTextColor,darkBackgroundColor,reason}`; inactive parent |
+| `createCompetitionSpecialization`                                   | `{parentId,slug,name,nameId?,description?,descriptionId?,sortOrder?,reason}`; child of a root only; palette fields rejected                                |
+| `updateCompetitionCatalogEntry`                                     | `{id,expectedVersion,reason,...editableFields}`; labels/descriptions/order, never slug/level                                                               |
+| `moveCompetitionSpecialization`                                     | `{id,parentId,expectedVersion,reason}`; unused child only                                                                                                  |
+| `archiveCompetitionCatalogEntry` / `restoreCompetitionCatalogEntry` | `{id,expectedVersion,reason}`; lifecycle with impact response; restore requires parent/rate readiness                                                      |
+| `deleteCompetitionCatalogEntry`                                     | `{id,expectedVersion,reason}`; unused entry only, root must have no children                                                                               |
+
+`name`/`description` are English; `nameId`/`descriptionId` are optional Indonesian.
+S05 palette contract (integration in progress): parent creation additionally
+requires `lightTextColor`, `lightBackgroundColor`, `darkTextColor` and
+`darkBackgroundColor`, all validated normalized opaque numeric `oklch(L C H)`.
+Parent updates can patch individual colors; omitted values remain unchanged.
+Child inputs reject palette fields and reads inherit a `parentColors` object.
+These safe color values can be projected to published content/current labels;
+they do not change financial snapshots or expose private catalog references.
+Reason is mandatory for writes. Missing entries return NOT_FOUND; stale versions,
+duplicate slug, referenced delete/move and unavailable restore return CONFLICT.
+Unknown fields are rejected; supplied slug/hierarchy edits cannot bypass the
+dedicated operations. New roots remain draft until dynamic pricing integration;
+the current readiness check recognizes existing slug-keyed configured rates.
+These routes do not activate customer V3 pricing. PostgreSQL integration checks
+verify the shared transaction lock serializes assignment against delete and
+booking `sessionTopic` creation against archive in either order. A booking that
+commits first is counted in archive impact and keeps its stored category and
+specialization IDs/slugs; an archive that commits first makes the queued booking
+fail with `BOOKING_NOT_EDITABLE`. A stale concurrent edit returns `CONFLICT`
+after the first edit increments the row version. Exact local evidence and the
+remaining T00A release gates are tracked in TASKS. A focused Chromium browser
+journey also verifies the archive/restore and move UI against these procedures;
+the RPC keys, input envelopes and response contract are unchanged.
+
+## V3 quoted top-ups (2026-10-18)
+
+Authenticated RPCs use `{"json": <input>}` and the standard JSON response envelope.
+
+| Path                                   | Input                                | Result                                                                                                                      |
+| -------------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| `/rpc/payment/getTopUpCatalog`         | None                                 | `active`, revision or null, packages (code/label/Marks/IDR), surcharge and 900-second quote TTL                             |
+| `/rpc/payment/createTopUpQuote`        | `{requestKey:UUID,marks:1..1000000}` | Owned quote ID, pinned revision, requested Marks/custom IDR, exact package or null, recommended package or null, ISO expiry |
+| `/rpc/payment/createPurchaseFromQuote` | `{quoteId:UUID,choice:"package"      | "custom"                                                                                                                    | "recommended"}` | Payment ID/reference/URL/status/recoveryRequired plus pinned quote choice and purchase label |
+
+Same student/request key replays the original offer; different Marks conflict.
+Amounts beyond PostgreSQL integer capacity fail BAD_REQUEST before persistence.
+The first payment requires an unexpired offer. Existing payment retries survive
+offer expiry but cannot switch choice. Foreign/missing offers are NOT_FOUND;
+expired/changed-choice/inactive offers return CONFLICT. Test-provider purchase
+restrictions also apply to quoted checkout. No activation endpoint is exposed.
+`getPurchase` additionally returns nullable quoteId/quoteChoice/purchaseLabel and
+providerIntentState. Existing `createPurchase` keeps its legacy path while V3 is
+inactive; active V3 requires quoted checkout for new sales.
+
+V3 booking creation requires a server-resolvable supported competition topic.
+Unresolvable/unsupported topics fail BAD_REQUEST; unavailable historical V3
+revision fails CONFLICT before wallet writes. Active V3 group-series creation
+prices at target headcount and pins that revision. When invitations resolve to a
+partial group, repricing uses the booking's pinned revision at confirmed
+headcount, updates each survivor's remaining scheduled-session hold and the
+booking/scheduled-session snapshots before reconfirmation. With no active V3
+pointer, legacy group-series pricing remains in force; target-size-one solo
+series is unchanged. Historical untagged snapshots remain readable.
+
+## V3 completion-feedback validation (2026-10-18)
+
+Existing `/rpc/booking/completeSession` keeps its bookingId/sessionId/feedback
+shape. Each of discussion/strengths/improvements must contain nonempty normalized
+text with at most 600 Unicode code points in total, including one LF between
+nonempty bullet lines. Normalize CRLF/CR, remove UI `• ` prefixes, trim edges
+and discard empty lines before counting. An emoji outside the BMP counts as one
+code point, not two UTF-16 units. Invalid submissions fail before settlement.
+Direct service overlength raises domain `REPORT_TOO_LONG`, mapped to BAD_REQUEST;
+missing/empty fields retain the existing completion-feedback-required error.
+Technical request guards cap each raw string at 10000 UTF-16 units and each
+raw field array at 600 entries. They are not a per-bullet business allowance.
+Historical report responses remain readable without applying new write limits.
+
+## V3 draft economy settings (2026-10-18)
+
+Admin-only RPCs, with the standard `json` request envelope:
+
+| Runtime path                          | Input                             | Output                                                                                                                                                                                                                           |
+| ------------------------------------- | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/rpc/admin/getV3EconomySettings`     | None                              | Latest `{version,values,status:"draft",createdAt,createdBy,reason,competitions}`; `competitions` lists every catalog parent with `{id,slug,name,isActive,rateConfigured,rate}`; virtual defaults at revision 0 before first save |
+| `/rpc/admin/previewV3EconomySettings` | `{values,exactMarks?}`            | `{status:"draft",sessions,topUp:quoteOrNull}`; one row per configured parent × modality × headcount 1–6; no writes                                                                                                               |
+| `/rpc/admin/saveV3EconomySettings`    | `{expectedVersion,values,reason}` | New immutable draft revision; stale version returns `CONFLICT`                                                                                                                                                                   |
+
+`values` contains packages (`code,marks,priceIdr`), exactSurchargeIdr,
+competitionRates (a map from parent competition slug to `soloMarks/soloFeeIdr`),
+onlineAdditionalMarks/onlineAdditionalFeeIdr, offlineBaseAdditionalMarks,
+offlineAdditionalMarks/offlineBaseAdditionalFeeIdr/offlineAdditionalFeeIdr.
+Packages require unique codes, ascending Marks/prices and decreasing unit rates.
+All seven canonical legacy parent rates are required; any additional key must
+match an existing catalog parent. Missing additional rates remain blank in the
+editor and are omitted from a saved revision until both values are entered.
+Specializations inherit their parent's rate and cannot own a separate rate.
+Unknown or child slugs fail validation. Group fees must fit the supported IDR
+bound. Reason is trimmed, required, max 2000 characters. Exact preview input is
+1–1,000,000 Marks. Anonymous/student/tutor access is denied; malformed payloads
+fail validation. Migration 0054 is required.
+
+Catalog, Economy editor and booking/discovery APIs use stable parent slugs, so
+new competition types do not require a code enum. A parent without a saved rate
+is not priced. The draft rate revision does not activate customer pricing: with
+the activation pointer unset, the seven legacy paths remain compatible and new
+parent slugs are rejected instead of falling back to tutor base rates. Only an
+explicitly active revision prices new bookings/discovery; existing V3 booking
+snapshots continue to resolve their pinned immutable revision.
+
+Pricing exports `calculateV3SessionPrice` and `calculateV3TopUpPrice`, accepting
+an optional validated configuration. Session output separates total, rounded
+per-student/collected Marks and tutor fee IDR. Top-up output preserves requested
+Marks, amount IDR, exact package code and advisory recommendation. These are
+calculations, not payable quotes. Customer booking and discovery pricing now
+read the active revision when the nullable activation pointer is set; the
+pointer remains unset in this work, so no live customer price changed. Apart
+from the admin draft RPCs above, SPEC's V3 API inventory remains proposed.
+
+## SnapCN video tooling (2026-10-18)
+
+`apps/video` is local Remotion authoring/render tooling. It adds no HTTP/RPC
+endpoint, authentication rule, request/response contract, or backend dependency.
+Its `CogitoIntro` composition is registered at 1280×720, 30 fps, 90 frames.
+
+Last updated: 2026-10-18
 
 ## Student dashboard balance CTA fit (2026-10-02)
 
@@ -513,7 +646,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Admin
 - **Input:** either `{ period?: "7d" | "30d" | "90d" }` (default `"30d"`) or `{ dateFrom: "YYYY-MM-DD", dateTo: "YYYY-MM-DD" }`; custom dates are inclusive WIB days, cannot be combined with `period`, are capped at 366 days, and reject impossible calendar dates
 - **Output:** `{ period, periodStart, periodEnd, summary, businessSummary, bookingTrend, userTrend, stateBreakdown, modalityBreakdown, categoryBreakdown }`
-- **Description:** Returns aggregate data used by admin Business insights. Selected-range metrics use WIB calendar boundaries. `businessSummary.signups`, `grossRevenueIdr`, `refundedIdr`, and `netRevenueIdr` follow the selected range; successful payment `updatedAt` is the available settlement-time proxy. Total accounts, student/tutor totals, current Marks ownership, and lifetime paid conversion are snapshots independent of the selected range. MAU counts unique accounts with auth-session activity in the latest rolling 30 days. Inactive users are accounts older than 30 days without such activity. Churn compares users active 31-60 days ago against those absent in the latest 30 days, so it is session-based operational churn rather than product-event retention. `summary.activeLearners` remains a distinct booking-proposer count. Locked booking-value fields represent operational booking value, not payment revenue. `stateBreakdown` is the live all-bookings state mix; modality/category breakdowns use the selected range; missing trend days are zero-filled.
+- **Description:** Returns aggregate data used by admin Business insights. Selected-range metrics use WIB calendar boundaries; booking counts use booking creation time and include every booking state. `summary.pricingSnapshotBreakdown` is `{ v3, legacy, other, missing }` and counts parent booking records, not sessions or financial value. `v3` uses the `engine: "v3"` tag; `legacy` requires an untagged object with numeric `perStudent`, `baseline`, `tutorShare`, and `cogitoTake`; `other` covers unknown engine tags and non-null snapshots that do not match the known legacy shape; `missing` is SQL `NULL`. Booking-derived Marks, IDR, and platform-share totals are omitted until their booking, participant, session, and date basis is defined. Top-up revenue remains based on successful payment and refund records: `businessSummary.signups`, `grossRevenueIdr`, `refundedIdr`, and `netRevenueIdr` follow the selected range, with successful payment `updatedAt` as the available settlement-time proxy. Total accounts, student/tutor totals, current Marks ownership, and lifetime paid conversion are snapshots independent of the selected range. MAU counts unique accounts with auth-session activity in the latest rolling 30 days. Inactive users are accounts older than 30 days without such activity. Churn compares users active 31-60 days ago against those absent in the latest 30 days, so it is session-based operational churn rather than product-event retention. `summary.activeLearners` remains a distinct booking-proposer count. `stateBreakdown` is the live all-bookings state mix; modality/category breakdowns use the selected range; missing trend days are zero-filled.
 
 ### `admin.listUsers`
 
@@ -765,8 +898,8 @@ All routes are admin-only. Package `code` is the stable business key used by
 
 - **Auth:** Tutor
 - **Input:** None
-- **Output:** `{ profile }`
-- **Description:** Returns the authenticated tutor's profile. The web app presents this tutor-owned profile editor at `/profile`; the legacy `/onboarding` URL redirects there. This route change does not alter the RPC contract.
+- **Output:** `{ profile: { ..., v3FeeProjection: null | { revision, competitions: [{ slug, name, rates: [{ headcount, online, offline }] }] } } }`
+- **Description:** Returns the authenticated tutor's profile. `v3FeeProjection` is `null` while the V3 activation pointer is unset. With an active revision, it contains the active IDR honorarium for online and offline sessions at headcounts 1–6, limited to the tutor's assigned parent competitions. The web app presents this tutor-owned profile editor at `/profile`; the legacy `/onboarding` URL redirects there. This route change does not alter the RPC path.
 
 ### `tutor.getMyProfileHistory`
 
@@ -780,8 +913,8 @@ All routes are admin-only. Package `code` is the stable business key used by
 - **Auth:** Tutor
 - **Input:** `{ version, displayName?, shortBio?, affiliation?, achievementProofUrls?, experienceProofUrls?, profileImageUrl?, education?, achievements?, experiences?, subjectIds?, modality?, baseRatesIdr?, onlineMaxClassSize?, offlineMaxClassSize?, bankName?, bankAccountNumber?, bankAccountHolderName?, bankAccountOpeningCity?, bankAccountOwnership?: "self" | "trusted_person", bankTransferDisclaimerAccepted?, prices? }`. `displayName` is a trimmed 1–255 character canonical account name and is audited with the profile save. `affiliation` is a trimmed string of 1–255 characters when supplied. `achievements` accepts up to 5 `{ competitionName, year, awards }` entries. `experiences` accepts up to 5 `{ role, organization, startYear, endYear, description }` entries; `endYear` may be null for ongoing work. Draft saves may omit affiliation.
 - **Output:** `{ profile, subjects: [{ id, slug, name, description?, isSelectable, parent: { id, slug, name } }] }`
-- **Errors:** `OPTIMISTIC_LOCK` (409) on version mismatch, `INVALID_TUTOR_PRICING` (400) on floor-price violation, `INVALID_TUTOR_SUBJECT_SELECTION` (400) when ids are not active specializations or exceed 7; tutor domain validation errors include field-specific data such as `missingFields`, `pricingError`, or `subjectIds` where available
-- **Description:** Updates the tutor profile with optimistic locking and records a full profile audit snapshot pair when state changes. The tutor editor presents one combined Education, Achievements, and Experiences section plus one profile-image field; each experience stores a role, organization, start/end years, and a brief description. Affiliation stores a study program/university or professional role/organization and is required on review. Short bios are limited to 50 whitespace-delimited words (and 2,000 characters). Year values are plain integers, and an end year must be on or after its start year. Award titles normalize to the structured `awards` array. `achievementProofUrls` and `experienceProofUrls` accept bounded HTTP(S) URLs; `profileImageUrl` accepts bounded HTTP(S) URLs or a generated local `/uploads/...` storage path. The tutor-facing proof guidance recommends one Google Drive folder with the “Anyone with the link can view” setting. `profileImageUrl` is the canonical tutor profile image: draft/changes-requested updates write it to the account image, while published changes wait in `pendingProfileChanges` until admin review. `subjectIds` is the normalized specialization selection. Payout-account fields remain private. A published tutor's `baseRatesIdr` takes effect immediately for future bookings; existing bookings retain their stored price snapshot for payout. Trust-sensitive structured profile changes wait in `pendingProfileChanges`. The web editor exposes separate **Save draft**/**Save profile changes** and **Submit for review** actions: saving permits incomplete required top-level fields while still highlighting malformed values, while submission applies the complete required-field gate. Both client-side and API-side validation errors are shown beside the affected field and in the form summary.
+- **Errors:** `OPTIMISTIC_LOCK` (409) on version mismatch, `INVALID_TUTOR_PRICING` (400) on floor-price violation or changed legacy rates while V3 is active, `INVALID_TUTOR_SUBJECT_SELECTION` (400) when ids are not active specializations or exceed 7; tutor domain validation errors include field-specific data such as `missingFields`, `pricingError`, or `subjectIds` where available
+- **Description:** Updates the tutor profile with optimistic locking and records a full profile audit snapshot pair when state changes. With the activation pointer unset, legacy `baseRatesIdr` writes remain available and V3 projection is `null`. With an active V3 revision, the editor shows read-only IDR fee tables derived from the active revision and rejects changed `baseRatesIdr` or legacy `prices`; unchanged legacy values in stale client payloads are ignored. Admin profile-edit approval also discards a queued legacy `baseRatesIdr` proposal. Existing booking snapshots remain authoritative. The tutor editor presents one combined Education, Achievements, and Experiences section plus one profile-image field; each experience stores a role, organization, start/end years, and a brief description. Affiliation stores a study program/university or professional role/organization and is required on review. Short bios are limited to 50 whitespace-delimited words (and 2,000 characters). Year values are plain integers, and an end year must be on or after its start year. Award titles normalize to the structured `awards` array. `achievementProofUrls` and `experienceProofUrls` accept bounded HTTP(S) URLs; `profileImageUrl` accepts bounded HTTP(S) URLs or a generated local `/uploads/...` storage path. The tutor-facing proof guidance recommends one Google Drive folder with the “Anyone with the link can view” setting. `profileImageUrl` is the canonical tutor profile image: draft/changes-requested updates write it to the account image, while published changes wait in `pendingProfileChanges` until admin review. `subjectIds` is the normalized specialization selection. Payout-account fields remain private. Trust-sensitive structured profile changes wait in `pendingProfileChanges`. The web editor exposes separate **Save draft**/**Save profile changes** and **Submit for review** actions: saving permits incomplete required top-level fields while still highlighting malformed values, while submission applies the complete required-field gate. Both client-side and API-side validation errors are shown beside the affected field and in the form summary.
 
 - **Consistency:** Profile, canonical account-name, subject, photo, and audit writes share one database transaction. Reverting the final pending proposal clears both `pendingProfileChanges` and `profileEditStatus`.
 
@@ -798,8 +931,8 @@ The web tutor profile editor groups Education, Achievements, and Experiences int
 - **Auth:** Tutor
 - **Input:** `{ acceptTerms?: boolean }`
 - **Output:** `{ profile }`
-- **Errors:** `TUTOR_PROFILE_INCOMPLETE` (400) when required profile fields are missing; `INVALID_TUTOR_PRICING` (400) when a base honorarium is invalid; `INVALID_TUTOR_SUBJECT_SELECTION` (400) when specialization ids are invalid; `TUTOR_TERMS_NOT_ACCEPTED` (400) when the profile has never accepted the current terms and `acceptTerms` is not `true`
-- **Description:** Submits a draft profile for admin review. Affiliation, at least one achievement, and at least one experience are required. Incomplete and pricing errors identify fields for UI highlighting. First successful submission requires `acceptTerms: true`; later submissions may send `{}`.
+- **Errors:** `TUTOR_PROFILE_INCOMPLETE` (400) when required profile fields are missing; `INVALID_TUTOR_PRICING` (400) when a legacy base honorarium is invalid while V3 is inactive; `INVALID_TUTOR_SUBJECT_SELECTION` (400) when specialization ids are invalid; `TUTOR_TERMS_NOT_ACCEPTED` (400) when the profile has never accepted the current terms and `acceptTerms` is not `true`
+- **Description:** Submits a draft profile for admin review. Affiliation, at least one achievement, and at least one experience are required. The service reads the active V3 pointer and profile inside the status-update transaction: when V3 is active, legacy `baseRatesIdr`/`prices` are neither required nor validated; when the pointer is null, the existing legacy pricing requirement remains. Incomplete and pricing errors identify fields for UI highlighting. First successful submission requires `acceptTerms: true`; later submissions may send `{}`.
 
 ### `tutor.listAvailability`
 
@@ -858,6 +991,48 @@ The web tutor profile editor groups Education, Achievements, and Experiences int
 - **Description:** The authenticated tutor's unpaid honorarium summary. With no date filters, completed sessions are selected after the latest admin-paid cutoff; the cutoff advances only when an admin records a payout. Weekly processing is an operational cadence, not an automatic Monday reset. The tutor dashboard presents this summary in its Payout details card and exposes the processing and transfer-fee explanations through UI info popovers; no additional API field or endpoint is required.
 
 ---
+
+## Public Content (`publicContent.*`)
+
+### `publicContent.tutors.list`
+
+- **Auth:** Public; no session cookie is required
+- **HTTP request:** `POST /rpc/publicContent/tutors/list` with the standard `{"json": {}}` request body
+- **Input:** `{}` (strict empty object)
+- **Output:** `Tutor[]`; each item has exactly `id`, `name`, `profileImageUrl`, `shortBio`, `affiliation`, `education`, `achievements`, `experiences`, `subjects`, and `modality`. `education` items contain `{ university, degree }`; achievements contain `{ competitionName, year, awards }`; experiences contain `{ role, organization, startYear, endYear, description }`; subjects contain `{ id, slug, name, nameId, parent: { id, slug, name, nameId, lightTextColor, lightBackgroundColor, darkTextColor, darkBackgroundColor } }`. Indonesian names and palette values are nullable where the catalog schema permits them; child specializations inherit the parent palette through `parent`.
+- **Description:** Reads only profiles whose `onboardingStatus` is `published`, using positive selected-column allowlists and an explicit public DTO mapper. Assigned catalog children and parents must both be active; inactive catalog types are omitted, and activity flags are not returned. `id` is the app tutor-profile ID; `profileImageUrl` comes from the canonical account image; subject IDs/slugs come from the app competition catalog. `modality` describes online/offline teaching format and is not a physical location. No location, Sanity ID, `userId`, price/rate, payout, tax, terms, or review fields are returned. Empty data returns `{"json": [], "meta": [...]}`. Database and mapping failures stay errors and are not translated to an empty list.
+- **Consumer:** The marketing site's Next server can call this route without forwarding an app user session. Browser CORS is not enabled by this API slice.
+
+### `publicContent.faq.list`
+
+- **Auth:** Public; no session cookie is required
+- **HTTP request:** `POST /rpc/publicContent/faq/list` with `{"json":{"locale":"en","surface":"full"}}`
+- **Input:** `{ locale?: "en" | "id", surface?: "full" | "landing" }`; both default to `en` and `full`
+- **Output:** `Faq[]`, each item `{ id, question, answer, sortOrder }`; answer blocks are either `{ type: "paragraph", text }` or `{ type: "list", style: "ordered" | "unordered", items }`
+- **Description:** Returns active entries ordered by `sortOrder`, then ID. The `landing` surface also requires `showOnLanding = true`. Indonesian question and answer fields independently fall back to English when missing; app chrome remains English. Public output omits inactive/landing flags, version, and all admin-only fields. Reads are request-time; API and database failures remain errors rather than empty results. The marketing site calls this procedure server-side with `cache: no-store`, validates the `{ json, meta }` envelope and entry shape, and renders failures separately from a valid empty list.
+
+### `adminFaq.list`
+
+- **Auth:** Admin
+- **HTTP request:** `POST /rpc/adminFaq/list` with `{"json":{}}`
+- **Input:** `{}` (strict empty object)
+- **Output:** All `FaqAdminDto` entries ordered by sort order and ID. Each item includes `id`, English/Indonesian question and answer fields, `sortOrder`, `isActive`, `showOnLanding`, and `version`.
+
+### `adminFaq.create`
+
+- **Auth:** Admin
+- **HTTP request:** `POST /rpc/adminFaq/create` with the standard `{"json": <input>}` envelope
+- **Input:** `{ questionEn, questionId?, answerEn, answerId?, sortOrder?, isActive?, showOnLanding? }`. English question and answer are required. Indonesian fields are optional; answers accept 1–50 paragraph/list blocks, with 1–50 items per list. Sort order is a non-negative integer; active defaults to true and landing visibility to false.
+- **Output:** The created `FaqAdminDto`, initially at version 1.
+
+### `adminFaq.update`
+
+- **Auth:** Admin
+- **HTTP request:** `POST /rpc/adminFaq/update` with the standard `{"json": <input>}` envelope
+- **Input:** The create fields plus `{ id, expectedVersion }`
+- **Output:** The updated `FaqAdminDto` with its version incremented
+- **Errors:** Wire codes are `NOT_FOUND` (404) when the ID does not exist and `CONFLICT` (409) when `expectedVersion` is stale. The underlying FAQ domain error names are not exposed as the oRPC error code.
+- **Description:** Updates are compare-and-swap writes. Deactivation hides the entry publicly while retaining it for admin editing; there is no destructive delete procedure.
 
 ## Tutor Discovery (`tutors.*`)
 
@@ -1212,7 +1387,7 @@ RPC contract.
 - **Input:** `{ tutorId, subjectId?, availabilitySlotId, modality, sessions: [...], targetGroupSize, inviteeUserIds, timezone?, learningGoal }` (`subjectId` selects an active tutor specialization; `learningGoal` carries Session Notes/reference links; `targetGroupSize` 2–6, `inviteeUserIds` 1–5, sessions 2–4)
 - **Output:** `{ booking }`
 - **Errors:** `BOOKING_SERIES_SIZE` (400), `BOOKING_TUTOR_CAPACITY` (400) when the target exceeds the tutor's modality limit, `USER_NOT_FOUND` (400) for unknown invitees
-- **Description:** Creates a group series with upfront per-participant holds for all sessions (FR-20, #46); invitees accept/decline the full-series package via `booking.confirmInvite`/`booking.declineInvite`
+- **Description:** Creates a group series with upfront per-participant holds for all sessions (FR-20, #46). When V3 is active, it requires a supported selected topic, prices at target headcount and pins the revision on the booking and sessions. A partial group is repriced from that pinned revision at confirmed headcount; each participant holds the per-session Marks times remaining scheduled sessions. With activation null, existing legacy pricing is preserved. Invitees accept/decline the full-series package via `booking.confirmInvite`/`booking.declineInvite`.
 
 ### `booking.confirmInvite`
 
@@ -1226,21 +1401,21 @@ RPC contract.
 - **Auth:** Student (invitee)
 - **Input:** `{ bookingId, reason? }`
 - **Output:** `{ declined: true }`
-- **Description:** Locks the parent booking before changing the invitation and resolving remaining responses, preventing concurrent final invite decisions from racing. Declines one pending group or group-series invitation. When no pending invitees remain, the parent resolves immediately: fewer than two confirmed participants expires the booking and releases holds; a viable partial group enters `awaiting_reconfirmation` with a fresh response window; a full group enters `awaiting_tutor_review`.
+- **Description:** Locks the parent booking before changing the invitation and resolving remaining responses, preventing concurrent final invite decisions from racing. Declines one pending group or group-series invitation. When no pending invitees remain, the parent resolves immediately: fewer than two confirmed participants expires the booking and releases holds; a viable partial group enters `awaiting_reconfirmation` with a fresh response window; a full group enters `awaiting_tutor_review`. For active V3 group-series, a partial group is recalculated at its confirmed headcount from the pinned revision, and participant holds plus booking/scheduled-session snapshots are adjusted before reconfirmation.
 
 ### `booking.withdrawInvite`
 
 - **Auth:** Student (booking proposer)
 - **Input:** `{ bookingId, inviteeUserId, reason? }`
 - **Output:** `{ withdrawn: true, inviteeUserId }`
-- **Description:** Locks the parent booking before changing the invitation and resolving remaining responses, preventing concurrent final invite decisions from racing. Withdraws one pending group or group-series invitation before confirmation. The target participant is marked `withdrawn_pre_h2`, confirmed headcount is unchanged, and the invitee receives a booking notification. When no pending invitees remain, the same parent resolution as `booking.declineInvite` runs; undersized bookings release remaining holds and expire, while viable partial groups enter reconfirmation.
+- **Description:** Locks the parent booking before changing the invitation and resolving remaining responses, preventing concurrent final invite decisions from racing. Withdraws one pending group or group-series invitation before confirmation. The target participant is marked `withdrawn_pre_h2`, confirmed headcount is unchanged, and the invitee receives a booking notification. When no pending invitees remain, the same parent resolution as `booking.declineInvite` runs; undersized bookings release remaining holds and expire, while viable partial groups enter reconfirmation. Active V3 group-series repricing uses confirmed headcount and the booking's pinned revision.
 
 ### `booking.reconfirm`
 
 - **Auth:** Student (participant)
 - **Input:** `{ bookingId, accept }`
 - **Output:** `{ reconfirmed: boolean }`
-- **Description:** Participant accepts or rejects the repriced offer
+- **Description:** Participant accepts or rejects the repriced offer. For active V3 group-series, a headcount change during reconfirmation triggers a fresh pinned-revision calculation and reissues reconfirmation; the booking reaches tutor review only when every confirmed participant accepts the current snapshot.
 
 ### `booking.withdraw`
 

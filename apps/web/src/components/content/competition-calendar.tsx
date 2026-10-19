@@ -48,9 +48,9 @@ import {
   AGENDA_DAYS_TO_SHOW,
   EVENT_GAP,
   EVENT_HEIGHT,
-  competitionTypeOptions,
   filterEventsByCompetitionType,
-  getCategoryLabel,
+  getCompetitionTypeOptions,
+  getSelectedCompetitionTypes,
 } from "./calendar-utils";
 import type { CalendarCompetition, CalendarView } from "./calendar-types";
 
@@ -73,8 +73,16 @@ export function CompetitionCalendar({
   const [view, setView] = useState<CalendarView>(initialView);
   const [selectedEvent, setSelectedEvent] =
     useState<CalendarCompetition | null>(null);
-  const [selectedTypes, setSelectedTypes] = useState<ReadonlySet<string>>(
-    () => new Set(competitionTypeOptions),
+  const [excludedTypes, setExcludedTypes] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const competitionTypeOptions = useMemo(
+    () => getCompetitionTypeOptions(events),
+    [events],
+  );
+  const selectedTypes = useMemo(
+    () => getSelectedCompetitionTypes(competitionTypeOptions, excludedTypes),
+    [competitionTypeOptions, excludedTypes],
   );
 
   useEffect(() => {
@@ -140,26 +148,25 @@ export function CompetitionCalendar({
     if (value === "month" || value === "agenda") setView(value);
   }
 
-  const isFiltered = selectedTypes.size < competitionTypeOptions.length;
+  const isFiltered = competitionTypeOptions.some(({ value }) =>
+    excludedTypes.has(value),
+  );
 
   const filterLabel = isFiltered
     ? `Calendar options, ${view} view, ${selectedTypes.size} of ${competitionTypeOptions.length} types shown`
     : `Calendar options, ${view} view`;
 
   function handleTypeToggle(value: string, checked: boolean) {
-    setSelectedTypes((prev) => {
+    setExcludedTypes((prev) => {
       const next = new Set(prev);
-      if (checked) {
-        next.add(value);
-      } else {
-        next.delete(value);
-      }
+      if (checked) next.delete(value);
+      else next.add(value);
       return next;
     });
   }
 
   function handleResetTypes() {
-    setSelectedTypes(new Set(competitionTypeOptions));
+    setExcludedTypes(new Set());
   }
 
   const calendarStyle = {
@@ -253,7 +260,7 @@ export function CompetitionCalendar({
                 <MenuSeparator />
                 <MenuGroup>
                   <MenuGroupLabel>Competition type</MenuGroupLabel>
-                  {competitionTypeOptions.map((value) => (
+                  {competitionTypeOptions.map(({ value, label }) => (
                     <MenuCheckboxItem
                       key={value}
                       checked={selectedTypes.has(value)}
@@ -261,7 +268,7 @@ export function CompetitionCalendar({
                         handleTypeToggle(value, checked === true)
                       }
                     >
-                      {getCategoryLabel(value)}
+                      {label}
                     </MenuCheckboxItem>
                   ))}
                 </MenuGroup>

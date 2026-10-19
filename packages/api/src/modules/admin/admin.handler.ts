@@ -20,6 +20,8 @@ import type {
   adminGetTutorPayoutReportInput,
   adminMarkTutorPayoutPaidInput,
   adminUpdateEconomySettingsInput,
+  adminPreviewV3EconomyInput,
+  adminSaveV3EconomyInput,
 } from "./admin.types";
 
 type ListUsersInputZod = z.infer<typeof listUsersInput>;
@@ -52,6 +54,29 @@ export type AdminHandler = ReturnType<typeof createAdminHandler>;
 
 export function createAdminHandler(adminService: AdminService) {
   return {
+    getV3EconomySettings: async () =>
+      withDomainMap(() => adminService.getV3EconomySettings(), mapAdminError),
+    previewV3EconomySettings: async ({
+      input,
+    }: {
+      input: z.infer<typeof adminPreviewV3EconomyInput>;
+    }) =>
+      withDomainMap(
+        async () => adminService.previewV3EconomySettings(input),
+        mapAdminError,
+      ),
+    saveV3EconomySettings: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: z.infer<typeof adminSaveV3EconomyInput>;
+    }) =>
+      withDomainMap(
+        () =>
+          adminService.saveV3EconomySettings(context.session!.user.id, input),
+        mapAdminError,
+      ),
     getDashboardAnalytics: async ({
       context: _context,
       input,

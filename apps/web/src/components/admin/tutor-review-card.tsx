@@ -41,7 +41,12 @@ import { IconAlertTriangle, IconInbox } from "@tabler/icons-react";
 import { getUserFacingError } from "@/lib/error-message";
 import { CogitoMarks } from "@/components/cogito-marks";
 import { EmptyState } from "@/components/empty-state";
-import { getCompetitionFieldClass } from "@/lib/competition-colors";
+import {
+  competitionPaletteClassName,
+  getCompetitionPalette,
+  getCompetitionPaletteStyle,
+  type CompetitionPalette,
+} from "@/lib/competition-colors";
 import { resolveProfileImageUrl } from "@/lib/profile-image-url";
 import { client, orpc } from "@/utils/orpc";
 import {
@@ -128,7 +133,14 @@ interface TutorReviewCardProps {
         id: string;
         name: string;
         slug: string;
-        parent?: { name: string; slug: string } | null;
+        parent?: {
+          name: string;
+          slug: string;
+          lightTextColor?: string | null;
+          lightBackgroundColor?: string | null;
+          darkTextColor?: string | null;
+          darkBackgroundColor?: string | null;
+        } | null;
       };
     }> | null;
     modality: string | null;
@@ -154,7 +166,7 @@ interface TutorReviewCardProps {
     } | null;
   };
   subjectLabels: ReadonlyMap<string, string>;
-  subjectFieldSlugs?: ReadonlyMap<string, string>;
+  subjectPalettes?: ReadonlyMap<string, CompetitionPalette>;
   onAction?: () => void;
 }
 
@@ -317,7 +329,11 @@ function ReviewEmptyState({
   );
 }
 
-export type SpecializationItem = { label: string; field?: string };
+export type SpecializationItem = {
+  id: string;
+  label: string;
+  parentColors?: CompetitionPalette | null;
+};
 
 function SpecBadges({ items }: { items: SpecializationItem[] }) {
   if (items.length === 0) {
@@ -325,14 +341,15 @@ function SpecBadges({ items }: { items: SpecializationItem[] }) {
   }
   return (
     <div className="flex min-w-0 flex-wrap gap-1.5">
-      {items.map(({ label, field }) => (
+      {items.map(({ id, label, parentColors }) => (
         <Badge
-          key={`${field ?? "specialization"}-${label}`}
+          key={id}
           variant="secondary"
           className={cn(
             "h-auto min-h-5.5 max-w-full whitespace-normal break-words py-0.5",
-            field ? getCompetitionFieldClass(field, "solid") : undefined,
+            parentColors ? competitionPaletteClassName : undefined,
           )}
+          style={getCompetitionPaletteStyle(parentColors)}
         >
           {label}
         </Badge>
@@ -457,7 +474,7 @@ function ReviewActions({
 export function TutorReviewCard({
   profile,
   subjectLabels,
-  subjectFieldSlugs,
+  subjectPalettes,
   onAction,
 }: TutorReviewCardProps) {
   const queryClient = useQueryClient();
@@ -695,15 +712,32 @@ export function TutorReviewCard({
       label: entry.subject.parent?.name
         ? `${entry.subject.parent.name} · ${entry.subject.name}`
         : entry.subject.name,
-      field: entry.subject.parent?.slug ?? entry.subject.slug,
+      parentColors: getCompetitionPalette(entry.subject.parent),
     }))
     .filter(
       (item, index, all) =>
         all.findIndex((other) => other.id === item.id) === index,
     );
+  const reviewSubjectLabels = new Map(subjectLabels);
+  const reviewSubjectPalettes = new Map(subjectPalettes ?? []);
+  for (const entry of profile.subjects ?? []) {
+    const subject = entry.subject;
+    const palette = getCompetitionPalette(subject.parent);
+    reviewSubjectLabels.set(
+      subject.id,
+      subject.parent?.name
+        ? `${subject.parent.name} · ${subject.name}`
+        : subject.name,
+    );
+    if (palette) reviewSubjectPalettes.set(subject.id, palette);
+  }
   const currentSubjectIds = currentSpecializationItems.map((item) => item.id);
   const specializationItems: SpecializationItem[] =
-    currentSpecializationItems.map(({ label, field }) => ({ label, field }));
+    currentSpecializationItems.map(({ id, label, parentColors }) => ({
+      id,
+      label,
+      parentColors,
+    }));
   const currentPendingValues: Record<string, unknown> = {
     name: profile.user?.name,
     displayName: profile.user?.name,
@@ -1224,8 +1258,8 @@ export function TutorReviewCard({
             profileId={profile.id}
             pendingChanges={profile.pendingProfileChanges}
             currentValues={currentPendingValues}
-            subjectLabels={subjectLabels}
-            subjectFieldSlugs={subjectFieldSlugs}
+            subjectLabels={reviewSubjectLabels}
+            subjectPalettes={reviewSubjectPalettes}
           />
           {profile.profileEditAdminNote ? (
             <div className="rounded-lg border border-warning-border bg-warning/10 p-3">
@@ -1249,8 +1283,8 @@ export function TutorReviewCard({
             entries={profileHistory}
             title="Full review history"
             description="Every profile save and moderation decision, including direct-live fields."
-            subjectLabels={subjectLabels}
-            subjectFieldSlugs={subjectFieldSlugs}
+            subjectLabels={reviewSubjectLabels}
+            subjectPalettes={reviewSubjectPalettes}
           />
         </aside>
       </div>

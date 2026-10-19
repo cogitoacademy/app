@@ -49,7 +49,7 @@ function makeService(
   };
   const auditPort = { record: async () => {} };
   const db = {
-    transaction: async (fn: any) => fn({}),
+    transaction: async (fn: any) => fn({ execute: async () => {} }),
   } as any;
   return createInviteService({
     inviteRepo: inviteRepo as InviteRepo,

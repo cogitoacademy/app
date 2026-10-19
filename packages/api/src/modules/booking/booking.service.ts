@@ -1,4 +1,9 @@
 import { env } from "@cogito-app/env/server";
+import type {
+  BookingPriceSnapshot,
+  LegacyBookingPriceSnapshot,
+  V3BookingPriceSnapshot,
+} from "@cogito-app/db/schema";
 import {
   BOOKING_TYPE,
   MODALITY,
@@ -22,7 +27,7 @@ import {
 } from "../../shared/constants";
 import type { GroupSize, Modality } from "../pricing/pricing.service";
 import type { DbType } from "../../lib/db";
-import type { DbOrTx } from "../../lib/tx";
+import type { DbOrTx, TxClient } from "../../lib/tx";
 import {
   BookingNotFoundError,
   BookingNotOwnedError,
@@ -48,9 +53,15 @@ import {
   BookingAcceptanceDeadlinePassedError,
   BookingCancellationDeadlinePassedError,
   BookingCompletionFeedbackRequiredError,
+  BookingCompletionFeedbackTooLongError,
   BookingTutorCapacityError,
+  BookingV3CompetitionRequiredError,
+  BookingV3CompetitionUnavailableError,
+  BookingV3PricingRevisionUnavailableError,
 } from "./booking.errors";
 import { escapeHtml, sanitizeHtml } from "../../lib/sanitize";
+import { completionFeedbackInput } from "./booking.types";
+import { FEEDBACK_LENGTH_ERROR } from "./feedback-rules";
 import {
   lockBookingReschedule,
   lockTutorForBooking,
@@ -58,6 +69,12 @@ import {
 } from "../../lib/locks";
 import { mapLimit } from "../../lib/concurrency";
 import { log } from "../../lib/logger";
+import { applyBookingTopicPalettes } from "./booking-topic-palette";
+import type { BookingCompetitionPalettePort } from "./booking-topic-palette";
+import {
+  isSelectableCompetitionRef,
+  lockCompetitionCatalog,
+} from "../competition-catalog/catalog-lock";
 import {
   BOOKING_STATE,
   TERMINAL_STATES,
@@ -84,6 +101,7 @@ import {
   formatBookingEventTitle,
   formatCalendarCompetitionLabel,
 } from "./booking-event-title";
+import { V3_COMPETITIONS } from "../pricing/v3-economy.config";
 
 /**
  * Terminal target per expiry-eligible state. Shared by `expireBookings` and
@@ -119,6 +137,47 @@ function assertTutorCapacity(
       maxClassSize,
     );
   }
+}
+
+function getPerStudentMarks(
+  snapshot: BookingPriceSnapshot | null | undefined,
+): number | null {
+  if (!snapshot) return null;
+  return snapshot.engine === "v3"
+    ? snapshot.perStudentMarks
+    : snapshot.perStudent;
+}
+
+function getCollectedMarks(
+  snapshot: BookingPriceSnapshot,
+  headcount: number,
+): number {
+  return snapshot.engine === "v3"
+    ? snapshot.collectedMarks
+    : snapshot.perStudent * headcount;
+}
+
+function buildV3Snapshot(
+  version: number,
+  quote: {
+    competition: string;
+    modality: "online" | "offline";
+    headcount: number;
+    perStudentMarks: number;
+    collectedMarks: number;
+    tutorFeeIdr: number;
+  },
+): V3BookingPriceSnapshot {
+  return {
+    engine: "v3",
+    v3Revision: version,
+    competition: quote.competition,
+    modality: quote.modality,
+    headcount: quote.headcount,
+    perStudentMarks: quote.perStudentMarks,
+    collectedMarks: quote.collectedMarks,
+    tutorHonorariumIdr: quote.tutorFeeIdr,
+  };
 }
 
 export {
@@ -215,6 +274,26 @@ type BookingRow = NonNullable<
   Awaited<ReturnType<BookingRepo["findBookingById"]>>
 >;
 
+function assertCompletionFeedback(
+  bookingId: string,
+  feedback: CompletionFeedback | undefined,
+): asserts feedback is CompletionFeedback {
+  const parsed = completionFeedbackInput.safeParse(feedback);
+  if (!parsed.success) {
+    if (
+      parsed.error.issues.some(
+        (issue) => issue.message === FEEDBACK_LENGTH_ERROR,
+      )
+    ) {
+      throw new BookingCompletionFeedbackTooLongError(bookingId);
+    }
+    throw new BookingCompletionFeedbackRequiredError(bookingId);
+  }
+  feedback!.discussion = parsed.data.discussion.map(escapeHtml);
+  feedback!.strengths = parsed.data.strengths.map(escapeHtml);
+  feedback!.improvements = parsed.data.improvements.map(escapeHtml);
+}
+
 /**
  * Creates the booking service orchestrating bookings, wallet holds, pricing, notifications, and meeting creation.
  *
@@ -229,10 +308,20 @@ export function createBookingService(deps: {
   audit: BookingAuditPort;
   notification: BookingNotificationPort;
   meeting: BookingMeetingPort;
+  competitionPalette?: BookingCompetitionPalettePort;
   roomPort?: BookingRoomPort;
 }) {
-  const { db, repo, wallet, pricing, audit, notification, meeting, roomPort } =
-    deps;
+  const {
+    db,
+    repo,
+    wallet,
+    pricing,
+    audit,
+    notification,
+    meeting,
+    competitionPalette,
+    roomPort,
+  } = deps;
 
   // ── Internal helpers (access, transitions, pricing) ──────────────────────
   // Shared by the public methods below; keep them above their consumers.
@@ -382,15 +471,20 @@ export function createBookingService(deps: {
       id: string;
       type: string;
       tutorId: string;
+      targetGroupSize: number;
       holdAmount: number;
 
       modality: string;
-      priceSnapshot: { perStudent: number } | null;
+      priceSnapshot: BookingPriceSnapshot | null;
     },
     remaining: { id: string; userId: string; heldAmount: number }[],
     actorType: "student" | "tutor" | "system",
   ): Promise<void> {
-    if (b.type !== BOOKING_TYPE.GROUP) return;
+    const isV3GroupSeries =
+      b.type === BOOKING_TYPE.SERIES &&
+      b.targetGroupSize > 1 &&
+      b.priceSnapshot?.engine === "v3";
+    if (b.type !== BOOKING_TYPE.GROUP && !isV3GroupSeries) return;
     if (remaining.length < MIN_GROUP_HEADCOUNT) return;
 
     const profile = await repo.findTutorProfile(tx, b.tutorId);
@@ -411,9 +505,118 @@ export function createBookingService(deps: {
       b.modality as Modality,
       newSize as GroupSize,
       b.priceSnapshot,
+      true,
     );
-    const newPerStudent = newSnapshot.perStudent;
-    const oldPerStudent = b.priceSnapshot?.perStudent ?? newPerStudent;
+    const newPerStudent = getPerStudentMarks(newSnapshot)!;
+    const oldPerStudent = getPerStudentMarks(b.priceSnapshot) ?? newPerStudent;
+
+    if (isV3GroupSeries) {
+      const sessions = await repo.listSessionsBySeriesId(tx, b.id);
+      const scheduledSessions = sessions.filter(
+        (session) => session.currentState === BOOKING_STATE.SCHEDULED,
+      );
+      const participantHold = newPerStudent * scheduledSessions.length;
+      const adjustments: {
+        participant: (typeof remaining)[number];
+        walletId: string;
+        amount: number;
+        direction: "increase" | "release";
+      }[] = [];
+
+      // Check every increase before moving any wallet balance. This keeps the
+      // deadline-expiry fallback from observing a partially repriced series
+      // when one participant cannot fund the new package.
+      for (const participant of remaining) {
+        if (participant.heldAmount === participantHold) continue;
+        // eslint-disable-next-line no-await-in-loop
+        const participantWallet = await wallet.getByUserId(
+          tx,
+          participant.userId,
+        );
+        if (!participantWallet)
+          throw new BookingNotFoundError(participant.userId);
+
+        if (participantHold > participant.heldAmount) {
+          const amount = participantHold - participant.heldAmount;
+          if (participantWallet.availableBalance < amount) {
+            throw new InsufficientMarksError(
+              participantHold,
+              participantWallet.availableBalance + participant.heldAmount,
+            );
+          }
+          adjustments.push({
+            participant,
+            walletId: participantWallet.id,
+            amount,
+            direction: "increase",
+          });
+        } else {
+          adjustments.push({
+            participant,
+            walletId: participantWallet.id,
+            amount: participant.heldAmount - participantHold,
+            direction: "release",
+          });
+        }
+      }
+
+      for (const adjustment of adjustments) {
+        if (adjustment.direction === "increase") {
+          // eslint-disable-next-line no-await-in-loop
+          await wallet.hold(tx, {
+            walletId: adjustment.walletId,
+            amount: adjustment.amount,
+            eventKey: `booking.${b.id}.reprice.increase.${adjustment.participant.userId}.${participantHold}`,
+            sourceReference: b.id,
+            bookingId: b.id,
+            actorType,
+            reason: "Group-series repricing: increased remaining session hold",
+          });
+        } else {
+          // eslint-disable-next-line no-await-in-loop
+          await wallet.release(tx, {
+            walletId: adjustment.walletId,
+            amount: adjustment.amount,
+            eventKey: `booking.${b.id}.reprice.release.${adjustment.participant.userId}.${participantHold}`,
+            sourceReference: b.id,
+            bookingId: b.id,
+            actorType,
+            reason: "Group-series repricing: released excess remaining hold",
+          });
+        }
+        // eslint-disable-next-line no-await-in-loop
+        await repo.updateParticipantState(tx, adjustment.participant.id, {
+          heldAmount: participantHold,
+        });
+      }
+
+      await repo.updateBookingPriceSnapshot(tx, b.id, {
+        priceSnapshot: newSnapshot,
+        holdAmount: participantHold * remaining.length,
+      });
+      await repo.updateScheduledSeriesPriceSnapshot(tx, b.id, {
+        priceSnapshot: newSnapshot,
+        holdAmount: newPerStudent,
+      });
+
+      if (newPerStudent !== oldPerStudent) {
+        for (const participant of remaining) {
+          // eslint-disable-next-line no-await-in-loop
+          await notification.writeBestEffort({
+            db: tx,
+            userId: participant.userId,
+            bookingId: b.id,
+            category: NOTIFICATION_CATEGORY.BOOKING,
+            severity: NOTIFICATION_SEVERITY.ACTION,
+            title: "Group price updated",
+            body: `Your group's per-student price per session changed to ${newPerStudent} Marks because the confirmed headcount changed.`,
+            eventKey: `booking.${b.id}.reprice.${participant.userId}.${newPerStudent}`,
+            emailRequired: true,
+          });
+        }
+      }
+      return;
+    }
 
     if (newPerStudent === oldPerStudent) {
       // N1: with flat legacy price maps (or rounding coincidences) the
@@ -618,10 +821,36 @@ export function createBookingService(deps: {
     return `${origin}/bookings/${bookingId}`;
   }
 
-  async function resolveSessionTopic(tutorId: string, subjectId?: string) {
-    const topic = await repo.findTutorSubjectTopic(db, tutorId, subjectId);
+  async function resolveSessionTopic(
+    conn: TxClient,
+    tutorId: string,
+    subjectId?: string,
+  ) {
+    const topic = await repo.findTutorSubjectTopic(conn, tutorId, subjectId);
     if (subjectId && !topic) {
       throw new BookingNotEditableError(subjectId);
+    }
+    if (!subjectId && !topic) {
+      const assignmentState = await repo.getTutorSubjectAssignmentState(
+        conn,
+        tutorId,
+      );
+      if (
+        assignmentState.hasAssignments &&
+        !assignmentState.hasActiveAssignments
+      ) {
+        throw new BookingNotEditableError(tutorId);
+      }
+    }
+    if (
+      topic &&
+      !(await isSelectableCompetitionRef(
+        conn,
+        topic.categoryId,
+        topic.subcategoryId,
+      ))
+    ) {
+      throw new BookingNotEditableError(topic.subcategoryId);
     }
     return topic;
   }
@@ -677,15 +906,74 @@ export function createBookingService(deps: {
     return { title, description: descriptionLines.join("\n") };
   }
 
-  type EconomicSnapshot = {
-    perStudent: number;
-    markValueIdr?: number;
-    economyVersion?: number;
-    tutorBaseRateIdr?: number;
-    tutorIncrementIdr?: number;
-    cogitoBaseTakeIdr?: number;
-    cogitoIncrementIdr?: number;
-  };
+  async function computeInitialPriceSnapshot(
+    conn: DbOrTx,
+    profile: {
+      prices?: Record<string, number> | null;
+      baseRatesIdr?: { online?: number; offline?: number } | null;
+    },
+    modality: Modality,
+    headcount: GroupSize,
+    topic: Awaited<ReturnType<typeof resolveSessionTopic>>,
+  ): Promise<BookingPriceSnapshot> {
+    const active = await pricing.getActiveV3Config?.(conn);
+    if (!active) {
+      if (
+        topic &&
+        !V3_COMPETITIONS.includes(
+          topic.categorySlug as (typeof V3_COMPETITIONS)[number],
+        )
+      ) {
+        throw new BookingV3CompetitionUnavailableError(topic.categorySlug);
+      }
+      return computePriceSnapshot(conn, profile, modality, headcount);
+    }
+    if (!topic) throw new BookingV3CompetitionRequiredError();
+    const competition = topic.categorySlug;
+    if (!Object.hasOwn(active.values.competitionRates, competition)) {
+      throw new BookingV3CompetitionUnavailableError(competition);
+    }
+    if (modality === "both" || !pricing.calculateV3SessionPrice)
+      throw new BookingV3CompetitionRequiredError();
+    return buildV3Snapshot(
+      active.version,
+      pricing.calculateV3SessionPrice(
+        { competition, modality, headcount },
+        active.values,
+      ),
+    );
+  }
+
+  async function resolveNewBookingTerms(
+    tx: TxClient,
+    input: {
+      tutorId: string;
+      modality: Modality;
+      subjectId?: string;
+    },
+    headcount: GroupSize,
+  ) {
+    await lockCompetitionCatalog(tx);
+    const profile = await repo.findTutorProfile(tx, input.tutorId, {
+      publishedOnly: true,
+    });
+    if (!profile) throw new BookingNotFoundError(input.tutorId);
+
+    const sessionTopic = await resolveSessionTopic(
+      tx,
+      input.tutorId,
+      input.subjectId,
+    );
+    const priceSnapshot = await computeInitialPriceSnapshot(
+      tx,
+      profile,
+      input.modality,
+      headcount,
+      sessionTopic,
+    );
+
+    return { profile, sessionTopic, priceSnapshot };
+  }
 
   /**
    * New tutor profiles use IDR base honoraria. Legacy profiles keep the old
@@ -700,13 +988,51 @@ export function createBookingService(deps: {
     },
     modality: Modality,
     groupSize: GroupSize,
-    previousSnapshot?: EconomicSnapshot | null,
+    previousSnapshot?: BookingPriceSnapshot | null,
+    legacyReprice = false,
   ) {
-    const baseRates = profile.baseRatesIdr;
-    const baseRateIdr =
-      previousSnapshot?.tutorBaseRateIdr ??
-      (modality === MODALITY.OFFLINE ? baseRates?.offline : baseRates?.online);
-    if (typeof baseRateIdr !== "number") {
+    if (previousSnapshot?.engine === "v3") {
+      const revision = await pricing.getV3ConfigByVersion?.(
+        previousSnapshot.v3Revision,
+        conn,
+      );
+      if (
+        !revision ||
+        revision.version !== previousSnapshot.v3Revision ||
+        !pricing.calculateV3SessionPrice
+      ) {
+        throw new BookingV3PricingRevisionUnavailableError(
+          previousSnapshot.v3Revision,
+        );
+      }
+      const competition = previousSnapshot.competition;
+      if (!Object.hasOwn(revision.values.competitionRates, competition)) {
+        throw new BookingV3CompetitionUnavailableError(
+          previousSnapshot.competition,
+        );
+      }
+      return buildV3Snapshot(
+        revision.version,
+        pricing.calculateV3SessionPrice(
+          {
+            competition,
+            modality: previousSnapshot.modality,
+            headcount: groupSize,
+          },
+          revision.values,
+        ),
+      );
+    }
+
+    const previousLegacy = previousSnapshot as
+      | LegacyBookingPriceSnapshot
+      | null
+      | undefined;
+    const hasLockedIdrInputs =
+      previousLegacy?.economyVersion !== undefined ||
+      previousLegacy?.markValueIdr !== undefined ||
+      previousLegacy?.tutorBaseRateIdr !== undefined;
+    if (!hasLockedIdrInputs && (previousLegacy || legacyReprice)) {
       return pricing.computeSplit(
         modality,
         (profile.prices?.[String(groupSize)] ?? DEFAULT_SOLO_PRICE) as number,
@@ -714,45 +1040,79 @@ export function createBookingService(deps: {
       );
     }
 
+    const baseRates = profile.baseRatesIdr;
+    const baseRateIdr =
+      previousLegacy?.tutorBaseRateIdr ??
+      (hasLockedIdrInputs
+        ? undefined
+        : modality === MODALITY.OFFLINE
+          ? baseRates?.offline
+          : baseRates?.online);
+    if (typeof baseRateIdr !== "number") {
+      if (hasLockedIdrInputs) {
+        throw new BookingV3PricingRevisionUnavailableError(
+          previousLegacy?.economyVersion ?? 0,
+        );
+      }
+      return pricing.computeSplit(
+        modality,
+        (profile.prices?.[String(groupSize)] ??
+          previousLegacy?.perStudent ??
+          DEFAULT_SOLO_PRICE) as number,
+        groupSize,
+      );
+    }
+
     if (!pricing.getEconomyConfig || !pricing.computeEconomics) {
       throw new Error("IDR pricing is not configured");
     }
+    if (
+      hasLockedIdrInputs &&
+      (previousLegacy?.markValueIdr === undefined ||
+        previousLegacy.tutorIncrementIdr === undefined ||
+        previousLegacy.cogitoBaseTakeIdr === undefined ||
+        previousLegacy.cogitoIncrementIdr === undefined)
+    ) {
+      throw new BookingV3PricingRevisionUnavailableError(
+        previousLegacy?.economyVersion ?? 0,
+      );
+    }
     const current = await pricing.getEconomyConfig(conn);
     const config =
-      previousSnapshot?.markValueIdr !== undefined
+      previousLegacy?.markValueIdr !== undefined
         ? {
             ...current,
-            version: previousSnapshot.economyVersion ?? current.version,
-            markValueIdr: previousSnapshot.markValueIdr,
+            version: previousLegacy.economyVersion ?? current.version,
+            markValueIdr: previousLegacy.markValueIdr,
             onlineTutorIncrementIdr:
               modality === MODALITY.ONLINE &&
-              previousSnapshot.tutorIncrementIdr !== undefined
-                ? previousSnapshot.tutorIncrementIdr
+              previousLegacy.tutorIncrementIdr !== undefined
+                ? previousLegacy.tutorIncrementIdr
                 : current.onlineTutorIncrementIdr,
             offlineTutorIncrementIdr:
               modality === MODALITY.OFFLINE &&
-              previousSnapshot.tutorIncrementIdr !== undefined
-                ? previousSnapshot.tutorIncrementIdr
+              previousLegacy.tutorIncrementIdr !== undefined
+                ? previousLegacy.tutorIncrementIdr
                 : current.offlineTutorIncrementIdr,
             onlineCogitoBaseIdr:
               modality === MODALITY.ONLINE &&
-              previousSnapshot.cogitoBaseTakeIdr !== undefined
-                ? previousSnapshot.cogitoBaseTakeIdr
+              previousLegacy.cogitoBaseTakeIdr !== undefined
+                ? previousLegacy.cogitoBaseTakeIdr
                 : current.onlineCogitoBaseIdr,
             offlineCogitoBaseIdr:
               modality === MODALITY.OFFLINE &&
-              previousSnapshot.cogitoBaseTakeIdr !== undefined
-                ? previousSnapshot.cogitoBaseTakeIdr
+              previousLegacy.cogitoBaseTakeIdr !== undefined
+                ? previousLegacy.cogitoBaseTakeIdr
                 : current.offlineCogitoBaseIdr,
             onlineCogitoIncrementIdr:
               modality === MODALITY.ONLINE &&
-              previousSnapshot.cogitoIncrementIdr !== undefined
-                ? previousSnapshot.cogitoIncrementIdr
+              previousLegacy.cogitoIncrementIdr !== undefined
+                ? previousLegacy.cogitoIncrementIdr
                 : current.onlineCogitoIncrementIdr,
             offlineCogitoIncrementIdr:
               modality === MODALITY.OFFLINE &&
-              previousSnapshot.cogitoIncrementIdr !== undefined
-                ? previousSnapshot.cogitoIncrementIdr
+              previousLegacy.cogitoIncrementIdr !== undefined
+                ? previousLegacy.cogitoIncrementIdr
                 : current.offlineCogitoIncrementIdr,
           }
         : current;
@@ -785,8 +1145,12 @@ export function createBookingService(deps: {
     if (userRole !== "admin") {
       await assertBookingAccess(b, userId, db, bookingId);
     }
+    const [bookingWithPalette] = await applyBookingTopicPalettes(
+      [b],
+      competitionPalette?.resolveCompetitionPalettes,
+    );
     return {
-      ...b,
+      ...bookingWithPalette,
       disclaimer: computeDisclaimer(b),
       ...computeMeetingInfo(b),
     };
@@ -822,7 +1186,13 @@ export function createBookingService(deps: {
             items[items.length - 1]!.id,
           )
         : null;
-    return { items, nextCursor };
+    return {
+      items: await applyBookingTopicPalettes(
+        items,
+        competitionPalette?.resolveCompetitionPalettes,
+      ),
+      nextCursor,
+    };
   }
 
   async function listForTutor(
@@ -843,7 +1213,13 @@ export function createBookingService(deps: {
             items[items.length - 1]!.id,
           )
         : null;
-    return { items, nextCursor };
+    return {
+      items: await applyBookingTopicPalettes(
+        items,
+        competitionPalette?.resolveCompetitionPalettes,
+      ),
+      nextCursor,
+    };
   }
 
   /**
@@ -884,7 +1260,14 @@ export function createBookingService(deps: {
             items[items.length - 1]!.id,
           )
         : null;
-    return { items, nextCursor, counts };
+    return {
+      items: await applyBookingTopicPalettes(
+        items,
+        competitionPalette?.resolveCompetitionPalettes,
+      ),
+      nextCursor,
+      counts,
+    };
   }
 
   /**
@@ -904,10 +1287,6 @@ export function createBookingService(deps: {
       publishedOnly: true,
     });
     if (!profile) throw new BookingNotFoundError(input.tutorId);
-    const sessionTopic = await resolveSessionTopic(
-      input.tutorId,
-      input.subjectId,
-    );
 
     const slot = await repo.findAvailabilitySlot(
       db,
@@ -928,19 +1307,21 @@ export function createBookingService(deps: {
       throw new BookingNotEditableError(input.tutorId);
     }
 
-    const priceSnapshot = await computePriceSnapshot(db, profile, modality, 1);
-    const totalMarks = priceSnapshot.perStudent * 1;
-
-    const w = await wallet.getByUserId(db, proposerId);
-    if (!w) throw new BookingNotFoundError(proposerId);
-    if (w.availableBalance < totalMarks) {
-      throw new InsufficientMarksError(totalMarks, w.availableBalance);
-    }
-
     const bookingId = crypto.randomUUID();
     const deadlineAt = new Date(Date.now() + RESPONSE_WINDOW_MS);
 
     return db.transaction(async (tx) => {
+      const { profile, sessionTopic, priceSnapshot } =
+        await resolveNewBookingTerms(tx, input, 1);
+      if (
+        (modality === MODALITY.OFFLINE &&
+          profile.modality === MODALITY.ONLINE) ||
+        (modality === MODALITY.ONLINE && profile.modality === MODALITY.OFFLINE)
+      ) {
+        throw new BookingNotEditableError(input.tutorId);
+      }
+      const totalMarks = getPerStudentMarks(priceSnapshot)!;
+
       await lockTutorForBooking(tx, input.tutorId);
       const overlapping = await repo.findOverlappingBookings(
         tx,
@@ -955,6 +1336,12 @@ export function createBookingService(deps: {
           session.scheduledStartAt.toISOString(),
           session.scheduledEndAt.toISOString(),
         );
+      }
+
+      const w = await wallet.getByUserId(tx, proposerId);
+      if (!w) throw new BookingNotFoundError(proposerId);
+      if (w.availableBalance < totalMarks) {
+        throw new InsufficientMarksError(totalMarks, w.availableBalance);
       }
 
       await wallet.hold(tx, {
@@ -1418,35 +1805,6 @@ export function createBookingService(deps: {
         status: meetingEventRow.status,
       };
     });
-  }
-
-  function normalizeFeedbackBullets(value: unknown): string[] {
-    const items = Array.isArray(value) ? value : [];
-    return items
-      .map((s) => (typeof s === "string" ? s.trim() : ""))
-      .filter(Boolean)
-      .slice(0, 30);
-  }
-
-  function assertCompletionFeedback(
-    bookingId: string,
-    feedback: CompletionFeedback | undefined,
-  ): asserts feedback is CompletionFeedback {
-    const discussion = normalizeFeedbackBullets(feedback?.discussion);
-    const strengths = normalizeFeedbackBullets(feedback?.strengths);
-    const improvements = normalizeFeedbackBullets(feedback?.improvements);
-    if (
-      discussion.length === 0 ||
-      strengths.length === 0 ||
-      improvements.length === 0
-    ) {
-      throw new BookingCompletionFeedbackRequiredError(bookingId);
-    }
-    feedback!.discussion = discussion.map((s) => escapeHtml(s).slice(0, 1000));
-    feedback!.strengths = strengths.map((s) => escapeHtml(s).slice(0, 1000));
-    feedback!.improvements = improvements.map((s) =>
-      escapeHtml(s).slice(0, 1000),
-    );
   }
 
   async function completeSession(
@@ -2645,10 +3003,6 @@ export function createBookingService(deps: {
     });
     if (!profile) throw new BookingNotFoundError(input.tutorId);
     assertTutorCapacity(profile, input.modality, input.targetGroupSize);
-    const sessionTopic = await resolveSessionTopic(
-      input.tutorId,
-      input.subjectId,
-    );
 
     // Validate invitees: registered users (DL-19), no duplicates, no self-
     // invite, and the total headcount must fit the target group size.
@@ -2681,24 +3035,16 @@ export function createBookingService(deps: {
     assertSessionFitsAvailability(slot, session, input.modality);
 
     const size = input.targetGroupSize;
-    const priceSnapshot = await computePriceSnapshot(
-      db,
-      profile,
-      input.modality,
-      size as GroupSize,
-    );
-    const totalMarks = priceSnapshot.perStudent * size;
-
-    const w = await wallet.getByUserId(db, proposerId);
-    if (!w) throw new BookingNotFoundError(proposerId);
-    if (w.availableBalance < totalMarks) {
-      throw new InsufficientMarksError(totalMarks, w.availableBalance);
-    }
 
     const bookingId = crypto.randomUUID();
     const deadlineAt = new Date(Date.now() + RESPONSE_WINDOW_MS);
 
     return db.transaction(async (tx) => {
+      const { profile, sessionTopic, priceSnapshot } =
+        await resolveNewBookingTerms(tx, input, size as GroupSize);
+      assertTutorCapacity(profile, input.modality, size);
+      const totalMarks = getCollectedMarks(priceSnapshot, size);
+
       await lockTutorForBooking(tx, input.tutorId);
       const overlapping = await repo.findOverlappingBookings(
         tx,
@@ -2713,6 +3059,12 @@ export function createBookingService(deps: {
           session.scheduledStartAt.toISOString(),
           session.scheduledEndAt.toISOString(),
         );
+      }
+
+      const w = await wallet.getByUserId(tx, proposerId);
+      if (!w) throw new BookingNotFoundError(proposerId);
+      if (w.availableBalance < totalMarks) {
+        throw new InsufficientMarksError(totalMarks, w.availableBalance);
       }
 
       await wallet.hold(tx, {
@@ -2774,7 +3126,7 @@ export function createBookingService(deps: {
           body: [
             "You have been invited to a group session. Confirm within 12 hours.",
             `Schedule: ${session.scheduledStartAt.toISOString()}`,
-            `Per-student price: ${priceSnapshot.perStudent} Marks`,
+            `Per-student price: ${getPerStudentMarks(priceSnapshot)} Marks`,
             `Total Marks held on acceptance: ${totalMarks}`,
             `View and accept in-platform: ${formatInviteCta(bookingId)}`,
           ].join(" "),
@@ -2835,7 +3187,7 @@ export function createBookingService(deps: {
       }
 
       const size = b.targetGroupSize;
-      const pricePerStudent = (b.priceSnapshot?.perStudent ??
+      const pricePerStudent = (getPerStudentMarks(b.priceSnapshot) ??
         DEFAULT_SOLO_PRICE) as number;
 
       // A group-series invitee accepts the whole package up front: the hold is
@@ -3084,11 +3436,17 @@ export function createBookingService(deps: {
         // legacy price maps, rounding coincidences) it NOW syncs holdAmount
         // to the participant-held total — without that sync the mismatch
         // below would re-fire on every reconfirm accept forever.
-        const perStudent = b.priceSnapshot?.perStudent;
+        const perStudent = getPerStudentMarks(b.priceSnapshot);
+        const isV3GroupSeries =
+          b.type === BOOKING_TYPE.SERIES &&
+          b.targetGroupSize > 1 &&
+          b.priceSnapshot?.engine === "v3";
         const snapshotHeadcount =
           b.type === BOOKING_TYPE.GROUP && perStudent && perStudent > 0
             ? Math.round(b.holdAmount / perStudent)
-            : null;
+            : isV3GroupSeries && b.priceSnapshot?.engine === "v3"
+              ? b.priceSnapshot.headcount
+              : null;
         if (
           snapshotHeadcount !== null &&
           confirmed.length !== snapshotHeadcount
@@ -3474,10 +3832,6 @@ export function createBookingService(deps: {
       publishedOnly: true,
     });
     if (!profile) throw new BookingNotFoundError(input.tutorId);
-    const sessionTopic = await resolveSessionTopic(
-      input.tutorId,
-      input.subjectId,
-    );
 
     if (
       input.sessions.length < MIN_SERIES_SESSIONS ||
@@ -3509,25 +3863,18 @@ export function createBookingService(deps: {
     );
     assertNoIntraSeriesOverlap(sessions);
 
-    const priceSnapshot = await computePriceSnapshot(
-      db,
-      profile,
-      input.modality,
-      1,
-    );
-    const perSession = priceSnapshot.perStudent;
-    const totalMarks = perSession * input.sessions.length;
-
-    const w = await wallet.getByUserId(db, proposerId);
-    if (!w) throw new BookingNotFoundError(proposerId);
-    if (w.availableBalance < totalMarks) {
-      throw new InsufficientMarksError(totalMarks, w.availableBalance);
-    }
-
     const bookingId = crypto.randomUUID();
     const deadlineAt = new Date(Date.now() + RESPONSE_WINDOW_MS);
 
     return db.transaction(async (tx) => {
+      const { sessionTopic, priceSnapshot } = await resolveNewBookingTerms(
+        tx,
+        input,
+        1,
+      );
+      const perSession = getPerStudentMarks(priceSnapshot)!;
+      const totalMarks = perSession * input.sessions.length;
+
       await lockTutorForBooking(tx, input.tutorId);
       for (const session of sessions) {
         // eslint-disable-next-line no-await-in-loop
@@ -3545,6 +3892,12 @@ export function createBookingService(deps: {
             session.scheduledEndAt.toISOString(),
           );
         }
+      }
+
+      const w = await wallet.getByUserId(tx, proposerId);
+      if (!w) throw new BookingNotFoundError(proposerId);
+      if (w.availableBalance < totalMarks) {
+        throw new InsufficientMarksError(totalMarks, w.availableBalance);
       }
 
       await wallet.hold(tx, {
@@ -3631,10 +3984,6 @@ export function createBookingService(deps: {
     });
     if (!profile) throw new BookingNotFoundError(input.tutorId);
     assertTutorCapacity(profile, input.modality, input.targetGroupSize);
-    const sessionTopic = await resolveSessionTopic(
-      input.tutorId,
-      input.subjectId,
-    );
 
     if (
       input.sessions.length < MIN_SERIES_SESSIONS ||
@@ -3686,25 +4035,17 @@ export function createBookingService(deps: {
     }
 
     const size = input.targetGroupSize;
-    const priceSnapshot = await computePriceSnapshot(
-      db,
-      profile,
-      input.modality,
-      size as GroupSize,
-    );
-    const perSession = priceSnapshot.perStudent;
-    const packageTotal = perSession * input.sessions.length;
-
-    const w = await wallet.getByUserId(db, proposerId);
-    if (!w) throw new BookingNotFoundError(proposerId);
-    if (w.availableBalance < packageTotal) {
-      throw new InsufficientMarksError(packageTotal, w.availableBalance);
-    }
 
     const bookingId = crypto.randomUUID();
     const deadlineAt = new Date(Date.now() + RESPONSE_WINDOW_MS);
 
     return db.transaction(async (tx) => {
+      const { profile, sessionTopic, priceSnapshot } =
+        await resolveNewBookingTerms(tx, input, size as GroupSize);
+      assertTutorCapacity(profile, input.modality, size);
+      const perSession = getPerStudentMarks(priceSnapshot)!;
+      const packageTotal = perSession * input.sessions.length;
+
       await lockTutorForBooking(tx, input.tutorId);
       for (const session of sessions) {
         // eslint-disable-next-line no-await-in-loop
@@ -3722,6 +4063,12 @@ export function createBookingService(deps: {
             session.scheduledEndAt.toISOString(),
           );
         }
+      }
+
+      const w = await wallet.getByUserId(tx, proposerId);
+      if (!w) throw new BookingNotFoundError(proposerId);
+      if (w.availableBalance < packageTotal) {
+        throw new InsufficientMarksError(packageTotal, w.availableBalance);
       }
 
       await wallet.hold(tx, {
@@ -3886,32 +4233,40 @@ export function createBookingService(deps: {
           for (const s of completed) {
             completedSessions++;
             const snap = s.priceSnapshot ?? b.priceSnapshot;
-            totalMarks += snap?.baseline ?? 0;
-            cogitoTake += snap?.cogitoTake ?? 0;
-            tutorPayout += snap?.tutorShare ?? 0;
+            totalMarks +=
+              snap?.engine === "v3"
+                ? snap.collectedMarks
+                : (snap?.baseline ?? 0);
+            if (snap?.engine !== "v3") cogitoTake += snap?.cogitoTake ?? 0;
+            if (snap?.engine !== "v3") tutorPayout += snap?.tutorShare ?? 0;
             tutorPayoutIdr +=
               snap?.tutorHonorariumIdr ??
-              (snap?.tutorShare ?? 0) * TUTOR_PAYOUT_RATE_IDR;
+              (snap?.engine === "v3" ? 0 : (snap?.tutorShare ?? 0)) *
+                TUTOR_PAYOUT_RATE_IDR;
           }
         } else {
           completedSessions++;
           const snap = b.priceSnapshot;
-          totalMarks += snap?.baseline ?? 0;
-          cogitoTake += snap?.cogitoTake ?? 0;
-          tutorPayout += snap?.tutorShare ?? 0;
+          totalMarks +=
+            snap?.engine === "v3" ? snap.collectedMarks : (snap?.baseline ?? 0);
+          if (snap?.engine !== "v3") cogitoTake += snap?.cogitoTake ?? 0;
+          if (snap?.engine !== "v3") tutorPayout += snap?.tutorShare ?? 0;
           tutorPayoutIdr +=
             snap?.tutorHonorariumIdr ??
-            (snap?.tutorShare ?? 0) * TUTOR_PAYOUT_RATE_IDR;
+            (snap?.engine === "v3" ? 0 : (snap?.tutorShare ?? 0)) *
+              TUTOR_PAYOUT_RATE_IDR;
         }
       } else {
         completedSessions++;
         const snap = b.priceSnapshot;
-        totalMarks += snap?.baseline ?? 0;
-        cogitoTake += snap?.cogitoTake ?? 0;
-        tutorPayout += snap?.tutorShare ?? 0;
+        totalMarks +=
+          snap?.engine === "v3" ? snap.collectedMarks : (snap?.baseline ?? 0);
+        if (snap?.engine !== "v3") cogitoTake += snap?.cogitoTake ?? 0;
+        if (snap?.engine !== "v3") tutorPayout += snap?.tutorShare ?? 0;
         tutorPayoutIdr +=
           snap?.tutorHonorariumIdr ??
-          (snap?.tutorShare ?? 0) * TUTOR_PAYOUT_RATE_IDR;
+          (snap?.engine === "v3" ? 0 : (snap?.tutorShare ?? 0)) *
+            TUTOR_PAYOUT_RATE_IDR;
       }
     }
 

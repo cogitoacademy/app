@@ -379,6 +379,41 @@
       "when": 1790661893766,
       "tag": "0053_fat_tigra",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1792300714302,
+      "tag": "0054_v3_economy_revision",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1792304065224,
+      "tag": "0055_classy_redwing",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1792310276156,
+      "tag": "0056_complex_ricochet",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1792311353486,
+      "tag": "0057_legacy_competition_palette_backfill",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1792347689780,
+      "tag": "0058_faq_entries",
+      "breakpoints": true
     }
   ]
 }

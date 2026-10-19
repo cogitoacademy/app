@@ -1,6 +1,232 @@
 # Cogito Runbook
 
-Last updated: 2026-10-02
+## Catalog migration/acceptance gate — implementation in progress
+
+Migrations `0056_complex_ricochet.sql` and `0057_legacy_competition_palette_backfill.sql`
+have been applied to the guarded local `cogito-test` database only. Migration 0056
+adds localized labels, row versions, inactive-by-default behavior for new rows, and
+four nullable color columns constrained to complete parent palettes/no child
+overrides. It preserves existing IDs, slugs, flags, and backfills the seven current
+competition palettes. Migration 0057 restores those same palettes for seven legacy
+0027 root aliases. The focused Postgres CRUD suite passed after both migrations;
+the exact cases and remaining acceptance gaps are in
+[`RELEASE-V3-TASKS.md`](./plans/active/RELEASE-V3-TASKS.md).
+
+The guarded Postgres catalog suite now passes assignment/delete in both orders,
+booking/archive in both orders over `booking.sessionTopic`, and stale concurrent
+admin edits in addition to historical-reference protection, non-admin denial and
+audit rollback. Run it with
+`bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests/integration/competition-catalog.test.ts`;
+latest result: 6 tests/72 expectations. The next reset-based dynamic-rate suite
+also passed 1 test/5 expectations and asserted that draft saving leaves the V3
+activation pointer unset. Run these reset-based suites sequentially against the
+guarded local `cogito-test` DB only. The move/archive/restore browser journey is
+`packages/e2e/src/specs/competition-catalog.spec.ts`; on Windows PowerShell, run
+it with dedicated local ports so Playwright starts its own test server rather
+than reusing a dev server:
+
+```powershell
+Push-Location packages/e2e
+$env:ENV_FILE = '../../apps/server/.env.test'
+$env:WEB_URL = 'http://localhost:3170'
+$env:SERVER_URL = 'http://localhost:3171'
+$env:PORT = '3171'
+$env:WEB_PORT = '3170'
+$env:BETTER_AUTH_URL = 'http://localhost:3171'
+$env:CORS_ORIGIN = 'http://localhost:3170'
+$env:VITE_SERVER_URL = 'http://localhost:3171'
+$env:CI = '1'
+bunx playwright test src/specs/competition-catalog.spec.ts --retries=0
+Pop-Location
+```
+
+Latest run passed 1 Chromium test, covering child-slug search, archive impact
+preview and confirmation, restore confirmation, moving an unused child, and the
+inherited destination palette. The E2E setup seeds test accounts; run it
+sequentially against guarded `cogito-test` only, and keep its ports separate
+from any running dev app. Before production rollout, complete all
+tutor/booking/discovery/calendar consumers and broader regression. New parents
+remain unsellable until a valid rate is configured through the dynamic economy
+flow. Do not activate customer V3 pricing until catalog consumers and
+app/website cache behavior pass. A local test migration does not authorize
+production rollout or change the commercial delivery date.
+
+New parent creation requires four bounded numeric opaque OKLCH values; a partial
+parent update retains omitted values, and children inherit the parent palette.
+Arbitrary CSS, variables, URLs, and alpha are rejected. Current and archived
+catalog references resolve to their stored parent palette for appearance without
+rewriting booking names, prices, or financial snapshots.
+
+## Marketing landing T11 smoke check (2026-10-19)
+
+The non-video landing work is in `C:\.Projects\cogito-acad` on branch
+`f/release-v3-nonvideo`. Run `bun run dev` or `bun run build` from
+`C:\.Projects\cogito-acad\apps\web`. The latest production build completed;
+static generation logged connection-refused errors from the existing public
+approved-achievements request, so confirm that endpoint before relying on
+achievement data in a local preview.
+
+In `/en` and `/id`, check desktop and mobile navigation for the removed
+Activities links and Start Learning CTA, and verify that the homepage no longer
+renders the Events section. Direct localized `/en/events/townhall-and-101-series`,
+`/en/events/simulation-days`, and their `/id/` counterparts still exist; leave
+route mapping/redirect decisions to T10. Check the school strip with mouse
+controls, focused ArrowLeft/ArrowRight keys, touch swipes, and
+`prefers-reduced-motion` (scroll should be instant). Check testimonials at
+320px, 390px, 469px, 470px, 768px, 1023px, 1024px and 1280px widths: the visible
+card surface fits its frame (including at 470px), with no horizontal page
+overflow or overlapping controls; arrows, dots and touch swipe change the active
+card; autoplay advances after 6.5 seconds; hover/focus and an active touch
+gesture pause it; the visible Play/Pause control works; reduced motion disables
+autoplay/transitions.
+Confirm accessible names and keyboard focus rings. Confirm the refined Why
+Cogito label-to-heading (16px) and heading-to-cards (32px) spacing with the
+client; the approved feature showcase still requires M02/Q14. A headless Edge run on 2026-10-19 passed at 320, 390, 469, 470, 768,
+1023, 1024 and 1280px widths, including mobile menu checks in `/en` and `/id`,
+manual logo scrolling, carousel autoplay/pause/resume, touch hold and swipe, and
+reduced-motion behavior. The testimonial surface stayed within its frame, its
+controls remained below it, and the page had no horizontal overflow or client
+errors after the FAQ viewport hydration fix. This did not cover a physical
+device, screen reader, or client visual acceptance.
+
+## V3 checkout verification and activation gate (2026-10-18)
+
+Migrations `0054`–`0057` were exercised only against the guarded local
+`cogito-test` database. A missing/null `economy_v3_activation.active_revision`
+keeps customer pricing legacy; applying migrations or saving a draft does not
+activate V3. Discovery and booking price projection now use the selected
+catalog parent's rate from the active revision, and a new unconfigured parent
+cannot fall back to a tutor's legacy base rate. Active V3 group-series prices
+at target headcount, pins its revision and recalculates viable partial groups at
+confirmed headcount before reconfirmation; each participant's remaining package
+hold and the booking/scheduled-session snapshots are updated together. A null
+pointer keeps legacy group-series behavior. Do not set a production pointer yet:
+analytics interpretation, website cutover, balance UI browser QA, and
+release/provider acceptance remain incomplete.
+
+Tutor profile reads use the active V3 pointer for their fee projection. A null
+pointer returns no V3 projection and keeps legacy base-rate writes available.
+An active pointer makes changed legacy `baseRatesIdr`/`prices` writes fail with
+`INVALID_TUTOR_PRICING`; admin edit approval ignores queued `baseRatesIdr`.
+Review submission reads the activation pointer in the same transaction as the
+status update: active V3 does not require legacy fee fields, while a null pointer
+keeps the current legacy fee requirement. The web form also skips legacy fee
+validation when it has an active V3 projection.
+Admin Business insights expose booking pricing-snapshot counts by engine; they
+do not convert V3 Marks to IDR or report booking platform take. Successful
+payment and refund rows remain the source for net top-up revenue. Resolve Q15 in
+the decision register before adding booked-service money totals. Snapshot counts
+use booking creation time and include every booking state.
+Verify the engine buckets against guarded PostgreSQL with
+`bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests/integration/admin-dashboard-analytics.test.ts`.
+Verify the guard and projection with:
+`bun test packages/api/src/tests/unit/tutor.service.test.ts packages/api/src/tests/unit/admin-tutor.service.test.ts`.
+No migration is required for this profile/API slice.
+
+Verify V3 group-series target pricing, pinned-revision partial repricing,
+reconfirmation and insufficient-funds preflight with:
+`bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests/unit/booking.service.test.ts`.
+This focused unit suite does not write the activation pointer or use a production
+database.
+
+Verify that the repository updates only scheduled child-session snapshots and
+holds with:
+`bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests/integration/booking-group-series.test.ts`.
+This suite resets only the guarded `cogito-test` database and does not set the
+V3 activation pointer.
+
+Run the isolated DB suite with:
+`bun scripts/run-test-suite.mjs api --timeout 30000 packages/api/src/tests/integration/v3-top-up.test.ts`.
+It resets only a guarded test DB, enables a fixture revision, proves concurrent
+purchase uniqueness and late credit, then clears activation in teardown. Do not
+run reset-based suites alongside browser fixtures or other database tests.
+
+Dynamic catalog-rate admin integration is covered by
+`bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests/integration/v3-dynamic-competition.test.ts`.
+It creates a parent through admin RPC, verifies it starts unpriced, saves its
+rate into a draft revision, and asserts the activation pointer remains unset.
+The catalog CRUD and economy-role suites also reset the guarded test DB; run
+those sequentially, never against development or production data.
+
+V3 uncertain checkout retains one payment/order identity. Use authoritative
+provider reconciliation on that record; an absent checkout URL or quote expiry
+does not prove the provider failed. Do not manually issue another provider POST
+or replace the payment ID to recover it. Live Midtrans operation, new balance UI
+browser QA and production migration remain unverified.
+
+## V3 report input smoke check (2026-10-18)
+
+Run `bun test --env-file apps/server/.env.test packages/api/src/tests/unit/booking-completion-feedback.test.ts packages/api/src/tests/unit/booking.service.test.ts`.
+Evidence: 295 tests pass, including aggregate 600/601 boundaries, emoji, CRLF,
+prefixes, empty lines, more than 30 short bullets and direct-service rejection
+before financial/report writes. No database migration is required for this slice.
+In browser, open Complete session as the assigned tutor: check all three counters,
+paste multiline text/emoji, exceed 600 and confirm completion is disabled without
+losing the draft. This browser smoke passed at exact 600 and over-limit 601; the
+exact-limit button enabled and the over-limit button disabled. No report was
+submitted, so settlement is still unverified here. Historical reports must remain
+readable.
+
+## V3 draft economy editor (2026-10-18)
+
+Migration `0054_v3_economy_revision.sql` was applied only to the isolated
+`cogito-test` database. No production migration was run. The migration and suite
+were exercised with:
+
+```
+bun scripts/run-test-suite.mjs api --timeout 30000 packages/api/src/tests/integration/economy-roles.test.ts
+```
+
+That file now includes two simultaneous same-version V3 saves (one winner),
+immutable previous revision, transactional audit failure rollback and unchanged
+active legacy settings. The suite passed 7 tests/26 expectations. The test reset
+helper explicitly truncates the new table in the guarded dedicated test DB. Do
+not run that reset against development data or production.
+
+Open `/admin-economy` as admin after migration: edit package and surcharge
+values, review every current parent, and enter both rates for any additional
+parent that should be priced. Incomplete dynamic rates remain blank/unavailable;
+children inherit their parent's rate. Verify the 1–6 student preview, custom
+440 Marks recommendation at equal package price, invalid-rate/missing-reason
+rejection, save/reload, and stale-version conflict. Student/tutor direct RPCs
+must fail. Browser QA passed for draft controls and 390px mobile layout; the
+Selia preview table scrolls inside its card. Draft saves do not change live
+checkout while the activation pointer is unset.
+
+The dynamic parent admin path passed one PostgreSQL integration test (5
+expectations); catalog CRUD and concurrency passed 6 tests/72 expectations; economy roles passed
+7 tests/26 expectations. Run each reset-based integration file sequentially
+against the guarded `cogito-test` database only.
+Screenshots are in `tmp/v3-admin-440.png` and `tmp/v3-admin-mobile-fixed.png`.
+
+Unit check: `bun test --env-file apps/server/.env.test packages/api/src/tests/unit/v3-rate-card.test.ts packages/api/src/tests/unit/v3-economy-config.test.ts packages/api/src/tests/unit/v3-economy-service.test.ts packages/api/src/tests/unit/pricing.service.test.ts packages/api/src/tests/unit/admin.service.test.ts`.
+For low-memory Windows typecheck, set child-process `GOMAXPROCS=2` and
+`GOMEMLIMIT=768MiB` before `bunx --no-install tsgo --noEmit -p apps/web/tsconfig.json`.
+Free disk space and start Docker before database verification; C: had ~250 MB.
+
+## V3 rate-card groundwork (2026-10-18)
+
+Run `bun test packages/api/src/tests/unit/v3-rate-card.test.ts packages/api/src/tests/unit/pricing.service.test.ts`
+for the V3 default matrices/top-up boundaries and existing pricing regression.
+This slice requires no database, secrets, migration or environment changes.
+There is no V3 pricing activation command yet: do not seed new package amounts
+or replace current economy defaults to simulate rollout. Activation must wait
+for persisted config/quote/booking snapshots and compatibility checks in T01.
+
+## SnapCN video tooling (2026-10-18)
+
+Run `bun install`, then `bun run video:studio` from the repository root
+(port 3002). `bun run video:still` writes `apps/video/out/cogito-intro.png`;
+`bun run video:render` writes `apps/video/out/cogito-intro.mp4`.
+Verify with `bunx turbo run check-types build --filter=@cogito-app/video`.
+First render downloads Chromium; upstream font loaders need network access.
+No backend services or application env files are required. Keep all Remotion
+package versions aligned. Add registry components only from `apps/video`;
+see its README for the command and alias configuration.
+If the first render fails with `ENOSPC`, free disk space before retrying;
+the Chromium download alone is about 120 MB, plus extraction and bundler caches.
+
+Last updated: 2026-10-19
 
 ## Student dashboard balance CTA fit (2026-10-02)
 
@@ -122,7 +348,24 @@ below; Student notes and tutor Session feedback remain in the Session overview, 
 
 ## Competition field palette
 
-The competition palette is compiled into the shared UI CSS and requires no environment variables, secrets, migrations, or deployment-time configuration. Competition-field badges in tutor discovery, tutor drawers, onboarding selections, and calendar details should use solid field backgrounds with white foregrounds except for Business Plan's dark foreground. Calendar event tiles intentionally remain soft. After changing a field token or slug mapping, run the UI/web typecheck and web build so Tailwind verifies every generated utility.
+Competition colors are catalog data rather than a fixed seven-slug UI map. Parent
+rows own light text/background and dark text/background OKLCH values; child rows
+inherit them. API projections resolve current and archived references by stable ID
+first and exact stored slug second. Unknown legacy content receives the documented
+neutral compatibility palette. UI consumers render the configured foreground and
+background for the active theme, while event labels and financial snapshots retain
+their stored identity and terms. Admin preview and consumer QA remain part of the
+T00A acceptance gate in `RELEASE-V3-TASKS.md`.
+
+For the authenticated `/calendar` filter smoke check, confirm each option uses the
+loaded event category's parent `coreCategory` slug and English `name`; when a
+category name is missing, the seven legacy slugs keep their familiar labels. Add
+or publish an event for a new parent slug and refresh the data: its option should
+appear selected while any previously excluded types stay excluded. Select only
+the new type and confirm both month and agenda views show matching events. With
+all current options selected, uncategorized events remain visible. Use **Reset**
+after excluding types and confirm it restores every option currently in the
+loaded event data.
 
 > **Start here for ops:** [INFRA-PLAYBOOK.md](./INFRA-PLAYBOOK.md) is the entry
 > point (scenario → command table). This document holds the detailed
@@ -344,7 +587,7 @@ After a web deployment, sign in once as each supported role and open `/dashboard
 - Admin: a normal login must land on `/dashboard`; open the admin workspace and verify the compact escalated-operation, tutor-review, and achievement-review counts above Business insights. Use the sidebar to open `/admin-operations`, `/admin-tutors`, `/admin-achievements`, and `/admin-economy`. In `/admin-operations`, verify category, urgency, and SLA-status filters; open a queue item and confirm its reported reason/source, affected-user count, OQ-04 deadline, time-since-report, escalated badge, and WhatsApp escalation action. Clicking the escalation action must show the confirmation modal; Cancel keeps the admin page in place, while Continue opens the Cogito support conversation at `+62 881-0119-90195` in a new tab. In the Wallet lookup tab, search a partial name and an email, select the intended user from the bounded identity results, and confirm the selected name/email/role, total/held/available Marks, and latest ledger entries load; verify a changed search does not leave the previous user's wallet visible. Confirm the hydrated participant wallet/booking-ledger cards and state-history timeline load, then use **Open override** to reach the existing preview/apply flow. Confirm the override opens as a bottom drawer below 640px and a width-constrained right-side drawer at 640px and above. Scroll long content independently while keeping Cancel, Preview, and Override visible in the footer. Confirm students show name/avatar, confirmation state, and held Marks; confirm the assigned tutor appears separately as payout-only. Change category and verify the policy explanation updates. Preview must show named student balance changes, booking-state change, and tutor payout eligibility without manual participant or Marks controls. Preview/Apply must succeed. In `/admin-economy`, verify the active schedule loads, edits persist after reload, and the preview updates.
 - In `/admin-tutor-payouts`, verify the default operational table shows tutors who need payment with the tutor name, bank, account number, account holder, gross honorarium, fee, net transfer, transfer status, transfer date, and an **Open** action. Check the date range controls and 7/30/90-day shortcuts; paid rows are filtered by transfer date while current unpaid balances remain visible. Switch between unpaid, paid, and all statuses, verify sorting by payment priority/amount/name/latest transfer, and download the filtered result as a CSV that opens in Excel or Google Sheets. Open an unpaid tutor, verify the full private destination account plus gross/fee/net breakdown, confirm the transfer dialog, and check that **Mark as paid** refreshes the report. A tutor with incomplete payout details must not be payable. The page must remain horizontally usable at a narrow viewport.
 - Complete-session feedback: as tutor, open a scheduled booking past end time and verify the booking detail shows the read-only Student notes. Click **Complete session**, fill Session discussion / Strengths observed / Areas for improvement (each textarea line is one bullet and Enter adds another), confirm disabled until all 3 have ≥1 bullet, submit and verify success toast + booking completed. Confirm the same detail page refreshes and shows Session feedback directly below Student notes in the Session overview, with all 3 bullet sections (per-session rows for series). As student/admin, open the completed booking and verify the Student notes and Session feedback are both visible.
-- In the admin dashboard's **Business insights** section, verify the default 30-day view loads booking KPIs plus Accounts & activity and Marks & revenue cards. Total accounts, rolling MAU/inactive/churn, current Marks ownership, and lifetime paid conversion must retain their labeled scopes when the date filter changes. Signups and gross/refund/net top-up revenue must follow the selected period. Switch among 7/30/90 days, then apply a custom start/end range; confirm inclusive WIB dates, a 366-day maximum, continuous trend labels, and matching signup/revenue changes. Cross-check successful payment totals against `payment_record.updated_at` for `PAID`/`SETTLED` rows and refunds against `refund_record.created_at`. Confirm booking activity, current booking portfolio, audience growth, session-format mix, and top categories still load; zero-data periods show intentional empty states and retry remains actionable. Confirm locked booking value stays distinct from realized top-up revenue.
+- In the admin dashboard's **Business insights** section, verify the default 30-day view loads booking KPIs plus Accounts & activity, top-up revenue, and pricing-snapshot count cards. Total accounts, rolling MAU/inactive/churn, current Marks ownership, and lifetime paid conversion must retain their labeled scopes when the date filter changes. Signups and gross/refund/net top-up revenue must follow the selected period. Switch among 7/30/90 days, then apply a custom start/end range; confirm inclusive WIB dates, a 366-day maximum, continuous trend labels, and matching signup/revenue changes. Cross-check successful payment totals against `payment_record.updated_at` for `PAID`/`SETTLED` rows and refunds against `refund_record.created_at`. Confirm booking activity, current booking portfolio, audience growth, session-format mix, and top categories still load; zero-data periods show intentional empty states and retry remains actionable. Pricing-snapshot buckets count booking records created in the selected period, include all states, and do not imply financial value: V3 is engine-tagged, legacy requires the known untagged numeric shape, unknown/malformed non-null snapshots are other, and SQL `NULL` is missing. Do not reintroduce booking-derived Marks, IDR, or platform-share totals until Q15 defines their population, participant, session, and date basis.
 - In the Operations → Room approvals tab, verify the Active rooms catalog loads. Use **Add room**, enter a name, location, and positive whole-number capacity, submit, and confirm the new room appears in the list and in the Offline room selector. Use **Edit** to change the name, location, or capacity and confirm the active catalog and room selectors refresh. Use **Deactivate**, confirm the danger dialog, and verify the room disappears from the active catalog and new selectors while existing assignments remain intact. Confirm blank names/locations and invalid capacity stay in the dialog without an RPC request. Then verify the pending offline room-approval queue loads. Use **Assign** for a requested room. Use **Choose another** (or **Choose room** when the original request conflicted) to open the admin booking detail; confirm the Offline room card shows the booking schedule without a UUID/date-time form, lets the admin select a target room, and calls **Assign room** or **Relocate room**. Confirm **Cancel** opens a confirmation dialog explaining the booking/hold impact, then refreshes the queue after confirmation.
 - In `/admin-tutors`, open a profile with pending edits and confirm the proposed specialization changes show readable category/specialization labels instead of raw UUIDs. Resize to a narrow viewport and verify specialization badges and other long pending values wrap without horizontal page overflow; use **Edit format** to correct structured education/competition entries, save, reload, and confirm the version-checked update and success toast. The review request/response payloads must remain unchanged.
 - In the focused `/admin-tutors/:profileId` review workspace, open a profile with mixed pending values and verify the **Tutor profile → review** summary announces the added, changed, removed, and empty counts. Use the **All**, **Added**, **Changed**, **Removed**, and **Empty** chips together with field search; confirm the list and relevant section badges respond to both controls. Expand and collapse fields with mouse and keyboard, confirm `aria-expanded` changes, and verify the current/proposed panes use readable text plus symbols and labels. Confirm Profile, Teaching setup, Credentials, Proofs, Marks, Profile photo, and Payout account remain visible even when empty, with inline empty states and section badges; the photo panel continues to show current versus proposed assets separately. Resize to a narrow viewport and enable reduced motion; there must be no page-level horizontal overflow or custom animated diff transition. The review request/response payloads must remain unchanged.
@@ -1655,6 +1898,53 @@ Do not "fix" the warnings by parallelizing the loops or by silencing the rules
 in `.oxlintrc.json` (that config is shared with the local run). The lint
 auto-fix commit sets `LEFTHOOK=0`; the baseline and format steps remain the
 authoritative CI gates.
+
+## Public Tutor API Verification
+
+`publicContent.tutors.list` is an anonymous server-side API for the future
+marketing-site consumer. Verify its HTTP contract locally with a `POST` to
+`http://localhost:3001/rpc/publicContent/tutors/list`, no cookie, and body
+`{"json": {}}`. The RPC response wraps the tutor array as `json`; an empty
+published set is `json: []`, while a non-success response indicates an API or
+database failure. The route does not enable browser CORS; use the marketing
+Next server for the fetch unless a later browser-read requirement adds an
+explicit origin policy.
+
+Run the focused API check from the repo root:
+
+```powershell
+bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests/unit/public-content.test.ts packages/api/src/tests/integration/public-content-tutors.test.ts
+```
+
+The integration fixture guard requires `NODE_ENV=test`, a local database host,
+and the exact `cogito-test` database name before any fixture write or cleanup;
+this suite does not reset or truncate the shared test database. Never load
+`apps/server/.env` for this fixture suite. It verifies an anonymous read, a
+published profile beside a draft profile, the exact public key set while
+sensitive columns are populated, active-vs-inactive catalog selection, the
+seeded published profile's presence and draft profile's absence, and the
+unchanged student gate on `tutors.listPublished`; it does not assume the shared
+test database has no other published tutors. The unit suite adds future/unknown
+top-level and nested fields to a simulated database row, verifies the positive
+selected-column allowlist, and checks that empty and error responses remain
+distinct. The 2026-10-19 integration run passed (1 test, 18 assertions) and the
+unit run passed (5 tests, 30 assertions); fixture cleanup was verified after
+the test.
+
+## FAQ content verification
+
+The app serves FAQ data through anonymous `POST /rpc/publicContent/faq/list` with the standard oRPC body envelope, for example `{"json":{"locale":"en","surface":"landing"}}`. The response array is in `json`. A valid empty array means there is no active matching FAQ copy; a non-success response remains an API failure. Indonesian question and answer fields fall back independently to English. Admin edits are available at `/admin-faq`; only active rows are public, and the landing surface also requires the landing checkbox.
+
+Run the focused FAQ checks from the repository root:
+
+```powershell
+bun test packages/api/src/tests/unit/faq.test.ts
+bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests/integration/faq.test.ts
+```
+
+The integration fixture guard requires `NODE_ENV=test`, loopback host, and the exact `cogito-test` database before writes or cleanup. It deletes only its recorded fixture IDs; it does not reset or truncate the shared DB. Migration `0058_faq_entries.sql` is applied on local `cogito-test` only. Never use `apps/server/.env` for this suite or apply the migration to a shared environment as part of local testing. On 2026-10-19, the FAQ unit tests passed (5 tests/19 expectations), integration passed (1 test/8 expectations), and the app web typecheck passed. The full API unit run passed (2,465 tests/5,776 expectations), app web tests passed (121/239), app web production build passed, and FAQ admin Playwright passed (1 Chromium test); its local fixture IDs were deleted and verified absent.
+
+The marketing site reads both FAQ surfaces server-side using `COGITO_APP_API_URL`, `POST /rpc/publicContent/faq/list`, the standard oRPC JSON envelope, and `cache: "no-store"`. Missing configuration, HTTP failure, invalid JSON/envelope, or invalid entries produce a localized FAQ error state; a valid empty array produces a separate empty state. Landing FAQ failures stay inside that section, and failed requests do not render FAQ JSON-LD. Local mock coverage returned HTTP 503 while `/{en,id}/faq` remained HTTP 200 with retry text; do not use the production API URL for local verification. From `C:/.Projects/cogito-acad`, run `bun test apps/web/tests` (13 tests/40 expectations). A headless-browser smoke against a local FAQ mock verified Enter/Space operation for the desktop/mobile landing cards and full FAQ accordion, plus the answer-region ARIA links; Tab-sequence and screen-reader behavior remain unverified. The marketing production build passed with `COGITO_APP_API_URL=http://127.0.0.1:4300`; both FAQ and landing routes are dynamic and no API data is baked into the build. Do not seed client FAQ copy without the approved M01 content inventory.
 
 ## Common Errors
 
