@@ -379,7 +379,10 @@ type SignupFailure = {
   signupAttemptId?: string;
 };
 
-const testSignupOtps = new Map<string, { otp: string; expiresAt: number }>();
+const testSignupOtps = new Map<
+  string,
+  { rowId: string; otp: string; expiresAt: number }
+>();
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -462,9 +465,9 @@ function lockSignupKey(tx: typeof db, key: string) {
 }
 
 /**
- * Send an OTP before account creation. Replacements happen under an
- * email-scoped transaction lock, so old codes are invalidated and concurrent
- * send requests cannot bypass the 60-second cooldown.
+ * Commit the OTP proof and cooldown before delivery. Replacements happen under
+ * an email-scoped transaction lock, while the external mail call runs after
+ * commit so provider latency cannot hold the database connection or lock.
  */
 export async function sendPreAccountSignupOtp(input: {
   email: string;
@@ -480,15 +483,13 @@ export async function sendPreAccountSignupOtp(input: {
   const sender = preAccountSignupEmailSender;
   if (!sender) {
     return {
-      ok: false,
+      ok: false as const,
       status: 502,
       error: "We couldn't send a code right now. Please try again.",
     };
   }
 
-  let capturedOtp: { otp: string; expiresAt: number } | null = null;
-  let clearCapturedOtp = false;
-  const result = await db.transaction(async (tx) => {
+  const proof = await db.transaction(async (tx) => {
     await lockSignupEmail(tx as unknown as typeof db, email);
     const identifier = signupOtpIdentifier(email);
     const [current] = await tx
@@ -533,56 +534,90 @@ export async function sendPreAccountSignupOtp(input: {
       updatedAt: new Date(now),
     });
 
-    try {
-      await sender({ email, otp });
-    } catch {
-      await tx.delete(verificationRow).where(eq(verificationRow.id, rowId));
-      clearCapturedOtp = true;
-      if (env.NODE_ENV !== "production") {
-        console.error(
-          JSON.stringify({
-            level: "error",
-            action: "pre_account_signup_otp_send_failed",
-            error: { code: "mail_provider_error" },
-          }),
-        );
-      }
-      return {
-        ok: false as const,
-        status: 502,
-        error: "We couldn't send a code right now. Please try again.",
-      };
-    }
-
-    if (env.NODE_ENV === "test") {
-      capturedOtp = {
-        otp,
-        expiresAt: now + SIGNUP_OTP_TTL_MS,
-      };
-    }
     return {
       ok: true as const,
-      signupAttemptId: input.signupAttemptId,
-      resendAfterSeconds: SIGNUP_RESEND_COOLDOWN_MS / 1000,
+      rowId,
+      otp,
+      expiresAt: now + SIGNUP_OTP_TTL_MS,
     };
   });
+
+  if (!proof.ok) return proof;
+
+  // The proof and cooldown are committed before calling the external mail
+  // provider so provider latency never holds a database connection or lock.
+  try {
+    await sender({ email, otp: proof.otp });
+  } catch {
+    // A resend may have replaced this proof while delivery was in flight.
+    // Delete only this request's row and leave any newer proof untouched.
+    await db.delete(verificationRow).where(eq(verificationRow.id, proof.rowId));
+    if (env.NODE_ENV === "test") {
+      const captured = testSignupOtps.get(email);
+      if (captured?.rowId === proof.rowId) testSignupOtps.delete(email);
+    }
+    if (env.NODE_ENV !== "production") {
+      console.error(
+        JSON.stringify({
+          level: "error",
+          action: "pre_account_signup_otp_send_failed",
+          error: { code: "mail_provider_error" },
+        }),
+      );
+    }
+    return {
+      ok: false,
+      status: 502,
+      error: "We couldn't send a code right now. Please try again.",
+    };
+  }
+
   if (env.NODE_ENV === "test") {
-    if (result.ok && capturedOtp) {
-      testSignupOtps.set(email, capturedOtp);
-    } else if (clearCapturedOtp) {
-      testSignupOtps.delete(email);
+    const [currentProof] = await db
+      .select({ id: verificationRow.id })
+      .from(verificationRow)
+      .where(eq(verificationRow.id, proof.rowId))
+      .limit(1);
+    if (currentProof) {
+      testSignupOtps.set(email, {
+        rowId: proof.rowId,
+        otp: proof.otp,
+        expiresAt: proof.expiresAt,
+      });
     }
   }
-  return result;
+
+  return {
+    ok: true as const,
+    signupAttemptId: input.signupAttemptId,
+    resendAfterSeconds: SIGNUP_RESEND_COOLDOWN_MS / 1000,
+  };
 }
 
 /** Test-only reader used by the loopback E2E fixture endpoint. */
-export function getPreAccountSignupOtpForTest(email: string) {
+export async function getPreAccountSignupOtpForTest(email: string) {
   if (env.NODE_ENV !== "test") return null;
   const normalizedEmail = normalizeEmail(email);
   const captured = testSignupOtps.get(normalizedEmail);
   if (!captured || captured.expiresAt <= Date.now()) {
-    testSignupOtps.delete(normalizedEmail);
+    if (
+      captured &&
+      testSignupOtps.get(normalizedEmail)?.rowId === captured.rowId
+    ) {
+      testSignupOtps.delete(normalizedEmail);
+    }
+    return null;
+  }
+
+  const [currentProof] = await db
+    .select({ id: verificationRow.id })
+    .from(verificationRow)
+    .where(eq(verificationRow.id, captured.rowId))
+    .limit(1);
+  if (
+    !currentProof ||
+    testSignupOtps.get(normalizedEmail)?.rowId !== captured.rowId
+  ) {
     return null;
   }
   return captured.otp;

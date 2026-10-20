@@ -203,6 +203,81 @@ describe("REQ-AUTH-01 pre-account email OTP", () => {
     }
   });
 
+  test("a stale mail failure cannot delete a newer resend proof or test capture", async () => {
+    wireTestMail();
+    const email = newEmail("stale-send-failure");
+    let rejectFirstSend!: (reason?: unknown) => void;
+    let markFirstSendStarted!: () => void;
+    const firstSendStarted = new Promise<void>((resolve) => {
+      markFirstSendStarted = resolve;
+    });
+    const firstSendGate = new Promise<void>((_resolve, reject) => {
+      rejectFirstSend = reject;
+    });
+    let sendCount = 0;
+    setPreAccountSignupEmailSender(async (params) => {
+      sendCount += 1;
+      if (sendCount === 1) {
+        markFirstSendStarted();
+        await firstSendGate;
+        return;
+      }
+      sentOtps.push(params);
+    });
+
+    const firstAttemptId = randomUUID();
+    const firstRequest = sendPreAccountSignupOtp({
+      email,
+      signupAttemptId: firstAttemptId,
+    });
+    try {
+      await firstSendStarted;
+      const firstProof = await db.query.verification.findFirst({
+        where: (row, { eq: equals }) =>
+          equals(row.identifier, `pre-account-signup-otp:${email}`),
+      });
+      expect(firstProof).toBeDefined();
+
+      // Model the elapsed cooldown while the first provider request is still
+      // pending; the following resend replaces this exact proof row.
+      await db
+        .update(verification)
+        .set({ createdAt: new Date(Date.now() - 61_000) })
+        .where(eq(verification.id, firstProof!.id));
+
+      const replacement = await sendCode(email, randomUUID());
+      const replacementProof = await db.query.verification.findFirst({
+        where: (row, { eq: equals }) =>
+          equals(row.identifier, `pre-account-signup-otp:${email}`),
+      });
+      expect(replacementProof).toBeDefined();
+      expect(replacementProof!.id).not.toBe(firstProof!.id);
+      expect(await getPreAccountSignupOtpForTest(email)).toBe(replacement.otp);
+
+      rejectFirstSend(new Error("stale provider failure"));
+      expect(await firstRequest).toMatchObject({ ok: false, status: 502 });
+      const stillCurrentProof = await db.query.verification.findFirst({
+        where: (row, { eq: equals }) =>
+          equals(row.identifier, `pre-account-signup-otp:${email}`),
+      });
+      expect(stillCurrentProof?.id).toBe(replacementProof!.id);
+      expect(await getPreAccountSignupOtpForTest(email)).toBe(replacement.otp);
+      expect(
+        await db.query.user.findFirst({ where: eq(user.email, email) }),
+      ).toBeUndefined();
+      expect(
+        await complete({
+          email,
+          signupAttemptId: replacement.signupAttemptId,
+          otp: replacement.otp,
+        }),
+      ).toMatchObject({ ok: true });
+    } finally {
+      rejectFirstSend(new Error("test cleanup"));
+      await firstRequest.catch(() => undefined);
+    }
+  });
+
   test("rejects incorrect codes and locks after three failed attempts", async () => {
     wireTestMail();
     const email = newEmail("attempts");

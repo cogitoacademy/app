@@ -22,7 +22,7 @@ Email sending lives outside this package (in `@cogito-app/api`'s EmailService) t
 
 ### Pre-account signup
 
-The server intercepts `POST /api/auth/sign-up/email`; requests without both the six-digit OTP and `signupAttemptId` are rejected before Better Auth runs. `POST /api/auth/sign-up/email-otp` takes `{ email, signupAttemptId }`, returns the bound attempt ID and 60-second cooldown, and enforces that cooldown per normalized email. A resend after the cooldown replaces the code, which expires after five minutes and allows three incorrect attempts. OTP digest, expiry, attempt count, and attempt ID use the existing `verification` table; no new schema is needed. `POST /api/auth/sign-up/email-outcome` takes `{ email, signupAttemptId }` and returns `{ created }` for the bounded idempotency result after an uncertain response.
+The server intercepts `POST /api/auth/sign-up/email`; requests without both the six-digit OTP and `signupAttemptId` are rejected before Better Auth runs. `POST /api/auth/sign-up/email-otp` takes `{ email, signupAttemptId }`, returns the bound attempt ID and 60-second cooldown, and enforces that cooldown per normalized email. The proof and cooldown commit before the external mail call; delivery runs outside the transaction and email lock. On send failure, cleanup removes only that request's proof row, so a delayed failure cannot delete a newer resend. A resend after the cooldown replaces the code, which expires after five minutes and allows three incorrect attempts. OTP digest, expiry, attempt count, and attempt ID use the existing `verification` table; no new schema is needed. `POST /api/auth/sign-up/email-outcome` takes `{ email, signupAttemptId }` and returns `{ created }` for the bounded idempotency result after an uncertain response.
 
 The completion path serializes by normalized email and attempt ID. Better Auth inserts the user, account, and session on the same transaction connection; successful creation consumes the proof and records the outcome in that transaction. A rejected create rolls back, leaving a valid proof available for retry. The verified-email hook is scoped to the exact email and private signup transaction; the public `createAuth` factory exposes no verification bypass option.
 
@@ -30,7 +30,7 @@ When `NODE_ENV=test`, the server mail ports do not send real mail. `GET /api/__t
 
 ### API and operations documentation follow-up
 
-This package README records the local module behavior. The release integration should also document the request/response contracts in `docs/API-REFERENCE.md`, the signup verification rule in `docs/CONTEXT.md` and `docs/MODULE-REFERENCE.md`, and the test-only OTP capture plus coordinated test procedure in `docs/RUNBOOK.md`. Update `docs/plans/active/RELEASE-V3-PRD.md` to keep REQ-AUTH-01 implementation status pending until the coordinated database integration and browser E2E run pass. These core docs are left to the release integration worker while those files are being integrated.
+The request/response contracts and verification behavior are recorded in `docs/API-REFERENCE.md`, `docs/CONTEXT.md`, `docs/MODULE-REFERENCE.md`, and `docs/RUNBOOK.md`. The active V3 task plan records the REQ-AUTH-01 verification status and remaining coordinated checks.
 
 ## Files
 

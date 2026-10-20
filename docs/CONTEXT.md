@@ -67,7 +67,11 @@ browser suite was not rerun against the shared test database. See the
 REQ-AUTH-01 changes public email/password signup so no account exists before a
 valid email OTP is proved. `POST /api/auth/sign-up/email-otp` sends a six-digit
 code with a 60-second per-email resend cooldown; a resend replaces the prior
-proof. `POST /api/auth/sign-up/email` requires the code and attempt UUID.
+proof. The proof and cooldown commit in a short transaction before the server
+calls the mail provider, so provider latency does not hold a database
+connection or email lock. A failed delivery removes only the proof row created
+by that request and returns an inline error. `POST /api/auth/sign-up/email`
+requires the code and attempt UUID.
 Account/session creation, proof consumption, and a 24-hour email/attempt outcome
 record commit in one PostgreSQL transaction. Failed account creation rolls back
 and keeps the proof reusable. The UI starts with an empty code, clears proof

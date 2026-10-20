@@ -90,7 +90,7 @@ function hasTrustedBrowserOrigin(request: Request) {
 export function registerAuthRoutes(app: Elysia) {
   const appWithTestOtpRoute =
     env.NODE_ENV === "test" && isLocalSignupOtpTestTarget()
-      ? app.get(TEST_SIGNUP_OTP_PATH, ({ request, server }) => {
+      ? app.get(TEST_SIGNUP_OTP_PATH, async ({ request, server }) => {
           const peerAddress = server?.requestIP(request)?.address;
           if (
             !peerAddress ||
@@ -106,7 +106,7 @@ export function registerAuthRoutes(app: Elysia) {
             return jsonResponse({ message: "Not found" }, 404);
           }
           const email = url.searchParams.get("email") ?? "";
-          const otp = getPreAccountSignupOtpForTest(email);
+          const otp = await getPreAccountSignupOtpForTest(email);
           return otp
             ? jsonResponse({ otp })
             : jsonResponse({ message: "No test code is available." }, 404);

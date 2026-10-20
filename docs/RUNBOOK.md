@@ -2438,7 +2438,7 @@ The production env schema requires `RESEND_API_KEY` and a non-default `EMAIL_FRO
 
 Accounts created before mandatory email verification remain `email_verified=false`; do not run a data backfill that marks them verified. On the next email/password or Google sign-in, the web client requests a fresh verification OTP and routes the account to `/verify-email`. After the code is accepted, the user continues to the original destination.
 
-New email/password signups receive the six-digit OTP before any account exists. After verified account creation commits, the server makes one separate best-effort attempt to send the welcome/onboarding email with the login link and platform introduction. Resending a code sends only the OTP. Legacy account verification and email-OTP sign-in remain verification-only; the email-OTP plugin cannot create users and does not send sign-in codes to unknown emails.
+New email/password signups receive the six-digit OTP before any account exists. The server commits the proof and cooldown before calling the mail provider, so provider latency does not hold a database transaction or email lock. A send failure deletes only that request's proof row and returns an inline error; it cannot remove a newer resend. After verified account creation commits, the server makes one separate best-effort attempt to send the welcome/onboarding email with the login link and platform introduction. Resending a code sends only the OTP. Legacy account verification and email-OTP sign-in remain verification-only; the email-OTP plugin cannot create users and does not send sign-in codes to unknown emails.
 
 Manual signup smoke test:
 
@@ -2447,6 +2447,7 @@ Manual signup smoke test:
 3. Request another code after the cooldown and confirm the new code works while the previous code is rejected.
 4. Change the email field and confirm the code input clears; return to the original address during cooldown and confirm the browser recovers its own attempt without exposing another attempt ID.
 5. Confirm existing-account email verification/sign-in still works and an unknown address cannot receive a sign-in OTP or create an account through the Better Auth email-OTP plugin.
+6. Simulate a provider send failure and confirm no account is created, the failed proof cannot be used, and a later resend remains usable if it replaced the failed request's proof while delivery was pending.
 
 Auth diagnostics must not print OTP values, signup attempt IDs, passwords, reset URLs, or reset tokens. The development reset-mail log may identify the user and action but omits the one-time link.
 

@@ -1,9 +1,10 @@
 import { describe, test, expect, beforeAll } from "bun:test";
+import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { db } from "@cogito-app/db";
 import { user, verification } from "@cogito-app/db/schema";
 
-import { auth } from "@cogito-app/auth";
+import { auth, setVerificationEmailSender } from "@cogito-app/auth";
 import { resetDatabase } from "../helpers/test-client";
 
 describe("G2: existing-account email verification via email-otp plugin", () => {
@@ -20,7 +21,6 @@ describe("G2: existing-account email verification via email-otp plugin", () => {
       otp: string;
       type: string;
     }> = [];
-    const { setVerificationEmailSender } = await import("@cogito-app/auth");
     setVerificationEmailSender(async (params) => {
       sent.push(params);
     });
@@ -86,7 +86,6 @@ describe("G2: existing-account email verification via email-otp plugin", () => {
   test("email OTP sign-in cannot send codes to or create unknown accounts", async () => {
     const unknownEmail = `unknown.signin.${Date.now()}@cogito.test`;
     const sent: string[] = [];
-    const { setVerificationEmailSender } = await import("@cogito-app/auth");
     setVerificationEmailSender(async ({ email: sentEmail }) => {
       sent.push(sentEmail);
     });
@@ -111,5 +110,53 @@ describe("G2: existing-account email verification via email-otp plugin", () => {
     expect(
       await db.select().from(user).where(eq(user.email, unknownEmail)),
     ).toEqual([]);
+  });
+
+  test("existing account can sign in with email OTP and receives a valid session", async () => {
+    const existingEmail = `existing.signin.${randomUUID()}@cogito.test`;
+    await auth.api.signUpEmail({
+      body: {
+        email: existingEmail,
+        password: "Test1234!",
+        name: "Existing OTP Sign-in",
+      },
+      headers: new Headers(),
+    });
+    const [existingUser] = await db
+      .select()
+      .from(user)
+      .where(eq(user.email, existingEmail));
+    expect(existingUser).toBeDefined();
+
+    const sent: Array<{ email: string; otp: string; type: string }> = [];
+    setVerificationEmailSender(async (params) => {
+      sent.push(params);
+    });
+    const sendResult = await auth.api.sendVerificationOTP({
+      body: { email: existingEmail, type: "sign-in" },
+      headers: new Headers(),
+    });
+    expect(sendResult.success).toBe(true);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ email: existingEmail, type: "sign-in" });
+    expect(sent[0]!.otp).toMatch(/^\d{6}$/);
+
+    const signInResponse = await auth.api.signInEmailOTP({
+      body: { email: existingEmail, otp: sent[0]!.otp },
+      headers: new Headers(),
+      asResponse: true,
+    });
+    const sessionCookie = signInResponse.headers
+      .getSetCookie()
+      .find((cookie) => cookie.includes("better-auth.session_token"))
+      ?.split(";")[0];
+    expect(sessionCookie).toBeDefined();
+
+    const session = await auth.api.getSession({
+      headers: new Headers({ cookie: sessionCookie ?? "" }),
+    });
+    expect(session).toMatchObject({
+      user: { id: existingUser!.id, email: existingEmail },
+    });
   });
 });
