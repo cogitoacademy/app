@@ -12,12 +12,14 @@ unchanged.
 
 Local startup on 20 October returned HTTP 200 from the web app on port 3000
 and `/health` on port 3001, with database, Redis and scheduler checks healthy.
-The web typecheck remains red: the imported class pages reference an absent
-`classes` router and the wrong detail route ID; the class service also passes
-an argument to the zero-argument ID helper. The class slice owns these fixes.
-The baseline no-show integration command stalled before assertions and was
-stopped; this is not passing integration evidence. The settlement slice owns
-the reproduction and has the exclusive test-database window.
+Class public-read commit `0a0ce408` registers `classes.list/get`, fixes the
+detail route ID and removes the invalid argument to the repository factory.
+The web typecheck now passes, as does the public DTO allowlist unit test.
+Publishing, class enrollment and browser acceptance remain incomplete.
+The initial baseline no-show integration command stalled before assertions;
+the settlement worker subsequently reproduced the failing no-show/completion
+assertion with the correct dependency/env setup. Settlement retains the
+exclusive test-database window until its regression run finishes.
 
 Read-only verification now confirms both local `cogito-app` and `cogito-test`
 have the same four fee, FAQ-rich-text, payout and class-draft migration hashes
