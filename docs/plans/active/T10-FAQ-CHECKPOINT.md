@@ -74,6 +74,8 @@ On 2026-10-19:
   behavior remain unverified.
 - The integration test requires `NODE_ENV=test`, loopback DB host, and exact `cogito-test`; cleanup deletes only recorded fixture IDs. No database reset or truncate is used.
 - Migrations `0058` and `0059` are applied to local `cogito-test`; `0059` is also applied to local development `cogito-app`. Production remains on the approved release migration path.
+- The shared Playwright runner now validates exact `NODE_ENV=test` and loopback PostgreSQL `/cogito-test` before global setup can reset/seed. Config and setup load the same resolved env file; API/web URLs and ports must agree, both server ports must be free, and existing servers are never reused. Traces remain on failure even with `--retries=0`. See the [guarded E2E runbook](../../RUNBOOK.md#guarded-playwright-e2e-runs-2026-10-20).
+- On 2026-10-20, parent verification of the guard passed 7 unit tests / 32 expectations and the E2E package typecheck. Browser E2E was not rerun during the integration checkpoint because it resets/seeds the shared `cogito-test` database; no test DB writes were made for this checkpoint. The guard commit does not change FAQ behavior.
 
 Commands:
 
@@ -94,6 +96,19 @@ FAQ admin browser coverage is run from `packages/e2e`:
 
 ```powershell
 bun run --filter @cogito-app/e2e test -- faq-admin.spec.ts --retries=0
+```
+
+Run the destructive Playwright setup only after ensuring no other worker is
+using `cogito-test` and the dedicated API/web ports are free. From the repo
+root in PowerShell, the guarded command is:
+
+```powershell
+Push-Location packages/e2e
+$env:NODE_ENV = 'test'
+$env:ENV_FILE = '../../apps/server/.env.test'
+bun run test -- faq-admin.spec.ts --retries=0
+Remove-Item Env:NODE_ENV, Env:ENV_FILE
+Pop-Location
 ```
 
 ## Remaining T10 work and gates

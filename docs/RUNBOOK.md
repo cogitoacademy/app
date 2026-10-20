@@ -12,36 +12,76 @@ match exactly:
 | `0059_massive_blindfold.sql` | 1792383364835 | `b4e69c578c477f72069aad24914fa9cc7193e3f79fe070e9efa858b5fa9a4669` | Applied | Applied |
 | `0059_faq_rich_text.sql` | 1792385462859 | `7f330d2e9be702fa8da6e1b1d9fba89771fb74b121a3c5bf3507901e1bfd40d7` | Applied | Applied |
 | `0060_tutor_payout_allocations.sql` | 1792388580581 | `728a44d0efd1517513120928147fdcef3776991c20d6f0b9b136cf03c8ab8bf3` | Applied | Applied |
-| `0061_academy_class_drafts.sql` | 1792394899225 | `db9f27f77c76201b609400077a530ca8d5141f79b904c6f9a7ef1595a4a366b8` | Pending | Applied |
+| `0061_academy_class_drafts.sql` | 1792394899225 | `db9f27f77c76201b609400077a530ca8d5141f79b904c6f9a7ef1595a4a366b8` | Applied | Applied |
 
-The dev database has `faq_entry`, `tutor_session_fee` and
-`tutor_payout_allocation`; academy class tables are absent. The test database
-also has `academy_class` and `academy_class_session`. Both databases have
-`question_en_rich` and `answer_en_rich` as required JSONB columns, with nullable
-`question_id_rich` and `answer_id_rich`. Existing fee, FAQ and payout migration
-SQL and timestamps are preserved. The unified journal orders these four entries
-by their recorded timestamps, which avoids Drizzle skipping an earlier import
-behind the latest applied timestamp. No reconciliation migration or historical
-fee backfill is required for the observed databases.
+Both local databases now have `faq_entry`, `tutor_session_fee`,
+`tutor_payout_allocation`, `academy_class` and `academy_class_session`.
+`question_en_rich` and `answer_en_rich` are required JSONB columns, while
+`question_id_rich` and `answer_id_rich` are nullable. Existing SQL files,
+timestamps, hashes and journal rows were preserved. The unified journal orders
+the four entries by their recorded timestamps, so Drizzle does not skip an
+earlier imported migration behind the latest applied timestamp. No
+reconciliation migration or historical fee backfill is required for the
+observed databases.
 
-After confirming no other worker is using the shared dev database and reviewing
-the dev journal again, the only local migration planned is the class-draft
-migration. From PowerShell:
+After SQL/hash review and confirming no other worker was using the shared dev
+database, the parent applied only `0061_academy_class_drafts.sql` to local
+development through the standard Drizzle migration command. The command was
+run from the B worktree's `packages/db` with the local dev env explicitly
+selected:
 
 ```powershell
-Push-Location packages/db
-$env:ENV_FILE = '../../apps/server/.env'
+Push-Location C:/.Projects/cogito-app/.worktrees/v3-session-fee-contract/packages/db
+$env:ENV_FILE = 'C:/.Projects/cogito-app/apps/server/.env'
 bun run db:migrate
 Remove-Item Env:ENV_FILE
 Pop-Location
 ```
 
-Do not run this from the integration checkpoint without parent coordination.
-`cogito-test` already has all four entries and needs no migration. Automated
-destructive/reset-based suites must pass `--env-file apps/server/.env.test`,
-verify the resolved target is loopback database `cogito-test`, and run
-sequentially. Never point those suites at `cogito-app`. The local migration
-state does not authorize production changes.
+Read-only post-migration verification confirmed both
+`drizzle.__drizzle_migrations` journals end with timestamp `1792394899225`, hash
+`db9f27f77c76201b609400077a530ca8d5141f79b904c6f9a7ef1595a4a366b8`; each also
+contains the preceding three hashes above. Their row IDs differ as expected.
+No migration in this four-file V3 integration set remains pending for these
+two local databases. Automated
+destructive/reset-based suites must use the E2E guard below and only the exact
+loopback `cogito-test` target, never `cogito-app`. This local migration state
+does not authorize production changes.
+
+## Guarded Playwright E2E runs (2026-10-20)
+
+The E2E config and global setup resolve and load the same env file with ambient
+values preserved, then both validate the target. Set `NODE_ENV=test` exactly;
+`DATABASE_URL` must use PostgreSQL and a loopback host (`localhost`,
+`127.0.0.1` or `::1`) with the exact database path `/cogito-test`. API and web
+URLs must be loopback HTTP origins, and `PORT` / `WEB_PORT` must match those
+URLs. Optional `BETTER_AUTH_URL` and `VITE_SERVER_URL` must resolve to the same
+local API. Validation runs before seed setup. Global setup resets and seeds
+only this guarded test database, so never point it at development or production.
+
+Playwright starts its own API and web servers with `reuseExistingServer: false`;
+the default ports are 3101 and 3100. Keep both free, or configure different
+free loopback origins and matching port variables. The specs run serially with
+one worker. Traces use `retain-on-failure` even when retries are disabled.
+Google Meet is explicitly disabled in both the test server and seed setup.
+
+From the repository root in PowerShell, run a FAQ browser spec this way:
+
+```powershell
+Push-Location packages/e2e
+$env:NODE_ENV = 'test'
+$env:ENV_FILE = '../../apps/server/.env.test'
+bun run test -- faq-admin.spec.ts --retries=0
+Remove-Item Env:NODE_ENV, Env:ENV_FILE
+Pop-Location
+```
+
+Keep credentials in the selected env file; do not print them in logs. The
+2026-10-20 guard checkpoint (`ad290158`, cherry-picked from `2e424c4e`) passed
+7 unit tests / 32 expectations and the E2E package typecheck, as reported by
+the parent. No destructive/browser E2E was run during this integration
+checkpoint. The local test DB guard does not replace the separate guarded test
+database requirement for automated destructive tests.
 
 ## Catalog migration/acceptance gate — implementation in progress
 
@@ -212,7 +252,7 @@ readable.
 
 ## V3 class draft admin smoke check (2026-10-19)
 
-Migration `0061_academy_class_drafts.sql` is additive and creates empty class/session tables; it does not backfill or publish records. The migration was applied only to the isolated local `cogito-test` database. The focused test command was:
+Migration `0061_academy_class_drafts.sql` is additive and creates empty class/session tables; it does not backfill or publish records. It is applied to both local `cogito-app` and isolated `cogito-test`; the parent applied it to dev after SQL/hash review. The focused test command was:
 
 ```
 bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests/integration/academy-class.test.ts

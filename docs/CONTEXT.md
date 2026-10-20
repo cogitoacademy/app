@@ -8,14 +8,23 @@ checkpoint integrates the existing fee/payout and class-draft work with FAQ
 rich text, calendar, palette and shared documentation changes. The source
 worktrees remain untouched.
 
-Read-only inspection confirmed the local `cogito-app` journal has fee,
-FAQ-rich-text and payout migrations; it has no academy class tables yet.
-`cogito-test` has the same migrations plus academy class and class-session
-tables from the class-draft migration. Both have the four FAQ rich-text JSONB
-columns with English fields required and Indonesian fields nullable. The
-canonical migration timestamps, file hashes, schema details and dev-only
-pending migration are recorded in [`RUNBOOK.md`](./RUNBOOK.md). No DB writes
-were performed during this checkpoint.
+Read-only verification now confirms both local `cogito-app` and `cogito-test`
+have the same four fee, FAQ-rich-text, payout and class-draft migration hashes
+in timestamp order, and both have the FAQ, fee, payout, class and class-session
+tables. The parent applied only the additive class-draft migration to local
+development after reviewing its SQL and journal state; this integration
+worktree made no database writes, and the shared test database was not changed
+for this checkpoint. Neither journal was rewritten and no historical fee
+backfill was added. Exact timestamps, hashes and verification details are in
+[`RUNBOOK.md`](./RUNBOOK.md).
+
+The imported Playwright guard validates `NODE_ENV=test` and loopback
+`cogito-test` before setup can reset or seed, loads the same resolved env file
+for config and setup, requires dedicated free API/web ports with server reuse
+disabled, and retains failure traces even at zero retries. Parent verification
+passed its guard unit suite (7 tests / 32 expectations) and E2E typecheck; the
+browser suite was not rerun against the shared test database. See the
+[runbook](./RUNBOOK.md) for the guarded command.
 
 ## Competition catalog language
 

@@ -2,6 +2,30 @@
 
 Date: 19 October 2026. Status: **T00A catalog CRUD/palette and T01 dynamic draft rates are implemented with focused isolated-DB and browser evidence; the non-video T11 landing slice is in progress; customer activation and full release acceptance remain pending**. Specs: [PRD](RELEASE-V3-PRD.md), [SPEC](RELEASE-V3-SPEC.md), [decisions](../../client/RELEASE-V3-DECISIONS.md), [audit](../../client/RELEASE-V3-AUDIT.md).
 
+## Integration checkpoint — 20 October 2026
+
+- Commit `22c5ffb3` integrates the existing B fee/payout and class-draft work,
+  its dirty source changes, and A's FAQ rich-text, calendar, palette and
+  documentation changes. The migration journal/snapshot chain keeps both
+  existing `0059` SQL files and their applied timestamps/hashes intact. Routes
+  were regenerated after combining the competing route changes.
+- Parent readback confirms the local dev and test journals now share all four
+  migration hashes and both schemas contain FAQ, fee, payout, class and
+  class-session tables. Parent applied only the class-draft migration to local
+  dev; no test database write, reset, or data-history rewrite occurred in this
+  checkpoint. See [RUNBOOK](../../RUNBOOK.md#v3-local-integration-database-state-2026-10-20).
+- Cherry-picked E2E guard commit `ad290158` from `2e424c4e`. Parent reports its
+  focused guard checks passed (7 tests / 32 expectations) and E2E typecheck
+  passed. `29` FAQ/calendar/color/fee unit tests passed with `48` expectations;
+  route generation found 39 route files; `git diff --check` passed. No class
+  DB integration or browser E2E was run here because its setup resets/seeds the
+  shared `cogito-test` database. Full web typecheck/build remain unverified for
+  this integration checkpoint.
+- Client TeX/PDF/font and generated output artifacts from A were excluded from
+  the import and remain preserved in the source checkout. Both source
+  worktrees remain untouched. This checkpoint is not the full V3 release or
+  client acceptance.
+
 ## Implementation evidence — 18–19 October 2026
 
 ### T00A catalog browser checkpoint
