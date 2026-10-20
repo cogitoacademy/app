@@ -23,6 +23,7 @@ function makeRepo(overrides: Partial<RoomRepo> = {}): RoomRepo {
     insertRoom: mock(async (_conn: any, _values: any) => ({})),
     findRoomById: mock(async (_conn: any, _roomId: string) => null),
     findRoomRecordById: mock(async (_conn: any, _roomId: string) => null),
+    lockRoomRecordById: mock(async (_conn: any, _roomId: string) => null),
     updateRoom: mock(async (_conn: any, _roomId: string, _values: any) => null),
     deactivateRoom: mock(async (_conn: any, _roomId: string) => null),
     findRoomBookings: mock(async (_conn: any) => []),
@@ -149,7 +150,7 @@ describe("createRoomService", () => {
         capacity: 12,
       });
       const repo = makeRepo({
-        findRoomRecordById: mock(async () => makeRoom()),
+        lockRoomRecordById: mock(async () => makeRoom()),
         updateRoom: mock(async (_conn, roomId, values) => {
           expect(roomId).toBe("room1");
           expect(values).toEqual({
@@ -174,7 +175,7 @@ describe("createRoomService", () => {
 
     test("throws when the room does not exist", async () => {
       const repo = makeRepo({
-        findRoomRecordById: mock(async () => null),
+        lockRoomRecordById: mock(async () => null),
       });
       const service = createRoomService(repo, makeDb());
 
@@ -194,7 +195,7 @@ describe("createRoomService", () => {
     test("soft-deactivates an active room", async () => {
       const updated = makeRoom({ isActive: false });
       const repo = makeRepo({
-        findRoomRecordById: mock(async () => makeRoom()),
+        lockRoomRecordById: mock(async () => makeRoom()),
         deactivateRoom: mock(async (_conn, roomId) => {
           expect(roomId).toBe("room1");
           return updated;
@@ -209,7 +210,7 @@ describe("createRoomService", () => {
       const inactive = makeRoom({ isActive: false });
       const deactivate = mock(async () => null);
       const repo = makeRepo({
-        findRoomRecordById: mock(async () => inactive),
+        lockRoomRecordById: mock(async () => inactive),
         deactivateRoom: deactivate,
       });
       const service = createRoomService(repo, makeDb());
@@ -220,7 +221,7 @@ describe("createRoomService", () => {
 
     test("throws when the room does not exist", async () => {
       const repo = makeRepo({
-        findRoomRecordById: mock(async () => null),
+        lockRoomRecordById: mock(async () => null),
       });
       const service = createRoomService(repo, makeDb());
 
