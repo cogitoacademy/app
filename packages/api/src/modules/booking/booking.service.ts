@@ -2347,10 +2347,7 @@ export function createBookingService(deps: {
       // hold less than session.holdAmount; releasing/deducting the full
       // session amount would draw the difference from the wallet's pooled
       // held balance (other bookings' holds) and strand later completions.
-      const effective = Math.min(
-        session.holdAmount,
-        participant.heldAmount,
-      );
+      const effective = Math.min(session.holdAmount, participant.heldAmount);
       if (effective > 0) {
         const w = await wallet.getByUserId(tx, participant.userId);
         if (!w) throw new BookingNotFoundError(participant.userId);

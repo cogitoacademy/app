@@ -1916,11 +1916,9 @@ describe("AdminBookingService additional guards", () => {
       }),
     ).rejects.toThrow(BookingStateTransitionError);
 
-    expect(repo.findBookingById).toHaveBeenCalledWith(
-      expect.anything(),
-      "b1",
-      { forUpdate: true },
-    );
+    expect(repo.findBookingById).toHaveBeenCalledWith(expect.anything(), "b1", {
+      forUpdate: true,
+    });
     expect(repo.findSessionById).toHaveBeenNthCalledWith(
       2,
       expect.anything(),

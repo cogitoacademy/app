@@ -472,10 +472,12 @@ describe("series no-show and completion settlement", () => {
       expect(finalBooking.holdAmount).toBe(afterCompletion.booking.holdAmount);
       expect(finalBooking.currentState).toBe("scheduled");
       expect(
-        (await db
-          .select()
-          .from(bookingSession)
-          .where(eq(bookingSession.id, first.id)))[0]!.currentState,
+        (
+          await db
+            .select()
+            .from(bookingSession)
+            .where(eq(bookingSession.id, first.id))
+        )[0]!.currentState,
       ).toBe("completed");
       expect(
         await db
