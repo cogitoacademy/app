@@ -34,7 +34,7 @@ function formatSessionDate(date: Date | string) {
 }
 
 export function ClassDetailPage() {
-  const { classId } = useParams({ from: "/_app/classes/$classId" });
+  const { classId } = useParams({ from: "/_app/classes_/$classId" });
   const academyClass = useQuery(
     orpc.classes.get.queryOptions({ input: { id: classId } }),
   );
@@ -72,7 +72,7 @@ export function ClassDetailPage() {
       <Button
         nativeButton={false}
         variant="plain"
-        render={<Link to="/classes" />}
+        render={<Link to="/classes" aria-label="Browse classes" />}
         className="w-fit"
       >
         <IconArrowLeft />

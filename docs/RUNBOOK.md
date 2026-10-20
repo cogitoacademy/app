@@ -274,7 +274,17 @@ bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests
 
 It passed 4 tests / 18 expectations, including admin-only access, audit reason/snapshots, optimistic version conflicts, online + managed-room draft sessions, stable session IDs after reorder, room/tutor capacity and modality validation, and overlapping-session rejection. The guarded test helper truncates class/session tables only in `cogito-test`; never run it against development or production data.
 
-Local UI smoke: sign in as admin, open `/admin-classes`, create/edit a cohort draft with at least one online and one in-person session, verify an active competition, published mode-compatible tutor and managed room are selectable, and save a reason. Reorder sessions and confirm their identities remain. Drafts are not public and do not reserve rooms; publication-time overlap checks, Meet creation, cover upload, student enrollment/public reads, and notifications are not available. Do not present this draft page as launch-ready; M01 class content/assets remain pending. Server typecheck hit Windows memory exhaustion in this attempt; web typecheck and production builds remain unverified for this slice.
+Local UI smoke: sign in as admin, open `/admin-classes`, create/edit a cohort draft with at least one online and one in-person session, verify an active competition, published mode-compatible tutor and managed room are selectable, and save a reason. Reorder sessions and confirm their identities remain. Drafts are not public and do not reserve rooms; publication-time overlap checks, Meet creation, cover upload, student enrollment, and notifications are not available. Published-only public list/detail procedures are now implemented; no browser E2E has verified them. Do not present this draft page as launch-ready; M01 class content/assets remain pending. Server typecheck hit Windows memory exhaustion in this attempt; web typecheck and production builds remain unverified for this slice.
+
+## V3 published class read contract (2026-10-20)
+
+Pure DTO test:
+
+```
+bun test packages/api/src/tests/unit/academy-class.public.test.ts
+```
+
+It passed 1 test / 1 expectation and verified the response omits tutor payout/account fields, room details, and roster data. `bun run --cwd apps/web check-types` passed after linking the existing workspace dependencies from `C:\.Projects\cogito-app`; no dependencies were installed. Browser E2E and database tests were not run. `classes.list` and `classes.get` are public reads of published classes only; they do not enable enrollment.
 
 ## V3 draft economy editor (2026-10-18)
 

@@ -1,4 +1,4 @@
-import { adminProcedure } from "../../procedures";
+import { adminProcedure, publicProcedure } from "../../procedures";
 import type { AcademyClassHandler } from "./academy-class.handler";
 import {
   getAcademyClassInput,
@@ -35,5 +35,27 @@ export function createAcademyClassRouter(handler: AcademyClassHandler) {
       })
       .input(saveAcademyClassDraftInput)
       .handler(handler.saveAcademyClassDraft),
+  };
+}
+
+export function createAcademyClassPublicRouter(handler: AcademyClassHandler) {
+  return {
+    list: publicProcedure
+      .route({
+        method: "POST",
+        path: "/classes/list",
+        tags: ["Classes"],
+        summary: "List published classes for the student catalog",
+      })
+      .handler(handler.listPublishedAcademyClasses),
+    get: publicProcedure
+      .route({
+        method: "POST",
+        path: "/classes/get",
+        tags: ["Classes"],
+        summary: "Get one published class for the student catalog",
+      })
+      .input(getAcademyClassInput)
+      .handler(handler.getPublishedAcademyClass),
   };
 }
