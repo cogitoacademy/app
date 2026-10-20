@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { createTestClassMeetingProvider } from "../../modules/meeting/test-class-meeting.provider";
 
 describe("test academy-class meeting provider", () => {
-  test("fails one controlled attempt then reuses the same session event", async () => {
+  test("keeps an accepted event retryable until its Meet link is ready", async () => {
     const provider = createTestClassMeetingProvider({
       failFirstTitlePrefix: "E2E RETRY: ",
     });
@@ -24,18 +24,20 @@ describe("test academy-class meeting provider", () => {
       startAt,
       endAt,
       undefined,
-      options,
+      { ...options, externalEventId: first.externalEventId ?? undefined },
     );
     const repeated = await provider(
       "session-retry-once",
       startAt,
       endAt,
       undefined,
-      options,
+      { ...options, externalEventId: retry.externalEventId ?? undefined },
     );
 
     expect(first.status).toBe("failed");
+    expect(first.externalEventId).toBe("test-class-event-session-retry-once");
     expect(retry.status).toBe("created");
+    expect(retry.externalEventId).toBe(first.externalEventId);
     expect(repeated).toEqual(retry);
   });
 });

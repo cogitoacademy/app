@@ -178,6 +178,16 @@ export async function findRoomRecordById(conn: DbOrTx, roomId: string) {
   });
 }
 
+/** Locks an existing room row before mutable room fields are read or changed. */
+export async function lockRoomRecordById(conn: DbOrTx, roomId: string) {
+  const [row] = await conn
+    .select()
+    .from(room)
+    .where(eq(room.id, roomId))
+    .for("update");
+  return row ?? null;
+}
+
 /** Updates the editable details of a room. */
 export async function updateRoom(
   conn: DbOrTx,
@@ -404,6 +414,7 @@ export function createRoomRepo() {
     insertRoom,
     findRoomById,
     findRoomRecordById,
+    lockRoomRecordById,
     updateRoom,
     deactivateRoom,
     findRoomBookings,

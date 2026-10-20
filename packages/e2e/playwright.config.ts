@@ -89,7 +89,7 @@ export default defineConfig({
       },
     },
     {
-      command: `bun --env-file="${resolvedEnvFile}" run dev -- --mode test`,
+      command: `bun --env-file="${resolvedEnvFile}" run --bun dev -- --mode test`,
       cwd: webCwd,
       url: webUrl,
       reuseExistingServer: false,

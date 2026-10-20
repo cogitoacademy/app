@@ -697,6 +697,25 @@ export function createGoogleMeetingProvider(
           ? offlineCalendarEventId(bookingId)
           : null;
       const event = await googleMeetBreaker.execute(async () => {
+        if (details?.externalEventId) {
+          if (config.authType === "oauth_refresh_token") {
+            return getEventWithOauth(
+              oauthAccessToken!,
+              details.externalEventId,
+              TIMEOUT_MS,
+            );
+          }
+          return withTimeout(
+            Promise.resolve(
+              calendar!.events.get({
+                calendarId: config.calendarId,
+                eventId: details.externalEventId,
+              }),
+            ).then((response) => response.data as GoogleCalendarEvent),
+            TIMEOUT_MS,
+            "Google Meet API timeout after 30s (resume event)",
+          );
+        }
         try {
           if (config.authType === "oauth_refresh_token") {
             return await insertEventWithOauth(
@@ -870,7 +889,7 @@ export function createGoogleMeetingProvider(
         id: row?.id ?? details?.idempotencyKey ?? "",
         bookingId,
         provider: "google_meet",
-        externalEventId: null,
+        externalEventId: details?.externalEventId ?? null,
         meetingUrl: null,
         status: "failed" as const,
         errorReason: String(error),
@@ -901,12 +920,16 @@ export function createGoogleMeetingProvider(
     return {
       provider: "google_meet" as const,
       status:
-        result.status === "created"
+        result.status === "created" && result.meetingUrl
           ? ("created" as const)
           : ("failed" as const),
       externalEventId: result.externalEventId,
       meetingUrl: result.meetingUrl,
-      errorReason: result.errorReason,
+      errorReason:
+        result.errorReason ??
+        (result.meetingUrl
+          ? null
+          : "Google accepted the event, but its Meet link is still pending"),
     };
   }
 

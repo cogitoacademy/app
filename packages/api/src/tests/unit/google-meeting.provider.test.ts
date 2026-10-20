@@ -1,4 +1,5 @@
 import { describe, test, expect, mock, beforeEach, afterEach } from "bun:test";
+import { createHash } from "node:crypto";
 
 let logCaptures: any[] = [];
 const originalConsoleLog = console.log;
@@ -1783,5 +1784,98 @@ describe("createGoogleMeetingProvider academy class events", () => {
     ).toBe(retryRequest?.requestBody?.conferenceData?.createRequest?.requestId);
     expect(mockCalendarEventsGet).toHaveBeenCalledTimes(1);
     expect(localInsert).not.toHaveBeenCalled();
+  });
+
+  test("resumes the accepted event until the pending Meet link is available", async () => {
+    mockCalendarEventsInsert.mockReset();
+    mockCalendarEventsGet.mockReset();
+    const sessionId = "class-session-pending-link";
+    const externalEventId = `cogito${createHash("sha256")
+      .update(`academy-class-session:${sessionId}`)
+      .digest("hex")}`;
+    mockCalendarEventsInsert.mockImplementationOnce(async () => ({
+      data: {
+        id: externalEventId,
+        conferenceData: { createRequest: { status: "pending" } },
+      },
+    }));
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      mockCalendarEventsGet.mockImplementationOnce(async () => ({
+        data: {
+          id: externalEventId,
+          conferenceData: { createRequest: { status: "pending" } },
+        },
+      }));
+    }
+    mockCalendarEventsGet.mockImplementationOnce(async () => ({
+      data: {
+        id: externalEventId,
+        conferenceData: {
+          entryPoints: [
+            {
+              entryPointType: "video",
+              uri: "https://meet.google.com/pending-link-ready",
+            },
+          ],
+        },
+      },
+    }));
+
+    const originalSetTimeout = globalThis.setTimeout;
+    globalThis.setTimeout = ((
+      callback: TimerHandler,
+      delay?: number,
+      ...args: unknown[]
+    ) => {
+      if (delay === 750 && typeof callback === "function") {
+        callback(...(args as []));
+        return 0 as unknown as ReturnType<typeof setTimeout>;
+      }
+      return originalSetTimeout(callback, delay, ...(args as []));
+    }) as typeof setTimeout;
+
+    try {
+      const localInsert = mock(() => ({
+        values: mock(() => ({ returning: mock(async () => []) })),
+      }));
+      const provider = createGoogleMeetingProvider(config, {
+        insert: localInsert,
+      } as any);
+      const startAt = new Date("2035-02-01T10:00:00.000Z");
+      const endAt = new Date("2035-02-01T11:00:00.000Z");
+      const details = { title: "Pending class link" };
+      const pending = await provider.createAcademyClassEvent(
+        sessionId,
+        startAt,
+        endAt,
+        undefined,
+        details,
+      );
+      const ready = await provider.createAcademyClassEvent(
+        sessionId,
+        startAt,
+        endAt,
+        undefined,
+        { ...details, externalEventId: pending.externalEventId ?? undefined },
+      );
+      const firstRequest = mockCalendarEventsInsert.mock.calls[0]?.[0] as
+        | { requestBody?: { id?: string } }
+        | undefined;
+
+      expect(pending.status).toBe("failed");
+      expect(pending.externalEventId).toBe(externalEventId);
+      expect(pending.meetingUrl).toBeNull();
+      expect(ready.status).toBe("created");
+      expect(ready.externalEventId).toBe(externalEventId);
+      expect(ready.meetingUrl).toBe(
+        "https://meet.google.com/pending-link-ready",
+      );
+      expect(firstRequest?.requestBody?.id).toBe(externalEventId);
+      expect(mockCalendarEventsInsert).toHaveBeenCalledTimes(1);
+      expect(mockCalendarEventsGet).toHaveBeenCalledTimes(9);
+      expect(localInsert).not.toHaveBeenCalled();
+    } finally {
+      globalThis.setTimeout = originalSetTimeout;
+    }
   });
 });

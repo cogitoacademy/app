@@ -24,6 +24,7 @@ import {
   user,
 } from "@cogito-app/db/schema";
 import type { DbOrTx } from "../../lib/tx";
+import type { TxClient } from "../../lib/tx";
 import type { listAcademyClassesInput } from "./academy-class.types";
 import type { z } from "zod";
 
@@ -67,9 +68,36 @@ export function createAcademyClassRepo() {
     });
   }
 
-  async function getTutorProfiles(conn: DbOrTx, tutorIds: readonly string[]) {
+  async function getCompetitionForPublish(conn: TxClient, id: string) {
+    const [competition] = await conn
+      .select({ id: subjectCategory.id, parentId: subjectCategory.parentId })
+      .from(subjectCategory)
+      .where(eq(subjectCategory.id, id))
+      .limit(1);
+    if (!competition) return null;
+
+    const lockIds = [competition.id, competition.parentId]
+      .filter((value): value is string => value !== null)
+      .toSorted();
+    for (const lockId of lockIds) {
+      // eslint-disable-next-line no-await-in-loop -- lock reference rows in a stable ID order
+      await conn
+        .select({ id: subjectCategory.id })
+        .from(subjectCategory)
+        .where(eq(subjectCategory.id, lockId))
+        .for("update");
+    }
+
+    return getCompetition(conn, id);
+  }
+
+  async function getTutorProfiles(
+    conn: DbOrTx,
+    tutorIds: readonly string[],
+    lockForUpdate = false,
+  ) {
     if (tutorIds.length === 0) return [];
-    return conn
+    const query = conn
       .select({
         userId: tutorProfile.userId,
         role: user.role,
@@ -81,14 +109,20 @@ export function createAcademyClassRepo() {
       .from(tutorProfile)
       .innerJoin(user, eq(user.id, tutorProfile.userId))
       .where(inArray(tutorProfile.userId, [...tutorIds]));
+    return lockForUpdate ? query.for("update") : query;
   }
 
-  async function getRooms(conn: DbOrTx, roomIds: readonly string[]) {
+  async function getRooms(
+    conn: DbOrTx,
+    roomIds: readonly string[],
+    lockForUpdate = false,
+  ) {
     if (roomIds.length === 0) return [];
-    return conn
+    const query = conn
       .select()
       .from(room)
       .where(and(inArray(room.id, [...roomIds]), eq(room.isActive, true)));
+    return lockForUpdate ? query.for("update") : query;
   }
 
   async function lockClassForPublish(conn: DbOrTx, id: string) {
@@ -502,6 +536,7 @@ export function createAcademyClassRepo() {
     list,
     get,
     getCompetition,
+    getCompetitionForPublish,
     getTutorProfiles,
     getRooms,
     lockClassForPublish,

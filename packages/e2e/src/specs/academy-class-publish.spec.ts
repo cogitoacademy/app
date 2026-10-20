@@ -339,7 +339,7 @@ test("admin publishes both class modes; students see only the published DTO", as
     ).toBeVisible();
 
     const retryReason = publishedCard.locator(`#meeting-retry-${draft.id}`);
-    await retryReason.fill("Retry a controlled test-provider failure");
+    await retryReason.fill("Retry the accepted event with a pending Meet link");
     await publishedCard
       .getByRole("button", { name: "Retry failed meeting setup" })
       .click();

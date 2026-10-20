@@ -26,6 +26,8 @@ export interface MeetingEventDetails {
   createConference?: boolean;
   /** Stable provider key used for idempotent class-session calendar events. */
   idempotencyKey?: string;
+  /** Existing provider event to resume when conference generation is pending. */
+  externalEventId?: string;
 }
 
 export interface AcademyClassMeetingResult {

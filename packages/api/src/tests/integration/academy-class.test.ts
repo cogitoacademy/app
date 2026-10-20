@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@cogito-app/db";
 import {
   academyClass,
@@ -20,6 +20,54 @@ import {
   setUserRole,
   signUpAndSignIn,
 } from "../helpers/test-client";
+import { lockRoomForBooking, lockTutorForBooking } from "../../lib/locks";
+import { lockCompetitionCatalog } from "../../modules/competition-catalog/catalog-lock";
+
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
+async function holdAdvisoryLock(lock: typeof lockRoomForBooking, id: string) {
+  const acquired = deferred();
+  const release = deferred();
+  const transaction = db.transaction(async (tx) => {
+    await lock(tx, id);
+    acquired.resolve();
+    await release.promise;
+  });
+  await acquired.promise;
+  return { release: release.resolve, transaction };
+}
+
+async function waitForBlockedAdvisoryQueryCount(expectedCount: number) {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    // eslint-disable-next-line no-await-in-loop -- poll the database for the lock waiter rather than guessing with a delay
+    const result = await db.execute(sql`
+      SELECT query
+      FROM pg_stat_activity
+      WHERE datname = current_database()
+        AND pid <> pg_backend_pid()
+        AND wait_event_type = 'Lock'
+        AND wait_event = 'advisory'
+        AND query ILIKE '%pg_advisory_xact_lock%'
+    `);
+    const rows = (
+      Array.isArray(result)
+        ? result
+        : ((result as unknown as { rows?: unknown[] }).rows ?? [])
+    ) as Array<{ query: string }>;
+    if (rows.length >= expectedCount) return;
+    // eslint-disable-next-line no-await-in-loop -- short bounded polling interval for a DB-observed gate
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error(
+    `Timed out waiting for ${expectedCount} blocked advisory lock query(s)`,
+  );
+}
 
 describe("academy class drafts and published reads", () => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -497,5 +545,204 @@ describe("academy class drafts and published reads", () => {
     expect(
       (await adminClient.admin.getAcademyClass({ id: wrongFee.id })).state,
     ).toBe("draft");
+  });
+
+  test("rechecks managed room capacity after a gated concurrent room update", async () => {
+    const managedRoom = await adminClient.room.create({
+      name: `Capacity race room ${suffix}`,
+      location: "Jakarta",
+      capacity: 10,
+    });
+    const startAt = new Date("2040-05-01T10:00:00.000Z");
+    const draft = await adminClient.admin.saveAcademyClassDraft({
+      kind: "masterclass",
+      competitionId,
+      titleEn: `Capacity race masterclass ${suffix}`,
+      descriptionEn: "Race fixture for fresh managed room capacity.",
+      tutorFeeIdr: 300_000,
+      masterclassRateMarks: 5,
+      reason: "Create a class before the managed room capacity race",
+      sessions: [
+        {
+          capacity: 6,
+          titleEn: "Room capacity race session",
+          startAt,
+          endAt: new Date(startAt.getTime() + 60 * 60 * 1000),
+          mode: "in_person",
+          roomId: managedRoom.id,
+          tutorId,
+        },
+      ],
+    });
+
+    const roomLock = await holdAdvisoryLock(lockRoomForBooking, managedRoom.id);
+    const tutorLock = await holdAdvisoryLock(lockTutorForBooking, tutorId);
+    let updatePromise: Promise<unknown> | undefined;
+    let publishPromise: Promise<unknown> | undefined;
+    try {
+      updatePromise = adminClient.room.update({
+        id: managedRoom.id,
+        name: managedRoom.name,
+        location: managedRoom.location,
+        capacity: 4,
+      });
+      await waitForBlockedAdvisoryQueryCount(1);
+
+      publishPromise = adminClient.admin.publishAcademyClass({
+        id: draft.id,
+        expectedVersion: draft.version,
+        reason: "Publish while a managed room capacity update is gated",
+      });
+      await waitForBlockedAdvisoryQueryCount(2);
+
+      roomLock.release();
+      await updatePromise;
+      tutorLock.release();
+      await expect(publishPromise).rejects.toThrow(
+        "exceeds the selected room's capacity",
+      );
+      expect(
+        (await adminClient.admin.getAcademyClass({ id: draft.id })).state,
+      ).toBe("draft");
+    } finally {
+      roomLock.release();
+      tutorLock.release();
+      await Promise.allSettled([
+        roomLock.transaction,
+        tutorLock.transaction,
+        ...(updatePromise ? [updatePromise] : []),
+        ...(publishPromise ? [publishPromise] : []),
+      ]);
+    }
+  });
+
+  test("rejects publication after a gated managed room deactivation", async () => {
+    const managedRoom = await adminClient.room.create({
+      name: `Deactivation race room ${suffix}`,
+      location: "Jakarta",
+      capacity: 10,
+    });
+    const startAt = new Date("2040-06-01T10:00:00.000Z");
+    const draft = await adminClient.admin.saveAcademyClassDraft({
+      kind: "masterclass",
+      competitionId,
+      titleEn: `Room deactivation race ${suffix}`,
+      descriptionEn: "Race fixture for fresh managed room activity.",
+      tutorFeeIdr: 300_000,
+      masterclassRateMarks: 5,
+      reason: "Create a class before the managed room deactivation race",
+      sessions: [
+        {
+          capacity: 6,
+          titleEn: "Room deactivation race session",
+          startAt,
+          endAt: new Date(startAt.getTime() + 60 * 60 * 1000),
+          mode: "in_person",
+          roomId: managedRoom.id,
+          tutorId,
+        },
+      ],
+    });
+
+    const roomLock = await holdAdvisoryLock(lockRoomForBooking, managedRoom.id);
+    const tutorLock = await holdAdvisoryLock(lockTutorForBooking, tutorId);
+    let deactivatePromise: Promise<unknown> | undefined;
+    let publishPromise: Promise<unknown> | undefined;
+    try {
+      deactivatePromise = adminClient.room.deactivate({ id: managedRoom.id });
+      await waitForBlockedAdvisoryQueryCount(1);
+
+      publishPromise = adminClient.admin.publishAcademyClass({
+        id: draft.id,
+        expectedVersion: draft.version,
+        reason: "Publish while a managed room deactivation is gated",
+      });
+      await waitForBlockedAdvisoryQueryCount(2);
+
+      roomLock.release();
+      const deactivatedRoom = await deactivatePromise;
+      expect(deactivatedRoom.isActive).toBe(false);
+      tutorLock.release();
+      await expect(publishPromise).rejects.toThrow(
+        "Select an active managed room",
+      );
+      expect(
+        (await adminClient.admin.getAcademyClass({ id: draft.id })).state,
+      ).toBe("draft");
+    } finally {
+      roomLock.release();
+      tutorLock.release();
+      await Promise.allSettled([
+        roomLock.transaction,
+        tutorLock.transaction,
+        ...(deactivatePromise ? [deactivatePromise] : []),
+        ...(publishPromise ? [publishPromise] : []),
+      ]);
+    }
+  });
+
+  test("rechecks competition status after a gated catalog archive", async () => {
+    const startAt = new Date("2041-05-01T10:00:00.000Z");
+    const draft = await adminClient.admin.saveAcademyClassDraft({
+      kind: "masterclass",
+      competitionId,
+      titleEn: `Catalog archive race ${suffix}`,
+      descriptionEn: "Race fixture for fresh competition status.",
+      tutorFeeIdr: 300_000,
+      masterclassRateMarks: 5,
+      reason: "Create a class before the competition archive race",
+      sessions: [
+        {
+          capacity: 4,
+          titleEn: "Catalog archive race session",
+          startAt,
+          endAt: new Date(startAt.getTime() + 60 * 60 * 1000),
+          mode: "online",
+          roomId: null,
+          tutorId,
+        },
+      ],
+    });
+
+    const acquired = deferred();
+    const release = deferred();
+    const archiveTransaction = db.transaction(async (tx) => {
+      await lockCompetitionCatalog(tx);
+      acquired.resolve();
+      await release.promise;
+      await tx
+        .update(subjectCategory)
+        .set({ isActive: false })
+        .where(eq(subjectCategory.id, competitionId));
+    });
+    await acquired.promise;
+    let publishPromise: Promise<unknown> | undefined;
+    try {
+      publishPromise = adminClient.admin.publishAcademyClass({
+        id: draft.id,
+        expectedVersion: draft.version,
+        reason: "Publish while a competition archive is gated",
+      });
+      await waitForBlockedAdvisoryQueryCount(1);
+      release.resolve();
+      await archiveTransaction;
+
+      await expect(publishPromise).rejects.toThrow(
+        "competition or specialization is archived",
+      );
+      expect(
+        (await adminClient.admin.getAcademyClass({ id: draft.id })).state,
+      ).toBe("draft");
+    } finally {
+      release.resolve();
+      await Promise.allSettled([
+        archiveTransaction,
+        ...(publishPromise ? [publishPromise] : []),
+      ]);
+      await db
+        .update(subjectCategory)
+        .set({ isActive: true })
+        .where(eq(subjectCategory.id, competitionId));
+    }
   });
 });

@@ -83,26 +83,32 @@ export function createRoomService(
   }
 
   async function updateRoom(input: UpdateRoomInput) {
-    const current = await repo.findRoomRecordById(db, input.id);
-    if (!current) throw new RoomNotFoundError(input.id);
+    return db.transaction(async (tx) => {
+      await lockRoomForBooking(tx, input.id);
+      const current = await repo.lockRoomRecordById(tx, input.id);
+      if (!current) throw new RoomNotFoundError(input.id);
 
-    const updated = await repo.updateRoom(db, input.id, {
-      name: input.name,
-      location: input.location,
-      capacity: input.capacity,
+      const updated = await repo.updateRoom(tx, input.id, {
+        name: input.name,
+        location: input.location,
+        capacity: input.capacity,
+      });
+      if (!updated) throw new RoomNotFoundError(input.id);
+      return updated;
     });
-    if (!updated) throw new RoomNotFoundError(input.id);
-    return updated;
   }
 
   async function deactivateRoom(roomId: string) {
-    const current = await repo.findRoomRecordById(db, roomId);
-    if (!current) throw new RoomNotFoundError(roomId);
-    if (!current.isActive) return current;
+    return db.transaction(async (tx) => {
+      await lockRoomForBooking(tx, roomId);
+      const current = await repo.lockRoomRecordById(tx, roomId);
+      if (!current) throw new RoomNotFoundError(roomId);
+      if (!current.isActive) return current;
 
-    const updated = await repo.deactivateRoom(db, roomId);
-    if (!updated) throw new RoomNotFoundError(roomId);
-    return updated;
+      const updated = await repo.deactivateRoom(tx, roomId);
+      if (!updated) throw new RoomNotFoundError(roomId);
+      return updated;
+    });
   }
 
   async function checkAvailability(

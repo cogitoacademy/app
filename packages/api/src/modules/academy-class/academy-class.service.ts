@@ -1,7 +1,8 @@
 import { academyClassSession } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
-import type { DbOrTx } from "../../lib/tx";
+import type { DbOrTx, TxClient } from "../../lib/tx";
 import { lockRoomForBooking, lockTutorForBooking } from "../../lib/locks";
+import { lockCompetitionCatalog } from "../competition-catalog/catalog-lock";
 import { log } from "../../lib/logger";
 import {
   BOOKING_STATES,
@@ -74,7 +75,7 @@ export function createAcademyClassService(deps: {
   }
 
   async function validatePublishReferences(
-    tx: DbOrTx,
+    tx: TxClient,
     record: NonNullable<Awaited<ReturnType<typeof repo.get>>>,
   ) {
     const approvedTutorFee =
@@ -130,7 +131,35 @@ export function createAcademyClassService(deps: {
       }
     }
 
-    const competition = await repo.getCompetition(tx, record.competitionId);
+    const tutorIds = [
+      ...new Set(record.sessions.map((session) => session.tutorId)),
+    ];
+    const roomIds = [
+      ...new Set(
+        record.sessions.flatMap((session) =>
+          session.mode === "in_person" && session.roomId
+            ? [session.roomId]
+            : [],
+        ),
+      ),
+    ];
+
+    // Keep mutable reference reads after the same locks used by the catalog,
+    // booking, and room writers. The sorted per-resource lock order prevents
+    // overlapping multi-session classes from acquiring tutors/rooms in
+    // opposite orders.
+    await lockCompetitionCatalog(tx);
+    for (const tutorId of [...tutorIds].toSorted()) {
+      await lockTutorForBooking(tx, tutorId);
+    }
+    for (const roomId of [...roomIds].toSorted()) {
+      await lockRoomForBooking(tx, roomId);
+    }
+
+    const competition = await repo.getCompetitionForPublish(
+      tx,
+      record.competitionId,
+    );
     if (
       !competition ||
       !competition.isActive ||
@@ -142,23 +171,11 @@ export function createAcademyClassService(deps: {
       );
     }
 
-    const tutorIds = [
-      ...new Set(record.sessions.map((session) => session.tutorId)),
-    ];
-    const profiles = await repo.getTutorProfiles(tx, tutorIds);
+    const profiles = await repo.getTutorProfiles(tx, tutorIds, true);
     const profileById = new Map(
       profiles.map((profile) => [profile.userId, profile]),
     );
-    const roomIds = [
-      ...new Set(
-        record.sessions.flatMap((session) =>
-          session.mode === "in_person" && session.roomId
-            ? [session.roomId]
-            : [],
-        ),
-      ),
-    ];
-    const rooms = await repo.getRooms(tx, roomIds);
+    const rooms = await repo.getRooms(tx, roomIds, true);
     const roomById = new Map(
       rooms.map((availableRoom) => [availableRoom.id, availableRoom]),
     );
@@ -172,11 +189,6 @@ export function createAcademyClassService(deps: {
         );
       }
     }
-
-    const tutorLocks = [...tutorIds].sort();
-    const roomLocks = [...roomIds].sort();
-    for (const tutorId of tutorLocks) await lockTutorForBooking(tx, tutorId);
-    for (const roomId of roomLocks) await lockRoomForBooking(tx, roomId);
 
     const now = new Date();
     for (const [index, session] of record.sessions.entries()) {
@@ -681,6 +693,7 @@ export function createAcademyClassService(deps: {
         { email: attempt.tutorEmail, name: attempt.tutorName },
         {
           title: `Cogito ${attempt.academyClass.titleEn}: ${attempt.session.titleEn}`,
+          externalEventId: attempt.meeting.externalEventId ?? undefined,
         },
       );
     } catch (error) {
@@ -693,6 +706,21 @@ export function createAcademyClassService(deps: {
       };
     }
 
+    if (
+      result.status === "created" &&
+      (result.provider !== "google_meet" || !result.meetingUrl?.trim())
+    ) {
+      result = {
+        ...result,
+        status: "failed",
+        errorReason:
+          result.errorReason ??
+          (result.provider !== "google_meet"
+            ? "A Google Meet link is required before a class session is ready"
+            : "The Google Meet link is still pending"),
+      };
+    }
+
     const retryDelay = Math.min(
       MAX_MEETING_RETRY_DELAY_MS,
       30_000 * 2 ** Math.min(10, Math.max(0, claimed.attemptCount - 1)),
@@ -700,7 +728,8 @@ export function createAcademyClassService(deps: {
     await repo.finishMeetingAttempt(deps.db, meetingId, {
       provider: result.provider,
       status: result.status,
-      externalEventId: result.externalEventId,
+      externalEventId:
+        result.externalEventId ?? attempt?.meeting.externalEventId ?? null,
       meetingUrl: result.meetingUrl,
       errorReason: result.errorReason,
       nextRetryAt:
