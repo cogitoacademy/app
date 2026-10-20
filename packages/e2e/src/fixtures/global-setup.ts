@@ -1,30 +1,32 @@
 import { execSync } from "node:child_process";
-import { existsSync, mkdirSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { request } from "@playwright/test";
 import dotenv from "dotenv";
+import { resolveE2eEnvironment, resolveE2eEnvFile } from "./e2e-environment";
 import { STUDENT_EMAIL } from "./test-accounts";
 
 async function globalSetup() {
+  const envFile = resolveE2eEnvFile(process.cwd(), process.env);
+  const envLoadResult = dotenv.config({ path: envFile, override: false });
+  if (envLoadResult.error) {
+    throw new Error("E2E environment file could not be loaded.");
+  }
+  // Keep setup and Playwright servers on the same resolved test configuration.
+  process.env.ENV_FILE = envFile;
+  const e2eEnvironment = resolveE2eEnvironment(process.env);
   const serverDir = path.resolve(process.cwd(), "../../apps/server");
-  const envFile = path.resolve(
-    process.cwd(),
-    process.env.ENV_FILE ??
-      [
-        "../../apps/server/.env.test",
-        "../../apps/server/.env.test.example",
-      ].find((candidate) =>
-        existsSync(path.resolve(process.cwd(), candidate)),
-      ) ??
-      "../../apps/server/.env.test.example",
-  );
-
-  dotenv.config({ path: envFile });
 
   console.log("Resetting seed student state...");
   const testSeedEnv = {
     ...process.env,
     NODE_ENV: "test",
+    DATABASE_URL: e2eEnvironment.databaseUrl,
+    SERVER_URL: e2eEnvironment.serverUrl,
+    BETTER_AUTH_URL: e2eEnvironment.serverUrl,
+    VITE_SERVER_URL: e2eEnvironment.serverUrl,
+    PORT: String(e2eEnvironment.serverPort),
+    WEB_PORT: String(e2eEnvironment.webPort),
     // Never hit the live Google Calendar from automated E2E, even if the
     // ambient env carries prod Meet credentials.
     GOOGLE_MEET_ENABLED: "false",
@@ -57,12 +59,8 @@ async function globalSetup() {
   // that production safeguard before the economy specs begin.
   const authDir = path.resolve(process.cwd(), ".auth");
   mkdirSync(authDir, { recursive: true });
-  const serverUrl =
-    process.env.SERVER_URL ??
-    process.env.BETTER_AUTH_URL ??
-    "http://localhost:3101";
   const authContext = await request.newContext({
-    baseURL: serverUrl,
+    baseURL: e2eEnvironment.serverUrl,
   });
   const signIn = await authContext.post("/api/auth/sign-in/email", {
     data: {
