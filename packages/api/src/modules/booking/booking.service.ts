@@ -1,4 +1,12 @@
 import { env } from "@cogito-app/env/server";
+import { createHash } from "node:crypto";
+import { and, eq } from "drizzle-orm";
+import {
+  tutorPayout,
+  tutorPayoutAllocation,
+  tutorProfile,
+  tutorTaxConfig,
+} from "@cogito-app/db/schema";
 import type {
   BookingPriceSnapshot,
   LegacyBookingPriceSnapshot,
@@ -58,6 +66,15 @@ import {
   BookingV3CompetitionRequiredError,
   BookingV3CompetitionUnavailableError,
   BookingV3PricingRevisionUnavailableError,
+  TutorPayoutAmountMismatchError,
+  TutorPayoutCalculationDomainError,
+  TutorPayoutNotFoundError,
+  TutorPayoutPreviewStaleError,
+  TutorPayoutProfileIncompleteError,
+  TutorPayoutReconciliationRequiredError,
+  TutorPayoutStateError,
+  TutorPayoutTaxConfigConflictError,
+  TutorPayoutTaxProfileIncompleteError,
 } from "./booking.errors";
 import { escapeHtml, sanitizeHtml } from "../../lib/sanitize";
 import { completionFeedbackInput } from "./booking.types";
@@ -66,6 +83,7 @@ import {
   lockBookingReschedule,
   lockTutorForBooking,
   lockTutorForPayout,
+  lockTutorTaxConfig,
 } from "../../lib/locks";
 import { mapLimit } from "../../lib/concurrency";
 import { log } from "../../lib/logger";
@@ -100,12 +118,23 @@ import type {
   BookingMeetingPort,
   BookingRoomPort,
   TutorPayoutReportRow,
+  TutorPayoutMutationResult,
+  TutorPayoutPreview,
+  TutorTaxConfigView,
 } from "./index";
 import {
   formatBookingEventTitle,
   formatCalendarCompetitionLabel,
 } from "./booking-event-title";
 import { V3_COMPETITIONS } from "../pricing/v3-economy.config";
+import {
+  calculateTutorPayoutAmounts,
+  calculateTutorTaxIdr,
+  DEFAULT_TUTOR_TAX_RATES_BPS,
+  sumSafeIdr,
+  tutorTaxStatus,
+  type TutorTaxRateSource,
+} from "./tutor-payout-calculation";
 
 /**
  * Terminal target per expiry-eligible state. Shared by `expireBookings` and
@@ -114,11 +143,7 @@ import { V3_COMPETITIONS } from "../pricing/v3-economy.config";
  * in `expireBookings` (targets the pre-proposal state) and is deliberately
  * absent here.
  */
-import {
-  getTutorPayoutTransferFeeIdr,
-  EXPIRY_TARGET,
-  computeMeetingInfo,
-} from "./booking.helpers";
+import { EXPIRY_TARGET, computeMeetingInfo } from "./booking.helpers";
 
 function assertTutorCapacity(
   profile: {
@@ -141,6 +166,50 @@ function assertTutorCapacity(
       maxClassSize,
     );
   }
+}
+
+function stableSerialize(value: unknown): string {
+  if (value instanceof Date) return JSON.stringify(value.toISOString());
+  if (Array.isArray(value)) {
+    return `[${value.map(stableSerialize).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    const object = value as Record<string, unknown>;
+    return `{${Object.keys(object)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableSerialize(object[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+function toTutorPayoutMutationResult(
+  row: typeof tutorPayout.$inferSelect,
+): TutorPayoutMutationResult {
+  return {
+    id: row.id,
+    tutorId: row.tutorId,
+    status: row.status as "prepared" | "paid" | "void",
+    sourceKeys: row.sourceKeys ?? [],
+    grossHonorariumIdr: row.grossHonorariumIdr,
+    taxStatus: row.taxStatus,
+    taxRateBps: row.taxRateBps,
+    taxRateSource: row.taxRateSource,
+    taxHonorariumIdr: row.taxHonorariumIdr,
+    transferFeeIdr: row.transferFeeIdr,
+    netHonorariumIdr: row.netHonorariumIdr,
+    actualAmountIdr: row.actualAmountIdr,
+    actualReference: row.actualReference,
+    actualProofUrl: row.actualProofUrl,
+    transferRecordedAt: row.transferRecordedAt,
+    transferRecordedBy: row.paidBy,
+    paidAt: row.paidAt,
+    preparedAt: row.preparedAt,
+    voidedAt: row.voidedAt,
+    voidReason: row.voidReason,
+    reconciliationStatus: row.reconciliationStatus,
+    reconciliationReason: row.reconciliationReason,
+  };
 }
 
 function getPerStudentMarks(
@@ -4398,19 +4467,20 @@ export function createBookingService(deps: {
       dateTo?: Date;
       dateBasis?: "scheduledStartAt" | "completedAt";
       excludeAllocatedSources?: boolean;
+      legacyCutoffAt?: Date;
     },
   ): Promise<TutorPayoutAggregate> {
     const bookings = await repo.findCompletedBookingsByTutor(
       conn,
       input.tutorId,
-      input.dateFrom,
+      input.legacyCutoffAt ?? input.dateFrom,
       input.dateTo,
       input.dateBasis,
     );
     const feeRows = await repo.findTutorSessionFeesByTutor(
       conn,
       input.tutorId,
-      input.dateFrom,
+      input.legacyCutoffAt ? undefined : input.dateFrom,
       input.dateTo,
       input.dateBasis,
     );
@@ -4451,7 +4521,6 @@ export function createBookingService(deps: {
         snap?.tutorHonorariumIdr ??
         (snap?.engine === "v3" ? 0 : (snap?.tutorShare ?? 0)) *
           TUTOR_PAYOUT_RATE_IDR;
-      tutorPayoutIdr += sourceGrossHonorariumIdr;
       items.push({
         ...source,
         grossHonorariumIdr: Math.round(sourceGrossHonorariumIdr),
@@ -4555,6 +4624,7 @@ export function createBookingService(deps: {
         a.scheduledStartAt.getTime() - b.scheduledStartAt.getTime() ||
         a.sourceKey.localeCompare(b.sourceKey),
     );
+    tutorPayoutIdr = sumSafeIdr(items.map((item) => item.grossHonorariumIdr));
 
     return {
       completedSessions,
@@ -4589,22 +4659,239 @@ export function createBookingService(deps: {
     );
   }
 
-  /**
-   * Builds the admin report as immutable paid batches plus the current unpaid
-   * balance for each tutor. Paid rows use transfer date for the date window;
-   * pending rows use completed-session date while respecting each tutor's last
-   * paid cutoff.
-   */
+  async function readTutorTaxConfig(conn: DbOrTx): Promise<TutorTaxConfigView> {
+    const row = await repo.findTutorTaxConfig(conn);
+    return {
+      id: "default",
+      version: row?.version ?? 0,
+      nikNpwpRateBps:
+        row?.nikNpwpRateBps ?? DEFAULT_TUTOR_TAX_RATES_BPS.nikNpwp,
+      nikOnlyRateBps:
+        row?.nikOnlyRateBps ?? DEFAULT_TUTOR_TAX_RATES_BPS.nikOnly,
+      missingRateBps:
+        row?.missingRateBps ?? DEFAULT_TUTOR_TAX_RATES_BPS.missing,
+    };
+  }
+
+  async function getUnpaidAggregate(conn: DbOrTx, tutorId: string) {
+    const lastPaid = await repo.findLatestPaidTutorPayout(conn, tutorId);
+    return aggregateTutorPayouts(conn, {
+      tutorId,
+      dateTo: new Date(),
+      dateBasis: "completedAt",
+      excludeAllocatedSources: true,
+      // The historical cutoff applies only to legacy booking rows. Immutable
+      // fee events remain visible and are excluded through their allocations.
+      legacyCutoffAt: lastPaid
+        ? new Date(lastPaid.cutoffAt.getTime() + 1)
+        : undefined,
+    });
+  }
+
+  function taxRateFor(
+    profile: NonNullable<Awaited<ReturnType<typeof repo.findTutorProfile>>>,
+    config: TutorTaxConfigView,
+  ) {
+    const taxStatus = tutorTaxStatus({
+      legalName: profile.taxLegalName,
+      nik: profile.nik,
+      npwp: profile.npwp,
+    });
+    const rateBps =
+      profile.taxRateOverrideBps ??
+      (taxStatus === "nik_npwp"
+        ? config.nikNpwpRateBps
+        : taxStatus === "nik_only"
+          ? config.nikOnlyRateBps
+          : config.missingRateBps);
+    const rateSource: TutorTaxRateSource =
+      profile.taxRateOverrideBps != null
+        ? "tutor_override"
+        : `default_${taxStatus}`;
+    return { taxStatus, rateBps, rateSource };
+  }
+
+  async function buildTutorPayoutPreview(
+    conn: DbOrTx,
+    input: {
+      tutorId: string;
+      sourceKeys: string[];
+      payoutId?: string;
+    },
+  ): Promise<TutorPayoutPreview> {
+    const profile = await repo.findTutorProfile(conn, input.tutorId);
+    if (!profile) {
+      throw new TutorPayoutProfileIncompleteError(input.tutorId, [
+        "tutorProfile",
+      ]);
+    }
+    const sourceKeys = [...new Set(input.sourceKeys)].sort();
+    if (!sourceKeys.length || sourceKeys.length !== input.sourceKeys.length) {
+      throw new TutorPayoutPreviewStaleError(
+        "Select one or more unique sessions",
+      );
+    }
+
+    const [aggregate, config, blockedSourceRows] = await Promise.all([
+      (async () => {
+        const lastPaid = await repo.findLatestPaidTutorPayout(
+          conn,
+          input.tutorId,
+        );
+        const allSources = await aggregateTutorPayouts(conn, {
+          tutorId: input.tutorId,
+          dateTo: new Date(),
+          dateBasis: "completedAt",
+          excludeAllocatedSources: !input.payoutId,
+          legacyCutoffAt: lastPaid
+            ? new Date(lastPaid.cutoffAt.getTime() + 1)
+            : undefined,
+        });
+        if (!input.payoutId) return allSources;
+
+        const ownAllocations = await repo.listTutorPayoutAllocationsByPayoutId(
+          conn,
+          input.payoutId,
+        );
+        const ownKeys = new Set(
+          ownAllocations
+            .filter((row) => row.active)
+            .map((row) => row.sourceKey),
+        );
+        const allActiveKeys = new Set(
+          await repo.listTutorPayoutAllocatedSourceKeys(conn, input.tutorId),
+        );
+        return {
+          ...allSources,
+          items: allSources.items.filter(
+            (item) =>
+              ownKeys.has(item.sourceKey) || !allActiveKeys.has(item.sourceKey),
+          ),
+        };
+      })(),
+      readTutorTaxConfig(conn),
+      repo.listTutorPayoutReconciliationSourceKeys(conn, input.tutorId),
+    ]);
+    const blockedSourceKeys = new Set(
+      blockedSourceRows.map((row) => row.sourceKey),
+    );
+    const blockedKey = sourceKeys.find((key) => blockedSourceKeys.has(key));
+    if (blockedKey) {
+      const blockedRow = blockedSourceRows.find(
+        (row) => row.sourceKey === blockedKey,
+      );
+      throw new TutorPayoutReconciliationRequiredError(
+        blockedRow?.payoutId ?? blockedKey,
+      );
+    }
+
+    const items = aggregate.items.filter((item) =>
+      sourceKeys.includes(item.sourceKey),
+    );
+    if (items.length !== sourceKeys.length) {
+      throw new TutorPayoutPreviewStaleError(
+        "One or more selected sessions are no longer available",
+      );
+    }
+    if (input.payoutId) {
+      const ownAllocations = await repo.listTutorPayoutAllocationsByPayoutId(
+        conn,
+        input.payoutId,
+      );
+      const ownKeys = new Set(
+        ownAllocations.filter((row) => row.active).map((row) => row.sourceKey),
+      );
+      if (items.some((item) => !ownKeys.has(item.sourceKey))) {
+        throw new TutorPayoutPreviewStaleError(
+          "Prepared session allocations changed",
+        );
+      }
+    }
+
+    const tax = taxRateFor(profile, config);
+    const grossHonorariumIdr = sumSafeIdr(
+      items.map((item) => item.grossHonorariumIdr),
+    );
+    const bankName = normalizeOptionalText(profile.bankName);
+    const amounts = calculateTutorPayoutAmounts({
+      grossIdr: grossHonorariumIdr,
+      taxRateBps: tax.rateBps,
+      bankName: bankName ?? "",
+    });
+    const basis = {
+      tutorId: input.tutorId,
+      profileVersion: profile.version,
+      taxConfigVersion: config.version,
+      taxStatus: tax.taxStatus,
+      taxRateBps: tax.rateBps,
+      taxRateSource: tax.rateSource,
+      legalName: normalizeOptionalText(profile.taxLegalName),
+      nik: normalizeOptionalText(profile.nik),
+      npwp: normalizeOptionalText(profile.npwp),
+      bankName,
+      bankAccountNumber: normalizeOptionalText(profile.bankAccountNumber),
+      bankAccountHolderName: normalizeOptionalText(
+        profile.bankAccountHolderName,
+      ),
+      bankAccountOpeningCity: normalizeOptionalText(
+        profile.bankAccountOpeningCity,
+      ),
+      bankAccountOwnership: profile.bankAccountOwnership ?? null,
+      sourceKeys,
+      items: items.map((item) => ({
+        ...item,
+        scheduledStartAt: item.scheduledStartAt.toISOString(),
+        earnedAt: item.earnedAt.toISOString(),
+      })),
+      amounts,
+    };
+    const previewVersion = createHash("sha256")
+      .update(stableSerialize(basis))
+      .digest("hex");
+
+    return {
+      previewVersion,
+      tutorId: input.tutorId,
+      profileVersion: profile.version,
+      taxConfigVersion: config.version,
+      sourceKeys,
+      items,
+      grossHonorariumIdr,
+      taxStatus: tax.taxStatus,
+      taxRateBps: tax.rateBps,
+      taxRateSource: tax.rateSource,
+      taxHonorariumIdr: amounts.taxIdr,
+      transferFeeIdr: amounts.transferFeeIdr,
+      netHonorariumIdr: amounts.netIdr,
+      legalName: normalizeOptionalText(profile.taxLegalName),
+      nik: normalizeOptionalText(profile.nik),
+      npwp: normalizeOptionalText(profile.npwp),
+      bankName,
+      bankAccountNumber: normalizeOptionalText(profile.bankAccountNumber),
+      bankAccountHolderName: normalizeOptionalText(
+        profile.bankAccountHolderName,
+      ),
+    };
+  }
+
+  async function previewTutorPayout(tutorId: string, sourceKeys: string[]) {
+    return db.transaction(async (tx) => {
+      await lockTutorTaxConfig(tx);
+      await lockTutorForPayout(tx, tutorId);
+      return buildTutorPayoutPreview(tx, { tutorId, sourceKeys });
+    });
+  }
+
   async function getTutorPayoutReport(input: {
     dateFrom?: Date;
     dateTo?: Date;
   }): Promise<TutorPayoutReportRow[]> {
     const dateTo = input.dateTo ?? new Date();
-    const [profiles, paidRows] = await Promise.all([
+    const [profiles, records, config] = await Promise.all([
       repo.listTutorPayoutProfiles(db),
       repo.listTutorPayoutRecords(db, input.dateFrom, dateTo),
+      readTutorTaxConfig(db),
     ]);
-
     const pendingRows: Array<TutorPayoutReportRow | null> = await mapLimit(
       profiles,
       5,
@@ -4613,30 +4900,44 @@ export function createBookingService(deps: {
           db,
           profile.tutorId,
         );
-        const lastPaidCutoff = lastPaid
-          ? new Date(lastPaid.cutoffAt.getTime() + 1)
-          : undefined;
-        // Current unpaid balances must never disappear just because the admin
-        // selected a shorter historical window. The date window limits paid
-        // transfer history; outstanding work is always operationally relevant.
-        const pendingFrom = lastPaidCutoff;
         const result = await aggregateTutorPayouts(db, {
           tutorId: profile.tutorId,
-          dateFrom: pendingFrom,
           dateTo,
           dateBasis: "completedAt",
           excludeAllocatedSources: true,
+          legacyCutoffAt: lastPaid
+            ? new Date(lastPaid.cutoffAt.getTime() + 1)
+            : undefined,
         });
+        if (result.completedSessions === 0) return null;
 
-        if (result.completedSessions === 0 || result.tutorPayoutIdr <= 0) {
-          return null;
-        }
-
-        const bankName = normalizeOptionalText(profile.bankName);
+        const taxStatus = tutorTaxStatus({
+          legalName: profile.taxLegalName,
+          nik: profile.nik,
+          npwp: profile.npwp,
+        });
+        const taxRateBps =
+          profile.taxRateOverrideBps ??
+          (taxStatus === "nik_npwp"
+            ? config.nikNpwpRateBps
+            : taxStatus === "nik_only"
+              ? config.nikOnlyRateBps
+              : config.missingRateBps);
+        const taxRateSource =
+          profile.taxRateOverrideBps != null
+            ? "tutor_override"
+            : `default_${taxStatus}`;
         const grossHonorariumIdr = result.tutorPayoutIdr;
-        const transferFeeIdr = bankName
-          ? getTutorPayoutTransferFeeIdr(bankName)
-          : 0;
+        const taxHonorariumIdr = calculateTutorTaxIdr(
+          grossHonorariumIdr,
+          taxRateBps,
+        );
+        const bankName = normalizeOptionalText(profile.bankName);
+        const transferFeeIdr =
+          grossHonorariumIdr === 0 || bankName?.toUpperCase() === "BCA"
+            ? 0
+            : 2_500;
+        const net = grossHonorariumIdr - taxHonorariumIdr - transferFeeIdr;
 
         return {
           id: `pending:${profile.tutorId}`,
@@ -4651,44 +4952,88 @@ export function createBookingService(deps: {
             profile.bankAccountOpeningCity,
           ),
           bankAccountOwnership: profile.bankAccountOwnership ?? null,
+          taxLegalName: normalizeOptionalText(profile.taxLegalName),
+          taxNik: normalizeOptionalText(profile.nik),
+          taxNpwp: normalizeOptionalText(profile.npwp),
           grossHonorariumIdr,
           transferFeeIdr,
-          netHonorariumIdr: Math.max(0, grossHonorariumIdr - transferFeeIdr),
+          netHonorariumIdr: net >= 0 ? net : null,
           status: "pending" as const,
           paidAt: null,
           payoutAccountComplete: hasCompletePayoutDetails(profile),
+          taxProfileComplete: Boolean(
+            profile.taxLegalName?.trim() && /^\d{16}$/.test(profile.nik ?? ""),
+          ),
+          taxStatus,
+          taxRateBps,
+          taxRateSource,
+          taxHonorariumIdr,
+          actualAmountIdr: null,
+          actualReference: null,
+          preparedAt: null,
+          voidedAt: null,
+          voidReason: null,
+          reconciliationStatus: "not_required",
+          reconciliationReason: null,
+          previewVersion: null,
+          coveredSessionCount: result.items.length,
         } satisfies TutorPayoutReportRow;
       },
     );
 
-    const paidReportRows = paidRows.map(
+    const historicalRows = records.map(
       (row) =>
         ({
           id: row.id,
           tutorId: row.tutorId,
           tutorName: row.tutorName,
           bankName: normalizeOptionalText(row.bankName),
-          bankAccountNumber:
-            normalizeOptionalText(row.bankAccountNumber) ??
-            normalizeOptionalText(row.profileBankAccountNumber),
-          bankAccountHolderName:
-            normalizeOptionalText(row.bankAccountHolderName) ??
-            normalizeOptionalText(row.profileBankAccountHolderName),
-          bankAccountOpeningCity: normalizeOptionalText(
-            row.profileBankAccountOpeningCity,
+          // Historical exports use saved payout snapshots. They never fall
+          // back to the tutor's current bank or identity details.
+          bankAccountNumber: normalizeOptionalText(row.bankAccountNumber),
+          bankAccountHolderName: normalizeOptionalText(
+            row.bankAccountHolderName,
           ),
-          bankAccountOwnership: row.profileBankAccountOwnership ?? null,
+          bankAccountOpeningCity: normalizeOptionalText(
+            row.bankAccountOpeningCity,
+          ),
+          bankAccountOwnership: row.bankAccountOwnership ?? null,
+          taxLegalName: normalizeOptionalText(row.taxLegalName),
+          taxNik: normalizeOptionalText(row.taxNik),
+          taxNpwp: normalizeOptionalText(row.taxNpwp),
           grossHonorariumIdr: row.grossHonorariumIdr,
           transferFeeIdr: row.transferFeeIdr,
           netHonorariumIdr: row.netHonorariumIdr,
-          status: "paid" as const,
+          status: row.status as "prepared" | "paid" | "void",
           paidAt: row.paidAt,
-          payoutAccountComplete: true,
+          payoutAccountComplete: Boolean(
+            row.bankName && row.bankAccountNumber && row.bankAccountHolderName,
+          ),
+          taxProfileComplete: Boolean(
+            row.taxLegalName && row.taxNik && /^\d{16}$/.test(row.taxNik),
+          ),
+          taxStatus:
+            (row.taxStatus as "nik_npwp" | "nik_only" | "missing" | null) ??
+            null,
+          taxRateBps: row.taxRateBps,
+          taxRateSource: row.taxRateSource,
+          taxHonorariumIdr: row.taxHonorariumIdr,
+          actualAmountIdr: row.actualAmountIdr,
+          actualReference: row.actualReference,
+          actualProofUrl: row.actualProofUrl,
+          transferRecordedAt: row.transferRecordedAt,
+          transferRecordedBy: row.paidBy,
+          preparedAt: row.preparedAt,
+          voidedAt: row.voidedAt,
+          voidReason: row.voidReason,
+          reconciliationStatus: row.reconciliationStatus,
+          reconciliationReason: row.reconciliationReason,
+          previewVersion: row.previewVersion,
+          coveredSessionCount: row.coveredSessionCount,
         }) satisfies TutorPayoutReportRow,
     );
-
     return [
-      ...paidReportRows,
+      ...historicalRows,
       ...pendingRows.filter((row): row is TutorPayoutReportRow => row !== null),
     ];
   }
@@ -4712,70 +5057,115 @@ export function createBookingService(deps: {
     const lastPaid = await repo.findLatestPaidTutorPayout(db, tutorId);
     const result = await aggregateTutorPayouts(db, {
       tutorId,
-      dateFrom: lastPaid
-        ? new Date(lastPaid.cutoffAt.getTime() + 1)
-        : undefined,
       dateBasis: "completedAt",
       excludeAllocatedSources: true,
+      legacyCutoffAt: lastPaid
+        ? new Date(lastPaid.cutoffAt.getTime() + 1)
+        : undefined,
     });
     return { ...result, lastPaidAt: lastPaid?.paidAt ?? null };
   }
 
-  async function markTutorPayoutPaid(tutorId: string, adminId: string) {
+  async function prepareTutorPayout(
+    adminId: string,
+    input: {
+      tutorId: string;
+      sourceKeys: string[];
+      previewVersion: string;
+      operationId: string;
+    },
+  ) {
     return db.transaction(async (tx) => {
-      await lockTutorForPayout(tx, tutorId);
-      const lastPaid = await repo.findLatestPaidTutorPayout(tx, tutorId);
-      const cutoffAt = new Date();
-      const result = await aggregateTutorPayouts(tx, {
-        tutorId,
-        dateFrom: lastPaid
-          ? new Date(lastPaid.cutoffAt.getTime() + 1)
-          : undefined,
-        dateTo: cutoffAt,
-        dateBasis: "completedAt",
-        excludeAllocatedSources: true,
-      });
-      if (result.completedSessions === 0 || result.tutorPayoutIdr <= 0) {
-        return null;
-      }
-      const profile = await repo.findTutorProfile(tx, tutorId);
-      if (
-        !profile?.bankName?.trim() ||
-        !profile.bankAccountNumber?.trim() ||
-        !profile.bankAccountHolderName?.trim() ||
-        !profile.bankAccountOpeningCity?.trim() ||
-        !profile.bankAccountOwnership ||
-        !profile.bankTransferDisclaimerAccepted
-      ) {
-        return null;
-      }
-      const bankName = profile.bankName.trim();
-      const transferFeeIdr = getTutorPayoutTransferFeeIdr(bankName);
-      const paidAt = new Date();
-      const allocatedGrossHonorariumIdr = result.items.reduce(
-        (sum, item) => sum + item.grossHonorariumIdr,
-        0,
+      await lockTutorTaxConfig(tx);
+      await lockTutorForPayout(tx, input.tutorId);
+
+      const prior = await repo.findTutorPayoutByIdempotencyKey(
+        tx,
+        input.operationId,
       );
-      if (allocatedGrossHonorariumIdr !== result.tutorPayoutIdr) {
-        throw new Error("Tutor payout allocation total does not match batch");
+      if (prior) {
+        if (
+          prior.tutorId !== input.tutorId ||
+          prior.previewVersion !== input.previewVersion
+        ) {
+          throw new TutorPayoutPreviewStaleError(
+            "This payout operation was already used for another preview",
+          );
+        }
+        return toTutorPayoutMutationResult(prior);
       }
 
+      const preview = await buildTutorPayoutPreview(tx, {
+        tutorId: input.tutorId,
+        sourceKeys: input.sourceKeys,
+      });
+      if (preview.previewVersion !== input.previewVersion) {
+        throw new TutorPayoutPreviewStaleError();
+      }
+      const profile = await repo.findTutorProfile(tx, input.tutorId);
+      if (!profile) {
+        throw new TutorPayoutProfileIncompleteError(input.tutorId, [
+          "tutorProfile",
+        ]);
+      }
+      const missingBankFields = [
+        !profile.bankName?.trim() && "bankName",
+        !profile.bankAccountNumber?.trim() && "bankAccountNumber",
+        !profile.bankAccountHolderName?.trim() && "bankAccountHolderName",
+        !profile.bankAccountOpeningCity?.trim() && "bankAccountOpeningCity",
+        !profile.bankAccountOwnership && "bankAccountOwnership",
+        !profile.bankTransferDisclaimerAccepted &&
+          "bankTransferDisclaimerAccepted",
+      ].filter((field): field is string => Boolean(field));
+      if (missingBankFields.length) {
+        throw new TutorPayoutProfileIncompleteError(
+          input.tutorId,
+          missingBankFields,
+        );
+      }
+      const missingTaxFields = [
+        !profile.taxLegalName?.trim() && "taxLegalName",
+        !/^\d{16}$/.test(profile.nik ?? "") && "nik",
+      ].filter((field): field is string => Boolean(field));
+      if (missingTaxFields.length) {
+        throw new TutorPayoutTaxProfileIncompleteError(
+          input.tutorId,
+          missingTaxFields,
+        );
+      }
+
+      const preparedAt = new Date();
       const row = await repo.insertTutorPayout(tx, {
-        tutorId,
-        cutoffAt,
-        grossHonorariumIdr: result.tutorPayoutIdr,
-        transferFeeIdr,
-        netHonorariumIdr: Math.max(0, result.tutorPayoutIdr - transferFeeIdr),
-        bankName,
-        bankAccountNumber: profile.bankAccountNumber.trim(),
-        bankAccountHolderName: profile.bankAccountHolderName.trim(),
-        status: "paid",
-        paidAt,
-        paidBy: adminId,
+        tutorId: input.tutorId,
+        cutoffAt: preparedAt,
+        previewVersion: preview.previewVersion,
+        sourceKeys: preview.sourceKeys,
+        idempotencyKey: input.operationId,
+        grossHonorariumIdr: preview.grossHonorariumIdr,
+        taxStatus: preview.taxStatus,
+        taxRateBps: preview.taxRateBps,
+        taxRateSource: preview.taxRateSource,
+        taxHonorariumIdr: preview.taxHonorariumIdr,
+        transferFeeIdr: preview.transferFeeIdr,
+        netHonorariumIdr: preview.netHonorariumIdr,
+        bankName: profile.bankName!.trim(),
+        bankAccountNumber: profile.bankAccountNumber!.trim(),
+        bankAccountHolderName: profile.bankAccountHolderName!.trim(),
+        bankAccountOpeningCity: profile.bankAccountOpeningCity!.trim(),
+        bankAccountOwnership: profile.bankAccountOwnership,
+        taxLegalName: profile.taxLegalName!.trim(),
+        taxNik: profile.nik!.trim(),
+        taxNpwp: normalizeOptionalText(profile.npwp),
+        taxProfileVersion: profile.version,
+        taxConfigVersion: preview.taxConfigVersion,
+        status: "prepared",
+        preparedAt,
+        preparedBy: adminId,
+        reconciliationStatus: "not_required",
       });
       await repo.insertTutorPayoutAllocations(
         tx,
-        result.items.map((item) => ({
+        preview.items.map((item) => ({
           payoutId: row.id,
           sourceKey: item.sourceKey,
           sourceType: item.sourceType,
@@ -4788,18 +5178,457 @@ export function createBookingService(deps: {
           earnedAt: item.earnedAt,
           grossHonorariumIdr: item.grossHonorariumIdr,
           priceSnapshot: item.priceSnapshot,
+          active: true,
         })),
       );
-      return {
-        id: row.id,
+      await audit.record({
+        db: tx,
+        actorId: adminId,
+        actorType: "admin",
+        action: "tutor_payout_prepared",
+        targetId: row.id,
+        targetType: "tutor_payout",
+        beforeState: { status: "pending" },
+        afterState: {
+          status: row.status,
+          grossHonorariumIdr: row.grossHonorariumIdr,
+          taxStatus: row.taxStatus,
+          taxRateBps: row.taxRateBps,
+          taxHonorariumIdr: row.taxHonorariumIdr,
+          transferFeeIdr: row.transferFeeIdr,
+          netHonorariumIdr: row.netHonorariumIdr,
+          sourceKeys: row.sourceKeys,
+        },
+      });
+      return toTutorPayoutMutationResult(row);
+    });
+  }
+
+  async function recordTutorPayoutTransfer(
+    adminId: string,
+    input: {
+      payoutId: string;
+      previewVersion: string;
+      actualAmountIdr: number;
+      paidAt: Date;
+      reference?: string;
+      proofUrl?: string;
+    },
+  ) {
+    return db.transaction(async (tx) => {
+      await lockTutorTaxConfig(tx);
+      const initial = await repo.findTutorPayoutById(tx, input.payoutId);
+      if (!initial) throw new TutorPayoutNotFoundError(input.payoutId);
+      await lockTutorForPayout(tx, initial.tutorId);
+      const row = await repo.findTutorPayoutById(tx, input.payoutId, true);
+      if (!row) throw new TutorPayoutNotFoundError(input.payoutId);
+      if (row.status !== "prepared") {
+        throw new TutorPayoutStateError(
+          "Only a prepared payout can record an external transfer",
+        );
+      }
+      const sourceKeys = row.sourceKeys ?? [];
+      const current = await buildTutorPayoutPreview(tx, {
         tutorId: row.tutorId,
+        sourceKeys,
+        payoutId: row.id,
+      });
+      if (
+        row.previewVersion !== input.previewVersion ||
+        current.previewVersion !== row.previewVersion
+      ) {
+        throw new TutorPayoutPreviewStaleError();
+      }
+      if (input.actualAmountIdr !== row.netHonorariumIdr) {
+        throw new TutorPayoutAmountMismatchError(
+          row.netHonorariumIdr,
+          input.actualAmountIdr,
+        );
+      }
+      if (Number.isNaN(input.paidAt.getTime())) {
+        throw new TutorPayoutStateError("Transfer date must be valid");
+      }
+
+      const paidAt = input.paidAt;
+      const transferRecordedAt = new Date();
+      const updatedRows = await tx
+        .update(tutorPayout)
+        .set({
+          status: "paid",
+          actualAmountIdr: input.actualAmountIdr,
+          actualReference: normalizeOptionalText(input.reference),
+          actualProofUrl: normalizeOptionalText(input.proofUrl),
+          transferRecordedAt,
+          paidAt,
+          paidBy: adminId,
+        })
+        .where(
+          and(eq(tutorPayout.id, row.id), eq(tutorPayout.status, "prepared")),
+        )
+        .returning();
+      const updated = updatedRows[0];
+      if (!updated) {
+        throw new TutorPayoutStateError(
+          "Payout state changed; reload and retry",
+        );
+      }
+      await audit.record({
+        db: tx,
+        actorId: adminId,
+        actorType: "admin",
+        action: "tutor_payout_transfer_recorded",
+        targetId: row.id,
+        targetType: "tutor_payout",
+        beforeState: { status: row.status },
+        afterState: {
+          status: updated.status,
+          actualAmountIdr: updated.actualAmountIdr,
+          actualReference: updated.actualReference,
+          paidAt: updated.paidAt?.toISOString() ?? null,
+          paidBy: adminId,
+        },
+      });
+      await notification.write({
+        db: tx,
+        userId: row.tutorId,
+        category: NOTIFICATION_CATEGORY.PAYMENT,
+        severity: NOTIFICATION_SEVERITY.ACTION,
+        title: "Tutor payout recorded",
+        body: [
+          `A payout for ${row.sourceKeys?.length ?? 0} session(s) was recorded.`,
+          `Gross Rp${row.grossHonorariumIdr.toLocaleString("id-ID")}.`,
+          `Tax Rp${row.taxHonorariumIdr?.toLocaleString("id-ID") ?? "0"} (${((row.taxRateBps ?? 0) / 100).toFixed(2)}%).`,
+          `Transfer fee Rp${row.transferFeeIdr.toLocaleString("id-ID")}.`,
+          `Net Rp${updated.actualAmountIdr?.toLocaleString("id-ID") ?? "0"}.`,
+          `Recorded transfer date: ${paidAt.toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta" })}.`,
+        ].join(" "),
+        eventKey: `tutor-payout.${row.id}.paid`,
+        emailRequired: true,
+        metadata: { payoutId: row.id },
+      });
+      return toTutorPayoutMutationResult(updated);
+    });
+  }
+
+  async function voidTutorPayout(
+    adminId: string,
+    input: { payoutId: string; reason: string },
+  ) {
+    const reason = input.reason.trim();
+    if (!reason) throw new TutorPayoutStateError("Void reason is required");
+    return db.transaction(async (tx) => {
+      await lockTutorTaxConfig(tx);
+      const initial = await repo.findTutorPayoutById(tx, input.payoutId);
+      if (!initial) throw new TutorPayoutNotFoundError(input.payoutId);
+      await lockTutorForPayout(tx, initial.tutorId);
+      const row = await repo.findTutorPayoutById(tx, input.payoutId, true);
+      if (!row) throw new TutorPayoutNotFoundError(input.payoutId);
+      if (row.status === "void") {
+        throw new TutorPayoutStateError("Payout is already void");
+      }
+      const voidedAt = new Date();
+      const hasTransferEvidence =
+        row.status === "paid" || row.actualAmountIdr !== null;
+      const updatedRows = await tx
+        .update(tutorPayout)
+        .set({
+          status: "void",
+          voidedAt,
+          voidedBy: adminId,
+          voidReason: reason,
+          reconciliationStatus: hasTransferEvidence
+            ? "required"
+            : "not_required",
+        })
+        .where(eq(tutorPayout.id, row.id))
+        .returning();
+      const updated = updatedRows[0]!;
+      await tx
+        .update(tutorPayoutAllocation)
+        .set({
+          active: false,
+          releasedAt: voidedAt,
+          releasedBy: adminId,
+          releaseReason: reason,
+        })
+        .where(
+          and(
+            eq(tutorPayoutAllocation.payoutId, row.id),
+            eq(tutorPayoutAllocation.active, true),
+          ),
+        );
+      await audit.record({
+        db: tx,
+        actorId: adminId,
+        actorType: "admin",
+        action: "tutor_payout_voided",
+        targetId: row.id,
+        targetType: "tutor_payout",
+        beforeState: {
+          status: row.status,
+          reconciliationStatus: row.reconciliationStatus,
+        },
+        afterState: {
+          status: updated.status,
+          reconciliationStatus: updated.reconciliationStatus,
+          reason,
+          voidedAt: voidedAt.toISOString(),
+          transferEvidenceRetained: hasTransferEvidence,
+        },
+      });
+      return toTutorPayoutMutationResult(updated);
+    });
+  }
+
+  async function resolveTutorPayoutReconciliation(
+    adminId: string,
+    input: { payoutId: string; reason: string },
+  ) {
+    const reason = input.reason.trim();
+    if (!reason)
+      throw new TutorPayoutStateError("Resolution reason is required");
+    return db.transaction(async (tx) => {
+      await lockTutorTaxConfig(tx);
+      const initial = await repo.findTutorPayoutById(tx, input.payoutId);
+      if (!initial) throw new TutorPayoutNotFoundError(input.payoutId);
+      await lockTutorForPayout(tx, initial.tutorId);
+      const row = await repo.findTutorPayoutById(tx, input.payoutId, true);
+      if (!row) throw new TutorPayoutNotFoundError(input.payoutId);
+      if (row.status !== "void" || row.reconciliationStatus !== "required") {
+        throw new TutorPayoutStateError(
+          "This payout has no outstanding transfer reconciliation",
+        );
+      }
+      const resolvedAt = new Date();
+      const updatedRows = await tx
+        .update(tutorPayout)
+        .set({
+          reconciliationStatus: "resolved",
+          reconciliationResolvedAt: resolvedAt,
+          reconciliationResolvedBy: adminId,
+          reconciliationReason: reason,
+        })
+        .where(eq(tutorPayout.id, row.id))
+        .returning();
+      const updated = updatedRows[0]!;
+      await audit.record({
+        db: tx,
+        actorId: adminId,
+        actorType: "admin",
+        action: "tutor_payout_reconciliation_resolved",
+        targetId: row.id,
+        targetType: "tutor_payout",
+        beforeState: { reconciliationStatus: row.reconciliationStatus },
+        afterState: {
+          reconciliationStatus: updated.reconciliationStatus,
+          reason,
+          resolvedAt: resolvedAt.toISOString(),
+        },
+      });
+      return toTutorPayoutMutationResult(updated);
+    });
+  }
+
+  async function getTutorTaxConfig() {
+    return readTutorTaxConfig(db);
+  }
+
+  async function updateTutorTaxConfig(
+    adminId: string,
+    input: {
+      expectedVersion: number;
+      nikNpwpRateBps: number;
+      nikOnlyRateBps: number;
+      missingRateBps: number;
+      reason: string;
+    },
+  ) {
+    for (const rate of [
+      input.nikNpwpRateBps,
+      input.nikOnlyRateBps,
+      input.missingRateBps,
+    ]) {
+      if (!Number.isSafeInteger(rate) || rate < 0 || rate > 10_000) {
+        throw new TutorPayoutCalculationDomainError(
+          "Tax rates must be whole basis points from 0 to 10000",
+        );
+      }
+    }
+    const reason = input.reason.trim();
+    if (!reason) throw new TutorPayoutStateError("Change reason is required");
+    return db.transaction(async (tx) => {
+      await lockTutorTaxConfig(tx);
+      const before = await readTutorTaxConfig(tx);
+      if (before.version !== input.expectedVersion) {
+        throw new TutorPayoutTaxConfigConflictError(
+          input.expectedVersion,
+          before.version,
+        );
+      }
+      const values = {
+        nikNpwpRateBps: input.nikNpwpRateBps,
+        nikOnlyRateBps: input.nikOnlyRateBps,
+        missingRateBps: input.missingRateBps,
+        version: before.version + 1,
+        updatedBy: adminId,
+        updatedAt: new Date(),
+      };
+      if (before.version === 0) {
+        await tx.insert(tutorTaxConfig).values({ id: "default", ...values });
+      } else {
+        const updated = await tx
+          .update(tutorTaxConfig)
+          .set(values)
+          .where(
+            and(
+              eq(tutorTaxConfig.id, "default"),
+              eq(tutorTaxConfig.version, before.version),
+            ),
+          )
+          .returning({ id: tutorTaxConfig.id });
+        if (!updated.length) {
+          throw new TutorPayoutTaxConfigConflictError(
+            input.expectedVersion,
+            (await readTutorTaxConfig(tx)).version,
+          );
+        }
+      }
+      const result = await readTutorTaxConfig(tx);
+      await audit.record({
+        db: tx,
+        actorId: adminId,
+        actorType: "admin",
+        action: "tutor_tax_config_updated",
+        targetId: "default",
+        targetType: "tutor_tax_config",
+        beforeState: before,
+        afterState: result,
+        details: { reason },
+      });
+      return result;
+    });
+  }
+
+  async function setTutorTaxRateOverride(
+    adminId: string,
+    input: { tutorId: string; rateBps: number | null; reason: string },
+  ) {
+    if (
+      input.rateBps !== null &&
+      (!Number.isSafeInteger(input.rateBps) ||
+        input.rateBps < 0 ||
+        input.rateBps > 10_000)
+    ) {
+      throw new TutorPayoutCalculationDomainError(
+        "Tax rate override must be whole basis points from 0 to 10000",
+      );
+    }
+    const reason = input.reason.trim();
+    if (!reason) throw new TutorPayoutStateError("Override reason is required");
+    return db.transaction(async (tx) => {
+      await lockTutorTaxConfig(tx);
+      await lockTutorForPayout(tx, input.tutorId);
+      const profile = await repo.findTutorProfile(tx, input.tutorId);
+      if (!profile) {
+        throw new TutorPayoutProfileIncompleteError(input.tutorId, [
+          "tutorProfile",
+        ]);
+      }
+      const [updated] = await tx
+        .update(tutorProfile)
+        .set({
+          taxRateOverrideBps: input.rateBps,
+          version: profile.version + 1,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(tutorProfile.userId, input.tutorId),
+            eq(tutorProfile.version, profile.version),
+          ),
+        )
+        .returning({ taxRateOverrideBps: tutorProfile.taxRateOverrideBps });
+      if (!updated) {
+        throw new TutorPayoutPreviewStaleError(
+          "Tutor profile changed; reload and retry",
+        );
+      }
+      await audit.record({
+        db: tx,
+        actorId: adminId,
+        actorType: "admin",
+        action: "tutor_tax_rate_override_updated",
+        targetId: input.tutorId,
+        targetType: "tutor_profile",
+        beforeState: { taxRateOverrideBps: profile.taxRateOverrideBps },
+        afterState: { taxRateOverrideBps: updated.taxRateOverrideBps },
+        details: { reason },
+      });
+      return { tutorId: input.tutorId, ...updated };
+    });
+  }
+
+  async function getTutorPayoutFinance(tutorId: string) {
+    return db.transaction(async (tx) => {
+      await lockTutorTaxConfig(tx);
+      await lockTutorForPayout(tx, tutorId);
+      const profile = await repo.findTutorProfile(tx, tutorId);
+      if (!profile) {
+        throw new TutorPayoutProfileIncompleteError(tutorId, ["tutorProfile"]);
+      }
+      const [pending, config, payoutRows] = await Promise.all([
+        getUnpaidAggregate(tx, tutorId),
+        readTutorTaxConfig(tx),
+        repo.listTutorPayoutsByTutorId(tx, tutorId),
+      ]);
+      const tax = taxRateFor(profile, config);
+      const grossHonorariumIdr = pending.tutorPayoutIdr;
+      const taxHonorariumIdr = calculateTutorTaxIdr(
+        grossHonorariumIdr,
+        tax.rateBps,
+      );
+      const bankName = normalizeOptionalText(profile.bankName);
+      const transferFeeIdr =
+        pending.items.length === 0 || bankName?.toUpperCase() === "BCA"
+          ? 0
+          : 2_500;
+      const net = grossHonorariumIdr - taxHonorariumIdr - transferFeeIdr;
+      const history = await mapLimit(payoutRows, 5, async (row) => ({
+        id: row.id,
+        status: row.status as "prepared" | "paid" | "void",
         grossHonorariumIdr: row.grossHonorariumIdr,
+        taxStatus: row.taxStatus,
+        taxRateBps: row.taxRateBps,
+        taxRateSource: row.taxRateSource,
+        taxHonorariumIdr: row.taxHonorariumIdr,
         transferFeeIdr: row.transferFeeIdr,
         netHonorariumIdr: row.netHonorariumIdr,
-        bankName: row.bankName,
-        bankAccountNumber: profile.bankAccountNumber.trim(),
-        bankAccountHolderName: profile.bankAccountHolderName.trim(),
+        actualAmountIdr: row.actualAmountIdr,
         paidAt: row.paidAt,
+        actualReference: row.actualReference,
+        reconciliationStatus: row.reconciliationStatus,
+        items: (await repo.listTutorPayoutAllocationsByPayoutId(
+          tx,
+          row.id,
+        )) as TutorPayoutAllocationDetail[],
+      }));
+      return {
+        pending: {
+          completedSessions: pending.completedSessions,
+          grossHonorariumIdr,
+          taxStatus: tax.taxStatus,
+          taxRateBps: tax.rateBps,
+          taxRateSource: tax.rateSource,
+          taxHonorariumIdr,
+          transferFeeIdr,
+          netHonorariumIdr: net >= 0 ? net : null,
+          payoutAccountComplete: hasCompletePayoutDetails(profile),
+          taxProfileComplete: Boolean(
+            profile.taxLegalName?.trim() && /^\d{16}$/.test(profile.nik ?? ""),
+          ),
+          items: pending.items,
+        },
+        history,
       };
     });
   }
@@ -5682,7 +6511,15 @@ export function createBookingService(deps: {
     getTutorPayouts,
     getPendingTutorPayouts,
     getTutorPayoutAllocations,
-    markTutorPayoutPaid,
+    previewTutorPayout,
+    prepareTutorPayout,
+    recordTutorPayoutTransfer,
+    voidTutorPayout,
+    resolveTutorPayoutReconciliation,
+    getTutorTaxConfig,
+    updateTutorTaxConfig,
+    setTutorTaxRateOverride,
+    getTutorPayoutFinance,
     expireBookings,
     releaseExpiredHolds,
     checkTutorLateness,

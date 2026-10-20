@@ -807,14 +807,10 @@ const adminContent: GuideContent = {
           actor: "Admin",
           icon: IconWallet,
           details: [
-            "The Unpaid amount column shows each tutor's unpaid honorarium and the completed sessions it includes.",
-            "Open a tutor payout to verify the destination account, transfer the net amount, then choose **Mark as paid**.",
-            "The unpaid amount covers completed sessions since that tutor's last recorded payment; it does not reset automatically each week.",
-            "If payout details are incomplete, ask the tutor to finish them before transferring money.",
-          ],
-          statuses: [
-            { label: "Unpaid", variant: "warning" },
-            { label: "Up to date", variant: "success" },
+            "Select the unpaid session fees to prepare a versioned batch with saved bank, tax-rate, and fee details.",
+            "After performing the bank transfer outside Cogito, record its exact net amount, actual date, and optional reference or proof.",
+            "An actual-amount mismatch cannot be marked paid. Refresh the preview if the tutor profile or tax configuration changes.",
+            "Voiding keeps transfer evidence. Reconcile an external transfer with an audited reason before those sessions can be prepared again.",
           ],
           cta: { label: "Open tutor payouts", to: "/admin-tutor-payouts" },
         },

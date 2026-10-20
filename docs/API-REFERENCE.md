@@ -697,34 +697,59 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `admin.getTutorPayoutReport`
 
-- **RPC path:** `/rpc/admin/payouts/tutor/report`
+- **HTTP:** `POST /rpc/admin/getTutorPayoutReport`
 - **Auth:** Admin
 - **Input:** `{ dateFrom?, dateTo? }` (ISO datetimes; both are optional)
-- **Output:** `TutorPayoutReportRow[]`, where each row contains `{ id, tutorId, tutorName, bankName, bankAccountNumber, bankAccountHolderName, bankAccountOpeningCity, bankAccountOwnership, grossHonorariumIdr, transferFeeIdr, netHonorariumIdr, status, paidAt, payoutAccountComplete }`; `status` is `paid` or `pending`.
-- **Description:** Returns immutable paid payout batches whose `paidAt` falls in the requested date window plus each tutor's current unpaid balance after the latest paid cutoff. The date window limits paid transfer history; current unpaid balances remain visible even when the outstanding completion is older than the selected window. Legacy paid rows without stored account snapshots fall back to the current tutor profile for account number and account-holder display.
+- **Output:** `TutorPayoutReportRow[]`; rows include payout status, covered-session count, gross, saved tax status/rate/source/withholding, transfer fee, calculated net, actual amount/reference/proof, transfer-recorded actor/time, and reconciliation fields. New paid/void rows use saved tax and bank snapshots. Legacy aggregate rows retain nullable snapshots and never fall back to current identity/bank data.
+- **Description:** Returns paid and void transfer history in the requested Asia/Jakarta date window plus each tutor's current unpaid summary. Current unpaid sessions remain visible outside the selected history window. NIK/NPWP and bank details are admin-only fields; this procedure requires the admin role.
 
 ### `admin.getPendingTutorPayouts`
 
 - **Auth:** Admin
 - **Input:** `{ tutorId }`
 - **Output:** `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr, items, lastPaidAt }`; each `items[]` entry includes `{ sourceKey, sourceType, tutorSessionFeeId, bookingId, bookingNumber, bookingSessionId, bookingType, deliveryStatus, scheduledStartAt, earnedAt, grossHonorariumIdr, priceSnapshot }`.
-- **Description:** Returns the unpaid tutor honorarium and auditable session breakdown since the latest admin-paid cutoff. `items` are the exact fee-event or legacy snapshot sources that will be captured if this balance is marked paid. The cutoff advances only when `admin.markTutorPayoutPaid` succeeds; no calendar-week reset is applied.
+- **Description:** Returns unpaid fee-event sources and the legacy compatibility summary. New fee-event rows are allocated only when an admin prepares a selected batch; a prepared batch reserves its exact sources. Existing published tutors can continue teaching while tax identity is incomplete, but a new batch cannot be prepared until legal name and a 16-digit NIK are present.
 
 ### `admin.getTutorPayoutAllocations`
 
-- **RPC path:** `/rpc/admin/payouts/tutor/details`
+- **HTTP:** `POST /rpc/admin/getTutorPayoutAllocations`
 - **Auth:** Admin
 - **Input:** `{ payoutId }` (UUID string)
-- **Output:** `{ detailsAvailable, items }`; each `items[]` entry includes `{ id, payoutId, sourceKey, sourceType, tutorSessionFeeId, bookingId, bookingNumber, bookingSessionId, bookingType, deliveryStatus, scheduledStartAt, earnedAt, grossHonorariumIdr, priceSnapshot, createdAt }`.
-- **Description:** Returns immutable per-session source allocations for a paid manual tutor transfer. `detailsAvailable` is false with an empty `items` array for historical payouts that predate session-level allocation; no historical allocation is inferred or fabricated.
+- **Output:** `{ detailsAvailable, items }`; each item includes the persisted fee/source identity, booking/session, delivery status, gross snapshot, and whether the allocation remains active or was released with a reason.
+- **Description:** Returns the saved per-session allocations for a prepared, paid, or void payout. Historical aggregate-only rows return no items; no historical allocation is inferred or fabricated.
 
-### `admin.markTutorPayoutPaid`
+### `admin.previewTutorPayout` and `admin.prepareTutorPayout`
 
+- **HTTP:** `POST /rpc/admin/previewTutorPayout` and `POST /rpc/admin/prepareTutorPayout`
 - **Auth:** Admin
-- **Input:** `{ tutorId }`
-- **Output:** `{ id, tutorId, grossHonorariumIdr, transferFeeIdr, netHonorariumIdr, bankName, bankAccountNumber, bankAccountHolderName, paidAt }`
-- **Errors:** `TUTOR_PAYOUT_NOT_AVAILABLE` (400) when no unpaid honorarium exists or payout account details are incomplete
-- **Description:** Atomically records an immutable paid payout at the current completion-time cutoff and one per-session allocation row for every included source. Exact conventional `BCA` has no transfer fee; all other bank names deduct Rp2,500 once from the payout. The application records the manual transfer and audit trail but does not execute the bank transfer.
+- **Preview input:** `{ tutorId, sourceKeys }`; output includes a SHA-256 `previewVersion`, exact selected sources, current profile/config versions, tax snapshot, one transfer fee, saved destination fields, and net.
+- **Prepare input:** `{ tutorId, sourceKeys, previewVersion, operationId }`; output is the immutable prepared payout header. `operationId` is a UUID idempotency key.
+- **Description:** Preparation revalidates fee sources, tutor profile, bank destination, tax configuration and preview version in a transaction. It reserves the selected sources atomically; active allocations and tutor locks prevent two admins from reserving the same source. Tax is rounded to whole IDR from basis points; exact bank name `BCA` has no fee and other banks incur Rp2,500 once per batch. Negative net is rejected.
+
+### `admin.recordTutorPayoutTransfer`
+
+- **HTTP:** `POST /rpc/admin/recordTutorPayoutTransfer`
+- **Auth:** Admin
+- **Input:** `{ payoutId, previewVersion, actualAmountIdr, paidAt, reference?, proofUrl? }`; `proofUrl` must be HTTP(S).
+- **Output:** Saved payout mutation result with actual amount/date/reference/proof and transfer-recorded actor/time.
+- **Errors:** `PAYOUT_PREVIEW_STALE`, `PAYOUT_AMOUNT_MISMATCH`, `TUTOR_PAYOUT_STATE_INVALID`.
+- **Description:** Records only an externally performed transfer. The actual amount must exactly equal the saved net. Current profile/rate/fee sources are revalidated before commit. The payout, audit, tutor notification and email outbox row commit together; this procedure does not execute a bank transfer.
+
+### `admin.voidTutorPayout` and `admin.resolveTutorPayoutReconciliation`
+
+- **HTTP:** `POST /rpc/admin/voidTutorPayout` and `POST /rpc/admin/resolveTutorPayoutReconciliation`
+- **Auth:** Admin
+- **Input:** `{ payoutId, reason }` for either procedure.
+- **Output:** Saved payout mutation result.
+- **Description:** Voiding preserves the payout, allocation and any external-transfer evidence while recording actor/time/reason. Allocations are released. If transfer evidence exists, the source fees stay blocked from repayment until an audited reconciliation resolution is recorded.
+
+### Tutor tax defaults and overrides
+
+- **HTTP:** `POST /rpc/admin/getTutorTaxConfig`, `/rpc/admin/updateTutorTaxConfig`, `/rpc/admin/setTutorTaxRateOverride`
+- **Auth:** Admin
+- **Inputs:** Update defaults with `{ expectedVersion, nikNpwpRateBps, nikOnlyRateBps, missingRateBps, reason }`; set/clear a tutor override with `{ tutorId, rateBps, reason }` (`rateBps: null` clears it).
+- **Output:** Current versioned defaults or `{ tutorId, taxRateOverrideBps }`.
+- **Description:** Defaults start at 250 bps (2.50%) for NIK+NPWP, 300 bps for NIK-only and missing identity. Admin changes and tutor-specific overrides require a reason and are audited. These configurable defaults are not legal validation; tax-adviser confirmation remains OPS01.
 
 ### `admin.getEconomySettings`
 
@@ -1024,7 +1049,15 @@ The web tutor profile editor groups Education, Achievements, and Experiences int
 - **Input:** `{ dateFrom?, dateTo? }`
 - **Output:** `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }` (internal split fields remain for compatibility; the tutor UI renders only `tutorPayoutIdr`)
 - **Errors:** `INVALID_DATE_RANGE` (400)
-- **Description:** The authenticated tutor's unpaid honorarium summary. Persisted fee events are filtered by earned time after the latest admin-paid cutoff; legacy payout-eligible booking/session sources without events retain the snapshot and cutoff fallback. Event keys avoid counting an event and its legacy source twice. The cutoff advances only when an admin records a payout; paid rows are still aggregate records rather than allocations to individual fee events. Weekly processing is an operational cadence, not an automatic Monday reset. The tutor dashboard presents this summary in its Payout details card and exposes the processing and transfer-fee explanations through UI info popovers; no additional API field or endpoint is required.
+- **Description:** Compatibility summary for the authenticated tutor's unpaid honorarium. Persisted fee events are filtered by earned time after the legacy cutoff; legacy payout-eligible sources retain the snapshot fallback. Weekly processing is an operational cadence, not a calendar reset. The detailed tax and transfer breakdown is returned by `tutor.getMyPayoutFinance`.
+
+### `tutor.getMyPayoutFinance`
+
+- **HTTP:** `POST /rpc/tutor/getMyPayoutFinance` with the standard `{"json": {}}` body.
+- **Auth:** Tutor; the tutor ID is taken from the authenticated session, not client input.
+- **Input:** None.
+- **Output:** `{ pending, history }`. `pending` contains own unpaid session count, gross, tax status/rate/source/withholding, one transfer fee, estimated net, and account/tax profile completion flags. `history` contains only the requesting tutor's saved payout snapshots and covered allocations.
+- **Description:** Returns own finance data for the dashboard and does not include NIK, NPWP, bank account details, or another tutor's finance. Tutor tax identity remains available only from the authenticated tutor's own profile; admin payout reports require admin authorization.
 
 ---
 
@@ -1784,7 +1817,9 @@ The successful mutation also best-effort updates the existing offline Calendar e
 
 ## Tutor payout profile fields (2026-08-28)
 
-`/rpc/tutor/updateMyProfile` accepts payout-account fields (`bankName`, `bankAccountNumber`, `bankAccountHolderName`, `bankAccountOpeningCity`, `bankAccountOwnership`, and `bankTransferDisclaimerAccepted`) inside the standard `{"json": <input>}` envelope. `/rpc/tutor/getMyProfile` returns the private fields to the authenticated tutor; the public tutor discovery projection omits all of them. `/rpc/tutor/submitForReview` requires every payout field plus the acknowledgment. Only the exact bank name `BCA` represents conventional BCA and has no transfer fee; `BCA Syariah`, `blu`/`BCA Digital`, and all other bank names incur Rp2,500 once per payout. `/rpc/tutor/payouts/get` with no date filters returns honorarium since the latest admin-paid cutoff; explicit date filters remain available for reporting. Admins use `/rpc/admin/payouts/tutor/pending` to inspect unpaid honorarium and `/rpc/admin/payouts/tutor/mark-paid` to atomically create a paid payout record. Completion timestamps, rather than calendar weeks, determine which completed sessions enter a payout batch; completion and payout use a per-tutor lock to avoid a race at the cutoff.
+`/rpc/tutor/updateMyProfile` accepts private bank-account fields and tax-profile strings (`taxLegalName`, 16-digit `nik`, optional `npwp`) inside the standard `{"json": <input>}` envelope. NIK/NPWP remain strings so leading zeroes are preserved. `/rpc/tutor/getMyProfile` returns those fields only to the authenticated tutor; public tutor discovery and `/rpc/tutor/getMyPayoutFinance` omit them. Existing published tutors may keep teaching with an incomplete tax profile; legal name and NIK are required before a new payout is prepared. `/rpc/tutor/submitForReview` does not require tax identity.
+
+Only exact bank name `BCA` is fee-free; all other bank names incur Rp2,500 once per batch. `/rpc/tutor/getMyPayouts` with no date filters returns own honorarium compatibility summary; `/rpc/tutor/getMyPayoutFinance` returns the own gross/rate/tax/fee/net/session/history view. Admins use `/rpc/admin/getPendingTutorPayouts`, `/rpc/admin/previewTutorPayout`, `/rpc/admin/prepareTutorPayout`, and `/rpc/admin/recordTutorPayoutTransfer` for the versioned two-step external transfer workflow. Admin APIs also provide audited tax defaults/overrides, reasoned void, and reconciliation resolution. No RPC executes a bank transfer.
 
 Numeric Marks fields returned by wallet, booking, pricing, and analytics procedures remain numbers. The web client presents those values with the shared `CogitoMarks` symbol component; this is presentation-only and does not change RPC inputs or outputs.
 

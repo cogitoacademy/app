@@ -8,8 +8,15 @@ import {
   adminListLedgerEntriesInput,
   adminGetTutorPayoutsInput,
   adminGetTutorPayoutReportInput,
-  adminMarkTutorPayoutPaidInput,
+  adminGetPendingTutorPayoutsInput,
   adminGetTutorPayoutAllocationsInput,
+  adminPreviewTutorPayoutInput,
+  adminPrepareTutorPayoutInput,
+  adminRecordTutorPayoutTransferInput,
+  adminVoidTutorPayoutInput,
+  adminResolveTutorPayoutReconciliationInput,
+  adminUpdateTutorTaxConfigInput,
+  adminSetTutorTaxRateOverrideInput,
   adminUpdateEconomySettingsInput,
   adminPreviewV3EconomyInput,
   adminSaveV3EconomyInput,
@@ -148,7 +155,7 @@ export function createAdminRouter(handler: AdminHandler) {
         description:
           "Returns completed tutor honorarium since the last paid cutoff",
       })
-      .input(adminMarkTutorPayoutPaidInput)
+      .input(adminGetPendingTutorPayoutsInput)
       .handler(handler.getPendingTutorPayouts),
 
     getTutorPayoutAllocations: adminProcedure
@@ -163,17 +170,88 @@ export function createAdminRouter(handler: AdminHandler) {
       .input(adminGetTutorPayoutAllocationsInput)
       .handler(handler.getTutorPayoutAllocations),
 
-    markTutorPayoutPaid: adminProcedure
+    previewTutorPayout: adminProcedure
       .route({
         method: "POST",
-        path: "/admin/payouts/tutor/mark-paid",
+        path: "/admin/payouts/tutor/preview",
         tags: ["Admin"],
-        summary: "Mark unpaid tutor honorarium as paid",
+        summary: "Preview a selected tutor payout batch",
         description:
-          "Creates an immutable payout record and advances the tutor's paid cutoff",
+          "Revalidates selected unpaid sessions, bank details and tax-rate basis",
       })
-      .input(adminMarkTutorPayoutPaidInput)
-      .handler(handler.markTutorPayoutPaid),
+      .input(adminPreviewTutorPayoutInput)
+      .handler(handler.previewTutorPayout),
+
+    prepareTutorPayout: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/payouts/tutor/prepare",
+        tags: ["Admin"],
+        summary: "Prepare an immutable tutor payout preview",
+      })
+      .input(adminPrepareTutorPayoutInput)
+      .handler(handler.prepareTutorPayout),
+
+    recordTutorPayoutTransfer: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/payouts/tutor/record-transfer",
+        tags: ["Admin"],
+        summary: "Record an externally performed tutor transfer",
+        description:
+          "Records actual amount, date and optional evidence after the bank transfer; it does not execute a transfer",
+      })
+      .input(adminRecordTutorPayoutTransferInput)
+      .handler(handler.recordTutorPayoutTransfer),
+
+    voidTutorPayout: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/payouts/tutor/void",
+        tags: ["Admin"],
+        summary: "Void a payout while keeping its audit and transfer evidence",
+      })
+      .input(adminVoidTutorPayoutInput)
+      .handler(handler.voidTutorPayout),
+
+    resolveTutorPayoutReconciliation: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/payouts/tutor/reconciliation/resolve",
+        tags: ["Admin"],
+        summary: "Resolve an audited transfer reconciliation",
+      })
+      .input(adminResolveTutorPayoutReconciliationInput)
+      .handler(handler.resolveTutorPayoutReconciliation),
+
+    getTutorTaxConfig: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/payouts/tutor/tax-config/get",
+        tags: ["Admin"],
+        summary: "Get configurable tutor payout tax defaults",
+      })
+      .handler(handler.getTutorTaxConfig),
+
+    updateTutorTaxConfig: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/payouts/tutor/tax-config/update",
+        tags: ["Admin"],
+        summary: "Update audited tutor payout tax defaults",
+      })
+      .input(adminUpdateTutorTaxConfigInput)
+      .handler(handler.updateTutorTaxConfig),
+
+    setTutorTaxRateOverride: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/payouts/tutor/tax-override/set",
+        tags: ["Admin"],
+        summary: "Set an audited tutor-specific payout tax rate",
+      })
+      .input(adminSetTutorTaxRateOverrideInput)
+      .handler(handler.setTutorTaxRateOverride),
 
     getEconomySettings: adminProcedure
       .route({

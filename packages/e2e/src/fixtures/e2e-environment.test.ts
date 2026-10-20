@@ -3,6 +3,8 @@ import { resolveE2eEnvironment } from "./e2e-environment";
 
 const validDatabaseUrl =
   "postgresql://postgres:password@localhost:6767/cogito-test";
+const validPayoutDatabaseUrl =
+  "postgresql://postgres:password@localhost:6767/cogito-test-payout";
 
 function validEnvironment(
   databaseUrl: string | undefined,
@@ -34,12 +36,20 @@ describe("E2E environment safety", () => {
     }
   });
 
+  test("accepts the isolated tutor payout test database", () => {
+    const environment = resolveE2eEnvironment(
+      validEnvironment(validPayoutDatabaseUrl),
+    );
+
+    expect(environment.databaseUrl).toBe(validPayoutDatabaseUrl);
+  });
+
   test("rejects missing and malformed database URLs", () => {
     for (const databaseUrl of [undefined, "", "not-a-url", "postgresql://["]) {
       expect(() =>
         resolveE2eEnvironment(validEnvironment(databaseUrl)),
       ).toThrow(
-        "E2E DATABASE_URL must target the loopback PostgreSQL database cogito-test.",
+        "E2E DATABASE_URL must target loopback PostgreSQL cogito-test or cogito-test-payout.",
       );
     }
   });
@@ -53,7 +63,7 @@ describe("E2E environment safety", () => {
       "postgresql://postgres:password@localhost./cogito-test",
     ]) {
       expect(() => resolveE2eEnvironment(validEnvironment(value))).toThrow(
-        "E2E DATABASE_URL must target the loopback PostgreSQL database cogito-test.",
+        "E2E DATABASE_URL must target loopback PostgreSQL cogito-test or cogito-test-payout.",
       );
     }
   });
@@ -67,7 +77,7 @@ describe("E2E environment safety", () => {
       "mysql://postgres:password@localhost/cogito-test",
     ]) {
       expect(() => resolveE2eEnvironment(validEnvironment(value))).toThrow(
-        "E2E DATABASE_URL must target the loopback PostgreSQL database cogito-test.",
+        "E2E DATABASE_URL must target loopback PostgreSQL cogito-test or cogito-test-payout.",
       );
     }
   });
@@ -81,7 +91,7 @@ describe("E2E environment safety", () => {
     };
 
     expect(() => resolveE2eEnvironment(resolvedEnvironment)).toThrow(
-      "E2E DATABASE_URL must target the loopback PostgreSQL database cogito-test.",
+      "E2E DATABASE_URL must target loopback PostgreSQL cogito-test or cogito-test-payout.",
     );
   });
 
@@ -95,7 +105,7 @@ describe("E2E environment safety", () => {
       errorMessage = error instanceof Error ? error.message : String(error);
     }
 
-    expect(errorMessage).toContain("E2E DATABASE_URL must target");
+    expect(errorMessage).toContain("E2E DATABASE_URL must target loopback");
     expect(errorMessage).not.toContain("private-user");
     expect(errorMessage).not.toContain("private-password");
   });

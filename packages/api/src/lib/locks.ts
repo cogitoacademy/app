@@ -33,6 +33,13 @@ export async function lockTutorForPayout(
   );
 }
 
+/** Serializes payout previews and writes against tax-rate configuration edits. */
+export async function lockTutorTaxConfig(conn: DbOrTx): Promise<void> {
+  await conn.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtextextended('tutor-tax-config', 2))`,
+  );
+}
+
 /** Serializes proposal replacement for a single booking. */
 export async function lockBookingReschedule(
   conn: DbOrTx,

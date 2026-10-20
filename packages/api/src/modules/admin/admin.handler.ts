@@ -18,8 +18,15 @@ import type {
   adminSearchUsersInput,
   adminGetTutorPayoutsInput,
   adminGetTutorPayoutReportInput,
-  adminMarkTutorPayoutPaidInput,
+  adminGetPendingTutorPayoutsInput,
   adminGetTutorPayoutAllocationsInput,
+  adminPreviewTutorPayoutInput,
+  adminPrepareTutorPayoutInput,
+  adminRecordTutorPayoutTransferInput,
+  adminVoidTutorPayoutInput,
+  adminResolveTutorPayoutReconciliationInput,
+  adminUpdateTutorTaxConfigInput,
+  adminSetTutorTaxRateOverrideInput,
   adminUpdateEconomySettingsInput,
   adminPreviewV3EconomyInput,
   adminSaveV3EconomyInput,
@@ -37,8 +44,8 @@ type AdminGetTutorPayoutsInputZod = z.infer<typeof adminGetTutorPayoutsInput>;
 type AdminGetTutorPayoutReportInputZod = z.infer<
   typeof adminGetTutorPayoutReportInput
 >;
-type AdminMarkTutorPayoutPaidInputZod = z.infer<
-  typeof adminMarkTutorPayoutPaidInput
+type AdminGetPendingTutorPayoutsInputZod = z.infer<
+  typeof adminGetPendingTutorPayoutsInput
 >;
 type AdminGetTutorPayoutAllocationsInputZod = z.infer<
   typeof adminGetTutorPayoutAllocationsInput
@@ -185,7 +192,7 @@ export function createAdminHandler(adminService: AdminService) {
       input,
     }: {
       context: Context;
-      input: AdminMarkTutorPayoutPaidInputZod;
+      input: AdminGetPendingTutorPayoutsInputZod;
     }) => {
       return withDomainMap(
         () => adminService.getPendingTutorPayouts(input),
@@ -205,18 +212,100 @@ export function createAdminHandler(adminService: AdminService) {
       );
     },
 
-    markTutorPayoutPaid: async ({
+    previewTutorPayout: async ({
+      input,
+    }: {
+      input: z.infer<typeof adminPreviewTutorPayoutInput>;
+    }) =>
+      withDomainMap(
+        () => adminService.previewTutorPayout(input),
+        mapAdminError,
+      ),
+
+    prepareTutorPayout: async ({
       context,
       input,
     }: {
       context: Context;
-      input: AdminMarkTutorPayoutPaidInputZod;
-    }) => {
-      return withDomainMap(
-        () => adminService.markTutorPayoutPaid(context.session!.user.id, input),
+      input: z.infer<typeof adminPrepareTutorPayoutInput>;
+    }) =>
+      withDomainMap(
+        () => adminService.prepareTutorPayout(context.session!.user.id, input),
         mapAdminError,
-      );
-    },
+      ),
+
+    recordTutorPayoutTransfer: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: z.infer<typeof adminRecordTutorPayoutTransferInput>;
+    }) =>
+      withDomainMap(
+        () =>
+          adminService.recordTutorPayoutTransfer(
+            context.session!.user.id,
+            input,
+          ),
+        mapAdminError,
+      ),
+
+    voidTutorPayout: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: z.infer<typeof adminVoidTutorPayoutInput>;
+    }) =>
+      withDomainMap(
+        () => adminService.voidTutorPayout(context.session!.user.id, input),
+        mapAdminError,
+      ),
+
+    resolveTutorPayoutReconciliation: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: z.infer<typeof adminResolveTutorPayoutReconciliationInput>;
+    }) =>
+      withDomainMap(
+        () =>
+          adminService.resolveTutorPayoutReconciliation(
+            context.session!.user.id,
+            input,
+          ),
+        mapAdminError,
+      ),
+
+    getTutorTaxConfig: async ({ context: _context }: { context: Context }) =>
+      withDomainMap(() => adminService.getTutorTaxConfig(), mapAdminError),
+
+    updateTutorTaxConfig: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: z.infer<typeof adminUpdateTutorTaxConfigInput>;
+    }) =>
+      withDomainMap(
+        () =>
+          adminService.updateTutorTaxConfig(context.session!.user.id, input),
+        mapAdminError,
+      ),
+
+    setTutorTaxRateOverride: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: z.infer<typeof adminSetTutorTaxRateOverrideInput>;
+    }) =>
+      withDomainMap(
+        () =>
+          adminService.setTutorTaxRateOverride(context.session!.user.id, input),
+        mapAdminError,
+      ),
 
     getEconomySettings: async ({ context: _context }: { context: Context }) => {
       return withDomainMap(

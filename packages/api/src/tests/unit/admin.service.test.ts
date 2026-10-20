@@ -277,31 +277,49 @@ describe("Admin Service", () => {
       ).rejects.toThrow(TutorPayoutNotAvailableError);
     });
 
-    test("marks a payout paid and audits it", async () => {
-      const row = { id: "p1", tutorId: "t1", transferFeeIdr: 6500 };
-      const payout = { markTutorPayoutPaid: mock(async () => row) };
-      const { service, auditPort } = makeService(payout);
+    test("prepares a versioned batch and records only the exact external transfer", async () => {
+      const prepared = { id: "p1", status: "prepared" };
+      const paid = { id: "p1", status: "paid" };
+      const prepareTutorPayout = mock(async () => prepared);
+      const recordTutorPayoutTransfer = mock(async () => paid);
+      const { service } = makeService({
+        prepareTutorPayout,
+        recordTutorPayoutTransfer,
+      });
+      const prepareInput = {
+        tutorId: "t1",
+        sourceKeys: ["fee:event-1"],
+        previewVersion: "a".repeat(64),
+        operationId: "4b30c664-94c6-4dca-9b91-08a7c0876ef1",
+      };
+      const transferInput = {
+        payoutId: "4b30c664-94c6-4dca-9b91-08a7c0876ef1",
+        previewVersion: "a".repeat(64),
+        actualAmountIdr: 9750,
+        paidAt: "2026-08-10T03:00:00.000Z",
+      };
+
       await expect(
-        service.markTutorPayoutPaid("admin1", { tutorId: "t1" }),
-      ).resolves.toBe(row);
-      expect(auditPort.record).toHaveBeenCalledWith(
-        expect.objectContaining({
-          action: "tutor_payout_paid",
-          targetId: "p1",
-        }),
-      );
+        service.prepareTutorPayout("admin1", prepareInput),
+      ).resolves.toBe(prepared);
+      expect(prepareTutorPayout).toHaveBeenCalledWith("admin1", prepareInput);
+      await expect(
+        service.recordTutorPayoutTransfer("admin1", transferInput),
+      ).resolves.toBe(paid);
+      expect(recordTutorPayoutTransfer).toHaveBeenCalledWith("admin1", {
+        ...transferInput,
+        paidAt: new Date(transferInput.paidAt),
+      });
     });
 
-    test("rejects missing payout support and empty settlements", async () => {
+    test("rejects unsupported payout writes", async () => {
       await expect(
-        makeService({}).service.markTutorPayoutPaid("admin1", {
+        makeService({}).service.prepareTutorPayout("admin1", {
           tutorId: "t1",
+          sourceKeys: ["fee:event-1"],
+          previewVersion: "a".repeat(64),
+          operationId: "4b30c664-94c6-4dca-9b91-08a7c0876ef1",
         }),
-      ).rejects.toThrow(TutorPayoutNotAvailableError);
-      await expect(
-        makeService({
-          markTutorPayoutPaid: mock(async () => null),
-        }).service.markTutorPayoutPaid("admin1", { tutorId: "t1" }),
       ).rejects.toThrow(TutorPayoutNotAvailableError);
     });
   });

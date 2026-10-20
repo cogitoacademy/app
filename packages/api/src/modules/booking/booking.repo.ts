@@ -35,6 +35,7 @@ import {
   tutorSessionFee,
   ledgerEntry,
   tutorPayoutAllocation,
+  tutorTaxConfig,
   type booking as bookingTable,
   type BookingSessionTopic,
   type BookingPriceSnapshot,
@@ -1219,7 +1220,12 @@ async function listTutorPayoutAllocatedSourceKeys(
     .select({ sourceKey: tutorPayoutAllocation.sourceKey })
     .from(tutorPayoutAllocation)
     .innerJoin(tutorPayout, eq(tutorPayoutAllocation.payoutId, tutorPayout.id))
-    .where(eq(tutorPayout.tutorId, tutorId));
+    .where(
+      and(
+        eq(tutorPayout.tutorId, tutorId),
+        eq(tutorPayoutAllocation.active, true),
+      ),
+    );
   return rows.map((row) => row.sourceKey);
 }
 
@@ -1252,6 +1258,9 @@ async function listTutorPayoutAllocationsByPayoutId(
       grossHonorariumIdr: tutorPayoutAllocation.grossHonorariumIdr,
       priceSnapshot: tutorPayoutAllocation.priceSnapshot,
       createdAt: tutorPayoutAllocation.createdAt,
+      active: tutorPayoutAllocation.active,
+      releasedAt: tutorPayoutAllocation.releasedAt,
+      releaseReason: tutorPayoutAllocation.releaseReason,
     })
     .from(tutorPayoutAllocation)
     .innerJoin(booking, eq(tutorPayoutAllocation.bookingId, booking.id))
@@ -1279,7 +1288,9 @@ async function findLatestPaidTutorPayout(conn: DbOrTx, tutorId: string) {
   const [row] = await conn
     .select({ ...getTableColumns(tutorPayout) })
     .from(tutorPayout)
-    .where(eq(tutorPayout.tutorId, tutorId))
+    .where(
+      and(eq(tutorPayout.tutorId, tutorId), eq(tutorPayout.status, "paid")),
+    )
     .orderBy(desc(tutorPayout.cutoffAt))
     .limit(1);
   return row ?? null;
@@ -1299,26 +1310,32 @@ async function listTutorPayoutProfiles(conn: DbOrTx) {
       bankAccountHolderName: tutorProfile.bankAccountHolderName,
       bankAccountOpeningCity: tutorProfile.bankAccountOpeningCity,
       bankAccountOwnership: tutorProfile.bankAccountOwnership,
+      taxLegalName: tutorProfile.taxLegalName,
       bankTransferDisclaimerAccepted:
         tutorProfile.bankTransferDisclaimerAccepted,
+      nik: tutorProfile.nik,
+      npwp: tutorProfile.npwp,
+      taxRateOverrideBps: tutorProfile.taxRateOverrideBps,
+      profileVersion: tutorProfile.version,
     })
     .from(tutorProfile)
     .innerJoin(user, eq(tutorProfile.userId, user.id))
     .orderBy(desc(tutorProfile.createdAt));
 }
 
-/**
- * Lists immutable payout batches by transfer date and joins the current
- * profile only as a fallback for legacy rows that predate account snapshots.
- */
+/** Lists payout snapshots by actual transfer date, plus prepared and void rows. */
 async function listTutorPayoutRecords(
   conn: DbOrTx,
   dateFrom?: Date,
   dateTo?: Date,
 ) {
-  const conditions: SQL[] = [eq(tutorPayout.status, "paid")];
-  if (dateFrom) conditions.push(gte(tutorPayout.paidAt, dateFrom));
-  if (dateTo) conditions.push(lte(tutorPayout.paidAt, dateTo));
+  const dateConditions: SQL[] = [];
+  if (dateFrom) dateConditions.push(gte(tutorPayout.paidAt, dateFrom));
+  if (dateTo) dateConditions.push(lte(tutorPayout.paidAt, dateTo));
+  const withinDateWindow = and(
+    sql`${tutorPayout.paidAt} IS NOT NULL`,
+    ...dateConditions,
+  );
 
   return conn
     .select({
@@ -1328,20 +1345,52 @@ async function listTutorPayoutRecords(
       bankName: tutorPayout.bankName,
       bankAccountNumber: tutorPayout.bankAccountNumber,
       bankAccountHolderName: tutorPayout.bankAccountHolderName,
-      profileBankAccountNumber: tutorProfile.bankAccountNumber,
-      profileBankAccountHolderName: tutorProfile.bankAccountHolderName,
-      profileBankAccountOpeningCity: tutorProfile.bankAccountOpeningCity,
-      profileBankAccountOwnership: tutorProfile.bankAccountOwnership,
+      bankAccountOpeningCity: tutorPayout.bankAccountOpeningCity,
+      bankAccountOwnership: tutorPayout.bankAccountOwnership,
+      taxLegalName: tutorPayout.taxLegalName,
+      taxNik: tutorPayout.taxNik,
+      taxNpwp: tutorPayout.taxNpwp,
+      taxStatus: tutorPayout.taxStatus,
+      taxRateBps: tutorPayout.taxRateBps,
+      taxRateSource: tutorPayout.taxRateSource,
+      taxHonorariumIdr: tutorPayout.taxHonorariumIdr,
+      actualAmountIdr: tutorPayout.actualAmountIdr,
+      actualReference: tutorPayout.actualReference,
+      actualProofUrl: tutorPayout.actualProofUrl,
+      transferRecordedAt: tutorPayout.transferRecordedAt,
       grossHonorariumIdr: tutorPayout.grossHonorariumIdr,
       transferFeeIdr: tutorPayout.transferFeeIdr,
       netHonorariumIdr: tutorPayout.netHonorariumIdr,
       status: tutorPayout.status,
       paidAt: tutorPayout.paidAt,
+      previewVersion: tutorPayout.previewVersion,
+      coveredSessionCount: sql<number>`(
+        SELECT count(*)::int
+        FROM tutor_payout_allocation
+        WHERE tutor_payout_allocation.payout_id = ${tutorPayout.id}
+      )`,
+      preparedAt: tutorPayout.preparedAt,
+      voidedAt: tutorPayout.voidedAt,
+      voidReason: tutorPayout.voidReason,
+      reconciliationStatus: tutorPayout.reconciliationStatus,
+      reconciliationReason: tutorPayout.reconciliationReason,
+      preparedBy: tutorPayout.preparedBy,
+      paidBy: tutorPayout.paidBy,
     })
     .from(tutorPayout)
     .innerJoin(user, eq(tutorPayout.tutorId, user.id))
-    .leftJoin(tutorProfile, eq(tutorPayout.tutorId, tutorProfile.userId))
-    .where(and(...conditions))
+    .where(
+      or(
+        eq(tutorPayout.status, "prepared"),
+        withinDateWindow,
+        and(
+          eq(tutorPayout.status, "void"),
+          sql`${tutorPayout.voidedAt} IS NOT NULL`,
+          ...(dateFrom ? [gte(tutorPayout.voidedAt, dateFrom)] : []),
+          ...(dateTo ? [lte(tutorPayout.voidedAt, dateTo)] : []),
+        ),
+      ),
+    )
     .orderBy(desc(tutorPayout.paidAt), desc(tutorPayout.id));
 }
 
@@ -1351,6 +1400,70 @@ async function insertTutorPayout(
 ) {
   const [row] = await conn.insert(tutorPayout).values(input).returning();
   return row!;
+}
+
+async function findTutorTaxConfig(conn: DbOrTx) {
+  return (
+    (await conn.query.tutorTaxConfig.findFirst({
+      where: eq(tutorTaxConfig.id, "default"),
+    })) ?? null
+  );
+}
+
+async function findTutorPayoutById(
+  conn: DbOrTx,
+  payoutId: string,
+  forUpdate = false,
+) {
+  const query = conn
+    .select({ ...getTableColumns(tutorPayout) })
+    .from(tutorPayout)
+    .where(eq(tutorPayout.id, payoutId))
+    .limit(1);
+  const [row] = forUpdate ? await query.for("update") : await query;
+  return row ?? null;
+}
+
+async function findTutorPayoutByIdempotencyKey(conn: DbOrTx, key: string) {
+  const [row] = await conn
+    .select({ ...getTableColumns(tutorPayout) })
+    .from(tutorPayout)
+    .where(eq(tutorPayout.idempotencyKey, key))
+    .limit(1);
+  return row ?? null;
+}
+
+async function listTutorPayoutsByTutorId(
+  conn: DbOrTx,
+  tutorId: string,
+  limit = 100,
+) {
+  return conn
+    .select({ ...getTableColumns(tutorPayout) })
+    .from(tutorPayout)
+    .where(eq(tutorPayout.tutorId, tutorId))
+    .orderBy(desc(tutorPayout.paidAt), desc(tutorPayout.createdAt))
+    .limit(limit);
+}
+
+async function listTutorPayoutReconciliationSourceKeys(
+  conn: DbOrTx,
+  tutorId: string,
+): Promise<{ sourceKey: string; payoutId: string }[]> {
+  const rows = await conn
+    .select({
+      sourceKey: tutorPayoutAllocation.sourceKey,
+      payoutId: tutorPayout.id,
+    })
+    .from(tutorPayoutAllocation)
+    .innerJoin(tutorPayout, eq(tutorPayoutAllocation.payoutId, tutorPayout.id))
+    .where(
+      and(
+        eq(tutorPayout.tutorId, tutorId),
+        eq(tutorPayout.reconciliationStatus, "required"),
+      ),
+    );
+  return rows;
 }
 
 async function insertTutorSessionFee(
@@ -1748,6 +1861,11 @@ export function createBookingRepo(db: DbType) {
     findLatestPaidTutorPayout,
     listTutorPayoutProfiles,
     listTutorPayoutRecords,
+    findTutorTaxConfig,
+    findTutorPayoutById,
+    findTutorPayoutByIdempotencyKey,
+    listTutorPayoutsByTutorId,
+    listTutorPayoutReconciliationSourceKeys,
     insertTutorPayout,
     insertTutorSessionFee,
   };

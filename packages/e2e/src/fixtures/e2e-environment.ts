@@ -6,6 +6,7 @@ const ENV_FILE_CANDIDATES = [
   "../../apps/server/.env.test.example",
 ];
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+const ALLOWED_TEST_DATABASES = new Set(["cogito-test", "cogito-test-payout"]);
 
 export type E2eEnvironment = {
   databaseUrl: string;
@@ -82,7 +83,7 @@ export function resolveE2eEnvironment(env: NodeJS.ProcessEnv): E2eEnvironment {
 function parseDatabaseUrl(value: string | undefined): string {
   if (!value) {
     throw new Error(
-      "E2E DATABASE_URL must target the loopback PostgreSQL database cogito-test.",
+      "E2E DATABASE_URL must target loopback PostgreSQL cogito-test or cogito-test-payout.",
     );
   }
 
@@ -91,17 +92,17 @@ function parseDatabaseUrl(value: string | undefined): string {
     url = new URL(value);
   } catch {
     throw new Error(
-      "E2E DATABASE_URL must target the loopback PostgreSQL database cogito-test.",
+      "E2E DATABASE_URL must target loopback PostgreSQL cogito-test or cogito-test-payout.",
     );
   }
 
   if (
     !["postgres:", "postgresql:"].includes(url.protocol) ||
     !isLoopbackHost(url.hostname) ||
-    url.pathname !== "/cogito-test"
+    !ALLOWED_TEST_DATABASES.has(url.pathname.replace(/^\//, ""))
   ) {
     throw new Error(
-      "E2E DATABASE_URL must target the loopback PostgreSQL database cogito-test.",
+      "E2E DATABASE_URL must target loopback PostgreSQL cogito-test or cogito-test-payout.",
     );
   }
 

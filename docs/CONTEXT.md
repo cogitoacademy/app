@@ -54,6 +54,20 @@ passed its guard unit suite (7 tests / 32 expectations) and E2E typecheck; the
 browser suite was not rerun against the shared test database. See the
 [runbook](./RUNBOOK.md) for the guarded command.
 
+## Tutor tax and payout checkpoint (2026-10-21)
+
+T03 now has tutor tax-profile fields, configurable default and tutor override
+rates, whole-IDR withholding, versioned selected-session preparation, manual
+external-transfer recording, audited void/reconciliation, tutor-only finance
+history, transactional notification/outbox writes, and saved-snapshot monthly
+CSV. New payouts snapshot the bank, identity, tax rate and fee sources; legacy
+aggregate rows remain unchanged and unbackfilled. OPS01 tax-adviser
+confirmation remains a release operational gate, and the defaults are not legal
+validation. Focused pure units pass (15 tests / 70 expectations). The isolated
+Postgres and browser suites are authored but remain pending the assigned
+verification window. Migration generation follows reviewed enrollment idx64;
+no migration is applied from this worktree.
+
 ## Competition catalog language
 
 **Parent competition**: A competition type, such as Debate, that owns the
@@ -162,21 +176,23 @@ series parent remains scheduled. Pending summaries apply the paid cutoff to new
 fees by `earnedAt` and retain the existing completion-time fallback for legacy
 records.
 
-Migration `0060_tutor_payout_allocations.sql` adds immutable per-session source
-rows for each newly recorded tutor payout. `markTutorPayoutPaid` writes the
-aggregate transfer row and one allocation per included fee event or legacy
-snapshot in the same transaction. A globally unique source key prevents a
-delivery from being allocated to a second payout. The admin payout drawer shows
-candidate sessions before payment and stored allocations after payment. Existing
-paid batches were not backfilled; their original session breakdown is reported
-as unavailable. The owner confirmed the V3 app is not yet in use, so historical
-per-session reconciliation is not required for this release; current fee events
-are the source of truth for new V3 completions. No rows were deleted and no
-production database was accessed. Any later cleanup must be scoped and reviewed.
+Migration `0060_tutor_payout_allocations.sql` adds per-session source
+allocations for newly prepared tutor payouts. The V3 payout workflow prepares
+an immutable fee/profile/rate/bank snapshot before an external transfer, then
+records only the exact net amount after that transfer. A filtered active-source
+unique index and stable tutor/config locks prevent a delivery from being
+reserved by two active batches. Void releases allocations but keeps payout and
+transfer evidence; repayment stays blocked when external transfer evidence is
+unreconciled. Existing paid aggregates remain unallocated and unchanged; their
+original session breakdown is never backfilled or inferred. Tax defaults are
+configurable and are not legal validation; OPS01 tax-adviser confirmation
+remains an operational release gate.
+The owner waived historical per-session reconciliation/backfill for unused V3;
+no historical payout rows were changed. Class delivery/report/expiry integration
+remains with T04/T06/T07 and is outside this payout implementation. This slice
+does not change existing cancellation, no-show, expiry, or feedback rules.
 Q03/Q06/Q07 and Q05 were resolved on 19 October; Q04's minimum/postponement
-rules were accepted while ordinary-reschedule rights remain open. Class
-delivery/report/expiry integration remains with T04/T06/T07. This slice does
-not change existing on-demand cancellation, no-show, expiry, or feedback rules.
+rules were accepted while ordinary-reschedule rights remain open.
 
 Series completion and no-show now serialize on the parent booking, child
 session, and participant rows. The existing session-specific no-show ledger
@@ -1541,7 +1557,7 @@ All procedures are POST (oRPC convention). Auth via session cookies.
 
 ### Admin Module (admin)
 
-- `listUsers`, `searchUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getPendingTutorPayouts`, `markTutorPayoutPaid`, `getEconomySettings`, `updateEconomySettings`
+- `listUsers`, `searchUsers`, `setRole`, `getWallet`, `listLedgerEntries`, tutor payout report/preview/prepare/record/void/reconciliation, tax defaults/override, `getEconomySettings`, `updateEconomySettings`
 
 ### AdminKnowledgeBank Module (admin)
 
@@ -1731,7 +1747,7 @@ file are the permanent record; plan-file archives are not maintained.
 
 | Plan                                                  | Status                                                                                                                                                                                                                          |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `docs/plans/active/RELEASE-V3-PRD.md` + SPEC/TASKS    | T00A catalog CRUD/palette and T01 dynamic rates/tutor guard/group-series repricing implemented; pricing-snapshot counts are available, but booked-service analytics Q15, website cutover, and activation acceptance remain open |
+| `docs/plans/active/RELEASE-V3-PRD.md` + SPEC/TASKS    | T00A catalog CRUD/palette and T01 dynamic rates/tutor guard/group-series repricing are implemented; T03 tax/payout workflow and focused units are implemented, with isolated database/browser acceptance pending. Pricing-snapshot counts are available; booked-service analytics Q15, website cutover, OPS01 tax-adviser confirmation, and activation acceptance remain open |
 | `docs/plans/active/DEFERRED-OPS-TASKS.md`             | Active — code gaps done, §3/§4 operator-console items pending                                                                                                                                                                   |
 | `docs/plans/active/DEPLOYMENT-PLAN.md`                | Active — applied 2026-08-31; remaining scope tracked in the plan                                                                                                                                                                |
 | `docs/plans/active/PAYMENT-INTEGRITY-FLAP.md`         | Active — payment-integrity alert stability                                                                                                                                                                                      |
@@ -2187,7 +2203,9 @@ Status: **all fixed and merged via #106 (2026-08-26)**; the follow-up re-audit f
 
 ## Tutor weekly honorarium and payout account (2026-08-28)
 
-Tutor-facing financial UI uses IDR only; internal/student Marks values are not presented to tutors. The tutor dashboard shows completed-session honorarium awaiting admin payment, not a calendar-reset total. Admin-confirmed payout records advance an exclusive cutoff so the pending amount clears only after payment. Tutor profiles store private payout bank details: bank name, account number, account-holder name, account-opening city/regency, ownership choice, and transfer-responsibility acknowledgment. Only the exact bank name `BCA` is fee-free, representing conventional BCA; BCA Syariah, `blu` (BCA Digital), and every other bank name incur a Rp2,500 deduction once per payout. The public tutor discovery projection omits all payout fields.
+Tutor-facing financial UI uses IDR and never presents internal/student Marks. The tutor dashboard reads only the authenticated tutor's unpaid count, gross, rate/status, tax, transfer fee, net, and own payout history. NIK/NPWP and bank account fields stay out of public discovery and tutor finance responses. A new payout requires legal name, 16-digit NIK, and complete bank details; published tutors may continue teaching before tax-profile completion.
+
+Admin payout uses immutable selected-source previews and two phases: prepare the versioned fee/profile/rate/bank snapshot, then record the externally performed transfer only after its exact net amount is paid. Admin default rates are configurable (250 bps for NIK+NPWP, 300 bps for NIK-only and missing identity), with audited tutor overrides. Whole-IDR withholding uses basis-point arithmetic and one Rp2,500 non-BCA fee per batch; exact bank name `BCA` is fee-free. Void keeps history and releases allocations; when transfer evidence exists, reconciliation blocks repayment until an audited resolution. Paid CSV rows use saved snapshots and actual `paidAt` in Asia/Jakarta, with void/reconciliation rows separate. No historical aggregate or tax snapshot is backfilled. These defaults are not legal validation; tax-adviser confirmation remains OPS01.
 
 ## Cogito Marks amount presentation (2026-09-08)
 

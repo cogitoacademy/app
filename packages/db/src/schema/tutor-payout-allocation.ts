@@ -9,7 +9,7 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
-import { uuidPrimaryKey } from "./auth";
+import { uuidPrimaryKey, user } from "./auth";
 import { booking, bookingSession, type BookingPriceSnapshot } from "./booking";
 import { tutorPayout } from "./tutor-payout";
 import { tutorSessionFee } from "./tutor-session-fee";
@@ -48,6 +48,12 @@ export const tutorPayoutAllocation = pgTable(
     earnedAt: timestamp("earned_at", { withTimezone: true }).notNull(),
     grossHonorariumIdr: integer("gross_honorarium_idr").notNull(),
     priceSnapshot: jsonb("price_snapshot").$type<BookingPriceSnapshot>(),
+    active: boolean("active").notNull().default(true),
+    releasedAt: timestamp("released_at", { withTimezone: true }),
+    releasedBy: text("released_by").references(() => user.id, {
+      onDelete: "restrict",
+    }),
+    releaseReason: text("release_reason"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -69,10 +75,12 @@ export const tutorPayoutAllocation = pgTable(
       "tutor_payout_allocation_amount_check",
       sql`${table.grossHonorariumIdr} >= 0`,
     ),
-    uniqueIndex("tutor_payout_allocation_source_uniq").on(table.sourceKey),
-    uniqueIndex("tutor_payout_allocation_fee_uniq")
+    uniqueIndex("tutor_payout_allocation_source_active_uniq")
+      .on(table.sourceKey)
+      .where(sql`${table.active}`),
+    uniqueIndex("tutor_payout_allocation_fee_active_uniq")
       .on(table.tutorSessionFeeId)
-      .where(sql`${table.tutorSessionFeeId} IS NOT NULL`),
+      .where(sql`${table.tutorSessionFeeId} IS NOT NULL AND ${table.active}`),
     index("tutor_payout_allocation_payout_start_idx").on(
       table.payoutId,
       table.scheduledStartAt,

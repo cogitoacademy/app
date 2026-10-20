@@ -2,7 +2,7 @@ import { USER_ROLE, ADMIN_DEFAULT_PAGE_LIMIT } from "../../shared/constants";
 import type { DbType } from "../../lib/db";
 import type { AdminRepo, UserRow, UserRole } from "./admin.repo";
 import type { AdminAuditPort, AdminWalletPort } from "./index";
-import type { BookingPayoutPort } from "../booking";
+import type { BookingPayoutPort, TutorTaxConfigUpdate } from "../booking";
 import {
   UserNotFoundError,
   LastAdminError,
@@ -525,27 +525,96 @@ export function createAdminService(deps: {
     return payout.getTutorPayoutAllocations(input.payoutId);
   }
 
-  async function markTutorPayoutPaid(
-    adminId: string,
-    input: { tutorId: string },
-  ) {
-    if (!payout.markTutorPayoutPaid) {
+  async function previewTutorPayout(input: {
+    tutorId: string;
+    sourceKeys: string[];
+  }) {
+    if (!payout.previewTutorPayout) {
       throw new TutorPayoutNotAvailableError(input.tutorId);
     }
-    const result = await payout.markTutorPayoutPaid(input.tutorId, adminId);
-    if (!result) throw new TutorPayoutNotAvailableError(input.tutorId);
-    await deps.auditPort.record({
-      db,
-      actorId: adminId,
-      actorType: "admin",
-      action: "tutor_payout_paid",
-      targetId: result.id,
-      targetType: "tutor_payout",
-      beforeState: { tutorId: result.tutorId },
-      afterState: result,
-      details: { transferFeeIdr: result.transferFeeIdr },
+    return payout.previewTutorPayout(input.tutorId, input.sourceKeys);
+  }
+
+  async function prepareTutorPayout(
+    adminId: string,
+    input: {
+      tutorId: string;
+      sourceKeys: string[];
+      previewVersion: string;
+      operationId: string;
+    },
+  ) {
+    if (!payout.prepareTutorPayout) {
+      throw new TutorPayoutNotAvailableError(input.tutorId);
+    }
+    return payout.prepareTutorPayout(adminId, input);
+  }
+
+  async function recordTutorPayoutTransfer(
+    adminId: string,
+    input: {
+      payoutId: string;
+      previewVersion: string;
+      actualAmountIdr: number;
+      paidAt: string;
+      reference?: string;
+      proofUrl?: string;
+    },
+  ) {
+    if (!payout.recordTutorPayoutTransfer) {
+      throw new TutorPayoutNotAvailableError(input.payoutId);
+    }
+    return payout.recordTutorPayoutTransfer(adminId, {
+      ...input,
+      paidAt: assertValidDateFilter(input.paidAt, "paidAt"),
     });
-    return result;
+  }
+
+  async function voidTutorPayout(
+    adminId: string,
+    input: { payoutId: string; reason: string },
+  ) {
+    if (!payout.voidTutorPayout) {
+      throw new TutorPayoutNotAvailableError(input.payoutId);
+    }
+    return payout.voidTutorPayout(adminId, input);
+  }
+
+  async function resolveTutorPayoutReconciliation(
+    adminId: string,
+    input: { payoutId: string; reason: string },
+  ) {
+    if (!payout.resolveTutorPayoutReconciliation) {
+      throw new TutorPayoutNotAvailableError(input.payoutId);
+    }
+    return payout.resolveTutorPayoutReconciliation(adminId, input);
+  }
+
+  async function getTutorTaxConfig() {
+    if (!payout.getTutorTaxConfig) {
+      throw new TutorPayoutNotAvailableError("tax config");
+    }
+    return payout.getTutorTaxConfig();
+  }
+
+  async function updateTutorTaxConfig(
+    adminId: string,
+    input: TutorTaxConfigUpdate,
+  ) {
+    if (!payout.updateTutorTaxConfig) {
+      throw new TutorPayoutNotAvailableError("tax config");
+    }
+    return payout.updateTutorTaxConfig(adminId, input);
+  }
+
+  async function setTutorTaxRateOverride(
+    adminId: string,
+    input: { tutorId: string; rateBps: number | null; reason: string },
+  ) {
+    if (!payout.setTutorTaxRateOverride) {
+      throw new TutorPayoutNotAvailableError(input.tutorId);
+    }
+    return payout.setTutorTaxRateOverride(adminId, input);
   }
 
   async function getEconomySettings() {
@@ -695,7 +764,14 @@ export function createAdminService(deps: {
     getTutorPayoutReport,
     getPendingTutorPayouts,
     getTutorPayoutAllocations,
-    markTutorPayoutPaid,
+    previewTutorPayout,
+    prepareTutorPayout,
+    recordTutorPayoutTransfer,
+    voidTutorPayout,
+    resolveTutorPayoutReconciliation,
+    getTutorTaxConfig,
+    updateTutorTaxConfig,
+    setTutorTaxRateOverride,
     getEconomySettings,
     getV3EconomySettings,
     previewV3EconomySettings,

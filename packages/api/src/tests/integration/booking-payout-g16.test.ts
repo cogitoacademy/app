@@ -12,6 +12,8 @@ import {
   tutorPayout,
   tutorSessionFee,
   tutorPayoutAllocation,
+  notification,
+  notificationDispatch,
 } from "@cogito-app/db/schema";
 import { TUTOR_PAYOUT_RATE_IDR } from "../../shared/constants";
 
@@ -23,6 +25,7 @@ import {
   resetDatabase,
   type TestClient,
 } from "../helpers/test-client";
+import { calculateTutorTaxIdr } from "../../modules/booking/tutor-payout-calculation";
 
 async function creditWallet(userId: string, amount: number) {
   const { services } = await import("@cogito-app/api/services");
@@ -371,9 +374,17 @@ describe("Tutor payouts (G16)", () => {
     const result = await other.tutorClient.tutor.getMyPayouts({});
     expect(result.completedSessions).toBe(0);
     expect(result.tutorPayout).toBe(0);
+    const otherFinance = await other.tutorClient.tutor.getMyPayoutFinance({});
+    expect(otherFinance.pending.grossHonorariumIdr).toBe(0);
+    expect(otherFinance.history).toHaveLength(0);
   });
 
-  test("preserves the paid cutoff and serializes two concurrent admin requests", async () => {
+  test("prepares and records exact tax snapshots, serializes admins, and blocks repayment until reconciliation", async () => {
+    const isolatedTutor = await createPublishedTutor(
+      `tutor.pay.cutoff.${ts}@cogito.test`,
+      ts + 2,
+    );
+    const payoutTutorId = isolatedTutor.tutorId;
     await db
       .update(tutorProfile)
       .set({
@@ -383,12 +394,15 @@ describe("Tutor payouts (G16)", () => {
         bankAccountOpeningCity: "Jakarta",
         bankAccountOwnership: "self",
         bankTransferDisclaimerAccepted: true,
+        taxLegalName: "Payout Snapshot Tutor",
+        nik: "0012345678901234",
+        npwp: "000123456789000",
       })
-      .where(eq(tutorProfile.userId, tutorId));
+      .where(eq(tutorProfile.userId, payoutTutorId));
 
-    const historicalCutoff = new Date();
+    const historicalCutoff = new Date(Date.now() - 60_000);
     await db.insert(tutorPayout).values({
-      tutorId,
+      tutorId: payoutTutorId,
       cutoffAt: historicalCutoff,
       grossHonorariumIdr: 237 * TUTOR_PAYOUT_RATE_IDR,
       transferFeeIdr: 0,
@@ -401,25 +415,28 @@ describe("Tutor payouts (G16)", () => {
       paidBy: adminId,
     });
 
-    const beforeNewCompletion = await tutorClient.tutor.getMyPayouts({});
+    const beforeNewCompletion =
+      await isolatedTutor.tutorClient.tutor.getMyPayouts({});
     expect(beforeNewCompletion.completedSessions).toBe(0);
     expect(beforeNewCompletion.tutorPayoutIdr).toBe(0);
 
     const start = new Date(Date.now() + 48 * 3600_000);
     const newBooking = await studentClient.booking.createSolo({
-      tutorId,
-      availabilitySlotId: slotId,
+      tutorId: payoutTutorId,
+      availabilitySlotId: isolatedTutor.slotId,
       modality: "online",
       scheduledStartAt: start.toISOString(),
       scheduledEndAt: new Date(start.getTime() + 3600_000).toISOString(),
       timezone: "Asia/Jakarta",
     });
-    await tutorClient.tutorActions.acceptBooking({ bookingId: newBooking.id });
+    await isolatedTutor.tutorClient.tutorActions.acceptBooking({
+      bookingId: newBooking.id,
+    });
     await db
       .update(bookingTable)
       .set({ scheduledStartAt: new Date(Date.now() - 30 * 60_000) })
       .where(eq(bookingTable.id, newBooking.id));
-    await tutorClient.tutorActions.completeSession({
+    await isolatedTutor.tutorClient.tutorActions.completeSession({
       feedback: TEST_COMPLETION_FEEDBACK,
       bookingId: newBooking.id,
     });
@@ -429,13 +446,68 @@ describe("Tutor payouts (G16)", () => {
       .where(eq(tutorSessionFee.bookingId, newBooking.id));
     expect(newFee).toBeDefined();
 
-    const pendingBeforePay = await tutorClient.tutor.getMyPayouts({});
+    const pendingBeforePay = await isolatedTutor.tutorClient.tutor.getMyPayouts(
+      {},
+    );
     expect(pendingBeforePay.completedSessions).toBe(1);
     expect(pendingBeforePay.tutorPayoutIdr).toBe(newFee!.grossHonorariumIdr);
 
+    const originalPreview = await adminClient.admin.previewTutorPayout({
+      tutorId: payoutTutorId,
+      sourceKeys: [newFee!.eventKey],
+    });
+    expect(originalPreview.taxRateBps).toBe(250);
+    await adminClient.admin.updateTutorTaxConfig({
+      expectedVersion: 0,
+      nikNpwpRateBps: 300,
+      nikOnlyRateBps: 325,
+      missingRateBps: 350,
+      reason: "Exercise stale preview revalidation in payout acceptance test",
+    });
+    const configChangedPrepare = adminClient.admin.prepareTutorPayout({
+      tutorId: payoutTutorId,
+      sourceKeys: originalPreview.sourceKeys,
+      previewVersion: originalPreview.previewVersion,
+      operationId: crypto.randomUUID(),
+    });
+    await expect(configChangedPrepare).rejects.toThrow();
+
+    const beforeProfileChange =
+      await isolatedTutor.tutorClient.tutor.getMyProfile({});
+    await isolatedTutor.tutorClient.tutor.updateMyProfile({
+      version: beforeProfileChange.version,
+      bankAccountNumber: "009876543210",
+    });
+    const profileChangedPrepare = adminClient.admin.prepareTutorPayout({
+      tutorId: payoutTutorId,
+      sourceKeys: originalPreview.sourceKeys,
+      previewVersion: originalPreview.previewVersion,
+      operationId: crypto.randomUUID(),
+    });
+    await expect(profileChangedPrepare).rejects.toThrow();
+
+    const currentPreview = await adminClient.admin.previewTutorPayout({
+      tutorId: payoutTutorId,
+      sourceKeys: [newFee!.eventKey],
+    });
+    expect(currentPreview.taxRateBps).toBe(300);
+    expect(currentPreview.taxHonorariumIdr).toBe(
+      calculateTutorTaxIdr(newFee!.grossHonorariumIdr, 300),
+    );
+    const operationIds = [crypto.randomUUID(), crypto.randomUUID()];
     const results = await Promise.allSettled([
-      adminClient.admin.markTutorPayoutPaid({ tutorId }),
-      secondAdminClient.admin.markTutorPayoutPaid({ tutorId }),
+      adminClient.admin.prepareTutorPayout({
+        tutorId: payoutTutorId,
+        sourceKeys: currentPreview.sourceKeys,
+        previewVersion: currentPreview.previewVersion,
+        operationId: operationIds[0]!,
+      }),
+      secondAdminClient.admin.prepareTutorPayout({
+        tutorId: payoutTutorId,
+        sourceKeys: currentPreview.sourceKeys,
+        previewVersion: currentPreview.previewVersion,
+        operationId: operationIds[1]!,
+      }),
     ]);
     expect(
       results.filter((result) => result.status === "fulfilled"),
@@ -447,15 +519,24 @@ describe("Tutor payouts (G16)", () => {
     const payouts = await db
       .select()
       .from(tutorPayout)
-      .where(eq(tutorPayout.tutorId, tutorId));
+      .where(eq(tutorPayout.tutorId, payoutTutorId));
     expect(payouts).toHaveLength(2);
     const newBatch = payouts.find(
       (payout) => payout.cutoffAt.getTime() > historicalCutoff.getTime(),
     );
     expect(newBatch).toMatchObject({
-      status: "paid",
+      status: "prepared",
       grossHonorariumIdr: newFee!.grossHonorariumIdr,
-      netHonorariumIdr: newFee!.grossHonorariumIdr,
+      taxRateBps: 300,
+      taxHonorariumIdr: calculateTutorTaxIdr(newFee!.grossHonorariumIdr, 300),
+      transferFeeIdr: 0,
+      netHonorariumIdr:
+        newFee!.grossHonorariumIdr -
+        calculateTutorTaxIdr(newFee!.grossHonorariumIdr, 300),
+      bankAccountNumber: "009876543210",
+      taxLegalName: "Payout Snapshot Tutor",
+      taxNik: "0012345678901234",
+      taxNpwp: "000123456789000",
     });
 
     const allocations = await db
@@ -495,7 +576,136 @@ describe("Tutor payouts (G16)", () => {
     );
     expect(historicalDetails).toEqual({ detailsAvailable: false, items: [] });
 
-    const pendingAfterPay = await tutorClient.tutor.getMyPayouts({});
+    await expect(
+      adminClient.admin.recordTutorPayoutTransfer({
+        payoutId: newBatch!.id,
+        previewVersion: currentPreview.previewVersion,
+        actualAmountIdr: newBatch!.netHonorariumIdr + 1,
+        paidAt: new Date().toISOString(),
+      }),
+    ).rejects.toThrow();
+    const actualPaidAt = new Date(Date.now() - 10_000);
+    const paidResult = await adminClient.admin.recordTutorPayoutTransfer({
+      payoutId: newBatch!.id,
+      previewVersion: currentPreview.previewVersion,
+      actualAmountIdr: newBatch!.netHonorariumIdr,
+      paidAt: actualPaidAt.toISOString(),
+      reference: "BANK-REF-001",
+      proofUrl: "https://example.com/proof/001",
+    });
+    expect(paidResult).toMatchObject({
+      status: "paid",
+      actualAmountIdr: newBatch!.netHonorariumIdr,
+      actualReference: "BANK-REF-001",
+      actualProofUrl: "https://example.com/proof/001",
+      transferRecordedBy: adminId,
+    });
+    expect(paidResult.transferRecordedAt).toBeInstanceOf(Date);
+    const [payoutNotification] = await db
+      .select()
+      .from(notification)
+      .where(eq(notification.eventKey, `tutor-payout.${newBatch!.id}.paid`))
+      .limit(1);
+    expect(payoutNotification?.body).toContain(
+      `Gross Rp${newFee!.grossHonorariumIdr.toLocaleString("id-ID")}`,
+    );
+    expect(payoutNotification?.body).toContain("Tax Rp");
+    expect(payoutNotification?.body).toContain("Transfer fee Rp");
+    expect(payoutNotification?.body).toContain("Net Rp");
+    const [emailDispatch] = await db
+      .select()
+      .from(notificationDispatch)
+      .where(eq(notificationDispatch.notificationId, payoutNotification!.id))
+      .limit(1);
+    expect(emailDispatch?.status).toBe("queued");
+
+    const snapshotProfile = await isolatedTutor.tutorClient.tutor.getMyProfile(
+      {},
+    );
+    await isolatedTutor.tutorClient.tutor.updateMyProfile({
+      version: snapshotProfile.version,
+      bankName: "Mandiri",
+      bankAccountNumber: "006655443322",
+      taxLegalName: "Changed Legal Name",
+      nik: "1234567890123456",
+      npwp: null,
+    });
+    const historicalReport = await adminClient.admin.getTutorPayoutReport({
+      dateFrom: new Date(actualPaidAt.getTime() - 60_000).toISOString(),
+      dateTo: new Date(actualPaidAt.getTime() + 60_000).toISOString(),
+    });
+    const savedRow = historicalReport.find((row) => row.id === newBatch!.id);
+    expect(savedRow).toMatchObject({
+      bankAccountNumber: "009876543210",
+      taxLegalName: "Payout Snapshot Tutor",
+      taxNik: "0012345678901234",
+      taxNpwp: "000123456789000",
+      taxRateBps: 300,
+      taxHonorariumIdr: calculateTutorTaxIdr(newFee!.grossHonorariumIdr, 300),
+      actualProofUrl: "https://example.com/proof/001",
+      transferRecordedBy: adminId,
+    });
+
+    const tutorFinance =
+      await isolatedTutor.tutorClient.tutor.getMyPayoutFinance({});
+    expect(tutorFinance.pending).toMatchObject({
+      grossHonorariumIdr: 0,
+      completedSessions: 0,
+    });
+    expect(tutorFinance.history[0]).toMatchObject({
+      id: newBatch!.id,
+      grossHonorariumIdr: newFee!.grossHonorariumIdr,
+      taxRateBps: 300,
+      taxHonorariumIdr: calculateTutorTaxIdr(newFee!.grossHonorariumIdr, 300),
+      actualAmountIdr: newBatch!.netHonorariumIdr,
+      actualReference: "BANK-REF-001",
+      items: [expect.objectContaining({ sourceKey: newFee!.eventKey })],
+    });
+    expect(tutorFinance.history[0]).not.toHaveProperty("nik");
+    expect(tutorFinance.history[0]).not.toHaveProperty("taxNik");
+    expect(tutorFinance.history[0]).not.toHaveProperty("taxNpwp");
+    await expect(studentClient.tutor.getMyPayoutFinance({})).rejects.toThrow();
+    await expect(
+      studentClient.admin.getTutorPayoutReport({}),
+    ).rejects.toThrow();
+
+    const voidResult = await adminClient.admin.voidTutorPayout({
+      payoutId: newBatch!.id,
+      reason: "Transfer needs external reconciliation before repayment",
+    });
+    expect(voidResult).toMatchObject({
+      status: "void",
+      actualAmountIdr: newBatch!.netHonorariumIdr,
+      actualReference: "BANK-REF-001",
+      actualProofUrl: "https://example.com/proof/001",
+    });
+    await expect(
+      adminClient.admin.previewTutorPayout({
+        tutorId: payoutTutorId,
+        sourceKeys: [newFee!.eventKey],
+      }),
+    ).rejects.toThrow();
+
+    await adminClient.admin.resolveTutorPayoutReconciliation({
+      payoutId: newBatch!.id,
+      reason:
+        "External transfer reconciled by bank statement reference BANK-REF-001",
+    });
+    const reconciledPreview = await adminClient.admin.previewTutorPayout({
+      tutorId: payoutTutorId,
+      sourceKeys: [newFee!.eventKey],
+    });
+    const repaymentPreparation = await adminClient.admin.prepareTutorPayout({
+      tutorId: payoutTutorId,
+      sourceKeys: reconciledPreview.sourceKeys,
+      previewVersion: reconciledPreview.previewVersion,
+      operationId: crypto.randomUUID(),
+    });
+    expect(repaymentPreparation.status).toBe("prepared");
+
+    const pendingAfterPay = await isolatedTutor.tutorClient.tutor.getMyPayouts(
+      {},
+    );
     expect(pendingAfterPay.completedSessions).toBe(0);
     expect(pendingAfterPay.tutorPayoutIdr).toBe(0);
   });

@@ -34,6 +34,8 @@ import {
   BookingCancellationDeadlinePassedError,
   BookingCompletionFeedbackRequiredError,
   BookingTutorCapacityError,
+  TutorPayoutPreviewStaleError,
+  TutorPayoutTaxProfileIncompleteError,
   BookingV3CompetitionUnavailableError,
 } from "../../modules/booking/booking.errors";
 
@@ -128,6 +130,9 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     findLatestPaidTutorPayout: mock(async () => null),
     listTutorPayoutProfiles: mock(async () => []),
     listTutorPayoutRecords: mock(async () => []),
+    findTutorTaxConfig: mock(async () => null),
+    findTutorPayoutByIdempotencyKey: mock(async () => null),
+    listTutorPayoutReconciliationSourceKeys: mock(async () => []),
     insertTutorPayout: mock(async () => ({})),
     insertTutorSessionFee: mock(async () => ({})),
     updateSessionSchedule: mock(async () => {}),
@@ -9274,51 +9279,91 @@ describe("BookingService additional coverage paths", () => {
     );
   });
 
-  test("marks a bank-ready pending tutor payout paid", async () => {
-    const completed = makeBooking({
-      priceSnapshot: {
-        baseline: 50,
-        cogitoTake: 10,
-        tutorShare: 40,
-        tutorHonorariumIdr: 200000,
-      },
-    });
-    const paidAt = new Date();
-    const row = {
-      id: "pay1",
-      tutorId: "tutor1",
-      grossHonorariumIdr: 200000,
-      transferFeeIdr: 0,
-      netHonorariumIdr: 200000,
+  test("prepares a versioned batch with fee, tax, and bank snapshots", async () => {
+    const profile = {
       bankName: "BCA",
-      paidAt,
+      bankAccountNumber: "001234567890",
+      bankAccountHolderName: "Tutor",
+      bankAccountOpeningCity: "Jakarta",
+      bankAccountOwnership: "self",
+      bankTransferDisclaimerAccepted: true,
+      taxLegalName: "Tutor Legal",
+      nik: "0012345678901234",
+      npwp: "000123456789000",
+      taxRateOverrideBps: null,
+      version: 3,
     };
-    const insertTutorPayout = mock(async () => row);
+    const fee = {
+      id: "fee1",
+      eventKey: "fee:event-1",
+      bookingId: "booking1",
+      bookingNumber: 17,
+      bookingSessionId: null,
+      bookingType: "solo",
+      scheduledStartAt: new Date("2026-08-01T10:00:00.000Z"),
+      earnedAt: new Date("2026-08-01T11:00:00.000Z"),
+      grossHonorariumIdr: 10_000,
+      priceSnapshot: null,
+    };
+    const insertTutorPayout = mock(async (_tx: unknown, values: any) => ({
+      id: "pay1",
+      ...values,
+      actualAmountIdr: null,
+      actualReference: null,
+      actualProofUrl: null,
+      transferRecordedAt: null,
+      paidAt: null,
+      paidBy: null,
+      voidedAt: null,
+      voidedBy: null,
+      voidReason: null,
+      reconciliationResolvedAt: null,
+      reconciliationResolvedBy: null,
+      reconciliationReason: null,
+      createdAt: new Date("2026-08-01T12:00:00.000Z"),
+    }));
     const insertTutorPayoutAllocations = mock(async () => []);
     const { service } = createService({
       repo: {
-        findCompletedBookingsByTutor: mock(async () => [completed]),
-        findTutorProfile: mock(async () => ({
-          bankName: " BCA ",
-          bankAccountNumber: "123",
-          bankAccountHolderName: "Tutor",
-          bankAccountOpeningCity: "Jakarta",
-          bankAccountOwnership: "personal",
-          bankTransferDisclaimerAccepted: true,
-        })),
+        findTutorProfile: mock(async () => profile),
+        findTutorSessionFeesByTutor: mock(async () => [fee]),
         insertTutorPayout,
         insertTutorPayoutAllocations,
       },
     });
-    await expect(
-      service.markTutorPayoutPaid("tutor1", "admin1"),
-    ).resolves.toMatchObject({ id: "pay1", netHonorariumIdr: 200000 });
+
+    const preview = await service.previewTutorPayout("tutor1", [fee.eventKey]);
+    expect(preview).toMatchObject({
+      grossHonorariumIdr: 10_000,
+      taxStatus: "nik_npwp",
+      taxRateBps: 250,
+      taxHonorariumIdr: 250,
+      transferFeeIdr: 0,
+      netHonorariumIdr: 9_750,
+      nik: "0012345678901234",
+      npwp: "000123456789000",
+    });
+
+    const prepared = await service.prepareTutorPayout("admin1", {
+      tutorId: "tutor1",
+      sourceKeys: preview.sourceKeys,
+      previewVersion: preview.previewVersion,
+      operationId: "4b30c664-94c6-4dca-9b91-08a7c0876ef1",
+    });
+
+    expect(prepared).toMatchObject({ id: "pay1", status: "prepared" });
     expect(insertTutorPayout).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        tutorId: "tutor1",
-        paidBy: "admin1",
-        status: "paid",
+        status: "prepared",
+        grossHonorariumIdr: 10_000,
+        taxRateBps: 250,
+        taxHonorariumIdr: 250,
+        transferFeeIdr: 0,
+        netHonorariumIdr: 9_750,
+        bankAccountNumber: "001234567890",
+        taxNik: "0012345678901234",
+        taxNpwp: "000123456789000",
       }),
     );
     expect(insertTutorPayoutAllocations).toHaveBeenCalledWith(
@@ -9326,36 +9371,90 @@ describe("BookingService additional coverage paths", () => {
       [
         expect.objectContaining({
           payoutId: "pay1",
-          sourceType: "legacy_booking",
-          bookingId: completed.id,
-          grossHonorariumIdr: 200_000,
+          sourceKey: fee.eventKey,
+          tutorSessionFeeId: fee.id,
+          grossHonorariumIdr: fee.grossHonorariumIdr,
         }),
       ],
     );
   });
 
-  test("does not settle empty or bank-incomplete tutor payouts", async () => {
-    const empty = createService();
-    await expect(
-      empty.service.markTutorPayoutPaid("tutor1", "admin1"),
-    ).resolves.toBeNull();
-    const completed = makeBooking({
-      priceSnapshot: {
-        baseline: 50,
-        cogitoTake: 10,
-        tutorShare: 40,
-        tutorHonorariumIdr: 200000,
-      },
-    });
-    const incomplete = createService({
+  test("rejects stale previews and prevents preparation without legal name and NIK", async () => {
+    const fee = {
+      id: "fee1",
+      eventKey: "fee:event-1",
+      bookingId: "booking1",
+      bookingNumber: 17,
+      bookingSessionId: null,
+      bookingType: "solo",
+      scheduledStartAt: new Date("2026-08-01T10:00:00.000Z"),
+      earnedAt: new Date("2026-08-01T11:00:00.000Z"),
+      grossHonorariumIdr: 10_000,
+      priceSnapshot: null,
+    };
+    let profile: {
+      bankName: string;
+      bankAccountNumber: string;
+      bankAccountHolderName: string;
+      bankAccountOpeningCity: string;
+      bankAccountOwnership: string;
+      bankTransferDisclaimerAccepted: boolean;
+      taxLegalName: string | null;
+      nik: string | null;
+      npwp: string | null;
+      taxRateOverrideBps: number | null;
+      version: number;
+    } = {
+      bankName: "Mandiri",
+      bankAccountNumber: "001234567890",
+      bankAccountHolderName: "Tutor",
+      bankAccountOpeningCity: "Jakarta",
+      bankAccountOwnership: "self",
+      bankTransferDisclaimerAccepted: true,
+      taxLegalName: "Tutor Legal",
+      nik: "0012345678901234",
+      npwp: null as string | null,
+      taxRateOverrideBps: null,
+      version: 1,
+    };
+    const insertTutorPayout = mock(async () => ({}));
+    const { service } = createService({
       repo: {
-        findCompletedBookingsByTutor: mock(async () => [completed]),
-        findTutorProfile: mock(async () => ({ bankName: "BCA" })),
+        findTutorProfile: mock(async () => profile),
+        findTutorSessionFeesByTutor: mock(async () => [fee]),
+        insertTutorPayout,
       },
     });
+    const preview = await service.previewTutorPayout("tutor1", [fee.eventKey]);
+    profile = { ...profile, bankAccountNumber: "009876543210", version: 2 };
     await expect(
-      incomplete.service.markTutorPayoutPaid("tutor1", "admin1"),
-    ).resolves.toBeNull();
+      service.prepareTutorPayout("admin1", {
+        tutorId: "tutor1",
+        sourceKeys: preview.sourceKeys,
+        previewVersion: preview.previewVersion,
+        operationId: "4b30c664-94c6-4dca-9b91-08a7c0876ef1",
+      }),
+    ).rejects.toThrow(TutorPayoutPreviewStaleError);
+    expect(insertTutorPayout).not.toHaveBeenCalled();
+
+    profile = {
+      ...profile,
+      taxLegalName: null,
+      nik: null,
+      version: 3,
+    };
+    const latestPreview = await service.previewTutorPayout("tutor1", [
+      fee.eventKey,
+    ]);
+    await expect(
+      service.prepareTutorPayout("admin1", {
+        tutorId: "tutor1",
+        sourceKeys: latestPreview.sourceKeys,
+        previewVersion: latestPreview.previewVersion,
+        operationId: "4d30c664-94c6-4dca-9b91-08a7c0876ef1",
+      }),
+    ).rejects.toThrow(TutorPayoutTaxProfileIncompleteError);
+    expect(insertTutorPayout).not.toHaveBeenCalled();
   });
 
   test("cancels sessions for an expiring series booking", async () => {

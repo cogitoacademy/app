@@ -19,11 +19,11 @@ import {
   CardHeaderAction,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
+import { TextLink } from "@cogito-app/ui/components/selia/text";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 
 import { EmptyState } from "@/components/empty-state";
-import { InfoPreview } from "@/components/info-preview";
 import Loader from "@/components/loader";
 import {
   isUpcomingBooking,
@@ -40,7 +40,27 @@ import {
 import { useNow } from "@/hooks/use-now";
 import { orpc } from "@/utils/orpc";
 
-const NON_BCA_TRANSFER_FEE_IDR = 2_500;
+function formatIdr(value: number | null | undefined) {
+  return value === null || value === undefined
+    ? "—"
+    : `Rp${value.toLocaleString("id-ID")}`;
+}
+
+function formatPayoutDate(value: Date | string | null) {
+  if (!value) return "Not transferred";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "medium",
+    timeZone: "Asia/Jakarta",
+  }).format(date);
+}
+
+function payoutStatusLabel(status: "prepared" | "paid" | "void") {
+  if (status === "prepared") return "Prepared";
+  if (status === "void") return "Void / reconciliation";
+  return "Transfer recorded";
+}
 
 export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
   const now = useNow();
@@ -52,8 +72,7 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
       input: { limit: 100, view: "action" },
     }),
   );
-  const profile = useQuery(orpc.tutor.getMyProfile.queryOptions());
-  const payouts = useQuery(orpc.tutor.getMyPayouts.queryOptions({ input: {} }));
+  const payoutFinance = useQuery(orpc.tutor.getMyPayoutFinance.queryOptions());
   const availability = useQuery(orpc.tutor.listAvailability.queryOptions());
 
   const items = (bookings.data?.items ?? []) as BookingCardData[];
@@ -72,21 +91,8 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
       (a, b) =>
         new Date(a.deadlineAt!).getTime() - new Date(b.deadlineAt!).getTime(),
     )[0];
-  const pendingHonorarium = payouts.data?.tutorPayoutIdr ?? 0;
-  const hasBankDetails = Boolean(
-    profile.data?.bankName?.trim() &&
-    profile.data?.bankAccountNumber?.trim() &&
-    profile.data?.bankAccountHolderName?.trim() &&
-    profile.data?.bankAccountOpeningCity?.trim() &&
-    profile.data?.bankAccountOwnership &&
-    profile.data?.bankTransferDisclaimerAccepted,
-  );
-  const usesBca = profile.data?.bankName?.trim().toUpperCase() === "BCA";
-  const transferFee =
-    pendingHonorarium > 0 && hasBankDetails && !usesBca
-      ? NON_BCA_TRANSFER_FEE_IDR
-      : 0;
-  const estimatedPayout = Math.max(0, pendingHonorarium - transferFee);
+  const pendingPayout = payoutFinance.data?.pending;
+  const payoutHistory = payoutFinance.data?.history ?? [];
 
   return (
     <Stack direction="column" spacing="md">
@@ -165,67 +171,117 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
           <CardHeader className="py-4">
             <CardTitle>Payout details</CardTitle>
             <CardHeaderAction>
-              <InfoPreview
-                title="Payout details"
-                description="Honorarium from completed sessions that have not yet been paid by an admin. Payouts are processed weekly, then this amount is cleared against the recorded payout."
-                label="About payout details"
-              />
+              <TextLink render={<Link to="/profile" />}>
+                Tax and bank profile
+              </TextLink>
             </CardHeaderAction>
           </CardHeader>
           <CardBody>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Text className="text-sm text-muted">Completed sessions</Text>
-                <Text className="mt-1 text-lg font-semibold">
-                  {payouts.data?.completedSessions ?? 0}
-                </Text>
-              </div>
-              <div>
-                <Text className="text-sm text-muted">Unpaid honorarium</Text>
-                <Text className="mt-1 text-lg font-semibold">
-                  Rp{pendingHonorarium.toLocaleString("id-ID")}
-                </Text>
-                <Text className="mt-1 text-sm text-muted">
-                  {payouts.data?.completedSessions ?? 0} completed session
-                  {(payouts.data?.completedSessions ?? 0) === 1 ? "" : "s"}
-                </Text>
-              </div>
-            </div>
-            <div className="mt-4 rounded-lg bg-accent p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-1.5">
-                  <Text className="text-sm text-muted">
-                    {!hasBankDetails
-                      ? "Transfer fee"
-                      : usesBca
-                        ? "BCA transfer fee"
-                        : "Non-BCA transfer fee"}
-                  </Text>
-                  <InfoPreview
-                    title="Transfer fee"
-                    description="Conventional BCA is free. BCA Syariah, blu (BCA Digital), and other banks incur Rp2.500 once per payout, deducted from your honorarium. The amount clears after an admin marks the payout as paid."
-                    label="About transfer fees"
-                  />
+            {payoutFinance.isPending ? (
+              <Loader />
+            ) : payoutFinance.isError || !pendingPayout ? (
+              <Text className="text-sm text-danger">
+                Payout details could not be loaded. Refresh and try again.
+              </Text>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                  <div>
+                    <Text className="text-sm text-muted">Unpaid sessions</Text>
+                    <Text className="mt-1 text-lg font-semibold">
+                      {pendingPayout.completedSessions}
+                    </Text>
+                  </div>
+                  <div>
+                    <Text className="text-sm text-muted">Gross honorarium</Text>
+                    <Text className="mt-1 text-lg font-semibold">
+                      {formatIdr(pendingPayout.grossHonorariumIdr)}
+                    </Text>
+                  </div>
+                  <div>
+                    <Text className="text-sm text-muted">Tax rate</Text>
+                    <Text className="mt-1 text-lg font-semibold">
+                      {(pendingPayout.taxRateBps / 100).toFixed(2)}%
+                    </Text>
+                    <Text className="text-xs text-dimmed">
+                      {pendingPayout.taxRateSource.replaceAll("_", " ")}
+                    </Text>
+                  </div>
                 </div>
-                <Text className="font-medium">
-                  {transferFee > 0
-                    ? `−Rp${transferFee.toLocaleString("id-ID")}`
-                    : "Rp0"}
+                <div className="mt-4 grid gap-2 rounded-lg bg-accent p-4 sm:grid-cols-2">
+                  <div className="flex justify-between gap-3">
+                    <Text className="text-sm text-muted">Tax withheld</Text>
+                    <Text className="font-medium">
+                      {formatIdr(pendingPayout.taxHonorariumIdr)}
+                    </Text>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <Text className="text-sm text-muted">Transfer fee</Text>
+                    <Text className="font-medium">
+                      {formatIdr(pendingPayout.transferFeeIdr)}
+                    </Text>
+                  </div>
+                  <div className="flex justify-between gap-3 sm:col-span-2 sm:border-t sm:border-border sm:pt-2">
+                    <Text className="font-semibold">Estimated net payout</Text>
+                    <Text className="font-semibold">
+                      {formatIdr(pendingPayout.netHonorariumIdr)}
+                    </Text>
+                  </div>
+                </div>
+                <Text className="mt-3 text-xs text-muted">
+                  Tax amounts use Cogito’s configurable defaults. Confirm the
+                  applicable treatment with a tax adviser; this estimate is not
+                  legal validation or tax advice.
                 </Text>
+                {!pendingPayout.taxProfileComplete ? (
+                  <Text className="mt-2 text-sm text-warning">
+                    Add your legal name and 16-digit NIK in your profile before
+                    a new payout can be prepared. You can continue teaching.
+                  </Text>
+                ) : null}
+                {!pendingPayout.payoutAccountComplete ? (
+                  <Text className="mt-2 text-sm text-warning">
+                    Complete your bank details before an admin prepares a
+                    payout. You can continue teaching.
+                  </Text>
+                ) : null}
+                {pendingPayout.netHonorariumIdr === null ? (
+                  <Text className="mt-2 text-sm text-warning">
+                    The current deductions exceed this unpaid gross amount, so a
+                    payout cannot be prepared for this batch.
+                  </Text>
+                ) : null}
+              </>
+            )}
+            {payoutHistory.length > 0 ? (
+              <div className="mt-5 border-t border-border pt-4">
+                <Text className="font-semibold">Recent payout history</Text>
+                <div className="mt-2 divide-y divide-item-border">
+                  {payoutHistory.slice(0, 3).map((row) => (
+                    <div key={row.id} className="py-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <Text className="text-sm font-medium">
+                          {payoutStatusLabel(row.status)} ·{" "}
+                          {formatPayoutDate(row.paidAt)}
+                        </Text>
+                        <Text className="text-sm font-semibold">
+                          {formatIdr(
+                            row.actualAmountIdr ?? row.netHonorariumIdr,
+                          )}
+                        </Text>
+                      </div>
+                      <Text className="mt-1 text-xs text-muted">
+                        {row.items.length} session(s) · gross{" "}
+                        {formatIdr(row.grossHonorariumIdr)} · tax{" "}
+                        {((row.taxRateBps ?? 0) / 100).toFixed(2)}% /{" "}
+                        {formatIdr(row.taxHonorariumIdr)} · fee{" "}
+                        {formatIdr(row.transferFeeIdr)}
+                      </Text>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="mt-2 flex items-center justify-between gap-3">
-                <Text className="font-medium">Estimated next payout</Text>
-                <Text className="font-semibold">
-                  Rp{estimatedPayout.toLocaleString("id-ID")}
-                </Text>
-              </div>
-              {!hasBankDetails ? (
-                <Text className="mt-2 text-sm text-warning">
-                  Complete your payout account details in your tutor profile
-                  before requesting a payout.
-                </Text>
-              ) : null}
-            </div>
+            ) : null}
           </CardBody>
         </Card>
 

@@ -1,6 +1,17 @@
 import { ORPCError } from "@orpc/server";
 import { DomainError } from "../../lib/domain-errors";
 import {
+  TutorPayoutAmountMismatchError,
+  TutorPayoutCalculationDomainError,
+  TutorPayoutNotFoundError,
+  TutorPayoutPreviewStaleError,
+  TutorPayoutProfileIncompleteError,
+  TutorPayoutReconciliationRequiredError,
+  TutorPayoutStateError,
+  TutorPayoutTaxConfigConflictError,
+  TutorPayoutTaxProfileIncompleteError,
+} from "../booking/booking.errors";
+import {
   notFound,
   conflict,
   badRequest,
@@ -94,6 +105,22 @@ export function mapAdminError(err: DomainError): ORPCError<string, undefined> {
   if (err instanceof EconomyCompetitionNotInCatalogError)
     return badRequest(err.message, err);
   if (err instanceof TutorPayoutNotAvailableError)
+    return badRequest(err.message, err);
+  if (
+    err instanceof TutorPayoutPreviewStaleError ||
+    err instanceof TutorPayoutReconciliationRequiredError ||
+    err instanceof TutorPayoutTaxConfigConflictError ||
+    err instanceof TutorPayoutStateError
+  )
+    return conflict(err.message, err);
+  if (err instanceof TutorPayoutNotFoundError)
+    return notFound(err.message, err);
+  if (
+    err instanceof TutorPayoutTaxProfileIncompleteError ||
+    err instanceof TutorPayoutProfileIncompleteError ||
+    err instanceof TutorPayoutAmountMismatchError ||
+    err instanceof TutorPayoutCalculationDomainError
+  )
     return badRequest(err.message, err);
   return internalServerError(err.message, err);
 }

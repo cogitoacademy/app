@@ -10,7 +10,8 @@ import {
  * E2E tests run against the local dev stack.
  *
  * Required environment:
- *   - DATABASE_URL pointing at the local Postgres container
+ *   - DATABASE_URL pointing at the local cogito-test database (or the
+ *     separately isolated cogito-test-payout database for payout coverage)
  *   - SERVER_URL=http://localhost:3101
  *   - WEB_URL=http://localhost:3100
  *

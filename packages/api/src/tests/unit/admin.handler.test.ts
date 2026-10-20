@@ -66,15 +66,33 @@ describe("AdminHandler", () => {
     });
   });
 
-  test("delegates tutor payout reads and payment marking", async () => {
+  test("delegates tutor payout reads, preparation, and external transfer records", async () => {
     const service = {
       getTutorPayoutReport: mock(async (input: unknown) => ({ input })),
       getPendingTutorPayouts: mock(async () => ({ total: 10 })),
-      markTutorPayoutPaid: mock(async () => ({ id: "p1" })),
+      prepareTutorPayout: mock(async (_adminId: string, input: unknown) => ({
+        id: "p1",
+        input,
+      })),
+      recordTutorPayoutTransfer: mock(
+        async (_adminId: string, input: unknown) => ({ id: "p1", input }),
+      ),
     } as any;
     const handler = createAdminHandler(service);
     const context = { session: { user: { id: "admin1" } } } as any;
     const input = { tutorId: "t1" };
+    const prepareInput = {
+      tutorId: "t1",
+      sourceKeys: ["fee:event-1"],
+      previewVersion: "a".repeat(64),
+      operationId: "4b30c664-94c6-4dca-9b91-08a7c0876ef1",
+    };
+    const transferInput = {
+      payoutId: "4b30c664-94c6-4dca-9b91-08a7c0876ef1",
+      previewVersion: "a".repeat(64),
+      actualAmountIdr: 9750,
+      paidAt: "2026-08-10T03:00:00.000Z",
+    };
     const reportInput = {
       dateFrom: "2026-08-01T00:00:00.000Z",
       dateTo: "2026-08-31T23:59:59.999Z",
@@ -87,11 +105,21 @@ describe("AdminHandler", () => {
       handler.getPendingTutorPayouts({ context, input }),
     ).resolves.toEqual({ total: 10 });
     await expect(
-      handler.markTutorPayoutPaid({ context, input }),
-    ).resolves.toEqual({ id: "p1" });
+      handler.prepareTutorPayout({ context, input: prepareInput }),
+    ).resolves.toEqual({ id: "p1", input: prepareInput });
+    await expect(
+      handler.recordTutorPayoutTransfer({ context, input: transferInput }),
+    ).resolves.toEqual({ id: "p1", input: transferInput });
     expect(service.getTutorPayoutReport).toHaveBeenCalledWith(reportInput);
     expect(service.getPendingTutorPayouts).toHaveBeenCalledWith(input);
-    expect(service.markTutorPayoutPaid).toHaveBeenCalledWith("admin1", input);
+    expect(service.prepareTutorPayout).toHaveBeenCalledWith(
+      "admin1",
+      prepareInput,
+    );
+    expect(service.recordTutorPayoutTransfer).toHaveBeenCalledWith(
+      "admin1",
+      transferInput,
+    );
   });
 
   describe("listUsers", () => {

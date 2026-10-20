@@ -685,20 +685,21 @@ active-grant override to `knowledgeBankEligible`.
 publication, and moderation. `/admin-tutor-payouts` is the separate operational
 payout workspace: it lists unpaid tutor honorarium, shows the completed sessions
 included in each unpaid amount, verifies private destination-account details,
-calculates bank transfer fees and net transfer amount, and records a completed
-transfer through **Mark as paid**. It also exposes a date-window report that
-combines paid transfer batches with current unpaid balances, supports status and
-sorting views, and downloads the active result set as a CSV compatible with
-Excel/Google Sheets. The unpaid amount advances from the latest recorded
-completion-time cutoff; it does not reset automatically each calendar week.
+prepares a versioned immutable snapshot for selected session sources, and records
+the exact actual net only after an external bank transfer. A reasoned void keeps
+history/evidence and requires audited transfer reconciliation before released
+sources can be prepared again. The report supports status/sorting views and a
+monthly CSV using saved snapshots, actual Asia/Jakarta paid dates, and a separate
+void/reconciliation section. The unpaid amount does not reset automatically each
+calendar week.
 
 **Files:**
 
-- `admin.types.ts` — `dashboardAnalyticsInput`, `listUsersInput`, `adminSearchUsersInput`, `setRoleInput`, `adminGetWalletInput`, `adminListLedgerEntriesInput`, `adminGetTutorPayoutsInput`, `adminMarkTutorPayoutPaidInput`, `adminUpdateEconomySettingsInput`
-- `admin.errors.ts` — `UserNotFoundError`, `LastAdminError`, `OptimisticLockError`, `WalletNotFoundError`, `InvalidLedgerFilterError`, `EconomyConfigConflictError`, `TutorPayoutNotAvailableError`
+- `admin.types.ts` — `dashboardAnalyticsInput`, `listUsersInput`, `adminSearchUsersInput`, `setRoleInput`, `adminGetWalletInput`, `adminListLedgerEntriesInput`, payout report/preview/prepare/record/void/reconciliation inputs, versioned tax default and override inputs
+- `admin.errors.ts` — `UserNotFoundError`, `LastAdminError`, `OptimisticLockError`, `WalletNotFoundError`, `InvalidLedgerFilterError`, `EconomyConfigConflictError`, payout stale/profile/tax/amount/reconciliation errors
 - `admin.repo.ts` — `getById`, `listUsers`, `searchUsers`, `getDashboardAnalytics`, `updateRoleWithExpected`
-- `admin.service.ts` — `getDashboardAnalytics`, `listUsers`, `searchUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getPendingTutorPayouts`, `markTutorPayoutPaid`, `getEconomySettings`, `updateEconomySettings`
-- `admin.handler.ts` — `getDashboardAnalytics`, `listUsers`, `searchUsers`, `setRole`, `getWallet`, `listLedgerEntries`, `getTutorPayouts`, `getPendingTutorPayouts`, `markTutorPayoutPaid`, `getEconomySettings`, `updateEconomySettings`
+- `admin.service.ts` — `getDashboardAnalytics`, `listUsers`, `searchUsers`, `setRole`, `getWallet`, `listLedgerEntries`, payout report/preview/prepare/record/void/reconciliation/config/override methods, economy methods
+- `admin.handler.ts` — corresponding admin-only payout procedures and the existing admin services
 - `admin.router.ts` — Admin-only routes
 
 **Service Methods:**
@@ -709,9 +710,14 @@ completion-time cutoff; it does not reset automatically each calendar week.
 - `setRole(userId, role, adminId)` — Changes user role; throws `LastAdminError` if removing last admin; optimistic lock via `expectedRole`; records audit log
 - `getWallet({ userId })` — Returns any user's wallet balances; throws `WalletNotFoundError`
 - `listLedgerEntries(input)` — Paginated ledger filtered by wallet/user, entry type, date range, or booking; `walletId` and `userId` are mutually exclusive
-- `getTutorPayouts({ tutorId, dateFrom?, dateTo? })` — Delegates to the booking module's all-completed-bookings reporting port
+- `getTutorPayouts({ tutorId, dateFrom?, dateTo? })` — Compatibility aggregate for completed tutor sessions → `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }`; persisted `tutor_session_fee` events are authoritative and legacy booking/session snapshots remain a read-only fallback for sources without an event. Stable source keys prevent event/legacy double counting and expose a completed series child before its parent completes. Fee events use `earnedAt`; legacy sources retain completion-time/scheduled-time cutoff behavior. New admin batches persist selected source allocations; legacy paid aggregates remain unchanged and unallocated. `totalMarks` reports the internal split basis (`priceSnapshot.baseline`).
 - `getPendingTutorPayouts({ tutorId })` — Returns unpaid honorarium after the latest admin-paid cutoff
-- `markTutorPayoutPaid(adminId, { tutorId })` — Records a paid payout (gross, exact bank, non-BCA transfer fee, net, cutoff, and payer) and audits the immutable payout record; returns `TutorPayoutNotAvailableError` when the amount or required payout-account details are unavailable
+- `previewTutorPayout(adminId, { tutorId, sourceKeys })` — Builds a versioned whole-IDR gross/tax/fee/net preview from selected fee and legacy sources plus the current tax/bank profile
+- `prepareTutorPayout(adminId, { tutorId, sourceKeys, previewVersion, operationId })` — Revalidates and atomically saves the immutable profile/rate/bank/fee snapshot and active per-source allocations; a stable lock and idempotency key serialize competing admins
+- `recordTutorPayoutTransfer(adminId, { payoutId, previewVersion, actualAmountIdr, paidAt, reference?, proofUrl? })` — Records only an externally performed transfer when its actual amount equals saved net; audit and tutor notification/outbox commit in the same transaction
+- `voidTutorPayout(adminId, { payoutId, reason })` and `resolveTutorPayoutReconciliation(adminId, { payoutId, reason })` — Keep voided history/evidence, release allocations and block repayment when an external transfer remains unreconciled
+- `updateTutorTaxConfig(adminId, input)` and `setTutorTaxRateOverride(adminId, input)` — Versioned defaults and tutor-specific overrides require audit reasons; defaults are configurable and not legal validation
+- `getTutorPayoutFinance(tutorId)` — Returns only that tutor's pending gross/tax/fee/net/session summary and own payout history, without identity or bank details
 - `getEconomySettings()` — Returns the active computational Mark value and IDR schedules
 - `updateEconomySettings(adminId, input)` — Optimistically updates the four Cogito take fields, records an `economy_config_updated` audit event, and affects future booking/repricing snapshots only; identical values return the current config without a write. It does not fan out a user notification: tutors do not need the platform take schedule because their IDR honorarium settings and the student-facing Marks preview remain separate concerns.
 
@@ -1604,7 +1610,11 @@ no discovery input, output, or RPC contract changes.
 
 ## Tutor payout presentation (2026-08-28)
 
-Tutor financial presentation is denominated in IDR and must not expose Marks. The dashboard's honorarium is the unpaid balance since the latest admin-paid cutoff, not lifetime earnings or a calendar-reset balance. Admin payout records are immutable and contain the cutoff, gross, bank, transfer fee, net, paidAt, and paidBy. Only conventional BCA (the exact bank name `BCA`) has no transfer deduction; BCA Syariah, `blu` (BCA Digital), and other banks deduct Rp2,500 once per payout. Bank name, account number, account-holder name, account-opening city/regency, ownership, and the transfer disclaimer are private tutor-profile payout fields; all are required by onboarding submission validation and omitted from public discovery.
+Tutor financial presentation is denominated in IDR and must not expose Marks. The tutor dashboard shows only that tutor's unpaid session count, gross, tax rate/status, withholding, one transfer fee, estimated net and saved payout history. It never returns NIK/NPWP or bank account values from the finance endpoint. New payout preparation requires a legal name, 16-digit NIK, and complete payout bank profile; published tutors without tax identity may keep teaching.
+
+Admin payout processing is a two-step external-transfer workflow. An admin selects unpaid source keys and reviews a versioned preview containing current fee identities, profile/config versions, tax snapshot, bank destination and net. Preparation atomically saves that snapshot and one allocation per source; profile, rate or fee changes make the preview stale. Whole-IDR withholding uses basis points and half-up rounding. Configurable defaults are 250 bps for NIK+NPWP and 300 bps for NIK-only or missing identity; a tutor override is audited. Exact bank name `BCA` has no transfer fee and other bank names incur Rp2,500 once per batch. These are configured implementation defaults and do not represent tax-adviser or legal validation (OPS01 remains open).
+
+Only after the operator performs the bank transfer externally may an admin record the exact saved net amount, actual payment date and optional HTTP(S) proof/reference. The payout, audit, tutor notification and email outbox row commit together; the application does not move money. A reasoned void retains the original snapshot and any transfer evidence while releasing allocations. If transfer evidence exists, the sessions remain blocked from repayment until an audited reconciliation resolution is recorded. Admin monthly CSVs use saved payout snapshots, group by actual paid date in Asia/Jakarta, keep mixed rates per payout, and place void/reconciliation rows in a separate section. No tax, bank, fee, or historical paid aggregate is backfilled from current profiles.
 
 The admin operational payout workflow lives at `/admin-tutor-payouts`, separate
 from Manage Tutors profile review. It reuses tutor profiles for account

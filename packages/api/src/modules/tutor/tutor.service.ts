@@ -1,6 +1,6 @@
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
-import { lockTutorForBooking } from "../../lib/locks";
+import { lockTutorForBooking, lockTutorForPayout } from "../../lib/locks";
 import { lockCompetitionCatalog } from "../competition-catalog/catalog-lock";
 import {
   ONBOARDING_STATUS,
@@ -33,6 +33,7 @@ import {
   InvalidTutorPricingError,
   OptimisticLockError,
   InvalidDateRangeError,
+  TutorPayoutFinanceUnavailableError,
   WeeklyAvailabilityRangeError,
 } from "./tutor.errors";
 import {
@@ -346,6 +347,7 @@ export function createTutorService(deps: {
    */
   async function updateMyProfile(userId: string, input: UpdateProfileInput) {
     return db.transaction(async (tx) => {
+      await lockTutorForPayout(tx, userId);
       await lockCompetitionCatalog(tx);
       const profile = await tutorRepo.getByUserId(tx, userId);
       const activeV3Config =
@@ -925,6 +927,13 @@ export function createTutorService(deps: {
     });
   }
 
+  async function getMyPayoutFinance(userId: string) {
+    if (!payout.getTutorPayoutFinance) {
+      throw new TutorPayoutFinanceUnavailableError();
+    }
+    return payout.getTutorPayoutFinance(userId);
+  }
+
   return {
     getMyProfile,
     getMyProfileHistory,
@@ -937,6 +946,7 @@ export function createTutorService(deps: {
     replaceWeeklyAvailability,
     deleteAvailability,
     getMyPayouts,
+    getMyPayoutFinance,
   };
 }
 

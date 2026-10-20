@@ -151,6 +151,9 @@ interface OnboardingFormProps {
     bankAccountOpeningCity: string | null;
     bankAccountOwnership: BankAccountOwnership | null;
     bankTransferDisclaimerAccepted: boolean | null;
+    taxLegalName: string | null;
+    nik: string | null;
+    npwp: string | null;
     termsOfServiceAcceptedAt: string | Date | null;
     termsOfServiceVersion: string | null;
     prices: Record<string, number> | null;
@@ -193,6 +196,9 @@ const TUTOR_FIELD_LABELS: Record<string, string> = {
   bankAccountOpeningCity: "Account opening city/regency",
   bankAccountOwnership: "Account ownership",
   bankTransferDisclaimerAccepted: "Transfer-account confirmation",
+  taxLegalName: "Legal name for payout records",
+  nik: "NIK",
+  npwp: "NPWP",
   termsOfService: "Tutor Terms of Service",
   subjects: "Specializations",
   baseRatesIdr: "Base honorarium",
@@ -502,6 +508,9 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       | "",
     bankTransferDisclaimerAccepted:
       profile.bankTransferDisclaimerAccepted ?? false,
+    taxLegalName: profile.taxLegalName ?? "",
+    nik: profile.nik ?? "",
+    npwp: profile.npwp ?? "",
   });
   const [name, setName] = useState(accountUser.name ?? "");
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -631,6 +640,9 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       bankAccountOpeningCity?: string;
       bankAccountOwnership?: BankAccountOwnership;
       bankTransferDisclaimerAccepted?: boolean;
+      taxLegalName?: string | null;
+      nik?: string | null;
+      npwp?: string | null;
       prices?: Record<string, number>;
     } = { version: profile.version };
     const displayName = name.trim();
@@ -658,6 +670,9 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     const bankAccountNumber = form.bankAccountNumber.replaceAll(/\D/g, "");
     const bankAccountHolderName = form.bankAccountHolderName.trim();
     const bankAccountOpeningCity = form.bankAccountOpeningCity.trim();
+    const taxLegalName = form.taxLegalName.trim();
+    const nik = form.nik.replaceAll(/\s/g, "");
+    const npwp = form.npwp.trim();
 
     payload.shortBio = shortBio;
     payload.affiliation = affiliation;
@@ -684,6 +699,9 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
       payload.bankAccountOwnership = form.bankAccountOwnership;
     payload.bankTransferDisclaimerAccepted =
       form.bankTransferDisclaimerAccepted;
+    payload.taxLegalName = taxLegalName || null;
+    payload.nik = nik || null;
+    payload.npwp = npwp || null;
     payload.onlineMaxClassSize = form.maxClassSize.online;
     payload.offlineMaxClassSize = form.maxClassSize.offline;
     if (
@@ -722,6 +740,9 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     const bankAccountNumber = form.bankAccountNumber.replaceAll(/\D/g, "");
     const bankAccountHolderName = form.bankAccountHolderName.trim();
     const bankAccountOpeningCity = form.bankAccountOpeningCity.trim();
+    const taxLegalName = form.taxLegalName.trim();
+    const nik = form.nik.replaceAll(/\s/g, "");
+    const npwp = form.npwp.trim();
 
     if (requireComplete && !shortBio) addError("shortBio", "Required.");
     if (requireComplete && !affiliation) addError("affiliation", "Required.");
@@ -828,6 +849,15 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
         "bankTransferDisclaimerAccepted",
         "Please confirm the transfer-account responsibility statement.",
       );
+    }
+    if (taxLegalName.length > 255) {
+      addError("taxLegalName", "Use 255 characters or fewer.");
+    }
+    if (nik && !/^\d{16}$/.test(nik)) {
+      addError("nik", "Enter all 16 digits. Leading zeros are kept.");
+    }
+    if (npwp.length > 64) {
+      addError("npwp", "Use 64 characters or fewer.");
     }
     if (requireComplete && isTutorTermsBlockingSubmit) {
       addError(
@@ -1918,6 +1948,123 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
                     </div>
                   </div>
                 </Field>
+
+                <div className="border-t border-card-separator pt-5">
+                  <Text className="font-medium">Tax identity for payouts</Text>
+                  <FieldDescription className="mt-1 block max-w-2xl">
+                    Complete your legal name and 16-digit NIK before a new
+                    payout is prepared. These details are private to you and
+                    payout admins. Tax rates are configurable by Cogito; ask
+                    your tax adviser about your circumstances.
+                  </FieldDescription>
+                </div>
+
+                <TutorFormField
+                  htmlFor="tutor-taxLegalName"
+                  label="Legal name"
+                  description={
+                    <FieldDescription>
+                      Use the name associated with your identity record.
+                    </FieldDescription>
+                  }
+                  error={
+                    errors.taxLegalName ? (
+                      <FieldError id="tutor-taxLegalName-error">
+                        {errors.taxLegalName}
+                      </FieldError>
+                    ) : undefined
+                  }
+                >
+                  <Input
+                    id="tutor-taxLegalName"
+                    autoComplete="name"
+                    value={form.taxLegalName}
+                    maxLength={255}
+                    aria-invalid={Boolean(errors.taxLegalName)}
+                    aria-describedby={
+                      errors.taxLegalName
+                        ? "tutor-taxLegalName-error"
+                        : undefined
+                    }
+                    onChange={(event) => {
+                      setForm((current) => ({
+                        ...current,
+                        taxLegalName: event.target.value,
+                      }));
+                      clearError("taxLegalName");
+                    }}
+                  />
+                </TutorFormField>
+
+                <TutorFormField
+                  htmlFor="tutor-nik"
+                  label="NIK"
+                  description={
+                    <FieldDescription>
+                      Enter all 16 digits. Leading zeros are preserved.
+                    </FieldDescription>
+                  }
+                  error={
+                    errors.nik ? (
+                      <FieldError id="tutor-nik-error">{errors.nik}</FieldError>
+                    ) : undefined
+                  }
+                >
+                  <Input
+                    id="tutor-nik"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={form.nik}
+                    maxLength={16}
+                    aria-invalid={Boolean(errors.nik)}
+                    aria-describedby={
+                      errors.nik ? "tutor-nik-error" : undefined
+                    }
+                    onChange={(event) => {
+                      setForm((current) => ({
+                        ...current,
+                        nik: event.target.value.replaceAll(/\D/g, ""),
+                      }));
+                      clearError("nik");
+                    }}
+                  />
+                </TutorFormField>
+
+                <TutorFormField
+                  htmlFor="tutor-npwp"
+                  label="NPWP (optional)"
+                  description={
+                    <FieldDescription>
+                      Optional. Enter the value exactly as provided, including
+                      any leading zeros.
+                    </FieldDescription>
+                  }
+                  error={
+                    errors.npwp ? (
+                      <FieldError id="tutor-npwp-error">
+                        {errors.npwp}
+                      </FieldError>
+                    ) : undefined
+                  }
+                >
+                  <Input
+                    id="tutor-npwp"
+                    autoComplete="off"
+                    value={form.npwp}
+                    maxLength={64}
+                    aria-invalid={Boolean(errors.npwp)}
+                    aria-describedby={
+                      errors.npwp ? "tutor-npwp-error" : undefined
+                    }
+                    onChange={(event) => {
+                      setForm((current) => ({
+                        ...current,
+                        npwp: event.target.value,
+                      }));
+                      clearError("npwp");
+                    }}
+                  />
+                </TutorFormField>
               </CardBody>
             </Card>
           </div>
