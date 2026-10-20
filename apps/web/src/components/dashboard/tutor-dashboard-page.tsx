@@ -171,9 +171,13 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
           <CardHeader className="py-4">
             <CardTitle>Payout details</CardTitle>
             <CardHeaderAction>
-              <TextLink render={<Link to="/profile" />}>
-                Tax and bank profile
-              </TextLink>
+              <TextLink
+                render={
+                  <Link to="/profile" aria-label="Review tax and bank profile">
+                    Tax and bank profile
+                  </Link>
+                }
+              />
             </CardHeaderAction>
           </CardHeader>
           <CardBody>
@@ -277,6 +281,22 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
                         {formatIdr(row.taxHonorariumIdr)} · fee{" "}
                         {formatIdr(row.transferFeeIdr)}
                       </Text>
+                      {row.items.length > 0 ? (
+                        <ul
+                          aria-label="Covered payout sessions"
+                          className="mt-2 space-y-1"
+                        >
+                          {row.items.map((item) => (
+                            <li key={item.sourceKey}>
+                              <Text className="text-xs text-muted">
+                                Booking #{item.bookingNumber} ·{" "}
+                                {item.bookingType} ·{" "}
+                                {formatPayoutDate(item.scheduledStartAt)}
+                              </Text>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
                     </div>
                   ))}
                 </div>

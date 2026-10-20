@@ -6,7 +6,12 @@ const ENV_FILE_CANDIDATES = [
   "../../apps/server/.env.test.example",
 ];
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
-const ALLOWED_TEST_DATABASES = new Set(["cogito-test", "cogito-test-payout"]);
+const TEST_DATABASE_PORTS = new Map<string, ReadonlySet<string>>([
+  ["cogito-test", new Set(["6767", "6768", "6769"])],
+  ["cogito-test-payout", new Set(["6770"])],
+]);
+const DATABASE_ERROR =
+  "E2E DATABASE_URL must target loopback PostgreSQL cogito-test on port 6767, 6768, or 6769, or cogito-test-payout on port 6770.";
 
 export type E2eEnvironment = {
   databaseUrl: string;
@@ -82,28 +87,24 @@ export function resolveE2eEnvironment(env: NodeJS.ProcessEnv): E2eEnvironment {
 
 function parseDatabaseUrl(value: string | undefined): string {
   if (!value) {
-    throw new Error(
-      "E2E DATABASE_URL must target loopback PostgreSQL cogito-test or cogito-test-payout.",
-    );
+    throw new Error(DATABASE_ERROR);
   }
 
   let url: URL;
   try {
     url = new URL(value);
   } catch {
-    throw new Error(
-      "E2E DATABASE_URL must target loopback PostgreSQL cogito-test or cogito-test-payout.",
-    );
+    throw new Error(DATABASE_ERROR);
   }
 
+  const databaseName = url.pathname.replace(/^\//, "");
+  const expectedPorts = TEST_DATABASE_PORTS.get(databaseName);
   if (
     !["postgres:", "postgresql:"].includes(url.protocol) ||
     !isLoopbackHost(url.hostname) ||
-    !ALLOWED_TEST_DATABASES.has(url.pathname.replace(/^\//, ""))
+    !expectedPorts?.has(url.port)
   ) {
-    throw new Error(
-      "E2E DATABASE_URL must target loopback PostgreSQL cogito-test or cogito-test-payout.",
-    );
+    throw new Error(DATABASE_ERROR);
   }
 
   return value;

@@ -59,19 +59,22 @@ contains the preceding three hashes above. Their row IDs differ as expected.
 No migration in this four-file V3 integration set remains pending for these
 two local databases. Automated
 destructive/reset-based suites must use the E2E guard below and only the exact
-loopback `cogito-test` target, never `cogito-app`. This local migration state
-does not authorize production changes.
+loopback test targets, never `cogito-app`. `cogito-test` is supported on its
+reserved worker ports 6767, 6768 and 6769; `cogito-test-payout` is supported
+only on port 6770. This local migration state does not authorize production
+changes.
 
 ## Guarded Playwright E2E runs (2026-10-20)
 
 The E2E config and global setup resolve and load the same env file with ambient
 values preserved, then both validate the target. Set `NODE_ENV=test` exactly;
 `DATABASE_URL` must use PostgreSQL and a loopback host (`localhost`,
-`127.0.0.1` or `::1`) with the exact database path `/cogito-test`. API and web
-URLs must be loopback HTTP origins, and `PORT` / `WEB_PORT` must match those
-URLs. Optional `BETTER_AUTH_URL` and `VITE_SERVER_URL` must resolve to the same
-local API. Validation runs before seed setup. Global setup resets and seeds
-only this guarded test database, so never point it at development or production.
+`127.0.0.1` or `::1`) with one of the exact database/port pairs: `/cogito-test`
+on 6767/6768/6769 or `/cogito-test-payout` on 6770. API and web URLs must be
+loopback HTTP origins, and `PORT` / `WEB_PORT` must match those URLs. Optional
+`BETTER_AUTH_URL` and `VITE_SERVER_URL` must resolve to the same local API.
+Validation runs before seed setup. Global setup resets and seeds only the
+guarded test database, so never point it at development or production.
 
 Playwright starts its own API and web servers with `reuseExistingServer: false`;
 the default ports are 3101 and 3100. Keep both free, or configure different
@@ -2649,14 +2652,74 @@ lockfile version of Drizzle Kit `0.31.10` after merging parent commit
 `876ec0367859d9ad5bd378d4e96cc4a29f49fab8e1d31ac17c9c95e98b041939`. It was
 generated from snapshot `0064` and changes only tutor tax/payout schema. The
 parent confirms `0064` is applied to local development; `0065` is not applied
-to development or test and remains pending parent SQL review. Preserve all
-earlier migration files, snapshots, hashes, and timestamps.
+to development or test and remains gated on parent review and database
+verification. Preserve all earlier migration files, snapshots, hashes, and
+timestamps.
+
+### Dedicated T03 payout test target
+
+The isolated target is prepared but must not be started, migrated, reset, or
+tested until the parent assigns the database/browser window. It uses
+`docker-compose.test-payout.yml`: PostgreSQL database `cogito-test-payout` on
+`127.0.0.1:6770`, Redis on `127.0.0.1:6382`, API/web ports 3111/3110, and the
+explicit named volume `cogito-t03-payout-20261021-data`. At the last port check
+on 2026-10-21, 6770, 6382, 3110 and 3111 were free; 6767 and 6769 were occupied
+and remain assigned to other work. The env template is
+`apps/server/.env.test.payout.example`; it pins `NODE_ENV=test`, the exact
+loopback database URL, disabled Google Meet, and the stub payment provider.
+Keep bank, calendar, and email providers fake; do not send real email or execute
+a bank transfer.
+
+After the parent grants the window, copy the template and use the same absolute
+env file for the target guard, migration, service integration test, and browser
+test:
+
+```powershell
+Copy-Item apps/server/.env.test.payout.example apps/server/.env.test.payout
+$payoutEnvFile = (Resolve-Path apps/server/.env.test.payout).Path
+$env:ENV_FILE = $payoutEnvFile
+$env:NODE_ENV = 'test'
+docker compose -f docker-compose.test-payout.yml up -d postgres redis
+bun --env-file $payoutEnvFile packages/db/ensure-test-database.mjs
+bun --env-file $payoutEnvFile run db:migrate
+bun --env-file $payoutEnvFile test --timeout 30000 packages/api/src/tests/integration/booking-payout-g16.test.ts
+Push-Location packages/e2e
+bun run test -- tutor-payout-tax.spec.ts --retries=0
+Pop-Location
+Remove-Item Env:ENV_FILE, Env:NODE_ENV
+```
+
+Verify the exact target before any write. The test helper independently refuses
+reset/migration against any other database/port pair:
+
+```powershell
+$payoutEnvFile = (Resolve-Path apps/server/.env.test.payout).Path
+bun --env-file $payoutEnvFile -e "const u = new URL(Bun.env.DATABASE_URL ?? ''); if (Bun.env.NODE_ENV !== 'test' || !['localhost','127.0.0.1','[::1]'].includes(u.hostname.replace(/^\[|\]$/g, '')) || u.port !== '6770' || u.pathname !== '/cogito-test-payout') throw new Error('Payout DB guard failed'); console.log(JSON.stringify({nodeEnv:Bun.env.NODE_ENV,host:u.hostname,port:u.port,database:u.pathname.slice(1)}));"
+```
+
+Do not use `0065` until its reviewed SQL is cleared and the parent authorizes
+database verification. The authored acceptance covers selected-source
+cutoffs, legacy reconciliation, concurrent preview/transfer behavior,
+allocation immutability, roles, and the tutor payout journey; all remain pending
+the assigned window.
 
 Honoraria do not reset on a calendar boundary. In `/admin-tutor-payouts`, review the selected unpaid sessions, legal-name/NIK completeness, configured rate, saved bank destination, whole-IDR withholding, one transfer fee and exact net. Current defaults are 2.50% for NIK+NPWP, 3.00% for NIK-only and missing identity; admins may change defaults or set a tutor override with a reason. These are configurable defaults, not legal validation. OPS01 tax-adviser confirmation remains a release operational gate.
 
 Prepare the versioned batch before performing a transfer. The app reserves each selected source atomically and does not call a bank. After the external transfer, record its exact calculated net, actual payment date and optional reference/proof URL. A mismatch cannot be marked paid. Verify the saved payout snapshot and transfer evidence in the admin detail. The tutor notification and email outbox record are written transactionally; do not test with real email delivery or bank transfers.
 
 Only exact bank name `BCA` is fee-free; other banks incur Rp2,500 once per batch. A reasoned void retains payout and transfer evidence and releases its fee allocations. If an external transfer was recorded, verify its real-world reconciliation and record an audited resolution before the same sessions can be prepared again. The monthly CSV groups paid rows by actual `paidAt` in Asia/Jakarta and exports their saved tax/bank snapshots; void and reconciliation rows remain in a separate section. Legacy paid rows without saved fee allocations remain aggregate-only and unchanged.
+
+New source-based payouts are excluded from the next unpaid summary through
+their per-session allocations, so preparing or paying selected sessions leaves
+other unpaid legacy and fee-event sources visible. The time cutoff applies only
+to historical aggregate rows with no saved source keys/version. An allocationless
+legacy payout voided while transfer reconciliation is required keeps its
+historical cutoff; after audited resolution, the previous paid legacy cutoff
+continues to prevent older covered bookings from reappearing. A repeated
+transfer record with the same normalized preview version, amount, date,
+reference and proof returns the saved result without another audit or tutor
+notification. Conflicting details are rejected. Tutor history and the payout
+notification identify each covered booking by booking number, type and date.
 
 ## Cogito Marks visual smoke check
 

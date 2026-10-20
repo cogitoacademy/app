@@ -127,7 +127,7 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     listTutorPayoutAllocatedSourceKeys: mock(async () => []),
     insertTutorPayoutAllocations: mock(async () => []),
     listTutorPayoutAllocationsByPayoutId: mock(async () => []),
-    findLatestPaidTutorPayout: mock(async () => null),
+    findLatestLegacyTutorPayoutCutoff: mock(async () => null),
     listTutorPayoutProfiles: mock(async () => []),
     listTutorPayoutRecords: mock(async () => []),
     findTutorTaxConfig: mock(async () => null),
@@ -9105,7 +9105,7 @@ describe("BookingService additional coverage paths", () => {
     const findTutorSessionFeesByTutor = mock(async () => [fee]);
     const { service } = createService({
       repo: {
-        findLatestPaidTutorPayout: mock(async () => ({
+        findLatestLegacyTutorPayoutCutoff: mock(async () => ({
           cutoffAt,
           paidAt: cutoffAt,
         })),
@@ -9161,7 +9161,7 @@ describe("BookingService additional coverage paths", () => {
     const findCompletedBookingsByTutor = mock(async () => []);
     const { service } = createService({
       repo: {
-        findLatestPaidTutorPayout: mock(async () => ({
+        findLatestLegacyTutorPayoutCutoff: mock(async () => ({
           cutoffAt,
           paidAt: cutoffAt,
         })),
@@ -9242,7 +9242,7 @@ describe("BookingService additional coverage paths", () => {
         listTutorPayoutProfiles,
         listTutorPayoutRecords,
         findCompletedBookingsByTutor,
-        findLatestPaidTutorPayout: mock(async (tutorId: string) =>
+        findLatestLegacyTutorPayoutCutoff: mock(async (tutorId: string) =>
           tutorId === "tutor2" ? { cutoffAt, paidAt: cutoffAt } : null,
         ),
       },

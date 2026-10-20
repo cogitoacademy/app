@@ -122,15 +122,18 @@ describe("createBookingRepo", () => {
     ).resolves.toBe(row);
   });
 
-  test("returns the latest paid payout or null when none exists", async () => {
+  test("returns the latest legacy payout cutoff or null when none exists", async () => {
     const row = { id: "p1", tutorId: "t1", status: "paid" };
     const repo = createBookingRepo({} as any);
 
     await expect(
-      repo.findLatestPaidTutorPayout(makeSelectConn([row]) as any, "t1"),
+      repo.findLatestLegacyTutorPayoutCutoff(
+        makeSelectConn([row]) as any,
+        "t1",
+      ),
     ).resolves.toEqual(row);
     await expect(
-      repo.findLatestPaidTutorPayout(makeSelectConn() as any, "t1"),
+      repo.findLatestLegacyTutorPayoutCutoff(makeSelectConn() as any, "t1"),
     ).resolves.toBeNull();
   });
 
@@ -154,7 +157,7 @@ describe("createBookingRepo", () => {
       repo.listTutorPayoutRecords(recordConn, dateFrom, dateTo),
     ).resolves.toEqual(records);
     expect(recordConn.innerJoin).toHaveBeenCalledTimes(1);
-    expect(recordConn.leftJoin).toHaveBeenCalledTimes(1);
+    expect(recordConn.leftJoin).not.toHaveBeenCalled();
     expect(recordConn.where).toHaveBeenCalledTimes(1);
 
     const unboundedConn = makeJoinSelectConn(records) as any;

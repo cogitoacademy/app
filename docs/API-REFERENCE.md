@@ -708,7 +708,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Admin
 - **Input:** `{ tutorId }`
 - **Output:** `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr, items, lastPaidAt }`; each `items[]` entry includes `{ sourceKey, sourceType, tutorSessionFeeId, bookingId, bookingNumber, bookingSessionId, bookingType, deliveryStatus, scheduledStartAt, earnedAt, grossHonorariumIdr, priceSnapshot }`.
-- **Description:** Returns unpaid fee-event sources and the legacy compatibility summary. New fee-event rows are allocated only when an admin prepares a selected batch; a prepared batch reserves its exact sources. Existing published tutors can continue teaching while tax identity is incomplete, but a new batch cannot be prepared until legal name and a 16-digit NIK are present.
+- **Description:** Returns unpaid fee-event sources and the legacy compatibility summary. New source-based payouts are excluded through their per-session allocations; the historical cutoff applies only to pre-T03 aggregate rows. An allocationless legacy payout voided with transfer reconciliation required retains its cutoff until audited resolution, after which the prior paid legacy cutoff still applies. A prepared batch reserves its exact sources. Existing published tutors can continue teaching while tax identity is incomplete, but a new batch cannot be prepared until legal name and a 16-digit NIK are present.
 
 ### `admin.getTutorPayoutAllocations`
 
@@ -733,7 +733,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Input:** `{ payoutId, previewVersion, actualAmountIdr, paidAt, reference?, proofUrl? }`; `proofUrl` must be HTTP(S).
 - **Output:** Saved payout mutation result with actual amount/date/reference/proof and transfer-recorded actor/time.
 - **Errors:** `PAYOUT_PREVIEW_STALE`, `PAYOUT_AMOUNT_MISMATCH`, `TUTOR_PAYOUT_STATE_INVALID`.
-- **Description:** Records only an externally performed transfer. The actual amount must exactly equal the saved net. Current profile/rate/fee sources are revalidated before commit. The payout, audit, tutor notification and email outbox row commit together; this procedure does not execute a bank transfer.
+- **Description:** Records only an externally performed transfer. The actual amount must exactly equal the saved net. Current profile/rate/fee sources are revalidated before commit. Repeating the complete normalized transfer input for an already-paid row returns its saved result; conflicting replays are rejected without another audit or notification. The payout, audit, tutor notification and email outbox row commit together; this procedure does not execute a bank transfer.
 
 ### `admin.voidTutorPayout` and `admin.resolveTutorPayoutReconciliation`
 
@@ -1049,14 +1049,14 @@ The web tutor profile editor groups Education, Achievements, and Experiences int
 - **Input:** `{ dateFrom?, dateTo? }`
 - **Output:** `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }` (internal split fields remain for compatibility; the tutor UI renders only `tutorPayoutIdr`)
 - **Errors:** `INVALID_DATE_RANGE` (400)
-- **Description:** Compatibility summary for the authenticated tutor's unpaid honorarium. Persisted fee events are filtered by earned time after the legacy cutoff; legacy payout-eligible sources retain the snapshot fallback. Weekly processing is an operational cadence, not a calendar reset. The detailed tax and transfer breakdown is returned by `tutor.getMyPayoutFinance`.
+- **Description:** Compatibility summary for the authenticated tutor's unpaid honorarium. Fee events are authoritative and excluded by active per-session allocations; only legacy booking/session snapshot sources use the cutoff from historical aggregate payouts. Weekly processing is an operational cadence, not a calendar reset. The detailed tax and transfer breakdown is returned by `tutor.getMyPayoutFinance`.
 
 ### `tutor.getMyPayoutFinance`
 
 - **HTTP:** `POST /rpc/tutor/getMyPayoutFinance` with the standard `{"json": {}}` body.
 - **Auth:** Tutor; the tutor ID is taken from the authenticated session, not client input.
 - **Input:** None.
-- **Output:** `{ pending, history }`. `pending` contains own unpaid session count, gross, tax status/rate/source/withholding, one transfer fee, estimated net, and account/tax profile completion flags. `history` contains only the requesting tutor's saved payout snapshots and covered allocations.
+- **Output:** `{ pending, history }`. `pending` contains own unpaid session count, gross, tax status/rate/source/withholding, one transfer fee, estimated net, and account/tax profile completion flags. `history` contains only the requesting tutor's saved payout snapshots and covered allocations, including booking number, session type, and scheduled date for each allocation.
 - **Description:** Returns own finance data for the dashboard and does not include NIK, NPWP, bank account details, or another tutor's finance. Tutor tax identity remains available only from the authenticated tutor's own profile; admin payout reports require admin authorization.
 
 ---

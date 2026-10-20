@@ -32,10 +32,11 @@ function assertPayoutTestDatabase() {
     !["localhost", "127.0.0.1", "::1"].includes(
       databaseUrl?.hostname.toLowerCase().replace(/^\[|\]$/g, "") ?? "",
     ) ||
+    databaseUrl?.port !== "6770" ||
     databaseUrl?.pathname !== "/cogito-test-payout"
   ) {
     throw new Error(
-      "Tutor payout browser coverage requires NODE_ENV=test and the local cogito-test-payout database.",
+      "Tutor payout browser coverage requires NODE_ENV=test and loopback cogito-test-payout on port 6770.",
     );
   }
 }
@@ -255,7 +256,20 @@ test("tutor dashboard shows the payout breakdown without tax identity values", a
           paidAt: new Date().toISOString(),
           actualReference: "BANK-OWN-001",
           reconciliationStatus: "not_required",
-          items: [{ sourceKey: "own-source" }],
+          items: [
+            {
+              sourceKey: "own-source-1",
+              bookingNumber: 201,
+              bookingType: "solo",
+              scheduledStartAt: "2026-10-20T03:00:00.000Z",
+            },
+            {
+              sourceKey: "own-source-2",
+              bookingNumber: 202,
+              bookingType: "series",
+              scheduledStartAt: "2026-10-21T03:00:00.000Z",
+            },
+          ],
         },
       ],
     });
@@ -277,6 +291,12 @@ test("tutor dashboard shows the payout breakdown without tax identity values", a
     await expect(session.page.getByText("Rp972.500")).toBeVisible();
     await expect(
       session.page.getByText(/gross Rp500\.000 · tax 3\.00%/),
+    ).toBeVisible();
+    await expect(
+      session.page.getByText("Booking #201 · solo · 20 Oct 2026"),
+    ).toBeVisible();
+    await expect(
+      session.page.getByText("Booking #202 · series · 21 Oct 2026"),
     ).toBeVisible();
     await expect(
       session.page.getByText("0012345678901234", { exact: false }),

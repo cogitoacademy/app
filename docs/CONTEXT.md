@@ -61,17 +61,28 @@ rates, whole-IDR withholding, versioned selected-session preparation, manual
 external-transfer recording, audited void/reconciliation, tutor-only finance
 history, transactional notification/outbox writes, and saved-snapshot monthly
 CSV. New payouts snapshot the bank, identity, tax rate and fee sources; legacy
-aggregate rows remain unchanged and unbackfilled. OPS01 tax-adviser
-confirmation remains a release operational gate, and the defaults are not legal
-validation. Focused pure units pass (15 tests / 70 expectations). The isolated
-Postgres and browser suites are authored but remain pending the assigned
-verification window. Parent-integrated enrollment migration `0064` is the
-generation baseline. T03 migration `0065_tutor_payout_tax.sql` was generated
-from `0064_snapshot.json` at journal timestamp `1792525224597` (SHA-256
+aggregate rows remain unchanged and unbackfilled. Historical cutoffs now apply
+only to those legacy aggregate rows, including unresolved allocationless voids
+until audited reconciliation is resolved. Identical transfer retries return
+the saved paid result without another audit or notification. Tutor payout
+history and its notification list the covered booking number, type and date.
+OPS01 tax-adviser confirmation remains a release operational gate, and the
+defaults are not legal validation. Focused pure/unit checks in this review pass
+passed 78 tests / 260 expectations across tax/profile, CSV, environment guard,
+repository and test-client safety; two targeted booking-service tests passed
+with 3 expectations. Changed-file formatting and lint passed with no errors;
+existing warnings remain in the large booking modules. The isolated Postgres
+and browser suites are authored but remain pending the assigned enrollment
+verification window. The dedicated target is `cogito-test-payout` on loopback
+port 6770 with Redis 6382, separate server/web ports 3111/3110, provider fakes,
+and a named volume; it has not been started or written. Parent-integrated
+enrollment migration `0064` is the generation baseline. T03 migration
+`0065_tutor_payout_tax.sql` was generated from `0064_snapshot.json` at journal
+timestamp `1792525224597` (SHA-256
 `876ec0367859d9ad5bd378d4e96cc4a29f49fab8e1d31ac17c9c95e98b041939`). The
 parent confirms `0064` is applied to local development; this worktree has not
-applied `0065`, which is awaiting SQL review and the assigned verification
-window.
+applied `0065`. No schema change is part of these review fixes; `0065` remains
+gated on parent review and the assigned database verification window.
 
 ## Competition catalog language
 

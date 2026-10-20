@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { resetDatabase } from "../helpers/test-client";
+import { assertSafeTestDatabase, resetDatabase } from "../helpers/test-client";
 
 const originalNodeEnv = process.env.NODE_ENV;
 const originalDatabaseUrl = process.env.DATABASE_URL;
@@ -27,5 +27,28 @@ describe("test client database safety", () => {
     await expect(resetDatabase()).rejects.toThrow(
       "resetDatabase() is blocked outside a dedicated test database",
     );
+  });
+
+  test("accepts the isolated payout test database on its reserved port", () => {
+    process.env.NODE_ENV = "test";
+    process.env.DATABASE_URL =
+      "postgresql://postgres:password@localhost:6770/cogito-test-payout";
+
+    expect(() => assertSafeTestDatabase()).not.toThrow();
+  });
+
+  test("rejects mismatched or reserved worktree database ports before SQL", () => {
+    process.env.NODE_ENV = "test";
+    for (const databaseUrl of [
+      "postgresql://postgres:password@localhost:6767/cogito-test-payout",
+      "postgresql://postgres:password@localhost:6770/cogito-test",
+      "postgresql://postgres:password@localhost:6769/cogito-test-payout",
+      "postgresql://postgres:password@db.example.com:6770/cogito-test-payout",
+    ]) {
+      process.env.DATABASE_URL = databaseUrl;
+      expect(() => assertSafeTestDatabase()).toThrow(
+        "resetDatabase() is blocked outside a dedicated test database",
+      );
+    }
   });
 });

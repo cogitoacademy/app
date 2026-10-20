@@ -4674,7 +4674,10 @@ export function createBookingService(deps: {
   }
 
   async function getUnpaidAggregate(conn: DbOrTx, tutorId: string) {
-    const lastPaid = await repo.findLatestPaidTutorPayout(conn, tutorId);
+    const lastPaid = await repo.findLatestLegacyTutorPayoutCutoff(
+      conn,
+      tutorId,
+    );
     return aggregateTutorPayouts(conn, {
       tutorId,
       dateTo: new Date(),
@@ -4734,7 +4737,7 @@ export function createBookingService(deps: {
 
     const [aggregate, config, blockedSourceRows] = await Promise.all([
       (async () => {
-        const lastPaid = await repo.findLatestPaidTutorPayout(
+        const lastPaid = await repo.findLatestLegacyTutorPayoutCutoff(
           conn,
           input.tutorId,
         );
@@ -4896,7 +4899,7 @@ export function createBookingService(deps: {
       profiles,
       5,
       async (profile) => {
-        const lastPaid = await repo.findLatestPaidTutorPayout(
+        const lastPaid = await repo.findLatestLegacyTutorPayoutCutoff(
           db,
           profile.tutorId,
         );
@@ -5054,7 +5057,7 @@ export function createBookingService(deps: {
   }
 
   async function getPendingTutorPayouts(tutorId: string) {
-    const lastPaid = await repo.findLatestPaidTutorPayout(db, tutorId);
+    const lastPaid = await repo.findLatestLegacyTutorPayoutCutoff(db, tutorId);
     const result = await aggregateTutorPayouts(db, {
       tutorId,
       dateBasis: "completedAt",
@@ -5222,6 +5225,23 @@ export function createBookingService(deps: {
       await lockTutorForPayout(tx, initial.tutorId);
       const row = await repo.findTutorPayoutById(tx, input.payoutId, true);
       if (!row) throw new TutorPayoutNotFoundError(input.payoutId);
+      if (Number.isNaN(input.paidAt.getTime())) {
+        throw new TutorPayoutStateError("Transfer date must be valid");
+      }
+      const actualReference = normalizeOptionalText(input.reference) ?? null;
+      const actualProofUrl = normalizeOptionalText(input.proofUrl) ?? null;
+      if (row.status === "paid") {
+        const isIdenticalReplay =
+          row.previewVersion === input.previewVersion &&
+          row.actualAmountIdr === input.actualAmountIdr &&
+          row.paidAt?.getTime() === input.paidAt.getTime() &&
+          row.actualReference === actualReference &&
+          row.actualProofUrl === actualProofUrl;
+        if (isIdenticalReplay) return toTutorPayoutMutationResult(row);
+        throw new TutorPayoutStateError(
+          "Transfer was already recorded with different details",
+        );
+      }
       if (row.status !== "prepared") {
         throw new TutorPayoutStateError(
           "Only a prepared payout can record an external transfer",
@@ -5245,10 +5265,6 @@ export function createBookingService(deps: {
           input.actualAmountIdr,
         );
       }
-      if (Number.isNaN(input.paidAt.getTime())) {
-        throw new TutorPayoutStateError("Transfer date must be valid");
-      }
-
       const paidAt = input.paidAt;
       const transferRecordedAt = new Date();
       const updatedRows = await tx
@@ -5256,8 +5272,8 @@ export function createBookingService(deps: {
         .set({
           status: "paid",
           actualAmountIdr: input.actualAmountIdr,
-          actualReference: normalizeOptionalText(input.reference),
-          actualProofUrl: normalizeOptionalText(input.proofUrl),
+          actualReference,
+          actualProofUrl,
           transferRecordedAt,
           paidAt,
           paidBy: adminId,
@@ -5288,6 +5304,17 @@ export function createBookingService(deps: {
           paidBy: adminId,
         },
       });
+      const allocations = await repo.listTutorPayoutAllocationsByPayoutId(
+        tx,
+        row.id,
+      );
+      const coveredSessions = allocations
+        .map((item) =>
+          escapeHtml(
+            `Booking #${item.bookingNumber} · ${item.bookingType} · ${item.scheduledStartAt.toLocaleDateString("id-ID", { dateStyle: "medium", timeZone: "Asia/Jakarta" })}`,
+          ),
+        )
+        .join("; ");
       await notification.write({
         db: tx,
         userId: row.tutorId,
@@ -5295,7 +5322,7 @@ export function createBookingService(deps: {
         severity: NOTIFICATION_SEVERITY.ACTION,
         title: "Tutor payout recorded",
         body: [
-          `A payout for ${row.sourceKeys?.length ?? 0} session(s) was recorded.`,
+          `Payout recorded for covered sessions: ${coveredSessions}.`,
           `Gross Rp${row.grossHonorariumIdr.toLocaleString("id-ID")}.`,
           `Tax Rp${row.taxHonorariumIdr?.toLocaleString("id-ID") ?? "0"} (${((row.taxRateBps ?? 0) / 100).toFixed(2)}%).`,
           `Transfer fee Rp${row.transferFeeIdr.toLocaleString("id-ID")}.`,

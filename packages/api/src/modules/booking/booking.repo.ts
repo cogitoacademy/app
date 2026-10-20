@@ -1284,12 +1284,29 @@ async function listTutorSessionFeeEventKeysByBookings(
   return rows.map((row) => row.eventKey);
 }
 
-async function findLatestPaidTutorPayout(conn: DbOrTx, tutorId: string) {
+async function findLatestLegacyTutorPayoutCutoff(
+  conn: DbOrTx,
+  tutorId: string,
+) {
+  const legacyAggregateRow = and(
+    isNull(tutorPayout.previewVersion),
+    isNull(tutorPayout.sourceKeys),
+  );
   const [row] = await conn
     .select({ ...getTableColumns(tutorPayout) })
     .from(tutorPayout)
     .where(
-      and(eq(tutorPayout.tutorId, tutorId), eq(tutorPayout.status, "paid")),
+      and(
+        eq(tutorPayout.tutorId, tutorId),
+        legacyAggregateRow,
+        or(
+          eq(tutorPayout.status, "paid"),
+          and(
+            eq(tutorPayout.status, "void"),
+            eq(tutorPayout.reconciliationStatus, "required"),
+          ),
+        ),
+      ),
     )
     .orderBy(desc(tutorPayout.cutoffAt))
     .limit(1);
@@ -1858,7 +1875,7 @@ export function createBookingRepo(db: DbType) {
     insertTutorPayoutAllocations,
     listTutorPayoutAllocationsByPayoutId,
     listTutorSessionFeeEventKeysByBookings,
-    findLatestPaidTutorPayout,
+    findLatestLegacyTutorPayoutCutoff,
     listTutorPayoutProfiles,
     listTutorPayoutRecords,
     findTutorTaxConfig,

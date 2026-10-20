@@ -4,7 +4,9 @@ import { resolveE2eEnvironment } from "./e2e-environment";
 const validDatabaseUrl =
   "postgresql://postgres:password@localhost:6767/cogito-test";
 const validPayoutDatabaseUrl =
-  "postgresql://postgres:password@localhost:6767/cogito-test-payout";
+  "postgresql://postgres:password@localhost:6770/cogito-test-payout";
+const databaseError =
+  "E2E DATABASE_URL must target loopback PostgreSQL cogito-test on port 6767, 6768, or 6769, or cogito-test-payout on port 6770.";
 
 function validEnvironment(
   databaseUrl: string | undefined,
@@ -48,9 +50,7 @@ describe("E2E environment safety", () => {
     for (const databaseUrl of [undefined, "", "not-a-url", "postgresql://["]) {
       expect(() =>
         resolveE2eEnvironment(validEnvironment(databaseUrl)),
-      ).toThrow(
-        "E2E DATABASE_URL must target loopback PostgreSQL cogito-test or cogito-test-payout.",
-      );
+      ).toThrow(databaseError);
     }
   });
 
@@ -63,7 +63,7 @@ describe("E2E environment safety", () => {
       "postgresql://postgres:password@localhost./cogito-test",
     ]) {
       expect(() => resolveE2eEnvironment(validEnvironment(value))).toThrow(
-        "E2E DATABASE_URL must target loopback PostgreSQL cogito-test or cogito-test-payout.",
+        databaseError,
       );
     }
   });
@@ -77,7 +77,7 @@ describe("E2E environment safety", () => {
       "mysql://postgres:password@localhost/cogito-test",
     ]) {
       expect(() => resolveE2eEnvironment(validEnvironment(value))).toThrow(
-        "E2E DATABASE_URL must target loopback PostgreSQL cogito-test or cogito-test-payout.",
+        databaseError,
       );
     }
   });
@@ -91,8 +91,31 @@ describe("E2E environment safety", () => {
     };
 
     expect(() => resolveE2eEnvironment(resolvedEnvironment)).toThrow(
-      "E2E DATABASE_URL must target loopback PostgreSQL cogito-test or cogito-test-payout.",
+      databaseError,
     );
+  });
+
+  test("preserves the standard worker ports and isolates payout on port 6770", () => {
+    for (const port of ["6767", "6768", "6769"]) {
+      expect(
+        resolveE2eEnvironment(
+          validEnvironment(
+            `postgresql://postgres:password@localhost:${port}/cogito-test`,
+          ),
+        ).databaseUrl,
+      ).toContain("/cogito-test");
+    }
+
+    for (const value of [
+      "postgresql://postgres:password@localhost:6770/cogito-test",
+      "postgresql://postgres:password@localhost:6767/cogito-test-payout",
+      "postgresql://postgres:password@localhost:6768/cogito-test-payout",
+      "postgresql://postgres:password@localhost:6769/cogito-test-payout",
+    ]) {
+      expect(() => resolveE2eEnvironment(validEnvironment(value))).toThrow(
+        databaseError,
+      );
+    }
   });
 
   test("does not include database credentials in guard errors", () => {

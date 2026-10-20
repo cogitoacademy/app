@@ -17,18 +17,35 @@ function getDatabaseName(databaseUrl: string | undefined) {
   }
 }
 
-function assertSafeTestDatabase() {
+const TEST_DATABASE_PORTS = new Map([
+  ["cogito-test", new Set(["6767", "6768", "6769"])],
+  ["cogito-test-settlement", new Set(["6767"])],
+  ["cogito-test-payout", new Set(["6770"])],
+]);
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+
+export function assertSafeTestDatabase() {
   const databaseUrl = process.env.DATABASE_URL;
   const databaseName = getDatabaseName(databaseUrl);
+  let parsedUrl: URL | undefined;
+  try {
+    if (databaseUrl) parsedUrl = new URL(databaseUrl);
+  } catch {
+    parsedUrl = undefined;
+  }
+  const hostname = parsedUrl?.hostname.toLowerCase().replace(/^\[|\]$/g, "");
 
   if (
     process.env.NODE_ENV !== "test" ||
-    !databaseName.toLowerCase().includes("test")
+    !parsedUrl ||
+    !["postgres:", "postgresql:"].includes(parsedUrl.protocol) ||
+    !LOOPBACK_HOSTS.has(hostname ?? "") ||
+    !TEST_DATABASE_PORTS.get(databaseName)?.has(parsedUrl.port)
   ) {
     throw new Error(
       [
         "resetDatabase() is blocked outside a dedicated test database.",
-        `NODE_ENV='${process.env.NODE_ENV ?? ""}', DATABASE_URL database='${databaseName}'.`,
+        `NODE_ENV='${process.env.NODE_ENV ?? ""}', DATABASE_URL database='${databaseName}', port='${parsedUrl?.port ?? ""}'.`,
       ].join(" "),
     );
   }
