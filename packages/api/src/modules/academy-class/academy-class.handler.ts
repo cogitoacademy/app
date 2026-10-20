@@ -21,6 +21,14 @@ export function createAcademyClassHandler(service: AcademyClassService) {
     }: {
       input: z.infer<typeof getAcademyClassInput>;
     }) => withDomainMap(() => service.get(input.id), mapAcademyClassError),
+    listPublishedAcademyClasses: async () =>
+      withDomainMap(() => service.listPublished(), mapAcademyClassError),
+    getPublishedAcademyClass: async ({
+      input,
+    }: {
+      input: z.infer<typeof getAcademyClassInput>;
+    }) =>
+      withDomainMap(() => service.getPublished(input.id), mapAcademyClassError),
     saveAcademyClassDraft: async ({
       context,
       input,

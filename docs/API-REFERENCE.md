@@ -751,6 +751,14 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Rate defaults:** Cohort full/half/single prices default to 20/22/25 Marks per session and tutor fee Rp400,000 per session. Masterclass defaults to 5 Marks and Rp300,000 tutor fee. Admin may edit these draft values; rates are snapshotted on the class/session draft.
 - **Errors:** `ACADEMY_CLASS_NOT_FOUND` (404); `ACADEMY_CLASS_VERSION_CONFLICT` and `ACADEMY_CLASS_STATE_CONFLICT` (409); invalid schedule/reference/class data (400).
 
+### `classes.list`, `classes.get`
+
+- **RPC paths:** `/rpc/classes/list`, `/rpc/classes/get`
+- **Auth:** Public read
+- **Inputs:** `list` has no input; `get` accepts `{ id }`.
+- **Output:** Published class catalog fields, competition and parent names, ordered sessions, schedule/mode/curriculum, and tutor display name. The DTO excludes tutor IDs/account data and fees, room details, audit/version fields, and student roster data.
+- **Rules:** The list filters to `published`; detail returns not found for missing or unpublished classes. Enrollment and booking are not included in this read contract.
+
 ## Admin Knowledge Bank Access (`adminKnowledgeBank.*`)
 
 All routes are admin-only. Each student has at most one live grant; the expiry

@@ -9,6 +9,7 @@ import {
   AcademyClassVersionConflictError,
 } from "./academy-class.errors";
 import { createAcademyClassRepo } from "./academy-class.repo";
+import { toPublicAcademyClass } from "./academy-class.public";
 import {
   listAcademyClassesInput,
   saveAcademyClassDraftInput,
@@ -23,7 +24,7 @@ export function createAcademyClassService(deps: {
   db: DbType;
   audit: AuditPort;
 }) {
-  const repo = createAcademyClassRepo(deps.db);
+  const repo = createAcademyClassRepo();
 
   async function list(input: z.infer<typeof listAcademyClassesInput>) {
     return repo.list(deps.db, input);
@@ -33,6 +34,19 @@ export function createAcademyClassService(deps: {
     const record = await repo.get(deps.db, id);
     if (!record) throw new AcademyClassNotFoundError(id);
     return record;
+  }
+
+  async function listPublished() {
+    const records = await repo.list(deps.db, { state: "published" });
+    return records.map(toPublicAcademyClass);
+  }
+
+  async function getPublished(id: string) {
+    const record = await repo.get(deps.db, id);
+    if (!record || record.state !== "published") {
+      throw new AcademyClassNotFoundError(id);
+    }
+    return toPublicAcademyClass(record);
   }
 
   function classValues(input: SaveDraftInput, actorId: string) {
@@ -385,5 +399,5 @@ export function createAcademyClassService(deps: {
     });
   }
 
-  return { list, get, saveDraft };
+  return { list, get, listPublished, getPublished, saveDraft };
 }
