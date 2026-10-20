@@ -82,4 +82,34 @@ describe("G2: existing-account email verification via email-otp plugin", () => {
       }),
     ).rejects.toThrow();
   });
+
+  test("email OTP sign-in cannot send codes to or create unknown accounts", async () => {
+    const unknownEmail = `unknown.signin.${Date.now()}@cogito.test`;
+    const sent: string[] = [];
+    const { setVerificationEmailSender } = await import("@cogito-app/auth");
+    setVerificationEmailSender(async ({ email: sentEmail }) => {
+      sent.push(sentEmail);
+    });
+
+    const sendResult = await auth.api.sendVerificationOTP({
+      body: { email: unknownEmail, type: "sign-in" },
+      headers: new Headers(),
+    });
+    expect(sendResult.success).toBe(true);
+    expect(sent).toEqual([]);
+
+    const otp = await auth.api.createVerificationOTP({
+      body: { email: unknownEmail, type: "sign-in" },
+      headers: new Headers(),
+    });
+    await expect(
+      auth.api.signInEmailOTP({
+        body: { email: unknownEmail, otp },
+        headers: new Headers(),
+      }),
+    ).rejects.toThrow();
+    expect(
+      await db.select().from(user).where(eq(user.email, unknownEmail)),
+    ).toEqual([]);
+  });
 });

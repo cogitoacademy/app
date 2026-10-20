@@ -642,21 +642,25 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 These Better Auth HTTP endpoints are mounted on the API under `/api/auth`; they
 are not oRPC procedures. A public account is created only after the signup OTP
 is valid for the submitted email and signup attempt.
+The custom signup, OTP-send, and outcome POST routes require an allowed browser
+`Origin` or `Referer` under the configured frontend-origin policy. Better
+Auth's email-OTP plugin has `disableSignUp: true`; its sign-in OTP routes cannot
+send a code to or create an unknown account.
 
 ### `POST /api/auth/sign-up/email-otp`
 
 - **Auth:** Public
 - **Input:** `{ email, signupAttemptId }`, where `signupAttemptId` is a client-generated UUID
 - **Output:** `200 { ok: true, signupAttemptId, resendAfterSeconds: 60 }`
-- **Errors:** `400` for an invalid email or attempt ID; `429` during the 60-second per-email cooldown (includes `Retry-After`, `retryAfterSeconds`, and the active attempt ID); `502` when the mail provider fails
-- **Behavior:** Sends a six-digit code that expires in five minutes. Resend after the cooldown replaces the stored proof and invalidates the previous code. Three incorrect submissions exhaust the attempt. The OTP is stored as an HMAC digest in the existing Better Auth `verification` table.
+- **Errors:** `400` for an invalid email or attempt ID; `403` for a missing or untrusted browser origin; `429` during the 60-second per-email cooldown (includes `Retry-After` and `retryAfterSeconds`, plus the attempt ID only when it matches the caller's submitted ID); `502` when the mail provider fails
+- **Behavior:** Sends a six-digit code that expires in five minutes. Resend after the cooldown replaces the stored proof and invalidates the previous code. Three incorrect submissions exhaust the attempt. The OTP is stored as an HMAC digest in the existing Better Auth `verification` table. Auth routes share a 10-request/minute/IP bucket across canonical, percent-encoded, repeatedly encoded, case-varied, and trailing-slash path forms. The browser stores only its per-address attempt ID in session storage; changing email clears the visible code and proof state, and returning to that address can recover the same attempt through its cooldown response.
 
 ### `POST /api/auth/sign-up/email`
 
 - **Auth:** Public; the normal email/password sign-in and session response is preserved
 - **Input:** `{ name, email, password, signupAttemptId, otp }`
 - **Output:** The Better Auth signup response with the newly created user and session on success
-- **Errors:** `400` without proof or with an incorrect/expired code; `409` for an existing account or already-completed attempt; `429` after three incorrect codes; otherwise the underlying Better Auth create error
+- **Errors:** `400` without proof or with an incorrect/expired code; `403` for a missing or untrusted browser origin; `409` for an existing account or already-completed attempt; `429` after three incorrect codes; otherwise the underlying Better Auth create error
 - **Behavior:** Raw signup without both proof fields fails. Account creation, proof consumption, and the attempt outcome record commit in one PostgreSQL transaction; a failed create rolls back and leaves the proof usable until expiry or resend. Concurrent requests for the same email/attempt can create at most one account and one welcome-email attempt. After commit, the browser establishes the returned session as with existing sign-in flows.
 
 ### `POST /api/auth/sign-up/email-outcome`
@@ -664,7 +668,8 @@ is valid for the submitted email and signup attempt.
 - **Auth:** Public
 - **Input:** `{ email, signupAttemptId }`
 - **Output:** `{ created: boolean }`
-- **Behavior:** Returns `true` only for the completed attempt bound to the exact normalized email. The result record expires after 24 hours. The web client checks this endpoint after a network-uncertain signup response and asks the user to sign in if the account committed without a browser session; it does not replay signup.
+- **Errors:** `403` for a missing or untrusted browser origin
+- **Behavior:** Returns `true` only for the completed attempt bound to the exact normalized email. The result record expires after 24 hours; a cooldown response never discloses a different caller's attempt ID. The web client checks this endpoint after a network-uncertain signup response and asks the user to sign in if the account committed without a browser session; it does not replay signup.
 
 ### Local test-only OTP capture
 

@@ -7,11 +7,18 @@ import { resolveE2eEnvironment } from "./e2e-environment";
 
 export async function createPreAccountSignupFixture() {
   const environment = resolveE2eEnvironment(process.env);
-  const api = await request.newContext({ baseURL: environment.serverUrl });
+  const api = await request.newContext({
+    baseURL: environment.serverUrl,
+    extraHTTPHeaders: { Origin: environment.webUrl },
+  });
+  const apiWithoutOrigin = await request.newContext({
+    baseURL: environment.serverUrl,
+  });
   const email = `e2e.signup.${randomUUID()}@cogito.test`;
 
   return {
     api,
+    apiWithoutOrigin,
     email,
     async readOtp() {
       const response = await api.get(

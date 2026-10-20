@@ -80,7 +80,17 @@ describe("REQ-AUTH-01 pre-account email OTP", () => {
       email,
       signupAttemptId: attemptId,
     });
-    expect(cooldown).toMatchObject({ ok: false, status: 429 });
+    expect(cooldown).toMatchObject({
+      ok: false,
+      status: 429,
+      signupAttemptId: attemptId,
+    });
+    const otherAttemptCooldown = await sendPreAccountSignupOtp({
+      email,
+      signupAttemptId: randomUUID(),
+    });
+    expect(otherAttemptCooldown).toMatchObject({ ok: false, status: 429 });
+    expect(otherAttemptCooldown).not.toHaveProperty("signupAttemptId");
     expect(sentOtps).toHaveLength(1);
 
     await db
@@ -122,7 +132,7 @@ describe("REQ-AUTH-01 pre-account email OTP", () => {
 
     expect(sent).toHaveLength(1);
     expect(cooldown).toMatchObject({ ok: false, status: 429 });
-    expect(cooldown?.signupAttemptId).toBe(sent[0]?.signupAttemptId);
+    expect(cooldown).not.toHaveProperty("signupAttemptId");
     expect(sentOtps).toHaveLength(1);
   });
 

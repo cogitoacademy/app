@@ -2422,14 +2422,17 @@ The production env schema requires `RESEND_API_KEY` and a non-default `EMAIL_FRO
 
 Accounts created before mandatory email verification remain `email_verified=false`; do not run a data backfill that marks them verified. On the next email/password or Google sign-in, the web client requests a fresh verification OTP and routes the account to `/verify-email`. After the code is accepted, the user continues to the original destination.
 
-New email/password signups receive one combined welcome + verification email: it contains the onboarding/dashboard entry point, login link, platform introduction, and six-digit OTP. **Resend code** and verification for legacy accounts remain verification-only, so they do not repeat the signup welcome copy.
+New email/password signups receive the six-digit OTP before any account exists. After verified account creation commits, the server makes one separate best-effort attempt to send the welcome/onboarding email with the login link and platform introduction. Resending a code sends only the OTP. Legacy account verification and email-OTP sign-in remain verification-only; the email-OTP plugin cannot create users and does not send sign-in codes to unknown emails.
 
 Manual signup smoke test:
 
-1. Create a new email/password account with a fresh address.
-2. Confirm exactly one auth email is delivered and that it contains both the welcome content and the six-digit verification code.
-3. Enter the code on `/verify-email` and confirm the account reaches its normal destination.
-4. Use **Resend code** and confirm the replacement message is verification-only.
+1. Create a new email/password account with a fresh address and confirm the OTP email arrives before an account exists.
+2. Enter the six-digit code in the signup form. Confirm the account is created only after the code is accepted and the separate welcome email is attempted after commit.
+3. Request another code after the cooldown and confirm the new code works while the previous code is rejected.
+4. Change the email field and confirm the code input clears; return to the original address during cooldown and confirm the browser recovers its own attempt without exposing another attempt ID.
+5. Confirm existing-account email verification/sign-in still works and an unknown address cannot receive a sign-in OTP or create an account through the Better Auth email-OTP plugin.
+
+Auth diagnostics must not print OTP values, signup attempt IDs, passwords, reset URLs, or reset tokens. The development reset-mail log may identify the user and action but omits the one-time link.
 
 Manual smoke test after an auth or web deploy:
 
@@ -2590,7 +2593,7 @@ bun run db:migrate
 
 Push-Location packages/e2e
 $env:ENV_FILE = "../../apps/server/.env.signup-test.local"
-bun run test src/specs/pre-account-signup.spec.ts
+bun run test --config=playwright.signup.config.ts src/specs/pre-account-signup.spec.ts
 Pop-Location
 ```
 
@@ -2599,6 +2602,13 @@ exact `cogito-test` database before its seed/reset setup. The spec must use a
 free dedicated API/web pair, and server reuse stays disabled. Do not point this
 run at development data or add live mail, Google OAuth, or Google Meet
 credentials.
+
+Signup verification covers the same 10/minute/IP auth bucket for canonical,
+encoded, repeatedly encoded, case-varied, and trailing-slash forms of auth
+paths. The browser keeps the per-email attempt UUID in session storage so it
+can recover its own cooldown after changing the email field or reloading; the
+OTP input is cleared on email change and must be entered again. The test-only
+OTP capture remains in memory and emits no OTP or credential values to logs.
 
 Economy role checks:
 

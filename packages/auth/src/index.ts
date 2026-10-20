@@ -239,7 +239,7 @@ function buildAuth(options?: InternalAuthOptions) {
             url,
             token,
           });
-        } catch (error) {
+        } catch {
           // Never surface email failures to the caller: the request endpoint
           // must return the same response for known and unknown emails
           // (anti-enumeration). The email provider logs its own failures.
@@ -248,7 +248,7 @@ function buildAuth(options?: InternalAuthOptions) {
               level: "error",
               action: "reset_password_email_send_failed",
               userId: user.id,
-              error: { message: String(error) },
+              error: { code: "mail_provider_error" },
             }),
           );
         }
@@ -301,7 +301,7 @@ function buildAuth(options?: InternalAuthOptions) {
           }
           try {
             await sender({ email, otp, type });
-          } catch (error) {
+          } catch {
             // Never surface email failures to the caller (anti-enumeration);
             // the email provider logs its own failures.
             console.error(
@@ -310,12 +310,13 @@ function buildAuth(options?: InternalAuthOptions) {
                 action: "verification_email_send_failed",
                 email,
                 type,
-                error: { message: String(error) },
+                error: { code: "mail_provider_error" },
               }),
             );
           }
         },
         sendVerificationOnSignUp: false,
+        disableSignUp: true,
         expiresIn: 300,
         otpLength: 6,
       }),
@@ -509,7 +510,9 @@ export async function sendPreAccountSignupOtp(input: {
           (current.createdAt.getTime() + SIGNUP_RESEND_COOLDOWN_MS - now) /
             1000,
         ),
-        signupAttemptId: parseSignupOtp(current.value)?.attemptId,
+        ...(parseSignupOtp(current.value)?.attemptId === input.signupAttemptId
+          ? { signupAttemptId: input.signupAttemptId }
+          : {}),
       };
     }
 
@@ -787,7 +790,7 @@ export async function completePreAccountSignup(input: {
       JSON.stringify({
         level: "error",
         action: "pre_account_signup_failed",
-        error: { message: String(error) },
+        error: { code: "signup_transaction_failed" },
       }),
     );
     return {
@@ -804,13 +807,13 @@ export async function completePreAccountSignup(input: {
   if (signupWelcomeEmailSender) {
     try {
       await signupWelcomeEmailSender({ user: createdUser });
-    } catch (error) {
+    } catch {
       console.error(
         JSON.stringify({
           level: "error",
           action: "signup_welcome_email_send_failed",
           userId: createdUser.id,
-          error: { message: String(error) },
+          error: { code: "mail_provider_error" },
         }),
       );
     }

@@ -42,6 +42,31 @@ import {
   signUpSchema,
 } from "./auth-form-validation";
 
+const SIGNUP_ATTEMPT_STORAGE_PREFIX = "cogito.signup.attempt:";
+const fallbackSignupAttempts = new Map<string, string>();
+
+function getOrCreateSignupAttemptId(email: string) {
+  const storageKey = `${SIGNUP_ATTEMPT_STORAGE_PREFIX}${email}`;
+  try {
+    const saved = window.sessionStorage.getItem(storageKey);
+    if (saved && /^[0-9a-f-]{36}$/i.test(saved)) return saved;
+  } catch {
+    // Keep the flow usable if browser storage is unavailable.
+  }
+
+  const inMemory = fallbackSignupAttempts.get(email);
+  if (inMemory) return inMemory;
+
+  const attemptId = crypto.randomUUID();
+  fallbackSignupAttempts.set(email, attemptId);
+  try {
+    window.sessionStorage.setItem(storageKey, attemptId);
+  } catch {
+    // The per-tab map preserves email-edit recovery for this mounted page.
+  }
+  return attemptId;
+}
+
 async function fetchSignupOutcome(email: string, attemptId: string) {
   try {
     const response = await fetch(
@@ -110,7 +135,9 @@ export default function SignUpForm({
       try {
         const email = value.email.trim().toLowerCase();
         if (!signupAttemptId || otpEmail !== email || !otpSent) {
-          setOtpError("Send a code to this email before creating your account.");
+          setOtpError(
+            "Send a code to this email before creating your account.",
+          );
           return;
         }
         const response = await fetch(`${serverUrl}/api/auth/sign-up/email`, {
@@ -127,9 +154,9 @@ export default function SignUpForm({
         });
 
         if (!response.ok) {
-          const errorBody = (await response.json().catch(() => null)) as
-            | { message?: string }
-            | null;
+          const errorBody = (await response.json().catch(() => null)) as {
+            message?: string;
+          } | null;
           const errorMessage =
             errorBody?.message ?? "We couldn't create your account. Try again.";
           setOtpError(errorMessage);
@@ -194,9 +221,7 @@ export default function SignUpForm({
   async function finishSignup(sessionUser?: CogitoUser) {
     if (!sessionUser) {
       setSignupCreatedWithoutSession(true);
-      setOtpError(
-        "Your account was created. Sign in to continue.",
-      );
+      setOtpError("Your account was created. Sign in to continue.");
       return;
     }
     rememberAuthOutcome("created", "email");
@@ -228,13 +253,13 @@ export default function SignUpForm({
     if (created) {
       setSignupCreatedWithoutSession(true);
       setSignupOutcomeUnknown(false);
-      setOtpError(
-        "Your account was created. Sign in to continue.",
-      );
+      setOtpError("Your account was created. Sign in to continue.");
       return;
     }
     setSignupOutcomeUnknown(false);
-    setOtpError("No account was created. Your code is still available to retry.");
+    setOtpError(
+      "No account was created. Your code is still available to retry.",
+    );
   }
 
   async function sendSignupCode() {
@@ -242,33 +267,31 @@ export default function SignUpForm({
     const enteredEmail = form.getFieldValue("email").trim();
     const parsedEmail = signInEmailSchema.safeParse(enteredEmail);
     if (!parsedEmail.success) {
-      setOtpError(parsedEmail.error.issues[0]?.message ?? "Enter a valid email address.");
+      setOtpError(
+        parsedEmail.error.issues[0]?.message ?? "Enter a valid email address.",
+      );
       return;
     }
     const email = parsedEmail.data.toLowerCase();
-    const attemptId = signupAttemptId ?? crypto.randomUUID();
+    const attemptId =
+      otpEmail === email && signupAttemptId
+        ? signupAttemptId
+        : getOrCreateSignupAttemptId(email);
     setSignupAttemptId(attemptId);
     setIsSendingCode(true);
     try {
-      const response = await fetch(
-        `${serverUrl}/api/auth/sign-up/email-otp`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, signupAttemptId: attemptId }),
-        },
-      );
-      const body = (await response.json().catch(() => null)) as
-        | {
-            message?: string;
-            signupAttemptId?: string;
-            retryAfterSeconds?: number;
-          }
-        | null;
-      if (
-        form.getFieldValue("email").trim().toLowerCase() !== email
-      ) {
+      const response = await fetch(`${serverUrl}/api/auth/sign-up/email-otp`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, signupAttemptId: attemptId }),
+      });
+      const body = (await response.json().catch(() => null)) as {
+        message?: string;
+        signupAttemptId?: string;
+        retryAfterSeconds?: number;
+      } | null;
+      if (form.getFieldValue("email").trim().toLowerCase() !== email) {
         return;
       }
       if (body?.signupAttemptId) setSignupAttemptId(body.signupAttemptId);
@@ -277,15 +300,15 @@ export default function SignUpForm({
           setOtp("");
           setOtpEmail(email);
           setOtpSent(true);
-          setCooldownUntil(
-            Date.now() + (body?.retryAfterSeconds ?? 60) * 1000,
-          );
+          setCooldownUntil(Date.now() + (body?.retryAfterSeconds ?? 60) * 1000);
         } else {
           setOtp("");
           setOtpEmail("");
           setOtpSent(false);
         }
-        setOtpError(body?.message ?? "We couldn't send a code. Please try again.");
+        setOtpError(
+          body?.message ?? "We couldn't send a code. Please try again.",
+        );
         return;
       }
       setOtp("");
@@ -479,7 +502,9 @@ export default function SignUpForm({
           </form.Field>
 
           <Field invalid={Boolean(otpError)}>
-        <FieldLabel htmlFor="signup-otp">Email verification code</FieldLabel>
+            <FieldLabel htmlFor="signup-otp">
+              Email verification code
+            </FieldLabel>
             <div className="flex items-center gap-2">
               <Input
                 id="signup-otp"
@@ -642,8 +667,10 @@ export default function SignUpForm({
                 type="submit"
                 block
                 disabled={
-                  isSubmitting || isAuthTransitioning ||
-                  signupOutcomeUnknown || signupCreatedWithoutSession
+                  isSubmitting ||
+                  isAuthTransitioning ||
+                  signupOutcomeUnknown ||
+                  signupCreatedWithoutSession
                 }
                 progress={isSubmitting || isAuthTransitioning}
               >

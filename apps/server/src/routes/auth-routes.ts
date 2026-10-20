@@ -6,8 +6,10 @@ import {
   getPreAccountSignupOutcome,
   sendPreAccountSignupOtp,
 } from "@cogito-app/auth";
+import { isAllowedFrontendOrigin } from "@cogito-app/env/origins";
 import { env } from "@cogito-app/env/server";
 import { readBodyWithLimit } from "@cogito-app/api/lib/request-id";
+import { normalizeRequestPath } from "../rate-limit-paths";
 import { hasSignupEmailProof, parseSignupBody } from "../signup-body";
 import { MAX_BODY_BYTES, bodyLimitResponse } from "./middlewares";
 import type { Elysia } from "elysia";
@@ -16,6 +18,11 @@ const SIGNUP_PATH = "/api/auth/sign-up/email";
 const SEND_SIGNUP_OTP_PATH = "/api/auth/sign-up/email-otp";
 const SIGNUP_OUTCOME_PATH = "/api/auth/sign-up/email-outcome";
 const TEST_SIGNUP_OTP_PATH = "/api/__test/auth/signup-otp";
+const CUSTOM_SIGNUP_PATHS = new Set([
+  SEND_SIGNUP_OTP_PATH,
+  SIGNUP_OUTCOME_PATH,
+  SIGNUP_PATH,
+]);
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 const LOOPBACK_ADDRESSES = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
 
@@ -46,17 +53,32 @@ function isLocalSignupOtpTestTarget() {
   }
 }
 
-function normalizeAuthPath(pathname: string) {
-  let decoded = pathname;
-  for (;;) {
-    const next = decodeURIComponent(decoded);
-    if (next === decoded) break;
-    decoded = next;
+function hasTrustedBrowserOrigin(request: Request) {
+  const origin = request.headers.get("origin");
+  const referer = request.headers.get("referer");
+  if (!origin && !referer) return false;
+  if (
+    origin &&
+    !isAllowedFrontendOrigin(origin, env.CORS_ORIGIN, env.NODE_ENV)
+  ) {
+    return false;
   }
-  return decoded
-    .replace(/\/{2,}/g, "/")
-    .replace(/\/+$/, "")
-    .toLowerCase();
+  if (referer) {
+    try {
+      if (
+        !isAllowedFrontendOrigin(
+          new URL(referer).origin,
+          env.CORS_ORIGIN,
+          env.NODE_ENV,
+        )
+      ) {
+        return false;
+      }
+    } catch {
+      return false;
+    }
+  }
+  return true;
 }
 
 /**
@@ -110,9 +132,12 @@ export function registerAuthRoutes(app: Elysia) {
       }
       let path: string;
       try {
-        path = normalizeAuthPath(new URL(request.url).pathname);
+        path = normalizeRequestPath(new URL(request.url).pathname);
       } catch {
         return jsonResponse({ message: "Invalid request path." }, 400);
+      }
+      if (CUSTOM_SIGNUP_PATHS.has(path) && !hasTrustedBrowserOrigin(request)) {
+        return jsonResponse({ message: "Invalid request origin." }, 403);
       }
 
       if (path === SEND_SIGNUP_OTP_PATH) {

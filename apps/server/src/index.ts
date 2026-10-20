@@ -122,7 +122,6 @@ setAuthEmailSender(async ({ user, url }) => {
       level: "info",
       action: "reset_password_link",
       userId: user.id,
-      url,
     });
   }
   const { subject, html } = buildResetPasswordEmail({

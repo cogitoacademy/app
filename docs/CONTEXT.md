@@ -54,7 +54,7 @@ passed its guard unit suite (7 tests / 32 expectations) and E2E typecheck; the
 browser suite was not rerun against the shared test database. See the
 [runbook](./RUNBOOK.md) for the guarded command.
 
-## V3 pre-account email signup checkpoint (2026-10-20)
+## V3 pre-account email signup checkpoint (2026-10-21)
 
 REQ-AUTH-01 changes public email/password signup so no account exists before a
 valid email OTP is proved. `POST /api/auth/sign-up/email-otp` sends a six-digit
@@ -66,6 +66,17 @@ and keeps the proof reusable. The UI starts with an empty code, clears proof
 when the email changes, shows inline send/verification errors, and checks
 `POST /api/auth/sign-up/email-outcome` after an uncertain network response
 instead of retrying account creation.
+
+These custom POST routes validate `Origin` or `Referer` against the configured
+frontend-origin policy. Auth path matching uses the same repeated-decoding,
+slash-normalizing canonicalizer as the 10/minute/IP auth limiter, so encoded
+separator, case, or trailing-slash variants share the same budget. The browser
+keeps only its attempt UUID per normalized email in session storage to recover
+after an address edit or reload; changing email still clears the visible OTP
+and proof state. Auth logs omit OTP values, attempt IDs, passwords, and
+password-reset URLs/tokens. Better Auth's email-OTP plugin also sets
+`disableSignUp: true`, so its sign-in OTP route cannot provision an account
+outside this transaction.
 
 The proof uses the existing Better Auth `verification` table; this slice has no
 schema, index, or migration change. The local OTP capture route is registered
