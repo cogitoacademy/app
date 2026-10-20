@@ -150,6 +150,16 @@ rules were accepted while ordinary-reschedule rights remain open. Class
 delivery/report/expiry integration remains with T04/T06/T07. This slice does
 not change existing on-demand cancellation, no-show, expiry, or feedback rules.
 
+Series completion and no-show now serialize on the parent booking, child
+session, and participant rows. The existing session-specific no-show ledger
+event marks that participant's allocation as already charged: a repeated
+series no-show is rejected, and a later completion report skips that allocation
+instead of consuming Marks held for future sessions. Other delivered group
+seats still settle normally. A no-show ledger event alone does not prove
+delivery or earn a tutor fee; the tutor must submit the completion report.
+Malformed V3 snapshots with a missing or invalid `tutorHonorariumIdr` fail
+before wallet/hold writes; an explicit zero honorarium remains valid.
+
 Focused verification: tutor-fee unit tests **4/4**, booking-service unit tests
 **307/307**, admin-service unit tests **30/30**, solo booking integration
 **12/12**, standalone group integration **8/8**, group-series integration
@@ -165,6 +175,14 @@ Production builds are not verified: server `tsdown` exited 253 without a source
 diagnostic, and Vite could not allocate 27,648 bytes after transforming 8,875
 modules. Retry checks/builds when memory headroom is available. No V3 activation
 or external provider call was performed.
+
+Settlement follow-on verification (2026-10-20): the focused real-Postgres
+series no-show/completion suite passed twice (**12 executions, 112
+expectations**), covering solo and group no-show settlement, repeat no-show and
+completion, concurrent completion, the no-show/completion race, malformed V3
+honoraria, and transaction rollback on fee insertion failure. The tutor-fee
+unit suite passed **6/6**. Logs confirm the test meeting adapter was manual.
+Browser E2E was not run for this settlement slice.
 
 ## V3 class draft checkpoint (2026-10-19)
 

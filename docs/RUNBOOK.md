@@ -83,6 +83,26 @@ the parent. No destructive/browser E2E was run during this integration
 checkpoint. The local test DB guard does not replace the separate guarded test
 database requirement for automated destructive tests.
 
+## Series no-show settlement verification (2026-10-20)
+
+Run the focused series settlement regression suite only against the dedicated
+loopback `cogito-test` database because its setup resets that database:
+
+```powershell
+bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests/integration/booking-series-noshow-complete.test.ts
+bun test --timeout 10000 packages/api/src/tests/unit/tutor-session-fee.test.ts
+```
+
+The Postgres suite passed twice: **6 tests / 56 expectations per run**. It
+covers solo/group no-show allocation, repeated no-show/completion, concurrent
+completion, the no-show/completion race, malformed V3 honorarium rejection,
+and rollback when fee insertion fails. The fee unit suite passed **6 tests**,
+including explicit zero and malformed V3 cases. Logs showed the manual meeting
+adapter; no external meeting service was called. Browser E2E was not run for
+this settlement slice. The package API TypeScript check still reports errors
+in unrelated existing class/test files; no diagnostic named the changed
+booking or fee files.
+
 ## Catalog migration/acceptance gate — implementation in progress
 
 Migrations `0056_complex_ricochet.sql` and `0057_legacy_competition_palette_backfill.sql`

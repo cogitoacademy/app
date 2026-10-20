@@ -1502,7 +1502,7 @@ RPC contract.
 - **Auth:** Tutor
 - **Input:** `{ bookingId, sessionId?, feedback: { discussion: string[1..30], strengths: string[1..30], improvements: string[1..30] } }` (`sessionId` required for series child sessions; each bullet 1–1000 chars)
 - **Output:** `{ booking }`
-- **Description:** Marks a scheduled session completed and deducts held Marks. Requires session discussion, strengths observed, and areas for improvement; saves one `session_completion_feedback` row atomically (per booking for solo/group, per session for series). In the same transaction it appends one `tutor_session_fee` event for the completed delivery (booking identity for solo/group; child-session identity for series), including the pinned price snapshot and gross IDR honorarium. This is an earned-fee fact, not a payout; the RPC output is unchanged. Missing/empty feedback returns `BOOKING_COMPLETION_FEEDBACK_REQUIRED` (400).
+- **Description:** Marks a scheduled session completed and deducts held Marks. Requires session discussion, strengths observed, and areas for improvement; saves one `session_completion_feedback` row atomically (per booking for solo/group, per session for series). In the same transaction it appends one `tutor_session_fee` event for the completed delivery (booking identity for solo/group; child-session identity for series), including the pinned price snapshot and gross IDR honorarium. For a series session with a prior participant no-show ledger entry, completion skips that already-charged allocation and preserves future holds; a no-show without this completion report earns no tutor fee. Malformed V3 honoraria fail before settlement writes. Concurrent completion is serialized so only one report, deduction, and fee is recorded. This is an earned-fee fact, not a payout; the RPC output is unchanged. Missing/empty feedback returns `BOOKING_COMPLETION_FEEDBACK_REQUIRED` (400).
 - **Frontend note:** Cancel uses Selia confirmation dialog; complete uses `CompleteSessionDialog` for three textarea-backed tutor feedback sections (each line is a bullet and Enter adds another). Booking detail shows read-only Student notes with Session feedback directly beneath it in the same Session overview block after completion. Mutation feedback is emitted through the global toast layer and does not change this RPC contract.
 
 ### `booking.listCompletionFeedback`
@@ -1528,8 +1528,8 @@ RPC contract.
 - **Auth:** Tutor
 - **Input:** `{ bookingId, participantUserId, sessionId? }` (`sessionId` required for series child sessions)
 - **Output:** `{ bookingId, participantUserId, sessionId, forfeitedMarks }`
-- **Errors:** `BOOKING_NOT_FOUND` (404), `BOOKING_NOT_EDITABLE` (400) before start+15 min, `BOOKING_STATE_TRANSITION` (409) if not `scheduled`
-- **Description:** Marks a participant as no-show 15 minutes after the session starts (U5/TC-30); their session hold is forfeited. A solo booking transitions to `no_show`; a group booking stays live and only the target's hold is forfeited (C1); a series session keeps its state so other participants are unaffected.
+- **Errors:** `BOOKING_NOT_FOUND` (404), `BOOKING_NOT_EDITABLE` (400) before start+15 min, if a report already exists, or for a repeated series no-show; `BOOKING_STATE_TRANSITION` (409) if not `scheduled`
+- **Description:** Marks a participant as no-show 15 minutes after the session starts (U5/TC-30); their session hold is forfeited. A solo booking transitions to `no_show`; a group booking stays live and only the target's hold is forfeited (C1); a series session keeps its state so other participants are unaffected. A series no-show is keyed to that participant and child session, and a repeated mark is rejected. Its ledger entry prevents a later delivery report from charging that allocation twice; the entry alone does not earn a tutor fee.
 
 ---
 

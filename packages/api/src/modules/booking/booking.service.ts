@@ -161,6 +161,14 @@ function getCollectedMarks(
     : snapshot.perStudent * headcount;
 }
 
+function seriesNoShowEventKey(
+  bookingId: string,
+  participantUserId: string,
+  sessionId: string,
+) {
+  return `booking.${bookingId}.no_show.${participantUserId}.${sessionId}`;
+}
+
 function buildV3Snapshot(
   version: number,
   quote: {
@@ -1848,7 +1856,7 @@ export function createBookingService(deps: {
     feedback?: CompletionFeedback,
   ) {
     return db.transaction(async (tx) => {
-      const b = await repo.findBookingById(tx, bookingId);
+      let b = await repo.findBookingById(tx, bookingId);
       if (!b) throw new BookingNotFoundError(bookingId);
       if (b.tutorId !== tutorId)
         throw new BookingNotOwnedError(bookingId, tutorId);
@@ -1860,6 +1868,17 @@ export function createBookingService(deps: {
       if (b.type !== BOOKING_TYPE.SERIES) {
         return completeSingleSession(tx, b, bookingId, tutorId, feedback);
       }
+
+      // No-show and completion take the parent booking lock before session and
+      // participant locks. Refresh after waiting so hold math includes any
+      // no-show allocation committed while we waited.
+      const lockedBooking = await repo.findBookingById(tx, bookingId, {
+        forUpdate: true,
+      });
+      if (!lockedBooking) throw new BookingNotFoundError(bookingId);
+      if (lockedBooking.tutorId !== tutorId)
+        throw new BookingNotOwnedError(bookingId, tutorId);
+      b = lockedBooking;
 
       return completeSeriesSession(
         tx,
@@ -1902,6 +1921,15 @@ export function createBookingService(deps: {
     if (b.scheduledStartAt.getTime() > Date.now()) {
       throw new BookingSessionNotStartedError(bookingId);
     }
+
+    const feeRecord = buildTutorSessionFeeRecord({
+      bookingId,
+      bookingSessionId: null,
+      tutorId,
+      scheduledStartAt: b.scheduledStartAt,
+      earnedAt: new Date(),
+      priceSnapshot: b.priceSnapshot,
+    });
 
     if (b.type === BOOKING_TYPE.GROUP) {
       // After a group repricing the holds live on each remaining
@@ -1954,17 +1982,8 @@ export function createBookingService(deps: {
       improvements: feedback!.improvements,
     });
 
-    await repo.insertTutorSessionFee(
-      tx,
-      buildTutorSessionFeeRecord({
-        bookingId,
-        bookingSessionId: null,
-        tutorId,
-        scheduledStartAt: b.scheduledStartAt,
-        earnedAt: updated.completedAt ?? new Date(),
-        priceSnapshot: b.priceSnapshot,
-      }),
-    );
+    feeRecord.earnedAt = updated.completedAt ?? new Date();
+    await repo.insertTutorSessionFee(tx, feeRecord);
 
     await notification.writeBestEffort({
       db: tx,
@@ -1998,7 +2017,9 @@ export function createBookingService(deps: {
     if (!sessionId) throw new BookingSessionRequiredError(bookingId);
     assertCompletionFeedback(bookingId, feedback);
 
-    const session = await repo.findSessionById(tx, sessionId);
+    const session = await repo.findSessionById(tx, sessionId, {
+      forUpdate: true,
+    });
     if (!session || session.seriesBookingId !== bookingId) {
       throw new BookingSessionNotFoundError(sessionId);
     }
@@ -2023,6 +2044,17 @@ export function createBookingService(deps: {
       );
     }
 
+    // Validate the persisted fee snapshot before any wallet or hold writes.
+    // Explicit V3 zero honoraria remain valid; missing/malformed values fail.
+    const feeRecord = buildTutorSessionFeeRecord({
+      bookingId,
+      bookingSessionId: session.id,
+      tutorId,
+      scheduledStartAt: session.scheduledStartAt,
+      earnedAt: new Date(),
+      priceSnapshot: session.priceSnapshot ?? b.priceSnapshot,
+    });
+
     const isGroupSeries = b.targetGroupSize > 1;
     let deductedHoldAmount = 0;
     let residualHeld = 0;
@@ -2035,8 +2067,28 @@ export function createBookingService(deps: {
     if (isGroupSeries) {
       // P1-8: group-series holds live on each confirmed participant's wallet,
       // so a completed session deducts each participant's per-session share.
-      const participants = await repo.findConfirmedParticipants(tx, bookingId);
+      const participants = await repo.findConfirmedParticipants(
+        tx,
+        bookingId,
+        undefined,
+        { forUpdate: true },
+      );
+      const noShowKeys = new Set(
+        await repo.findLedgerEventKeys(
+          tx,
+          bookingId,
+          participants.map((p) =>
+            seriesNoShowEventKey(bookingId, p.userId, session.id),
+          ),
+        ),
+      );
       for (const p of participants) {
+        // This session's no-show ledger row proves the allocation was already
+        // charged. Attendance is booking-wide, so never infer other sessions.
+        if (
+          noShowKeys.has(seriesNoShowEventKey(bookingId, p.userId, session.id))
+        )
+          continue;
         if (p.heldAmount <= 0) continue;
         // eslint-disable-next-line no-await-in-loop
         const w = await wallet.getByUserId(tx, p.userId);
@@ -2069,35 +2121,45 @@ export function createBookingService(deps: {
         tx,
         bookingId,
         b.proposerId,
+        { forUpdate: true },
       );
-      // L1: after an admin cancelSeriesSession(..., release) the remaining
-      // held amount may be below the per-session amount — never deduct more
-      // than the participant actually holds (InsufficientBalanceError → a
-      // delivered-but-unpaid session).
-      const deductAmount = Math.min(
-        session.holdAmount,
-        proposerParticipant?.heldAmount ?? proposerWallet.heldBalance,
-      );
-      await wallet.deduct(tx, {
-        walletId: proposerWallet.id,
-        amount: deductAmount,
-        eventKey: `booking.${bookingId}.session.${session.id}.deduct`,
-        sourceReference: bookingId,
+      const noShowKey = seriesNoShowEventKey(
         bookingId,
-        actorType: ACTOR_TYPE.TUTOR,
-        reason: "Series session completed",
-      });
-
-      if (proposerParticipant) {
-        residualHeld = Math.max(
-          0,
-          proposerParticipant.heldAmount - deductAmount,
+        b.proposerId,
+        session.id,
+      );
+      const alreadyForfeited = (
+        await repo.findLedgerEventKeys(tx, bookingId, [noShowKey])
+      ).includes(noShowKey);
+      if (!alreadyForfeited) {
+        // L1: after an admin cancelSeriesSession(..., release) the remaining
+        // held amount may be below the per-session amount — never deduct more
+        // than the participant actually holds.
+        const deductAmount = Math.min(
+          session.holdAmount,
+          proposerParticipant?.heldAmount ?? proposerWallet.heldBalance,
         );
-        await repo.updateParticipantState(tx, proposerParticipant.id, {
-          heldAmount: residualHeld,
+        await wallet.deduct(tx, {
+          walletId: proposerWallet.id,
+          amount: deductAmount,
+          eventKey: `booking.${bookingId}.session.${session.id}.deduct`,
+          sourceReference: bookingId,
+          bookingId,
+          actorType: ACTOR_TYPE.TUTOR,
+          reason: "Series session completed",
         });
+
+        if (proposerParticipant) {
+          residualHeld = Math.max(
+            0,
+            proposerParticipant.heldAmount - deductAmount,
+          );
+          await repo.updateParticipantState(tx, proposerParticipant.id, {
+            heldAmount: residualHeld,
+          });
+        }
+        deductedHoldAmount = deductAmount;
       }
-      deductedHoldAmount = deductAmount;
     }
     await repo.updateBookingHoldAmount(
       tx,
@@ -2107,17 +2169,8 @@ export function createBookingService(deps: {
 
     const sessionCompletedAt = new Date();
     await repo.completeSession(tx, session.id, sessionCompletedAt);
-    await repo.insertTutorSessionFee(
-      tx,
-      buildTutorSessionFeeRecord({
-        bookingId,
-        bookingSessionId: session.id,
-        tutorId,
-        scheduledStartAt: session.scheduledStartAt,
-        earnedAt: sessionCompletedAt,
-        priceSnapshot: session.priceSnapshot ?? b.priceSnapshot,
-      }),
-    );
+    feeRecord.earnedAt = sessionCompletedAt;
+    await repo.insertTutorSessionFee(tx, feeRecord);
 
     await repo.insertCompletionFeedback(tx, {
       bookingId,
@@ -2393,23 +2446,23 @@ export function createBookingService(deps: {
     sessionId?: string,
   ) {
     return db.transaction(async (tx) => {
-      const b = await repo.findBookingById(tx, bookingId);
+      let b = await repo.findBookingById(tx, bookingId);
       if (!b) throw new BookingNotFoundError(bookingId);
       if (b.tutorId !== tutorId)
         throw new BookingNotOwnedError(bookingId, tutorId);
-
-      const participant = await repo.findParticipant(
-        tx,
-        bookingId,
-        participantUserId,
-      );
-      if (!participant)
-        throw new BookingParticipantNotFoundError(participantUserId);
-
       const isSeries = b.type === BOOKING_TYPE.SERIES;
+      if (isSeries) {
+        const lockedBooking = await repo.findBookingById(tx, bookingId, {
+          forUpdate: true,
+        });
+        if (!lockedBooking) throw new BookingNotFoundError(bookingId);
+        if (lockedBooking.tutorId !== tutorId)
+          throw new BookingNotOwnedError(bookingId, tutorId);
+        b = lockedBooking;
+      }
       const session = isSeries
         ? sessionId
-          ? await repo.findSessionById(tx, sessionId)
+          ? await repo.findSessionById(tx, sessionId, { forUpdate: true })
           : null
         : null;
       if (isSeries && !session)
@@ -2417,6 +2470,15 @@ export function createBookingService(deps: {
       if (session && session.seriesBookingId !== bookingId) {
         throw new BookingSessionNotFoundError(sessionId ?? "");
       }
+
+      const participant = await repo.findParticipant(
+        tx,
+        bookingId,
+        participantUserId,
+        { forUpdate: isSeries },
+      );
+      if (!participant)
+        throw new BookingParticipantNotFoundError(participantUserId);
 
       const sessionStartAt = session?.scheduledStartAt ?? b.scheduledStartAt;
       const now = new Date();
@@ -2446,6 +2508,18 @@ export function createBookingService(deps: {
             "A session report has already been submitted",
           );
         }
+        const eventKey = seriesNoShowEventKey(
+          bookingId,
+          participantUserId,
+          sessionId!,
+        );
+        if (
+          (await repo.findLedgerEventKeys(tx, bookingId, [eventKey])).length
+        ) {
+          throw new BookingNotEditableError(
+            "Participant was already marked as a no-show for this session",
+          );
+        }
       }
 
       const forfeitAmount = isSeries
@@ -2457,7 +2531,9 @@ export function createBookingService(deps: {
         await wallet.deduct(tx, {
           walletId: w.id,
           amount: forfeitAmount,
-          eventKey: `booking.${bookingId}.no_show.${participantUserId}.${sessionId ?? "solo"}`,
+          eventKey: isSeries
+            ? seriesNoShowEventKey(bookingId, participantUserId, sessionId!)
+            : `booking.${bookingId}.no_show.${participantUserId}.${sessionId ?? "solo"}`,
           sourceReference: bookingId,
           bookingId,
           actorType: ACTOR_TYPE.TUTOR,
