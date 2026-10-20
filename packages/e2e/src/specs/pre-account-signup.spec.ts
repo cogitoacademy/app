@@ -8,19 +8,43 @@ test("public signup requires the email OTP before creating an account", async ({
   const fixture = await createPreAccountSignupFixture();
   const password = "SignupTest123!";
   try {
-    const bypass = await fixture.api.post("/api/auth/sign-up/email", {
-      data: {
-        email: fixture.email,
-        password,
-        name: "Signup E2E",
-      },
+    const rawSignup = {
+      email: fixture.email,
+      password,
+      name: "Signup E2E",
+    };
+    const canonicalBypass = await fixture.api.post("/api/auth/sign-up/email", {
+      data: rawSignup,
     });
-    expect(bypass.status()).toBe(400);
-    await expect(bypass).not.toBeOK();
+    expect(canonicalBypass.status()).toBe(400);
+
+    const bypassPaths = [
+      "/api/auth/sign-up%2FEMAIL/",
+      "/api/auth/sign-up%252Femail",
+      "/API/AUTH/SIGN-UP/EMAIL",
+    ];
+    const bypassResponses = await Promise.all(
+      bypassPaths.map((path) =>
+        fixture.api.post(path, { data: rawSignup }),
+      ),
+    );
+    for (const [index, bypass] of bypassResponses.entries()) {
+      expect(
+        bypass.status(),
+        `signup bypass via ${bypassPaths[index]}`,
+      ).toBeGreaterThanOrEqual(400);
+      expect(bypass.status(), `signup bypass via ${bypassPaths[index]}`).toBeLessThan(500);
+    }
+    const unsupportedMethod = await fixture.api.put("/api/auth/sign-up/email", {
+      data: rawSignup,
+    });
+    expect(unsupportedMethod.status()).toBe(405);
 
     await page.context().clearCookies();
     await page.goto("/login");
-    await page.getByRole("button", { name: "Sign up", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Switch to sign up", exact: true })
+      .click();
     await expect(
       page.getByRole("heading", { name: "Create your account" }),
     ).toBeVisible();
@@ -77,7 +101,9 @@ test("public signup requires the email OTP before creating an account", async ({
     };
     expect(cooldownBody.signupAttemptId).toBe(firstSendBody.signupAttemptId);
 
-    await expect(page.getByRole("button", { name: /Resend in/ })).toBeDisabled();
+    await expect(
+      page.getByRole("button", { name: /Resend in/ }),
+    ).toBeDisabled();
     const otp = await fixture.readOtp();
     const wrongOtp = otp === "000000" ? "000001" : "000000";
     await otpInput.fill(wrongOtp);
@@ -88,9 +114,16 @@ test("public signup requires the email OTP before creating an account", async ({
     await expect(page).toHaveURL(/\/login$/);
 
     await otpInput.fill(otp);
+    const dashboardWalletResponsePromise = page.waitForResponse((response) =>
+      response.url().endsWith("/rpc/wallet/get"),
+    );
     await page.getByRole("button", { name: "Sign Up", exact: true }).click();
     await page.waitForURL("**/dashboard");
     await expect(page).toHaveURL(/\/dashboard$/);
+    const dashboardWalletResponse = await dashboardWalletResponsePromise;
+    expect(await dashboardWalletResponse.json()).toHaveProperty(
+      "json.totalBalance",
+    );
   } finally {
     try {
       fixture.cleanup();
@@ -108,7 +141,9 @@ test("checks the committed outcome when the signup response is lost", async ({
   try {
     await page.context().clearCookies();
     await page.goto("/login");
-    await page.getByRole("button", { name: "Sign up", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Switch to sign up", exact: true })
+      .click();
     await page.getByRole("heading", { name: "Create your account" }).waitFor();
     await page.getByLabel("Name", { exact: true }).fill("Signup Recovery E2E");
     await page.getByLabel("Email", { exact: true }).fill(fixture.email);
@@ -129,6 +164,11 @@ test("checks the committed outcome when the signup response is lost", async ({
 
     const otp = await fixture.readOtp();
     await page.getByLabel("Email verification code", { exact: true }).fill(otp);
+    const outcomeResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/auth/sign-up/email-outcome") &&
+        response.request().method() === "POST",
+    );
     await page.route("**/api/auth/sign-up/email", async (route) => {
       const signupResponse = await route.fetch();
       expect(signupResponse.status()).toBe(200);
@@ -139,23 +179,15 @@ test("checks the committed outcome when the signup response is lost", async ({
     await expect(page.getByRole("alert")).toHaveText(
       "Your account was created, but this browser did not receive a session. Sign in to continue.",
     );
+    const outcomeResponse = await outcomeResponsePromise;
+    expect(outcomeResponse.ok()).toBe(true);
+    expect(await outcomeResponse.json()).toEqual({ created: true });
     await expect(
       page.getByRole("button", { name: "Sign in to continue" }),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Sign Up", exact: true }),
     ).toBeDisabled();
-
-    const outcome = await fixture.api.post(
-      "/api/auth/sign-up/email-outcome",
-      {
-        data: {
-          email: fixture.email,
-          signupAttemptId: sendBody.signupAttemptId,
-        },
-      },
-    );
-    expect(await outcome.json()).toEqual({ created: true });
   } finally {
     try {
       fixture.cleanup();

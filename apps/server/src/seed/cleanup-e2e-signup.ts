@@ -17,6 +17,7 @@ function assertDedicatedTestDatabase() {
     process.env.NODE_ENV !== "test" ||
     !["postgres:", "postgresql:"].includes(databaseUrl?.protocol ?? "") ||
     databaseUrl?.pathname.replace(/^\/+/, "") !== "cogito-test" ||
+    !["6767", "6768"].includes(databaseUrl?.port ?? "") ||
     !["localhost", "127.0.0.1", "::1"].includes(
       databaseUrl?.hostname.toLowerCase().replace(/^\[|\]$/g, "") ?? "",
     )

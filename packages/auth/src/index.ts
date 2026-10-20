@@ -364,6 +364,7 @@ export const auth = createAuth();
 
 const SIGNUP_OTP_PREFIX = "pre-account-signup-otp:";
 const SIGNUP_OUTCOME_PREFIX = "pre-account-signup-outcome:";
+const verificationRow = schema.verification;
 const SIGNUP_OTP_TTL_MS = 5 * 60_000;
 const SIGNUP_RESEND_COOLDOWN_MS = 60_000;
 const SIGNUP_OUTCOME_TTL_MS = 24 * 60 * 60_000;
@@ -496,7 +497,10 @@ export async function sendPreAccountSignupOtp(input: {
       .orderBy(sql`${verificationRow.createdAt} desc`)
       .limit(1);
     const now = Date.now();
-    if (current && current.createdAt.getTime() + SIGNUP_RESEND_COOLDOWN_MS > now) {
+    if (
+      current &&
+      current.createdAt.getTime() + SIGNUP_RESEND_COOLDOWN_MS > now
+    ) {
       return {
         ok: false as const,
         status: 429,
@@ -512,7 +516,10 @@ export async function sendPreAccountSignupOtp(input: {
     await tx
       .delete(verificationRow)
       .where(eq(verificationRow.identifier, identifier));
-    const otp = makeSignupOtp(email, parseSignupOtp(current?.value ?? "")?.digest);
+    const otp = makeSignupOtp(
+      email,
+      parseSignupOtp(current?.value ?? "")?.digest,
+    );
     const rowId = randomUUID();
     await tx.insert(verificationRow).values({
       id: rowId,
@@ -525,7 +532,7 @@ export async function sendPreAccountSignupOtp(input: {
 
     try {
       await sender({ email, otp });
-    } catch (error) {
+    } catch {
       await tx.delete(verificationRow).where(eq(verificationRow.id, rowId));
       clearCapturedOtp = true;
       if (env.NODE_ENV !== "production") {
@@ -533,7 +540,7 @@ export async function sendPreAccountSignupOtp(input: {
           JSON.stringify({
             level: "error",
             action: "pre_account_signup_otp_send_failed",
-            error: { message: String(error) },
+            error: { code: "mail_provider_error" },
           }),
         );
       }
@@ -608,8 +615,7 @@ export async function completePreAccountSignup(input: {
   signupAttemptId: string;
   headers: Headers;
 }): Promise<
-  | { ok: true; response: Response }
-  | (SignupFailure & { response?: Response })
+  { ok: true; response: Response } | (SignupFailure & { response?: Response })
 > {
   const email = normalizeEmail(input.email);
   if (!isValidEmail(email) || !isUuid(input.signupAttemptId)) {
@@ -660,7 +666,8 @@ export async function completePreAccountSignup(input: {
         .orderBy(sql`${verificationRow.createdAt} desc`)
         .limit(1);
       if (!proof) return { kind: "invalid-code" as const };
-      if (proof.expiresAt <= new Date()) return { kind: "expired-code" as const };
+      if (proof.expiresAt <= new Date())
+        return { kind: "expired-code" as const };
 
       const parsed = parseSignupOtp(proof.value);
       if (!parsed || parsed.attemptId !== input.signupAttemptId) {
@@ -704,16 +711,15 @@ export async function completePreAccountSignup(input: {
         headers: input.headers,
         asResponse: true,
       });
-      const body = (await response.clone().json().catch(() => null)) as
-        | { user?: CogitoUser }
-        | null;
+      const body = (await response
+        .clone()
+        .json()
+        .catch(() => null)) as { user?: CogitoUser } | null;
       if (!response.ok || !body?.user) {
         throw new FailedBetterAuthSignup(response);
       }
 
-      await tx
-        .delete(verificationRow)
-        .where(eq(verificationRow.id, proof.id));
+      await tx.delete(verificationRow).where(eq(verificationRow.id, proof.id));
       const now = new Date();
       await tx.insert(verificationRow).values({
         id: randomUUID(),
@@ -738,7 +744,8 @@ export async function completePreAccountSignup(input: {
       return {
         ok: false,
         status: 409,
-        error: "Signup was already completed. Check the signup status before trying again.",
+        error:
+          "Signup was already completed. Check the signup status before trying again.",
       };
     } else if (result.kind === "existing-account") {
       return {
@@ -786,7 +793,8 @@ export async function completePreAccountSignup(input: {
     return {
       ok: false,
       status: 500,
-      error: "We couldn't complete signup. Your code is still available to retry.",
+      error:
+        "We couldn't complete signup. Your code is still available to retry.",
     };
   }
 

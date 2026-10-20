@@ -16,6 +16,8 @@ const SIGNUP_PATH = "/api/auth/sign-up/email";
 const SEND_SIGNUP_OTP_PATH = "/api/auth/sign-up/email-otp";
 const SIGNUP_OUTCOME_PATH = "/api/auth/sign-up/email-outcome";
 const TEST_SIGNUP_OTP_PATH = "/api/__test/auth/signup-otp";
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+const LOOPBACK_ADDRESSES = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
 
 function jsonResponse(body: unknown, status = 200, retryAfterSeconds?: number) {
   return new Response(JSON.stringify(body), {
@@ -32,17 +34,29 @@ function jsonResponse(body: unknown, status = 200, retryAfterSeconds?: number) {
 function isLocalSignupOtpTestTarget() {
   try {
     const databaseUrl = new URL(env.DATABASE_URL);
-    const hostname = databaseUrl.hostname
-      .toLowerCase()
-      .replace(/^\[|\]$/g, "");
+    const hostname = databaseUrl.hostname.toLowerCase().replace(/^\[|\]$/g, "");
     return (
       ["postgres:", "postgresql:"].includes(databaseUrl.protocol) &&
-      ["localhost", "127.0.0.1", "::1"].includes(hostname) &&
+      LOOPBACK_HOSTS.has(hostname) &&
+      ["6767", "6768"].includes(databaseUrl.port) &&
       databaseUrl.pathname === "/cogito-test"
     );
   } catch {
     return false;
   }
+}
+
+function normalizeAuthPath(pathname: string) {
+  let decoded = pathname;
+  for (;;) {
+    const next = decodeURIComponent(decoded);
+    if (next === decoded) break;
+    decoded = next;
+  }
+  return decoded
+    .replace(/\/{2,}/g, "/")
+    .replace(/\/+$/, "")
+    .toLowerCase();
 }
 
 /**
@@ -54,14 +68,19 @@ function isLocalSignupOtpTestTarget() {
 export function registerAuthRoutes(app: Elysia) {
   const appWithTestOtpRoute =
     env.NODE_ENV === "test" && isLocalSignupOtpTestTarget()
-      ? app.get(TEST_SIGNUP_OTP_PATH, ({ request }) => {
+      ? app.get(TEST_SIGNUP_OTP_PATH, ({ request, server }) => {
+          const peerAddress = server?.requestIP(request)?.address;
+          if (
+            !peerAddress ||
+            !LOOPBACK_ADDRESSES.has(peerAddress.toLowerCase())
+          ) {
+            return jsonResponse({ message: "Not found" }, 404);
+          }
           const url = new URL(request.url);
           const requestHostname = url.hostname
             .toLowerCase()
             .replace(/^\[|\]$/g, "");
-          if (
-            !["localhost", "127.0.0.1", "::1"].includes(requestHostname)
-          ) {
+          if (!LOOPBACK_HOSTS.has(requestHostname)) {
             return jsonResponse({ message: "Not found" }, 404);
           }
           const email = url.searchParams.get("email") ?? "";
@@ -91,10 +110,7 @@ export function registerAuthRoutes(app: Elysia) {
       }
       let path: string;
       try {
-        path = decodeURIComponent(new URL(request.url).pathname)
-          .replace(/\/{2,}/g, "/")
-          .replace(/\/+$/, "")
-          .toLowerCase();
+        path = normalizeAuthPath(new URL(request.url).pathname);
       } catch {
         return jsonResponse({ message: "Invalid request path." }, 400);
       }

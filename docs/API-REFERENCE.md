@@ -404,7 +404,7 @@ checks. When the API is linked to Coolify's bundled private PostgreSQL, set
 serve TLS. `DB_SSL_REJECT_UNAUTHORIZED` is only relevant when database TLS is
 enabled.
 
-Email/password sign-in and sign-up use Better Auth endpoints under `/api/auth`. The server's sign-up password-policy preflight returns 400 for malformed JSON instead of allowing a parser exception to become a 500. A new email/password signup receives one combined `auth` email containing the welcome/onboarding copy, dashboard/login link, platform intro, and six-digit verification OTP; later verification resends and other OTP types remain verification-only. The web client validates the email forms on the client and surfaces invalid fields with Selia's inline error state and danger outline, waits for the successful auth response and a fresh session read before entering an authenticated route, and the authenticated route guard also reads the non-cookie-cached session so role-based redirects do not briefly fall back to `/login`. If that fresh session has `emailVerified !== true`, the web client requests an email-verification OTP and routes the user to `/verify-email` before the normal role/return-path destination; this also covers legacy accounts created before verification was introduced. The validated destination is preserved after verification. This changes no successful request or response shape.
+Email/password sign-in and sign-up use Better Auth endpoints under `/api/auth`. The server's sign-up password-policy preflight returns 400 for malformed JSON instead of allowing a parser exception to become a 500. Public email/password signup requests a six-digit OTP before account creation, then attempts a separate welcome/onboarding email after proof-backed creation commits; existing-account verification resends and other OTP types remain verification-only. The detailed request contracts are documented below. The web client validates the email forms on the client and surfaces invalid fields with Selia's inline error state and danger outline, waits for the successful auth response and a fresh session read before entering an authenticated route, and the authenticated route guard also reads the non-cookie-cached session so role-based redirects do not briefly fall back to `/login`. If that fresh session has `emailVerified !== true`, the web client requests an email-verification OTP and routes the user to `/verify-email` before the normal role/return-path destination; this also covers legacy accounts created before verification was introduced. The validated destination is preserved after verification. This changes no successful request or response shape.
 
 Google sign-in starts through Better Auth on the API and uses `GET /api/auth/callback/google` as the provider callback (`BETTER_AUTH_URL`), then redirects the browser to the frontend callback route supplied by the web client (`https://app.cogitoacademy.id/auth/callback`). The web client supplies `callbackURL` for an existing account and `newUserCallbackURL` for a newly-created account; both carry the validated return path, so PostHog can capture `account_signed_in` or `account_created` only after the callback identifies the user. The Google provider explicitly sends `prompt=consent`, so the Google OAuth permission screen is shown even when the account has authorized the client before. Sign-in requests Google's identity scopes only; the broader Calendar scope used by the server-side Meet integration remains a separate operator OAuth flow. In production, session cookies remain `SameSite=Strict`; Better Auth's short-lived signed OAuth state cookie is scoped to `SameSite=Lax` so a top-level `GET` callback from Google can return it for state verification. The state cookie remains `Secure`/`HttpOnly`, and the database-backed state record plus signed cookie must both validate before a session is created. This changes no endpoint input or output shape.
 
@@ -636,6 +636,44 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 - `/forgot-password` — email request form (always shows success state after submit)
 - `/reset-password` — token entry + new password form; renders invalid/expired state on `error=INVALID_TOKEN`
+
+## Pre-account email signup verification (REQ-AUTH-01)
+
+These Better Auth HTTP endpoints are mounted on the API under `/api/auth`; they
+are not oRPC procedures. A public account is created only after the signup OTP
+is valid for the submitted email and signup attempt.
+
+### `POST /api/auth/sign-up/email-otp`
+
+- **Auth:** Public
+- **Input:** `{ email, signupAttemptId }`, where `signupAttemptId` is a client-generated UUID
+- **Output:** `200 { ok: true, signupAttemptId, resendAfterSeconds: 60 }`
+- **Errors:** `400` for an invalid email or attempt ID; `429` during the 60-second per-email cooldown (includes `Retry-After`, `retryAfterSeconds`, and the active attempt ID); `502` when the mail provider fails
+- **Behavior:** Sends a six-digit code that expires in five minutes. Resend after the cooldown replaces the stored proof and invalidates the previous code. Three incorrect submissions exhaust the attempt. The OTP is stored as an HMAC digest in the existing Better Auth `verification` table.
+
+### `POST /api/auth/sign-up/email`
+
+- **Auth:** Public; the normal email/password sign-in and session response is preserved
+- **Input:** `{ name, email, password, signupAttemptId, otp }`
+- **Output:** The Better Auth signup response with the newly created user and session on success
+- **Errors:** `400` without proof or with an incorrect/expired code; `409` for an existing account or already-completed attempt; `429` after three incorrect codes; otherwise the underlying Better Auth create error
+- **Behavior:** Raw signup without both proof fields fails. Account creation, proof consumption, and the attempt outcome record commit in one PostgreSQL transaction; a failed create rolls back and leaves the proof usable until expiry or resend. Concurrent requests for the same email/attempt can create at most one account and one welcome-email attempt. After commit, the browser establishes the returned session as with existing sign-in flows.
+
+### `POST /api/auth/sign-up/email-outcome`
+
+- **Auth:** Public
+- **Input:** `{ email, signupAttemptId }`
+- **Output:** `{ created: boolean }`
+- **Behavior:** Returns `true` only for the completed attempt bound to the exact normalized email. The result record expires after 24 hours. The web client checks this endpoint after a network-uncertain signup response and asks the user to sign in if the account committed without a browser session; it does not replay signup.
+
+### Local test-only OTP capture
+
+`GET /api/__test/auth/signup-otp?email=...` exists only when `NODE_ENV=test`
+and the server is connected to loopback PostgreSQL database `cogito-test` on
+port `6767` or `6768`. It also requires a loopback request peer and loopback
+Host. The route reads an in-memory test capture; test signup mail is suppressed.
+It is not registered for production or ordinary development and must not be
+used to retrieve production OTPs.
 
 ---
 

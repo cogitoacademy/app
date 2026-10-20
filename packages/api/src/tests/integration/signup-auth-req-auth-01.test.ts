@@ -47,11 +47,12 @@ async function complete(input: {
   signupAttemptId: string;
   otp: string;
   name?: string;
+  password?: string;
   headers?: Headers;
 }) {
   return completePreAccountSignup({
     email: input.email,
-    password: "Test1234!",
+    password: input.password ?? "Test1234!",
     name: input.name ?? "Signup Test",
     otp: input.otp,
     signupAttemptId: input.signupAttemptId,
@@ -85,9 +86,7 @@ describe("REQ-AUTH-01 pre-account email OTP", () => {
     await db
       .update(verification)
       .set({ createdAt: new Date(Date.now() - 61_000) })
-      .where(
-        eq(verification.identifier, `pre-account-signup-otp:${email}`),
-      );
+      .where(eq(verification.identifier, `pre-account-signup-otp:${email}`));
     const second = await sendCode(email, attemptId);
     expect(second.otp).not.toBe(first.otp);
 
@@ -108,22 +107,90 @@ describe("REQ-AUTH-01 pre-account email OTP", () => {
     ).toMatchObject({ emailVerified: true });
   });
 
+  test("serializes concurrent sends for one email across attempt IDs", async () => {
+    wireTestMail();
+    const email = newEmail("send-race");
+    const attemptIds = [randomUUID(), randomUUID()];
+
+    const results = await Promise.all(
+      attemptIds.map((signupAttemptId) =>
+        sendPreAccountSignupOtp({ email, signupAttemptId }),
+      ),
+    );
+    const sent = results.filter((result) => result.ok);
+    const cooldown = results.find((result) => !result.ok);
+
+    expect(sent).toHaveLength(1);
+    expect(cooldown).toMatchObject({ ok: false, status: 429 });
+    expect(cooldown?.signupAttemptId).toBe(sent[0]?.signupAttemptId);
+    expect(sentOtps).toHaveLength(1);
+  });
+
+  test("resending with a new attempt ID invalidates the old proof", async () => {
+    wireTestMail();
+    const email = newEmail("attempt-rotate");
+    const oldAttemptId = randomUUID();
+    const first = await sendCode(email, oldAttemptId);
+
+    await db
+      .update(verification)
+      .set({ createdAt: new Date(Date.now() - 61_000) })
+      .where(eq(verification.identifier, `pre-account-signup-otp:${email}`));
+
+    const newAttemptId = randomUUID();
+    const second = await sendCode(email, newAttemptId);
+    expect(second.otp).not.toBe(first.otp);
+
+    expect(
+      await complete({
+        email,
+        signupAttemptId: oldAttemptId,
+        otp: first.otp,
+      }),
+    ).toMatchObject({ ok: false, status: 400 });
+    expect(
+      await complete({
+        email,
+        signupAttemptId: newAttemptId,
+        otp: second.otp,
+      }),
+    ).toMatchObject({ ok: true });
+  });
+
   test("reports mail failure without keeping a usable OTP", async () => {
     wireTestMail();
     const email = newEmail("mail-failure");
-    setPreAccountSignupEmailSender(async () => {
-      throw new Error("mail provider unavailable");
+    let rejectedOtp = "";
+    const logged: string[] = [];
+    const originalConsoleError = console.error;
+    setPreAccountSignupEmailSender(async ({ otp }) => {
+      rejectedOtp = otp;
+      throw new Error(`mail provider echoed ${otp}`);
     });
 
-    expect(
-      await sendPreAccountSignupOtp({ email, signupAttemptId: randomUUID() }),
-    ).toMatchObject({ ok: false, status: 502 });
-    expect(
-      await db.query.verification.findFirst({
-        where: (row, { eq: equals }) =>
-          equals(row.identifier, `pre-account-signup-otp:${email}`),
-      }),
-    ).toBeUndefined();
+    console.error = (...args: unknown[]) => logged.push(args.join(" "));
+    try {
+      const result = await sendPreAccountSignupOtp({
+        email,
+        signupAttemptId: randomUUID(),
+      });
+
+      expect(result).toMatchObject({ ok: false, status: 502 });
+      expect(rejectedOtp).toMatch(/^\d{6}$/);
+      expect(JSON.stringify(result)).not.toContain(rejectedOtp);
+      expect(logged.join(" ")).not.toContain(rejectedOtp);
+      expect(
+        await db.query.verification.findFirst({
+          where: (row, { eq: equals }) =>
+            equals(row.identifier, `pre-account-signup-otp:${email}`),
+        }),
+      ).toBeUndefined();
+      expect(
+        await db.query.user.findFirst({ where: eq(user.email, email) }),
+      ).toBeUndefined();
+    } finally {
+      console.error = originalConsoleError;
+    }
   });
 
   test("rejects incorrect codes and locks after three failed attempts", async () => {
@@ -132,15 +199,16 @@ describe("REQ-AUTH-01 pre-account email OTP", () => {
     const { signupAttemptId, otp } = await sendCode(email);
     const wrongOtp = otp === "000000" ? "000001" : "000000";
 
+    const failedAttempts = await Promise.all(
+      Array.from({ length: 3 }, () =>
+        complete({ email, signupAttemptId, otp: wrongOtp }),
+      ),
+    );
     expect(
-      await complete({ email, signupAttemptId, otp: wrongOtp }),
-    ).toMatchObject({ ok: false, status: 400 });
-    expect(
-      await complete({ email, signupAttemptId, otp: wrongOtp }),
-    ).toMatchObject({ ok: false, status: 400 });
-    expect(
-      await complete({ email, signupAttemptId, otp: wrongOtp }),
-    ).toMatchObject({ ok: false, status: 429 });
+      failedAttempts
+        .map((result) => (result.ok ? 200 : result.status))
+        .toSorted(),
+    ).toEqual([400, 400, 429]);
     expect(await complete({ email, signupAttemptId, otp })).toMatchObject({
       ok: false,
       status: 429,
@@ -154,9 +222,7 @@ describe("REQ-AUTH-01 pre-account email OTP", () => {
     await db
       .update(verification)
       .set({ expiresAt: new Date(Date.now() - 1) })
-      .where(
-        eq(verification.identifier, `pre-account-signup-otp:${email}`),
-      );
+      .where(eq(verification.identifier, `pre-account-signup-otp:${email}`));
 
     expect(await complete({ email, signupAttemptId, otp })).toMatchObject({
       ok: false,
@@ -177,6 +243,9 @@ describe("REQ-AUTH-01 pre-account email OTP", () => {
     expect(
       await db.query.user.findFirst({ where: eq(user.email, changedEmail) }),
     ).toBeUndefined();
+    expect(
+      await complete({ email, signupAttemptId: randomUUID(), otp }),
+    ).toMatchObject({ ok: false, status: 400 });
 
     expect(await complete({ email, signupAttemptId, otp })).toMatchObject({
       ok: true,
@@ -192,9 +261,9 @@ describe("REQ-AUTH-01 pre-account email OTP", () => {
       email,
       signupAttemptId,
       otp,
-      headers: new Headers({ origin: "https://untrusted.example" }),
+      password: `Aa1${"x".repeat(126)}`,
     });
-    expect(failedCreate.ok).toBe(false);
+    expect(failedCreate).toMatchObject({ ok: false, status: 400 });
     expect(
       await db.query.user.findFirst({ where: eq(user.email, email) }),
     ).toBeUndefined();
@@ -231,8 +300,21 @@ describe("REQ-AUTH-01 pre-account email OTP", () => {
       true,
     );
     expect(
-      await complete({ email, signupAttemptId, otp }),
-    ).toMatchObject({ ok: false, status: 409 });
+      await getPreAccountSignupOutcome({
+        email: newEmail("outcome-other-email"),
+        signupAttemptId,
+      }),
+    ).toBe(false);
+    expect(
+      await getPreAccountSignupOutcome({
+        email,
+        signupAttemptId: randomUUID(),
+      }),
+    ).toBe(false);
+    expect(await complete({ email, signupAttemptId, otp })).toMatchObject({
+      ok: false,
+      status: 409,
+    });
     expect(welcomedUserIds).toHaveLength(1);
   });
 });

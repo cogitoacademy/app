@@ -4,8 +4,11 @@ import { db } from "@cogito-app/db";
 import { economyConfig, user } from "@cogito-app/db/schema";
 import { eq } from "drizzle-orm";
 
-import { appRouter, type AppRouter } from "../../routers";
+import { appRouter } from "../../routers";
 import { services } from "../../services";
+
+const SAFE_TEST_DATABASES = new Set(["cogito-test", "cogito-test-settlement"]);
+const LOOPBACK_DATABASE_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
 function getDatabaseName(databaseUrl: string | undefined) {
   if (!databaseUrl) return "";
@@ -20,10 +23,21 @@ function getDatabaseName(databaseUrl: string | undefined) {
 function assertSafeTestDatabase() {
   const databaseUrl = process.env.DATABASE_URL;
   const databaseName = getDatabaseName(databaseUrl);
+  let databaseTarget: URL | undefined;
+  try {
+    databaseTarget = databaseUrl ? new URL(databaseUrl) : undefined;
+  } catch {
+    databaseTarget = undefined;
+  }
+  const databaseHost = databaseTarget?.hostname
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "");
 
   if (
     process.env.NODE_ENV !== "test" ||
-    !databaseName.toLowerCase().includes("test")
+    !["postgres:", "postgresql:"].includes(databaseTarget?.protocol ?? "") ||
+    !LOOPBACK_DATABASE_HOSTS.has(databaseHost ?? "") ||
+    !SAFE_TEST_DATABASES.has(databaseName)
   ) {
     throw new Error(
       [
@@ -56,7 +70,7 @@ export async function createTestContext(sessionCookie?: string) {
 export function createTestClient(
   context: Awaited<ReturnType<typeof createTestContext>>,
 ) {
-  return createRouterClient<AppRouter>(appRouter, { context });
+  return createRouterClient(appRouter, { context });
 }
 
 export async function signUpAndSignIn(

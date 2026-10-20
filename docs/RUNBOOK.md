@@ -2510,7 +2510,49 @@ Default local test ports:
 
 - Web: `3100`
 - Server: `3101`
-- PostgreSQL: `6767` (test container; shared with dev container — see note above)
+- PostgreSQL: `6767` (test container; override with `TEST_POSTGRES_PORT`)
+- Redis: `6379` (override with `TEST_REDIS_PORT`)
+
+### Isolated pre-account signup E2E (REQ-AUTH-01)
+
+Use a task-local ignored env file such as
+`apps/server/.env.signup-test.local`. Keep it pointed at loopback PostgreSQL
+`cogito-test` and Redis, with `SERVER_URL=http://localhost:3201`,
+`WEB_URL=http://localhost:3200`, `PORT=3201`, and `WEB_PORT=3200`. Leave
+`RESEND_API_KEY` and Google/Meet credentials blank. The test server captures
+signup OTPs in memory and suppresses signup/welcome mail; the browser fixture
+reads that code through a route available only in the exact local test target.
+
+To avoid colliding with the shared `6767`/`6379` test services, start a separate
+local Compose project with loopback-only port overrides:
+
+```powershell
+$env:TEST_POSTGRES_PORT = "6768"
+$env:TEST_REDIS_PORT = "6380"
+docker compose -p cogito-signup -f docker-compose.test.yml up -d
+```
+
+Before reusing a previously initialized target, inspect its data and preserve
+anything unexpected. Do not use `down --volumes` or remove database volumes.
+Run the standard migration before Playwright setup, and keep `ENV_FILE` pointed
+at the same task-local file in both commands:
+
+```powershell
+$env:NODE_ENV = "test"
+$env:ENV_FILE = "../../apps/server/.env.signup-test.local"
+bun run db:migrate
+
+Push-Location packages/e2e
+$env:ENV_FILE = "../../apps/server/.env.signup-test.local"
+bun run test src/specs/pre-account-signup.spec.ts
+Pop-Location
+```
+
+The Playwright guard checks `NODE_ENV=test`, loopback HTTP origins, and the
+exact `cogito-test` database before its seed/reset setup. The spec must use a
+free dedicated API/web pair, and server reuse stays disabled. Do not point this
+run at development data or add live mail, Google OAuth, or Google Meet
+credentials.
 
 Economy role checks:
 
