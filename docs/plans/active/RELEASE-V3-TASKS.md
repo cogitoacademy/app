@@ -10,10 +10,11 @@ Date: 19 October 2026. Status: **T00A catalog CRUD/palette and T01 dynamic draft
   Public-read commit `0a0ce408` fixes class-router wiring, the detail route ID
   and the repository-factory call. Web typecheck and the public DTO allowlist
   unit test pass. Publish/enrollment and browser acceptance remain open.
-  The initial no-show integration command stalled before assertions; settlement
-  subsequently reproduced the failing no-show/completion assertion with correct
-  dependency/env setup. Settlement owns exclusive `cogito-test` writes while
-  other workers implement without database writes.
+  Settlement through `de76a5b9` is merged. Independent integration-branch checks
+  pass: 375 core unit tests / 949 expectations, 7 no-show Postgres tests / 69
+  expectations, and web typecheck. Those database writes target only
+  `cogito-test-settlement`; browser settlement coverage remains open. Heavy
+  compiler/browser runs are serialized after virtual-memory allocation failures.
 - Commit `22c5ffb3` integrates the existing B fee/payout and class-draft work,
   its dirty source changes, and A's FAQ rich-text, calendar, palette and
   documentation changes. The migration journal/snapshot chain keeps both

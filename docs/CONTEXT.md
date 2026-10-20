@@ -16,10 +16,15 @@ Class public-read commit `0a0ce408` registers `classes.list/get`, fixes the
 detail route ID and removes the invalid argument to the repository factory.
 The web typecheck now passes, as does the public DTO allowlist unit test.
 Publishing, class enrollment and browser acceptance remain incomplete.
-The initial baseline no-show integration command stalled before assertions;
-the settlement worker subsequently reproduced the failing no-show/completion
-assertion with the correct dependency/env setup. Settlement retains the
-exclusive test-database window until its regression run finishes.
+Settlement through `de76a5b9` is merged into `f/release-v3`: session-specific
+no-show allocations, completion/cancellation serialization, admin parent-hold
+recomputation and finalization with cancelled children. Verification on the
+integration branch passed 375 core unit tests (949 expectations), 7 no-show
+Postgres tests (69 expectations), and web typecheck. The database suite used
+only the guarded `cogito-test-settlement` database. Browser settlement coverage
+remains open. Heavy typecheck/browser work is serialized after Windows
+virtual-memory allocation failures; class review fixes run before the next
+signup verification pass.
 
 Read-only verification now confirms both local `cogito-app` and `cogito-test`
 have the same four fee, FAQ-rich-text, payout and class-draft migration hashes
