@@ -78,6 +78,8 @@ export default defineConfig({
       env: {
         ...testServerEnv,
         GOOGLE_MEET_ENABLED: "false",
+        ACADEMY_CLASS_MEETING_TEST_FAIL_FIRST_TITLE_PREFIX:
+          "Cogito E2E RETRY: ",
         GOOGLE_MEET_REFRESH_TOKEN: "",
         GOOGLE_MEET_CLIENT_ID: "",
         GOOGLE_MEET_CLIENT_SECRET: "",
@@ -87,7 +89,7 @@ export default defineConfig({
       },
     },
     {
-      command: `bun --env-file="${resolvedEnvFile}" run dev -- --mode test`,
+      command: `bun --env-file="${resolvedEnvFile}" run --bun dev -- --mode test`,
       cwd: webCwd,
       url: webUrl,
       reuseExistingServer: false,

@@ -28,14 +28,16 @@ export function buildTutorSessionFeeRecord({
   priceSnapshot,
 }: TutorSessionFeeRecordInput) {
   const grossHonorariumIdr =
-    priceSnapshot?.tutorHonorariumIdr ??
-    (priceSnapshot?.engine === "v3"
-      ? 0
-      : (priceSnapshot?.tutorShare ?? 0) * TUTOR_PAYOUT_RATE_IDR);
+    priceSnapshot?.engine === "v3"
+      ? priceSnapshot.tutorHonorariumIdr
+      : (priceSnapshot?.tutorHonorariumIdr ??
+        (priceSnapshot?.tutorShare ?? 0) * TUTOR_PAYOUT_RATE_IDR);
 
   if (!Number.isSafeInteger(grossHonorariumIdr) || grossHonorariumIdr < 0) {
     throw new RangeError(
-      "Tutor honorarium must be a non-negative whole IDR amount",
+      priceSnapshot?.engine === "v3"
+        ? "V3 tutor honorarium must be a non-negative whole IDR amount"
+        : "Tutor honorarium must be a non-negative whole IDR amount",
     );
   }
 

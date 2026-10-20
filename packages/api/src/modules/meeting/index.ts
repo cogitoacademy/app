@@ -1,6 +1,7 @@
 import type { DbType } from "../../lib/db";
 import type { RedisClient } from "../../lib/redis";
 import type {
+  AcademyClassMeetingResult,
   MeetingEvent,
   MeetingEventDetails,
   MeetingPort,
@@ -27,15 +28,24 @@ export function createMeetingModule(deps: {
   googleMeetEnabled?: boolean;
   googleConfig?: GoogleMeetingConfig;
   redis?: RedisClient;
+  classMeetingProvider?: NonNullable<MeetingPort["createAcademyClassEvent"]>;
 }): MeetingPort {
-  if (deps.googleMeetEnabled && deps.googleConfig) {
-    return createGoogleMeetingProviderWithFallback(
-      deps.googleConfig,
-      deps.db,
-      deps.redis,
-    );
-  }
-  return createFallbackMeetingProvider(deps.db);
+  const provider =
+    deps.googleMeetEnabled && deps.googleConfig
+      ? createGoogleMeetingProviderWithFallback(
+          deps.googleConfig,
+          deps.db,
+          deps.redis,
+        )
+      : createFallbackMeetingProvider(deps.db);
+  return deps.classMeetingProvider
+    ? { ...provider, createAcademyClassEvent: deps.classMeetingProvider }
+    : provider;
 }
 
-export type { MeetingEvent, MeetingEventDetails, MeetingPort };
+export type {
+  AcademyClassMeetingResult,
+  MeetingEvent,
+  MeetingEventDetails,
+  MeetingPort,
+};

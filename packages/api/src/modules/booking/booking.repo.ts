@@ -33,6 +33,7 @@ import {
   meetingEvent,
   tutorPayout,
   tutorSessionFee,
+  ledgerEntry,
   tutorPayoutAllocation,
   type booking as bookingTable,
   type BookingSessionTopic,
@@ -353,8 +354,9 @@ async function findParticipant(
   conn: DbOrTx,
   bookingId: string,
   userId: string,
+  options: { forUpdate?: boolean } = {},
 ) {
-  const [participant] = await conn
+  const query = conn
     .select({ ...getTableColumns(bookingParticipant) })
     .from(bookingParticipant)
     .where(
@@ -364,6 +366,9 @@ async function findParticipant(
       ),
     )
     .limit(1);
+  const [participant] = options.forUpdate
+    ? await query.for("update")
+    : await query;
   return participant ?? null;
 }
 
@@ -383,6 +388,7 @@ async function findConfirmedParticipants(
   conn: DbOrTx,
   bookingId: string,
   excludeUserId?: string,
+  options: { forUpdate?: boolean } = {},
 ) {
   const conditions = [
     eq(bookingParticipant.bookingId, bookingId),
@@ -395,10 +401,31 @@ async function findConfirmedParticipants(
   if (excludeUserId) {
     conditions.push(ne(bookingParticipant.userId, excludeUserId));
   }
-  return conn
+  const query = conn
     .select({ ...getTableColumns(bookingParticipant) })
     .from(bookingParticipant)
     .where(and(...conditions));
+  return options.forUpdate
+    ? query.orderBy(asc(bookingParticipant.userId)).for("update")
+    : query;
+}
+
+async function findLedgerEventKeys(
+  conn: DbOrTx,
+  bookingId: string,
+  eventKeys: string[],
+): Promise<string[]> {
+  if (eventKeys.length === 0) return [];
+  const rows = await conn
+    .select({ eventKey: ledgerEntry.eventKey })
+    .from(ledgerEntry)
+    .where(
+      and(
+        eq(ledgerEntry.bookingId, bookingId),
+        inArray(ledgerEntry.eventKey, eventKeys),
+      ),
+    );
+  return rows.map((row) => row.eventKey);
 }
 
 /** Returns invitees whose response can still keep a group in invitation phase. */
@@ -754,12 +781,17 @@ async function updateScheduledSeriesPriceSnapshot(
     );
 }
 
-async function findSessionById(conn: DbOrTx, sessionId: string) {
-  const [session] = await conn
+async function findSessionById(
+  conn: DbOrTx,
+  sessionId: string,
+  options: { forUpdate?: boolean } = {},
+) {
+  const query = conn
     .select({ ...getTableColumns(bookingSession) })
     .from(bookingSession)
     .where(eq(bookingSession.id, sessionId))
     .limit(1);
+  const [session] = options.forUpdate ? await query.for("update") : await query;
   return session ?? null;
 }
 
@@ -775,10 +807,17 @@ async function updateSessionSchedule(
 }
 
 async function cancelSession(conn: DbOrTx, sessionId: string) {
-  await conn
+  const [cancelled] = await conn
     .update(bookingSession)
     .set({ currentState: "cancelled", holdAmount: 0 })
-    .where(eq(bookingSession.id, sessionId));
+    .where(
+      and(
+        eq(bookingSession.id, sessionId),
+        eq(bookingSession.currentState, BOOKING_STATE.SCHEDULED),
+      ),
+    )
+    .returning({ id: bookingSession.id });
+  return Boolean(cancelled);
 }
 
 async function completeSession(
@@ -1660,6 +1699,7 @@ export function createBookingRepo(db: DbType) {
     listActiveTutorAvailability,
     findParticipant,
     findConfirmedParticipants,
+    findLedgerEventKeys,
     findPendingInvitees,
     findUserEmails,
     findUsersByIds,

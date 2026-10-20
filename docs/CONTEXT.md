@@ -15,11 +15,26 @@ and `/health` on port 3001, with database, Redis and scheduler checks healthy.
 Class public-read commit `0a0ce408` registers `classes.list/get`, fixes the
 detail route ID and removes the invalid argument to the repository factory.
 The web typecheck now passes, as does the public DTO allowlist unit test.
-Publishing, class enrollment and browser acceptance remain incomplete.
-The initial baseline no-show integration command stalled before assertions;
-the settlement worker subsequently reproduced the failing no-show/completion
-assertion with the correct dependency/env setup. Settlement retains the
-exclusive test-database window until its regression run finishes.
+Class publishing and review fixes are merged through `42e8358f`, with room
+mock compatibility in `b353cb1d`. Author verification passed the class browser
+journey, 9 Postgres cases / 51 expectations, provider units and all three app
+typechecks. Parent additionally verified 113 room/tutor unit tests and the
+entire API unit suite (2,486 tests / 5,845 expectations). Enrollment and the
+downstream class delivery/report/cancellation flows remain incomplete.
+Settlement through `de76a5b9` is merged into `f/release-v3`: session-specific
+no-show allocations, completion/cancellation serialization, admin parent-hold
+recomputation and finalization with cancelled children. Verification on the
+integration branch passed 375 core unit tests (949 expectations), 7 no-show
+Postgres tests (69 expectations), and web typecheck. The database suite used
+only the guarded `cogito-test-settlement` database. Browser settlement coverage
+remains open. Heavy typecheck/browser work is serialized after Windows
+virtual-memory allocation failures. Class checks are finished; signup owns
+the next heavy verification window.
+
+Migration `0063_academy_class_meetings.sql` is applied to local development
+and the class test database. Parent verified the dev table and migration hash
+`f3c0a5888c23dc94ef487f8e4d9aca7052e338705ab34c9c62b3be207ccfb41e`
+at timestamp `1792496861907`. Existing migration history was preserved.
 
 Read-only verification now confirms both local `cogito-app` and `cogito-test`
 have the same four fee, FAQ-rich-text, payout and class-draft migration hashes
@@ -190,6 +205,23 @@ rules were accepted while ordinary-reschedule rights remain open. Class
 delivery/report/expiry integration remains with T04/T06/T07. This slice does
 not change existing on-demand cancellation, no-show, expiry, or feedback rules.
 
+Series completion and no-show now serialize on the parent booking, child
+session, and participant rows. The existing session-specific no-show ledger
+event marks that participant's allocation as already charged: a repeated
+series no-show is rejected, and a later completion report skips that allocation
+instead of consuming Marks held for future sessions. Other delivered group
+seats still settle normally. A no-show ledger event alone does not prove
+delivery or earn a tutor fee; the tutor must submit the completion report.
+Malformed V3 snapshots with a missing or invalid `tutorHonorariumIdr` fail
+before wallet/hold writes; an explicit zero honorarium remains valid.
+
+Student and admin per-session cancellation now use the booking's reschedule
+advisory lock, then lock and refresh the parent booking, child session, and
+participant rows. Cancellation changes a child only while it is still
+`scheduled`; a concurrent completion that commits first leaves the report,
+fee, wallet, and remaining holds intact, and the stale cancel is rejected.
+The shared advisory lock also serializes cancellation with proposal acceptance.
+
 Focused verification: tutor-fee unit tests **4/4**, booking-service unit tests
 **307/307**, admin-service unit tests **30/30**, solo booking integration
 **12/12**, standalone group integration **8/8**, group-series integration
@@ -206,6 +238,30 @@ diagnostic, and Vite could not allocate 27,648 bytes after transforming 8,875
 modules. Retry checks/builds when memory headroom is available. No V3 activation
 or external provider call was performed.
 
+Settlement follow-on verification (2026-10-20): the focused real-Postgres
+series no-show/completion suite passed twice (**12 executions, 112
+expectations**), covering solo and group no-show settlement, repeat no-show and
+completion, concurrent completion, the no-show/completion race, malformed V3
+honoraria, and transaction rollback on fee insertion failure. The tutor-fee
+unit suite passed **6/6**. Logs confirm the test meeting adapter was manual.
+Browser E2E was not run for this settlement slice.
+
+Review follow-up verification (2026-10-20): booking/admin service and repository
+unit suites passed **447/447 tests, 1,153 expectations**. The settlement suite
+passed **7/7 tests, 69 expectations**, including full-series completion after a
+no-show and a lock-gated cancellation/completion race. Admin U6 passed **7/7,
+70 expectations** across solo release/forfeit/partial cancellation and group
+series release followed by completion; it asserts wallet, participant, and
+parent holds plus terminal parent state. Existing G18 series completion passed
+**8/8, 29 expectations**, and M4 student cancellation passed **1/1, 4
+expectations**. Admin cancellation now recomputes the parent hold from remaining
+confirmed/reconfirmed participant holds, excluding pending invitees. Series
+completion finalizes the parent after every child is completed or cancelled,
+then releases residual participant holds. These integration runs used the
+retained loopback `cogito-test-settlement` database on port 6767; meeting
+creation used the manual adapter and email delivery was not configured. No
+browser E2E or typecheck was run for this follow-up.
+
 ## V3 class draft checkpoint (2026-10-19)
 
 Migration `0061_academy_class_drafts.sql` adds the class and session draft model. The admin-only `admin-classes` page creates/edits drafts with localized titles/descriptions, cohort curriculum and enrollment defaults, per-session schedule/capacity/tutor/mode/room, and required audit reason. Approved defaults are cohort 20/22/25 Marks per full/half/single session with Rp400,000 tutor fee per session, and masterclass 5 Marks with Rp300,000 tutor fee. Both online and in-person are available; in-person requires an active managed room. Drafts are not public and do not reserve rooms.
@@ -217,6 +273,14 @@ Focused integration verification: **4/4 tests, 18 expectations** against the gua
 ## V3 published class read contract (2026-10-20)
 
 The public `classes.list` and `classes.get` procedures expose published classes only. Their explicit DTO includes the student catalog fields and tutor display name, while omitting tutor identifiers and account fields, tutor fees, room details, admin version/audit fields, and student roster data. A missing or unpublished detail is returned as not found. The catalog and detail pages consume this contract; enrollment remains unavailable until T05.
+
+## V3 class publication and meeting setup checkpoint (2026-10-20)
+
+Admin can publish a versioned class draft after the service rechecks active competition ancestry, published tutor assignments and mode/capacity, future session times, cohort minimum/curriculum, managed-room capacity and conflicts, and the approved tutor fee (Rp400,000 per cohort session or Rp300,000 per masterclass session in either mode). Publication marks sessions scheduled, writes audit state, deduplicates one tutor notification per class, and creates one durable meeting job per online session in the same transaction. In-person sessions use managed rooms and have no Meet job.
+
+Migration `0063_academy_class_meetings.sql` adds the per-session meeting job/status record. Provider work runs after commit under a claim lease with exponential retry; stable Google event IDs recover an event after an ambiguous provider response. If Calendar accepted an event but Meet URL generation is still pending, the job remains retryable and the next attempt fetches that same event ID instead of inserting another. Admin can retry failed setup. Test mode uses a controlled local adapter; no Google Calendar call is made in tests. The admin Class studio now exposes draft/edit/publish controls and failed-meeting retry. Public list/detail pages use the allowlisted DTO and keep enrollment visibly unavailable.
+
+Publication takes the competition-catalog lock, sorted tutor locks, and sorted room locks before fresh row-locked reference reads. Catalog archive, tutor status, and room update/deactivation use the matching locks so publication cannot validate stale mutable references. The class publish API suite passed 9 tests / 51 expectations, including gated room-capacity, room-deactivation, and catalog-archive races. The admin-to-public Chromium journey passed 1 spec and covers pending-link retry, hidden drafts, role denial, empty/error states, and DTO privacy. Migration `0063` is applied only to isolated `cogito-test`; dev migration review remains with the parent. T04 remains in progress for enrollment, class absence/cancellation/report/expiry integration, and approved client curriculum/cover inputs. This checkpoint is not a V3 activation or release gate.
 
 ## V3 report-field character limits (2026-10-18)
 
@@ -1941,7 +2005,7 @@ Status: verified at git HEAD `ec8b16c` (post-#46 merge). B3/B4/B6/B8/B9 are **Fi
 | M7  | MED      | Withdraw from `AWAITING_ADMIN_ROOM_APPROVAL` regresses to reconfirmation but leaves the `requested` roomBooking live for admin assign. **FIXED** (REVIEW-FIXES-4 P2.13): both the group regression path and the solo/series cancel path call `roomPort.cancelRequestedRoomForBooking` (new room-service method: cancels the pending `requested` row, no-op if already confirmed/cancelled) so an admin `assignRoom` mid-reconfirmation cannot resurrect a room for a booking heading back to tutor review                                                                                                                                                                                                                                                                                                                                                                                                                                           | `booking.service.ts` (withdraw), `room.service.ts`                                                               |
 | M8  | MED      | Pre-H2 withdraw group reprice throws `InsufficientMarksError` and rolls back the withdrawal (PRD TC-19: fall through to expiry). **FIXED** (REVIEW-FIXES-4 P2.15): the withdraw regression branch catches `InsufficientMarksError` from `repriceGroupForHeadcount`, releases the remaining participants' holds, zeroes the booking hold and transitions to EXPIRED (mirroring the B5 expiry fallback) — the withdrawer is never stuck in a group they cannot leave                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `booking.service.ts` (withdraw/repriceGroupForHeadcount)                                                         |
 | M9  | MED      | Knowledge Bank eligibility was previously exposed to every protected role. **UPDATED (2026-09-01):** the endpoint and content/file paths admit students, tutors, and admins; students retain the 35-Mark total-balance gate while tutors and admins bypass it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | `wallet.router.ts`, `content.router.ts`, `apps/server/src/routes.ts`                                             |
-| L1  | LOW      | `completeSeriesSession` can deduct more than the remaining hold after an admin `cancelSeriesSession(..., release)` → `InsufficientBalanceError`; guard with `Math.min`. **FIXED** (REVIEW-FIXES-4 P2.16): both the solo-series and group-series completion deducts are capped at the participant's remaining held amount (`Math.min(session.holdAmount, p.heldAmount)`) so a delivered session never throws on an exhausted hold                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `admin-booking.service.ts`, `booking.service.ts`                                                                 |
+| L1  | LOW      | `completeSeriesSession` can deduct more than the remaining hold after an admin `cancelSeriesSession(..., release)` → `InsufficientBalanceError`; guard with `Math.min`. **FIXED** (REVIEW-FIXES-4 P2.16): both the solo-series and group-series completion deducts are capped at the participant's remaining held amount (`Math.min(session.holdAmount, p.heldAmount)`) so a delivered session never throws on an exhausted hold. P2 follow-up recomputes the admin-cancelled parent hold from remaining confirmed participants and finalizes the series after every child is completed or cancelled, releasing residual holds                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `admin-booking.service.ts`, `booking.service.ts`                                                                 |
 | L2  | LOW      | `meetingEvent` row written on the global `db`, not the booking tx → tx rollback after Google event creation leaves an orphan event + row; tutor re-accept duplicates the event. **FIXED** (REVIEW-FIXES-4 P2.17): `MeetingPort.createEvent` accepts an optional `conn` (DbOrTx) and both providers write the local row through it, so the row commits/rolls back with the booking; `finalizeMeetingSchedule` passes the booking `tx` and best-effort `cancelEvent`s the provider event when the tx fails after creation (no orphan, no duplicate on re-accept)                                                                                                                                                                                                                                                                                                                                                                                      | `google-meeting.provider.ts`, `booking.service.ts`                                                               |
 | L3  | LOW      | "Meeting link ready" notification sent even with no URL (fallback provider) — should say "link pending". **FIXED** (REVIEW-FIXES-4 P2.17): `finalizeMeetingSchedule` derives the copy from `meetingResult.meetingUrl` — "Meeting link ready" only when a URL exists, otherwise "Meeting link pending" (manual/fallback rows)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `booking.service.ts`                                                                                             |
 | L4  | LOW      | Webhook timestamp validation was provider-agnostic; Midtrans notifications use a body signature and no timestamp header. **FIXED**: timestamp validation is provider-conditional and skipped for Midtrans                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `apps/server/src/webhooks/payments.ts`                                                                           |

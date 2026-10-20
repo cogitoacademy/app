@@ -145,6 +145,52 @@ export const academyClassSession = pgTable(
   ],
 );
 
+export const academyClassMeeting = pgTable(
+  "academy_class_meeting",
+  {
+    id: uuidPrimaryKey,
+    sessionId: text("session_id")
+      .notNull()
+      .unique()
+      .references(() => academyClassSession.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull().default("google_meet"),
+    externalEventId: text("external_event_id"),
+    meetingUrl: text("meeting_url"),
+    status: text("status").notNull().default("pending"),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    nextRetryAt: timestamp("next_retry_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    errorReason: text("error_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    check(
+      "academy_class_meeting_provider_check",
+      sql`${table.provider} IN ('google_meet', 'manual')`,
+    ),
+    check(
+      "academy_class_meeting_status_check",
+      sql`${table.status} IN ('pending', 'processing', 'created', 'failed')`,
+    ),
+    check(
+      "academy_class_meeting_attempt_count_check",
+      sql`${table.attemptCount} >= 0`,
+    ),
+    index("academy_class_meeting_retry_idx").on(
+      table.status,
+      table.nextRetryAt,
+    ),
+  ],
+);
+
 export const academyClassRelations = relations(
   academyClass,
   ({ one, many }) => ({
@@ -170,6 +216,20 @@ export const academyClassSessionRelations = relations(
     room: one(room, {
       fields: [academyClassSession.roomId],
       references: [room.id],
+    }),
+    meeting: one(academyClassMeeting, {
+      fields: [academyClassSession.id],
+      references: [academyClassMeeting.sessionId],
+    }),
+  }),
+);
+
+export const academyClassMeetingRelations = relations(
+  academyClassMeeting,
+  ({ one }) => ({
+    session: one(academyClassSession, {
+      fields: [academyClassMeeting.sessionId],
+      references: [academyClassSession.id],
     }),
   }),
 );

@@ -21,12 +21,12 @@ Read-only inspection used loopback URLs from `apps/server/.env` and
 `drizzle.__drizzle_migrations`. The four migration files and recorded hashes
 match exactly:
 
-| Migration | Applied timestamp | SHA-256 | `cogito-app` dev | `cogito-test` |
-| --- | ---: | --- | --- | --- |
-| `0059_massive_blindfold.sql` | 1792383364835 | `b4e69c578c477f72069aad24914fa9cc7193e3f79fe070e9efa858b5fa9a4669` | Applied | Applied |
-| `0059_faq_rich_text.sql` | 1792385462859 | `7f330d2e9be702fa8da6e1b1d9fba89771fb74b121a3c5bf3507901e1bfd40d7` | Applied | Applied |
-| `0060_tutor_payout_allocations.sql` | 1792388580581 | `728a44d0efd1517513120928147fdcef3776991c20d6f0b9b136cf03c8ab8bf3` | Applied | Applied |
-| `0061_academy_class_drafts.sql` | 1792394899225 | `db9f27f77c76201b609400077a530ca8d5141f79b904c6f9a7ef1595a4a366b8` | Applied | Applied |
+| Migration                           | Applied timestamp | SHA-256                                                            | `cogito-app` dev | `cogito-test` |
+| ----------------------------------- | ----------------: | ------------------------------------------------------------------ | ---------------- | ------------- |
+| `0059_massive_blindfold.sql`        |     1792383364835 | `b4e69c578c477f72069aad24914fa9cc7193e3f79fe070e9efa858b5fa9a4669` | Applied          | Applied       |
+| `0059_faq_rich_text.sql`            |     1792385462859 | `7f330d2e9be702fa8da6e1b1d9fba89771fb74b121a3c5bf3507901e1bfd40d7` | Applied          | Applied       |
+| `0060_tutor_payout_allocations.sql` |     1792388580581 | `728a44d0efd1517513120928147fdcef3776991c20d6f0b9b136cf03c8ab8bf3` | Applied          | Applied       |
+| `0061_academy_class_drafts.sql`     |     1792394899225 | `db9f27f77c76201b609400077a530ca8d5141f79b904c6f9a7ef1595a4a366b8` | Applied          | Applied       |
 
 Both local databases now have `faq_entry`, `tutor_session_fee`,
 `tutor_payout_allocation`, `academy_class` and `academy_class_session`.
@@ -96,6 +96,42 @@ Keep credentials in the selected env file; do not print them in logs. The
 the parent. No destructive/browser E2E was run during this integration
 checkpoint. The local test DB guard does not replace the separate guarded test
 database requirement for automated destructive tests.
+
+## Series cancellation and settlement verification (2026-10-20)
+
+Run these destructive integration suites only against the retained, dedicated
+loopback `cogito-test-settlement` database (`localhost:6767`). Its current
+migration chain is applied. The local ignored `apps/server/.env.settlement.test`
+file is derived from the test environment and pins `NODE_ENV=test` plus that
+database; do not point it at the dev DB or shared `cogito-test`. Before each
+integration command, verify the exact target:
+
+```powershell
+bun --env-file apps/server/.env.settlement.test -e "const u = new URL(Bun.env.DATABASE_URL ?? ''); if (Bun.env.NODE_ENV !== 'test' || !['localhost','127.0.0.1','[::1]'].includes(u.hostname) || u.port !== '6767' || u.pathname !== '/cogito-test-settlement') throw new Error('Settlement DB guard failed'); console.log(JSON.stringify({nodeEnv:Bun.env.NODE_ENV,host:u.hostname,port:u.port,database:u.pathname.slice(1)}));"
+bun test --timeout 30000 --env-file apps/server/.env.settlement.test packages/api/src/tests/unit/booking.service.test.ts packages/api/src/tests/unit/admin-booking.service.test.ts packages/api/src/tests/unit/booking.repo.test.ts packages/api/src/tests/unit/admin-booking.repo.test.ts
+bun test --timeout 30000 --env-file apps/server/.env.settlement.test packages/api/src/tests/integration/admin-series-cancel-u6.test.ts
+bun test --timeout 30000 --env-file apps/server/.env.settlement.test packages/api/src/tests/integration/booking-series-noshow-complete.test.ts
+bun test --timeout 30000 --env-file apps/server/.env.settlement.test packages/api/src/tests/integration/booking-series-g18.test.ts
+bun test --timeout 30000 --env-file apps/server/.env.settlement.test packages/api/src/tests/integration/booking-series-cancel-m4.test.ts
+```
+
+The 20 October review follow-up passed: service/repository unit suites **447/447
+tests, 1,153 expectations**; admin U6 **7/7 tests, 70 expectations**; student
+M4 **1/1 test, 4 expectations**; no-show settlement **7/7 tests, 69
+expectations**; and G18 series completion **8/8 tests, 29 expectations**. U6
+uses real admin/tutor API clients to verify solo release, forfeit, partial
+release, and group-series release followed by completion; all cases assert
+wallet/participant/booking holds and the parent terminal state. Settlement also
+covers a lock-gated cancellation/completion race, solo/group no-show allocation,
+repeated and concurrent settlement, malformed V3 honorarium rejection, and
+fee-insert rollback. Logs showed the manual meeting adapter; email delivery was
+not configured. No Google/Meet, payment, or email provider call was made.
+Browser E2E and TypeScript checks were not run for this follow-up.
+The retained test database contains only local test data and remains available
+for review. After the last run (M4), its snapshot was: `booking` 2,
+`booking_session` 2, `booking_participant` 2, `ledger_entry` 3,
+`tutor_session_fee` 0, and `session_completion_feedback` 0. Each integration
+suite resets this database, so rerunning any suite changes the snapshot.
 
 ## Catalog migration/acceptance gate — implementation in progress
 
@@ -285,6 +321,16 @@ bun test packages/api/src/tests/unit/academy-class.public.test.ts
 ```
 
 It passed 1 test / 1 expectation and verified the response omits tutor payout/account fields, room details, and roster data. `bun run --cwd apps/web check-types` passed after linking the existing workspace dependencies from `C:\.Projects\cogito-app`; no dependencies were installed. Browser E2E and database tests were not run. `classes.list` and `classes.get` are public reads of published classes only; they do not enable enrollment.
+
+## V3 class publish and Meet retry verification (2026-10-20)
+
+`0063_academy_class_meetings.sql` is an additive migration for per-session provider work. The author first applied it to guarded loopback `cogito-test`. After reviewing the SQL and fixes, the parent applied it through the standard runner to guarded `localhost:6767/cogito-app` and verified `academy_class_meeting` plus journal timestamp `1792496861907`, hash `f3c0a5888c23dc94ef487f8e4d9aca7052e338705ab34c9c62b3be207ccfb41e`. Existing migration SQL, hashes, and timestamps were preserved.
+
+Publish is version-checked under a class-row lock. Before commit the service rechecks active competition ancestry, tutor publication/mode/capacity, future sessions, approved flat class fees, cohort rules, managed-room capacity and conflicts. Publication, session scheduling, audit, one deduplicated notification per assigned tutor, and online-session meeting jobs commit atomically. Provider calls happen after commit; leased jobs retry with backoff and stable Google event identity. Test mode uses a controlled provider adapter and the E2E server disables Google credentials.
+
+The guarded API integration suite passed 9 tests / 51 expectations, including deterministic gated races where room capacity changes from 10 to 4, a room is deactivated, and a competition is archived while publication waits. The focused meeting-provider unit files passed 42 tests / 146 expectations. The Playwright admin-to-student journey passed 1 Chromium spec (15.8s; about 1.2m including server startup and fixture seed), including the controlled case where Calendar accepts the event, Meet URL generation is pending, and retry resumes the same event. The test adapter is local-only; Google Meet is disabled. All database work targeted loopback `cogito-test`; dev and production were not touched.
+
+Run the class API suite with `bun scripts/run-test-suite.mjs api --timeout 30000 packages/api/src/tests/integration/academy-class.test.ts`. Run provider units with `bun test packages/api/src/tests/unit/google-meeting.provider.test.ts packages/api/src/tests/unit/academy-class.meeting-provider.test.ts`. For the browser spec, set `NODE_ENV=test`, `ENV_FILE` to `apps/server/.env.test.example` (its database URL is `localhost:6767/cogito-test`), `GOMAXPROCS=2`, and `GOMEMLIMIT=768MiB`, then run `bun scripts/run-test-suite.mjs e2e src/specs/academy-class-publish.spec.ts`. Playwright launches the Vite test server via Bun's `run --bun` mode. Migration `0063_academy_class_meetings.sql` is applied to both local dev and the class test database; parent dev table/hash readback passed.
 
 ## V3 draft economy editor (2026-10-18)
 

@@ -25,6 +25,7 @@ import { createRoomModule } from "./modules/room";
 import { createAdminBookingModule } from "./modules/admin-booking";
 import { createRefundModule } from "./modules/refund";
 import { createMeetingModule } from "./modules/meeting";
+import { createTestClassMeetingProvider } from "./modules/meeting/test-class-meeting.provider";
 import type { MeetingModule } from "./modules/meeting";
 import { createContentModule } from "./modules/content";
 import type { ContentService } from "./modules/content/content.service";
@@ -267,10 +268,6 @@ function createServices() {
     audit: audit.service,
     economy: economy.service,
   });
-  const academyClass = createAcademyClassModule({
-    db,
-    audit: audit.service,
-  });
   const email = createEmailModule({
     resendApiKey: env.RESEND_API_KEY,
     emailFrom: env.EMAIL_FROM,
@@ -285,6 +282,14 @@ function createServices() {
     googleMeetEnabled: !!(env.GOOGLE_MEET_ENABLED && googleMeetConfig),
     googleConfig: googleMeetConfig,
     redis,
+    ...(env.NODE_ENV === "test"
+      ? {
+          classMeetingProvider: createTestClassMeetingProvider({
+            failFirstTitlePrefix:
+              process.env.ACADEMY_CLASS_MEETING_TEST_FAIL_FIRST_TITLE_PREFIX,
+          }),
+        }
+      : {}),
   });
 
   // Core modules
@@ -300,6 +305,12 @@ function createServices() {
   const faq = createFaqModule({ db });
   const auth = createAuthModule({ db, wallet: wallet.service });
   const notification = createNotificationModule({ db, email: email.service });
+  const academyClass = createAcademyClassModule({
+    db,
+    audit: audit.service,
+    meeting,
+    notification: notification.service,
+  });
   const contact = createContactModule({
     db,
     notification: notification.service,

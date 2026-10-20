@@ -96,6 +96,7 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     updateParticipantState: mock(async () => {}),
     findParticipant: mock(async () => null),
     findConfirmedParticipants: mock(async () => []),
+    findLedgerEventKeys: mock(async () => []),
     findPendingInvitees: mock(async () => []),
     findUserEmails: mock(async () => []),
     findUsersByIds: mock(async () => []),
@@ -130,7 +131,7 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     insertTutorPayout: mock(async () => ({})),
     insertTutorSessionFee: mock(async () => ({})),
     updateSessionSchedule: mock(async () => {}),
-    cancelSession: mock(async () => {}),
+    cancelSession: mock(async () => true),
     insertSessionNote: mock(async () => ({})),
     listSessionNotes: mock(async () => []),
     insertCompletionFeedback: mock(async () => ({})),
@@ -2746,7 +2747,7 @@ describe("BookingService", () => {
         repo: {
           findBookingById: mock(async () => refreshed)
             .mockImplementationOnce(async () => booking)
-            .mockImplementationOnce(async () => refreshed),
+            .mockImplementationOnce(async () => booking),
           findSessionById: mock(async () => session),
           listSessionsBySeriesId: mock(async () => sessions),
           findParticipant: mock(async () => ({
@@ -2995,6 +2996,7 @@ describe("BookingService", () => {
         repo: {
           findBookingById: mock(async () => completedBooking)
             .mockImplementationOnce(async () => booking)
+            .mockImplementationOnce(async () => booking)
             .mockImplementationOnce(async () => booking),
           findSessionById: mock(async () => sessions[2]),
           listSessionsBySeriesId: mock(async () => [
@@ -3081,6 +3083,7 @@ describe("BookingService", () => {
       const { service, repo, notification, wallet } = createService({
         repo: {
           findBookingById: mock(async () => completedBooking)
+            .mockImplementationOnce(async () => booking)
             .mockImplementationOnce(async () => booking)
             .mockImplementationOnce(async () => booking),
           findSessionById: mock(async () => sessions[2]),
@@ -7475,6 +7478,9 @@ describe("BookingService", () => {
         repo: {
           findSessionById: mock(async () => session),
           findBookingById: mock(async () => booking),
+          findParticipant: mock(async () =>
+            makeParticipant({ heldAmount: 42 }),
+          ),
         },
       });
 
@@ -7529,12 +7535,60 @@ describe("BookingService", () => {
         expect.objectContaining({ heldAmount: 42 }),
       );
       expect(repo.cancelSession).toHaveBeenCalledWith(expect.anything(), "s1");
+      expect(repo.findBookingById).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        { forUpdate: true },
+      );
+      expect(repo.findSessionById).toHaveBeenNthCalledWith(
+        2,
+        expect.anything(),
+        "s1",
+        { forUpdate: true },
+      );
+      expect(repo.findParticipant).toHaveBeenCalledWith(
+        expect.anything(),
+        "b1",
+        "student1",
+        { forUpdate: true },
+      );
       expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
         expect.anything(),
         "b1",
         42,
       );
       expect(notification.writeBestEffort).toHaveBeenCalledTimes(1);
+    });
+
+    test("refuses cancellation when the locked proposer hold row is missing", async () => {
+      const booking = makeBooking({
+        type: "series",
+        targetGroupSize: 1,
+        currentState: "scheduled",
+      });
+      const session = {
+        id: "s1",
+        seriesBookingId: "b1",
+        scheduledStartAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+        scheduledEndAt: new Date(Date.now() + 73 * 60 * 60 * 1000),
+        currentState: "scheduled",
+        holdAmount: 42,
+      };
+      const { service, wallet, repo } = createService({
+        repo: {
+          findSessionById: mock(async () => session),
+          findBookingById: mock(async () => booking),
+          findParticipant: mock(async () => null),
+        },
+      });
+
+      await expect(service.cancelSession("student1", "s1")).rejects.toThrow(
+        BookingParticipantNotFoundError,
+      );
+      expect(wallet.release).not.toHaveBeenCalled();
+      expect(wallet.deduct).not.toHaveBeenCalled();
+      expect(repo.updateBookingHoldAmount).not.toHaveBeenCalled();
+      expect(repo.cancelSession).not.toHaveBeenCalled();
     });
 
     test("TC-30: cancelling a session within 2h of start forfeits the session hold", async () => {

@@ -781,20 +781,30 @@ used to retrieve production OTPs.
 
 ### `admin.listAcademyClasses`, `admin.getAcademyClass`, `admin.saveAcademyClassDraft`
 
-- **RPC paths:** `/rpc/admin/classes/list`, `/rpc/admin/classes/get`, `/rpc/admin/classes/save-draft`
+- **RPC paths:** `/rpc/admin/listAcademyClasses`, `/rpc/admin/getAcademyClass`, `/rpc/admin/saveAcademyClassDraft`
 - **Auth:** Admin
 - **Inputs:** list `{ state?: "draft" | "published" | "postponed" | "cancelled" | "completed" }`; get `{ id }`; save uses a `kind`-discriminated class payload. Both kinds require `competitionId`, English `titleEn`/`descriptionEn`, optional Indonesian fields, optional `coverKey`, `tutorFeeIdr`, `sessions[]`, and an audit `reason`. Cohort adds `minimumEnrollment`, `minimumCheckAt`, `fullRateMarks`, `halfRateMarks`, and `singleRateMarks`; masterclass adds `masterclassRateMarks` and must contain exactly one session. Each session has optional stable `id`, `capacity`, English title, optional Indonesian title/curriculum, ISO `startAt`/`endAt`, `mode` (`online` or `in_person`), `tutorId`, and `roomId` only for in-person delivery. Updates additionally require class `id` and `expectedVersion`.
 - **Output:** Admin class/session rows with competition, tutor, and managed-room labels. Save returns the saved class and ordered sessions.
-- **Rules:** New rows are drafts only. Competition must be active; each tutor must have a published profile that supports the mode and session capacity; in-person sessions require an active room large enough for that session. Cohorts require English curriculum text, a minimum-check date before the first session, and non-overlapping sessions; masterclasses have exactly one session. Draft updates preserve submitted session IDs and use optimistic version checks; only drafts are editable. Create/update writes an audit entry with actor, reason, and before/after snapshot. The admin editor uploads PNG/JPEG/WebP/GIF covers (max 5 MB) through `upload.createUploadUrl` and saves the returned key as `coverKey`; no class asset was uploaded during implementation. Drafts are not public and do not reserve rooms. Publication, Meet creation, and conflict reservation are not implemented by the current slice.
-- **Rate defaults:** Cohort full/half/single prices default to 20/22/25 Marks per session and tutor fee Rp400,000 per session. Masterclass defaults to 5 Marks and Rp300,000 tutor fee. Admin may edit these draft values; rates are snapshotted on the class/session draft.
+- **Rules:** New rows are drafts only. Competition must be active; each tutor must have a published profile that supports the mode and session capacity; in-person sessions require an active room large enough for that session. Cohorts require English curriculum text, a minimum-check date before the first session, and non-overlapping sessions; masterclasses have exactly one session. Draft updates preserve submitted session IDs and use optimistic version checks; only drafts are editable. Create/update writes an audit entry with actor, reason, and before/after snapshot. The admin editor uploads PNG/JPEG/WebP/GIF covers (max 5 MB) through `upload.createUploadUrl` and saves the returned key as `coverKey`; approved class assets remain pending. Drafts are not public and do not reserve rooms.
+- **Rate defaults:** Cohort full/half/single prices default to 20/22/25 Marks per session; tutor fee is fixed at Rp400,000 per session in either delivery mode. Masterclasses default to 5 Marks and Rp300,000 tutor fee. Publish rejects a changed tutor fee.
 - **Errors:** `ACADEMY_CLASS_NOT_FOUND` (404); `ACADEMY_CLASS_VERSION_CONFLICT` and `ACADEMY_CLASS_STATE_CONFLICT` (409); invalid schedule/reference/class data (400).
+
+### `admin.publishAcademyClass`, `admin.retryAcademyClassMeetings`
+
+- **RPC paths:** `/rpc/admin/publishAcademyClass`, `/rpc/admin/retryAcademyClassMeetings`
+- **Auth:** Admin
+- **Inputs:** Publish `{ id, expectedVersion, reason }`; retry `{ id, reason }`.
+- **Output:** Updated admin class/session rows, including per-online-session meeting status for admin reads.
+- **Publish rules:** Publication locks and version-checks the draft, then takes the competition-catalog lock, sorted tutor locks, and sorted room locks before rereading current references under row locks. It revalidates active competition ancestry, published tutor assignment and capacity, approved flat tutor fee, future schedule, managed room capacity, and overlap against active bookings and other published classes. Catalog archive, tutor status changes, and room update/deactivation coordinate through the matching locks. One online-session meeting job is inserted with publication and audit writes in the same transaction; in-person sessions use managed rooms and do not create Meet work. Assigned tutors receive one deduplicated schedule notification each.
+- **Meeting retry rules:** Provider work runs after publication commits and uses durable per-session jobs, a lease, exponential retries, and stable Google event IDs. If Google accepted an event but has not generated its Meet URL, the job remains failed/retryable with that event ID; retry fetches the same event rather than inserting another. A manual fallback is not reported ready. Repeated/concurrent publication cannot add duplicate jobs or notifications. Admin retry queues failed jobs; scheduled retries continue automatically. Test mode injects a controlled local adapter and never calls Google.
+- **Enrollment:** Not implemented; public class screens state that registration is not available.
 
 ### `classes.list`, `classes.get`
 
 - **RPC paths:** `/rpc/classes/list`, `/rpc/classes/get`
 - **Auth:** Public read
 - **Inputs:** `list` has no input; `get` accepts `{ id }`.
-- **Output:** Published class catalog fields, competition and parent names, ordered sessions, schedule/mode/curriculum, and tutor display name. The DTO excludes tutor IDs/account data and fees, room details, audit/version fields, and student roster data.
+- **Output:** Published class catalog fields, competition and parent names, ordered sessions, schedule/mode/curriculum, and tutor display name. The DTO excludes tutor IDs/account data, IDR tutor fees/payout/tax data, meeting/room details, audit/version fields, and student roster data.
 - **Rules:** The list filters to `published`; detail returns not found for missing or unpublished classes. Enrollment and booking are not included in this read contract.
 
 ## Admin Knowledge Bank Access (`adminKnowledgeBank.*`)
@@ -1414,7 +1424,8 @@ RPC contract.
 - **Auth:** Student (proposer)
 - **Input:** `{ sessionId }`
 - **Output:** `{ booking }`
-- **Description:** Student cancels an individual series session before that session starts; pre-H-2 releases the session hold and a pre-start post-H-2 cancellation forfeits it (per-session penalty, #46). At/after the session start it rejects with `BOOKING_CANCELLATION_DEADLINE_PASSED`. Group-series sessions cannot be cancelled (no opt-out).
+- **Errors:** `BOOKING_CANCELLATION_DEADLINE_PASSED` (400) after start; `BOOKING_STATE_TRANSITION` (409) if a concurrent action already moved the child; `BOOKING_PARTICIPANT_NOT_FOUND` (404) if the proposer hold row is missing
+- **Description:** Student cancels an individual series session before that session starts; pre-H-2 releases the session hold and a pre-start post-H-2 cancellation forfeits it (per-session penalty, #46). The booking, child session, and proposer hold are re-read under locks; the child moves to `cancelled` only from `scheduled`. If delivery completion wins a race, cancellation is rejected without a second wallet/hold change or overwriting the report. Cancellation shares the booking reschedule lock. At/after the session start it rejects with `BOOKING_CANCELLATION_DEADLINE_PASSED`. Group-series sessions cannot be cancelled (no opt-out).
 
 ### `booking.addSessionNote`
 
@@ -1548,7 +1559,7 @@ RPC contract.
 - **Auth:** Tutor
 - **Input:** `{ bookingId, sessionId?, feedback: { discussion: string[1..30], strengths: string[1..30], improvements: string[1..30] } }` (`sessionId` required for series child sessions; each bullet 1–1000 chars)
 - **Output:** `{ booking }`
-- **Description:** Marks a scheduled session completed and deducts held Marks. Requires session discussion, strengths observed, and areas for improvement; saves one `session_completion_feedback` row atomically (per booking for solo/group, per session for series). In the same transaction it appends one `tutor_session_fee` event for the completed delivery (booking identity for solo/group; child-session identity for series), including the pinned price snapshot and gross IDR honorarium. This is an earned-fee fact, not a payout; the RPC output is unchanged. Missing/empty feedback returns `BOOKING_COMPLETION_FEEDBACK_REQUIRED` (400).
+- **Description:** Marks a scheduled session completed and deducts held Marks. Requires session discussion, strengths observed, and areas for improvement; saves one `session_completion_feedback` row atomically (per booking for solo/group, per session for series). In the same transaction it appends one `tutor_session_fee` event for the completed delivery (booking identity for solo/group; child-session identity for series), including the pinned price snapshot and gross IDR honorarium. For a series session with a prior participant no-show ledger entry, completion skips that already-charged allocation and preserves future holds; a no-show without this completion report earns no tutor fee. Malformed V3 honoraria fail before settlement writes. Concurrent completion is serialized so only one report, deduction, and fee is recorded. A series parent completes after every child is completed or cancelled, then releases residual participant holds. This is an earned-fee fact, not a payout; the RPC output is unchanged. Missing/empty feedback returns `BOOKING_COMPLETION_FEEDBACK_REQUIRED` (400).
 - **Frontend note:** Cancel uses Selia confirmation dialog; complete uses `CompleteSessionDialog` for three textarea-backed tutor feedback sections (each line is a bullet and Enter adds another). Booking detail shows read-only Student notes with Session feedback directly beneath it in the same Session overview block after completion. Mutation feedback is emitted through the global toast layer and does not change this RPC contract.
 
 ### `booking.listCompletionFeedback`
@@ -1574,8 +1585,8 @@ RPC contract.
 - **Auth:** Tutor
 - **Input:** `{ bookingId, participantUserId, sessionId? }` (`sessionId` required for series child sessions)
 - **Output:** `{ bookingId, participantUserId, sessionId, forfeitedMarks }`
-- **Errors:** `BOOKING_NOT_FOUND` (404), `BOOKING_NOT_EDITABLE` (400) before start+15 min, `BOOKING_STATE_TRANSITION` (409) if not `scheduled`
-- **Description:** Marks a participant as no-show 15 minutes after the session starts (U5/TC-30); their session hold is forfeited. A solo booking transitions to `no_show`; a group booking stays live and only the target's hold is forfeited (C1); a series session keeps its state so other participants are unaffected.
+- **Errors:** `BOOKING_NOT_FOUND` (404), `BOOKING_NOT_EDITABLE` (400) before start+15 min, if a report already exists, or for a repeated series no-show; `BOOKING_STATE_TRANSITION` (409) if not `scheduled`
+- **Description:** Marks a participant as no-show 15 minutes after the session starts (U5/TC-30); their session hold is forfeited. A solo booking transitions to `no_show`; a group booking stays live and only the target's hold is forfeited (C1); a series session keeps its state so other participants are unaffected. A series no-show is keyed to that participant and child session, and a repeated mark is rejected. Its ledger entry prevents a later delivery report from charging that allocation twice; the entry alone does not earn a tutor fee.
 
 ---
 
@@ -1741,7 +1752,7 @@ The successful mutation also best-effort updates the existing offline Calendar e
 - **Input:** `{ sessionId, marksAction, amount? }` (`marksAction` one of `release`/`forfeit`/`partial`; `amount` required when `partial`, max 1000)
 - **Output:** `{ sessionId, currentState: "cancelled", marksAction, affectedParticipants }`
 - **Errors:** `BOOKING_NOT_FOUND` (404), `BOOKING_STATE_TRANSITION` (409) if the session is not `scheduled`
-- **Description:** Cancels a single series session; the session hold is released, forfeited, or partially returned per `marksAction` (U6/TC-31); records audit + participant notifications
+- **Description:** Cancels a single scheduled series session; the booking, child, and participant holds are locked and refreshed before settling, then the child transition is conditional on `scheduled` (U6/TC-31). The parent hold is recalculated from remaining confirmed/reconfirmed participant holds, excluding pending invitees. Solo series therefore reflect the proposer hold; group series reflect each confirmed participant's package. The booking reschedule lock serializes cancellation with proposal acceptance. It records audit + participant notifications; a concurrent completion that wins leaves settlement untouched and the cancel is rejected.
 
 ---
 

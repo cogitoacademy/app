@@ -7,7 +7,11 @@ import {
   tutorInvite,
   tutorProfile,
   availabilitySlot,
+  booking as bookingTable,
+  bookingParticipant,
   bookingSession,
+  sessionCompletionFeedback,
+  tutorSessionFee,
   auditLog,
   notification,
 } from "@cogito-app/db/schema";
@@ -20,6 +24,7 @@ import {
   resetDatabase,
   type TestClient,
 } from "../helpers/test-client";
+import { TEST_COMPLETION_FEEDBACK } from "../helpers/completion-feedback";
 
 async function creditWallet(userId: string, amount: number) {
   const { services } = await import("@cogito-app/api/services");
@@ -153,40 +158,69 @@ describe("U6: admin per-session series cancel with Marks choice (FR-20/TC-31)", 
   }
 
   let slotOffset = 0;
-  async function createAcceptedSeries(studentClient: TestClient) {
+  async function createAcceptedSeries(
+    studentClient: TestClient,
+    sessionCount = 2,
+  ) {
     slotOffset += 1;
-    const base = (66 + slotOffset * 12) * 3600_000;
-    const t1 = new Date(Date.now() + base);
-    const t2 = new Date(Date.now() + base + 6 * 3600_000);
+    const base = (66 + slotOffset * 24) * 3600_000;
+    const requestedSessions = Array.from({ length: sessionCount }, (_, i) => {
+      const start = new Date(Date.now() + base + i * 6 * 3600_000);
+      return {
+        scheduledStartAt: start.toISOString(),
+        scheduledEndAt: new Date(start.getTime() + 3600_000).toISOString(),
+      };
+    });
     const b = await studentClient.booking.createSeries({
       tutorId: (await db.select().from(tutorProfile).limit(1))[0]!.userId,
       availabilitySlotId: slotId,
       modality: "online",
-      sessions: [
-        {
-          scheduledStartAt: t1.toISOString(),
-          scheduledEndAt: new Date(t1.getTime() + 3600_000).toISOString(),
-        },
-        {
-          scheduledStartAt: t2.toISOString(),
-          scheduledEndAt: new Date(t2.getTime() + 3600_000).toISOString(),
-        },
-      ],
+      sessions: requestedSessions,
       timezone: "Asia/Jakarta",
     });
     await tutorClient.tutorActions.acceptBooking({ bookingId: b.id });
     const sessions = await studentClient.booking.listSessions({
       bookingId: b.id,
     });
-    return { bookingId: b.id, session: sessions[0]! };
+    return { bookingId: b.id, session: sessions[0]!, sessions };
+  }
+
+  async function createAcceptedGroupSeries(
+    studentClient: TestClient,
+    inviteeClient: TestClient,
+    inviteeId: string,
+  ) {
+    slotOffset += 1;
+    const base = (66 + slotOffset * 24) * 3600_000;
+    const requestedSessions = Array.from({ length: 3 }, (_, i) => {
+      const start = new Date(Date.now() + base + i * 6 * 3600_000);
+      return {
+        scheduledStartAt: start.toISOString(),
+        scheduledEndAt: new Date(start.getTime() + 3600_000).toISOString(),
+      };
+    });
+    const b = await studentClient.booking.createGroupSeries({
+      tutorId: (await db.select().from(tutorProfile).limit(1))[0]!.userId,
+      availabilitySlotId: slotId,
+      modality: "online",
+      targetGroupSize: 2,
+      inviteeUserIds: [inviteeId],
+      sessions: requestedSessions,
+      timezone: "Asia/Jakarta",
+    });
+    await inviteeClient.booking.confirmInvite({ bookingId: b.id });
+    await tutorClient.tutorActions.acceptBooking({ bookingId: b.id });
+    return {
+      bookingId: b.id,
+      sessions: await studentClient.booking.listSessions({
+        bookingId: b.id,
+      }),
+    };
   }
 
   test("U6: cancel with release returns the session hold and cancels the session", async () => {
     const { client, studentId } = await freshStudent("release");
-    const { bookingId, session } = await createAcceptedSeries(
-      client,
-      studentId,
-    );
+    const { bookingId, session } = await createAcceptedSeries(client);
     const before = await walletOf(studentId);
 
     const result = await adminClient.adminBooking.cancelSeriesSession({
@@ -231,10 +265,7 @@ describe("U6: admin per-session series cancel with Marks choice (FR-20/TC-31)", 
 
   test("U6: cancel with forfeit deducts the session hold", async () => {
     const { client, studentId } = await freshStudent("forfeit");
-    const { bookingId, session } = await createAcceptedSeries(
-      client,
-      studentId,
-    );
+    const { bookingId, session } = await createAcceptedSeries(client);
     const before = await walletOf(studentId);
 
     const result = await adminClient.adminBooking.cancelSeriesSession({
@@ -272,5 +303,275 @@ describe("U6: admin per-session series cancel with Marks choice (FR-20/TC-31)", 
 
     const after = await walletOf(studentId);
     expect(after.availableBalance).toBe(before.availableBalance + 10);
+  });
+
+  async function runSoloCancelThenComplete(
+    marksAction: "release" | "forfeit" | "partial",
+  ) {
+    const { client, studentId } = await freshStudent(`settle-${marksAction}`);
+    const { bookingId, sessions } = await createAcceptedSeries(client, 3);
+    const cancelledSession = sessions[0]!;
+    const perSession = cancelledSession.holdAmount;
+    const walletBefore = await walletOf(studentId);
+    const [bookingBefore] = await db
+      .select()
+      .from(bookingTable)
+      .where(eq(bookingTable.id, bookingId));
+    const [participantBefore] = await db
+      .select()
+      .from(bookingParticipant)
+      .where(eq(bookingParticipant.bookingId, bookingId));
+
+    expect(bookingBefore!.holdAmount).toBe(participantBefore!.heldAmount);
+
+    await adminClient.adminBooking.cancelSeriesSession({
+      sessionId: cancelledSession.id,
+      marksAction,
+      ...(marksAction === "partial" ? { amount: 10 } : {}),
+    });
+    const cancelledAmount = marksAction === "partial" ? 10 : perSession;
+
+    const walletAfterCancel = await walletOf(studentId);
+    const [bookingAfterCancel] = await db
+      .select()
+      .from(bookingTable)
+      .where(eq(bookingTable.id, bookingId));
+    const [participantAfterCancel] = await db
+      .select()
+      .from(bookingParticipant)
+      .where(eq(bookingParticipant.bookingId, bookingId));
+
+    expect(participantAfterCancel!.heldAmount).toBe(
+      participantBefore!.heldAmount - cancelledAmount,
+    );
+    expect(bookingAfterCancel!.holdAmount).toBe(
+      participantAfterCancel!.heldAmount,
+    );
+    expect(bookingAfterCancel!.holdAmount).toBe(
+      bookingBefore!.holdAmount - cancelledAmount,
+    );
+    expect(walletAfterCancel.heldBalance).toBe(
+      walletBefore.heldBalance - cancelledAmount,
+    );
+    if (marksAction !== "forfeit") {
+      expect(walletAfterCancel.availableBalance).toBe(
+        walletBefore.availableBalance + cancelledAmount,
+      );
+      expect(walletAfterCancel.totalBalance).toBe(walletBefore.totalBalance);
+    } else {
+      expect(walletAfterCancel.totalBalance).toBe(
+        walletBefore.totalBalance - perSession,
+      );
+    }
+
+    const remainingSessions = sessions.slice(1);
+    await Promise.all(
+      remainingSessions.map((session) =>
+        db
+          .update(bookingSession)
+          .set({
+            scheduledStartAt: new Date(Date.now() - 2 * 3600_000),
+            scheduledEndAt: new Date(Date.now() - 1 * 3600_000),
+          })
+          .where(eq(bookingSession.id, session.id)),
+      ),
+    );
+    for (const session of remainingSessions) {
+      // eslint-disable-next-line no-await-in-loop
+      await tutorClient.tutorActions.completeSession({
+        bookingId,
+        sessionId: session.id,
+        feedback: TEST_COMPLETION_FEEDBACK,
+      });
+    }
+
+    const finalWallet = await walletOf(studentId);
+    const [finalBooking] = await db
+      .select()
+      .from(bookingTable)
+      .where(eq(bookingTable.id, bookingId));
+    const [finalParticipant] = await db
+      .select()
+      .from(bookingParticipant)
+      .where(eq(bookingParticipant.bookingId, bookingId));
+    const finalSessions = await db
+      .select()
+      .from(bookingSession)
+      .where(eq(bookingSession.seriesBookingId, bookingId));
+
+    expect(finalBooking!.currentState).toBe("completed");
+    expect(finalBooking!.holdAmount).toBe(0);
+    expect(finalParticipant!.heldAmount).toBe(0);
+    expect(finalWallet.heldBalance).toBe(0);
+    expect(finalWallet.totalBalance).toBe(
+      walletBefore.totalBalance -
+        perSession * (sessions.length - 1) -
+        (marksAction === "forfeit" ? perSession : 0),
+    );
+    expect(
+      finalSessions.filter((session) => session.currentState === "cancelled"),
+    ).toHaveLength(1);
+    expect(
+      finalSessions.filter((session) => session.currentState === "completed"),
+    ).toHaveLength(2);
+    expect(
+      await db
+        .select()
+        .from(tutorSessionFee)
+        .where(eq(tutorSessionFee.bookingId, bookingId)),
+    ).toHaveLength(2);
+    expect(
+      await db
+        .select()
+        .from(sessionCompletionFeedback)
+        .where(eq(sessionCompletionFeedback.bookingId, bookingId)),
+    ).toHaveLength(2);
+  }
+
+  test("U6: release then complete remaining solo sessions settles the parent", async () => {
+    await runSoloCancelThenComplete("release");
+  });
+
+  test("U6: forfeit then complete remaining solo sessions settles the parent", async () => {
+    await runSoloCancelThenComplete("forfeit");
+  });
+
+  test("U6: partial release leaves residual held until terminal series cleanup", async () => {
+    await runSoloCancelThenComplete("partial");
+  });
+
+  test("U6: group-series cancellation reconciles confirmed holds through completion", async () => {
+    const proposer = await freshStudent("group-settlement-proposer");
+    const invitee = await freshStudent("group-settlement-invitee");
+    const { bookingId, sessions } = await createAcceptedGroupSeries(
+      proposer.client,
+      invitee.client,
+      invitee.studentId,
+    );
+    const cancelledSession = sessions[0]!;
+    const perSession = cancelledSession.holdAmount;
+    const participantsBefore = await db
+      .select()
+      .from(bookingParticipant)
+      .where(eq(bookingParticipant.bookingId, bookingId));
+    const confirmedBefore = participantsBefore.filter(
+      (participant) =>
+        participant.confirmationState === "confirmed" ||
+        participant.confirmationState === "reconfirmed",
+    );
+    const walletsBefore = await Promise.all([
+      walletOf(proposer.studentId),
+      walletOf(invitee.studentId),
+    ]);
+    const [bookingBefore] = await db
+      .select()
+      .from(bookingTable)
+      .where(eq(bookingTable.id, bookingId));
+
+    expect(confirmedBefore).toHaveLength(2);
+    expect(bookingBefore!.holdAmount).toBe(
+      confirmedBefore.reduce(
+        (sum, participant) => sum + participant.heldAmount,
+        0,
+      ),
+    );
+
+    await adminClient.adminBooking.cancelSeriesSession({
+      sessionId: cancelledSession.id,
+      marksAction: "release",
+    });
+
+    const participantsAfterCancel = await db
+      .select()
+      .from(bookingParticipant)
+      .where(eq(bookingParticipant.bookingId, bookingId));
+    const confirmedAfterCancel = participantsAfterCancel.filter(
+      (participant) =>
+        participant.confirmationState === "confirmed" ||
+        participant.confirmationState === "reconfirmed",
+    );
+    const [bookingAfterCancel] = await db
+      .select()
+      .from(bookingTable)
+      .where(eq(bookingTable.id, bookingId));
+    const [proposerWalletAfterCancel, inviteeWalletAfterCancel] =
+      await Promise.all([
+        walletOf(proposer.studentId),
+        walletOf(invitee.studentId),
+      ]);
+
+    expect(bookingAfterCancel!.holdAmount).toBe(
+      confirmedAfterCancel.reduce(
+        (sum, participant) => sum + participant.heldAmount,
+        0,
+      ),
+    );
+    expect(bookingAfterCancel!.holdAmount).toBe(
+      bookingBefore!.holdAmount - perSession * confirmedBefore.length,
+    );
+    expect(proposerWalletAfterCancel.heldBalance).toBe(
+      walletsBefore[0]!.heldBalance - perSession,
+    );
+    expect(inviteeWalletAfterCancel.heldBalance).toBe(
+      walletsBefore[1]!.heldBalance - perSession,
+    );
+
+    const remainingSessions = sessions.slice(1);
+    await Promise.all(
+      remainingSessions.map((session) =>
+        db
+          .update(bookingSession)
+          .set({
+            scheduledStartAt: new Date(Date.now() - 2 * 3600_000),
+            scheduledEndAt: new Date(Date.now() - 1 * 3600_000),
+          })
+          .where(eq(bookingSession.id, session.id)),
+      ),
+    );
+    for (const session of remainingSessions) {
+      // eslint-disable-next-line no-await-in-loop
+      await tutorClient.tutorActions.completeSession({
+        bookingId,
+        sessionId: session.id,
+        feedback: TEST_COMPLETION_FEEDBACK,
+      });
+    }
+
+    const [finalBooking] = await db
+      .select()
+      .from(bookingTable)
+      .where(eq(bookingTable.id, bookingId));
+    const finalParticipants = await db
+      .select()
+      .from(bookingParticipant)
+      .where(eq(bookingParticipant.bookingId, bookingId));
+    const finalWallets = await Promise.all([
+      walletOf(proposer.studentId),
+      walletOf(invitee.studentId),
+    ]);
+
+    expect(finalBooking!.currentState).toBe("completed");
+    expect(finalBooking!.holdAmount).toBe(0);
+    expect(
+      finalParticipants.every((participant) => participant.heldAmount === 0),
+    ).toBe(true);
+    expect(finalWallets.map((account) => account.heldBalance)).toEqual([0, 0]);
+    expect(finalWallets.map((account) => account.totalBalance)).toEqual(
+      walletsBefore.map(
+        (account) => account.totalBalance - perSession * (sessions.length - 1),
+      ),
+    );
+    expect(
+      await db
+        .select()
+        .from(tutorSessionFee)
+        .where(eq(tutorSessionFee.bookingId, bookingId)),
+    ).toHaveLength(2);
+    expect(
+      await db
+        .select()
+        .from(sessionCompletionFeedback)
+        .where(eq(sessionCompletionFeedback.bookingId, bookingId)),
+    ).toHaveLength(2);
   });
 });

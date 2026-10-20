@@ -534,6 +534,7 @@ export function createTutorService(deps: {
     input: SubmitForReviewInput = {},
   ) {
     return db.transaction(async (tx) => {
+      await lockTutorForBooking(tx, userId);
       const profile = await tutorRepo.getByUserId(tx, userId);
       const activeV3Config =
         (await pricingPort.getActiveV3Config?.(tx)) ?? null;

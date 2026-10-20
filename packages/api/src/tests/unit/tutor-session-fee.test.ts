@@ -93,6 +93,75 @@ describe("tutor session fee contract", () => {
     );
   });
 
+  test("rejects a V3 snapshot with no tutor honorarium", () => {
+    const snapshot = {
+      engine: "v3",
+      v3Revision: 7,
+      competition: "competition-policy-debate",
+      modality: "online",
+      headcount: 2,
+      perStudentMarks: 27,
+      collectedMarks: 54,
+    } as unknown as BookingPriceSnapshot;
+
+    expect(() =>
+      buildTutorSessionFeeRecord({
+        bookingId: "booking-v3-missing-fee",
+        bookingSessionId: "session-v3-missing-fee",
+        tutorId: "tutor-1",
+        scheduledStartAt,
+        earnedAt,
+        priceSnapshot: snapshot,
+      }),
+    ).toThrow("V3 tutor honorarium");
+  });
+
+  test("rejects invalid V3 honoraria but preserves an explicit zero", () => {
+    for (const amount of [Number.NaN, Number.POSITIVE_INFINITY, 1.5, -1]) {
+      const snapshot = {
+        engine: "v3",
+        v3Revision: 7,
+        competition: "competition-policy-debate",
+        modality: "online",
+        headcount: 2,
+        perStudentMarks: 27,
+        collectedMarks: 54,
+        tutorHonorariumIdr: amount,
+      } as BookingPriceSnapshot;
+
+      expect(() =>
+        buildTutorSessionFeeRecord({
+          bookingId: "booking-v3-invalid-fee",
+          bookingSessionId: "session-v3-invalid-fee",
+          tutorId: "tutor-1",
+          scheduledStartAt,
+          earnedAt,
+          priceSnapshot: snapshot,
+        }),
+      ).toThrow();
+    }
+
+    const zeroSnapshot: BookingPriceSnapshot = {
+      engine: "v3",
+      v3Revision: 7,
+      competition: "competition-policy-debate",
+      modality: "online",
+      headcount: 2,
+      perStudentMarks: 27,
+      collectedMarks: 54,
+      tutorHonorariumIdr: 0,
+    };
+    const zeroFee = buildTutorSessionFeeRecord({
+      bookingId: "booking-v3-zero-fee",
+      bookingSessionId: "session-v3-zero-fee",
+      tutorId: "tutor-1",
+      scheduledStartAt,
+      earnedAt,
+      priceSnapshot: zeroSnapshot,
+    });
+    expect(zeroFee.grossHonorariumIdr).toBe(0);
+  });
+
   test("rejects a non-whole or negative honorarium amount", () => {
     const invalidSnapshot: BookingPriceSnapshot = {
       ...legacySnapshot,
