@@ -1,5 +1,19 @@
 # Cogito Runbook
 
+## Local V3 development startup (2026-10-20)
+
+`f/release-v3` contains integrated baseline `10a733cd`. The local web app at
+`http://localhost:3000` and API health at `http://localhost:3001/health` returned
+HTTP 200 after Docker restart and the pending class migration. API health
+reported database, Redis and scheduler healthy. The background development
+processes write logs under `tmp/v3-dev/`; these are development processes,
+separate from the exclusive test servers on ports 3100/3101.
+
+The pre-integration dirty source is retained in the named
+`v3 pre-integration source backup 20261020` stash. Do not pop it over the
+integrated branch: those changes are already incorporated. Client document
+artifacts and the old fee worktree remain preserved.
+
 ## V3 local integration database state (2026-10-20)
 
 Read-only inspection used loopback URLs from `apps/server/.env` and
@@ -280,7 +294,17 @@ bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests
 
 It passed 4 tests / 18 expectations, including admin-only access, audit reason/snapshots, optimistic version conflicts, online + managed-room draft sessions, stable session IDs after reorder, room/tutor capacity and modality validation, and overlapping-session rejection. The guarded test helper truncates class/session tables only in `cogito-test`; never run it against development or production data.
 
-Local UI smoke: sign in as admin, open `/admin-classes`, create/edit a cohort draft with at least one online and one in-person session, verify an active competition, published mode-compatible tutor and managed room are selectable, and save a reason. Reorder sessions and confirm their identities remain. Drafts are not public and do not reserve rooms; publication-time overlap checks, Meet creation, cover upload, student enrollment/public reads, and notifications are not available. Do not present this draft page as launch-ready; M01 class content/assets remain pending. Server typecheck hit Windows memory exhaustion in this attempt; web typecheck and production builds remain unverified for this slice.
+Local UI smoke: sign in as admin, open `/admin-classes`, create/edit a cohort draft with at least one online and one in-person session, verify an active competition, published mode-compatible tutor and managed room are selectable, and save a reason. Reorder sessions and confirm their identities remain. Drafts are not public and do not reserve rooms; publication-time overlap checks, Meet creation, cover upload, student enrollment, and notifications are not available. Published-only public list/detail procedures are now implemented; no browser E2E has verified them. Do not present this draft page as launch-ready; M01 class content/assets remain pending. Server typecheck hit Windows memory exhaustion in this attempt; web typecheck and production builds remain unverified for this slice.
+
+## V3 published class read contract (2026-10-20)
+
+Pure DTO test:
+
+```
+bun test packages/api/src/tests/unit/academy-class.public.test.ts
+```
+
+It passed 1 test / 1 expectation and verified the response omits tutor payout/account fields, room details, and roster data. `bun run --cwd apps/web check-types` passed after linking the existing workspace dependencies from `C:\.Projects\cogito-app`; no dependencies were installed. Browser E2E and database tests were not run. `classes.list` and `classes.get` are public reads of published classes only; they do not enable enrollment.
 
 ## V3 draft economy editor (2026-10-18)
 

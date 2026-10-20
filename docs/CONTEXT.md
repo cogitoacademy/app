@@ -3,10 +3,23 @@
 ## V3 integration and local migration checkpoint (2026-10-20)
 
 Feature worktrees derive from `f/release-v3`; tested work merges there, and
-`main` waits for final acceptance. The isolated `t3/integrate-v3-progress`
-checkpoint integrates the existing fee/payout and class-draft work with FAQ
-rich text, calendar, palette and shared documentation changes. The source
-worktrees remain untouched.
+`main` waits for final acceptance. The `t3/integrate-v3-progress` checkpoint
+was fast-forwarded into `f/release-v3` at `10a733cd`, combining fee/payout and
+class drafts with FAQ rich text, calendar, palette and shared docs. The prior
+dirty source is preserved in the named `v3 pre-integration source backup
+20261020` stash; client artifacts remain in place and the old fee worktree is
+unchanged.
+
+Local startup on 20 October returned HTTP 200 from the web app on port 3000
+and `/health` on port 3001, with database, Redis and scheduler checks healthy.
+Class public-read commit `0a0ce408` registers `classes.list/get`, fixes the
+detail route ID and removes the invalid argument to the repository factory.
+The web typecheck now passes, as does the public DTO allowlist unit test.
+Publishing, class enrollment and browser acceptance remain incomplete.
+The initial baseline no-show integration command stalled before assertions;
+the settlement worker subsequently reproduced the failing no-show/completion
+assertion with the correct dependency/env setup. Settlement retains the
+exclusive test-database window until its regression run finishes.
 
 Read-only verification now confirms both local `cogito-app` and `cogito-test`
 have the same four fee, FAQ-rich-text, payout and class-draft migration hashes
@@ -188,9 +201,13 @@ Browser E2E was not run for this settlement slice.
 
 Migration `0061_academy_class_drafts.sql` adds the class and session draft model. The admin-only `admin-classes` page creates/edits drafts with localized titles/descriptions, cohort curriculum and enrollment defaults, per-session schedule/capacity/tutor/mode/room, and required audit reason. Approved defaults are cohort 20/22/25 Marks per full/half/single session with Rp400,000 tutor fee per session, and masterclass 5 Marks with Rp300,000 tutor fee. Both online and in-person are available; in-person requires an active managed room. Drafts are not public and do not reserve rooms.
 
-The service validates active competition, published mode-compatible tutors and session capacities, active room capacity, non-overlapping class sessions, cohort curriculum/check date, and the one-session masterclass rule. Draft updates are optimistic-versioned and preserve supplied session IDs; audit actions are `academy_class.draft_created` and `academy_class.draft_updated`. The admin editor uploads PNG/JPEG/WebP/GIF covers through the existing protected upload flow (max 5 MB) and stores the returned key on save; approved M01 cover/curriculum assets are still pending. Room/tutor conflict checks at publication, Meet creation, publishing, public classes/enrollment, and T02/T06/T07 report/expiry integration remain open.
+The service validates active competition, published mode-compatible tutors and session capacities, active room capacity, non-overlapping class sessions, cohort curriculum/check date, and the one-session masterclass rule. Draft updates are optimistic-versioned and preserve supplied session IDs; audit actions are `academy_class.draft_created` and `academy_class.draft_updated`. The admin editor uploads PNG/JPEG/WebP/GIF covers through the existing protected upload flow (max 5 MB) and stores the returned key on save; approved M01 cover/curriculum assets are still pending. Room/tutor conflict checks and Meet creation at publication, admin publish controls, enrollment, and T02/T06/T07 report/expiry integration remain open.
 
 Focused integration verification: **4/4 tests, 18 expectations** against the guarded local `cogito-test` database after additive migration. A server TypeScript-Go check attempt again failed with Windows `Out of memory`; Vite build and web typecheck have not been rerun for this slice. No production database, V3 activation, or external provider was used.
+
+## V3 published class read contract (2026-10-20)
+
+The public `classes.list` and `classes.get` procedures expose published classes only. Their explicit DTO includes the student catalog fields and tutor display name, while omitting tutor identifiers and account fields, tutor fees, room details, admin version/audit fields, and student roster data. A missing or unpublished detail is returned as not found. The catalog and detail pages consume this contract; enrollment remains unavailable until T05.
 
 ## V3 report-field character limits (2026-10-18)
 
