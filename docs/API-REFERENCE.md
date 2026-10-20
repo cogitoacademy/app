@@ -1,8 +1,9 @@
 # Cogito API Reference
 
-Enrollment schema milestone (2026-10-21): migration `0064` adds storage only.
-No new enrollment procedures are registered by this milestone; existing
-`classes.list/get` remain published-class reads, not enrollment checkout APIs.
+Enrollment schema milestone (2026-10-21): additive migration `0064` stores
+enrollment snapshots, installment state, per-session seat/funding allocations,
+and immutable top-up attempts. T05 registers authenticated enrollment
+procedures below; public `classes.list/get` remain published-class reads.
 
 ## Competition catalog CRUD — working branch (2026-10-18)
 
@@ -763,15 +764,39 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Output:** Updated admin class/session rows, including per-online-session meeting status for admin reads.
 - **Publish rules:** Publication locks and version-checks the draft, then takes the competition-catalog lock, sorted tutor locks, and sorted room locks before rereading current references under row locks. It revalidates active competition ancestry, published tutor assignment and capacity, approved flat tutor fee, future schedule, managed room capacity, and overlap against active bookings and other published classes. Catalog archive, tutor status changes, and room update/deactivation coordinate through the matching locks. One online-session meeting job is inserted with publication and audit writes in the same transaction; in-person sessions use managed rooms and do not create Meet work. Assigned tutors receive one deduplicated schedule notification each.
 - **Meeting retry rules:** Provider work runs after publication commits and uses durable per-session jobs, a lease, exponential retries, and stable Google event IDs. If Google accepted an event but has not generated its Meet URL, the job remains failed/retryable with that event ID; retry fetches the same event rather than inserting another. A manual fallback is not reported ready. Repeated/concurrent publication cannot add duplicate jobs or notifications. Admin retry queues failed jobs; scheduled retries continue automatically. Test mode injects a controlled local adapter and never calls Google.
-- **Enrollment:** Not implemented; public class screens state that registration is not available.
+- **Enrollment:** Student checkout is a separate T05 API/UI slice described below; class publishing remains an admin-only operation.
 
 ### `classes.list`, `classes.get`
 
 - **RPC paths:** `/rpc/classes/list`, `/rpc/classes/get`
 - **Auth:** Public read
 - **Inputs:** `list` has no input; `get` accepts `{ id }`.
-- **Output:** Published class catalog fields, competition and parent names, ordered sessions, schedule/mode/curriculum, and tutor display name. The DTO excludes tutor IDs/account data, IDR tutor fees/payout/tax data, meeting/room details, audit/version fields, and student roster data.
-- **Rules:** The list filters to `published`; detail returns not found for missing or unpublished classes. Enrollment and booking are not included in this read contract.
+- **Output:** Published class catalog fields, current published cohort/masterclass rates, competition and parent names, ordered sessions, schedule/mode/curriculum, and tutor display name. The DTO excludes tutor IDs/account data, IDR tutor fees/payout/tax data, meeting/room details, audit/version fields, and student roster data.
+- **Rules:** The list filters to `published`; detail returns not found for missing or unpublished classes. Enrollment data is never included in this public read contract.
+
+### `classes.getMyEnrollments`, `classes.createEnrollment`
+
+- **RPC paths:** `/rpc/classes/getMyEnrollments`, `/rpc/classes/createEnrollment`
+- **Auth:** `getMyEnrollments` requires the signed-in student role. `createEnrollment` requires a verified student. Tutors, admins and other students cannot read or mutate another student's enrollment.
+- **Inputs:** Read `{ classId }`. Create `{ classId, requestKey, plan: "full" | "half" | "single" | "masterclass", sessionId? }`; `requestKey` is a UUID scoped to the student. A single plan requires one eligible `sessionId`; other plans select the eligible sessions on the server.
+- **Output:** Read returns `{ classId, eligibleSessions, enrollments }`, scoped to the caller. Each eligible session reports `seatsAvailable` and `alreadyEntitled`; each enrollment returns its plan/state, immutable quote totals, installment summaries and per-session allocation balances. Create returns the same enrollment summary plus `outcome: "confirmed" | "checkout_pending" | "already_exists"`, wallet `availableMarks` and `shortfallMarks`.
+- **Rules:** Create uses current published rates and snapshots selected future scheduled session IDs and per-session rates. Cohort full holds every selected session at the full rate; half splits remaining count with ceil/floor, charging the first half now and reserving the second half without Marks until its due session; single reserves one selected session. A masterclass requires its one scheduled session. A pending checkout reserves all selected seats for 15 minutes. The request key makes retries return the original enrollment without another hold. Active entitlements cannot be switched to another plan; after a missed half deadline, rejoin is a new quote for future sessions only.
+
+### `classes.completeCheckout`, `classes.paySecondInstallment`
+
+- **RPC paths:** `/rpc/classes/completeCheckout`, `/rpc/classes/paySecondInstallment`
+- **Auth:** Verified student; both operations verify enrollment ownership in the service.
+- **Inputs:** `{ enrollmentId }`.
+- **Output:** `{ enrollment, outcome, availableMarks, shortfallMarks }`; checkout/payment outcomes are `funded`, `checkout_pending`, `defaulted`, `expired` or `insufficient`.
+- **Rules:** Checkout holds the first installment from the current wallet inside the seat-allocation transaction. Insufficient balance leaves the checkout pending and returns the shortfall without a partial hold. The second installment uses the saved rate and due session; duplicate calls after funding are no-ops. At the due session start, an unpaid installment defaults and releases only its unfunded future reservations; missed sessions are not charged. Reminder jobs are idempotent and skip historical notices for late joiners.
+
+### `classes.createTopUpQuote`, `classes.purchaseTopUp`
+
+- **RPC paths:** `/rpc/classes/createTopUpQuote`, `/rpc/classes/purchaseTopUp`
+- **Auth:** Verified student; both operations verify ownership of the associated enrollment/installment or attempt.
+- **Inputs:** Quote `{ enrollmentId, ordinal: 1 | 2, requestKey }`; purchase `{ attemptId, choice: "package" | "custom" | "recommended" }`.
+- **Output:** Quote returns the existing V3 top-up quote fields plus a stable `attemptId`, immutable requested shortfall Marks, quote ID, revision and expiry. Purchase returns payment ID, nullable checkout URL, status and recovery state.
+- **Rules:** An attempt is keyed to one installment and request key; its shortfall amount and payment quote identity cannot be replaced on retry. The student's top-up completion credits the wallet through the existing payment flow. It does not extend an expired class seat reservation or promise re-enrollment.
 
 ## Admin Knowledge Bank Access (`adminKnowledgeBank.*`)
 

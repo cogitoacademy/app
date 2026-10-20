@@ -34,6 +34,11 @@ export interface SchedulerHandlers {
   onSendNotificationEmail: () => Promise<{ sent: number; failed: number }>;
   onEscalateSupportTickets: () => Promise<{ escalated: number }>;
   onRetryFailedMeetings: () => Promise<{ succeeded: number; failed: number }>;
+  onClassEnrollmentDueJobs?: () => Promise<{
+    expiredCheckouts: number;
+    defaultedInstallments: number;
+    remindersQueued: number;
+  }>;
   onReconcilePayments?: () => Promise<{
     checked: number;
     reconciled: number;
@@ -225,6 +230,23 @@ export function createSchedulerService(
               ...paymentResult,
             });
             return paymentResult;
+          case "class-enrollment-check":
+            const enrollmentResult = handlers.onClassEnrollmentDueJobs
+              ? await handlers.onClassEnrollmentDueJobs()
+              : {
+                  expiredCheckouts: 0,
+                  defaultedInstallments: 0,
+                  remindersQueued: 0,
+                };
+            log({
+              level: "info",
+              action: "class_enrollment_check_complete",
+              message: `Expired ${enrollmentResult.expiredCheckouts} checkouts, defaulted ${enrollmentResult.defaultedInstallments} installments, queued ${enrollmentResult.remindersQueued} reminders`,
+              traceId: ctx.traceId,
+              userId: ctx.userId,
+              ...enrollmentResult,
+            });
+            return enrollmentResult;
           default:
             log({
               level: "warn",

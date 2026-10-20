@@ -1,5 +1,62 @@
 # Cogito Runbook
 
+## T05 enrollment isolated test target and evidence (2026-10-21)
+
+Destructive seed/reset and enrollment integration work used only the newly
+created disposable Docker resources `cogito-t05-enrollment-postgres` with named
+volume `cogito-t05-enrollment-pgdata` at loopback port 6769, database
+`cogito-test`, and `cogito-t05-enrollment-redis` at loopback port 6381. This
+volume was created because the pre-existing `cogito-test` volume contained
+signup fixtures and user data; it was preserved. Development Postgres
+`localhost:6767/cogito-app`, signup Postgres `localhost:6768`, and the signup
+volume were not reset or migrated by T05 testing. The T05 volume is the only
+target that may be reset by this feature's tests.
+
+The integration test asserts `NODE_ENV=test`, PostgreSQL, a loopback hostname,
+port `6769`, and exact database path `/cogito-test` before its first database
+write. The Playwright spec additionally checks T05 DB/Redis/server/web ports
+`6769/6381/3201/3200`; its global setup uses the same exact DB guard before
+seeding. Provider behavior is stubbed. The synthetic V3 economy revision used
+to exercise the existing top-up quote path is appended/activated only inside
+this exact guarded test database; no customer pricing pointer or external
+provider is called. Vite uses `apps/web/node_modules/.vite-t05-enrollment` for
+the T05 browser server to avoid contending with the existing app's Vite cache.
+
+The fresh T05 database was migrated through `0064_academy_class_enrollment.sql`
+using the normal Drizzle runner. Latest journal readback is timestamp
+`1792522475956`, hash
+`a9bced856633d71b70d5bfe4f3bf4b7a78c41122aa92eeb98f3845a6f8119c8b`. The same
+additive migration was applied to dev by the parent; T05 did not apply it to
+dev. No existing migration, journal, snapshot, or test data outside the named
+T05 volume was changed.
+
+Focused evidence, with no dependency installation or browser download:
+
+| Check                                           | Command / target                                                                                                                                                                                                                                        | Result                            |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Pricing + funding invariants                    | `bun --smol test --timeout 30000 packages/api/src/tests/unit/class-enrollment.pricing.test.ts packages/api/src/tests/unit/class-enrollment.funding.test.ts`                                                                                             | 11 tests / 36 expectations passed |
+| PostgreSQL enrollment concurrency and lifecycle | `bun --smol --env-file=$env:ENV_FILE test --timeout 30000 packages/api/src/tests/integration/class-enrollment.test.ts`, with the guarded T05 env file and 6769 DB                                                                                       | 7 tests / 64 expectations passed  |
+| Public class DTO allowlist                      | `bun --smol test --timeout 30000 packages/api/src/tests/unit/academy-class.public.test.ts`                                                                                                                                                              | 1 test / 1 expectation passed     |
+| Student enrollment browser journey              | From `packages/e2e`, `bun --smol --env-file=$envPath C:\.Projects\cogito-app\node_modules\.bun\@playwright+test@1.62.1\node_modules\@playwright\test\cli.js test src/specs/class-enrollment.spec.ts --workers=1 --reporter=line`; exact T05 ports above | 1 Chromium spec passed in 58.7s   |
+
+The API database cases cover request replay and last-seat contention, atomic
+rollback, rate snapshot immutability, insufficient balance and expiry, late
+join/rejoin, deadline default and reminder catch-up, and role/ownership denial.
+The browser journey covers full, half and single enrollment, no-seat denial,
+repeat request and reload, insufficient Marks/top-up quote, and concurrent
+duplicate second-installment payment. Reload waits for navigation commit and
+then asserts the reloaded enrollment state; this avoids waiting on Vite's full
+`load` event, which stalled on unresolved dev-source requests in the isolated
+test server. The E2E package typecheck passed before the final reload-wait
+assertions. API/web typechecks were attempted but are blocked by the existing
+worktree dependency links resolving two distinct Drizzle ORM 0.45.2 builds in
+`packages/api` and `packages/db` (`shouldInlineParams` type conflicts across
+unrelated modules); no dependency link or installation was changed. Focused
+`oxlint` exited 0 with style warnings, and `oxfmt --check` passed 27 changed
+source/doc files; the very wide task table was excluded to avoid reflow. No T05
+browser/API process remains on 3200/3201; the T05 Postgres/Redis containers
+remain on 6769/6381 for parent review.
+
 ## Enrollment dev migration (2026-10-21)
 
 Parent reviewed and integrated additive `0064_academy_class_enrollment.sql`
@@ -326,7 +383,7 @@ bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests
 
 It passed 4 tests / 18 expectations, including admin-only access, audit reason/snapshots, optimistic version conflicts, online + managed-room draft sessions, stable session IDs after reorder, room/tutor capacity and modality validation, and overlapping-session rejection. The guarded test helper truncates class/session tables only in `cogito-test`; never run it against development or production data.
 
-Local UI smoke: sign in as admin, open `/admin-classes`, create/edit a cohort draft with at least one online and one in-person session, verify an active competition, published mode-compatible tutor and managed room are selectable, and save a reason. Reorder sessions and confirm their identities remain. Drafts are not public and do not reserve rooms; publication-time overlap checks, Meet creation, cover upload, student enrollment, and notifications are not available. Published-only public list/detail procedures are now implemented; no browser E2E has verified them. Do not present this draft page as launch-ready; M01 class content/assets remain pending. Server typecheck hit Windows memory exhaustion in this attempt; web typecheck and production builds remain unverified for this slice.
+Local UI smoke: sign in as admin, open `/admin-classes`, create/edit a cohort draft with at least one online and one in-person session, verify an active competition, published mode-compatible tutor and managed room are selectable, and save a reason. Reorder sessions and confirm their identities remain. Drafts are not public and do not reserve rooms; publication-time overlap checks, Meet creation, cover upload and notifications are implemented and browser-verified. Published-only public list/detail and the student enrollment flow are browser-verified. T02 delivery fees, T06 cancellation and T07 report/expiry settlement remain open. Do not present the draft page as launch-ready; M01 class content/assets remain pending. The T05 API/web typecheck blocker and focused evidence are recorded above.
 
 ## V3 published class read contract (2026-10-20)
 

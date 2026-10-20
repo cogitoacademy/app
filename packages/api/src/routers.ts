@@ -11,6 +11,7 @@ import {
   createAcademyClassPublicRouter,
   createAcademyClassRouter,
 } from "./modules/academy-class/academy-class.router";
+import { createClassEnrollmentRouter } from "./modules/class-enrollment/class-enrollment.router";
 import { createTutorRouter } from "./modules/tutor/tutor.router";
 import { createDiscoveryRouter } from "./modules/tutor-discovery/discovery.router";
 import { createInviteRouter } from "./modules/invite/invite.router";
@@ -82,7 +83,10 @@ export const appRouter = {
     }),
   auth: authRouter,
   admin: adminRouter,
-  classes: createAcademyClassPublicRouter(handlers.academyClass),
+  classes: {
+    ...createAcademyClassPublicRouter(handlers.academyClass),
+    ...createClassEnrollmentRouter(handlers.classEnrollment),
+  },
   adminTutor: adminTutorRouter,
   adminMarkPackage: adminMarkPackageRouter,
   adminKnowledgeBank: adminKnowledgeBankRouter,

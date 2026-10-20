@@ -21,6 +21,7 @@ import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { EmptyStateCard } from "@/components/empty-state";
 import { CogitoMarks } from "@/components/cogito-marks";
+import { ClassEnrollmentPanel } from "@/components/content/class-enrollment-panel";
 import Loader from "@/components/loader";
 import { resolveProfileImageUrl } from "@/lib/profile-image-url";
 import { orpc } from "@/utils/orpc";
@@ -66,6 +67,11 @@ export function ClassDetailPage() {
           ? `/uploads/${academyClass.data.coverKey}`
           : undefined,
       );
+  const enrollmentKind =
+    academyClass.data.kind === "cohort" ||
+    academyClass.data.kind === "masterclass"
+      ? academyClass.data.kind
+      : null;
 
   return (
     <Stack direction="column" spacing="lg" className="w-full min-w-0 pb-8">
@@ -189,9 +195,24 @@ export function ClassDetailPage() {
         </ol>
       </section>
 
-      <Text className="text-sm text-muted">
-        Class details only. Enrollment will open when registration is ready.
-      </Text>
+      {enrollmentKind ? (
+        <ClassEnrollmentPanel
+          classId={academyClass.data.id}
+          kind={enrollmentKind}
+          rates={{
+            cohortFullRateMarks: academyClass.data.cohortFullRateMarks,
+            cohortHalfRateMarks: academyClass.data.cohortHalfRateMarks,
+            cohortSingleRateMarks: academyClass.data.cohortSingleRateMarks,
+            masterclassRateMarks: academyClass.data.masterclassRateMarks,
+          }}
+          sessions={academyClass.data.sessions.map((session) => ({
+            id: session.id,
+            sequenceNumber: session.sequenceNumber,
+            titleEn: session.titleEn,
+            startAt: session.startAt,
+          }))}
+        />
+      ) : null}
     </Stack>
   );
 }

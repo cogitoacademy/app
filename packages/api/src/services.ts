@@ -13,6 +13,7 @@ import { createAdminMarkPackageModule } from "./modules/admin-mark-package";
 import { createAdminKnowledgeBankModule } from "./modules/admin-knowledge-bank";
 import { createCompetitionCatalogModule } from "./modules/competition-catalog";
 import { createAcademyClassModule } from "./modules/academy-class";
+import { createClassEnrollmentModule } from "./modules/class-enrollment";
 import { createTutorModule } from "./modules/tutor";
 import { createDiscoveryModule } from "./modules/tutor-discovery";
 import { createInviteModule } from "./modules/invite";
@@ -49,6 +50,7 @@ import type { AdminMarkPackageService } from "./modules/admin-mark-package/admin
 import type { AdminKnowledgeBankService } from "./modules/admin-knowledge-bank/admin-knowledge-bank.service";
 import type { CompetitionCatalogService } from "./modules/competition-catalog/competition-catalog.service";
 import type { AcademyClassService } from "./modules/academy-class/academy-class.service";
+import type { ClassEnrollmentService } from "./modules/class-enrollment/class-enrollment.service";
 import type { TutorService } from "./modules/tutor/tutor.service";
 import type { InviteService } from "./modules/invite/invite.service";
 import type { AchievementService } from "./modules/achievement/achievement.service";
@@ -73,6 +75,7 @@ import type { AdminMarkPackageHandler } from "./modules/admin-mark-package/admin
 import type { AdminKnowledgeBankHandler } from "./modules/admin-knowledge-bank/admin-knowledge-bank.handler";
 import type { CompetitionCatalogHandler } from "./modules/competition-catalog/competition-catalog.handler";
 import type { AcademyClassHandler } from "./modules/academy-class/academy-class.handler";
+import type { ClassEnrollmentHandler } from "./modules/class-enrollment/class-enrollment.handler";
 import type { TutorHandler } from "./modules/tutor/tutor.handler";
 import type { DiscoveryHandler } from "./modules/tutor-discovery/discovery.handler";
 import type { InviteHandler } from "./modules/invite/invite.handler";
@@ -101,6 +104,7 @@ export interface ServiceRegistry {
   adminKnowledgeBank: AdminKnowledgeBankService;
   competitionCatalog: CompetitionCatalogService;
   academyClass: AcademyClassService;
+  classEnrollment: ClassEnrollmentService;
   tutor: TutorService;
   invite: InviteService;
   achievement: AchievementService;
@@ -128,6 +132,7 @@ export interface HandlerRegistry {
   adminKnowledgeBank: AdminKnowledgeBankHandler;
   competitionCatalog: CompetitionCatalogHandler;
   academyClass: AcademyClassHandler;
+  classEnrollment: ClassEnrollmentHandler;
   tutor: TutorHandler;
   discovery: DiscoveryHandler;
   invite: InviteHandler;
@@ -411,6 +416,14 @@ function createServices() {
     redis,
   });
 
+  const classEnrollment = createClassEnrollmentModule({
+    db,
+    wallet: wallet.service,
+    payment: payment.service,
+    notification: notification.service,
+    appBaseUrl: env.CORS_ORIGIN,
+  });
+
   const adminBooking = createAdminBookingModule({
     db,
     audit: audit.service,
@@ -455,6 +468,7 @@ function createServices() {
     adminKnowledgeBank: adminKnowledgeBank.service,
     competitionCatalog: competitionCatalog.service,
     academyClass: academyClass.service,
+    classEnrollment: classEnrollment.service,
     tutor: tutor.service,
     invite: invite.service,
     achievement: achievement.service,
@@ -482,6 +496,7 @@ function createServices() {
     adminKnowledgeBank: adminKnowledgeBank.handler,
     competitionCatalog: competitionCatalog.handler,
     academyClass: academyClass.handler,
+    classEnrollment: classEnrollment.handler,
     tutor: tutor.handler,
     discovery: discovery.handler,
     invite: invite.handler,
