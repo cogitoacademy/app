@@ -172,6 +172,7 @@ function NumberField({
   max,
   required = true,
   description,
+  readOnly = false,
 }: {
   id: string;
   label: string;
@@ -181,6 +182,7 @@ function NumberField({
   max?: number;
   required?: boolean;
   description?: string;
+  readOnly?: boolean;
 }) {
   return (
     <Field>
@@ -192,6 +194,7 @@ function NumberField({
         max={max}
         step={1}
         required={required}
+        readOnly={readOnly}
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />
@@ -267,8 +270,16 @@ export function AcademyClassPage() {
   const [form, setForm] = useState<DraftForm>(() => emptyDraft());
   const [coverUploading, setCoverUploading] = useState(false);
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
+  const [meetingRetryReasons, setMeetingRetryReasons] = useState<
+    Record<string, string>
+  >({});
   const classesQuery = useQuery(
     orpc.admin.listAcademyClasses.queryOptions({ input: { state: "draft" } }),
+  );
+  const publishedClassesQuery = useQuery(
+    orpc.admin.listAcademyClasses.queryOptions({
+      input: { state: "published" },
+    }),
   );
   const competitionsQuery = useQuery(
     orpc.admin.listCompetitionCatalog.queryOptions({
@@ -305,8 +316,67 @@ export function AcademyClassPage() {
       },
     }),
   );
+  const publishClass = useMutation(
+    orpc.admin.publishAcademyClass.mutationOptions({
+      onSuccess: async (record) => {
+        setForm(emptyDraft());
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: orpc.admin.listAcademyClasses.key({
+              input: { state: "draft" },
+            }),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: orpc.admin.listAcademyClasses.key({
+              input: { state: "published" },
+            }),
+          }),
+        ]);
+        toastManager.add({
+          title: "Class published",
+          description: `${record.titleEn} is now visible in the student catalog.`,
+          type: "success",
+        });
+      },
+      onError: (error: Error) => {
+        toastManager.add({
+          title: "Class could not be published",
+          description: getUserFacingError(error),
+          type: "error",
+        });
+      },
+    }),
+  );
+  const retryClassMeetings = useMutation(
+    orpc.admin.retryAcademyClassMeetings.mutationOptions({
+      onSuccess: async (record) => {
+        setMeetingRetryReasons((current) => ({
+          ...current,
+          [record.id]: "",
+        }));
+        await queryClient.invalidateQueries({
+          queryKey: orpc.admin.listAcademyClasses.key({
+            input: { state: "published" },
+          }),
+        });
+        toastManager.add({
+          title: "Meeting setup retried",
+          description: `${record.titleEn} meeting setup has been retried.`,
+          type: "success",
+        });
+      },
+      onError: (error: Error) => {
+        toastManager.add({
+          title: "Meeting retry could not be started",
+          description: getUserFacingError(error),
+          type: "error",
+        });
+      },
+    }),
+  );
 
   const classes = classesQuery.data ?? [];
+  const publishedClasses = publishedClassesQuery.data ?? [];
   const competitions = competitionsQuery.data ?? [];
   const tutors = tutorsQuery.data ?? [];
   const rooms = roomsQuery.data ?? [];
@@ -415,8 +485,7 @@ export function AcademyClassPage() {
     }
   }
 
-  function submitDraft(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function draftInputFromForm() {
     const sessions = form.sessions.map((session) => ({
       ...(session.id ? { id: session.id } : {}),
       capacity: Number(session.capacity),
@@ -460,6 +529,49 @@ export function AcademyClassPage() {
             kind: "masterclass" as const,
             masterclassRateMarks: Number(form.masterclassRateMarks),
           };
+    return input;
+  }
+
+  function hasUnsavedDraftChanges() {
+    if (!form.id) return true;
+    const saved = classes.find((record) => record.id === form.id);
+    if (!saved) return true;
+    return (
+      JSON.stringify({ ...form, reason: "" }) !==
+      JSON.stringify({ ...draftFromRecord(saved), reason: "" })
+    );
+  }
+
+  async function publishCurrentDraft(
+    input: ReturnType<typeof draftInputFromForm>,
+  ) {
+    if (!form.id) return;
+    try {
+      const saved = hasUnsavedDraftChanges()
+        ? await saveDraft.mutateAsync(input)
+        : await client.admin.getAcademyClass({ id: form.id });
+      await publishClass.mutateAsync({
+        id: saved.id,
+        expectedVersion: saved.version,
+        reason: input.reason,
+      });
+    } catch {
+      // Each mutation displays its own actionable error toast.
+    }
+  }
+
+  function submitDraft(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const input = draftInputFromForm();
+    const submitter = (event.nativeEvent as SubmitEvent).submitter;
+    if (
+      submitter instanceof HTMLButtonElement &&
+      submitter.name === "class-action" &&
+      submitter.value === "publish"
+    ) {
+      void publishCurrentDraft(input);
+      return;
+    }
     saveDraft.mutate(input);
   }
 
@@ -494,6 +606,10 @@ export function AcademyClassPage() {
               </Button>
               {classesQuery.isLoading ? (
                 <Text className="text-muted">Loading drafts…</Text>
+              ) : classesQuery.isError ? (
+                <Text className="text-danger-foreground">
+                  Draft classes could not be loaded. Refresh to try again.
+                </Text>
               ) : classes.length === 0 ? (
                 <Text className="text-muted">No class drafts yet.</Text>
               ) : (
@@ -671,6 +787,7 @@ export function AcademyClassPage() {
                     label="Flat tutor fee per session (IDR)"
                     value={form.tutorFeeIdr}
                     onChange={(value) => updateForm("tutorFeeIdr", value)}
+                    readOnly
                     min={1}
                     max={2_000_000_000}
                     description={
@@ -743,10 +860,10 @@ export function AcademyClassPage() {
                         />
                       </div>
                     </div>
-                    <FieldDescription>
+                    <Text className="text-muted text-sm">
                       The minimum counts unique active full/half-plan students.
                       Single-session buyers do not count.
-                    </FieldDescription>
+                    </Text>
                   </>
                 ) : null}
 
@@ -1007,9 +1124,27 @@ export function AcademyClassPage() {
                 <div className="flex flex-wrap justify-end gap-3">
                   {form.id ? (
                     <Button
+                      type="submit"
+                      name="class-action"
+                      value="publish"
+                      disabled={
+                        saveDraft.isPending ||
+                        publishClass.isPending ||
+                        coverUploading
+                      }
+                    >
+                      {publishClass.isPending ? "Publishing…" : "Publish class"}
+                    </Button>
+                  ) : null}
+                  {form.id ? (
+                    <Button
                       type="button"
                       variant="secondary"
-                      disabled={coverUploading}
+                      disabled={
+                        coverUploading ||
+                        saveDraft.isPending ||
+                        publishClass.isPending
+                      }
                       onClick={() => {
                         setForm(emptyDraft());
                         setCoverPreviewUrl(null);
@@ -1020,7 +1155,11 @@ export function AcademyClassPage() {
                   ) : null}
                   <Button
                     type="submit"
-                    disabled={saveDraft.isPending || coverUploading}
+                    disabled={
+                      saveDraft.isPending ||
+                      publishClass.isPending ||
+                      coverUploading
+                    }
                   >
                     <IconDeviceFloppy />
                     {saveDraft.isPending ? "Saving…" : "Save draft"}
@@ -1031,6 +1170,110 @@ export function AcademyClassPage() {
           </CardBody>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Published classes</CardTitle>
+        </CardHeader>
+        <CardBody>
+          <Stack direction="column" spacing="sm">
+            {publishedClassesQuery.isLoading ? (
+              <Text className="text-muted">Loading published classes…</Text>
+            ) : publishedClassesQuery.isError ? (
+              <Text className="text-danger-foreground">
+                Published classes could not be loaded. Refresh to try again.
+              </Text>
+            ) : publishedClasses.length === 0 ? (
+              <Text className="text-muted">
+                No classes have been published.
+              </Text>
+            ) : (
+              publishedClasses.map((record) => {
+                const onlineSessions = record.sessions.filter(
+                  (session) => session.mode === "online",
+                );
+                const failedMeetings = onlineSessions.filter(
+                  (session) => session.meeting?.status === "failed",
+                );
+                const createdMeetings = onlineSessions.filter(
+                  (session) => session.meeting?.status === "created",
+                );
+                const pendingMeetings =
+                  onlineSessions.length -
+                  failedMeetings.length -
+                  createdMeetings.length;
+                const retryReason = meetingRetryReasons[record.id] ?? "";
+                return (
+                  <div
+                    key={record.id}
+                    className="rounded-lg border border-card-border bg-card p-4"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Text className="font-medium">{record.titleEn}</Text>
+                          <Badge variant="success">Published</Badge>
+                          <Badge variant="secondary">{record.kind}</Badge>
+                        </div>
+                        <Text className="mt-1 text-sm text-muted">
+                          {record.sessions.length} session(s) ·{" "}
+                          {record.competition.name}
+                        </Text>
+                        <Text className="mt-2 text-sm text-muted">
+                          {onlineSessions.length === 0
+                            ? "In-person sessions use managed rooms; no Meet is created."
+                            : `${createdMeetings.length} Meet(s) ready${pendingMeetings > 0 ? ` · ${pendingMeetings} pending` : ""}${failedMeetings.length > 0 ? ` · ${failedMeetings.length} failed` : ""}.`}
+                        </Text>
+                      </div>
+                    </div>
+                    {failedMeetings.length > 0 ? (
+                      <div className="mt-4 flex flex-wrap items-end gap-3">
+                        <Field className="min-w-64 flex-1">
+                          <FieldLabel htmlFor={`meeting-retry-${record.id}`}>
+                            Retry reason
+                          </FieldLabel>
+                          <Input
+                            id={`meeting-retry-${record.id}`}
+                            maxLength={500}
+                            value={retryReason}
+                            onChange={(event) =>
+                              setMeetingRetryReasons((current) => ({
+                                ...current,
+                                [record.id]: event.target.value,
+                              }))
+                            }
+                          />
+                        </Field>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          disabled={
+                            retryClassMeetings.isPending ||
+                            retryReason.trim().length < 3
+                          }
+                          onClick={() =>
+                            retryClassMeetings.mutate({
+                              id: record.id,
+                              reason: retryReason,
+                            })
+                          }
+                        >
+                          Retry failed meeting setup
+                        </Button>
+                      </div>
+                    ) : pendingMeetings > 0 ? (
+                      <Text className="mt-3 text-sm text-muted">
+                        Meeting work is queued or running. Failed attempts are
+                        retried automatically.
+                      </Text>
+                    ) : null}
+                  </div>
+                );
+              })
+            )}
+          </Stack>
+        </CardBody>
+      </Card>
     </Stack>
   );
 }

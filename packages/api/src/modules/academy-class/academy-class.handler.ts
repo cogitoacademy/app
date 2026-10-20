@@ -5,6 +5,8 @@ import type { AcademyClassService } from "./academy-class.service";
 import {
   getAcademyClassInput,
   listAcademyClassesInput,
+  publishAcademyClassInput,
+  retryAcademyClassMeetingsInput,
   saveAcademyClassDraftInput,
 } from "./academy-class.types";
 import type { z } from "zod";
@@ -38,6 +40,28 @@ export function createAcademyClassHandler(service: AcademyClassService) {
     }) =>
       withDomainMap(
         () => service.saveDraft(context.session!.user.id, input),
+        mapAcademyClassError,
+      ),
+    publishAcademyClass: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: z.infer<typeof publishAcademyClassInput>;
+    }) =>
+      withDomainMap(
+        () => service.publish(context.session!.user.id, input),
+        mapAcademyClassError,
+      ),
+    retryAcademyClassMeetings: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: z.infer<typeof retryAcademyClassMeetingsInput>;
+    }) =>
+      withDomainMap(
+        () => service.retryMeetings(context.session!.user.id, input),
         mapAcademyClassError,
       ),
   };

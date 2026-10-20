@@ -237,6 +237,14 @@ Focused integration verification: **4/4 tests, 18 expectations** against the gua
 
 The public `classes.list` and `classes.get` procedures expose published classes only. Their explicit DTO includes the student catalog fields and tutor display name, while omitting tutor identifiers and account fields, tutor fees, room details, admin version/audit fields, and student roster data. A missing or unpublished detail is returned as not found. The catalog and detail pages consume this contract; enrollment remains unavailable until T05.
 
+## V3 class publication and meeting setup checkpoint (2026-10-20)
+
+Admin can publish a versioned class draft after the service rechecks active competition ancestry, published tutor assignments and mode/capacity, future session times, cohort minimum/curriculum, managed-room capacity and conflicts, and the approved tutor fee (Rp400,000 per cohort session or Rp300,000 per masterclass session in either mode). Publication marks sessions scheduled, writes audit state, deduplicates one tutor notification per class, and creates one durable meeting job per online session in the same transaction. In-person sessions use managed rooms and have no Meet job.
+
+Migration `0063_academy_class_meetings.sql` adds the per-session meeting job/status record. Provider work runs after commit under a claim lease with exponential retry; stable Google event IDs recover an event after an ambiguous provider response. Admin can retry failed setup. Test mode uses a controlled local adapter; no Google Calendar call is made in tests. The admin Class studio now exposes draft/edit/publish controls and failed-meeting retry. Public list/detail pages use the allowlisted DTO and keep enrollment visibly unavailable.
+
+The class publish API race/integration suite and the admin-to-public browser journey cover version conflicts, concurrent publish, online plus offline sessions, retry, hidden drafts, role denial, empty/error states, and DTO privacy. Migration `0063` is applied only to isolated `cogito-test`; dev migration review remains with the parent. T04 remains in progress for enrollment, class absence/cancellation/report/expiry integration, and approved client curriculum/cover inputs. This checkpoint is not a V3 activation or release gate.
+
 ## V3 report-field character limits (2026-10-18)
 
 REQ-REPORT-01 now applies to new on-demand/series completion submissions:

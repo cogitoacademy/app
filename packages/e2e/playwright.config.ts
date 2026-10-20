@@ -78,6 +78,8 @@ export default defineConfig({
       env: {
         ...testServerEnv,
         GOOGLE_MEET_ENABLED: "false",
+        ACADEMY_CLASS_MEETING_TEST_FAIL_FIRST_TITLE_PREFIX:
+          "Cogito E2E RETRY: ",
         GOOGLE_MEET_REFRESH_TOKEN: "",
         GOOGLE_MEET_CLIENT_ID: "",
         GOOGLE_MEET_CLIENT_SECRET: "",

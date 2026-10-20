@@ -3,6 +3,8 @@ import type { AcademyClassHandler } from "./academy-class.handler";
 import {
   getAcademyClassInput,
   listAcademyClassesInput,
+  publishAcademyClassInput,
+  retryAcademyClassMeetingsInput,
   saveAcademyClassDraftInput,
 } from "./academy-class.types";
 
@@ -35,6 +37,24 @@ export function createAcademyClassRouter(handler: AcademyClassHandler) {
       })
       .input(saveAcademyClassDraftInput)
       .handler(handler.saveAcademyClassDraft),
+    publishAcademyClass: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/classes/publish",
+        tags: ["Admin", "Classes"],
+        summary: "Validate and publish a versioned class draft",
+      })
+      .input(publishAcademyClassInput)
+      .handler(handler.publishAcademyClass),
+    retryAcademyClassMeetings: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/classes/retry-meetings",
+        tags: ["Admin", "Classes"],
+        summary: "Retry failed meetings for a published class",
+      })
+      .input(retryAcademyClassMeetingsInput)
+      .handler(handler.retryAcademyClassMeetings),
   };
 }
 

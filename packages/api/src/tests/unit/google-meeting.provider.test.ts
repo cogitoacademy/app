@@ -1695,3 +1695,93 @@ describe("createGoogleMeetingProvider OAuth flows", () => {
     }
   });
 });
+
+describe("createGoogleMeetingProvider academy class events", () => {
+  const config = {
+    authType: "service_account" as const,
+    clientEmail: "test@example.com",
+    privateKey: "-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----",
+    calendarId: "primary",
+  };
+
+  test("reuses a stable Google event ID after an ambiguous successful insert", async () => {
+    mockCalendarEventsInsert.mockReset();
+    mockCalendarEventsGet.mockReset();
+    mockCalendarEventsInsert.mockImplementationOnce(async () => ({
+      data: {
+        id: "stable-class-event",
+        conferenceData: {
+          entryPoints: [
+            { entryPointType: "video", uri: "https://meet.google.com/class" },
+          ],
+        },
+      },
+    }));
+    mockCalendarEventsInsert.mockImplementationOnce(async () => {
+      throw Object.assign(new Error("Google Calendar returned 409"), {
+        code: 409,
+      });
+    });
+    mockCalendarEventsGet.mockImplementationOnce(async () => ({
+      data: {
+        id: "stable-class-event",
+        conferenceData: {
+          entryPoints: [
+            { entryPointType: "video", uri: "https://meet.google.com/class" },
+          ],
+        },
+      },
+    }));
+
+    const localInsert = mock(() => ({
+      values: mock(() => ({ returning: mock(async () => []) })),
+    }));
+    const provider = createGoogleMeetingProvider(config, {
+      insert: localInsert,
+    } as any);
+    const sessionId = "class-session-retry";
+    const startAt = new Date("2035-02-01T10:00:00.000Z");
+    const endAt = new Date("2035-02-01T11:00:00.000Z");
+
+    const first = await provider.createAcademyClassEvent(
+      sessionId,
+      startAt,
+      endAt,
+      { email: "tutor@example.com", name: "Test Tutor" },
+      { title: "Cogito class retry" },
+    );
+    const retry = await provider.createAcademyClassEvent(
+      sessionId,
+      startAt,
+      endAt,
+      { email: "tutor@example.com", name: "Test Tutor" },
+      { title: "Cogito class retry" },
+    );
+
+    const firstRequest = mockCalendarEventsInsert.mock.calls[0]?.[0] as
+      | {
+          requestBody?: {
+            id?: string;
+            conferenceData?: { createRequest?: { requestId?: string } };
+          };
+        }
+      | undefined;
+    const retryRequest = mockCalendarEventsInsert.mock.calls[1]?.[0] as
+      | {
+          requestBody?: {
+            id?: string;
+            conferenceData?: { createRequest?: { requestId?: string } };
+          };
+        }
+      | undefined;
+    expect(first.status).toBe("created");
+    expect(retry.status).toBe("created");
+    expect(retry.externalEventId).toBe(first.externalEventId);
+    expect(firstRequest?.requestBody?.id).toBe(retryRequest?.requestBody?.id);
+    expect(
+      firstRequest?.requestBody?.conferenceData?.createRequest?.requestId,
+    ).toBe(retryRequest?.requestBody?.conferenceData?.createRequest?.requestId);
+    expect(mockCalendarEventsGet).toHaveBeenCalledTimes(1);
+    expect(localInsert).not.toHaveBeenCalled();
+  });
+});

@@ -3,7 +3,10 @@ import { eq } from "drizzle-orm";
 import { db } from "@cogito-app/db";
 import {
   academyClass,
+  academyClassMeeting,
+  academyClassSession,
   auditLog,
+  notification,
   room,
   subjectCategory,
   tutorInvite,
@@ -312,5 +315,187 @@ describe("academy class drafts and published reads", () => {
         .set({ modality: "both" })
         .where(eq(tutorProfile.userId, tutorId));
     }
+  });
+
+  test("publishes both modes once and exposes only the public class DTO", async () => {
+    const startAt = new Date("2036-01-05T10:00:00.000Z");
+    const input = {
+      kind: "cohort" as const,
+      competitionId,
+      titleEn: `Published cohort ${suffix}`,
+      descriptionEn: "Integration fixture for public class reads.",
+      tutorFeeIdr: 400_000,
+      minimumEnrollment: 2,
+      minimumCheckAt: new Date("2035-12-01T00:00:00.000Z"),
+      fullRateMarks: 20,
+      halfRateMarks: 22,
+      singleRateMarks: 25,
+      reason: "Exercise class publication",
+      sessions: [
+        {
+          capacity: 4,
+          titleEn: "Online session",
+          curriculumEn: "Online curriculum fixture.",
+          startAt,
+          endAt: new Date(startAt.getTime() + 60 * 60 * 1000),
+          mode: "online" as const,
+          roomId: null,
+          tutorId,
+        },
+        {
+          capacity: 4,
+          titleEn: "In-person session",
+          curriculumEn: "In-person curriculum fixture.",
+          startAt: new Date(startAt.getTime() + 7 * 24 * 60 * 60 * 1000),
+          endAt: new Date(
+            startAt.getTime() + 7 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000,
+          ),
+          mode: "in_person" as const,
+          roomId,
+          tutorId,
+        },
+      ],
+    };
+    const draft = await adminClient.admin.saveAcademyClassDraft(input);
+    const anonymousClient = createTestClient(await createTestContext());
+
+    expect(draft.state).toBe("draft");
+    expect(
+      (await anonymousClient.classes.list()).some(
+        (record) => record.id === draft.id,
+      ),
+    ).toBe(false);
+    await expect(anonymousClient.classes.get({ id: draft.id })).rejects.toThrow(
+      "Class not found",
+    );
+
+    const publishInput = {
+      id: draft.id,
+      expectedVersion: draft.version,
+      reason: "Publish approved cohort fixture",
+    };
+    const outcomes = await Promise.allSettled([
+      adminClient.admin.publishAcademyClass(publishInput),
+      adminClient.admin.publishAcademyClass(publishInput),
+    ]);
+    expect(
+      outcomes.filter((outcome) => outcome.status === "fulfilled"),
+    ).toHaveLength(1);
+    expect(
+      outcomes.filter((outcome) => outcome.status === "rejected"),
+    ).toHaveLength(1);
+
+    const published = await adminClient.admin.getAcademyClass({ id: draft.id });
+    expect(published.state).toBe("published");
+    expect(published.sessions.map((session) => session.tutorFeeIdr)).toEqual([
+      400_000, 400_000,
+    ]);
+    const meetingRows = await db
+      .select({ meeting: academyClassMeeting, session: academyClassSession })
+      .from(academyClassMeeting)
+      .innerJoin(
+        academyClassSession,
+        eq(academyClassMeeting.sessionId, academyClassSession.id),
+      )
+      .where(eq(academyClassSession.classId, draft.id));
+    expect(meetingRows).toHaveLength(1);
+    expect(meetingRows[0]?.meeting.status).toBe("created");
+
+    const tutorNotifications = await db
+      .select()
+      .from(notification)
+      .where(
+        eq(
+          notification.eventKey,
+          `academy_class_published:${draft.id}:tutor:${tutorId}`,
+        ),
+      );
+    expect(tutorNotifications).toHaveLength(1);
+    const publishAudits = await db
+      .select()
+      .from(auditLog)
+      .where(eq(auditLog.targetId, draft.id));
+    expect(
+      publishAudits.filter(
+        (entry) => entry.action === "academy_class.published",
+      ),
+    ).toHaveLength(1);
+
+    const publicRecord = await anonymousClient.classes.get({ id: draft.id });
+    expect(publicRecord.state).toBe("published");
+    expect(publicRecord.sessions.map((session) => session.mode)).toEqual([
+      "online",
+      "in_person",
+    ]);
+    expect("tutorFeeIdr" in publicRecord).toBe(false);
+    for (const session of publicRecord.sessions) {
+      expect(Object.keys(session)).not.toContain("tutorId");
+      expect(Object.keys(session)).not.toContain("roomId");
+      expect(Object.keys(session)).not.toContain("meeting");
+      expect(Object.keys(session.tutor ?? {})).toEqual(["name"]);
+    }
+  });
+
+  test("rejects an outdated publish version and a non-approved tutor fee", async () => {
+    const startAt = new Date("2036-03-01T10:00:00.000Z");
+    const input = {
+      kind: "masterclass" as const,
+      competitionId,
+      titleEn: `Versioned masterclass ${suffix}`,
+      descriptionEn: "Integration fixture for publish version checks.",
+      tutorFeeIdr: 300_000,
+      masterclassRateMarks: 5,
+      reason: "Create masterclass for publish version test",
+      sessions: [
+        {
+          capacity: 4,
+          titleEn: "Masterclass session",
+          startAt,
+          endAt: new Date(startAt.getTime() + 60 * 60 * 1000),
+          mode: "online" as const,
+          roomId: null,
+          tutorId,
+        },
+      ],
+    };
+    const draft = await adminClient.admin.saveAcademyClassDraft(input);
+    const updated = await adminClient.admin.saveAcademyClassDraft({
+      ...input,
+      id: draft.id,
+      expectedVersion: draft.version,
+      descriptionEn: "Updated after another admin reviewed the draft.",
+      reason: "Update masterclass before publish",
+    });
+
+    await expect(
+      adminClient.admin.publishAcademyClass({
+        id: draft.id,
+        expectedVersion: draft.version,
+        reason: "Attempt stale publish",
+      }),
+    ).rejects.toThrow("changed in another admin session");
+    expect(
+      (await adminClient.admin.getAcademyClass({ id: draft.id })).state,
+    ).toBe("draft");
+    expect(updated.version).toBe(draft.version + 1);
+
+    const wrongFee = await adminClient.admin.saveAcademyClassDraft({
+      ...input,
+      titleEn: `Wrong-fee masterclass ${suffix}`,
+      tutorFeeIdr: 250_000,
+      reason: "Create draft with non-approved fee",
+    });
+    await expect(
+      adminClient.admin.publishAcademyClass({
+        id: wrongFee.id,
+        expectedVersion: wrongFee.version,
+        reason: "Reject non-approved tutor fee",
+      }),
+    ).rejects.toThrow(
+      "approved masterclass tutor fee is Rp300,000 per session",
+    );
+    expect(
+      (await adminClient.admin.getAcademyClass({ id: wrongFee.id })).state,
+    ).toBe("draft");
   });
 });

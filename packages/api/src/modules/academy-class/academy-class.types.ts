@@ -110,3 +110,14 @@ export const listAcademyClassesInput = z.object({
 export const getAcademyClassInput = z.object({
   id: z.string().uuid(),
 });
+
+export const publishAcademyClassInput = z.object({
+  id: z.string().uuid(),
+  expectedVersion: z.number().int().positive(),
+  reason: z.string().trim().min(3).max(500),
+});
+
+export const retryAcademyClassMeetingsInput = z.object({
+  id: z.string().uuid(),
+  reason: z.string().trim().min(3).max(500),
+});

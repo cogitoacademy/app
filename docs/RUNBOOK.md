@@ -21,12 +21,12 @@ Read-only inspection used loopback URLs from `apps/server/.env` and
 `drizzle.__drizzle_migrations`. The four migration files and recorded hashes
 match exactly:
 
-| Migration | Applied timestamp | SHA-256 | `cogito-app` dev | `cogito-test` |
-| --- | ---: | --- | --- | --- |
-| `0059_massive_blindfold.sql` | 1792383364835 | `b4e69c578c477f72069aad24914fa9cc7193e3f79fe070e9efa858b5fa9a4669` | Applied | Applied |
-| `0059_faq_rich_text.sql` | 1792385462859 | `7f330d2e9be702fa8da6e1b1d9fba89771fb74b121a3c5bf3507901e1bfd40d7` | Applied | Applied |
-| `0060_tutor_payout_allocations.sql` | 1792388580581 | `728a44d0efd1517513120928147fdcef3776991c20d6f0b9b136cf03c8ab8bf3` | Applied | Applied |
-| `0061_academy_class_drafts.sql` | 1792394899225 | `db9f27f77c76201b609400077a530ca8d5141f79b904c6f9a7ef1595a4a366b8` | Applied | Applied |
+| Migration                           | Applied timestamp | SHA-256                                                            | `cogito-app` dev | `cogito-test` |
+| ----------------------------------- | ----------------: | ------------------------------------------------------------------ | ---------------- | ------------- |
+| `0059_massive_blindfold.sql`        |     1792383364835 | `b4e69c578c477f72069aad24914fa9cc7193e3f79fe070e9efa858b5fa9a4669` | Applied          | Applied       |
+| `0059_faq_rich_text.sql`            |     1792385462859 | `7f330d2e9be702fa8da6e1b1d9fba89771fb74b121a3c5bf3507901e1bfd40d7` | Applied          | Applied       |
+| `0060_tutor_payout_allocations.sql` |     1792388580581 | `728a44d0efd1517513120928147fdcef3776991c20d6f0b9b136cf03c8ab8bf3` | Applied          | Applied       |
+| `0061_academy_class_drafts.sql`     |     1792394899225 | `db9f27f77c76201b609400077a530ca8d5141f79b904c6f9a7ef1595a4a366b8` | Applied          | Applied       |
 
 Both local databases now have `faq_entry`, `tutor_session_fee`,
 `tutor_payout_allocation`, `academy_class` and `academy_class_session`.
@@ -321,6 +321,16 @@ bun test packages/api/src/tests/unit/academy-class.public.test.ts
 ```
 
 It passed 1 test / 1 expectation and verified the response omits tutor payout/account fields, room details, and roster data. `bun run --cwd apps/web check-types` passed after linking the existing workspace dependencies from `C:\.Projects\cogito-app`; no dependencies were installed. Browser E2E and database tests were not run. `classes.list` and `classes.get` are public reads of published classes only; they do not enable enrollment.
+
+## V3 class publish and Meet retry verification (2026-10-20)
+
+`0063_academy_class_meetings.sql` is an additive migration for per-session provider work. It was generated from the current Drizzle schema and applied with the standard migration runner only after verifying `DATABASE_URL` resolves to loopback database `cogito-test`. It was not applied to local dev; the parent reviews the generated SQL before any dev migration. Existing migration SQL, hashes, and timestamps were preserved.
+
+Publish is version-checked under a class-row lock. Before commit the service rechecks active competition ancestry, tutor publication/mode/capacity, future sessions, approved flat class fees, cohort rules, managed-room capacity and conflicts. Publication, session scheduling, audit, one deduplicated notification per assigned tutor, and online-session meeting jobs commit atomically. Provider calls happen after commit; leased jobs retry with backoff and stable Google event identity. Test mode uses a controlled provider adapter and the E2E server disables Google credentials.
+
+The guarded API integration suite covers hidden drafts, versioned publication, both session modes and approved fee snapshots, privacy allowlist, repeat/concurrent publish, notification/job dedupe, stale publish, and publish validation. It passed 6 tests / 44 expectations. The Playwright admin-to-student journey passed 1 Chromium spec (15.9s; 1.1m including test server startup and fixture seed), covering UI draft creation, hidden draft, role denial, stale-save rejection, required-field validation, online meeting failure/retry, offline no-Meet behavior, student catalog/detail, empty/error states, and private-field omission. The test adapter is local-only; Google Meet is disabled. Both suites target loopback `cogito-test`; neither wrote dev or production data.
+
+Run the class API suite with `bun scripts/run-test-suite.mjs api --timeout 30000 packages/api/src/tests/integration/academy-class.test.ts`. Run browser coverage with `NODE_ENV=test`, `ENV_FILE` pointing to an `.env.test` whose `DATABASE_URL` is loopback `cogito-test`, then `bun run --cwd packages/e2e test src/specs/academy-class-publish.spec.ts`. Migration `0063_academy_class_meetings.sql` is applied only to `cogito-test`; parent review is required before it is applied to dev.
 
 ## V3 draft economy editor (2026-10-18)
 

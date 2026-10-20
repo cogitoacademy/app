@@ -743,20 +743,30 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 ### `admin.listAcademyClasses`, `admin.getAcademyClass`, `admin.saveAcademyClassDraft`
 
-- **RPC paths:** `/rpc/admin/classes/list`, `/rpc/admin/classes/get`, `/rpc/admin/classes/save-draft`
+- **RPC paths:** `/rpc/admin/listAcademyClasses`, `/rpc/admin/getAcademyClass`, `/rpc/admin/saveAcademyClassDraft`
 - **Auth:** Admin
 - **Inputs:** list `{ state?: "draft" | "published" | "postponed" | "cancelled" | "completed" }`; get `{ id }`; save uses a `kind`-discriminated class payload. Both kinds require `competitionId`, English `titleEn`/`descriptionEn`, optional Indonesian fields, optional `coverKey`, `tutorFeeIdr`, `sessions[]`, and an audit `reason`. Cohort adds `minimumEnrollment`, `minimumCheckAt`, `fullRateMarks`, `halfRateMarks`, and `singleRateMarks`; masterclass adds `masterclassRateMarks` and must contain exactly one session. Each session has optional stable `id`, `capacity`, English title, optional Indonesian title/curriculum, ISO `startAt`/`endAt`, `mode` (`online` or `in_person`), `tutorId`, and `roomId` only for in-person delivery. Updates additionally require class `id` and `expectedVersion`.
 - **Output:** Admin class/session rows with competition, tutor, and managed-room labels. Save returns the saved class and ordered sessions.
-- **Rules:** New rows are drafts only. Competition must be active; each tutor must have a published profile that supports the mode and session capacity; in-person sessions require an active room large enough for that session. Cohorts require English curriculum text, a minimum-check date before the first session, and non-overlapping sessions; masterclasses have exactly one session. Draft updates preserve submitted session IDs and use optimistic version checks; only drafts are editable. Create/update writes an audit entry with actor, reason, and before/after snapshot. The admin editor uploads PNG/JPEG/WebP/GIF covers (max 5 MB) through `upload.createUploadUrl` and saves the returned key as `coverKey`; no class asset was uploaded during implementation. Drafts are not public and do not reserve rooms. Publication, Meet creation, and conflict reservation are not implemented by the current slice.
-- **Rate defaults:** Cohort full/half/single prices default to 20/22/25 Marks per session and tutor fee Rp400,000 per session. Masterclass defaults to 5 Marks and Rp300,000 tutor fee. Admin may edit these draft values; rates are snapshotted on the class/session draft.
+- **Rules:** New rows are drafts only. Competition must be active; each tutor must have a published profile that supports the mode and session capacity; in-person sessions require an active room large enough for that session. Cohorts require English curriculum text, a minimum-check date before the first session, and non-overlapping sessions; masterclasses have exactly one session. Draft updates preserve submitted session IDs and use optimistic version checks; only drafts are editable. Create/update writes an audit entry with actor, reason, and before/after snapshot. The admin editor uploads PNG/JPEG/WebP/GIF covers (max 5 MB) through `upload.createUploadUrl` and saves the returned key as `coverKey`; approved class assets remain pending. Drafts are not public and do not reserve rooms.
+- **Rate defaults:** Cohort full/half/single prices default to 20/22/25 Marks per session; tutor fee is fixed at Rp400,000 per session in either delivery mode. Masterclasses default to 5 Marks and Rp300,000 tutor fee. Publish rejects a changed tutor fee.
 - **Errors:** `ACADEMY_CLASS_NOT_FOUND` (404); `ACADEMY_CLASS_VERSION_CONFLICT` and `ACADEMY_CLASS_STATE_CONFLICT` (409); invalid schedule/reference/class data (400).
+
+### `admin.publishAcademyClass`, `admin.retryAcademyClassMeetings`
+
+- **RPC paths:** `/rpc/admin/publishAcademyClass`, `/rpc/admin/retryAcademyClassMeetings`
+- **Auth:** Admin
+- **Inputs:** Publish `{ id, expectedVersion, reason }`; retry `{ id, reason }`.
+- **Output:** Updated admin class/session rows, including per-online-session meeting status for admin reads.
+- **Publish rules:** Publication locks and version-checks the draft, revalidates active competition ancestry, published tutor assignment and capacity, approved flat tutor fee, future schedule, managed room capacity, and overlap against active bookings and other published classes. One online-session meeting job is inserted with publication and audit writes in the same transaction; in-person sessions use managed rooms and do not create Meet work. Assigned tutors receive one deduplicated schedule notification each.
+- **Meeting retry rules:** Provider work runs after publication commits and uses durable per-session jobs, a lease, exponential retries, and stable Google event IDs. Repeated/concurrent publication cannot add duplicate jobs or notifications. Admin retry queues failed jobs; scheduled retries continue automatically. Test mode injects a controlled local adapter and never calls Google.
+- **Enrollment:** Not implemented; public class screens state that registration is not available.
 
 ### `classes.list`, `classes.get`
 
 - **RPC paths:** `/rpc/classes/list`, `/rpc/classes/get`
 - **Auth:** Public read
 - **Inputs:** `list` has no input; `get` accepts `{ id }`.
-- **Output:** Published class catalog fields, competition and parent names, ordered sessions, schedule/mode/curriculum, and tutor display name. The DTO excludes tutor IDs/account data and fees, room details, audit/version fields, and student roster data.
+- **Output:** Published class catalog fields, competition and parent names, ordered sessions, schedule/mode/curriculum, and tutor display name. The DTO excludes tutor IDs/account data, IDR tutor fees/payout/tax data, meeting/room details, audit/version fields, and student roster data.
 - **Rules:** The list filters to `published`; detail returns not found for missing or unpublished classes. Enrollment and booking are not included in this read contract.
 
 ## Admin Knowledge Bank Access (`adminKnowledgeBank.*`)

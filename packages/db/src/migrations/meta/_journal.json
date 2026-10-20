@@ -442,6 +442,13 @@
       "when": 1792394899225,
       "tag": "0061_academy_class_drafts",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1792496861907,
+      "tag": "0063_academy_class_meetings",
+      "breakpoints": true
     }
   ]
 }

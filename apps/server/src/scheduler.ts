@@ -50,7 +50,16 @@ export async function initScheduler(): Promise<void> {
     onSendNotificationEmail: () =>
       services.notification.dispatchQueuedEmails(50),
     onEscalateSupportTickets: () => services.support.escalatePastSlaTickets(),
-    onRetryFailedMeetings: () => services.booking.retryFailedMeetings(),
+    onRetryFailedMeetings: async () => {
+      const [bookingResult, classResult] = await Promise.all([
+        services.booking.retryFailedMeetings(),
+        services.academyClass.retryFailedMeetings(),
+      ]);
+      return {
+        succeeded: bookingResult.succeeded + classResult.succeeded,
+        failed: bookingResult.failed + classResult.failed,
+      };
+    },
     onReconcilePayments: () => services.payment.reconcilePendingPayments(50),
   });
 

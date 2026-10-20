@@ -35,6 +35,21 @@ function offlineCalendarEventId(bookingId: string): string {
   return `cogito${createHash("sha256").update(bookingId).digest("hex")}`;
 }
 
+function isDuplicateCalendarEventError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const value = error as {
+    code?: number | string;
+    message?: string;
+    response?: { status?: number };
+  };
+  return (
+    value.code === 409 ||
+    value.code === "409" ||
+    value.response?.status === 409 ||
+    /already exists|409/i.test(value.message ?? "")
+  );
+}
+
 interface GoogleOAuthTokenResponse {
   access_token?: string;
   error?: string;
@@ -270,6 +285,7 @@ export function createGoogleMeetingProvider(
     attendees: MeetingAttendee[] | undefined,
     details: MeetingEventDetails | undefined,
     timeoutMs: number,
+    idempotencyKey?: string,
   ): Promise<GoogleCalendarEvent> {
     const calendarId = encodeURIComponent(config.calendarId);
     const summary = details?.title?.trim() || `Cogito Booking ${bookingId}`;
@@ -283,8 +299,10 @@ export function createGoogleMeetingProvider(
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          ...(details?.createConference === false
-            ? { id: offlineCalendarEventId(bookingId) }
+          ...(idempotencyKey || details?.createConference === false
+            ? {
+                id: offlineCalendarEventId(idempotencyKey ?? bookingId),
+              }
             : {}),
           summary,
           ...(description ? { description } : {}),
@@ -306,7 +324,7 @@ export function createGoogleMeetingProvider(
             : {
                 conferenceData: {
                   createRequest: {
-                    requestId: bookingId,
+                    requestId: idempotencyKey ?? bookingId,
                     conferenceSolutionKey: { type: "hangoutsMeet" },
                   },
                 },
@@ -673,9 +691,15 @@ export function createGoogleMeetingProvider(
         scheduledStartAt ?? new Date(now.getTime() + 60 * 60 * 1000);
       const end = scheduledEndAt ?? new Date(start.getTime() + 90 * 60 * 1000);
 
-      const event = await googleMeetBreaker.execute(() =>
-        config.authType === "oauth_refresh_token"
-          ? insertEventWithOauth(
+      const providerEventId = details?.idempotencyKey
+        ? offlineCalendarEventId(details.idempotencyKey)
+        : details?.createConference === false
+          ? offlineCalendarEventId(bookingId)
+          : null;
+      const event = await googleMeetBreaker.execute(async () => {
+        try {
+          if (config.authType === "oauth_refresh_token") {
+            return await insertEventWithOauth(
               oauthAccessToken!,
               bookingId,
               start,
@@ -683,56 +707,85 @@ export function createGoogleMeetingProvider(
               attendees,
               details,
               TIMEOUT_MS,
-            )
-          : withTimeout(
-              Promise.resolve(
-                calendar!.events.insert({
-                  calendarId: config.calendarId,
-                  sendUpdates,
-                  requestBody: {
-                    ...(details?.createConference === false
-                      ? { id: offlineCalendarEventId(bookingId) }
-                      : {}),
-                    summary:
-                      details?.title?.trim() || `Cogito Booking ${bookingId}`,
-                    ...(details?.description?.trim()
-                      ? { description: details.description.trim() }
-                      : {}),
-                    ...(details?.location?.trim()
-                      ? { location: details.location.trim() }
-                      : {}),
-                    start: { dateTime: start.toISOString() },
-                    end: { dateTime: end.toISOString() },
-                    ...(attendees?.length
-                      ? {
-                          attendees: attendees.map((attendee) => ({
-                            email: attendee.email,
-                            ...(attendee.name
-                              ? { displayName: attendee.name }
-                              : {}),
-                          })),
-                        }
-                      : {}),
-                    ...(details?.createConference === false
-                      ? {}
-                      : {
-                          conferenceData: {
-                            createRequest: {
-                              requestId: bookingId,
-                              conferenceSolutionKey: { type: "hangoutsMeet" },
-                            },
-                          },
-                        }),
-                  },
+              details?.idempotencyKey,
+            );
+          }
+          return await withTimeout(
+            Promise.resolve(
+              calendar!.events.insert({
+                calendarId: config.calendarId,
+                sendUpdates,
+                requestBody: {
+                  ...(details?.idempotencyKey ||
+                  details?.createConference === false
+                    ? {
+                        id: offlineCalendarEventId(
+                          details.idempotencyKey ?? bookingId,
+                        ),
+                      }
+                    : {}),
+                  summary:
+                    details?.title?.trim() || `Cogito Booking ${bookingId}`,
+                  ...(details?.description?.trim()
+                    ? { description: details.description.trim() }
+                    : {}),
+                  ...(details?.location?.trim()
+                    ? { location: details.location.trim() }
+                    : {}),
+                  start: { dateTime: start.toISOString() },
+                  end: { dateTime: end.toISOString() },
+                  ...(attendees?.length
+                    ? {
+                        attendees: attendees.map((attendee) => ({
+                          email: attendee.email,
+                          ...(attendee.name
+                            ? { displayName: attendee.name }
+                            : {}),
+                        })),
+                      }
+                    : {}),
                   ...(details?.createConference === false
                     ? {}
-                    : { conferenceDataVersion: 1 }),
-                }),
-              ).then((response) => response.data as GoogleCalendarEvent),
+                    : {
+                        conferenceData: {
+                          createRequest: {
+                            requestId: details?.idempotencyKey ?? bookingId,
+                            conferenceSolutionKey: { type: "hangoutsMeet" },
+                          },
+                        },
+                      }),
+                },
+                ...(details?.createConference === false
+                  ? {}
+                  : { conferenceDataVersion: 1 }),
+              }),
+            ).then((response) => response.data as GoogleCalendarEvent),
+            TIMEOUT_MS,
+            "Google Meet API timeout after 30s",
+          );
+        } catch (error) {
+          if (!providerEventId || !isDuplicateCalendarEventError(error)) {
+            throw error;
+          }
+          if (config.authType === "oauth_refresh_token") {
+            return getEventWithOauth(
+              oauthAccessToken!,
+              providerEventId,
               TIMEOUT_MS,
-              "Google Meet API timeout after 30s",
-            ),
-      );
+            );
+          }
+          return withTimeout(
+            Promise.resolve(
+              calendar!.events.get({
+                calendarId: config.calendarId,
+                eventId: providerEventId,
+              }),
+            ).then((response) => response.data as GoogleCalendarEvent),
+            TIMEOUT_MS,
+            "Google Meet API timeout after 30s (get idempotent event)",
+          );
+        }
+      });
 
       const externalEventId = event.id ?? null;
       const immediateMeetingUrl = getMeetUrl(event);
@@ -760,20 +813,25 @@ export function createGoogleMeetingProvider(
         }
       }
 
-      const [row] = await write
-        .insert(meetingEvent)
-        .values({
-          bookingId,
-          provider: "google_meet",
-          externalEventId,
-          meetingUrl,
-          attendeeEmails: attendees?.map((attendee) => attendee.email) ?? null,
-          status: "created",
-        })
-        .returning();
+      const row = details?.idempotencyKey
+        ? undefined
+        : (
+            await write
+              .insert(meetingEvent)
+              .values({
+                bookingId,
+                provider: "google_meet",
+                externalEventId,
+                meetingUrl,
+                attendeeEmails:
+                  attendees?.map((attendee) => attendee.email) ?? null,
+                status: "created",
+              })
+              .returning()
+          )[0];
 
       return {
-        id: row!.id,
+        id: row?.id ?? details?.idempotencyKey ?? externalEventId ?? "",
         bookingId,
         provider: "google_meet",
         externalEventId,
@@ -790,21 +848,26 @@ export function createGoogleMeetingProvider(
         error: { message: String(error) },
       });
 
-      const [row] = await write
-        .insert(meetingEvent)
-        .values({
-          bookingId,
-          provider: "google_meet",
-          status: "failed",
-          errorReason: String(error),
-          meetingUrl: null,
-          externalEventId: null,
-          attendeeEmails: attendees?.map((attendee) => attendee.email) ?? null,
-        })
-        .returning();
+      const row = details?.idempotencyKey
+        ? undefined
+        : (
+            await write
+              .insert(meetingEvent)
+              .values({
+                bookingId,
+                provider: "google_meet",
+                status: "failed",
+                errorReason: String(error),
+                meetingUrl: null,
+                externalEventId: null,
+                attendeeEmails:
+                  attendees?.map((attendee) => attendee.email) ?? null,
+              })
+              .returning()
+          )[0];
 
       return {
-        id: row!.id,
+        id: row?.id ?? details?.idempotencyKey ?? "",
         bookingId,
         provider: "google_meet",
         externalEventId: null,
@@ -815,7 +878,46 @@ export function createGoogleMeetingProvider(
     }
   }
 
-  return { createEvent, updateEvent, cancelEvent, setManualLink, probe };
+  async function createAcademyClassEvent(
+    sessionId: string,
+    scheduledStartAt: Date,
+    scheduledEndAt: Date,
+    attendee?: MeetingAttendee,
+    details?: MeetingEventDetails,
+  ) {
+    const result = await createEvent(
+      `academy-class-session:${sessionId}`,
+      scheduledStartAt,
+      scheduledEndAt,
+      attendee ? [attendee] : undefined,
+      undefined,
+      {
+        ...details,
+        title: details?.title ?? "Cogito class session",
+        createConference: true,
+        idempotencyKey: `academy-class-session:${sessionId}`,
+      },
+    );
+    return {
+      provider: "google_meet" as const,
+      status:
+        result.status === "created"
+          ? ("created" as const)
+          : ("failed" as const),
+      externalEventId: result.externalEventId,
+      meetingUrl: result.meetingUrl,
+      errorReason: result.errorReason,
+    };
+  }
+
+  return {
+    createEvent,
+    createAcademyClassEvent,
+    updateEvent,
+    cancelEvent,
+    setManualLink,
+    probe,
+  };
 }
 
 export function createGoogleMeetingProviderWithFallback(
@@ -897,6 +999,14 @@ export function createGoogleMeetingProviderWithFallback(
 
   return {
     createEvent,
+    createAcademyClassEvent: (sessionId, startAt, endAt, attendee, details) =>
+      googleProvider.createAcademyClassEvent!(
+        sessionId,
+        startAt,
+        endAt,
+        attendee,
+        details,
+      ),
     updateEvent: googleProvider.updateEvent,
     cancelEvent: googleProvider.cancelEvent,
     setManualLink: googleProvider.setManualLink,
