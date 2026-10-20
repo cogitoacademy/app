@@ -3,10 +3,21 @@
 ## V3 integration and local migration checkpoint (2026-10-20)
 
 Feature worktrees derive from `f/release-v3`; tested work merges there, and
-`main` waits for final acceptance. The isolated `t3/integrate-v3-progress`
-checkpoint integrates the existing fee/payout and class-draft work with FAQ
-rich text, calendar, palette and shared documentation changes. The source
-worktrees remain untouched.
+`main` waits for final acceptance. The `t3/integrate-v3-progress` checkpoint
+was fast-forwarded into `f/release-v3` at `10a733cd`, combining fee/payout and
+class drafts with FAQ rich text, calendar, palette and shared docs. The prior
+dirty source is preserved in the named `v3 pre-integration source backup
+20261020` stash; client artifacts remain in place and the old fee worktree is
+unchanged.
+
+Local startup on 20 October returned HTTP 200 from the web app on port 3000
+and `/health` on port 3001, with database, Redis and scheduler checks healthy.
+The web typecheck remains red: the imported class pages reference an absent
+`classes` router and the wrong detail route ID; the class service also passes
+an argument to the zero-argument ID helper. The class slice owns these fixes.
+The baseline no-show integration command stalled before assertions and was
+stopped; this is not passing integration evidence. The settlement slice owns
+the reproduction and has the exclusive test-database window.
 
 Read-only verification now confirms both local `cogito-app` and `cogito-test`
 have the same four fee, FAQ-rich-text, payout and class-draft migration hashes

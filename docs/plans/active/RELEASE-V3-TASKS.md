@@ -4,6 +4,14 @@ Date: 19 October 2026. Status: **T00A catalog CRUD/palette and T01 dynamic draft
 
 ## Integration checkpoint — 20 October 2026
 
+- Baseline `10a733cd` is now fast-forwarded into `f/release-v3`. The prior
+  dirty source is retained in the named `v3 pre-integration source backup
+  20261020` stash. Dev web and API health return HTTP 200 on ports 3000/3001.
+  Web typecheck exposes missing class-router wiring, a mismatched detail route
+  ID and the class ID-helper call; the active class slice owns those failures.
+  The baseline no-show integration command stalled before assertions and was
+  stopped; no pass is claimed. Settlement owns its reproduction and exclusive
+  `cogito-test` writes while other workers implement without database writes.
 - Commit `22c5ffb3` integrates the existing B fee/payout and class-draft work,
   its dirty source changes, and A's FAQ rich-text, calendar, palette and
   documentation changes. The migration journal/snapshot chain keeps both

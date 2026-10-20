@@ -1,5 +1,19 @@
 # Cogito Runbook
 
+## Local V3 development startup (2026-10-20)
+
+`f/release-v3` contains integrated baseline `10a733cd`. The local web app at
+`http://localhost:3000` and API health at `http://localhost:3001/health` returned
+HTTP 200 after Docker restart and the pending class migration. API health
+reported database, Redis and scheduler healthy. The background development
+processes write logs under `tmp/v3-dev/`; these are development processes,
+separate from the exclusive test servers on ports 3100/3101.
+
+The pre-integration dirty source is retained in the named
+`v3 pre-integration source backup 20261020` stash. Do not pop it over the
+integrated branch: those changes are already incorporated. Client document
+artifacts and the old fee worktree remain preserved.
+
 ## V3 local integration database state (2026-10-20)
 
 Read-only inspection used loopback URLs from `apps/server/.env` and
