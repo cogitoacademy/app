@@ -177,6 +177,78 @@ Persist selected session IDs and both installment rates at enrollment. Split rem
 
 Cancellation of one session releases that entitlement only; withdrawal releases applicable unpaid/held set; completed charges cannot be released as if still held. Cancelling a current-half seat must not let the next-half invoice charge that same removed seat. Do not recompute locked installment rates/session IDs from a changed schedule or merely "remaining session count" at payment time.
 
+### 3.3.1 T05 enrollment checkout contract [REQ-ENROLL-01..04]
+
+This section freezes the T05 implementation contract before enrollment code is
+added. It does not close T06 cancellation/rescheduling policy or implement T07
+completion/report settlement.
+
+- The authenticated student selects a cohort plan or one scheduled session;
+  the server resolves the currently published class rates and eligible
+  sessions. Cohort plans include every class session whose state is `scheduled`
+  and whose `startAt` is strictly after the server's quote time. A single plan
+  may name one such session. Masterclass has one server-selected session.
+  Past, cancelled and reschedule-required sessions are never newly sold.
+- Full holds the published class's `cohortFullRateMarks` per selected cohort
+  session (20 in the accepted example). Half holds the published class's
+  `cohortHalfRateMarks` per session for the first `ceil(R/2)` selected sessions and creates the second
+  installment for `floor(R/2)`; for `R=1`, there is one immediate installment
+  and no empty second installment. Single holds the published class's
+  `cohortSingleRateMarks` for one cohort session (25 in the accepted example);
+  masterclass holds its `masterclassRateMarks` for its one session (5 in the
+  accepted example). With the accepted example rates, a full 16-session plan
+  is 320 Marks; half 16 is 176 now and 176 later; half 15 is 176 now and 154
+  later. The class's current published rate fields are authoritative at quote
+  time. Store the selected session IDs and both applicable rates on the
+  enrollment before returning the quote; later admin edits cannot reprice it.
+- One idempotency key identifies one student's enrollment attempt. Replaying
+  that key returns the same quote/status, including after expiry; a new attempt
+  needs a new key. In one transaction, lock selected session rows in sorted ID
+  order, expire stale checkout reservations for those sessions, check every
+  selected session's capacity and the student's active entitlement, then either
+  create all reservation/allocation rows or none. Capacity counts funded
+  entitlements, unpaid-half reservations, and checkout reservations only while
+  `expiresAt > now`. A partial/failed plan leaves no seats or wallet hold.
+- A checkout reservation lasts 15 minutes. If the wallet can cover the first
+  due installment, atomically hold it and activate the enrollment. Otherwise,
+  reserve the seats without a wallet hold and offer the existing immutable
+  V3 top-up quote/purchase flow for the exact shortfall. Persist the enrollment
+  checkout and its top-up quote/payment identities. A top-up success credits the
+  wallet through the payment module once; enrollment confirmation separately
+  rechecks that the same student's owned payment matches the saved quote, the
+  reservation has not expired, seats remain reserved, and the wallet can fund
+  the snapshot amount. A late payment may credit the wallet, but must not
+  create an enrollment or promise an expired seat. Never automatically spend
+  the credited wallet on a different quote.
+- Each session allocation snapshots its Marks rate, installment number and
+  explicit funding/ledger identity. A half plan reserves both installments'
+  selected sessions, but only the first installment allocations are funded
+  initially. Paying installment two holds its snapshotted total once and marks
+  only its allocations funded. No class completion/report fee may be created
+  by quote, enrollment, or installment payment. T07 may later spend only the
+  funded amount on that specific allocation; this T05 slice does not deduct a
+  whole plan as delivered or implement settlement.
+- The second-installment deadline is the current start time of the first
+  session in that installment. Payment is accepted only while server time is
+  strictly before `dueAt`; an unpaid due installment releases its unfunded
+  session allocations at/after the deadline, including the session starting at
+  the boundary. If an authorized schedule edit changes that session time,
+  recompute due/reminder dates from the same locked session ID and re-read them
+  before send; this does not grant a new reschedule right while Q04 remains
+  open. Paid first-installment allocations and history remain. Rejoining after
+  default is a new current-rate quote for future scheduled sessions only; a
+  student cannot switch plans on an existing enrollment.
+- Send email and in-app reminders at 7 days and 1 day before the first session
+  in the relevant installment. Stable per-installment/per-boundary event keys
+  make retries and catch-up idempotent. A missed job sends a still-relevant
+  reminder only when the enrollment existed by that reminder boundary and the
+  installment remains unpaid; an enrollment made after a boundary skips that
+  historical reminder. Re-read due time and enrollment state before delivery.
+- Student detail/read/action APIs authorize the student role and ownership;
+  paid actions also require verified email. Public class projections remain an
+  allowlist and never include students, private financial data or Meet links.
+  There is no success-shaped T06 cancellation/reschedule control in this slice.
+
 ### 3.4 Session settlement and cancellation
 
 Settlement transaction: lock session/delivery + report version + allocations/fees; assert assigned tutor/admin permission and delivery; normalize/validate report; for each chargeable allocation deduct its held amount once; save report; create earned fee snapshot once; mark completed; enqueue durable referral/notification events. Commit before provider emails. Report correction edits revision and audit only. Admin completion requires reason/confirmed delivery/all fields; undelivered outcome uses cancel/reschedule/release. Do not reuse generic `admin_correction` that currently maps to cancelled.
