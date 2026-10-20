@@ -456,6 +456,13 @@
       "when": 1792522475956,
       "tag": "0064_academy_class_enrollment",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1792525224597,
+      "tag": "0065_tutor_payout_tax",
+      "breakpoints": true
     }
   ]
 }

@@ -65,8 +65,13 @@ aggregate rows remain unchanged and unbackfilled. OPS01 tax-adviser
 confirmation remains a release operational gate, and the defaults are not legal
 validation. Focused pure units pass (15 tests / 70 expectations). The isolated
 Postgres and browser suites are authored but remain pending the assigned
-verification window. Migration generation follows reviewed enrollment idx64;
-no migration is applied from this worktree.
+verification window. Parent-integrated enrollment migration `0064` is the
+generation baseline. T03 migration `0065_tutor_payout_tax.sql` was generated
+from `0064_snapshot.json` at journal timestamp `1792525224597` (SHA-256
+`876ec0367859d9ad5bd378d4e96cc4a29f49fab8e1d31ac17c9c95e98b041939`). The
+parent confirms `0064` is applied to local development; this worktree has not
+applied `0065`, which is awaiting SQL review and the assigned verification
+window.
 
 ## Competition catalog language
 

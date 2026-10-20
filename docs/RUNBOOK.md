@@ -2638,9 +2638,19 @@ drawer on a short viewport. Scroll and overscroll the profile body; it may bounc
 locally, but the header and booking/review footer must remain visible and must not
 move with the body.
 
-## Tutor payout operations (2026-08-28)
+## Tutor payout operations (2026-10-21)
 
 Migrations `0060_tutor_payout_allocations.sql` and the reviewed Release V3 payout migration must be applied before using the tax/payout workflow. For Release V3, review and apply `0065_*` only after verifying it was generated from the parent-integrated `0064` snapshot and contains only tutor tax/payout schema changes. Never regenerate or rewrite earlier SQL, snapshots, hashes, or timestamps as part of this rollout. Do not backfill historical paid aggregates or fabricate fee/tax snapshots.
+
+Release V3 migration `0065_tutor_payout_tax.sql` was generated with the
+lockfile version of Drizzle Kit `0.31.10` after merging parent commit
+`385fc959`. Its journal entry is idx `65`, timestamp `1792525224597`, tag
+`0065_tutor_payout_tax`, and SQL SHA-256
+`876ec0367859d9ad5bd378d4e96cc4a29f49fab8e1d31ac17c9c95e98b041939`. It was
+generated from snapshot `0064` and changes only tutor tax/payout schema. The
+parent confirms `0064` is applied to local development; `0065` is not applied
+to development or test and remains pending parent SQL review. Preserve all
+earlier migration files, snapshots, hashes, and timestamps.
 
 Honoraria do not reset on a calendar boundary. In `/admin-tutor-payouts`, review the selected unpaid sessions, legal-name/NIK completeness, configured rate, saved bank destination, whole-IDR withholding, one transfer fee and exact net. Current defaults are 2.50% for NIK+NPWP, 3.00% for NIK-only and missing identity; admins may change defaults or set a tutor override with a reason. These are configurable defaults, not legal validation. OPS01 tax-adviser confirmation remains a release operational gate.
 

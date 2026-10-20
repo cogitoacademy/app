@@ -1477,7 +1477,7 @@ The authenticated dashboard shell is viewport-fixed. Its content pane exclusivel
 - The tutor profile editor uses the authenticated shell's page-level vertical scroll container, matching the student profile and avoiding a nested form scrollbar. Direct page children cannot flex-shrink, so the tutor wrapper and onboarding content share one natural height; specialization-category fieldsets keep their natural height and the final action card stays in normal document flow without trailing scroll space. This is presentation-only and does not change the tutor RPC contract.
 - The tutor profile editor keeps draft/save and submit-for-review as distinct actions. Missing required fields are allowed during draft/save, while submit requires the complete profile; malformed fields are surfaced beside their controls and in a validation summary. A published tutor can continue editing while a profile-change proposal is under review; saving updates the pending proposal and the explicit submit action queues the latest validated version.
 - Every role uses Better Auth `user.name` as the canonical visible name. Tutor onboarding sends a changed account name through the transport-only `displayName` input on `tutor.updateMyProfile`; the service updates `user.name` and its audit entry atomically without persisting a second `tutorProfile.displayName` value. Discovery search matches `user.name`, its backward-compatible `displayName` projection is populated from `user.name`, and tutor/sidebar/booking/admin surfaces render `user.name`. The tutor-profile column remains legacy compatibility data.
-- Tutor payout calculations retain the internal split fields for accounting compatibility, but tutor-facing payout UI exposes only unpaid completed-session count and IDR honorarium. The private payout form collects bank name, account number, account-holder name, account-opening city/regency, ownership choice, and transfer-responsibility acknowledgment; submission requires all of them. Admin payout records advance the paid cutoff.
+- Tutor payout calculations retain the internal split fields for accounting compatibility, but tutor-facing finance shows only that tutor's own IDR honoraria and saved payout history. The private payout form collects bank details and tax identity; tax identity is required before a new payout can be prepared, but incomplete published tutors may continue teaching. Admins prepare immutable selected-source batches and record externally completed transfers; historical aggregate payouts remain unchanged and unbackfilled.
 - New tutor submissions must select at least one active specialization from the normalized catalog; categories cannot be selected directly
 - A normalized subject update replaces the tutor's join rows atomically and never accepts arbitrary legacy `expertise` strings as category ids
 - Structured tutor achievements are stored in `tutor_profile.education` and `tutor_profile.achievements` as JSONB arrays. Education has at most 2 entries; achievements has at most 5 entries, each with a 1900–2100 year and at least one award.
@@ -1608,7 +1608,7 @@ no discovery input, output, or RPC contract changes.
 - Insufficient available balance throws `InsufficientBalanceError`
 - `hold`/`release`/`deduct`/`credit`/`compensate` are service-layer only — consumed via ports, not exposed over RPC
 
-## Tutor payout presentation (2026-08-28)
+## Tutor payout presentation (2026-10-21)
 
 Tutor financial presentation is denominated in IDR and must not expose Marks. The tutor dashboard shows only that tutor's unpaid session count, gross, tax rate/status, withholding, one transfer fee, estimated net and saved payout history. It never returns NIK/NPWP or bank account values from the finance endpoint. New payout preparation requires a legal name, 16-digit NIK, and complete payout bank profile; published tutors without tax identity may keep teaching.
 
@@ -1617,11 +1617,19 @@ Admin payout processing is a two-step external-transfer workflow. An admin selec
 Only after the operator performs the bank transfer externally may an admin record the exact saved net amount, actual payment date and optional HTTP(S) proof/reference. The payout, audit, tutor notification and email outbox row commit together; the application does not move money. A reasoned void retains the original snapshot and any transfer evidence while releasing allocations. If transfer evidence exists, the sessions remain blocked from repayment until an audited reconciliation resolution is recorded. Admin monthly CSVs use saved payout snapshots, group by actual paid date in Asia/Jakarta, keep mixed rates per payout, and place void/reconciliation rows in a separate section. No tax, bank, fee, or historical paid aggregate is backfilled from current profiles.
 
 The admin operational payout workflow lives at `/admin-tutor-payouts`, separate
-from Manage Tutors profile review. It reuses tutor profiles for account
-readiness, reads the pending completion-time summary, and records the current
-unpaid honorarium only after the operator confirms the net transfer. Paid payout
-rows snapshot the account number and account-holder name at transfer time; old
-rows without those snapshots use the current profile as a display fallback.
+from Manage Tutors profile review. It previews and prepares a versioned batch
+from selected unpaid source keys, then records the exact saved net only after
+the operator performs the transfer externally. New payout rows snapshot the
+bank destination, tax identity, tax/rate configuration and fee sources. Legacy
+aggregate-only payout rows retain nullable snapshots and are never repopulated
+from the current profile.
+
+Migration `0065_tutor_payout_tax.sql` adds the saved tax/payout snapshot and
+reconciliation fields. It was generated from parent-integrated snapshot `0064`
+at journal timestamp `1792525224597` (SHA-256
+`876ec0367859d9ad5bd378d4e96cc4a29f49fab8e1d31ac17c9c95e98b041939`). Parent
+SQL review and the assigned database/browser verification window remain
+pending; this worktree has not applied `0065`.
 
 Numeric Marks amounts in the web UI are rendered through `apps/web/src/components/cogito-marks.tsx`. The component owns the Cogito mark-symbol prefix, supported icon sizes, whitespace behavior, and accessible `value + Marks` label; feature components should not duplicate that markup.
 

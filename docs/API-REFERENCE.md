@@ -1815,7 +1815,7 @@ The successful mutation also best-effort updates the existing offline Calendar e
 - **Errors:** `INVALID_CONTENT_TYPE` (400), `INVALID_FILENAME` (400); local-mode `POST /uploads/*` returns 415 when the body bytes are not a recognized image (magic-byte sniff) and 413 when over the size limit
 - **Description:** Returns a Cloudflare R2 presigned PUT URL whose key, content type, and declared content length are signed, or a local URL (dev, authenticated `POST /uploads/*`) for uploading a file. Browser clients using R2 require bucket CORS for the frontend origin. Uploaded objects are referenced by `key`/`publicUrl` (e.g. private achievement `evidenceUrl`, public `documentationUrl`, or user avatar). Local files are served via `GET /uploads/*` when `R2_PUBLIC_URL` is unset. The nightly `infra/r2-upload-audit.sh` HEADs bucket objects and alerts on ContentType vs key-class mismatches
 
-## Tutor payout profile fields (2026-08-28)
+## Tutor payout profile fields (2026-10-21)
 
 `/rpc/tutor/updateMyProfile` accepts private bank-account fields and tax-profile strings (`taxLegalName`, 16-digit `nik`, optional `npwp`) inside the standard `{"json": <input>}` envelope. NIK/NPWP remain strings so leading zeroes are preserved. `/rpc/tutor/getMyProfile` returns those fields only to the authenticated tutor; public tutor discovery and `/rpc/tutor/getMyPayoutFinance` omit them. Existing published tutors may keep teaching with an incomplete tax profile; legal name and NIK are required before a new payout is prepared. `/rpc/tutor/submitForReview` does not require tax identity.
 
