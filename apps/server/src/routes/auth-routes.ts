@@ -1,8 +1,49 @@
-import { auth, assertPasswordPolicy } from "@cogito-app/auth";
+import {
+  auth,
+  assertPasswordPolicy,
+  completePreAccountSignup,
+  getPreAccountSignupOtpForTest,
+  getPreAccountSignupOutcome,
+  sendPreAccountSignupOtp,
+} from "@cogito-app/auth";
+import { env } from "@cogito-app/env/server";
 import { readBodyWithLimit } from "@cogito-app/api/lib/request-id";
-import { parseSignupBody } from "../signup-body";
+import { hasSignupEmailProof, parseSignupBody } from "../signup-body";
 import { MAX_BODY_BYTES, bodyLimitResponse } from "./middlewares";
 import type { Elysia } from "elysia";
+
+const SIGNUP_PATH = "/api/auth/sign-up/email";
+const SEND_SIGNUP_OTP_PATH = "/api/auth/sign-up/email-otp";
+const SIGNUP_OUTCOME_PATH = "/api/auth/sign-up/email-outcome";
+const TEST_SIGNUP_OTP_PATH = "/api/__test/auth/signup-otp";
+
+function jsonResponse(body: unknown, status = 200, retryAfterSeconds?: number) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      ...(retryAfterSeconds === undefined
+        ? {}
+        : { "Retry-After": String(retryAfterSeconds) }),
+    },
+  });
+}
+
+function isLocalSignupOtpTestTarget() {
+  try {
+    const databaseUrl = new URL(env.DATABASE_URL);
+    const hostname = databaseUrl.hostname
+      .toLowerCase()
+      .replace(/^\[|\]$/g, "");
+    return (
+      ["postgres:", "postgresql:"].includes(databaseUrl.protocol) &&
+      ["localhost", "127.0.0.1", "::1"].includes(hostname) &&
+      databaseUrl.pathname === "/cogito-test"
+    );
+  } catch {
+    return false;
+  }
+}
 
 /**
  * /api/auth/* — better-auth's handler behind the bounded-body + password
@@ -11,7 +52,27 @@ import type { Elysia } from "elysia";
  * sign-up route enforces the C6 password policy before delegating.
  */
 export function registerAuthRoutes(app: Elysia) {
-  return app.all(
+  const appWithTestOtpRoute =
+    env.NODE_ENV === "test" && isLocalSignupOtpTestTarget()
+      ? app.get(TEST_SIGNUP_OTP_PATH, ({ request }) => {
+          const url = new URL(request.url);
+          const requestHostname = url.hostname
+            .toLowerCase()
+            .replace(/^\[|\]$/g, "");
+          if (
+            !["localhost", "127.0.0.1", "::1"].includes(requestHostname)
+          ) {
+            return jsonResponse({ message: "Not found" }, 404);
+          }
+          const email = url.searchParams.get("email") ?? "";
+          const otp = getPreAccountSignupOtpForTest(email);
+          return otp
+            ? jsonResponse({ otp })
+            : jsonResponse({ message: "No test code is available." }, 404);
+        })
+      : app;
+
+  return appWithTestOtpRoute.all(
     "/api/auth/*",
     async (context) => {
       const { request, status } = context;
@@ -28,8 +89,60 @@ export function registerAuthRoutes(app: Elysia) {
       if (tooLarge) {
         return bodyLimitResponse();
       }
+      let path: string;
+      try {
+        path = decodeURIComponent(new URL(request.url).pathname)
+          .replace(/\/{2,}/g, "/")
+          .replace(/\/+$/, "")
+          .toLowerCase();
+      } catch {
+        return jsonResponse({ message: "Invalid request path." }, 400);
+      }
+
+      if (path === SEND_SIGNUP_OTP_PATH) {
+        const parsed = parseSignupBody(body);
+        if (!parsed?.email || !parsed.signupAttemptId) {
+          return jsonResponse(
+            { message: "Enter a valid email address to request a code." },
+            400,
+          );
+        }
+        const result = await sendPreAccountSignupOtp({
+          email: parsed.email,
+          signupAttemptId: parsed.signupAttemptId,
+        });
+        if (!result.ok) {
+          return jsonResponse(
+            {
+              message: result.error,
+              ...(result.retryAfterSeconds === undefined
+                ? {}
+                : { retryAfterSeconds: result.retryAfterSeconds }),
+              ...(result.signupAttemptId
+                ? { signupAttemptId: result.signupAttemptId }
+                : {}),
+            },
+            result.status,
+            result.retryAfterSeconds,
+          );
+        }
+        return jsonResponse(result);
+      }
+
+      if (path === SIGNUP_OUTCOME_PATH) {
+        const parsed = parseSignupBody(body);
+        const created =
+          parsed?.email && parsed.signupAttemptId
+            ? await getPreAccountSignupOutcome({
+                email: parsed.email,
+                signupAttemptId: parsed.signupAttemptId,
+              })
+            : false;
+        return jsonResponse({ created });
+      }
+
       // C6: enforce the password complexity policy at sign-up.
-      if (request.url.endsWith("/api/auth/sign-up/email")) {
+      if (path === SIGNUP_PATH) {
         const parsed = parseSignupBody(body);
         if (!parsed) {
           return status(400, { message: "Invalid JSON request body" });
@@ -38,6 +151,23 @@ export function registerAuthRoutes(app: Elysia) {
         if (policyError) {
           return status(400, { message: policyError });
         }
+        if (!hasSignupEmailProof(parsed)) {
+          return jsonResponse(
+            { message: "Verify your email before creating an account." },
+            400,
+          );
+        }
+        const result = await completePreAccountSignup({
+          email: parsed.email,
+          password: parsed.password ?? "",
+          name: parsed.name,
+          otp: parsed.otp,
+          signupAttemptId: parsed.signupAttemptId,
+          headers: request.headers,
+        });
+        return result.ok
+          ? result.response
+          : jsonResponse({ message: result.error }, result.status);
       }
       const bounded = new Request(request.url, {
         method: request.method,

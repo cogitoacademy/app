@@ -6,7 +6,7 @@ import { user, verification } from "@cogito-app/db/schema";
 import { auth } from "@cogito-app/auth";
 import { resetDatabase } from "../helpers/test-client";
 
-describe("G2: email verification via email-otp plugin", () => {
+describe("G2: existing-account email verification via email-otp plugin", () => {
   beforeAll(async () => {
     await resetDatabase();
   });
@@ -14,12 +14,11 @@ describe("G2: email verification via email-otp plugin", () => {
   const ts = Date.now();
   const email = `verify.g2.${ts}@cogito.test`;
 
-  test("sign-up sends one combined welcome + verification email", async () => {
+  test("trusted signup does not send pre-account OTP; existing account can request one", async () => {
     const sent: Array<{
       email: string;
       otp: string;
       type: string;
-      isSignup?: boolean;
     }> = [];
     const { setVerificationEmailSender } = await import("@cogito-app/auth");
     setVerificationEmailSender(async (params) => {
@@ -28,6 +27,12 @@ describe("G2: email verification via email-otp plugin", () => {
 
     await auth.api.signUpEmail({
       body: { email, password: "Test1234!", name: "Verify G2" },
+      headers: new Headers(),
+    });
+
+    expect(sent).toHaveLength(0);
+    await auth.api.sendVerificationOTP({
+      body: { email, type: "email-verification" },
       headers: new Headers(),
     });
 
@@ -40,13 +45,12 @@ describe("G2: email verification via email-otp plugin", () => {
     expect(rows.length).toBeGreaterThan(0);
     expect(rows[0]!.value).toMatch(/^\d{6}/);
 
-    // The sender was invoked once with the signup marker used by the
-    // composition root to render the welcome copy in the same email.
+    // This path is for an account that already exists; public signup sends
+    // its own pre-account OTP and welcome mail only after creation commits.
     expect(sent.length).toBe(1);
     expect(sent[0]!.email).toBe(email);
     expect(sent[0]!.otp).toMatch(/^\d{6}$/);
     expect(sent[0]!.type).toBe("email-verification");
-    expect(sent[0]!.isSignup).toBe(true);
   });
 
   test("verify-email with the correct OTP marks the user verified", async () => {
