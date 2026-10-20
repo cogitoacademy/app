@@ -70,6 +70,10 @@ import {
 import { mapLimit } from "../../lib/concurrency";
 import { log } from "../../lib/logger";
 import { applyBookingTopicPalettes } from "./booking-topic-palette";
+import {
+  buildTutorSessionFeeRecord,
+  tutorSessionFeeEventKey,
+} from "./tutor-session-fee";
 import type { BookingCompetitionPalettePort } from "./booking-topic-palette";
 import {
   isSelectableCompetitionRef,
@@ -250,6 +254,36 @@ export interface TutorPayoutResult {
   cogitoTake: number;
   tutorPayout: number;
   tutorPayoutIdr: number;
+}
+
+export type TutorPayoutAllocationSourceType =
+  | "fee_event"
+  | "legacy_booking"
+  | "legacy_series_session";
+
+export interface TutorPayoutSourceItem {
+  sourceKey: string;
+  sourceType: TutorPayoutAllocationSourceType;
+  tutorSessionFeeId: string | null;
+  bookingId: string;
+  bookingNumber: number;
+  bookingSessionId: string | null;
+  bookingType: "solo" | "group" | "series";
+  deliveryStatus: "completed" | "no_show";
+  scheduledStartAt: Date;
+  earnedAt: Date;
+  grossHonorariumIdr: number;
+  priceSnapshot: BookingPriceSnapshot | null;
+}
+
+export interface TutorPayoutAggregate extends TutorPayoutResult {
+  items: TutorPayoutSourceItem[];
+}
+
+export interface TutorPayoutAllocationDetail extends TutorPayoutSourceItem {
+  id: string;
+  payoutId: string;
+  createdAt: Date;
 }
 
 export interface BookingTransition {
@@ -1852,6 +1886,16 @@ export function createBookingService(deps: {
         BOOKING_STATE.COMPLETED,
       );
     }
+    const existingReport = await repo.findCompletionFeedback(
+      tx,
+      bookingId,
+      null,
+    );
+    if (existingReport) {
+      throw new BookingNotEditableError(
+        "A session report has already been submitted",
+      );
+    }
 
     assertCompletionFeedback(bookingId, feedback);
 
@@ -1910,6 +1954,18 @@ export function createBookingService(deps: {
       improvements: feedback!.improvements,
     });
 
+    await repo.insertTutorSessionFee(
+      tx,
+      buildTutorSessionFeeRecord({
+        bookingId,
+        bookingSessionId: null,
+        tutorId,
+        scheduledStartAt: b.scheduledStartAt,
+        earnedAt: updated.completedAt ?? new Date(),
+        priceSnapshot: b.priceSnapshot,
+      }),
+    );
+
     await notification.writeBestEffort({
       db: tx,
       userId: b.proposerId,
@@ -1955,6 +2011,16 @@ export function createBookingService(deps: {
     }
     if (session.scheduledStartAt.getTime() > Date.now()) {
       throw new BookingSessionNotStartedError(sessionId);
+    }
+    const existingReport = await repo.findCompletionFeedback(
+      tx,
+      bookingId,
+      session.id,
+    );
+    if (existingReport) {
+      throw new BookingNotEditableError(
+        "A session report has already been submitted",
+      );
     }
 
     const isGroupSeries = b.targetGroupSize > 1;
@@ -2039,7 +2105,19 @@ export function createBookingService(deps: {
       Math.max(0, b.holdAmount - deductedHoldAmount),
     );
 
-    await repo.completeSession(tx, session.id);
+    const sessionCompletedAt = new Date();
+    await repo.completeSession(tx, session.id, sessionCompletedAt);
+    await repo.insertTutorSessionFee(
+      tx,
+      buildTutorSessionFeeRecord({
+        bookingId,
+        bookingSessionId: session.id,
+        tutorId,
+        scheduledStartAt: session.scheduledStartAt,
+        earnedAt: sessionCompletedAt,
+        priceSnapshot: session.priceSnapshot ?? b.priceSnapshot,
+      }),
+    );
 
     await repo.insertCompletionFeedback(tx, {
       bookingId,
@@ -2355,6 +2433,19 @@ export function createBookingService(deps: {
           "mark_no_show",
           BOOKING_STATE.NO_SHOW,
         );
+      }
+
+      if (isSeries) {
+        const existingReport = await repo.findCompletionFeedback(
+          tx,
+          bookingId,
+          sessionId!,
+        );
+        if (existingReport) {
+          throw new BookingNotEditableError(
+            "A session report has already been submitted",
+          );
+        }
       }
 
       const forfeitAmount = isSeries
@@ -4207,8 +4298,9 @@ export function createBookingService(deps: {
       dateFrom?: Date;
       dateTo?: Date;
       dateBasis?: "scheduledStartAt" | "completedAt";
+      excludeAllocatedSources?: boolean;
     },
-  ): Promise<TutorPayoutResult> {
+  ): Promise<TutorPayoutAggregate> {
     const bookings = await repo.findCompletedBookingsByTutor(
       conn,
       input.tutorId,
@@ -4216,12 +4308,79 @@ export function createBookingService(deps: {
       input.dateTo,
       input.dateBasis,
     );
+    const feeRows = await repo.findTutorSessionFeesByTutor(
+      conn,
+      input.tutorId,
+      input.dateFrom,
+      input.dateTo,
+      input.dateBasis,
+    );
+    const feeEventKeys = new Set(
+      await repo.listTutorSessionFeeEventKeysByBookings(
+        conn,
+        bookings.map((booking) => booking.id),
+      ),
+    );
+    const allocatedSourceKeys = new Set(
+      input.excludeAllocatedSources
+        ? await repo.listTutorPayoutAllocatedSourceKeys(conn, input.tutorId)
+        : [],
+    );
 
     let completedSessions = 0;
     let totalMarks = 0;
     let cogitoTake = 0;
     let tutorPayout = 0;
     let tutorPayoutIdr = 0;
+    const items: TutorPayoutSourceItem[] = [];
+
+    const addPayoutSnapshot = (
+      snap: BookingPriceSnapshot | null | undefined,
+      source: Omit<
+        TutorPayoutSourceItem,
+        "grossHonorariumIdr" | "priceSnapshot"
+      >,
+      grossHonorariumIdr?: number,
+    ) => {
+      completedSessions++;
+      totalMarks +=
+        snap?.engine === "v3" ? snap.collectedMarks : (snap?.baseline ?? 0);
+      if (snap?.engine !== "v3") cogitoTake += snap?.cogitoTake ?? 0;
+      if (snap?.engine !== "v3") tutorPayout += snap?.tutorShare ?? 0;
+      const sourceGrossHonorariumIdr =
+        grossHonorariumIdr ??
+        snap?.tutorHonorariumIdr ??
+        (snap?.engine === "v3" ? 0 : (snap?.tutorShare ?? 0)) *
+          TUTOR_PAYOUT_RATE_IDR;
+      tutorPayoutIdr += sourceGrossHonorariumIdr;
+      items.push({
+        ...source,
+        grossHonorariumIdr: Math.round(sourceGrossHonorariumIdr),
+        priceSnapshot: snap ?? null,
+      });
+    };
+
+    // New completions use the immutable fee fact. Older records and explicit
+    // legacy payout-eligible no-shows still use their booking snapshots below.
+    for (const fee of feeRows) {
+      if (allocatedSourceKeys.has(fee.eventKey)) continue;
+      addPayoutSnapshot(
+        fee.priceSnapshot,
+        {
+          sourceKey: fee.eventKey,
+          sourceType: "fee_event",
+          tutorSessionFeeId: fee.id,
+          bookingId: fee.bookingId,
+          bookingNumber: fee.bookingNumber,
+          bookingSessionId: fee.bookingSessionId,
+          bookingType: fee.bookingType as TutorPayoutSourceItem["bookingType"],
+          deliveryStatus: "completed",
+          scheduledStartAt: fee.scheduledStartAt,
+          earnedAt: fee.earnedAt,
+        },
+        fee.grossHonorariumIdr,
+      );
+    }
 
     for (const b of bookings) {
       if (b.type === BOOKING_TYPE.SERIES) {
@@ -4231,44 +4390,72 @@ export function createBookingService(deps: {
         );
         if (completed.length > 0) {
           for (const s of completed) {
-            completedSessions++;
-            const snap = s.priceSnapshot ?? b.priceSnapshot;
-            totalMarks +=
-              snap?.engine === "v3"
-                ? snap.collectedMarks
-                : (snap?.baseline ?? 0);
-            if (snap?.engine !== "v3") cogitoTake += snap?.cogitoTake ?? 0;
-            if (snap?.engine !== "v3") tutorPayout += snap?.tutorShare ?? 0;
-            tutorPayoutIdr +=
-              snap?.tutorHonorariumIdr ??
-              (snap?.engine === "v3" ? 0 : (snap?.tutorShare ?? 0)) *
-                TUTOR_PAYOUT_RATE_IDR;
+            const sourceKey = tutorSessionFeeEventKey(b.id, s.id);
+            if (
+              feeEventKeys.has(sourceKey) ||
+              allocatedSourceKeys.has(sourceKey)
+            ) {
+              continue;
+            }
+            addPayoutSnapshot(s.priceSnapshot ?? b.priceSnapshot, {
+              sourceKey,
+              sourceType: "legacy_series_session",
+              tutorSessionFeeId: null,
+              bookingId: b.id,
+              bookingNumber: b.bookingNumber,
+              bookingSessionId: s.id,
+              bookingType: "series",
+              deliveryStatus: "completed",
+              scheduledStartAt: s.scheduledStartAt,
+              earnedAt: s.completedAt ?? b.completedAt ?? s.scheduledStartAt,
+            });
           }
         } else {
-          completedSessions++;
-          const snap = b.priceSnapshot;
-          totalMarks +=
-            snap?.engine === "v3" ? snap.collectedMarks : (snap?.baseline ?? 0);
-          if (snap?.engine !== "v3") cogitoTake += snap?.cogitoTake ?? 0;
-          if (snap?.engine !== "v3") tutorPayout += snap?.tutorShare ?? 0;
-          tutorPayoutIdr +=
-            snap?.tutorHonorariumIdr ??
-            (snap?.engine === "v3" ? 0 : (snap?.tutorShare ?? 0)) *
-              TUTOR_PAYOUT_RATE_IDR;
+          const sourceKey = tutorSessionFeeEventKey(b.id, null);
+          if (
+            !feeEventKeys.has(sourceKey) &&
+            !allocatedSourceKeys.has(sourceKey)
+          ) {
+            addPayoutSnapshot(b.priceSnapshot, {
+              sourceKey,
+              sourceType: "legacy_booking",
+              tutorSessionFeeId: null,
+              bookingId: b.id,
+              bookingNumber: b.bookingNumber,
+              bookingSessionId: null,
+              bookingType: "series",
+              deliveryStatus: "completed",
+              scheduledStartAt: b.scheduledStartAt,
+              earnedAt: b.completedAt ?? b.scheduledStartAt,
+            });
+          }
         }
       } else {
-        completedSessions++;
-        const snap = b.priceSnapshot;
-        totalMarks +=
-          snap?.engine === "v3" ? snap.collectedMarks : (snap?.baseline ?? 0);
-        if (snap?.engine !== "v3") cogitoTake += snap?.cogitoTake ?? 0;
-        if (snap?.engine !== "v3") tutorPayout += snap?.tutorShare ?? 0;
-        tutorPayoutIdr +=
-          snap?.tutorHonorariumIdr ??
-          (snap?.engine === "v3" ? 0 : (snap?.tutorShare ?? 0)) *
-            TUTOR_PAYOUT_RATE_IDR;
+        const sourceKey = tutorSessionFeeEventKey(b.id, null);
+        if (feeEventKeys.has(sourceKey) || allocatedSourceKeys.has(sourceKey)) {
+          continue;
+        }
+        addPayoutSnapshot(b.priceSnapshot, {
+          sourceKey,
+          sourceType: "legacy_booking",
+          tutorSessionFeeId: null,
+          bookingId: b.id,
+          bookingNumber: b.bookingNumber,
+          bookingSessionId: null,
+          bookingType: b.type as TutorPayoutSourceItem["bookingType"],
+          deliveryStatus:
+            b.currentState === BOOKING_STATE.NO_SHOW ? "no_show" : "completed",
+          scheduledStartAt: b.scheduledStartAt,
+          earnedAt: b.completedAt ?? b.scheduledStartAt,
+        });
       }
     }
+
+    items.sort(
+      (a, b) =>
+        a.scheduledStartAt.getTime() - b.scheduledStartAt.getTime() ||
+        a.sourceKey.localeCompare(b.sourceKey),
+    );
 
     return {
       completedSessions,
@@ -4276,6 +4463,7 @@ export function createBookingService(deps: {
       cogitoTake,
       tutorPayout,
       tutorPayoutIdr: Math.round(tutorPayoutIdr),
+      items,
     };
   }
 
@@ -4338,6 +4526,7 @@ export function createBookingService(deps: {
           dateFrom: pendingFrom,
           dateTo,
           dateBasis: "completedAt",
+          excludeAllocatedSources: true,
         });
 
         if (result.completedSessions === 0 || result.tutorPayoutIdr <= 0) {
@@ -4410,7 +4599,14 @@ export function createBookingService(deps: {
     dateFrom?: Date;
     dateTo?: Date;
   }): Promise<TutorPayoutResult> {
-    return aggregateTutorPayouts(db, input);
+    const result = await aggregateTutorPayouts(db, input);
+    return {
+      completedSessions: result.completedSessions,
+      totalMarks: result.totalMarks,
+      cogitoTake: result.cogitoTake,
+      tutorPayout: result.tutorPayout,
+      tutorPayoutIdr: result.tutorPayoutIdr,
+    };
   }
 
   async function getPendingTutorPayouts(tutorId: string) {
@@ -4421,6 +4617,7 @@ export function createBookingService(deps: {
         ? new Date(lastPaid.cutoffAt.getTime() + 1)
         : undefined,
       dateBasis: "completedAt",
+      excludeAllocatedSources: true,
     });
     return { ...result, lastPaidAt: lastPaid?.paidAt ?? null };
   }
@@ -4437,6 +4634,7 @@ export function createBookingService(deps: {
           : undefined,
         dateTo: cutoffAt,
         dateBasis: "completedAt",
+        excludeAllocatedSources: true,
       });
       if (result.completedSessions === 0 || result.tutorPayoutIdr <= 0) {
         return null;
@@ -4455,6 +4653,14 @@ export function createBookingService(deps: {
       const bankName = profile.bankName.trim();
       const transferFeeIdr = getTutorPayoutTransferFeeIdr(bankName);
       const paidAt = new Date();
+      const allocatedGrossHonorariumIdr = result.items.reduce(
+        (sum, item) => sum + item.grossHonorariumIdr,
+        0,
+      );
+      if (allocatedGrossHonorariumIdr !== result.tutorPayoutIdr) {
+        throw new Error("Tutor payout allocation total does not match batch");
+      }
+
       const row = await repo.insertTutorPayout(tx, {
         tutorId,
         cutoffAt,
@@ -4468,6 +4674,23 @@ export function createBookingService(deps: {
         paidAt,
         paidBy: adminId,
       });
+      await repo.insertTutorPayoutAllocations(
+        tx,
+        result.items.map((item) => ({
+          payoutId: row.id,
+          sourceKey: item.sourceKey,
+          sourceType: item.sourceType,
+          tutorSessionFeeId: item.tutorSessionFeeId,
+          bookingId: item.bookingId,
+          bookingSessionId: item.bookingSessionId,
+          bookingType: item.bookingType,
+          deliveryStatus: item.deliveryStatus,
+          scheduledStartAt: item.scheduledStartAt,
+          earnedAt: item.earnedAt,
+          grossHonorariumIdr: item.grossHonorariumIdr,
+          priceSnapshot: item.priceSnapshot,
+        })),
+      );
       return {
         id: row.id,
         tutorId: row.tutorId,
@@ -4480,6 +4703,17 @@ export function createBookingService(deps: {
         paidAt: row.paidAt,
       };
     });
+  }
+
+  async function getTutorPayoutAllocations(payoutId: string) {
+    const items = (await repo.listTutorPayoutAllocationsByPayoutId(
+      db,
+      payoutId,
+    )) as TutorPayoutAllocationDetail[];
+    return {
+      detailsAvailable: items.length > 0,
+      items,
+    };
   }
 
   /**
@@ -5348,6 +5582,7 @@ export function createBookingService(deps: {
     getTutorPayoutReport,
     getTutorPayouts,
     getPendingTutorPayouts,
+    getTutorPayoutAllocations,
     markTutorPayoutPaid,
     expireBookings,
     releaseExpiredHolds,

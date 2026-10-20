@@ -8,14 +8,26 @@ import type { FaqRepo, FaqRow } from "../../modules/faq/faq.repo";
 import { createFaqRouter } from "../../modules/faq/faq.router";
 import { createFaqService } from "../../modules/faq/faq.service";
 import { createFaqInput, updateFaqInput } from "../../modules/faq/faq.types";
+import type { FaqRichTextDocument } from "@cogito-app/db/schema/faq";
+
+function paragraph(text: string): FaqRichTextDocument {
+  return {
+    type: "doc",
+    blocks: [{ type: "paragraph", content: text ? [{ text }] : [] }],
+  };
+}
 
 function makeRow(overrides: Partial<FaqRow> = {}): FaqRow {
   return {
     id: "faq-1",
     questionEn: "Where can I get help?",
     questionId: null,
+    questionEnRich: paragraph("Where can I get help?"),
+    questionIdRich: null,
     answerEn: [{ type: "paragraph", text: "Contact the support team." }],
     answerId: null,
+    answerEnRich: paragraph("Contact the support team."),
+    answerIdRich: null,
     sortOrder: 1,
     isActive: true,
     showOnLanding: false,
@@ -47,36 +59,92 @@ function context(role: "admin" | "student" | null): Context {
   } as Context;
 }
 
-describe("FAQ content", () => {
-  test("requires English content and accepts only paragraph or list blocks", () => {
-    const parsed = createFaqInput.parse({
-      questionEn: "  How do I join?  ",
-      answerEn: [{ type: "paragraph", text: "  Open the app.  " }],
-    });
+function validInput(overrides: Record<string, unknown> = {}) {
+  return {
+    questionEnRich: paragraph("How do I join?"),
+    questionIdRich: null,
+    answerEnRich: paragraph("Open the app."),
+    answerIdRich: null,
+    ...overrides,
+  };
+}
 
-    expect(parsed.questionEn).toBe("How do I join?");
-    expect(parsed.answerEn).toEqual([
-      { type: "paragraph", text: "Open the app." },
-    ]);
+describe("FAQ content", () => {
+  test("accepts rich text, lists and safe links, but rejects unsafe URLs", () => {
+    const parsed = createFaqInput.parse(
+      validInput({
+        questionEnRich: {
+          type: "doc",
+          blocks: [
+            {
+              type: "paragraph",
+              content: [
+                { text: "How do I " },
+                { text: "join", bold: true, href: "https://example.com/join" },
+                { text: "?" },
+              ],
+            },
+          ],
+        },
+        answerEnRich: {
+          type: "doc",
+          blocks: [
+            { type: "paragraph", content: [{ text: "Start here." }] },
+            {
+              type: "list",
+              style: "ordered",
+              items: [
+                [{ text: "Open the app." }],
+                [{ text: "Create an account." }],
+              ],
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(parsed.questionEnRich).toMatchObject({
+      blocks: [
+        {
+          content: [
+            { text: "How do I " },
+            { text: "join", bold: true, href: "https://example.com/join" },
+            { text: "?" },
+          ],
+        },
+      ],
+    });
     expect(parsed.isActive).toBe(true);
     expect(parsed.showOnLanding).toBe(false);
     expect(
-      createFaqInput.safeParse({
-        questionEn: " ",
-        answerEn: [{ type: "paragraph", text: "Answer" }],
-      }).success,
+      createFaqInput.safeParse(
+        validInput({
+          answerEnRich: {
+            type: "doc",
+            blocks: [
+              {
+                type: "paragraph",
+                content: [{ text: "Bad link", href: "javascript:alert(1)" }],
+              },
+            ],
+          },
+        }),
+      ).success,
     ).toBe(false);
     expect(
-      createFaqInput.safeParse({
-        questionEn: "Question",
-        answerEn: [{ type: "html", html: "<script>alert(1)</script>" }],
-      }).success,
-    ).toBe(false);
-    expect(
-      createFaqInput.safeParse({
-        questionEn: "Question",
-        answerEn: [{ type: "paragraph", text: "Answer", html: "<b>" }],
-      }).success,
+      createFaqInput.safeParse(
+        validInput({
+          answerEnRich: {
+            type: "doc",
+            blocks: [
+              {
+                type: "paragraph",
+                content: [{ text: "Bad shape", html: "<b>" }],
+              },
+            ],
+          },
+        }),
+      ).success,
     ).toBe(false);
   });
 
@@ -84,12 +152,19 @@ describe("FAQ content", () => {
     const rowWithQuestionOnly = makeRow({
       id: "faq-question-id",
       questionId: "Bagaimana cara bergabung?",
+      questionIdRich: paragraph("Bagaimana cara bergabung?"),
       answerId: null,
     });
     const rowWithAnswerOnly = makeRow({
       id: "faq-answer-id",
       questionId: null,
       answerId: [{ type: "list", style: "ordered", items: ["Pertama"] }],
+      answerIdRich: {
+        type: "doc",
+        blocks: [
+          { type: "list", style: "ordered", items: [[{ text: "Pertama" }]] },
+        ],
+      },
     });
     const listPublic = mock(async () => [
       rowWithQuestionOnly,
@@ -110,12 +185,16 @@ describe("FAQ content", () => {
         id: "faq-question-id",
         question: "Bagaimana cara bergabung?",
         answer: rowWithQuestionOnly.answerEn,
-        sortOrder: 1,
+        questionRich: rowWithQuestionOnly.questionIdRich,
+        answerRich: rowWithQuestionOnly.answerEnRich,
+        sortOrder: 0,
       },
       {
         id: "faq-answer-id",
         question: rowWithAnswerOnly.questionEn,
         answer: rowWithAnswerOnly.answerId,
+        questionRich: rowWithAnswerOnly.questionEnRich,
+        answerRich: rowWithAnswerOnly.answerIdRich,
         sortOrder: 1,
       },
     ]);
@@ -123,18 +202,45 @@ describe("FAQ content", () => {
       "id",
       "question",
       "answer",
+      "questionRich",
+      "answerRich",
       "sortOrder",
     ]);
   });
 
-  test("normalizes empty Indonesian fields when creating an entry", async () => {
-    const input = createFaqInput.parse({
-      questionEn: "Question",
-      questionId: "   ",
-      answerEn: [{ type: "paragraph", text: "Answer" }],
-      answerId: null,
-      showOnLanding: true,
-    });
+  test("stores rich content and maintains a plain public compatibility projection", async () => {
+    const input = createFaqInput.parse(
+      validInput({
+        questionEnRich: {
+          type: "doc",
+          blocks: [
+            {
+              type: "paragraph",
+              content: [
+                { text: "How to " },
+                { text: "join", href: "https://example.com" },
+                { text: "?" },
+              ],
+            },
+          ],
+        },
+        answerEnRich: {
+          type: "doc",
+          blocks: [
+            { type: "paragraph", content: [{ text: "Read the guide." }] },
+            {
+              type: "list",
+              style: "unordered",
+              items: [
+                [{ text: "Create an account." }],
+                [{ text: "Join a class." }],
+              ],
+            },
+          ],
+        },
+        showOnLanding: true,
+      }),
+    );
     const create = mock(async (values) =>
       makeRow({ ...values, id: "created" }),
     );
@@ -144,22 +250,74 @@ describe("FAQ content", () => {
 
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({
-        questionEn: "Question",
+        questionEn: "How to join?",
+        questionEnRich: input.questionEnRich,
         questionId: null,
-        answerId: null,
+        answerEn: [
+          { type: "paragraph", text: "Read the guide." },
+          {
+            type: "list",
+            style: "unordered",
+            items: ["Create an account.", "Join a class."],
+          },
+        ],
         showOnLanding: true,
       }),
     );
     expect(created.id).toBe("created");
     expect(created.version).toBe(1);
+    expect(created.modifiedAt).toBe("2026-10-01T00:00:00.000Z");
+  });
+
+  test("serializes admin modification timestamps as valid ISO dates", async () => {
+    const service = createFaqService({
+      repo: makeRepo({
+        listAdmin: mock(async () => [
+          makeRow({ updatedAt: "2026-10-01T00:00:00.000Z" as unknown as Date }),
+        ]),
+      }) as FaqRepo,
+    });
+
+    const [entry] = await service.listAdmin();
+    expect(entry?.modifiedAt).toBe("2026-10-01T00:00:00.000Z");
+  });
+
+  test("sorts public entries alphabetically in the requested locale", async () => {
+    const service = createFaqService({
+      repo: makeRepo({
+        listPublic: mock(async () => [
+          makeRow({ id: "z", questionEn: "When?", questionId: "Kapan?" }),
+          makeRow({ id: "a", questionEn: "How?", questionId: "Bagaimana?" }),
+        ]),
+      }) as FaqRepo,
+    });
+
+    expect(
+      (await service.listPublic({ locale: "en", surface: "full" })).map(
+        ({ id, sortOrder }) => [id, sortOrder],
+      ),
+    ).toEqual([
+      ["a", 0],
+      ["z", 1],
+    ]);
+    expect(
+      (await service.listPublic({ locale: "id", surface: "full" })).map(
+        ({ id, sortOrder }) => [id, sortOrder],
+      ),
+    ).toEqual([
+      ["a", 0],
+      ["z", 1],
+    ]);
   });
 
   test("uses an atomic expected-version update and reports stale edits", async () => {
     const input = updateFaqInput.parse({
       id: "faq-1",
       expectedVersion: 1,
-      questionEn: "Updated question",
-      answerEn: [{ type: "paragraph", text: "Updated answer" }],
+      ...validInput({
+        questionEnRich: paragraph("Updated question"),
+        answerEnRich: paragraph("Updated answer"),
+      }),
     });
     const updateIfVersion = mock(async () => undefined);
     const findById = mock(async () => makeRow({ version: 2 }));

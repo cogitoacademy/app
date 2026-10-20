@@ -12,7 +12,10 @@ import {
   sortDayEvents,
 } from "./calendar-utils";
 import type { CalendarCompetition } from "./calendar-types";
-import { competitionPaletteClassName } from "@/lib/competition-colors";
+import {
+  competitionPaletteClassName,
+  competitionPaletteSubtleClassName,
+} from "@/lib/competition-colors";
 
 function makeEvent(
   id: string,
@@ -107,7 +110,9 @@ describe("competition category colors", () => {
       coreCategory: "unknown-slug",
       parentColors: palette,
     };
-    expect(getCategoryEventClass(category)).toBe(competitionPaletteClassName);
+    expect(getCategoryEventClass(category)).toBe(
+      competitionPaletteSubtleClassName,
+    );
     expect(getCategoryBadgeClass(category)).toBe(competitionPaletteClassName);
   });
 

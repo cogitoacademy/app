@@ -119,10 +119,16 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     findSessionById: mock(async () => null),
     completeSession: mock(async () => {}),
     findCompletedBookingsByTutor: mock(async () => []),
+    findTutorSessionFeesByTutor: mock(async () => []),
+    listTutorSessionFeeEventKeysByBookings: mock(async () => []),
+    listTutorPayoutAllocatedSourceKeys: mock(async () => []),
+    insertTutorPayoutAllocations: mock(async () => []),
+    listTutorPayoutAllocationsByPayoutId: mock(async () => []),
     findLatestPaidTutorPayout: mock(async () => null),
     listTutorPayoutProfiles: mock(async () => []),
     listTutorPayoutRecords: mock(async () => []),
     insertTutorPayout: mock(async () => ({})),
+    insertTutorSessionFee: mock(async () => ({})),
     updateSessionSchedule: mock(async () => {}),
     cancelSession: mock(async () => {}),
     insertSessionNote: mock(async () => ({})),
@@ -229,6 +235,7 @@ function makeMeeting() {
 function makeBooking(overrides: Record<string, unknown> = {}) {
   return {
     id: "b1",
+    bookingNumber: 1,
     type: "solo",
     modality: "online",
     tutorId: "tutor1",
@@ -2773,7 +2780,20 @@ describe("BookingService", () => {
       expect(repo.completeSession).toHaveBeenCalledWith(
         expect.anything(),
         "s1",
+        expect.any(Date),
       );
+      expect(repo.insertTutorSessionFee).toHaveBeenCalledTimes(1);
+      const feeRecord = repo.insertTutorSessionFee.mock.calls[0]?.[1];
+      expect(feeRecord).toMatchObject({
+        bookingId: "b1",
+        bookingSessionId: "s1",
+        tutorId: "tutor1",
+        scheduledStartAt: session.scheduledStartAt,
+        eventKey: "tutor-session-fee:session:s1",
+        grossHonorariumIdr: 235_200,
+        priceSnapshot: booking.priceSnapshot,
+      });
+      expect(feeRecord.earnedAt).toBeInstanceOf(Date);
       expect(repo.updateParticipantState).toHaveBeenCalledWith(
         expect.anything(),
         "p1",
@@ -8505,6 +8525,32 @@ describe("BookingService additional coverage paths", () => {
     );
   });
 
+  test("rejects no-show marking after a series session report exists", async () => {
+    const { service, wallet, repo } = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          makeBooking({ type: "series", currentState: "scheduled" }),
+        ),
+        findParticipant: mock(async () => makeParticipant()),
+        findSessionById: mock(async () => ({
+          id: "s1",
+          seriesBookingId: "b1",
+          currentState: "scheduled",
+          scheduledStartAt: new Date(Date.now() - 60 * 60 * 1000),
+          scheduledEndAt: new Date(Date.now() - 30 * 60 * 1000),
+          holdAmount: 42,
+        })),
+        findCompletionFeedback: mock(async () => ({ id: "report1" })),
+      },
+    });
+
+    await expect(
+      service.markParticipantNoShow("b1", "tutor1", "student1", "s1"),
+    ).rejects.toThrow(BookingNotEditableError);
+    expect(wallet.deduct).not.toHaveBeenCalled();
+    expect(repo.updateParticipantState).not.toHaveBeenCalled();
+  });
+
   test("rejects no-show marking when the session is no longer scheduled", async () => {
     const { service } = createService({
       repo: {
@@ -8740,6 +8786,9 @@ describe("BookingService additional coverage paths", () => {
         findCompletedBookingsByTutor: mock(async () => [series, solo]),
         listSessionsBySeriesId: mock(async () => [
           {
+            id: "series-session-aggregate",
+            scheduledStartAt: new Date("2026-08-02T00:00:00Z"),
+            completedAt: new Date("2026-08-02T01:30:00Z"),
             currentState: "completed",
             priceSnapshot: {
               baseline: 90,
@@ -8761,6 +8810,87 @@ describe("BookingService additional coverage paths", () => {
       cogitoTake: 28,
       tutorPayout: 112,
       tutorPayoutIdr: 640_000,
+    });
+  });
+
+  test("preserves explicit legacy payout eligibility for no-shows without fee events", async () => {
+    const eligibleNoShow = makeBooking({
+      id: "eligible-no-show",
+      currentState: "no_show",
+      overrideMeta: { tutorPayoutEligible: true },
+      priceSnapshot: {
+        baseline: 50,
+        cogitoTake: 10,
+        tutorShare: 40,
+        tutorHonorariumIdr: 200_000,
+      },
+    });
+    const { service } = createService({
+      repo: {
+        findCompletedBookingsByTutor: mock(async () => [eligibleNoShow]),
+      },
+    });
+
+    await expect(
+      service.getTutorPayouts({ tutorId: "tutor1" }),
+    ).resolves.toEqual({
+      completedSessions: 1,
+      totalMarks: 50,
+      cogitoTake: 10,
+      tutorPayout: 40,
+      tutorPayoutIdr: 200_000,
+    });
+  });
+
+  test("uses fee facts without double-counting a completed legacy series parent", async () => {
+    const series = makeBooking({
+      id: "series-with-fee",
+      type: "series",
+      currentState: "completed",
+      priceSnapshot: { baseline: 100, cogitoTake: 20, tutorShare: 80 },
+    });
+    const fee = {
+      bookingId: series.id,
+      bookingSessionId: "session-1",
+      eventKey: "tutor-session-fee:session:session-1",
+      grossHonorariumIdr: 45_000,
+      priceSnapshot: {
+        baseline: 50,
+        cogitoTake: 10,
+        tutorShare: 40,
+        tutorHonorariumIdr: 45_000,
+      },
+    };
+    const { service } = createService({
+      repo: {
+        findTutorSessionFeesByTutor: mock(async () => [fee]),
+        listTutorSessionFeeEventKeysByBookings: mock(async () => [
+          fee.eventKey,
+        ]),
+        findCompletedBookingsByTutor: mock(async () => [series]),
+        listSessionsBySeriesId: mock(async () => [
+          {
+            id: "session-1",
+            currentState: "completed",
+            priceSnapshot: {
+              baseline: 50,
+              cogitoTake: 10,
+              tutorShare: 40,
+              tutorHonorariumIdr: 45_000,
+            },
+          },
+        ]),
+      },
+    });
+
+    await expect(
+      service.getTutorPayouts({ tutorId: "tutor1" }),
+    ).resolves.toEqual({
+      completedSessions: 1,
+      totalMarks: 50,
+      cogitoTake: 10,
+      tutorPayout: 40,
+      tutorPayoutIdr: 45_000,
     });
   });
 
@@ -8872,6 +9002,9 @@ describe("BookingService additional coverage paths", () => {
         findCompletedBookingsByTutor: mock(async () => [series]),
         listSessionsBySeriesId: mock(async () => [
           {
+            id: "series-session-1",
+            scheduledStartAt: new Date("2026-08-02T00:00:00Z"),
+            completedAt: new Date("2026-08-02T01:30:00Z"),
             currentState: "completed",
             priceSnapshot: {
               baseline: 60,
@@ -8889,6 +9022,79 @@ describe("BookingService additional coverage paths", () => {
     expect(result.totalMarks).toBe(result.cogitoTake + result.tutorPayout);
     expect(result.totalMarks).toBe(60);
     expect(result.tutorPayoutIdr).toBe(230_000);
+  });
+
+  test("includes fee facts after the last payout cutoff", async () => {
+    const cutoffAt = new Date("2026-08-01T00:00:00Z");
+    const fee = {
+      id: "fee-1",
+      bookingId: "series-1",
+      bookingNumber: 2,
+      bookingType: "series",
+      bookingSessionId: "session-1",
+      scheduledStartAt: new Date("2026-08-02T00:00:00Z"),
+      earnedAt: new Date("2026-08-02T01:30:00Z"),
+      eventKey: "tutor-session-fee:session:session-1",
+      grossHonorariumIdr: 45_000,
+      priceSnapshot: {
+        baseline: 50,
+        cogitoTake: 10,
+        tutorShare: 40,
+        tutorHonorariumIdr: 45_000,
+      },
+    };
+    const findTutorSessionFeesByTutor = mock(async () => [fee]);
+    const { service } = createService({
+      repo: {
+        findLatestPaidTutorPayout: mock(async () => ({
+          cutoffAt,
+          paidAt: cutoffAt,
+        })),
+        findTutorSessionFeesByTutor,
+        listTutorSessionFeeEventKeysByBookings: mock(async () => [
+          fee.eventKey,
+        ]),
+      },
+    });
+
+    await expect(
+      service.getPendingTutorPayouts("tutor1"),
+    ).resolves.toMatchObject({ completedSessions: 1, tutorPayoutIdr: 45_000 });
+    expect(findTutorSessionFeesByTutor).toHaveBeenCalledWith(
+      expect.anything(),
+      "tutor1",
+      new Date(cutoffAt.getTime() + 1),
+      undefined,
+      "completedAt",
+    );
+  });
+
+  test("does not re-report session sources already allocated to a payout", async () => {
+    const completed = makeBooking({
+      currentState: "completed",
+      priceSnapshot: {
+        baseline: 50,
+        cogitoTake: 10,
+        tutorShare: 40,
+        tutorHonorariumIdr: 200_000,
+      },
+    });
+    const { service } = createService({
+      repo: {
+        findCompletedBookingsByTutor: mock(async () => [completed]),
+        listTutorPayoutAllocatedSourceKeys: mock(async () => [
+          "tutor-session-fee:booking:b1",
+        ]),
+      },
+    });
+
+    await expect(
+      service.getPendingTutorPayouts("tutor1"),
+    ).resolves.toMatchObject({
+      completedSessions: 0,
+      tutorPayoutIdr: 0,
+      items: [],
+    });
   });
 
   test("returns pending payouts since the last cutoff", async () => {
@@ -9034,6 +9240,7 @@ describe("BookingService additional coverage paths", () => {
       paidAt,
     };
     const insertTutorPayout = mock(async () => row);
+    const insertTutorPayoutAllocations = mock(async () => []);
     const { service } = createService({
       repo: {
         findCompletedBookingsByTutor: mock(async () => [completed]),
@@ -9046,6 +9253,7 @@ describe("BookingService additional coverage paths", () => {
           bankTransferDisclaimerAccepted: true,
         })),
         insertTutorPayout,
+        insertTutorPayoutAllocations,
       },
     });
     await expect(
@@ -9058,6 +9266,17 @@ describe("BookingService additional coverage paths", () => {
         paidBy: "admin1",
         status: "paid",
       }),
+    );
+    expect(insertTutorPayoutAllocations).toHaveBeenCalledWith(
+      expect.anything(),
+      [
+        expect.objectContaining({
+          payoutId: "pay1",
+          sourceType: "legacy_booking",
+          bookingId: completed.id,
+          grossHonorariumIdr: 200_000,
+        }),
+      ],
     );
   });
 

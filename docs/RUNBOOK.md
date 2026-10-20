@@ -1,5 +1,48 @@
 # Cogito Runbook
 
+## V3 local integration database state (2026-10-20)
+
+Read-only inspection used loopback URLs from `apps/server/.env` and
+`apps/server/.env.test`; secrets were not printed. Migration tracking is in
+`drizzle.__drizzle_migrations`. The four migration files and recorded hashes
+match exactly:
+
+| Migration | Applied timestamp | SHA-256 | `cogito-app` dev | `cogito-test` |
+| --- | ---: | --- | --- | --- |
+| `0059_massive_blindfold.sql` | 1792383364835 | `b4e69c578c477f72069aad24914fa9cc7193e3f79fe070e9efa858b5fa9a4669` | Applied | Applied |
+| `0059_faq_rich_text.sql` | 1792385462859 | `7f330d2e9be702fa8da6e1b1d9fba89771fb74b121a3c5bf3507901e1bfd40d7` | Applied | Applied |
+| `0060_tutor_payout_allocations.sql` | 1792388580581 | `728a44d0efd1517513120928147fdcef3776991c20d6f0b9b136cf03c8ab8bf3` | Applied | Applied |
+| `0061_academy_class_drafts.sql` | 1792394899225 | `db9f27f77c76201b609400077a530ca8d5141f79b904c6f9a7ef1595a4a366b8` | Pending | Applied |
+
+The dev database has `faq_entry`, `tutor_session_fee` and
+`tutor_payout_allocation`; academy class tables are absent. The test database
+also has `academy_class` and `academy_class_session`. Both databases have
+`question_en_rich` and `answer_en_rich` as required JSONB columns, with nullable
+`question_id_rich` and `answer_id_rich`. Existing fee, FAQ and payout migration
+SQL and timestamps are preserved. The unified journal orders these four entries
+by their recorded timestamps, which avoids Drizzle skipping an earlier import
+behind the latest applied timestamp. No reconciliation migration or historical
+fee backfill is required for the observed databases.
+
+After confirming no other worker is using the shared dev database and reviewing
+the dev journal again, the only local migration planned is the class-draft
+migration. From PowerShell:
+
+```powershell
+Push-Location packages/db
+$env:ENV_FILE = '../../apps/server/.env'
+bun run db:migrate
+Remove-Item Env:ENV_FILE
+Pop-Location
+```
+
+Do not run this from the integration checkpoint without parent coordination.
+`cogito-test` already has all four entries and needs no migration. Automated
+destructive/reset-based suites must pass `--env-file apps/server/.env.test`,
+verify the resolved target is loopback database `cogito-test`, and run
+sequentially. Never point those suites at `cogito-app`. The local migration
+state does not authorize production changes.
+
 ## Catalog migration/acceptance gate — implementation in progress
 
 Migrations `0056_complex_ricochet.sql` and `0057_legacy_competition_palette_backfill.sql`
@@ -166,6 +209,18 @@ losing the draft. This browser smoke passed at exact 600 and over-limit 601; the
 exact-limit button enabled and the over-limit button disabled. No report was
 submitted, so settlement is still unverified here. Historical reports must remain
 readable.
+
+## V3 class draft admin smoke check (2026-10-19)
+
+Migration `0061_academy_class_drafts.sql` is additive and creates empty class/session tables; it does not backfill or publish records. The migration was applied only to the isolated local `cogito-test` database. The focused test command was:
+
+```
+bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests/integration/academy-class.test.ts
+```
+
+It passed 4 tests / 18 expectations, including admin-only access, audit reason/snapshots, optimistic version conflicts, online + managed-room draft sessions, stable session IDs after reorder, room/tutor capacity and modality validation, and overlapping-session rejection. The guarded test helper truncates class/session tables only in `cogito-test`; never run it against development or production data.
+
+Local UI smoke: sign in as admin, open `/admin-classes`, create/edit a cohort draft with at least one online and one in-person session, verify an active competition, published mode-compatible tutor and managed room are selectable, and save a reason. Reorder sessions and confirm their identities remain. Drafts are not public and do not reserve rooms; publication-time overlap checks, Meet creation, cover upload, student enrollment/public reads, and notifications are not available. Do not present this draft page as launch-ready; M01 class content/assets remain pending. Server typecheck hit Windows memory exhaustion in this attempt; web typecheck and production builds remain unverified for this slice.
 
 ## V3 draft economy editor (2026-10-18)
 
@@ -1067,6 +1122,24 @@ database migration problem, not an empty ticket list.
 For isolated local test runs, the test runner migrates `cogito-test` automatically
 using `apps/server/.env.test` or `apps/server/.env.test.example`.
 
+Migration `0059_massive_blindfold.sql` creates `tutor_session_fee`. Apply it
+before starting an API build that records completed-session fees. It adds one
+source-keyed row per completed solo/group booking or completed series child and
+does not backfill historical bookings. Tutor/admin payout summaries consume
+these rows, suppress the corresponding legacy booking/session snapshot, and
+retain the legacy fallback for sources with no fee event. Pending cutoffs filter
+new events by `earnedAt` and preserve the existing completion-time fallback for
+legacy sources. Paid rows are still aggregate cutoff records, not allocations
+to individual fee events. Only the successful completion transaction writes
+these fee facts.
+
+For a browser preview against the local development database, `apps/server/.env`
+selects `cogito-app` and the API's port; keep that database URL but disable
+external side effects (`PAYMENT_PROVIDER=stub`, `SCHEDULER_ENABLED=false`,
+`GOOGLE_MEET_ENABLED=false`, blank `RESEND_API_KEY`, and local-only analytics).
+Use `apps/server/.env.test` for integration tests. Never run the test suite's
+`resetDatabase()` helper against `cogito-app`.
+
 #### Migration rollback
 
 Up migrations are the only automatic path; rollback SQL for the 2026 taxonomy
@@ -1933,18 +2006,21 @@ the test.
 
 ## FAQ content verification
 
-The app serves FAQ data through anonymous `POST /rpc/publicContent/faq/list` with the standard oRPC body envelope, for example `{"json":{"locale":"en","surface":"landing"}}`. The response array is in `json`. A valid empty array means there is no active matching FAQ copy; a non-success response remains an API failure. Indonesian question and answer fields fall back independently to English. Admin edits are available at `/admin-faq`; only active rows are public, and the landing surface also requires the landing checkbox.
+The app serves FAQ data through anonymous `POST /rpc/publicContent/faq/list` with the standard oRPC body envelope, for example `{"json":{"locale":"en","surface":"landing"}}`. The response array is in `json`; it retains the legacy plain-text `question`/`answer` fields and adds locale-selected `questionRich`/`answerRich` documents. Older consumers can ignore these additive fields. Entries are alphabetized by the question displayed for the requested locale. A valid empty array means there is no active matching FAQ copy; a non-success response remains an API failure. Indonesian question and answer fields fall back independently to English. Admin edits are available at `/admin-faq`; the rich editor supports bold, italic, safe links, and ordered/unordered lists, with optional Indonesian fields hidden by default. Only active rows are public, and at most six active rows may be selected for the landing surface.
 
 Run the focused FAQ checks from the repository root:
 
 ```powershell
-bun test packages/api/src/tests/unit/faq.test.ts
+bun test --timeout 30000 apps/web/src/lib/faq-rich-text.test.ts packages/api/src/tests/unit/faq.test.ts
 bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests/integration/faq.test.ts
+bun run --filter @cogito-app/e2e test -- faq-admin.spec.ts --retries=0
 ```
 
-The integration fixture guard requires `NODE_ENV=test`, loopback host, and the exact `cogito-test` database before writes or cleanup. It deletes only its recorded fixture IDs; it does not reset or truncate the shared DB. Migration `0058_faq_entries.sql` is applied on local `cogito-test` only. Never use `apps/server/.env` for this suite or apply the migration to a shared environment as part of local testing. On 2026-10-19, the FAQ unit tests passed (5 tests/19 expectations), integration passed (1 test/8 expectations), and the app web typecheck passed. The full API unit run passed (2,465 tests/5,776 expectations), app web tests passed (121/239), app web production build passed, and FAQ admin Playwright passed (1 Chromium test); its local fixture IDs were deleted and verified absent.
+The integration fixture guard requires `NODE_ENV=test`, a loopback host, and the exact `cogito-test` database before writes or cleanup. It deletes only recorded fixture IDs; it does not reset or truncate the database. Migrations `0058` and `0059` are applied to local `cogito-test`; migration `0059` is also applied to local development `cogito-app`. In shared/production, apply migrations `0058` then `0059` through the approved release process before deploying API code that selects the rich columns. The marketing reader accepts responses without rich fields, so it may deploy before or after the API release. On 2026-10-19, the rich-text/API unit checks passed (8 tests, 28 expectations), FAQ Postgres integration passed (2 tests, 13 expectations), the FAQ admin Playwright spec passed (1 Chromium test), and the E2E TypeScript check passed. A local development-database create probe succeeded after applying `0059` and its throwaway row was deleted. The scoped FAQ web typecheck and web production build also passed; the full web typecheck was not rerun because earlier attempts exhausted available memory.
 
-The marketing site reads both FAQ surfaces server-side using `COGITO_APP_API_URL`, `POST /rpc/publicContent/faq/list`, the standard oRPC JSON envelope, and `cache: "no-store"`. Missing configuration, HTTP failure, invalid JSON/envelope, or invalid entries produce a localized FAQ error state; a valid empty array produces a separate empty state. Landing FAQ failures stay inside that section, and failed requests do not render FAQ JSON-LD. Local mock coverage returned HTTP 503 while `/{en,id}/faq` remained HTTP 200 with retry text; do not use the production API URL for local verification. From `C:/.Projects/cogito-acad`, run `bun test apps/web/tests` (13 tests/40 expectations). A headless-browser smoke against a local FAQ mock verified Enter/Space operation for the desktop/mobile landing cards and full FAQ accordion, plus the answer-region ARIA links; Tab-sequence and screen-reader behavior remain unverified. The marketing production build passed with `COGITO_APP_API_URL=http://127.0.0.1:4300`; both FAQ and landing routes are dynamic and no API data is baked into the build. Do not seed client FAQ copy without the approved M01 content inventory.
+If `POST /rpc/adminFaq/create` returns `500` with `INTERNAL_SERVER_ERROR` / `Unexpected error`, first check that migration `0059_faq_rich_text.sql` is applied to the exact database used by that API server. It adds `question_en_rich`, `question_id_rich`, `answer_en_rich`, and `answer_id_rich`; migrating `cogito-test` does not update development `cogito-app`. For local development, run `bun run db:migrate` from `packages/db` with the default `apps/server/.env` target, then restart the API. Verify the target before migrating; never point this local command at a shared/production database.
+
+The marketing site reads both FAQ surfaces server-side using `COGITO_APP_API_URL`, `POST /rpc/publicContent/faq/list`, and `cache: "no-store"`. The parser requires a `json` field and accepts `meta` when absent or an array; the configured API omits empty metadata. Missing configuration, HTTP failure, invalid JSON/envelope, or invalid entries produce a localized FAQ error state; a valid empty array produces a separate empty state. The adapter validates rich documents and safe link schemes, uses rich fields when present, and falls back to legacy answer/question text when an older API omits them. FAQ JSON-LD continues to use the plain projection. Landing FAQ failures stay inside that section, and failed requests do not render FAQ JSON-LD. Local mock coverage returned HTTP 503 while `/{en,id}/faq` remained HTTP 200 with retry text; do not use the production API URL for local verification. From `C:/.Projects/cogito-acad`, run `bun test apps/web/tests`; FAQ-specific rendering/parser tests and the marketing typecheck/build have passed. A headless-browser smoke against a local FAQ mock verified Enter/Space operation for the desktop/mobile landing cards and full FAQ accordion, plus the answer-region ARIA links; Tab-sequence and screen-reader behavior remain unverified. The marketing production build passed with `COGITO_APP_API_URL=http://127.0.0.1:4300`; both FAQ and landing routes are dynamic and no API data is baked into the build. Do not seed client FAQ copy without the approved M01 content inventory.
 
 ## Common Errors
 
@@ -2454,7 +2530,7 @@ move with the body.
 
 ## Tutor payout operations (2026-08-28)
 
-Apply migrations `0034_faulty_richard_fisk.sql`, `0035_ordinary_lyja.sql`, and `0036_worried_groot.sql` before deploying the tutor payout-account UI. Operations may process tutor honoraria weekly, but the balance does not reset on a calendar boundary. Review the unpaid amount, transfer the net amount, then call the admin mark-paid procedure; this advances the completion-time cutoff and clears only the sessions included in that payout. Completion and mark-paid operations are serialized per tutor to avoid a boundary race. Only conventional BCA (exact bank name `BCA`) is fee-free; BCA Syariah, blu (BCA Digital), and any other destination incur Rp2,500 once on that payout. The application records the payment audit trail but does not execute a bank transfer. Confirm the tutor's account number, holder name, opening city/regency, ownership choice, and transfer disclaimer before initiating the transfer.
+Apply migrations `0034_faulty_richard_fisk.sql`, `0035_ordinary_lyja.sql`, and `0036_worried_groot.sql` before deploying the tutor payout-account UI; migration `0060_tutor_payout_allocations.sql` adds per-session audit details. Operations may process tutor honoraria weekly, but the balance does not reset on a calendar boundary. Review the unpaid amount and session breakdown, transfer the net amount manually, then call the admin mark-paid procedure. The payout header and one immutable source allocation per included session are committed together; verify the paid drawer breakdown against the transfer record. This advances the completion-time cutoff and prevents those sources from being included in a later payout. Completion and mark-paid operations are serialized per tutor to avoid a boundary race. Only conventional BCA (exact bank name `BCA`) is fee-free; BCA Syariah, blu (BCA Digital), and any other destination incur Rp2,500 once on that payout. The application records the manual payment and audit trail but does not execute a bank transfer. Confirm the tutor's account number, holder name, opening city/regency, ownership choice, and transfer disclaimer before initiating the transfer. Historical payout batches created before session allocations have no original breakdown; do not infer or backfill one without reconciling it against the manual transfer records.
 
 ## Cogito Marks visual smoke check
 

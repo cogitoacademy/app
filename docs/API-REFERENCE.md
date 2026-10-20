@@ -691,9 +691,9 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 - **Auth:** Admin
 - **Input:** `{ tutorId, dateFrom?, dateTo? }`
-- **Output:** `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }` (`tutorPayoutIdr` is summed from IDR tutor-honorarium snapshots; legacy pre-economy bookings use the compatibility path)
+- **Output:** `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }` (`tutorPayoutIdr` sums persisted fee-event honoraria plus the legacy snapshot fallback for sources without a fee event)
 - **Errors:** `INVALID_LEDGER_FILTER` (400) — invalid date
-- **Description:** Internal tutor payout reporting from completed bookings in the requested date range. With no date filters this is an all-time report; use `admin.getPendingTutorPayouts` for the unpaid amount after the latest admin-paid cutoff. `totalMarks` reports the internal split basis (`priceSnapshot.baseline`), so `totalMarks === cogitoTake + tutorPayout`; per-student rounding surpluses (`actualMarksPooled ≥ baseline`) are not included.
+- **Description:** Internal tutor payout summary. Persisted `tutor_session_fee` events are authoritative for recorded deliveries; legacy payout-eligible booking/session snapshots without an event, including explicit no-show eligibility, use the compatibility adapter. Event keys prevent fee-event/legacy double counting, including a completed series child whose parent is still scheduled. With no date filters this is all-time; use `admin.getPendingTutorPayouts` for the amount after the latest paid cutoff. New fee events use `earnedAt` for that cutoff, while legacy sources retain the existing completion-time/scheduled-time fallback. Payout report rows remain aggregate transfer headers; `admin.getTutorPayoutAllocations` returns the session-level sources recorded for new paid batches. Historical batches are not backfilled. `totalMarks` reports the internal split basis (`priceSnapshot.baseline`), so `totalMarks === cogitoTake + tutorPayout`; per-student rounding surpluses (`actualMarksPooled ≥ baseline`) are not included.
 
 ### `admin.getTutorPayoutReport`
 
@@ -707,8 +707,16 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 
 - **Auth:** Admin
 - **Input:** `{ tutorId }`
-- **Output:** `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr, lastPaidAt }`
-- **Description:** Returns the unpaid tutor honorarium since the latest admin-paid cutoff. The cutoff advances only when `admin.markTutorPayoutPaid` succeeds; no calendar-week reset is applied. The admin `/admin-tutor-payouts` workspace uses this summary to show the unpaid amount and completed sessions before transfer.
+- **Output:** `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr, items, lastPaidAt }`; each `items[]` entry includes `{ sourceKey, sourceType, tutorSessionFeeId, bookingId, bookingNumber, bookingSessionId, bookingType, deliveryStatus, scheduledStartAt, earnedAt, grossHonorariumIdr, priceSnapshot }`.
+- **Description:** Returns the unpaid tutor honorarium and auditable session breakdown since the latest admin-paid cutoff. `items` are the exact fee-event or legacy snapshot sources that will be captured if this balance is marked paid. The cutoff advances only when `admin.markTutorPayoutPaid` succeeds; no calendar-week reset is applied.
+
+### `admin.getTutorPayoutAllocations`
+
+- **RPC path:** `/rpc/admin/payouts/tutor/details`
+- **Auth:** Admin
+- **Input:** `{ payoutId }` (UUID string)
+- **Output:** `{ detailsAvailable, items }`; each `items[]` entry includes `{ id, payoutId, sourceKey, sourceType, tutorSessionFeeId, bookingId, bookingNumber, bookingSessionId, bookingType, deliveryStatus, scheduledStartAt, earnedAt, grossHonorariumIdr, priceSnapshot, createdAt }`.
+- **Description:** Returns immutable per-session source allocations for a paid manual tutor transfer. `detailsAvailable` is false with an empty `items` array for historical payouts that predate session-level allocation; no historical allocation is inferred or fabricated.
 
 ### `admin.markTutorPayoutPaid`
 
@@ -716,7 +724,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Input:** `{ tutorId }`
 - **Output:** `{ id, tutorId, grossHonorariumIdr, transferFeeIdr, netHonorariumIdr, bankName, bankAccountNumber, bankAccountHolderName, paidAt }`
 - **Errors:** `TUTOR_PAYOUT_NOT_AVAILABLE` (400) when no unpaid honorarium exists or payout account details are incomplete
-- **Description:** Atomically records an immutable paid payout at the current completion-time cutoff. Exact conventional `BCA` has no transfer fee; all other bank names deduct Rp2,500 once from the payout. The application records the payment and audit trail but does not execute the bank transfer.
+- **Description:** Atomically records an immutable paid payout at the current completion-time cutoff and one per-session allocation row for every included source. Exact conventional `BCA` has no transfer fee; all other bank names deduct Rp2,500 once from the payout. The application records the manual transfer and audit trail but does not execute the bank transfer.
 
 ### `admin.getEconomySettings`
 
@@ -732,6 +740,16 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Output:** The updated economy settings object; `version` increments only when at least one schedule value changes
 - **Errors:** `ECONOMY_CONFIG_CONFLICT` (409) when `expectedVersion` is stale; validation errors (400) for unsupported values
 - **Description:** Updates the active Cogito take schedule, records an audit event, and affects only future bookings and new repricing snapshots. Existing booking snapshots remain unchanged. The update does not notify tutors; their IDR honorarium settings and the student-facing Marks preview remain separate concerns. Saving identical values is a no-op and creates no new audit event or notification.
+
+### `admin.listAcademyClasses`, `admin.getAcademyClass`, `admin.saveAcademyClassDraft`
+
+- **RPC paths:** `/rpc/admin/classes/list`, `/rpc/admin/classes/get`, `/rpc/admin/classes/save-draft`
+- **Auth:** Admin
+- **Inputs:** list `{ state?: "draft" | "published" | "postponed" | "cancelled" | "completed" }`; get `{ id }`; save uses a `kind`-discriminated class payload. Both kinds require `competitionId`, English `titleEn`/`descriptionEn`, optional Indonesian fields, optional `coverKey`, `tutorFeeIdr`, `sessions[]`, and an audit `reason`. Cohort adds `minimumEnrollment`, `minimumCheckAt`, `fullRateMarks`, `halfRateMarks`, and `singleRateMarks`; masterclass adds `masterclassRateMarks` and must contain exactly one session. Each session has optional stable `id`, `capacity`, English title, optional Indonesian title/curriculum, ISO `startAt`/`endAt`, `mode` (`online` or `in_person`), `tutorId`, and `roomId` only for in-person delivery. Updates additionally require class `id` and `expectedVersion`.
+- **Output:** Admin class/session rows with competition, tutor, and managed-room labels. Save returns the saved class and ordered sessions.
+- **Rules:** New rows are drafts only. Competition must be active; each tutor must have a published profile that supports the mode and session capacity; in-person sessions require an active room large enough for that session. Cohorts require English curriculum text, a minimum-check date before the first session, and non-overlapping sessions; masterclasses have exactly one session. Draft updates preserve submitted session IDs and use optimistic version checks; only drafts are editable. Create/update writes an audit entry with actor, reason, and before/after snapshot. The admin editor uploads PNG/JPEG/WebP/GIF covers (max 5 MB) through `upload.createUploadUrl` and saves the returned key as `coverKey`; no class asset was uploaded during implementation. Drafts are not public and do not reserve rooms. Publication, Meet creation, and conflict reservation are not implemented by the current slice.
+- **Rate defaults:** Cohort full/half/single prices default to 20/22/25 Marks per session and tutor fee Rp400,000 per session. Masterclass defaults to 5 Marks and Rp300,000 tutor fee. Admin may edit these draft values; rates are snapshotted on the class/session draft.
+- **Errors:** `ACADEMY_CLASS_NOT_FOUND` (404); `ACADEMY_CLASS_VERSION_CONFLICT` and `ACADEMY_CLASS_STATE_CONFLICT` (409); invalid schedule/reference/class data (400).
 
 ## Admin Knowledge Bank Access (`adminKnowledgeBank.*`)
 
@@ -988,7 +1006,7 @@ The web tutor profile editor groups Education, Achievements, and Experiences int
 - **Input:** `{ dateFrom?, dateTo? }`
 - **Output:** `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }` (internal split fields remain for compatibility; the tutor UI renders only `tutorPayoutIdr`)
 - **Errors:** `INVALID_DATE_RANGE` (400)
-- **Description:** The authenticated tutor's unpaid honorarium summary. With no date filters, completed sessions are selected after the latest admin-paid cutoff; the cutoff advances only when an admin records a payout. Weekly processing is an operational cadence, not an automatic Monday reset. The tutor dashboard presents this summary in its Payout details card and exposes the processing and transfer-fee explanations through UI info popovers; no additional API field or endpoint is required.
+- **Description:** The authenticated tutor's unpaid honorarium summary. Persisted fee events are filtered by earned time after the latest admin-paid cutoff; legacy payout-eligible booking/session sources without events retain the snapshot and cutoff fallback. Event keys avoid counting an event and its legacy source twice. The cutoff advances only when an admin records a payout; paid rows are still aggregate records rather than allocations to individual fee events. Weekly processing is an operational cadence, not an automatic Monday reset. The tutor dashboard presents this summary in its Payout details card and exposes the processing and transfer-fee explanations through UI info popovers; no additional API field or endpoint is required.
 
 ---
 
@@ -1008,31 +1026,32 @@ The web tutor profile editor groups Education, Achievements, and Experiences int
 - **Auth:** Public; no session cookie is required
 - **HTTP request:** `POST /rpc/publicContent/faq/list` with `{"json":{"locale":"en","surface":"full"}}`
 - **Input:** `{ locale?: "en" | "id", surface?: "full" | "landing" }`; both default to `en` and `full`
-- **Output:** `Faq[]`, each item `{ id, question, answer, sortOrder }`; answer blocks are either `{ type: "paragraph", text }` or `{ type: "list", style: "ordered" | "unordered", items }`
-- **Description:** Returns active entries ordered by `sortOrder`, then ID. The `landing` surface also requires `showOnLanding = true`. Indonesian question and answer fields independently fall back to English when missing; app chrome remains English. Public output omits inactive/landing flags, version, and all admin-only fields. Reads are request-time; API and database failures remain errors rather than empty results. The marketing site calls this procedure server-side with `cache: no-store`, validates the `{ json, meta }` envelope and entry shape, and renders failures separately from a valid empty list.
+- **Output:** `Faq[]`, each item `{ id, question, answer, questionRich, answerRich, sortOrder }`; the legacy answer blocks remain `{ type: "paragraph", text }` or `{ type: "list", style: "ordered" | "unordered", items }`. Rich documents are `{ type: "doc", blocks }` with paragraphs of text runs (`bold?`, `italic?`, safe `href?`) or ordered/unordered lists of text-run arrays.
+- **Description:** Returns active entries alphabetically by the question displayed for the requested locale (locale-aware comparison, ID tie-break). `sortOrder` remains in the backward-compatible DTO and is assigned the zero-based display position. The `landing` surface also requires `showOnLanding = true`. Indonesian question and answer fields independently fall back to English when missing; rich and plain projections use the same locale fallback. Rich fields are additive; older consumers can ignore them, and the marketing adapter accepts their absence from an older API and renders the legacy text instead. Links allow `http:`, `https:`, `mailto:`, same-origin paths, and anchors. Public output still omits inactive/landing flags, version, and all admin-only fields. Reads are request-time; API and database failures remain errors rather than empty results. The marketing site calls this procedure server-side with `cache: no-store`, requires the `json` field, accepts `meta` when absent or an array (the configured API may omit empty metadata), validates rich entries, and renders failures separately from a valid empty list.
 
 ### `adminFaq.list`
 
 - **Auth:** Admin
 - **HTTP request:** `POST /rpc/adminFaq/list` with `{"json":{}}`
 - **Input:** `{}` (strict empty object)
-- **Output:** All `FaqAdminDto` entries ordered by sort order and ID. Each item includes `id`, English/Indonesian question and answer fields, `sortOrder`, `isActive`, `showOnLanding`, and `version`.
+- **Output:** All `AdminFaqDto` entries ordered alphabetically by the English question, then ID. Each item includes `id`, `questionEn`, `questionId`, legacy `answerEn`/`answerId` projections, `questionEnRich`, `questionIdRich`, `answerEnRich`, `answerIdRich`, `isActive`, `showOnLanding`, `version`, and ISO `modifiedAt`.
 
 ### `adminFaq.create`
 
 - **Auth:** Admin
 - **HTTP request:** `POST /rpc/adminFaq/create` with the standard `{"json": <input>}` envelope
-- **Input:** `{ questionEn, questionId?, answerEn, answerId?, sortOrder?, isActive?, showOnLanding? }`. English question and answer are required. Indonesian fields are optional; answers accept 1–50 paragraph/list blocks, with 1–50 items per list. Sort order is a non-negative integer; active defaults to true and landing visibility to false.
-- **Output:** The created `FaqAdminDto`, initially at version 1.
+- **Input:** `{ questionEnRich, questionIdRich?, answerEnRich, answerIdRich?, isActive?, showOnLanding? }`. English rich question and answer are required; Indonesian documents are optional or `null`. A document is `{ type: "doc", blocks }`; blocks are paragraphs of text runs (`bold?`, `italic?`, safe `href?`) or ordered/unordered lists of text-run arrays. Questions are limited to 500 plain-text characters; documents to 50 blocks. Links allow `http:`, `https:`, `mailto:`, same-origin paths, and anchors; unsafe protocols and raw HTML are rejected. Active defaults to true and landing visibility to false.
+- **Output:** The created `AdminFaqDto`, initially at version 1 with `modifiedAt`. The service also derives the legacy plain-text question and answer fields used by the public DTO.
+- **Errors:** `BAD_REQUEST` when selecting the new entry would exceed the six-active-FAQ landing limit.
 
 ### `adminFaq.update`
 
 - **Auth:** Admin
 - **HTTP request:** `POST /rpc/adminFaq/update` with the standard `{"json": <input>}` envelope
 - **Input:** The create fields plus `{ id, expectedVersion }`
-- **Output:** The updated `FaqAdminDto` with its version incremented
-- **Errors:** Wire codes are `NOT_FOUND` (404) when the ID does not exist and `CONFLICT` (409) when `expectedVersion` is stale. The underlying FAQ domain error names are not exposed as the oRPC error code.
-- **Description:** Updates are compare-and-swap writes. Deactivation hides the entry publicly while retaining it for admin editing; there is no destructive delete procedure.
+- **Output:** The updated `AdminFaqDto` with its version incremented
+- **Errors:** Wire codes are `NOT_FOUND` (404) when the ID does not exist, `CONFLICT` (409) when `expectedVersion` is stale, and `BAD_REQUEST` when selecting the entry would exceed the six-active-FAQ landing limit. The underlying FAQ domain error names are not exposed as the oRPC error code.
+- **Description:** Updates are compare-and-swap writes. Deactivation hides the entry publicly and clears landing selection while retaining it for admin editing; there is no destructive delete procedure. Create uses the same six-active-entry landing limit.
 
 ## Tutor Discovery (`tutors.*`)
 
@@ -1483,7 +1502,7 @@ RPC contract.
 - **Auth:** Tutor
 - **Input:** `{ bookingId, sessionId?, feedback: { discussion: string[1..30], strengths: string[1..30], improvements: string[1..30] } }` (`sessionId` required for series child sessions; each bullet 1–1000 chars)
 - **Output:** `{ booking }`
-- **Description:** Marks a scheduled session completed and deducts held Marks. Requires session discussion, strengths observed, and areas for improvement; saves one `session_completion_feedback` row atomically (per booking for solo/group, per session for series). Missing/empty feedback returns `BOOKING_COMPLETION_FEEDBACK_REQUIRED` (400).
+- **Description:** Marks a scheduled session completed and deducts held Marks. Requires session discussion, strengths observed, and areas for improvement; saves one `session_completion_feedback` row atomically (per booking for solo/group, per session for series). In the same transaction it appends one `tutor_session_fee` event for the completed delivery (booking identity for solo/group; child-session identity for series), including the pinned price snapshot and gross IDR honorarium. This is an earned-fee fact, not a payout; the RPC output is unchanged. Missing/empty feedback returns `BOOKING_COMPLETION_FEEDBACK_REQUIRED` (400).
 - **Frontend note:** Cancel uses Selia confirmation dialog; complete uses `CompleteSessionDialog` for three textarea-backed tutor feedback sections (each line is a bullet and Enter adds another). Booking detail shows read-only Student notes with Session feedback directly beneath it in the same Session overview block after completion. Mutation feedback is emitted through the global toast layer and does not change this RPC contract.
 
 ### `booking.listCompletionFeedback`

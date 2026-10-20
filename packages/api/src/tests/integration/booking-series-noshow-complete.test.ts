@@ -8,6 +8,7 @@ import {
   availabilitySlot,
   bookingSession,
   bookingParticipant,
+  tutorSessionFee,
 } from "@cogito-app/db/schema";
 
 import {
@@ -211,5 +212,25 @@ describe("H2: series no-show decrements participant.heldAmount", () => {
     // later residual-release can never release more than the wallet holds.
     const after = await getParticipant(b.id, studentId);
     expect(after!.heldAmount).toBe(perSession * (sessions.length - 1));
+
+    // No-show forfeits the seat and cannot be followed by a completion report
+    // that would pay a tutor fee for a session that was not delivered.
+    const feedback = {
+      discussion: ["Discussed the lesson"],
+      strengths: ["Participated"],
+      improvements: ["Review vocabulary"],
+    };
+    await expect(
+      tutorClient.tutorActions.completeSession({
+        bookingId: b.id,
+        sessionId: s1.id,
+        feedback,
+      }),
+    ).rejects.toThrow();
+    const fees = await db
+      .select()
+      .from(tutorSessionFee)
+      .where(eq(tutorSessionFee.bookingSessionId, s1.id));
+    expect(fees).toHaveLength(0);
   });
 });

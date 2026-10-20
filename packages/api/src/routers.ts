@@ -7,6 +7,7 @@ import { createAdminTutorRouter } from "./modules/admin-tutor/admin-tutor.router
 import { createAdminMarkPackageRouter } from "./modules/admin-mark-package/admin-mark-package.router";
 import { createAdminKnowledgeBankRouter } from "./modules/admin-knowledge-bank/admin-knowledge-bank.router";
 import { createCompetitionCatalogRouter } from "./modules/competition-catalog/competition-catalog.router";
+import { createAcademyClassRouter } from "./modules/academy-class/academy-class.router";
 import { createTutorRouter } from "./modules/tutor/tutor.router";
 import { createDiscoveryRouter } from "./modules/tutor-discovery/discovery.router";
 import { createInviteRouter } from "./modules/invite/invite.router";
@@ -33,6 +34,7 @@ const authRouter = createAuthRouter(handlers.auth);
 const adminRouter = {
   ...createAdminRouter(handlers.admin),
   ...createCompetitionCatalogRouter(handlers.competitionCatalog),
+  ...createAcademyClassRouter(handlers.academyClass),
 };
 const adminTutorRouter = createAdminTutorRouter(handlers.adminTutor);
 const adminMarkPackageRouter = createAdminMarkPackageRouter(

@@ -9,6 +9,9 @@ import {
   availabilitySlot,
   booking as bookingTable,
   bookingSession,
+  tutorPayout,
+  tutorSessionFee,
+  tutorPayoutAllocation,
 } from "@cogito-app/db/schema";
 import { TUTOR_PAYOUT_RATE_IDR } from "../../shared/constants";
 
@@ -133,10 +136,13 @@ describe("Tutor payouts (G16)", () => {
   const studentEmail = `student.pay.${ts}@cogito.test`;
   const tutorEmail = `tutor.pay.${ts}@cogito.test`;
   const adminEmail = `admin.pay.${ts}@cogito.test`;
+  const secondAdminEmail = `admin.pay.second.${ts}@cogito.test`;
 
   let studentClient: TestClient;
   let tutorClient: TestClient;
   let adminClient: TestClient;
+  let secondAdminClient: TestClient;
+  let adminId: string;
   let studentId: string;
   let tutorId: string;
   let slotId: string;
@@ -165,11 +171,23 @@ describe("Tutor payouts (G16)", () => {
       "Admin Payout",
     );
     const adminCtx = await createTestContext(adminRes.cookie);
-    await setUserRole(adminCtx.session!.user.id, "admin");
+    adminId = adminCtx.session!.user.id;
+    await setUserRole(adminId, "admin");
     adminClient = createTestClient(
       await createTestContext(
         (await signInAndGetCookie(adminEmail, "Test1234!")) ?? "",
       ),
+    );
+
+    const secondAdminRes = await signUpAndSignIn(
+      secondAdminEmail,
+      "Test1234!",
+      "Second Admin Payout",
+    );
+    const secondAdminCtx = await createTestContext(secondAdminRes.cookie);
+    await setUserRole(secondAdminCtx.session!.user.id, "admin");
+    secondAdminClient = createTestClient(
+      await createTestContext(secondAdminRes.cookie),
     );
   });
 
@@ -224,6 +242,7 @@ describe("Tutor payouts (G16)", () => {
         cogitoTake: 30,
       },
       originalMarks: 150,
+      completedAt: new Date(Date.now() - 60_000),
     });
 
     await insertBookingRow({
@@ -251,6 +270,7 @@ describe("Tutor payouts (G16)", () => {
         cogitoTake: 10,
       },
       originalMarks: 100,
+      completedAt: new Date(Date.now() - 60_000),
     });
 
     const s1 = new Date(Date.now() + 72 * 3600_000);
@@ -315,6 +335,28 @@ describe("Tutor payouts (G16)", () => {
     expect(empty.tutorPayout).toBe(0);
   });
 
+  test("admin pending payout exposes an auditable session breakdown", async () => {
+    const pending = await adminClient.admin.getPendingTutorPayouts({ tutorId });
+
+    expect(pending.completedSessions).toBe(4);
+    expect(pending.items).toHaveLength(4);
+    expect(
+      pending.items?.filter((item) => item.sourceType === "fee_event"),
+    ).toHaveLength(1);
+    expect(
+      pending.items?.filter((item) => item.sourceType === "legacy_booking"),
+    ).toHaveLength(1);
+    expect(
+      pending.items?.filter(
+        (item) => item.sourceType === "legacy_series_session",
+      ),
+    ).toHaveLength(2);
+    expect(
+      pending.items?.reduce((sum, item) => sum + item.grossHonorariumIdr, 0),
+    ).toBe(pending.tutorPayoutIdr);
+    expect(pending.items?.every((item) => item.bookingNumber > 0)).toBe(true);
+  });
+
   test("tutor.getMyPayouts returns own scoped summary", async () => {
     const result = await tutorClient.tutor.getMyPayouts({});
     expect(result.completedSessions).toBe(4);
@@ -329,5 +371,132 @@ describe("Tutor payouts (G16)", () => {
     const result = await other.tutorClient.tutor.getMyPayouts({});
     expect(result.completedSessions).toBe(0);
     expect(result.tutorPayout).toBe(0);
+  });
+
+  test("preserves the paid cutoff and serializes two concurrent admin requests", async () => {
+    await db
+      .update(tutorProfile)
+      .set({
+        bankName: "BCA",
+        bankAccountNumber: "001234567890",
+        bankAccountHolderName: "Prof Payout",
+        bankAccountOpeningCity: "Jakarta",
+        bankAccountOwnership: "self",
+        bankTransferDisclaimerAccepted: true,
+      })
+      .where(eq(tutorProfile.userId, tutorId));
+
+    const historicalCutoff = new Date();
+    await db.insert(tutorPayout).values({
+      tutorId,
+      cutoffAt: historicalCutoff,
+      grossHonorariumIdr: 237 * TUTOR_PAYOUT_RATE_IDR,
+      transferFeeIdr: 0,
+      netHonorariumIdr: 237 * TUTOR_PAYOUT_RATE_IDR,
+      bankName: "BCA",
+      bankAccountNumber: "001234567890",
+      bankAccountHolderName: "Prof Payout",
+      status: "paid",
+      paidAt: historicalCutoff,
+      paidBy: adminId,
+    });
+
+    const beforeNewCompletion = await tutorClient.tutor.getMyPayouts({});
+    expect(beforeNewCompletion.completedSessions).toBe(0);
+    expect(beforeNewCompletion.tutorPayoutIdr).toBe(0);
+
+    const start = new Date(Date.now() + 48 * 3600_000);
+    const newBooking = await studentClient.booking.createSolo({
+      tutorId,
+      availabilitySlotId: slotId,
+      modality: "online",
+      scheduledStartAt: start.toISOString(),
+      scheduledEndAt: new Date(start.getTime() + 3600_000).toISOString(),
+      timezone: "Asia/Jakarta",
+    });
+    await tutorClient.tutorActions.acceptBooking({ bookingId: newBooking.id });
+    await db
+      .update(bookingTable)
+      .set({ scheduledStartAt: new Date(Date.now() - 30 * 60_000) })
+      .where(eq(bookingTable.id, newBooking.id));
+    await tutorClient.tutorActions.completeSession({
+      feedback: TEST_COMPLETION_FEEDBACK,
+      bookingId: newBooking.id,
+    });
+    const [newFee] = await db
+      .select()
+      .from(tutorSessionFee)
+      .where(eq(tutorSessionFee.bookingId, newBooking.id));
+    expect(newFee).toBeDefined();
+
+    const pendingBeforePay = await tutorClient.tutor.getMyPayouts({});
+    expect(pendingBeforePay.completedSessions).toBe(1);
+    expect(pendingBeforePay.tutorPayoutIdr).toBe(newFee!.grossHonorariumIdr);
+
+    const results = await Promise.allSettled([
+      adminClient.admin.markTutorPayoutPaid({ tutorId }),
+      secondAdminClient.admin.markTutorPayoutPaid({ tutorId }),
+    ]);
+    expect(
+      results.filter((result) => result.status === "fulfilled"),
+    ).toHaveLength(1);
+    expect(
+      results.filter((result) => result.status === "rejected"),
+    ).toHaveLength(1);
+
+    const payouts = await db
+      .select()
+      .from(tutorPayout)
+      .where(eq(tutorPayout.tutorId, tutorId));
+    expect(payouts).toHaveLength(2);
+    const newBatch = payouts.find(
+      (payout) => payout.cutoffAt.getTime() > historicalCutoff.getTime(),
+    );
+    expect(newBatch).toMatchObject({
+      status: "paid",
+      grossHonorariumIdr: newFee!.grossHonorariumIdr,
+      netHonorariumIdr: newFee!.grossHonorariumIdr,
+    });
+
+    const allocations = await db
+      .select()
+      .from(tutorPayoutAllocation)
+      .where(eq(tutorPayoutAllocation.payoutId, newBatch!.id));
+    expect(allocations).toHaveLength(1);
+    expect(allocations[0]).toMatchObject({
+      payoutId: newBatch!.id,
+      sourceKey: newFee!.eventKey,
+      sourceType: "fee_event",
+      tutorSessionFeeId: newFee!.id,
+      bookingId: newBooking.id,
+      grossHonorariumIdr: newFee!.grossHonorariumIdr,
+    });
+
+    const allocationDetails = await adminClient.admin.getTutorPayoutAllocations(
+      {
+        payoutId: newBatch!.id,
+      },
+    );
+    expect(allocationDetails.detailsAvailable).toBe(true);
+    expect(allocationDetails.items).toHaveLength(1);
+    expect(allocationDetails.items[0]).toMatchObject({
+      sourceKey: newFee!.eventKey,
+      bookingNumber: expect.any(Number),
+      grossHonorariumIdr: newFee!.grossHonorariumIdr,
+    });
+
+    const historicalBatch = payouts.find(
+      (payout) => payout.cutoffAt.getTime() === historicalCutoff.getTime(),
+    );
+    const historicalDetails = await adminClient.admin.getTutorPayoutAllocations(
+      {
+        payoutId: historicalBatch!.id,
+      },
+    );
+    expect(historicalDetails).toEqual({ detailsAvailable: false, items: [] });
+
+    const pendingAfterPay = await tutorClient.tutor.getMyPayouts({});
+    expect(pendingAfterPay.completedSessions).toBe(0);
+    expect(pendingAfterPay.tutorPayoutIdr).toBe(0);
   });
 });

@@ -28,7 +28,11 @@ import {
   createBookingHandler,
   createTutorActionsHandler,
 } from "./booking.handler";
-import type { BookingService } from "./booking.service";
+import type {
+  BookingService,
+  TutorPayoutAllocationDetail,
+  TutorPayoutSourceItem,
+} from "./booking.service";
 import type { BookingHandler, TutorActionsHandler } from "./booking.handler";
 import type { BookingCompetitionPalettePort } from "./booking-topic-palette";
 
@@ -165,6 +169,11 @@ export interface BookingPayoutPort {
     tutorPayout: number;
     tutorPayoutIdr: number;
     lastPaidAt: Date | null;
+    items: TutorPayoutSourceItem[];
+  }>;
+  getTutorPayoutAllocations?(payoutId: string): Promise<{
+    detailsAvailable: boolean;
+    items: TutorPayoutAllocationDetail[];
   }>;
   markTutorPayoutPaid?(
     tutorId: string,

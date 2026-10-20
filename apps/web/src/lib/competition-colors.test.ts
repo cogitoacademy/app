@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   competitionPaletteClassName,
+  competitionPaletteSubtleClassName,
   getCompetitionPalette,
   getCompetitionPaletteStyle,
 } from "./competition-colors";
@@ -41,6 +42,18 @@ describe("competition palette presentation", () => {
       "--competition-dark-text": palette.darkTextColor,
       "--competition-dark-background": palette.darkBackgroundColor,
     });
+  });
+
+  test("keeps calendar event colors subtle without flattening dynamic palettes", () => {
+    expect(competitionPaletteSubtleClassName).toContain(
+      "color-mix(in_oklab,var(--competition-light-background)_15%,transparent)",
+    );
+    expect(competitionPaletteSubtleClassName).toContain(
+      "color-mix(in_oklab,var(--competition-light-background)_25%,transparent)",
+    );
+    expect(competitionPaletteSubtleClassName).toContain(
+      "dark:border-[color:var(--competition-dark-background)]",
+    );
   });
 
   test("leaves missing palette styling to a neutral caller fallback", () => {

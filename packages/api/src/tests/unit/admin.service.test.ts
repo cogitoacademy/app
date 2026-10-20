@@ -215,13 +215,34 @@ describe("Admin Service", () => {
 
     test("returns pending payout data and rejects an unavailable port", async () => {
       const payout = {
-        getPendingTutorPayouts: mock(async () => ({ tutorId: "t1" })),
+        getPendingTutorPayouts: mock(async () => ({
+          tutorId: "t1",
+          items: [],
+        })),
       };
       await expect(
         makeService(payout).service.getPendingTutorPayouts({ tutorId: "t1" }),
-      ).resolves.toEqual({ tutorId: "t1" });
+      ).resolves.toEqual({ tutorId: "t1", items: [] });
       await expect(
         makeService({}).service.getPendingTutorPayouts({ tutorId: "t1" }),
+      ).rejects.toThrow(TutorPayoutNotAvailableError);
+    });
+
+    test("returns paid session allocations and rejects an unavailable port", async () => {
+      const details = { detailsAvailable: true, items: [] };
+      const getTutorPayoutAllocations = mock(async () => details);
+      await expect(
+        makeService({
+          getTutorPayoutAllocations,
+        }).service.getTutorPayoutAllocations({
+          payoutId: "payout-1",
+        }),
+      ).resolves.toBe(details);
+      expect(getTutorPayoutAllocations).toHaveBeenCalledWith("payout-1");
+      await expect(
+        makeService({}).service.getTutorPayoutAllocations({
+          payoutId: "payout-1",
+        }),
       ).rejects.toThrow(TutorPayoutNotAvailableError);
     });
 

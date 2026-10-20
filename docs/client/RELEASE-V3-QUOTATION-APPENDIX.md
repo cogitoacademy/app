@@ -10,7 +10,7 @@ This appendix accompanies the [Release v3 PRD](../plans/active/RELEASE-V3-PRD.md
 
 | Additional work package | Included change |
 | --- | --- |
-| Economy changes and exact top-up | Revised competition rate card and admin controls, package adjustments, custom Marks quotation/tier/surcharge/recommendation and integration with the existing payment flow |
+| Economy changes and exact top-up | Revised competition rate card and admin controls, package adjustments, custom Marks quotations, pricing tiers, surcharge, and recommendations and integration with the existing payment flow |
 | Cohorts and masterclasses | Shared public class/session model, curriculum, tutor assignment, capacity and enrollment, full/half/single plans, installment reminders, late joining/rejoining and class-specific cancellation/returns |
 | Tutor finance extension | Tax identity/settings/override, withholding, explicit session coverage, payout snapshots, actual-transfer recording, void/reconciliation and monthly tax export |
 | Report extensions and branded PDF | New report limits/reminders/admin resolution and cross-class support, plus student/admin three-month branded PDF export, reusing the agreed session report foundation |
@@ -73,6 +73,4 @@ Material delivery, necessary client decisions, third-party readiness or UAT feed
 - New features, changed business rules, additional pages or expanded deliverables are change requests, with impact/price/date agreed before implementation. A material change is not treated as a cosmetic UAT revision.
 - Included post-release defect correction period: **30 calendar days from production release of the additions**, covering defects against their agreed scope without an additional development fee. New requirements, ongoing content operations and third-party subscription/usage costs are separate. Original-contract obligations are not redefined by this period.
 
-## 6. Acceptance record
-
-Acceptance requires written agreement to this quotation's price, scope, payment terms, timeline and deferrals. Record this PRD/quotation revision and decision outcomes; silence is not acceptance.
+**Acceptance.** Written agreement to this quotation’s price, scope, payment terms and timeline is required. Record the accepted revision; silence is not acceptance.

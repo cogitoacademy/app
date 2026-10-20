@@ -1,5 +1,22 @@
 # Cogito App — Codebase Context
 
+## V3 integration and local migration checkpoint (2026-10-20)
+
+Feature worktrees derive from `f/release-v3`; tested work merges there, and
+`main` waits for final acceptance. The isolated `t3/integrate-v3-progress`
+checkpoint integrates the existing fee/payout and class-draft work with FAQ
+rich text, calendar, palette and shared documentation changes. The source
+worktrees remain untouched.
+
+Read-only inspection confirmed the local `cogito-app` journal has fee,
+FAQ-rich-text and payout migrations; it has no academy class tables yet.
+`cogito-test` has the same migrations plus academy class and class-session
+tables from the class-draft migration. Both have the four FAQ rich-text JSONB
+columns with English fields required and Indonesian fields nullable. The
+canonical migration timestamps, file hashes, schema details and dev-only
+pending migration are recorded in [`RUNBOOK.md`](./RUNBOOK.md). No DB writes
+were performed during this checkpoint.
+
 ## Competition catalog language
 
 **Parent competition**: A competition type, such as Debate, that owns the
@@ -85,6 +102,68 @@ uncertain provider outcomes, early webhook, concurrent purchases, late credit,
 dynamic active-rate selection and pinned-revision repricing. Web typecheck and
 build pass. New balance UI has not yet received browser QA. Production and live
 payment providers were untouched.
+
+## V3 earned tutor session fee checkpoint (2026-10-19)
+
+Migration `0059_massive_blindfold.sql` adds `tutor_session_fee`, an append-only
+application record for the gross IDR honorarium earned when a tutor completes a
+session. Completion writes it in the same transaction as the existing state,
+Marks deduction, and feedback. Solo/group identity is the booking ID; each series
+child uses its session ID, so a completed child is recorded while the parent
+series remains scheduled. Stable event keys and unique source indexes prevent a
+second fee row for the same delivery. The row pins tutor, scheduled/completed
+timestamps, gross honorarium, and the booking/session price snapshot. Legacy
+snapshots use their saved IDR honorarium or the existing `tutorShare × 7,000`
+compatibility calculation; V3 snapshots use their saved IDR honorarium.
+
+This is a delivery/earned-fee fact, separate from the manual bank transfer.
+Tutor/admin payout summaries read fee events for the requested time window,
+then use the legacy booking/session snapshot adapter only for sources without a
+fee event. Source-key deduplication prevents a completed booking or series child
+from being counted twice; this also makes a completed child visible while its
+series parent remains scheduled. Pending summaries apply the paid cutoff to new
+fees by `earnedAt` and retain the existing completion-time fallback for legacy
+records.
+
+Migration `0060_tutor_payout_allocations.sql` adds immutable per-session source
+rows for each newly recorded tutor payout. `markTutorPayoutPaid` writes the
+aggregate transfer row and one allocation per included fee event or legacy
+snapshot in the same transaction. A globally unique source key prevents a
+delivery from being allocated to a second payout. The admin payout drawer shows
+candidate sessions before payment and stored allocations after payment. Existing
+paid batches were not backfilled; their original session breakdown is reported
+as unavailable. The owner confirmed the V3 app is not yet in use, so historical
+per-session reconciliation is not required for this release; current fee events
+are the source of truth for new V3 completions. No rows were deleted and no
+production database was accessed. Any later cleanup must be scoped and reviewed.
+Q03/Q06/Q07 and Q05 were resolved on 19 October; Q04's minimum/postponement
+rules were accepted while ordinary-reschedule rights remain open. Class
+delivery/report/expiry integration remains with T04/T06/T07. This slice does
+not change existing on-demand cancellation, no-show, expiry, or feedback rules.
+
+Focused verification: tutor-fee unit tests **4/4**, booking-service unit tests
+**307/307**, admin-service unit tests **30/30**, solo booking integration
+**12/12**, standalone group integration **8/8**, group-series integration
+**9/9**, and payout/allocation integration **8/8** (**378 tests total**). Tests
+cover pending source detail, fee-event and legacy snapshot allocations,
+historical batch detail-unavailable behavior, completed-child visibility,
+cutoff preservation, and the two-admin no-duplicate race. Server and web
+TypeScript checks passed individually before the production-build attempts;
+later reruns under memory pressure failed (server TypeScript-Go hit a Windows
+allocation stack, and web TypeScript-Go exited 253 without a source diagnostic).
+The full workspace check previously hit Windows `VirtualAlloc` errno 1455.
+Production builds are not verified: server `tsdown` exited 253 without a source
+diagnostic, and Vite could not allocate 27,648 bytes after transforming 8,875
+modules. Retry checks/builds when memory headroom is available. No V3 activation
+or external provider call was performed.
+
+## V3 class draft checkpoint (2026-10-19)
+
+Migration `0061_academy_class_drafts.sql` adds the class and session draft model. The admin-only `admin-classes` page creates/edits drafts with localized titles/descriptions, cohort curriculum and enrollment defaults, per-session schedule/capacity/tutor/mode/room, and required audit reason. Approved defaults are cohort 20/22/25 Marks per full/half/single session with Rp400,000 tutor fee per session, and masterclass 5 Marks with Rp300,000 tutor fee. Both online and in-person are available; in-person requires an active managed room. Drafts are not public and do not reserve rooms.
+
+The service validates active competition, published mode-compatible tutors and session capacities, active room capacity, non-overlapping class sessions, cohort curriculum/check date, and the one-session masterclass rule. Draft updates are optimistic-versioned and preserve supplied session IDs; audit actions are `academy_class.draft_created` and `academy_class.draft_updated`. The admin editor uploads PNG/JPEG/WebP/GIF covers through the existing protected upload flow (max 5 MB) and stores the returned key on save; approved M01 cover/curriculum assets are still pending. Room/tutor conflict checks at publication, Meet creation, publishing, public classes/enrollment, and T02/T06/T07 report/expiry integration remain open.
+
+Focused integration verification: **4/4 tests, 18 expectations** against the guarded local `cogito-test` database after additive migration. A server TypeScript-Go check attempt again failed with Windows `Out of memory`; Vite build and web typecheck have not been rerun for this slice. No production database, V3 activation, or external provider was used.
 
 ## V3 report-field character limits (2026-10-18)
 
@@ -560,9 +639,11 @@ the website read does not migrate or fall back to Sanity tutor data.
 
 ## FAQ admin and public API slice (2026-10-19)
 
-FAQ entries are owned by the app database and edited by admins at `/admin-faq`. English question/answer fields are required; Indonesian fields are optional and fall back per field on public reads. Answers use strict paragraph/list blocks rather than HTML. The anonymous `publicContent.faq.list` endpoint returns active entries in sort order for either `full` or `landing`; the landing surface also filters to `showOnLanding`. Admin list/create/update stay behind admin authorization, and updates use expected-version checks. Public responses exclude admin visibility/version fields; request/database failures remain errors. The marketing site reads full and landing FAQ through a server-only, `no-store` API adapter with strict oRPC-envelope validation. Empty results render a localized empty state; API/configuration errors render a separate localized retry state and do not replace the landing page. No FAQ copy was seeded and neither Sanity nor legacy FAQ fallback is used.
+FAQ entries are owned by the app database and edited by admins at `/admin-faq`. Authenticated students, tutors, and admins read active FAQs at `/faq` through the anonymous public projection and Selia accordion; the editor remains admin-only. The sidebar exposes FAQ to all app roles and keeps a separate “Manage FAQs” link for admins. Migration `0059_faq_rich_text.sql` adds rich JSONB documents while preserving and backfilling the legacy question/answer columns. The English question and answer are required; Indonesian fields are optional and hidden in the new-entry form until requested. The admin editor supports bold, italic, safe links, and ordered/unordered lists. Admin rows are alphabetized by the English question, numbered for scanning, and show their modified date. The `showOnLanding` selection is limited to six active entries and serialized in the database transaction.
 
-Migration 0058 and FAQ integration fixtures were exercised only on local `cogito-test`. Development/production migration and initial FAQ copy remain release gates. See [T10 FAQ checkpoint](plans/active/T10-FAQ-CHECKPOINT.md).
+The anonymous `publicContent.faq.list` endpoint keeps the legacy plain-text `question`/`answer` fields and adds locale-selected `questionRich`/`answerRich` documents; the additive fields preserve existing consumers. Entries remain alphabetized by the question displayed for the requested locale, and `landing` also filters to `showOnLanding`. Admin visibility/version fields remain private; writes require admin authorization and updates use expected-version checks. The marketing adapter reads both surfaces server-side with `no-store`, requires the response `json` field while allowing absent or array-valued `meta`, validates rich documents and safe links, and falls back to the legacy fields when an older API omits rich fields. It renders rich formatting, answers, and lists; links inside question triggers remain non-interactive to preserve button semantics. FAQ JSON-LD continues to use the plain-text projection. Empty results and API/configuration errors retain their separate localized states. No FAQ copy was seeded and neither Sanity nor legacy FAQ fallback is used.
+
+Migrations `0058` and `0059` have been exercised on local `cogito-test`; `0059` is also applied to the local development database `cogito-app`. Shared/production migration and initial FAQ copy remain release gates. See [T10 FAQ checkpoint](plans/active/T10-FAQ-CHECKPOINT.md).
 
 ## Tutor specialization selector layout (2026-09-09)
 

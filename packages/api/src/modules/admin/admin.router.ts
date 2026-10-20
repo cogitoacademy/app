@@ -9,6 +9,7 @@ import {
   adminGetTutorPayoutsInput,
   adminGetTutorPayoutReportInput,
   adminMarkTutorPayoutPaidInput,
+  adminGetTutorPayoutAllocationsInput,
   adminUpdateEconomySettingsInput,
   adminPreviewV3EconomyInput,
   adminSaveV3EconomyInput,
@@ -149,6 +150,18 @@ export function createAdminRouter(handler: AdminHandler) {
       })
       .input(adminMarkTutorPayoutPaidInput)
       .handler(handler.getPendingTutorPayouts),
+
+    getTutorPayoutAllocations: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/payouts/tutor/details",
+        tags: ["Admin"],
+        summary: "Get sessions allocated to a tutor payout",
+        description:
+          "Returns the immutable per-session sources recorded for a paid tutor transfer",
+      })
+      .input(adminGetTutorPayoutAllocationsInput)
+      .handler(handler.getTutorPayoutAllocations),
 
     markTutorPayoutPaid: adminProcedure
       .route({

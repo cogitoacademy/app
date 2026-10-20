@@ -9,6 +9,7 @@ import {
   tutorInvite,
   tutorProfile,
   availabilitySlot,
+  tutorSessionFee,
   type BookingPriceSnapshot,
 } from "@cogito-app/db/schema";
 import { createBookingRepo } from "../../modules/booking/booking.repo";
@@ -533,13 +534,64 @@ describe("Booking group series flow (FR-20)", () => {
         .where(eq(bookingSession.id, s.id));
     }
 
-    for (const s of sessions) {
+    const firstSession = sessions[0]!;
+    await tutorClient.tutorActions.completeSession({
+      feedback: TEST_COMPLETION_FEEDBACK,
+      bookingId,
+      sessionId: firstSession.id,
+    });
+
+    const firstFees = await db
+      .select()
+      .from(tutorSessionFee)
+      .where(eq(tutorSessionFee.bookingId, bookingId));
+    expect(firstFees).toHaveLength(1);
+    expect(firstFees[0]).toMatchObject({
+      bookingId,
+      bookingSessionId: firstSession.id,
+      tutorId,
+      eventKey: `tutor-session-fee:session:${firstSession.id}`,
+    });
+    expect(firstFees[0]!.grossHonorariumIdr).toBeGreaterThan(0);
+
+    const parentAfterFirstSession = await proposerClient.booking.get({
+      bookingId,
+    });
+    expect(parentAfterFirstSession.currentState).toBe("scheduled");
+    const payoutAfterFirstSession = await tutorClient.tutor.getMyPayouts({});
+    expect(payoutAfterFirstSession.completedSessions).toBe(1);
+    expect(payoutAfterFirstSession.tutorPayoutIdr).toBe(
+      firstFees[0]!.grossHonorariumIdr,
+    );
+
+    await expect(
+      tutorClient.tutorActions.completeSession({
+        feedback: TEST_COMPLETION_FEEDBACK,
+        bookingId,
+        sessionId: firstSession.id,
+      }),
+    ).rejects.toThrow();
+    const afterDuplicate = await db
+      .select()
+      .from(tutorSessionFee)
+      .where(eq(tutorSessionFee.bookingId, bookingId));
+    expect(afterDuplicate).toHaveLength(1);
+
+    // Keep completion order deterministic because the final child finishes the parent.
+    for (const s of sessions.slice(1)) {
+      // eslint-disable-next-line no-await-in-loop
       await tutorClient.tutorActions.completeSession({
         feedback: TEST_COMPLETION_FEEDBACK,
         bookingId,
         sessionId: s.id,
       });
     }
+    const allFees = await db
+      .select()
+      .from(tutorSessionFee)
+      .where(eq(tutorSessionFee.bookingId, bookingId));
+    expect(allFees).toHaveLength(3);
+    expect(new Set(allFees.map((fee) => fee.eventKey)).size).toBe(3);
 
     for (const userId of [proposerId, invitee1Id, invitee2Id]) {
       const [w] = await db

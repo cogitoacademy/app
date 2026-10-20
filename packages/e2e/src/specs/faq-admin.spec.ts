@@ -6,26 +6,61 @@ import {
   request,
   test,
   type APIRequestContext,
-  type Page,
 } from "@playwright/test";
 
-import { ADMIN_EMAIL, ADMIN_PASSWORD } from "../fixtures/test-accounts";
+import {
+  ADMIN_EMAIL,
+  ADMIN_PASSWORD,
+  STUDENT_EMAIL,
+  STUDENT_PASSWORD,
+  TUTOR_EMAIL,
+  TUTOR_PASSWORD,
+} from "../fixtures/test-accounts";
+type FaqRichTextRun = {
+  text: string;
+  bold?: boolean;
+  italic?: boolean;
+  href?: string;
+};
+
+type FaqRichTextDocument = {
+  type: "doc";
+  blocks: Array<
+    | { type: "paragraph"; content: FaqRichTextRun[] }
+    | {
+        type: "list";
+        style: "ordered" | "unordered";
+        items: FaqRichTextRun[][];
+      }
+  >;
+};
 
 type FaqAnswerBlock =
   | { type: "paragraph"; text: string }
   | { type: "list"; style: "ordered" | "unordered"; items: string[] };
 
-type FaqEntry = {
+type AdminFaqDto = {
   id: string;
   questionEn: string;
   questionId: string | null;
   answerEn: FaqAnswerBlock[];
   answerId: FaqAnswerBlock[] | null;
-  sortOrder: number;
+  questionEnRich: FaqRichTextDocument;
+  questionIdRich: FaqRichTextDocument | null;
+  answerEnRich: FaqRichTextDocument;
+  answerIdRich: FaqRichTextDocument | null;
   isActive: boolean;
   showOnLanding: boolean;
   version: number;
+  modifiedAt: string;
 };
+
+function paragraph(text: string): FaqRichTextDocument {
+  return {
+    type: "doc",
+    blocks: [{ type: "paragraph", content: text ? [{ text }] : [] }],
+  };
+}
 
 function assertDedicatedTestDatabase() {
   let databaseUrl: URL | undefined;
@@ -49,24 +84,20 @@ function assertDedicatedTestDatabase() {
   }
 }
 
-async function loginAsAdmin(page: Page) {
-  await page.goto("/login");
-  await page.locator("input#email").fill(ADMIN_EMAIL);
-  await page.locator("input#password").fill(ADMIN_PASSWORD);
-  await page.getByRole("button", { name: "Sign In", exact: true }).click();
-  await page.waitForURL(/\/(dashboard|profile)(?:$|\/)/);
+async function createAdminApiContext() {
+  return createApiContext(ADMIN_EMAIL, ADMIN_PASSWORD);
 }
 
-async function createAdminApiContext() {
+async function createApiContext(email: string, password: string) {
   const context = await request.newContext({
     baseURL: process.env.SERVER_URL ?? "http://localhost:3101",
   });
   try {
     const response = await context.post("/api/auth/sign-in/email", {
-      data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
+      data: { email, password },
     });
     if (!response.ok()) {
-      throw new Error(`Admin API sign-in returned ${response.status()}`);
+      throw new Error(`API sign-in returned ${response.status()}`);
     }
     return context;
   } catch (error) {
@@ -75,36 +106,87 @@ async function createAdminApiContext() {
   }
 }
 
-async function adminFaqRpc<T>(context: APIRequestContext, input: unknown) {
-  const response = await context.post("/rpc/adminFaq/update", {
+async function adminFaqRpc<T>(
+  context: APIRequestContext,
+  procedure: "create" | "update",
+  input: unknown,
+) {
+  const response = await context.post(`/rpc/adminFaq/${procedure}`, {
     data: { json: input },
   });
   if (!response.ok()) {
     throw new Error(
-      `FAQ update returned ${response.status()}: ${await response.text()}`,
+      `FAQ ${procedure} returned ${response.status()}: ${await response.text()}`,
     );
   }
   return ((await response.json()) as { json: T }).json;
 }
 
-test("FAQ is admin-only and admins can create and edit ordered localized entries", async ({
-  page,
+test("students and tutors can read FAQ entries but cannot edit them", async ({
+  browser,
 }) => {
   assertDedicatedTestDatabase();
 
+  const accounts = [
+    { email: STUDENT_EMAIL, password: STUDENT_PASSWORD },
+    { email: TUTOR_EMAIL, password: TUTOR_PASSWORD },
+  ];
+
+  const sessions = await Promise.all(
+    accounts.map(async (account) => {
+      const api = await createApiContext(account.email, account.password);
+      return {
+        api,
+        storageState: await api.storageState(),
+      };
+    }),
+  );
+
+  // Reuse one browser context for both authenticated roles; the checks run
+  // sequentially against the shared test server without creating test data.
+  for (const { api, storageState } of sessions) {
+    const context = await browser.newContext({ storageState });
+    try {
+      const rolePage = await context.newPage();
+      await rolePage.goto("/faq");
+      await expect(rolePage).toHaveURL(/\/faq$/);
+      await expect(
+        rolePage.getByRole("heading", { name: "FAQ", exact: true }),
+      ).toBeVisible();
+      await expect(
+        rolePage.getByText("There are no FAQs available yet.", { exact: true }),
+      ).toBeVisible();
+      await expect(
+        rolePage.getByRole("button", { name: "Add FAQ", exact: true }),
+      ).toHaveCount(0);
+      await expect(
+        rolePage.getByRole("link", { name: "FAQ", exact: true }),
+      ).toBeVisible();
+    } finally {
+      await context.close();
+      await api.dispose();
+    }
+  }
+});
+
+test("admins can create and edit rich, alphabetized FAQs", async ({ page }) => {
+  assertDedicatedTestDatabase();
+
   await page.goto("/admin-faq");
-  await page.waitForURL(/\/dashboard(?:$|\/)/);
+  await page.waitForURL(/\/(dashboard|login)(?:$|\/)/);
 
   const browser = page.context().browser();
   if (!browser) throw new Error("FAQ browser coverage needs a browser context");
-  const adminContext = await browser.newContext();
-  const adminPage = await adminContext.newPage();
   const fixtureIds: string[] = [];
   let adminApi: APIRequestContext | undefined;
+  let adminContext: Awaited<ReturnType<typeof browser.newContext>> | undefined;
 
   try {
-    await loginAsAdmin(adminPage);
     adminApi = await createAdminApiContext();
+    adminContext = await browser.newContext({
+      storageState: await adminApi.storageState(),
+    });
+    const adminPage = await adminContext.newPage();
     await adminPage.goto("/admin-faq");
     await expect(
       adminPage.getByRole("heading", { name: "FAQ", exact: true }),
@@ -115,83 +197,86 @@ test("FAQ is admin-only and admins can create and edit ordered localized entries
     const indonesianQuestion = `Pertanyaan E2E ${suffix}`;
     const englishAnswer = `English answer ${suffix}`;
     const indonesianAnswer = `Jawaban Indonesia ${suffix}`;
-    const englishAnswerParagraph = adminPage
-      .getByRole("group", { name: "Answer (English)" })
-      .getByLabel("Paragraph 1");
+    const questionEditor = adminPage.locator(
+      '[data-faq-editor="faq-question-en-rich"]',
+    );
+    const answerEditor = adminPage.locator(
+      '[data-faq-editor="faq-answer-en-rich"]',
+    );
+    const questionToolbar = adminPage.getByRole("toolbar", {
+      name: "Question (English) formatting",
+    });
+    const answerToolbar = adminPage.getByRole("toolbar", {
+      name: "Answer (English) formatting",
+    });
 
     await adminPage
       .getByRole("button", { name: "Add FAQ", exact: true })
       .click();
-    await englishAnswerParagraph.fill(englishAnswer);
+    await expect(
+      adminPage.getByRole("textbox", { name: "Question (Indonesian)" }),
+    ).toHaveCount(0);
+    await answerEditor.fill(englishAnswer);
     await adminPage
       .getByRole("button", { name: "Save FAQ", exact: true })
       .click();
     await expect(
       adminPage.getByText("Enter an English question.", { exact: true }),
     ).toBeVisible();
-    await expect(adminPage.locator("#faq-question-en")).toBeFocused();
-    await expect(adminPage.locator("#faq-question-en")).toHaveAttribute(
-      "aria-invalid",
-      "true",
-    );
-    await expect(adminPage.locator("#faq-question-en")).toHaveAttribute(
+    await expect(questionEditor).toBeFocused();
+    await expect(questionEditor).toHaveAttribute("aria-invalid", "true");
+    await expect(questionEditor).toHaveAttribute(
       "aria-describedby",
-      "faq-question-en-error",
+      "faq-question-en-rich-description faq-question-en-rich-error",
     );
 
-    await adminPage
-      .getByLabel("Question (English)", { exact: true })
-      .fill(englishQuestion);
-    await englishAnswerParagraph.fill("");
+    await questionEditor.fill(englishQuestion);
+    await answerEditor.fill("");
     await adminPage
       .getByRole("button", { name: "Save FAQ", exact: true })
       .click();
     await expect(
-      adminPage.getByText("Add at least one English answer block.", {
+      adminPage.getByText("Add English answer content before saving.", {
         exact: true,
       }),
     ).toBeVisible();
-    await expect(englishAnswerParagraph).toBeFocused();
-    await expect(englishAnswerParagraph).toHaveAttribute(
-      "aria-invalid",
-      "true",
-    );
-    await expect(englishAnswerParagraph).toHaveAttribute(
-      "aria-describedby",
-      "answer-english-description faq-answer-en-error",
-    );
-    await englishAnswerParagraph.fill(englishAnswer);
+    await expect(answerEditor).toBeFocused();
+    await expect(answerEditor).toHaveAttribute("aria-invalid", "true");
+    await answerEditor.fill(englishAnswer);
+
+    await questionEditor.press("Control+A");
+    await questionToolbar.getByRole("button", { name: "Bold" }).click();
+    await questionToolbar
+      .getByRole("button", { name: "Add or edit link" })
+      .click();
+    const linkInput = adminPage.locator("#faq-question-en-rich-link-href");
+    await expect(linkInput).toBeVisible();
+    await linkInput.fill("https://example.com/faq");
+    await expect(linkInput).toHaveValue("https://example.com/faq");
+    await linkInput.press("Enter");
+    await expect(linkInput).toHaveCount(0);
+
+    await answerEditor.press("End");
+    await answerEditor.press("Enter");
+    await answerToolbar.getByRole("button", { name: "Bulleted list" }).click();
+    await answerEditor.type("First step");
+    await answerEditor.press("Enter");
+    await answerEditor.type("Second step");
+    await answerEditor.press("Enter");
+    await answerEditor.press("Enter");
+
     await adminPage
-      .getByLabel("Question (Indonesian, optional)", { exact: true })
+      .getByRole("button", { name: "Add Indonesian version" })
+      .click();
+    await adminPage
+      .getByRole("textbox", { name: "Question (Indonesian)" })
       .fill(indonesianQuestion);
     await adminPage
-      .getByRole("button", { name: "Add paragraph", exact: true })
-      .nth(1)
-      .click();
-    await adminPage
-      .getByRole("group", { name: "Answer (Indonesian, optional)" })
-      .getByLabel("Paragraph 1")
+      .getByRole("textbox", { name: "Answer (Indonesian)" })
       .fill(indonesianAnswer);
-    await adminPage.locator('[role="checkbox"]').nth(0).click();
-    await adminPage.locator('[role="checkbox"]').nth(1).click();
-    const sortOrderInput = adminPage.getByLabel("Sort order", { exact: true });
-    await sortOrderInput.fill("20.5");
     await adminPage
-      .getByRole("button", { name: "Save FAQ", exact: true })
-      .click();
-    await expect(
-      adminPage.getByText(
-        "Sort order must be a whole number greater than or equal to zero.",
-        { exact: true },
-      ),
-    ).toBeVisible();
-    await expect(sortOrderInput).toBeFocused();
-    await expect(sortOrderInput).toHaveAttribute("aria-invalid", "true");
-    await expect(sortOrderInput).toHaveAttribute(
-      "aria-describedby",
-      "faq-sort-order-error",
-    );
-    await sortOrderInput.fill("20");
+      .getByRole("checkbox", { name: "Show on landing page" })
+      .check();
 
     const createResponsePromise = adminPage.waitForResponse(
       (response) =>
@@ -203,58 +288,111 @@ test("FAQ is admin-only and admins can create and edit ordered localized entries
       .click();
     const createResponse = await createResponsePromise;
     expect(createResponse.ok()).toBe(true);
-    const created = (await createResponse.json()) as { json: FaqEntry };
+    const created = (await createResponse.json()) as { json: AdminFaqDto };
     fixtureIds.push(created.json.id);
 
-    const entry = adminPage
-      .locator('[data-slot="item"]')
-      .filter({ hasText: englishQuestion });
-    await expect(entry).toBeVisible();
-    await expect(entry.getByText("Inactive", { exact: true })).toBeVisible();
-    await expect(entry.getByText("Landing", { exact: true })).toBeVisible();
-    await expect(
-      entry.getByText("Order 20 · Version 1", { exact: true }),
-    ).toBeVisible();
     expect(created.json).toMatchObject({
       questionEn: englishQuestion,
       questionId: indonesianQuestion,
-      answerEn: [{ type: "paragraph", text: englishAnswer }],
+      answerEn: [
+        { type: "paragraph", text: englishAnswer },
+        {
+          type: "list",
+          style: "unordered",
+          items: ["First step", "Second step"],
+        },
+      ],
       answerId: [{ type: "paragraph", text: indonesianAnswer }],
-      sortOrder: 20,
-      isActive: false,
+      isActive: true,
       showOnLanding: true,
       version: 1,
     });
+    expect(created.json.questionEnRich.blocks[0]).toMatchObject({
+      type: "paragraph",
+      content: [
+        {
+          text: englishQuestion,
+          bold: true,
+          href: "https://example.com/faq",
+        },
+      ],
+    });
+    expect(created.json.answerEnRich.blocks[1]).toMatchObject({
+      type: "list",
+      style: "unordered",
+      items: [[{ text: "First step" }], [{ text: "Second step" }]],
+    });
 
-    const concurrent = await adminFaqRpc<FaqEntry>(adminApi!, {
+    const earlierQuestion = `AAA E2E FAQ ${suffix}`;
+    const earlier = await adminFaqRpc<AdminFaqDto>(adminApi!, "create", {
+      questionEnRich: paragraph(earlierQuestion),
+      answerEnRich: paragraph("Alphabetical fixture."),
+      isActive: true,
+      showOnLanding: false,
+    });
+    fixtureIds.push(earlier.id);
+    await adminPage.reload();
+    const entriesCard = adminPage.locator('[data-slot="card"]').filter({
+      has: adminPage.getByRole("heading", {
+        name: "FAQ entries",
+        exact: true,
+      }),
+    });
+    await expect(
+      entriesCard.locator(
+        '[data-slot="card-body"] > div > [data-slot="stack"]',
+      ),
+    ).toHaveCSS("margin-left", "0px");
+    const earlierItem = adminPage
+      .locator('[data-slot="item"]')
+      .filter({ hasText: earlierQuestion });
+    const createdItem = adminPage
+      .locator('[data-slot="item"]')
+      .filter({ hasText: englishQuestion });
+    await expect(earlierItem).toBeVisible();
+    await expect(createdItem).toBeVisible();
+    expect((await earlierItem.boundingBox())!.y).toBeLessThan(
+      (await createdItem.boundingBox())!.y,
+    );
+    await expect(
+      createdItem.getByText("Landing", { exact: true }),
+    ).toBeVisible();
+    const rowNumber = createdItem.locator('[data-slot="item-media"]');
+    await expect(rowNumber).toHaveText(/^#\d+$/);
+    await expect(rowNumber).toHaveCSS("font-size", "12px");
+    expect(
+      await rowNumber.evaluate(
+        (element) => getComputedStyle(element).fontFamily,
+      ),
+    ).toBe(
+      await adminPage
+        .locator("body")
+        .evaluate((element) => getComputedStyle(element).fontFamily),
+    );
+    await expect(createdItem.getByText(/^Updated /)).toBeVisible();
+
+    const concurrent = await adminFaqRpc<AdminFaqDto>(adminApi!, "update", {
       id: created.json.id,
       expectedVersion: created.json.version,
-      questionEn: created.json.questionEn,
-      questionId: created.json.questionId ?? undefined,
-      answerEn: created.json.answerEn,
-      answerId: created.json.answerId,
-      sortOrder: 21,
+      questionEnRich: created.json.questionEnRich,
+      questionIdRich: created.json.questionIdRich,
+      answerEnRich: created.json.answerEnRich,
+      answerIdRich: created.json.answerIdRich,
       isActive: created.json.isActive,
       showOnLanding: created.json.showOnLanding,
     });
     expect(concurrent.version).toBe(2);
 
-    await entry.getByRole("button", { name: "Edit", exact: true }).click();
+    await createdItem
+      .getByRole("button", { name: "Edit", exact: true })
+      .click();
     await expect(
       adminPage.getByRole("heading", { name: "Edit FAQ", exact: true }),
     ).toBeVisible();
-    await adminPage
-      .getByLabel("Question (English)", { exact: true })
-      .fill(`${englishQuestion} updated`);
-    await adminPage
-      .getByRole("group", { name: "Answer (English)" })
-      .getByLabel("Paragraph 1")
-      .fill(`${englishAnswer} updated`);
-    await adminPage.getByLabel("Sort order", { exact: true }).fill("40");
-    await adminPage.locator('[role="checkbox"]').nth(0).click();
-    await adminPage.locator('[role="checkbox"]').nth(1).click();
+    await questionEditor.fill(`${englishQuestion} updated`);
+    await answerEditor.fill(`${englishAnswer} updated`);
 
-    const updateResponsePromise = adminPage.waitForResponse(
+    const conflictResponsePromise = adminPage.waitForResponse(
       (response) =>
         response.url().includes("/rpc/adminFaq/update") &&
         response.request().method() === "POST",
@@ -262,10 +400,10 @@ test("FAQ is admin-only and admins can create and edit ordered localized entries
     await adminPage
       .getByRole("button", { name: "Save FAQ", exact: true })
       .click();
-    const updateResponse = await updateResponsePromise;
-    expect(updateResponse.status()).toBe(409);
-    const updateInput = (
-      updateResponse.request().postDataJSON() as {
+    const conflictResponse = await conflictResponsePromise;
+    expect(conflictResponse.status()).toBe(409);
+    const conflictInput = (
+      conflictResponse.request().postDataJSON() as {
         json: { id: string; expectedVersion: number };
       }
     ).json;
@@ -273,13 +411,8 @@ test("FAQ is admin-only and admins can create and edit ordered localized entries
     await expect(adminPage.getByRole("alert")).toHaveText(
       "FAQ changed in another admin session. Reload and review it.",
     );
-    await expect(
-      adminPage.getByLabel("Question (English)", { exact: true }),
-    ).toHaveValue(`${englishQuestion} updated`);
-    await expect(
-      adminPage.getByLabel("Sort order", { exact: true }),
-    ).toHaveValue("40");
-    expect(updateInput).toMatchObject({
+    await expect(questionEditor).toContainText(`${englishQuestion} updated`);
+    expect(conflictInput).toMatchObject({
       id: created.json.id,
       expectedVersion: 1,
     });
@@ -287,29 +420,21 @@ test("FAQ is admin-only and admins can create and edit ordered localized entries
       adminPage
         .locator('[data-slot="item"]')
         .filter({ hasText: englishQuestion })
-        .getByText("Order 21 · Version 2", { exact: true }),
+        .getByText("Version 2", { exact: false }),
     ).toBeVisible();
 
     await adminPage
       .getByRole("button", { name: "Cancel", exact: true })
       .click();
-    const refreshedEntry = adminPage
+    const refreshedItem = adminPage
       .locator('[data-slot="item"]')
       .filter({ hasText: englishQuestion });
-    await expect(refreshedEntry).toBeVisible();
-    await refreshedEntry
+    await expect(refreshedItem).toBeVisible();
+    await refreshedItem
       .getByRole("button", { name: "Edit", exact: true })
       .click();
-    await adminPage
-      .getByLabel("Question (English)", { exact: true })
-      .fill(`${englishQuestion} updated`);
-    await adminPage
-      .getByRole("group", { name: "Answer (English)" })
-      .getByLabel("Paragraph 1")
-      .fill(`${englishAnswer} updated`);
-    await adminPage.getByLabel("Sort order", { exact: true }).fill("40");
-    await adminPage.locator('[role="checkbox"]').nth(0).click();
-    await adminPage.locator('[role="checkbox"]').nth(1).click();
+    await questionEditor.fill(`${englishQuestion} updated`);
+    await answerEditor.fill(`${englishAnswer} updated`);
 
     const successfulUpdatePromise = adminPage.waitForResponse(
       (response) =>
@@ -321,39 +446,26 @@ test("FAQ is admin-only and admins can create and edit ordered localized entries
       .click();
     const successfulUpdate = await successfulUpdatePromise;
     expect(successfulUpdate.ok()).toBe(true);
-    const updated = (await successfulUpdate.json()) as { json: FaqEntry };
+    const updated = (await successfulUpdate.json()) as { json: AdminFaqDto };
     expect(updated.json).toMatchObject({
       id: created.json.id,
       questionEn: `${englishQuestion} updated`,
       questionId: indonesianQuestion,
       answerEn: [{ type: "paragraph", text: `${englishAnswer} updated` }],
       answerId: [{ type: "paragraph", text: indonesianAnswer }],
-      sortOrder: 40,
       isActive: true,
-      showOnLanding: false,
+      showOnLanding: true,
       version: 3,
     });
-    const successfulUpdateInput = (
-      successfulUpdate.request().postDataJSON() as {
-        json: { id: string; expectedVersion: number };
-      }
-    ).json;
-    expect(successfulUpdateInput).toMatchObject({
-      id: created.json.id,
-      expectedVersion: 2,
-    });
-    const updatedEntry = adminPage
+    const updatedItem = adminPage
       .locator('[data-slot="item"]')
       .filter({ hasText: `${englishQuestion} updated` });
-    await expect(updatedEntry).toBeVisible();
+    await expect(updatedItem).toBeVisible();
     await expect(
-      updatedEntry.getByText("Active", { exact: true }),
+      updatedItem.getByText("Active", { exact: true }),
     ).toBeVisible();
     await expect(
-      updatedEntry.getByText("Landing", { exact: true }),
-    ).toHaveCount(0);
-    await expect(
-      updatedEntry.getByText("Order 40 · Version 3", { exact: true }),
+      updatedItem.getByText("Landing", { exact: true }),
     ).toBeVisible();
   } finally {
     try {
@@ -380,7 +492,7 @@ test("FAQ is admin-only and admins can create and edit ordered localized entries
       try {
         await adminApi?.dispose();
       } finally {
-        await adminContext.close();
+        await adminContext?.close();
       }
     }
   }

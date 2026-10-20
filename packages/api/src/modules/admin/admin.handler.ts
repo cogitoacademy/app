@@ -19,6 +19,7 @@ import type {
   adminGetTutorPayoutsInput,
   adminGetTutorPayoutReportInput,
   adminMarkTutorPayoutPaidInput,
+  adminGetTutorPayoutAllocationsInput,
   adminUpdateEconomySettingsInput,
   adminPreviewV3EconomyInput,
   adminSaveV3EconomyInput,
@@ -38,6 +39,9 @@ type AdminGetTutorPayoutReportInputZod = z.infer<
 >;
 type AdminMarkTutorPayoutPaidInputZod = z.infer<
   typeof adminMarkTutorPayoutPaidInput
+>;
+type AdminGetTutorPayoutAllocationsInputZod = z.infer<
+  typeof adminGetTutorPayoutAllocationsInput
 >;
 type AdminUpdateEconomySettingsInputZod = z.infer<
   typeof adminUpdateEconomySettingsInput
@@ -185,6 +189,18 @@ export function createAdminHandler(adminService: AdminService) {
     }) => {
       return withDomainMap(
         () => adminService.getPendingTutorPayouts(input),
+        mapAdminError,
+      );
+    },
+
+    getTutorPayoutAllocations: async ({
+      input,
+    }: {
+      context: Context;
+      input: AdminGetTutorPayoutAllocationsInputZod;
+    }) => {
+      return withDomainMap(
+        () => adminService.getTutorPayoutAllocations(input),
         mapAdminError,
       );
     },

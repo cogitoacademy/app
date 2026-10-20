@@ -1,5 +1,18 @@
 import { z } from "zod";
 
+import type { FaqRichTextDocument } from "@cogito-app/db/schema/faq";
+export type {
+  FaqRichTextBlock,
+  FaqRichTextDocument,
+  FaqRichTextRun,
+} from "@cogito-app/db/schema/faq";
+import {
+  faqAnswerRichTextSchema,
+  faqQuestionRichTextSchema,
+} from "./faq-rich-text";
+
+export const FAQ_LANDING_MAX_ITEMS = 6;
+
 export const faqAnswerBlockSchema = z.discriminatedUnion("type", [
   z
     .object({
@@ -23,11 +36,10 @@ export const faqAnswerBlocksSchema = z
 
 const faqFieldsSchema = z
   .object({
-    questionEn: z.string().trim().min(1).max(500),
-    questionId: z.string().trim().max(500).optional(),
-    answerEn: faqAnswerBlocksSchema,
-    answerId: faqAnswerBlocksSchema.nullable().optional(),
-    sortOrder: z.number().int().min(0).max(1_000_000).default(0),
+    questionEnRich: faqQuestionRichTextSchema,
+    questionIdRich: faqQuestionRichTextSchema.nullable().optional(),
+    answerEnRich: faqAnswerRichTextSchema,
+    answerIdRich: faqAnswerRichTextSchema.nullable().optional(),
     isActive: z.boolean().default(true),
     showOnLanding: z.boolean().default(false),
   })
@@ -58,6 +70,8 @@ export type PublicFaqDto = {
   id: string;
   question: string;
   answer: FaqAnswerBlock[];
+  questionRich: FaqRichTextDocument;
+  answerRich: FaqRichTextDocument;
   sortOrder: number;
 };
 
@@ -67,8 +81,12 @@ export type AdminFaqDto = {
   questionId: string | null;
   answerEn: FaqAnswerBlock[];
   answerId: FaqAnswerBlock[] | null;
-  sortOrder: number;
+  questionEnRich: FaqRichTextDocument;
+  questionIdRich: FaqRichTextDocument | null;
+  answerEnRich: FaqRichTextDocument;
+  answerIdRich: FaqRichTextDocument | null;
   isActive: boolean;
   showOnLanding: boolean;
   version: number;
+  modifiedAt: string;
 };

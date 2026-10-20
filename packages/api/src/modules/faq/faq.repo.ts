@@ -1,7 +1,16 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, ne, sql } from "drizzle-orm";
 
 import { faqEntry } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
+import type { TxClient } from "../../lib/tx";
+import { FaqLandingLimitError } from "./faq.errors";
+import { FAQ_LANDING_MAX_ITEMS } from "./faq.types";
+
+async function lockFaqLandingSelection(tx: TxClient) {
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtextextended('cogito:faq-landing-selection', 0))`,
+  );
+}
 
 export function createFaqRepo(db: DbType) {
   return {
@@ -9,7 +18,7 @@ export function createFaqRepo(db: DbType) {
       return db
         .select()
         .from(faqEntry)
-        .orderBy(asc(faqEntry.sortOrder), asc(faqEntry.id));
+        .orderBy(asc(sql`lower(${faqEntry.questionEn})`), asc(faqEntry.id));
     },
 
     listPublic(landingOnly: boolean) {
@@ -18,8 +27,12 @@ export function createFaqRepo(db: DbType) {
           id: faqEntry.id,
           questionEn: faqEntry.questionEn,
           questionId: faqEntry.questionId,
+          questionEnRich: faqEntry.questionEnRich,
+          questionIdRich: faqEntry.questionIdRich,
           answerEn: faqEntry.answerEn,
           answerId: faqEntry.answerId,
+          answerEnRich: faqEntry.answerEnRich,
+          answerIdRich: faqEntry.answerIdRich,
           sortOrder: faqEntry.sortOrder,
         })
         .from(faqEntry)
@@ -28,13 +41,32 @@ export function createFaqRepo(db: DbType) {
             ? and(eq(faqEntry.isActive, true), eq(faqEntry.showOnLanding, true))
             : eq(faqEntry.isActive, true),
         )
-        .orderBy(asc(faqEntry.sortOrder), asc(faqEntry.id));
+        .orderBy(asc(sql`lower(${faqEntry.questionEn})`), asc(faqEntry.id));
     },
 
     async create(values: typeof faqEntry.$inferInsert) {
-      const [row] = await db.insert(faqEntry).values(values).returning();
-      if (!row) throw new Error("FAQ insert returned no row");
-      return row;
+      return db.transaction(async (tx) => {
+        await lockFaqLandingSelection(tx);
+        if (values.isActive && values.showOnLanding) {
+          const selected = await tx
+            .select({ id: faqEntry.id })
+            .from(faqEntry)
+            .where(
+              and(
+                eq(faqEntry.isActive, true),
+                eq(faqEntry.showOnLanding, true),
+              ),
+            )
+            .limit(FAQ_LANDING_MAX_ITEMS);
+          if (selected.length >= FAQ_LANDING_MAX_ITEMS) {
+            throw new FaqLandingLimitError();
+          }
+        }
+
+        const [row] = await tx.insert(faqEntry).values(values).returning();
+        if (!row) throw new Error("FAQ insert returned no row");
+        return row;
+      });
     },
 
     async updateIfVersion(
@@ -42,16 +74,47 @@ export function createFaqRepo(db: DbType) {
       expectedVersion: number,
       values: Partial<typeof faqEntry.$inferInsert>,
     ) {
-      const [row] = await db
-        .update(faqEntry)
-        .set({
-          ...values,
-          version: sql`${faqEntry.version} + 1`,
-          updatedAt: new Date(),
-        })
-        .where(and(eq(faqEntry.id, id), eq(faqEntry.version, expectedVersion)))
-        .returning();
-      return row;
+      return db.transaction(async (tx) => {
+        await lockFaqLandingSelection(tx);
+        const [current] = await tx
+          .select({
+            version: faqEntry.version,
+          })
+          .from(faqEntry)
+          .where(eq(faqEntry.id, id))
+          .limit(1);
+        if (!current || current.version !== expectedVersion) return undefined;
+
+        if (values.isActive === true && values.showOnLanding === true) {
+          const selected = await tx
+            .select({ id: faqEntry.id })
+            .from(faqEntry)
+            .where(
+              and(
+                eq(faqEntry.isActive, true),
+                eq(faqEntry.showOnLanding, true),
+                ne(faqEntry.id, id),
+              ),
+            )
+            .limit(FAQ_LANDING_MAX_ITEMS);
+          if (selected.length >= FAQ_LANDING_MAX_ITEMS) {
+            throw new FaqLandingLimitError();
+          }
+        }
+
+        const [row] = await tx
+          .update(faqEntry)
+          .set({
+            ...values,
+            version: sql`${faqEntry.version} + 1`,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(eq(faqEntry.id, id), eq(faqEntry.version, expectedVersion)),
+          )
+          .returning();
+        return row;
+      });
     },
 
     async findById(id: string) {

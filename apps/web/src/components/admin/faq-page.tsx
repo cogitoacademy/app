@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  IconDeviceFloppy,
-  IconEdit,
-  IconPlus,
-  IconX,
-} from "@tabler/icons-react";
+import { IconDeviceFloppy, IconEdit, IconPlus } from "@tabler/icons-react";
 
+import type {
+  AdminFaqDto,
+  CreateFaqInput,
+  FaqRichTextDocument,
+} from "@cogito-app/api/modules/faq/faq.types";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
 import {
@@ -25,302 +25,105 @@ import {
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
-import { Input } from "@cogito-app/ui/components/selia/input";
 import {
   Item,
   ItemAction,
   ItemContent,
   ItemDescription,
+  ItemMedia,
   ItemTitle,
 } from "@cogito-app/ui/components/selia/item";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
-import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 
+import { FaqRichTextEditor } from "@/components/admin/faq-rich-text-editor";
+import {
+  faqRichTextToPlainText,
+  normalizeFaqRichTextDocument,
+} from "@/lib/faq-rich-text";
 import { getUserFacingError } from "@/lib/error-message";
 import { client } from "@/utils/orpc";
 
-type AnswerBlock =
-  | { type: "paragraph"; text: string }
-  | { type: "list"; style: "ordered" | "unordered"; items: string[] };
+const FAQ_LIST_KEY = ["adminFaq", "list"] as const;
+const MAX_LANDING_FAQS = 6;
 
-type EditableBlock =
-  | { id: string; type: "paragraph"; text: string }
-  | {
-      id: string;
-      type: "list";
-      style: "ordered" | "unordered";
-      itemsText: string;
-    };
-
-type FaqEntry = {
-  id: string;
-  questionEn: string;
-  questionId: string | null;
-  answerEn: AnswerBlock[];
-  answerId: AnswerBlock[] | null;
-  sortOrder: number;
-  isActive: boolean;
-  showOnLanding: boolean;
-  version: number;
-};
-
-type FaqPayload = {
-  questionEn: string;
-  questionId?: string;
-  answerEn: AnswerBlock[];
-  answerId: AnswerBlock[] | null;
-  sortOrder: number;
-  isActive: boolean;
-  showOnLanding: boolean;
-};
-
+type FaqEntry = AdminFaqDto;
+type FaqPayload = CreateFaqInput;
 type FaqDraft = {
-  questionEn: string;
-  questionId: string;
-  answerEn: EditableBlock[];
-  answerId: EditableBlock[];
-  sortOrder: string;
+  questionEnRich: FaqRichTextDocument;
+  questionIdRich: FaqRichTextDocument;
+  answerEnRich: FaqRichTextDocument;
+  answerIdRich: FaqRichTextDocument;
   isActive: boolean;
   showOnLanding: boolean;
+  showIndonesian: boolean;
 };
-
 type FaqValidationError = {
-  field: "questionEn" | "answerEn" | "sortOrder";
+  field: "questionEnRich" | "answerEnRich";
   message: string;
 };
 
-const FAQ_LIST_KEY = ["adminFaq", "list"] as const;
+function emptyRichDocument(): FaqRichTextDocument {
+  return { type: "doc", blocks: [{ type: "paragraph", content: [] }] };
+}
 
 function emptyDraft(): FaqDraft {
   return {
-    questionEn: "",
-    questionId: "",
-    answerEn: [{ id: crypto.randomUUID(), type: "paragraph", text: "" }],
-    answerId: [],
-    sortOrder: "0",
+    questionEnRich: emptyRichDocument(),
+    questionIdRich: emptyRichDocument(),
+    answerEnRich: emptyRichDocument(),
+    answerIdRich: emptyRichDocument(),
     isActive: true,
     showOnLanding: false,
+    showIndonesian: false,
   };
-}
-
-function toEditableBlocks(blocks: AnswerBlock[] | null): EditableBlock[] {
-  return (blocks ?? []).map((block) =>
-    block.type === "paragraph"
-      ? { id: crypto.randomUUID(), type: "paragraph", text: block.text }
-      : {
-          id: crypto.randomUUID(),
-          type: "list",
-          style: block.style,
-          itemsText: block.items.join("\n"),
-        },
-  );
-}
-
-function toAnswerBlocks(blocks: EditableBlock[]): AnswerBlock[] {
-  const answer: AnswerBlock[] = [];
-  for (const block of blocks) {
-    if (block.type === "paragraph") {
-      const text = block.text.trim();
-      if (text) answer.push({ type: "paragraph", text });
-      continue;
-    }
-    const items = block.itemsText
-      .split(/\r?\n/)
-      .map((item) => item.trim())
-      .filter(Boolean);
-    if (items.length) answer.push({ type: "list", style: block.style, items });
-  }
-  return answer;
 }
 
 function draftFromEntry(entry: FaqEntry): FaqDraft {
+  const questionEnRich = normalizeFaqRichTextDocument(
+    entry.questionEnRich,
+    entry.questionEn,
+  );
+  const questionIdRich = normalizeFaqRichTextDocument(
+    entry.questionIdRich,
+    entry.questionId ?? "",
+  );
+  const answerEnRich = normalizeFaqRichTextDocument(
+    entry.answerEnRich,
+    entry.answerEn
+      .map((block) =>
+        block.type === "paragraph" ? block.text : block.items.join("\n"),
+      )
+      .join("\n\n"),
+  );
+  const answerIdRich = normalizeFaqRichTextDocument(
+    entry.answerIdRich,
+    entry.answerId
+      ?.map((block) =>
+        block.type === "paragraph" ? block.text : block.items.join("\n"),
+      )
+      .join("\n\n") ?? "",
+  );
   return {
-    questionEn: entry.questionEn,
-    questionId: entry.questionId ?? "",
-    answerEn: toEditableBlocks(entry.answerEn),
-    answerId: toEditableBlocks(entry.answerId),
-    sortOrder: String(entry.sortOrder),
+    questionEnRich,
+    questionIdRich,
+    answerEnRich,
+    answerIdRich,
     isActive: entry.isActive,
     showOnLanding: entry.showOnLanding,
+    showIndonesian: hasText(questionIdRich) || hasText(answerIdRich),
   };
 }
 
-function BlocksField({
-  label,
-  blocks,
-  onChange,
-  error,
-  errorId,
-  invalid = false,
-}: {
-  label: string;
-  blocks: EditableBlock[];
-  onChange: (blocks: EditableBlock[]) => void;
-  error?: string;
-  errorId?: string;
-  invalid?: boolean;
-}) {
-  const fieldId = label
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-  const labelId = `${fieldId}-label`;
-  const descriptionId = `${fieldId}-description`;
-  const describedBy = errorId ? `${descriptionId} ${errorId}` : descriptionId;
+function hasText(document: FaqRichTextDocument) {
+  return faqRichTextToPlainText(document).length > 0;
+}
 
-  function addParagraph() {
-    onChange([
-      ...blocks,
-      { id: crypto.randomUUID(), type: "paragraph", text: "" },
-    ]);
-  }
-
-  function addList(style: "ordered" | "unordered") {
-    onChange([
-      ...blocks,
-      { id: crypto.randomUUID(), type: "list", style, itemsText: "" },
-    ]);
-  }
-
-  function updateBlock(index: number, block: EditableBlock) {
-    onChange(
-      blocks.map((current, currentIndex) =>
-        currentIndex === index ? block : current,
-      ),
-    );
-  }
-
-  return (
-    <Field>
-      <div
-        role="group"
-        aria-labelledby={labelId}
-        aria-describedby={describedBy}
-      >
-        <p id={labelId} className="font-medium text-foreground">
-          {label}
-        </p>
-        <FieldDescription id={descriptionId}>
-          Add paragraphs or lists. Enter each list item on its own line.
-        </FieldDescription>
-        {error && errorId ? (
-          <p id={errorId} className="text-danger">
-            {error}
-          </p>
-        ) : null}
-        <Stack>
-          {blocks.map((block, index) => {
-            const blockLabel =
-              block.type === "paragraph"
-                ? `Paragraph ${index + 1}`
-                : `${block.style === "ordered" ? "Ordered" : "Unordered"} list ${index + 1}`;
-            const controlId = `${fieldId}-${block.id}`;
-            return (
-              <div
-                className="rounded-lg border border-card-border p-3"
-                key={block.id}
-              >
-                <Stack
-                  direction="row"
-                  spacing="sm"
-                  className="mb-3 items-center justify-between"
-                >
-                  <FieldLabel
-                    htmlFor={controlId}
-                    className="text-sm font-medium text-muted"
-                  >
-                    {blockLabel}
-                  </FieldLabel>
-                  <Button
-                    type="button"
-                    variant="plain"
-                    size="sm"
-                    onClick={() =>
-                      onChange(
-                        blocks.filter((_, itemIndex) => itemIndex !== index),
-                      )
-                    }
-                    aria-label={`Remove ${label.toLowerCase()} block ${index + 1}`}
-                  >
-                    <IconX aria-hidden="true" />
-                    Remove
-                  </Button>
-                </Stack>
-                {block.type === "paragraph" ? (
-                  <Textarea
-                    id={controlId}
-                    rows={3}
-                    aria-invalid={invalid || undefined}
-                    aria-describedby={invalid ? describedBy : descriptionId}
-                    data-faq-answer-field={
-                      fieldId === "answer-english" ? "" : undefined
-                    }
-                    value={block.text}
-                    onChange={(event) =>
-                      updateBlock(index, { ...block, text: event.target.value })
-                    }
-                  />
-                ) : (
-                  <Textarea
-                    id={controlId}
-                    rows={3}
-                    aria-invalid={invalid || undefined}
-                    aria-describedby={invalid ? describedBy : descriptionId}
-                    data-faq-answer-field={
-                      fieldId === "answer-english" ? "" : undefined
-                    }
-                    placeholder="One item per line"
-                    value={block.itemsText}
-                    onChange={(event) =>
-                      updateBlock(index, {
-                        ...block,
-                        itemsText: event.target.value,
-                      })
-                    }
-                  />
-                )}
-              </div>
-            );
-          })}
-          <Stack direction="row" spacing="sm" className="flex-wrap">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              id={
-                fieldId === "answer-english"
-                  ? "faq-answer-en-add-paragraph"
-                  : undefined
-              }
-              aria-describedby={invalid ? describedBy : undefined}
-              onClick={addParagraph}
-            >
-              <IconPlus aria-hidden="true" />
-              Add paragraph
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => addList("ordered")}
-            >
-              <IconPlus aria-hidden="true" />
-              Add ordered list
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => addList("unordered")}
-            >
-              <IconPlus aria-hidden="true" />
-              Add unordered list
-            </Button>
-          </Stack>
-        </Stack>
-      </div>
-    </Field>
+function formatModifiedDate(value: string) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "Unknown date";
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(
+    date,
   );
 }
 
@@ -331,27 +134,29 @@ export function FaqPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [validationError, setValidationError] =
     useState<FaqValidationError | null>(null);
-  useEffect(() => {
-    if (!validationError) return;
-
-    const targetId =
-      validationError.field === "questionEn"
-        ? "faq-question-en"
-        : validationError.field === "sortOrder"
-          ? "faq-sort-order"
-          : "faq-answer-en-add-paragraph";
-    const target =
-      validationError.field === "answerEn"
-        ? (document.querySelector<HTMLTextAreaElement>(
-            "[data-faq-answer-field]",
-          ) ?? document.getElementById(targetId))
-        : document.getElementById(targetId);
-    target?.focus();
-  }, [validationError]);
   const listQuery = useQuery({
     queryKey: FAQ_LIST_KEY,
     queryFn: () => client.adminFaq.list({}),
   });
+  const entries = listQuery.data ?? [];
+  const otherLandingCount = entries.filter(
+    (entry) =>
+      entry.isActive && entry.showOnLanding && entry.id !== editingEntry?.id,
+  ).length;
+  const landingCount = draft
+    ? otherLandingCount + Number(draft.isActive && draft.showOnLanding)
+    : entries.filter((entry) => entry.isActive && entry.showOnLanding).length;
+
+  useEffect(() => {
+    if (!validationError) return;
+    const editorId =
+      validationError.field === "questionEnRich"
+        ? "faq-question-en-rich"
+        : "faq-answer-en-rich";
+    document
+      .querySelector<HTMLElement>(`[data-faq-editor="${editorId}"]`)
+      ?.focus();
+  }, [validationError]);
 
   const saveMutation = useMutation({
     mutationFn: (payload: FaqPayload) =>
@@ -377,8 +182,6 @@ export function FaqPage() {
     },
   });
 
-  const entries = listQuery.data ?? [];
-
   function openNewEntry() {
     setEditingEntry(null);
     setDraft(emptyDraft());
@@ -393,46 +196,51 @@ export function FaqPage() {
     setValidationError(null);
   }
 
+  function updateDraft(update: Partial<FaqDraft>) {
+    setDraft((current) => (current ? { ...current, ...update } : current));
+    setFormError(null);
+    setValidationError(null);
+  }
+
   function saveEntry() {
     if (!draft) return;
-    const answerEn = toAnswerBlocks(draft.answerEn);
-    const answerId = toAnswerBlocks(draft.answerId);
-    const sortOrder = Number(draft.sortOrder);
-    if (!draft.questionEn.trim()) {
+    const questionLength = faqRichTextToPlainText(draft.questionEnRich).length;
+    if (questionLength === 0) {
       setFormError(null);
       setValidationError({
-        field: "questionEn",
+        field: "questionEnRich",
         message: "Enter an English question.",
       });
       return;
     }
-    if (answerEn.length === 0) {
+    if (questionLength > 500) {
       setFormError(null);
       setValidationError({
-        field: "answerEn",
-        message: "Add at least one English answer block.",
+        field: "questionEnRich",
+        message: "Question must be 500 characters or fewer.",
       });
       return;
     }
-    if (!Number.isInteger(sortOrder) || sortOrder < 0) {
+    if (!hasText(draft.answerEnRich)) {
       setFormError(null);
       setValidationError({
-        field: "sortOrder",
-        message:
-          "Sort order must be a whole number greater than or equal to zero.",
+        field: "answerEnRich",
+        message: "Add English answer content before saving.",
       });
       return;
     }
+
     setValidationError(null);
     setFormError(null);
     saveMutation.mutate({
-      questionEn: draft.questionEn.trim(),
-      questionId: draft.questionId.trim() || undefined,
-      answerEn,
-      answerId: answerId.length ? answerId : null,
-      sortOrder,
+      questionEnRich: draft.questionEnRich,
+      questionIdRich: hasText(draft.questionIdRich)
+        ? draft.questionIdRich
+        : null,
+      answerEnRich: draft.answerEnRich,
+      answerIdRich: hasText(draft.answerIdRich) ? draft.answerIdRich : null,
       isActive: draft.isActive,
-      showOnLanding: draft.showOnLanding,
+      showOnLanding: draft.isActive && draft.showOnLanding,
     });
   }
 
@@ -447,8 +255,8 @@ export function FaqPage() {
           <div>
             <Heading level={1}>FAQ</Heading>
             <p className="mt-1 text-muted">
-              Manage public answers, language options, order, and landing-page
-              visibility.
+              Write questions and answers in English. Add an Indonesian version
+              when needed, then choose up to six for the landing page.
             </p>
           </div>
           <Button type="button" onClick={openNewEntry}>
@@ -461,9 +269,14 @@ export function FaqPage() {
           <CardHeader>
             <CardTitle>FAQ entries</CardTitle>
             <CardDescription>
-              Public pages show active entries in sort order. Landing pages show
-              active entries marked for landing.
+              Listed alphabetically by English question. The date on each row is
+              its last modified date.
             </CardDescription>
+            <Badge
+              variant={landingCount === MAX_LANDING_FAQS ? "warning" : "info"}
+            >
+              Landing FAQs: {landingCount}/{MAX_LANDING_FAQS}
+            </Badge>
           </CardHeader>
           <CardBody>
             {listQuery.isPending ? (
@@ -473,214 +286,224 @@ export function FaqPage() {
                 {getUserFacingError(listQuery.error)}
               </p>
             ) : entries.length === 0 ? (
-              <p className="text-muted">No FAQ entries yet.</p>
+              <p className="text-muted">
+                No FAQ entries yet. Add the first one.
+              </p>
             ) : (
-              <Stack>
-                {entries.map((entry) => (
-                  <Item
-                    key={entry.id}
-                    variant="outline"
-                    direction="row"
-                    className="items-center"
-                  >
-                    <ItemContent className="min-w-0 flex-1">
-                      <ItemTitle className="max-w-full truncate">
-                        {entry.questionEn}
-                      </ItemTitle>
-                      <ItemDescription>
-                        Order {entry.sortOrder} · Version {entry.version}
-                      </ItemDescription>
-                    </ItemContent>
-                    <ItemAction className="flex-wrap justify-end">
-                      <Badge variant={entry.isActive ? "success" : "secondary"}>
-                        {entry.isActive ? "Active" : "Inactive"}
-                      </Badge>
-                      {entry.showOnLanding && (
-                        <Badge variant="info">Landing</Badge>
-                      )}
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => openEntry(entry)}
-                      >
-                        <IconEdit aria-hidden="true" />
-                        Edit
-                      </Button>
-                    </ItemAction>
-                  </Item>
-                ))}
-              </Stack>
+              <div>
+                <Stack>
+                  {entries.map((entry, index) => (
+                    <Item
+                      key={entry.id}
+                      variant="outline"
+                      direction="row"
+                      className="items-center"
+                    >
+                      <ItemMedia className="w-8 text-right text-sm text-muted">
+                        #{index + 1}
+                      </ItemMedia>
+                      <ItemContent className="min-w-0 flex-1">
+                        <ItemTitle className="max-w-full truncate">
+                          {entry.questionEn}
+                        </ItemTitle>
+                        <ItemDescription>
+                          Updated {formatModifiedDate(entry.modifiedAt)} ·
+                          Version {entry.version}
+                        </ItemDescription>
+                      </ItemContent>
+                      <ItemAction className="flex-wrap justify-end">
+                        <Badge
+                          variant={entry.isActive ? "success" : "secondary"}
+                        >
+                          {entry.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                        {entry.isActive && entry.showOnLanding ? (
+                          <Badge variant="info">Landing</Badge>
+                        ) : null}
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => openEntry(entry)}
+                        >
+                          <IconEdit aria-hidden="true" />
+                          Edit
+                        </Button>
+                      </ItemAction>
+                    </Item>
+                  ))}
+                </Stack>
+              </div>
             )}
           </CardBody>
         </Card>
 
-        {draft && (
+        {draft ? (
           <Card>
             <CardHeader>
               <CardTitle>{editingEntry ? "Edit FAQ" : "Add FAQ"}</CardTitle>
               <CardDescription>
-                English content is required. Indonesian fields are optional and
-                fall back to English on public pages.
+                Use bold, italic, links, and lists. English is required; blank
+                Indonesian fields use the English version.
               </CardDescription>
             </CardHeader>
             <CardBody>
-              <Stack spacing="lg">
-                <Field>
-                  <FieldLabel htmlFor="faq-question-en">
-                    Question (English)
-                  </FieldLabel>
-                  <Input
-                    id="faq-question-en"
-                    aria-invalid={
-                      validationError?.field === "questionEn" || undefined
+              <div>
+                <Stack spacing="lg">
+                  <FaqRichTextEditor
+                    id="faq-question-en-rich"
+                    label="Question (English)"
+                    description="Write the English question. Keep it under 500 characters."
+                    value={draft.questionEnRich}
+                    onChange={(questionEnRich) =>
+                      updateDraft({ questionEnRich })
                     }
-                    aria-describedby={
-                      validationError?.field === "questionEn"
-                        ? "faq-question-en-error"
+                    error={
+                      validationError?.field === "questionEnRich"
+                        ? validationError.message
                         : undefined
                     }
-                    value={draft.questionEn}
-                    onChange={(event) => {
-                      setDraft({ ...draft, questionEn: event.target.value });
-                      setValidationError(null);
-                      setFormError(null);
-                    }}
-                    required
+                    invalid={validationError?.field === "questionEnRich"}
                   />
-                  {validationError?.field === "questionEn" ? (
-                    <p id="faq-question-en-error" className="text-danger">
-                      {validationError.message}
+                  <FaqRichTextEditor
+                    id="faq-answer-en-rich"
+                    label="Answer (English)"
+                    description="Add paragraphs or lists, and link text where useful."
+                    value={draft.answerEnRich}
+                    onChange={(answerEnRich) => updateDraft({ answerEnRich })}
+                    error={
+                      validationError?.field === "answerEnRich"
+                        ? validationError.message
+                        : undefined
+                    }
+                    invalid={validationError?.field === "answerEnRich"}
+                  />
+                  <div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      aria-expanded={draft.showIndonesian}
+                      aria-controls="faq-indonesian-fields"
+                      onClick={() =>
+                        updateDraft({ showIndonesian: !draft.showIndonesian })
+                      }
+                    >
+                      {draft.showIndonesian
+                        ? "Hide Indonesian fields"
+                        : "Add Indonesian version"}
+                    </Button>
+                    <div
+                      id="faq-indonesian-fields"
+                      hidden={!draft.showIndonesian}
+                    >
+                      {draft.showIndonesian ? (
+                        <Stack spacing="lg" className="mt-6">
+                          <FaqRichTextEditor
+                            id="faq-question-id-rich"
+                            label="Question (Indonesian)"
+                            description="Leave blank to use the English question."
+                            value={draft.questionIdRich}
+                            onChange={(questionIdRich) =>
+                              updateDraft({ questionIdRich })
+                            }
+                          />
+                          <FaqRichTextEditor
+                            id="faq-answer-id-rich"
+                            label="Answer (Indonesian)"
+                            description="Leave blank to use the English answer."
+                            value={draft.answerIdRich}
+                            onChange={(answerIdRich) =>
+                              updateDraft({ answerIdRich })
+                            }
+                          />
+                        </Stack>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <Stack
+                    direction="row"
+                    spacing="lg"
+                    className="flex-wrap items-start"
+                  >
+                    <Field>
+                      <FieldLabel className="gap-2">
+                        <Checkbox
+                          checked={draft.isActive}
+                          onCheckedChange={(checked) =>
+                            updateDraft({
+                              isActive: checked === true,
+                              ...(checked === true
+                                ? {}
+                                : { showOnLanding: false }),
+                            })
+                          }
+                        />
+                        Active
+                      </FieldLabel>
+                      <FieldDescription>
+                        Inactive entries are hidden from public FAQ pages.
+                      </FieldDescription>
+                    </Field>
+                    <Field>
+                      <FieldLabel className="gap-2">
+                        <Checkbox
+                          checked={draft.showOnLanding}
+                          disabled={
+                            !draft.isActive ||
+                            (!draft.showOnLanding &&
+                              otherLandingCount >= MAX_LANDING_FAQS)
+                          }
+                          onCheckedChange={(checked) =>
+                            updateDraft({ showOnLanding: checked === true })
+                          }
+                        />
+                        Show on landing page
+                      </FieldLabel>
+                      <FieldDescription>
+                        {!draft.isActive
+                          ? "Activate this FAQ before selecting it."
+                          : otherLandingCount >= MAX_LANDING_FAQS &&
+                              !draft.showOnLanding
+                            ? "Six active FAQs are already selected. Remove one first."
+                            : "Select up to six active FAQs for the landing section."}
+                      </FieldDescription>
+                    </Field>
+                  </Stack>
+                  {formError ? (
+                    <p className="text-danger" role="alert">
+                      {formError}
                     </p>
                   ) : null}
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="faq-question-id">
-                    Question (Indonesian, optional)
-                  </FieldLabel>
-                  <Input
-                    id="faq-question-id"
-                    value={draft.questionId}
-                    onChange={(event) =>
-                      setDraft({ ...draft, questionId: event.target.value })
-                    }
-                  />
-                </Field>
-                <BlocksField
-                  label="Answer (English)"
-                  blocks={draft.answerEn}
-                  onChange={(answerEn) => {
-                    setDraft({ ...draft, answerEn });
-                    setValidationError(null);
-                    setFormError(null);
-                  }}
-                  error={
-                    validationError?.field === "answerEn"
-                      ? validationError.message
-                      : undefined
-                  }
-                  errorId="faq-answer-en-error"
-                  invalid={validationError?.field === "answerEn"}
-                />
-                <BlocksField
-                  label="Answer (Indonesian, optional)"
-                  blocks={draft.answerId}
-                  onChange={(answerId) => {
-                    setDraft({ ...draft, answerId });
-                    setFormError(null);
-                  }}
-                />
-                <Stack
-                  direction="row"
-                  spacing="lg"
-                  className="flex-wrap items-end"
-                >
-                  <Field className="w-40">
-                    <FieldLabel htmlFor="faq-sort-order">Sort order</FieldLabel>
-                    <Input
-                      id="faq-sort-order"
-                      type="number"
-                      min={0}
-                      step={1}
-                      aria-invalid={
-                        validationError?.field === "sortOrder" || undefined
-                      }
-                      aria-describedby={
-                        validationError?.field === "sortOrder"
-                          ? "faq-sort-order-error"
-                          : undefined
-                      }
-                      value={draft.sortOrder}
-                      onChange={(event) => {
-                        setDraft({ ...draft, sortOrder: event.target.value });
-                        setValidationError(null);
+                  <Stack direction="row" spacing="sm" className="justify-end">
+                    <Button
+                      type="button"
+                      variant="plain"
+                      onClick={() => {
+                        setDraft(null);
+                        setEditingEntry(null);
                         setFormError(null);
+                        setValidationError(null);
                       }}
-                    />
-                    {validationError?.field === "sortOrder" ? (
-                      <p id="faq-sort-order-error" className="text-danger">
-                        {validationError.message}
-                      </p>
-                    ) : null}
-                  </Field>
-                  <Field>
-                    <FieldLabel className="gap-2">
-                      <Checkbox
-                        checked={draft.isActive}
-                        onCheckedChange={(checked) =>
-                          setDraft({ ...draft, isActive: checked === true })
-                        }
-                      />
-                      Active
-                    </FieldLabel>
-                  </Field>
-                  <Field>
-                    <FieldLabel className="gap-2">
-                      <Checkbox
-                        checked={draft.showOnLanding}
-                        onCheckedChange={(checked) =>
-                          setDraft({
-                            ...draft,
-                            showOnLanding: checked === true,
-                          })
-                        }
-                      />
-                      Show on landing page
-                    </FieldLabel>
-                  </Field>
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={saveEntry}
+                      disabled={saveMutation.isPending}
+                      progress={saveMutation.isPending}
+                    >
+                      <IconDeviceFloppy aria-hidden="true" />
+                      Save FAQ
+                    </Button>
+                  </Stack>
                 </Stack>
-                {formError && (
-                  <p className="text-danger" role="alert">
-                    {formError}
-                  </p>
-                )}
-                <Stack direction="row" spacing="sm" className="justify-end">
-                  <Button
-                    type="button"
-                    variant="plain"
-                    onClick={() => {
-                      setDraft(null);
-                      setEditingEntry(null);
-                      setFormError(null);
-                      setValidationError(null);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={saveEntry}
-                    disabled={saveMutation.isPending}
-                    progress={saveMutation.isPending}
-                  >
-                    <IconDeviceFloppy aria-hidden="true" />
-                    Save FAQ
-                  </Button>
-                </Stack>
-              </Stack>
+              </div>
             </CardBody>
           </Card>
-        )}
+        ) : null}
       </Stack>
     </main>
   );

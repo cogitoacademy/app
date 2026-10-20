@@ -33,6 +33,9 @@ export function getCompetitionPalette(
 export const competitionPaletteClassName =
   "bg-[color:var(--competition-light-background)] text-[color:var(--competition-light-text)] dark:bg-[color:var(--competition-dark-background)] dark:text-[color:var(--competition-dark-text)]";
 
+export const competitionPaletteSubtleClassName =
+  "bg-[color:color-mix(in_oklab,var(--competition-light-background)_15%,transparent)] hover:bg-[color:color-mix(in_oklab,var(--competition-light-background)_25%,transparent)] border-[color:var(--competition-light-background)] dark:bg-[color:color-mix(in_oklab,var(--competition-dark-background)_15%,transparent)] dark:hover:bg-[color:color-mix(in_oklab,var(--competition-dark-background)_25%,transparent)] dark:border-[color:var(--competition-dark-background)]";
+
 export function getCompetitionPaletteStyle(
   palette?: CompetitionPalette | null,
 ): CSSProperties | undefined {

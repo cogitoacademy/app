@@ -1,0 +1,1036 @@
+"use client";
+
+import { useState } from "react";
+import type { ChangeEvent, FormEvent } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  IconCalendarPlus,
+  IconDeviceFloppy,
+  IconEdit,
+  IconMapPin,
+  IconPlus,
+  IconTrash,
+} from "@tabler/icons-react";
+import { Badge } from "@cogito-app/ui/components/selia/badge";
+import { Button } from "@cogito-app/ui/components/selia/button";
+import {
+  Card,
+  CardBody,
+  CardHeader,
+  CardTitle,
+} from "@cogito-app/ui/components/selia/card";
+import {
+  Field,
+  FieldDescription,
+  FieldLabel,
+} from "@cogito-app/ui/components/selia/field";
+import { Heading } from "@cogito-app/ui/components/selia/heading";
+import { Input } from "@cogito-app/ui/components/selia/input";
+import { Stack } from "@cogito-app/ui/components/selia/stack";
+import {
+  Select,
+  SelectItem,
+  SelectList,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@cogito-app/ui/components/selia/select";
+import { Text } from "@cogito-app/ui/components/selia/text";
+import { Textarea } from "@cogito-app/ui/components/selia/textarea";
+import { toastManager } from "@cogito-app/ui/components/selia/toast";
+import { getUserFacingError } from "@/lib/error-message";
+import { resolveProfileImageUrl } from "@/lib/profile-image-url";
+import { client, orpc } from "@/utils/orpc";
+
+type ClassRecord = Awaited<ReturnType<typeof client.admin.getAcademyClass>>;
+type ClassKind = "cohort" | "masterclass";
+type SessionMode = "online" | "in_person";
+type SessionForm = {
+  id?: string;
+  capacity: string;
+  titleEn: string;
+  titleId: string;
+  curriculumEn: string;
+  curriculumId: string;
+  startAt: string;
+  endAt: string;
+  mode: SessionMode;
+  roomId: string;
+  tutorId: string;
+};
+const COVER_IMAGE_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+] as const;
+const MAX_COVER_IMAGE_BYTES = 5 * 1024 * 1024;
+type CoverImageType = (typeof COVER_IMAGE_TYPES)[number];
+
+type DraftForm = {
+  id?: string;
+  expectedVersion?: number;
+  kind: ClassKind;
+  competitionId: string;
+  titleEn: string;
+  titleId: string;
+  descriptionEn: string;
+  descriptionId: string;
+  coverKey: string;
+  tutorFeeIdr: string;
+  minimumEnrollment: string;
+  minimumCheckAt: string;
+  fullRateMarks: string;
+  halfRateMarks: string;
+  singleRateMarks: string;
+  masterclassRateMarks: string;
+  reason: string;
+  sessions: SessionForm[];
+};
+
+const emptySession = (): SessionForm => ({
+  capacity: "",
+  titleEn: "",
+  titleId: "",
+  curriculumEn: "",
+  curriculumId: "",
+  startAt: "",
+  endAt: "",
+  mode: "online",
+  roomId: "",
+  tutorId: "",
+});
+
+const emptyDraft = (kind: ClassKind = "cohort"): DraftForm => ({
+  kind,
+  competitionId: "",
+  titleEn: "",
+  titleId: "",
+  descriptionEn: "",
+  descriptionId: "",
+  coverKey: "",
+  tutorFeeIdr: kind === "cohort" ? "400000" : "300000",
+  minimumEnrollment: "",
+  minimumCheckAt: "",
+  fullRateMarks: "20",
+  halfRateMarks: "22",
+  singleRateMarks: "25",
+  masterclassRateMarks: "5",
+  reason: "",
+  sessions: [emptySession()],
+});
+
+function toLocalDateTime(value: Date | string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+function draftFromRecord(record: ClassRecord): DraftForm {
+  return {
+    id: record.id,
+    expectedVersion: record.version,
+    kind: record.kind as ClassKind,
+    competitionId: record.competitionId,
+    titleEn: record.titleEn,
+    titleId: record.titleId ?? "",
+    descriptionEn: record.descriptionEn,
+    descriptionId: record.descriptionId ?? "",
+    coverKey: record.coverKey ?? "",
+    tutorFeeIdr: String(record.tutorFeeIdr),
+    minimumEnrollment: String(record.minimumEnrollment ?? ""),
+    minimumCheckAt: toLocalDateTime(record.minimumCheckAt),
+    fullRateMarks: String(record.cohortFullRateMarks ?? ""),
+    halfRateMarks: String(record.cohortHalfRateMarks ?? ""),
+    singleRateMarks: String(record.cohortSingleRateMarks ?? ""),
+    masterclassRateMarks: String(record.masterclassRateMarks ?? ""),
+    reason: "",
+    sessions: record.sessions.map((session) => ({
+      id: session.id,
+      capacity: String(session.capacity),
+      titleEn: session.titleEn,
+      titleId: session.titleId ?? "",
+      curriculumEn: session.curriculumEn ?? "",
+      curriculumId: session.curriculumId ?? "",
+      startAt: toLocalDateTime(session.startAt),
+      endAt: toLocalDateTime(session.endAt),
+      mode: session.mode as SessionMode,
+      roomId: session.roomId ?? "",
+      tutorId: session.tutorId,
+    })),
+  };
+}
+
+function NumberField({
+  id,
+  label,
+  value,
+  onChange,
+  min = 1,
+  max,
+  required = true,
+  description,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  min?: number;
+  max?: number;
+  required?: boolean;
+  description?: string;
+}) {
+  return (
+    <Field>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <Input
+        id={id}
+        type="number"
+        min={min}
+        max={max}
+        step={1}
+        required={required}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      {description ? <FieldDescription>{description}</FieldDescription> : null}
+    </Field>
+  );
+}
+
+function TextField({
+  id,
+  label,
+  value,
+  onChange,
+  required = false,
+  type = "text",
+  maxLength,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  required?: boolean;
+  type?: string;
+  maxLength?: number;
+}) {
+  return (
+    <Field>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <Input
+        id={id}
+        type={type}
+        maxLength={maxLength}
+        required={required}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </Field>
+  );
+}
+
+function TextareaField({
+  id,
+  label,
+  value,
+  onChange,
+  required = false,
+  maxLength,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  required?: boolean;
+  maxLength?: number;
+}) {
+  return (
+    <Field>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <Textarea
+        id={id}
+        maxLength={maxLength}
+        required={required}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        rows={3}
+      />
+    </Field>
+  );
+}
+
+export function AcademyClassPage() {
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState<DraftForm>(() => emptyDraft());
+  const [coverUploading, setCoverUploading] = useState(false);
+  const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
+  const classesQuery = useQuery(
+    orpc.admin.listAcademyClasses.queryOptions({ input: { state: "draft" } }),
+  );
+  const competitionsQuery = useQuery(
+    orpc.admin.listCompetitionCatalog.queryOptions({
+      input: { includeArchived: false },
+    }),
+  );
+  const tutorsQuery = useQuery(
+    orpc.adminTutor.listTutorProfiles.queryOptions({
+      input: { status: "published", limit: 100, offset: 0 },
+    }),
+  );
+  const roomsQuery = useQuery(orpc.room.list.queryOptions({ input: {} }));
+  const saveDraft = useMutation(
+    orpc.admin.saveAcademyClassDraft.mutationOptions({
+      onSuccess: async (record) => {
+        setForm(draftFromRecord(record));
+        await queryClient.invalidateQueries({
+          queryKey: orpc.admin.listAcademyClasses.key({
+            input: { state: "draft" },
+          }),
+        });
+        toastManager.add({
+          title: "Class draft saved",
+          description: "This draft is not public and does not reserve a room.",
+          type: "success",
+        });
+      },
+      onError: (error: Error) => {
+        toastManager.add({
+          title: "Class draft could not be saved",
+          description: getUserFacingError(error),
+          type: "error",
+        });
+      },
+    }),
+  );
+
+  const classes = classesQuery.data ?? [];
+  const competitions = competitionsQuery.data ?? [];
+  const tutors = tutorsQuery.data ?? [];
+  const rooms = roomsQuery.data ?? [];
+
+  function updateForm<Key extends keyof DraftForm>(
+    key: Key,
+    value: DraftForm[Key],
+  ) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function updateSession(index: number, patch: Partial<SessionForm>) {
+    setForm((current) => ({
+      ...current,
+      sessions: current.sessions.map((session, sessionIndex) =>
+        sessionIndex === index ? { ...session, ...patch } : session,
+      ),
+    }));
+  }
+
+  function changeKind(kind: ClassKind) {
+    setForm((current) => ({
+      ...current,
+      kind,
+      tutorFeeIdr: kind === "cohort" ? "400000" : "300000",
+      sessions:
+        kind === "masterclass"
+          ? current.sessions.slice(0, 1)
+          : current.sessions,
+    }));
+  }
+
+  async function uploadCover(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    if (!COVER_IMAGE_TYPES.includes(file.type as CoverImageType)) {
+      toastManager.add({
+        title: "Unsupported cover image",
+        description: "Choose a PNG, JPEG, WebP, or GIF image.",
+        type: "error",
+      });
+      input.value = "";
+      return;
+    }
+    if (file.size > MAX_COVER_IMAGE_BYTES) {
+      toastManager.add({
+        title: "Cover image is too large",
+        description: "Choose an image up to 5 MB.",
+        type: "error",
+      });
+      input.value = "";
+      return;
+    }
+
+    setCoverUploading(true);
+    try {
+      const signed = await client.upload.createUploadUrl({
+        filename: file.name,
+        contentType: file.type as CoverImageType,
+        contentLength: file.size,
+      });
+      const uploadUrl =
+        resolveProfileImageUrl(signed.uploadUrl) ?? signed.uploadUrl;
+      const isLocalUpload = signed.uploadUrl.startsWith("/");
+      const fields = signed.fields ?? {};
+      let response: Response;
+
+      if (Object.keys(fields).length > 0) {
+        const body = new FormData();
+        Object.entries(fields).forEach(([key, value]) =>
+          body.append(key, value),
+        );
+        body.append("file", file, file.name);
+        response = await fetch(uploadUrl, {
+          method: signed.method,
+          body,
+        });
+      } else {
+        response = await fetch(uploadUrl, {
+          method: signed.method,
+          credentials: isLocalUpload ? "include" : "omit",
+          headers: { "content-type": file.type },
+          body: file,
+        });
+      }
+
+      if (!response.ok) throw new Error("Cover image upload failed.");
+      setForm((current) => ({ ...current, coverKey: signed.key }));
+      setCoverPreviewUrl(resolveProfileImageUrl(signed.publicUrl) ?? null);
+      toastManager.add({
+        title: "Cover image uploaded",
+        description: "Save the draft to attach this cover image.",
+        type: "success",
+      });
+    } catch (error) {
+      toastManager.add({
+        title: "Cover image could not be uploaded",
+        description: getUserFacingError(error),
+        type: "error",
+      });
+    } finally {
+      setCoverUploading(false);
+      input.value = "";
+    }
+  }
+
+  function submitDraft(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const sessions = form.sessions.map((session) => ({
+      ...(session.id ? { id: session.id } : {}),
+      capacity: Number(session.capacity),
+      titleEn: session.titleEn,
+      titleId: session.titleId,
+      curriculumEn: session.curriculumEn,
+      curriculumId: session.curriculumId,
+      startAt: new Date(session.startAt).toISOString(),
+      endAt: new Date(session.endAt).toISOString(),
+      mode: session.mode,
+      roomId: session.roomId || null,
+      tutorId: session.tutorId,
+    }));
+    const common = {
+      ...(form.id
+        ? { id: form.id, expectedVersion: form.expectedVersion }
+        : {}),
+      competitionId: form.competitionId,
+      titleEn: form.titleEn,
+      titleId: form.titleId,
+      descriptionEn: form.descriptionEn,
+      descriptionId: form.descriptionId,
+      coverKey: form.coverKey,
+      tutorFeeIdr: Number(form.tutorFeeIdr),
+      reason: form.reason,
+      sessions,
+    };
+    const input =
+      form.kind === "cohort"
+        ? {
+            ...common,
+            kind: "cohort" as const,
+            minimumEnrollment: Number(form.minimumEnrollment),
+            minimumCheckAt: new Date(form.minimumCheckAt).toISOString(),
+            fullRateMarks: Number(form.fullRateMarks),
+            halfRateMarks: Number(form.halfRateMarks),
+            singleRateMarks: Number(form.singleRateMarks),
+          }
+        : {
+            ...common,
+            kind: "masterclass" as const,
+            masterclassRateMarks: Number(form.masterclassRateMarks),
+          };
+    saveDraft.mutate(input);
+  }
+
+  return (
+    <Stack direction="column" spacing="lg" className="pb-8">
+      <Stack direction="column" spacing="sm">
+        <Heading level={1}>Class studio</Heading>
+        <Text className="text-muted">
+          Create and manage drafts. Drafts are not public and do not reserve
+          rooms.
+        </Text>
+      </Stack>
+
+      <div className="grid gap-6 lg:grid-cols-[minmax(17rem,0.8fr)_minmax(0,1.2fr)]">
+        <Card>
+          <CardHeader>
+            <CardTitle>Draft classes</CardTitle>
+          </CardHeader>
+          <CardBody>
+            <Stack direction="column" spacing="sm">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={coverUploading}
+                onClick={() => {
+                  setForm(emptyDraft());
+                  setCoverPreviewUrl(null);
+                }}
+              >
+                <IconPlus />
+                New class draft
+              </Button>
+              {classesQuery.isLoading ? (
+                <Text className="text-muted">Loading drafts…</Text>
+              ) : classes.length === 0 ? (
+                <Text className="text-muted">No class drafts yet.</Text>
+              ) : (
+                classes.map((record) => (
+                  <div
+                    key={record.id}
+                    className="flex items-start justify-between gap-3 rounded-lg border border-card-border bg-card p-3"
+                  >
+                    <div className="min-w-0">
+                      <div className="mb-1 flex flex-wrap items-center gap-2">
+                        <Text className="font-medium">{record.titleEn}</Text>
+                        <Badge variant="secondary">{record.kind}</Badge>
+                      </div>
+                      <Text className="text-muted text-sm">
+                        {record.sessions.length} session
+                        {record.sessions.length === 1 ? "" : "s"} ·{" "}
+                        {record.competition.name}
+                      </Text>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="plain"
+                      size="sm"
+                      disabled={coverUploading}
+                      aria-label={`Edit ${record.titleEn}`}
+                      onClick={() => {
+                        setForm(draftFromRecord(record));
+                        setCoverPreviewUrl(null);
+                      }}
+                    >
+                      <IconEdit />
+                    </Button>
+                  </div>
+                ))
+              )}
+            </Stack>
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              {form.id ? "Edit class draft" : "New class draft"}
+            </CardTitle>
+          </CardHeader>
+          <CardBody>
+            <form onSubmit={submitDraft}>
+              <Stack direction="column" spacing="lg">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field>
+                    <FieldLabel htmlFor="class-kind">Class type</FieldLabel>
+                    <Select
+                      value={form.kind}
+                      onValueChange={(value) =>
+                        changeKind(String(value) as ClassKind)
+                      }
+                      items={[
+                        { value: "cohort", label: "Cohort" },
+                        { value: "masterclass", label: "Masterclass" },
+                      ]}
+                    >
+                      <SelectTrigger id="class-kind">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectPopup>
+                        <SelectList>
+                          <SelectItem value="cohort">Cohort</SelectItem>
+                          <SelectItem value="masterclass">
+                            Masterclass
+                          </SelectItem>
+                        </SelectList>
+                      </SelectPopup>
+                    </Select>
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="class-competition">
+                      Competition
+                    </FieldLabel>
+                    <Select
+                      value={form.competitionId}
+                      onValueChange={(value) =>
+                        updateForm("competitionId", String(value ?? ""))
+                      }
+                      items={competitions.map((competition) => ({
+                        value: competition.id,
+                        label: competition.name,
+                      }))}
+                    >
+                      <SelectTrigger id="class-competition">
+                        <SelectValue placeholder="Choose a competition" />
+                      </SelectTrigger>
+                      <SelectPopup>
+                        <SelectList>
+                          {competitions.map((competition) => (
+                            <SelectItem
+                              key={competition.id}
+                              value={competition.id}
+                            >
+                              {competition.parent
+                                ? `${competition.parent.name} · ${competition.name}`
+                                : competition.name}
+                            </SelectItem>
+                          ))}
+                        </SelectList>
+                      </SelectPopup>
+                    </Select>
+                  </Field>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <TextField
+                    id="class-title-en"
+                    label="Title (English)"
+                    value={form.titleEn}
+                    onChange={(value) => updateForm("titleEn", value)}
+                    required
+                    maxLength={200}
+                  />
+                  <TextField
+                    id="class-title-id"
+                    label="Title (Indonesian, optional)"
+                    value={form.titleId}
+                    onChange={(value) => updateForm("titleId", value)}
+                    maxLength={200}
+                  />
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <TextareaField
+                    id="class-description-en"
+                    label="Description (English)"
+                    value={form.descriptionEn}
+                    onChange={(value) => updateForm("descriptionEn", value)}
+                    required
+                    maxLength={5_000}
+                  />
+                  <TextareaField
+                    id="class-description-id"
+                    label="Description (Indonesian, optional)"
+                    value={form.descriptionId}
+                    onChange={(value) => updateForm("descriptionId", value)}
+                    maxLength={5_000}
+                  />
+                </div>
+                <Field>
+                  <FieldLabel htmlFor="class-cover">Cover image</FieldLabel>
+                  <Input
+                    id="class-cover"
+                    type="file"
+                    accept={COVER_IMAGE_TYPES.join(",")}
+                    disabled={coverUploading}
+                    onChange={(event) => void uploadCover(event)}
+                  />
+                  <FieldDescription>
+                    {coverUploading
+                      ? "Uploading cover image…"
+                      : "PNG, JPEG, WebP, or GIF up to 5 MB. Upload the approved class cover asset."}
+                  </FieldDescription>
+                  <Text className="text-muted text-sm">
+                    {form.coverKey
+                      ? "A cover image is attached to this draft. Save to keep it."
+                      : "No cover image is attached yet."}
+                  </Text>
+                  {coverPreviewUrl ? (
+                    <img
+                      src={coverPreviewUrl}
+                      alt=""
+                      className="mt-2 aspect-video max-h-48 w-full rounded-lg border border-card-border object-cover"
+                    />
+                  ) : null}
+                </Field>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <NumberField
+                    id="class-tutor-fee"
+                    label="Flat tutor fee per session (IDR)"
+                    value={form.tutorFeeIdr}
+                    onChange={(value) => updateForm("tutorFeeIdr", value)}
+                    min={1}
+                    max={2_000_000_000}
+                    description={
+                      form.kind === "cohort"
+                        ? "Default: Rp400,000 per session, for either delivery mode."
+                        : "Default: Rp300,000 for the single masterclass session."
+                    }
+                  />
+                  {form.kind === "cohort" ? (
+                    <NumberField
+                      id="class-minimum-enrollment"
+                      label="Minimum full/half-plan students"
+                      value={form.minimumEnrollment}
+                      onChange={(value) =>
+                        updateForm("minimumEnrollment", value)
+                      }
+                    />
+                  ) : (
+                    <NumberField
+                      id="class-masterclass-rate"
+                      label="Seat price (Marks)"
+                      value={form.masterclassRateMarks}
+                      onChange={(value) =>
+                        updateForm("masterclassRateMarks", value)
+                      }
+                      description="Default: 5 Marks for the single session."
+                    />
+                  )}
+                </div>
+                {form.kind === "cohort" ? (
+                  <>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <TextField
+                        id="class-minimum-check-at"
+                        label="Minimum-enrollment check date"
+                        type="datetime-local"
+                        value={form.minimumCheckAt}
+                        onChange={(value) =>
+                          updateForm("minimumCheckAt", value)
+                        }
+                        required
+                      />
+                      <div className="grid gap-4 sm:grid-cols-3">
+                        <NumberField
+                          id="class-full-rate"
+                          label="Full plan · Marks/session"
+                          value={form.fullRateMarks}
+                          onChange={(value) =>
+                            updateForm("fullRateMarks", value)
+                          }
+                          description="Default 20"
+                        />
+                        <NumberField
+                          id="class-half-rate"
+                          label="Half plan · Marks/session"
+                          value={form.halfRateMarks}
+                          onChange={(value) =>
+                            updateForm("halfRateMarks", value)
+                          }
+                          description="Default 22"
+                        />
+                        <NumberField
+                          id="class-single-rate"
+                          label="Single session · Marks"
+                          value={form.singleRateMarks}
+                          onChange={(value) =>
+                            updateForm("singleRateMarks", value)
+                          }
+                          description="Default 25"
+                        />
+                      </div>
+                    </div>
+                    <FieldDescription>
+                      The minimum counts unique active full/half-plan students.
+                      Single-session buyers do not count.
+                    </FieldDescription>
+                  </>
+                ) : null}
+
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <Heading level={3}>Sessions</Heading>
+                      <Text className="text-muted text-sm">
+                        Each session has its own tutor, capacity, delivery mode,
+                        and schedule.
+                      </Text>
+                    </div>
+                    {form.kind === "cohort" ? (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() =>
+                          updateForm("sessions", [
+                            ...form.sessions,
+                            emptySession(),
+                          ])
+                        }
+                      >
+                        <IconCalendarPlus />
+                        Add session
+                      </Button>
+                    ) : null}
+                  </div>
+                  {form.sessions.map((session, index) => (
+                    <div
+                      key={session.id ?? `new-${index}`}
+                      className="space-y-4 rounded-lg border border-card-border bg-card p-4"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <Text className="font-medium">Session {index + 1}</Text>
+                        {form.kind === "cohort" && form.sessions.length > 1 ? (
+                          <Button
+                            type="button"
+                            variant="plain"
+                            size="sm"
+                            aria-label={`Remove session ${index + 1}`}
+                            onClick={() =>
+                              updateForm(
+                                "sessions",
+                                form.sessions.filter((_, i) => i !== index),
+                              )
+                            }
+                          >
+                            <IconTrash />
+                            Remove
+                          </Button>
+                        ) : null}
+                      </div>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <TextField
+                          id={`session-${index}-title-en`}
+                          label="Session title (English)"
+                          value={session.titleEn}
+                          onChange={(value) =>
+                            updateSession(index, { titleEn: value })
+                          }
+                          required
+                          maxLength={200}
+                        />
+                        <TextField
+                          id={`session-${index}-title-id`}
+                          label="Session title (Indonesian, optional)"
+                          value={session.titleId}
+                          onChange={(value) =>
+                            updateSession(index, { titleId: value })
+                          }
+                          maxLength={200}
+                        />
+                      </div>
+                      {form.kind === "cohort" ? (
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <TextareaField
+                            id={`session-${index}-curriculum-en`}
+                            label="Curriculum description (English)"
+                            value={session.curriculumEn}
+                            onChange={(value) =>
+                              updateSession(index, { curriculumEn: value })
+                            }
+                            required
+                            maxLength={5_000}
+                          />
+                          <TextareaField
+                            id={`session-${index}-curriculum-id`}
+                            label="Curriculum description (Indonesian, optional)"
+                            value={session.curriculumId}
+                            onChange={(value) =>
+                              updateSession(index, { curriculumId: value })
+                            }
+                            maxLength={5_000}
+                          />
+                        </div>
+                      ) : null}
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <TextField
+                          id={`session-${index}-start`}
+                          label="Start"
+                          type="datetime-local"
+                          value={session.startAt}
+                          onChange={(value) =>
+                            updateSession(index, { startAt: value })
+                          }
+                          required
+                        />
+                        <TextField
+                          id={`session-${index}-end`}
+                          label="End"
+                          type="datetime-local"
+                          value={session.endAt}
+                          onChange={(value) =>
+                            updateSession(index, { endAt: value })
+                          }
+                          required
+                        />
+                      </div>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <NumberField
+                          id={`session-${index}-capacity`}
+                          label="Session capacity"
+                          value={session.capacity}
+                          onChange={(value) =>
+                            updateSession(index, { capacity: value })
+                          }
+                        />
+                        <Field>
+                          <FieldLabel htmlFor={`session-${index}-mode`}>
+                            Delivery mode
+                          </FieldLabel>
+                          <Select
+                            value={session.mode}
+                            onValueChange={(value) =>
+                              updateSession(index, {
+                                mode: String(value) as SessionMode,
+                                roomId:
+                                  String(value) === "in_person"
+                                    ? session.roomId
+                                    : "",
+                              })
+                            }
+                            items={[
+                              { value: "online", label: "Online" },
+                              { value: "in_person", label: "In person" },
+                            ]}
+                          >
+                            <SelectTrigger id={`session-${index}-mode`}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectPopup>
+                              <SelectList>
+                                <SelectItem value="online">Online</SelectItem>
+                                <SelectItem value="in_person">
+                                  In person
+                                </SelectItem>
+                              </SelectList>
+                            </SelectPopup>
+                          </Select>
+                        </Field>
+                      </div>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <Field>
+                          <FieldLabel htmlFor={`session-${index}-tutor`}>
+                            Published tutor
+                          </FieldLabel>
+                          <Select
+                            value={session.tutorId}
+                            onValueChange={(value) =>
+                              updateSession(index, {
+                                tutorId: String(value ?? ""),
+                              })
+                            }
+                            items={tutors.map((tutor) => ({
+                              value: tutor.userId,
+                              label: tutor.user.name,
+                            }))}
+                          >
+                            <SelectTrigger id={`session-${index}-tutor`}>
+                              <SelectValue placeholder="Choose a tutor" />
+                            </SelectTrigger>
+                            <SelectPopup>
+                              <SelectList>
+                                {tutors.map((tutor) => (
+                                  <SelectItem
+                                    key={tutor.userId}
+                                    value={tutor.userId}
+                                  >
+                                    {tutor.user.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectList>
+                            </SelectPopup>
+                          </Select>
+                        </Field>
+                        {session.mode === "in_person" ? (
+                          <Field>
+                            <FieldLabel htmlFor={`session-${index}-room`}>
+                              <span className="inline-flex items-center gap-1">
+                                <IconMapPin className="size-4" />
+                                Managed room
+                              </span>
+                            </FieldLabel>
+                            <Select
+                              value={session.roomId}
+                              onValueChange={(value) =>
+                                updateSession(index, {
+                                  roomId: String(value ?? ""),
+                                })
+                              }
+                              items={rooms.map((room) => ({
+                                value: room.id,
+                                label: `${room.name} · ${room.location}`,
+                              }))}
+                            >
+                              <SelectTrigger id={`session-${index}-room`}>
+                                <SelectValue placeholder="Choose a room" />
+                              </SelectTrigger>
+                              <SelectPopup>
+                                <SelectList>
+                                  {rooms.map((room) => (
+                                    <SelectItem key={room.id} value={room.id}>
+                                      {room.name} · {room.location} · capacity{" "}
+                                      {room.capacity}
+                                    </SelectItem>
+                                  ))}
+                                </SelectList>
+                              </SelectPopup>
+                            </Select>
+                          </Field>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <Field>
+                  <FieldLabel htmlFor="class-audit-reason">
+                    Reason for this change
+                  </FieldLabel>
+                  <Textarea
+                    id="class-audit-reason"
+                    required
+                    minLength={3}
+                    maxLength={500}
+                    value={form.reason}
+                    onChange={(event) =>
+                      updateForm("reason", event.target.value)
+                    }
+                    rows={2}
+                  />
+                  <FieldDescription>
+                    Saved with the admin actor and before/after snapshot.
+                  </FieldDescription>
+                </Field>
+
+                <div className="flex flex-wrap justify-end gap-3">
+                  {form.id ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={coverUploading}
+                      onClick={() => {
+                        setForm(emptyDraft());
+                        setCoverPreviewUrl(null);
+                      }}
+                    >
+                      Cancel edit
+                    </Button>
+                  ) : null}
+                  <Button
+                    type="submit"
+                    disabled={saveDraft.isPending || coverUploading}
+                  >
+                    <IconDeviceFloppy />
+                    {saveDraft.isPending ? "Saving…" : "Save draft"}
+                  </Button>
+                </div>
+              </Stack>
+            </form>
+          </CardBody>
+        </Card>
+      </div>
+    </Stack>
+  );
+}

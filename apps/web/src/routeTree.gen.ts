@@ -19,6 +19,7 @@ import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AppAchievementsRouteImport } from './routes/_app.achievements'
 import { Route as AppAdminRouteImport } from './routes/_app.admin'
 import { Route as AppAdminAchievementsRouteImport } from './routes/_app.admin-achievements'
+import { Route as AppAdminClassesRouteImport } from './routes/_app.admin-classes'
 import { Route as AppAdminCompetitionsRouteImport } from './routes/_app.admin-competitions'
 import { Route as AppAdminEconomyRouteImport } from './routes/_app.admin-economy'
 import { Route as AppAdminFaqRouteImport } from './routes/_app.admin-faq'
@@ -30,7 +31,9 @@ import { Route as AppAvailabilityRouteImport } from './routes/_app.availability'
 import { Route as AppBalanceRouteImport } from './routes/_app.balance'
 import { Route as AppBookingsRouteImport } from './routes/_app.bookings'
 import { Route as AppCalendarRouteImport } from './routes/_app.calendar'
+import { Route as AppClassesRouteImport } from './routes/_app.classes'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
+import { Route as AppFaqRouteImport } from './routes/_app.faq'
 import { Route as AppGuideRouteImport } from './routes/_app.guide'
 import { Route as AppKnowledgeBankRouteImport } from './routes/_app.knowledge-bank'
 import { Route as AppNotificationsRouteImport } from './routes/_app.notifications'
@@ -41,6 +44,7 @@ import { Route as AppTutorsRouteImport } from './routes/_app.tutors'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as AppAdminTutorsProfileIdRouteImport } from './routes/_app.admin-tutors_.$profileId'
 import { Route as AppBookingsBookingIdRouteImport } from './routes/_app.bookings_.$bookingId'
+import { Route as AppClassesClassIdRouteImport } from './routes/_app.classes_.$classId'
 import { Route as AppAdminOperationsBookingsBookingIdRouteImport } from './routes/_app.admin-operations_.bookings.$bookingId'
 import { Route as AppTutorsTutorIdBookRouteImport } from './routes/_app.tutors_.$tutorId.book'
 
@@ -91,6 +95,11 @@ const AppAdminRoute = AppAdminRouteImport.update({
 const AppAdminAchievementsRoute = AppAdminAchievementsRouteImport.update({
   id: '/admin-achievements',
   path: '/admin-achievements',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminClassesRoute = AppAdminClassesRouteImport.update({
+  id: '/admin-classes',
+  path: '/admin-classes',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAdminCompetitionsRoute = AppAdminCompetitionsRouteImport.update({
@@ -148,9 +157,19 @@ const AppCalendarRoute = AppCalendarRouteImport.update({
   path: '/calendar',
   getParentRoute: () => AppRoute,
 } as any)
+const AppClassesRoute = AppClassesRouteImport.update({
+  id: '/classes',
+  path: '/classes',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppDashboardRoute = AppDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppFaqRoute = AppFaqRouteImport.update({
+  id: '/faq',
+  path: '/faq',
   getParentRoute: () => AppRoute,
 } as any)
 const AppGuideRoute = AppGuideRouteImport.update({
@@ -203,6 +222,11 @@ const AppBookingsBookingIdRoute = AppBookingsBookingIdRouteImport.update({
   path: '/bookings/$bookingId',
   getParentRoute: () => AppRoute,
 } as any)
+const AppClassesClassIdRoute = AppClassesClassIdRouteImport.update({
+  id: '/classes_/$classId',
+  path: '/classes/$classId',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAdminOperationsBookingsBookingIdRoute =
   AppAdminOperationsBookingsBookingIdRouteImport.update({
     id: '/admin-operations_/bookings/$bookingId',
@@ -225,6 +249,7 @@ export interface FileRoutesByFullPath {
   '/achievements': typeof AppAchievementsRoute
   '/admin': typeof AppAdminRoute
   '/admin-achievements': typeof AppAdminAchievementsRoute
+  '/admin-classes': typeof AppAdminClassesRoute
   '/admin-competitions': typeof AppAdminCompetitionsRoute
   '/admin-economy': typeof AppAdminEconomyRoute
   '/admin-faq': typeof AppAdminFaqRoute
@@ -236,7 +261,9 @@ export interface FileRoutesByFullPath {
   '/balance': typeof AppBalanceRoute
   '/bookings': typeof AppBookingsRoute
   '/calendar': typeof AppCalendarRoute
+  '/classes': typeof AppClassesRoute
   '/dashboard': typeof AppDashboardRoute
+  '/faq': typeof AppFaqRoute
   '/guide': typeof AppGuideRoute
   '/knowledge-bank': typeof AppKnowledgeBankRoute
   '/notifications': typeof AppNotificationsRoute
@@ -247,6 +274,7 @@ export interface FileRoutesByFullPath {
   '/auth/callback': typeof AuthCallbackRoute
   '/admin-tutors/$profileId': typeof AppAdminTutorsProfileIdRoute
   '/bookings/$bookingId': typeof AppBookingsBookingIdRoute
+  '/classes/$classId': typeof AppClassesClassIdRoute
   '/admin-operations/bookings/$bookingId': typeof AppAdminOperationsBookingsBookingIdRoute
   '/tutors/$tutorId/book': typeof AppTutorsTutorIdBookRoute
 }
@@ -260,6 +288,7 @@ export interface FileRoutesByTo {
   '/achievements': typeof AppAchievementsRoute
   '/admin': typeof AppAdminRoute
   '/admin-achievements': typeof AppAdminAchievementsRoute
+  '/admin-classes': typeof AppAdminClassesRoute
   '/admin-competitions': typeof AppAdminCompetitionsRoute
   '/admin-economy': typeof AppAdminEconomyRoute
   '/admin-faq': typeof AppAdminFaqRoute
@@ -271,7 +300,9 @@ export interface FileRoutesByTo {
   '/balance': typeof AppBalanceRoute
   '/bookings': typeof AppBookingsRoute
   '/calendar': typeof AppCalendarRoute
+  '/classes': typeof AppClassesRoute
   '/dashboard': typeof AppDashboardRoute
+  '/faq': typeof AppFaqRoute
   '/guide': typeof AppGuideRoute
   '/knowledge-bank': typeof AppKnowledgeBankRoute
   '/notifications': typeof AppNotificationsRoute
@@ -282,6 +313,7 @@ export interface FileRoutesByTo {
   '/auth/callback': typeof AuthCallbackRoute
   '/admin-tutors/$profileId': typeof AppAdminTutorsProfileIdRoute
   '/bookings/$bookingId': typeof AppBookingsBookingIdRoute
+  '/classes/$classId': typeof AppClassesClassIdRoute
   '/admin-operations/bookings/$bookingId': typeof AppAdminOperationsBookingsBookingIdRoute
   '/tutors/$tutorId/book': typeof AppTutorsTutorIdBookRoute
 }
@@ -297,6 +329,7 @@ export interface FileRoutesById {
   '/_app/achievements': typeof AppAchievementsRoute
   '/_app/admin': typeof AppAdminRoute
   '/_app/admin-achievements': typeof AppAdminAchievementsRoute
+  '/_app/admin-classes': typeof AppAdminClassesRoute
   '/_app/admin-competitions': typeof AppAdminCompetitionsRoute
   '/_app/admin-economy': typeof AppAdminEconomyRoute
   '/_app/admin-faq': typeof AppAdminFaqRoute
@@ -308,7 +341,9 @@ export interface FileRoutesById {
   '/_app/balance': typeof AppBalanceRoute
   '/_app/bookings': typeof AppBookingsRoute
   '/_app/calendar': typeof AppCalendarRoute
+  '/_app/classes': typeof AppClassesRoute
   '/_app/dashboard': typeof AppDashboardRoute
+  '/_app/faq': typeof AppFaqRoute
   '/_app/guide': typeof AppGuideRoute
   '/_app/knowledge-bank': typeof AppKnowledgeBankRoute
   '/_app/notifications': typeof AppNotificationsRoute
@@ -319,6 +354,7 @@ export interface FileRoutesById {
   '/auth/callback': typeof AuthCallbackRoute
   '/_app/admin-tutors_/$profileId': typeof AppAdminTutorsProfileIdRoute
   '/_app/bookings_/$bookingId': typeof AppBookingsBookingIdRoute
+  '/_app/classes_/$classId': typeof AppClassesClassIdRoute
   '/_app/admin-operations_/bookings/$bookingId': typeof AppAdminOperationsBookingsBookingIdRoute
   '/_app/tutors_/$tutorId/book': typeof AppTutorsTutorIdBookRoute
 }
@@ -334,6 +370,7 @@ export interface FileRouteTypes {
     | '/achievements'
     | '/admin'
     | '/admin-achievements'
+    | '/admin-classes'
     | '/admin-competitions'
     | '/admin-economy'
     | '/admin-faq'
@@ -345,7 +382,9 @@ export interface FileRouteTypes {
     | '/balance'
     | '/bookings'
     | '/calendar'
+    | '/classes'
     | '/dashboard'
+    | '/faq'
     | '/guide'
     | '/knowledge-bank'
     | '/notifications'
@@ -356,6 +395,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/admin-tutors/$profileId'
     | '/bookings/$bookingId'
+    | '/classes/$classId'
     | '/admin-operations/bookings/$bookingId'
     | '/tutors/$tutorId/book'
   fileRoutesByTo: FileRoutesByTo
@@ -369,6 +409,7 @@ export interface FileRouteTypes {
     | '/achievements'
     | '/admin'
     | '/admin-achievements'
+    | '/admin-classes'
     | '/admin-competitions'
     | '/admin-economy'
     | '/admin-faq'
@@ -380,7 +421,9 @@ export interface FileRouteTypes {
     | '/balance'
     | '/bookings'
     | '/calendar'
+    | '/classes'
     | '/dashboard'
+    | '/faq'
     | '/guide'
     | '/knowledge-bank'
     | '/notifications'
@@ -391,6 +434,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/admin-tutors/$profileId'
     | '/bookings/$bookingId'
+    | '/classes/$classId'
     | '/admin-operations/bookings/$bookingId'
     | '/tutors/$tutorId/book'
   id:
@@ -405,6 +449,7 @@ export interface FileRouteTypes {
     | '/_app/achievements'
     | '/_app/admin'
     | '/_app/admin-achievements'
+    | '/_app/admin-classes'
     | '/_app/admin-competitions'
     | '/_app/admin-economy'
     | '/_app/admin-faq'
@@ -416,7 +461,9 @@ export interface FileRouteTypes {
     | '/_app/balance'
     | '/_app/bookings'
     | '/_app/calendar'
+    | '/_app/classes'
     | '/_app/dashboard'
+    | '/_app/faq'
     | '/_app/guide'
     | '/_app/knowledge-bank'
     | '/_app/notifications'
@@ -427,6 +474,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/_app/admin-tutors_/$profileId'
     | '/_app/bookings_/$bookingId'
+    | '/_app/classes_/$classId'
     | '/_app/admin-operations_/bookings/$bookingId'
     | '/_app/tutors_/$tutorId/book'
   fileRoutesById: FileRoutesById
@@ -514,6 +562,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminAchievementsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/admin-classes': {
+      id: '/_app/admin-classes'
+      path: '/admin-classes'
+      fullPath: '/admin-classes'
+      preLoaderRoute: typeof AppAdminClassesRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/admin-competitions': {
       id: '/_app/admin-competitions'
       path: '/admin-competitions'
@@ -591,11 +646,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCalendarRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/classes': {
+      id: '/_app/classes'
+      path: '/classes'
+      fullPath: '/classes'
+      preLoaderRoute: typeof AppClassesRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/dashboard': {
       id: '/_app/dashboard'
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof AppDashboardRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/faq': {
+      id: '/_app/faq'
+      path: '/faq'
+      fullPath: '/faq'
+      preLoaderRoute: typeof AppFaqRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/guide': {
@@ -668,6 +737,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppBookingsBookingIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/classes_/$classId': {
+      id: '/_app/classes_/$classId'
+      path: '/classes/$classId'
+      fullPath: '/classes/$classId'
+      preLoaderRoute: typeof AppClassesClassIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/admin-operations_/bookings/$bookingId': {
       id: '/_app/admin-operations_/bookings/$bookingId'
       path: '/admin-operations/bookings/$bookingId'
@@ -689,6 +765,7 @@ interface AppRouteChildren {
   AppAchievementsRoute: typeof AppAchievementsRoute
   AppAdminRoute: typeof AppAdminRoute
   AppAdminAchievementsRoute: typeof AppAdminAchievementsRoute
+  AppAdminClassesRoute: typeof AppAdminClassesRoute
   AppAdminCompetitionsRoute: typeof AppAdminCompetitionsRoute
   AppAdminEconomyRoute: typeof AppAdminEconomyRoute
   AppAdminFaqRoute: typeof AppAdminFaqRoute
@@ -700,7 +777,9 @@ interface AppRouteChildren {
   AppBalanceRoute: typeof AppBalanceRoute
   AppBookingsRoute: typeof AppBookingsRoute
   AppCalendarRoute: typeof AppCalendarRoute
+  AppClassesRoute: typeof AppClassesRoute
   AppDashboardRoute: typeof AppDashboardRoute
+  AppFaqRoute: typeof AppFaqRoute
   AppGuideRoute: typeof AppGuideRoute
   AppKnowledgeBankRoute: typeof AppKnowledgeBankRoute
   AppNotificationsRoute: typeof AppNotificationsRoute
@@ -710,6 +789,7 @@ interface AppRouteChildren {
   AppTutorsRoute: typeof AppTutorsRoute
   AppAdminTutorsProfileIdRoute: typeof AppAdminTutorsProfileIdRoute
   AppBookingsBookingIdRoute: typeof AppBookingsBookingIdRoute
+  AppClassesClassIdRoute: typeof AppClassesClassIdRoute
   AppAdminOperationsBookingsBookingIdRoute: typeof AppAdminOperationsBookingsBookingIdRoute
   AppTutorsTutorIdBookRoute: typeof AppTutorsTutorIdBookRoute
 }
@@ -718,6 +798,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAchievementsRoute: AppAchievementsRoute,
   AppAdminRoute: AppAdminRoute,
   AppAdminAchievementsRoute: AppAdminAchievementsRoute,
+  AppAdminClassesRoute: AppAdminClassesRoute,
   AppAdminCompetitionsRoute: AppAdminCompetitionsRoute,
   AppAdminEconomyRoute: AppAdminEconomyRoute,
   AppAdminFaqRoute: AppAdminFaqRoute,
@@ -729,7 +810,9 @@ const AppRouteChildren: AppRouteChildren = {
   AppBalanceRoute: AppBalanceRoute,
   AppBookingsRoute: AppBookingsRoute,
   AppCalendarRoute: AppCalendarRoute,
+  AppClassesRoute: AppClassesRoute,
   AppDashboardRoute: AppDashboardRoute,
+  AppFaqRoute: AppFaqRoute,
   AppGuideRoute: AppGuideRoute,
   AppKnowledgeBankRoute: AppKnowledgeBankRoute,
   AppNotificationsRoute: AppNotificationsRoute,
@@ -739,6 +822,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppTutorsRoute: AppTutorsRoute,
   AppAdminTutorsProfileIdRoute: AppAdminTutorsProfileIdRoute,
   AppBookingsBookingIdRoute: AppBookingsBookingIdRoute,
+  AppClassesClassIdRoute: AppClassesClassIdRoute,
   AppAdminOperationsBookingsBookingIdRoute:
     AppAdminOperationsBookingsBookingIdRoute,
   AppTutorsTutorIdBookRoute: AppTutorsTutorIdBookRoute,

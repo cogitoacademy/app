@@ -12,6 +12,7 @@ import { createAdminTutorModule } from "./modules/admin-tutor";
 import { createAdminMarkPackageModule } from "./modules/admin-mark-package";
 import { createAdminKnowledgeBankModule } from "./modules/admin-knowledge-bank";
 import { createCompetitionCatalogModule } from "./modules/competition-catalog";
+import { createAcademyClassModule } from "./modules/academy-class";
 import { createTutorModule } from "./modules/tutor";
 import { createDiscoveryModule } from "./modules/tutor-discovery";
 import { createInviteModule } from "./modules/invite";
@@ -46,6 +47,7 @@ import type { AdminTutorService } from "./modules/admin-tutor/admin-tutor.servic
 import type { AdminMarkPackageService } from "./modules/admin-mark-package/admin-mark-package.service";
 import type { AdminKnowledgeBankService } from "./modules/admin-knowledge-bank/admin-knowledge-bank.service";
 import type { CompetitionCatalogService } from "./modules/competition-catalog/competition-catalog.service";
+import type { AcademyClassService } from "./modules/academy-class/academy-class.service";
 import type { TutorService } from "./modules/tutor/tutor.service";
 import type { InviteService } from "./modules/invite/invite.service";
 import type { AchievementService } from "./modules/achievement/achievement.service";
@@ -69,6 +71,7 @@ import type { AdminTutorHandler } from "./modules/admin-tutor/admin-tutor.handle
 import type { AdminMarkPackageHandler } from "./modules/admin-mark-package/admin-mark-package.handler";
 import type { AdminKnowledgeBankHandler } from "./modules/admin-knowledge-bank/admin-knowledge-bank.handler";
 import type { CompetitionCatalogHandler } from "./modules/competition-catalog/competition-catalog.handler";
+import type { AcademyClassHandler } from "./modules/academy-class/academy-class.handler";
 import type { TutorHandler } from "./modules/tutor/tutor.handler";
 import type { DiscoveryHandler } from "./modules/tutor-discovery/discovery.handler";
 import type { InviteHandler } from "./modules/invite/invite.handler";
@@ -96,6 +99,7 @@ export interface ServiceRegistry {
   adminMarkPackage: AdminMarkPackageService;
   adminKnowledgeBank: AdminKnowledgeBankService;
   competitionCatalog: CompetitionCatalogService;
+  academyClass: AcademyClassService;
   tutor: TutorService;
   invite: InviteService;
   achievement: AchievementService;
@@ -122,6 +126,7 @@ export interface HandlerRegistry {
   adminMarkPackage: AdminMarkPackageHandler;
   adminKnowledgeBank: AdminKnowledgeBankHandler;
   competitionCatalog: CompetitionCatalogHandler;
+  academyClass: AcademyClassHandler;
   tutor: TutorHandler;
   discovery: DiscoveryHandler;
   invite: InviteHandler;
@@ -261,6 +266,10 @@ function createServices() {
     db,
     audit: audit.service,
     economy: economy.service,
+  });
+  const academyClass = createAcademyClassModule({
+    db,
+    audit: audit.service,
   });
   const email = createEmailModule({
     resendApiKey: env.RESEND_API_KEY,
@@ -434,6 +443,7 @@ function createServices() {
     adminMarkPackage: adminMarkPackage.service,
     adminKnowledgeBank: adminKnowledgeBank.service,
     competitionCatalog: competitionCatalog.service,
+    academyClass: academyClass.service,
     tutor: tutor.service,
     invite: invite.service,
     achievement: achievement.service,
@@ -460,6 +470,7 @@ function createServices() {
     adminMarkPackage: adminMarkPackage.handler,
     adminKnowledgeBank: adminKnowledgeBank.handler,
     competitionCatalog: competitionCatalog.handler,
+    academyClass: academyClass.handler,
     tutor: tutor.handler,
     discovery: discovery.handler,
     invite: invite.handler,

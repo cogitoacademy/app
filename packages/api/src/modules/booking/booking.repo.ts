@@ -32,6 +32,8 @@ import {
   user,
   meetingEvent,
   tutorPayout,
+  tutorSessionFee,
+  tutorPayoutAllocation,
   type booking as bookingTable,
   type BookingSessionTopic,
   type BookingPriceSnapshot,
@@ -1144,6 +1146,96 @@ async function findCompletedBookingsByTutor(
     .where(and(...conditions));
 }
 
+async function findTutorSessionFeesByTutor(
+  conn: DbOrTx,
+  tutorId: string,
+  dateFrom?: Date,
+  dateTo?: Date,
+  dateBasis: "scheduledStartAt" | "completedAt" = "scheduledStartAt",
+) {
+  const conditions: SQL[] = [eq(tutorSessionFee.tutorId, tutorId)];
+  const dateColumn =
+    dateBasis === "completedAt"
+      ? tutorSessionFee.earnedAt
+      : tutorSessionFee.scheduledStartAt;
+  if (dateFrom) conditions.push(gte(dateColumn, dateFrom));
+  if (dateTo) conditions.push(lte(dateColumn, dateTo));
+
+  return conn
+    .select({
+      ...getTableColumns(tutorSessionFee),
+      bookingNumber: booking.bookingNumber,
+      bookingType: booking.type,
+    })
+    .from(tutorSessionFee)
+    .innerJoin(booking, eq(tutorSessionFee.bookingId, booking.id))
+    .where(and(...conditions));
+}
+
+async function listTutorPayoutAllocatedSourceKeys(
+  conn: DbOrTx,
+  tutorId: string,
+): Promise<string[]> {
+  const rows = await conn
+    .select({ sourceKey: tutorPayoutAllocation.sourceKey })
+    .from(tutorPayoutAllocation)
+    .innerJoin(tutorPayout, eq(tutorPayoutAllocation.payoutId, tutorPayout.id))
+    .where(eq(tutorPayout.tutorId, tutorId));
+  return rows.map((row) => row.sourceKey);
+}
+
+async function insertTutorPayoutAllocations(
+  conn: DbOrTx,
+  rows: (typeof tutorPayoutAllocation.$inferInsert)[],
+) {
+  if (rows.length === 0) return [];
+  return conn.insert(tutorPayoutAllocation).values(rows).returning();
+}
+
+async function listTutorPayoutAllocationsByPayoutId(
+  conn: DbOrTx,
+  payoutId: string,
+) {
+  return conn
+    .select({
+      id: tutorPayoutAllocation.id,
+      payoutId: tutorPayoutAllocation.payoutId,
+      sourceKey: tutorPayoutAllocation.sourceKey,
+      sourceType: tutorPayoutAllocation.sourceType,
+      tutorSessionFeeId: tutorPayoutAllocation.tutorSessionFeeId,
+      bookingId: tutorPayoutAllocation.bookingId,
+      bookingNumber: booking.bookingNumber,
+      bookingSessionId: tutorPayoutAllocation.bookingSessionId,
+      bookingType: tutorPayoutAllocation.bookingType,
+      deliveryStatus: tutorPayoutAllocation.deliveryStatus,
+      scheduledStartAt: tutorPayoutAllocation.scheduledStartAt,
+      earnedAt: tutorPayoutAllocation.earnedAt,
+      grossHonorariumIdr: tutorPayoutAllocation.grossHonorariumIdr,
+      priceSnapshot: tutorPayoutAllocation.priceSnapshot,
+      createdAt: tutorPayoutAllocation.createdAt,
+    })
+    .from(tutorPayoutAllocation)
+    .innerJoin(booking, eq(tutorPayoutAllocation.bookingId, booking.id))
+    .where(eq(tutorPayoutAllocation.payoutId, payoutId))
+    .orderBy(
+      asc(tutorPayoutAllocation.scheduledStartAt),
+      asc(tutorPayoutAllocation.id),
+    );
+}
+
+async function listTutorSessionFeeEventKeysByBookings(
+  conn: DbOrTx,
+  bookingIds: string[],
+): Promise<string[]> {
+  if (bookingIds.length === 0) return [];
+
+  const rows = await conn
+    .select({ eventKey: tutorSessionFee.eventKey })
+    .from(tutorSessionFee)
+    .where(inArray(tutorSessionFee.bookingId, bookingIds));
+  return rows.map((row) => row.eventKey);
+}
+
 async function findLatestPaidTutorPayout(conn: DbOrTx, tutorId: string) {
   const [row] = await conn
     .select({ ...getTableColumns(tutorPayout) })
@@ -1220,6 +1312,41 @@ async function insertTutorPayout(
 ) {
   const [row] = await conn.insert(tutorPayout).values(input).returning();
   return row!;
+}
+
+async function insertTutorSessionFee(
+  conn: DbOrTx,
+  input: typeof tutorSessionFee.$inferInsert,
+) {
+  const [inserted] = await conn
+    .insert(tutorSessionFee)
+    .values(input)
+    .onConflictDoNothing()
+    .returning();
+  if (inserted) return inserted;
+
+  const [existing] = await conn
+    .select()
+    .from(tutorSessionFee)
+    .where(eq(tutorSessionFee.eventKey, input.eventKey!))
+    .limit(1);
+  const snapshotMatches =
+    JSON.stringify(existing?.priceSnapshot ?? null) ===
+    JSON.stringify(input.priceSnapshot ?? null);
+  if (
+    !existing ||
+    existing.bookingId !== input.bookingId ||
+    existing.bookingSessionId !== (input.bookingSessionId ?? null) ||
+    existing.tutorId !== input.tutorId ||
+    existing.grossHonorariumIdr !== input.grossHonorariumIdr ||
+    existing.scheduledStartAt.getTime() !== input.scheduledStartAt!.getTime() ||
+    !snapshotMatches
+  ) {
+    throw new Error(
+      "Tutor session fee event conflicts with an existing source",
+    );
+  }
+  return existing;
 }
 
 /**
@@ -1573,10 +1700,16 @@ export function createBookingRepo(db: DbType) {
     decrementBookingConfirmedHeadcount,
     cancelAllSessions,
     findCompletedBookingsByTutor,
+    findTutorSessionFeesByTutor,
+    listTutorPayoutAllocatedSourceKeys,
+    insertTutorPayoutAllocations,
+    listTutorPayoutAllocationsByPayoutId,
+    listTutorSessionFeeEventKeysByBookings,
     findLatestPaidTutorPayout,
     listTutorPayoutProfiles,
     listTutorPayoutRecords,
     insertTutorPayout,
+    insertTutorSessionFee,
   };
 }
 

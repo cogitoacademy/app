@@ -10,7 +10,10 @@ import {
 } from "date-fns";
 
 import type { CalendarCompetition } from "./calendar-types";
-import { competitionPaletteClassName } from "@/lib/competition-colors";
+import {
+  competitionPaletteClassName,
+  competitionPaletteSubtleClassName,
+} from "@/lib/competition-colors";
 
 export const EVENT_HEIGHT = 24;
 export const EVENT_GAP = 4;
@@ -44,7 +47,7 @@ export function getEducationLevelLabel(level: string) {
 export function getCategoryEventClass(
   category?: CalendarCompetition["categories"][number],
 ) {
-  if (category?.parentColors) return competitionPaletteClassName;
+  if (category?.parentColors) return competitionPaletteSubtleClassName;
   return "bg-accent/30 text-foreground border-border";
 }
 

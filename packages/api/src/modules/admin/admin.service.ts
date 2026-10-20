@@ -518,6 +518,13 @@ export function createAdminService(deps: {
     return payout.getPendingTutorPayouts(input.tutorId);
   }
 
+  async function getTutorPayoutAllocations(input: { payoutId: string }) {
+    if (!payout.getTutorPayoutAllocations) {
+      throw new TutorPayoutNotAvailableError(input.payoutId);
+    }
+    return payout.getTutorPayoutAllocations(input.payoutId);
+  }
+
   async function markTutorPayoutPaid(
     adminId: string,
     input: { tutorId: string },
@@ -687,6 +694,7 @@ export function createAdminService(deps: {
     getTutorPayouts,
     getTutorPayoutReport,
     getPendingTutorPayouts,
+    getTutorPayoutAllocations,
     markTutorPayoutPaid,
     getEconomySettings,
     getV3EconomySettings,

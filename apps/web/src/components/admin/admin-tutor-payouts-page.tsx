@@ -62,6 +62,9 @@ const QUICK_RANGE_DAYS = [7, 30, 90] as const;
 type PayoutReportRow = Awaited<
   ReturnType<typeof client.admin.getTutorPayoutReport>
 >[number];
+type PayoutSessionItem = NonNullable<
+  Awaited<ReturnType<typeof client.admin.getPendingTutorPayouts>>["items"]
+>[number];
 type StatusFilter = "pending" | "paid" | "all";
 type SortOption = "needs_payment" | "amount_desc" | "name" | "latest";
 const EMPTY_PAYOUT_ROWS: PayoutReportRow[] = [];
@@ -76,6 +79,17 @@ function formatDate(value: Date | string | null) {
   if (Number.isNaN(date.getTime())) return "—";
   return new Intl.DateTimeFormat("en-GB", {
     dateStyle: "medium",
+    timeZone: "Asia/Jakarta",
+  }).format(date);
+}
+
+function formatDateTime(value: Date | string | null) {
+  if (!value) return "—";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
     timeZone: "Asia/Jakarta",
   }).format(date);
 }
@@ -125,6 +139,17 @@ function statusLabel(row: PayoutReportRow) {
 
 function statusVariant(row: PayoutReportRow) {
   return row.status === "paid" ? "success" : "warning";
+}
+
+function payoutSourceLabel(sourceType: PayoutSessionItem["sourceType"]) {
+  return sourceType === "fee_event" ? "Recorded fee" : "Legacy snapshot";
+}
+
+function payoutSnapshotLabel(snapshot: PayoutSessionItem["priceSnapshot"]) {
+  if (!snapshot) return "Price snapshot unavailable";
+  return snapshot.engine === "v3"
+    ? `V3 · ${snapshot.collectedMarks} Marks`
+    : `Legacy · ${snapshot.tutorShare ?? 0} tutor Marks`;
 }
 
 function payoutDateSortValue(value: Date | string | null) {
@@ -259,6 +284,27 @@ export function AdminTutorPayoutsPage() {
     }),
     enabled: selectedRow?.status === "pending" && Boolean(selectedRow.tutorId),
   });
+  const selectedPaidAllocationsQuery = useQuery({
+    ...orpc.admin.getTutorPayoutAllocations.queryOptions({
+      input: {
+        payoutId: selectedRow?.status === "paid" ? selectedRow.id : "",
+      },
+    }),
+    enabled: selectedRow?.status === "paid",
+  });
+
+  const selectedPayoutItems =
+    selectedRow?.status === "pending"
+      ? (selectedPendingQuery.data?.items ?? [])
+      : (selectedPaidAllocationsQuery.data?.items ?? []);
+  const selectedPayoutItemsLoading =
+    selectedRow?.status === "pending"
+      ? selectedPendingQuery.isPending
+      : selectedPaidAllocationsQuery.isPending;
+  const selectedPayoutItemsError =
+    selectedRow?.status === "pending"
+      ? selectedPendingQuery.isError
+      : selectedPaidAllocationsQuery.isError;
 
   const markPayoutMutation = useMutation(
     orpc.admin.markTutorPayoutPaid.mutationOptions({
@@ -710,6 +756,92 @@ export function AdminTutorPayoutsPage() {
                       </Text>
                     </div>
                   </div>
+                </section>
+
+                <section className="rounded-lg border border-item-border p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <Text className="text-xs font-semibold uppercase tracking-wide text-dimmed">
+                      Session breakdown
+                    </Text>
+                    {selectedPayoutItems.length > 0 ? (
+                      <Badge variant="secondary">
+                        {selectedPayoutItems.length} session(s)
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <Text className="mt-1 text-sm text-muted">
+                    {selectedRow.status === "paid"
+                      ? "Recorded sources for this manual transfer."
+                      : "Sessions included in the current unpaid balance."}
+                  </Text>
+                  {selectedPayoutItemsLoading ? (
+                    <Text className="mt-3 text-sm text-muted">
+                      Loading session breakdown…
+                    </Text>
+                  ) : selectedPayoutItemsError ? (
+                    <Text className="mt-3 text-sm text-danger">
+                      Session breakdown could not be loaded. Refresh and try
+                      again.
+                    </Text>
+                  ) : selectedRow.status === "paid" &&
+                    selectedPaidAllocationsQuery.data &&
+                    !selectedPaidAllocationsQuery.data.detailsAvailable ? (
+                    <Text className="mt-3 text-sm text-muted">
+                      This historical transfer predates session-level records;
+                      its original session breakdown is unavailable.
+                    </Text>
+                  ) : selectedPayoutItems.length === 0 ? (
+                    <Text className="mt-3 text-sm text-muted">
+                      No session details are available for this payout.
+                    </Text>
+                  ) : (
+                    <div className="mt-3 divide-y divide-item-border">
+                      {selectedPayoutItems.map((item) => (
+                        <div
+                          key={item.sourceKey}
+                          className="flex min-w-0 flex-col gap-2 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
+                        >
+                          <div className="min-w-0 space-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Text className="font-medium">
+                                {item.bookingType === "series"
+                                  ? "Series session"
+                                  : `${item.bookingType} session`}
+                              </Text>
+                              <Badge
+                                variant={
+                                  item.sourceType === "fee_event"
+                                    ? "info"
+                                    : "secondary"
+                                }
+                              >
+                                {payoutSourceLabel(item.sourceType)}
+                              </Badge>
+                            </div>
+                            <Text className="text-sm text-muted">
+                              Session {formatDateTime(item.scheduledStartAt)} ·{" "}
+                              {item.deliveryStatus === "no_show"
+                                ? "No-show"
+                                : "Completed"}
+                            </Text>
+                            <Text className="text-xs text-dimmed">
+                              Earned {formatDateTime(item.earnedAt)} · Booking #
+                              {item.bookingNumber}
+                            </Text>
+                            <Text className="break-all font-mono text-xs text-dimmed">
+                              {item.bookingSessionId ?? item.bookingId}
+                            </Text>
+                            <Text className="text-xs text-dimmed">
+                              {payoutSnapshotLabel(item.priceSnapshot)}
+                            </Text>
+                          </div>
+                          <Text className="shrink-0 font-semibold">
+                            {formatIdr(item.grossHonorariumIdr)}
+                          </Text>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </section>
 
                 <section className="rounded-lg border border-item-border p-4">

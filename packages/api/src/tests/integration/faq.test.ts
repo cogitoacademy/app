@@ -2,10 +2,11 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createRouterClient } from "@orpc/server";
 import { db } from "@cogito-app/db";
 import { faqEntry } from "@cogito-app/db/schema";
-import { inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import type { Context } from "../../context";
 import { createFaqModule, createFaqRouter } from "../../modules/faq";
+import type { FaqRichTextDocument } from "@cogito-app/db/schema/faq";
 
 function assertDedicatedTestDatabase() {
   let parsedUrl: URL | undefined;
@@ -29,6 +30,27 @@ function assertDedicatedTestDatabase() {
   }
 }
 
+function richParagraph(text: string): FaqRichTextDocument {
+  return {
+    type: "doc",
+    blocks: [{ type: "paragraph", content: [{ text }] }],
+  };
+}
+
+function richAnswer(text: string): FaqRichTextDocument {
+  return {
+    type: "doc",
+    blocks: [
+      { type: "paragraph", content: [{ text }] },
+      {
+        type: "list",
+        style: "unordered",
+        items: [[{ text: "First item" }], [{ text: "Second item" }]],
+      },
+    ],
+  };
+}
+
 function createClients() {
   const module = createFaqModule({ db });
   const router = createFaqRouter(module.handler);
@@ -50,6 +72,7 @@ function context(role: "admin" | null): Context {
 
 describe("FAQ Postgres integration", () => {
   const fixtureIds: string[] = [];
+  let originalLandingSelection: { id: string }[] = [];
   let safeToCleanup = false;
   let clients: ReturnType<typeof createClients>;
 
@@ -60,80 +83,94 @@ describe("FAQ Postgres integration", () => {
   });
 
   afterAll(async () => {
-    if (safeToCleanup && fixtureIds.length > 0) {
-      assertDedicatedTestDatabase();
+    if (!safeToCleanup) return;
+    assertDedicatedTestDatabase();
+    if (fixtureIds.length > 0) {
       await db.delete(faqEntry).where(inArray(faqEntry.id, fixtureIds));
+    }
+    if (originalLandingSelection.length > 0) {
+      await db
+        .update(faqEntry)
+        .set({ showOnLanding: true })
+        .where(
+          inArray(
+            faqEntry.id,
+            originalLandingSelection.map(({ id }) => id),
+          ),
+        );
     }
   });
 
-  test("saves are visible on request-time reads, ordered by surface and locale", async () => {
+  test("keeps public response compatible and orders by localized question", async () => {
     const later = await clients.adminClient.adminFaq.create({
-      questionEn: "Later question",
-      questionId: "Pertanyaan berikutnya",
-      answerEn: [{ type: "paragraph", text: "English answer." }],
-      answerId: [{ type: "paragraph", text: "Jawaban Indonesia." }],
-      sortOrder: 20,
+      questionEnRich: richParagraph("Later question"),
+      questionIdRich: richParagraph("Pertanyaan berikutnya"),
+      answerEnRich: richParagraph("English answer."),
+      answerIdRich: richParagraph("Jawaban Indonesia."),
       isActive: true,
       showOnLanding: false,
     });
     fixtureIds.push(later.id);
     const landing = await clients.adminClient.adminFaq.create({
-      questionEn: "Landing question",
-      answerEn: [
-        { type: "paragraph", text: "First paragraph." },
-        { type: "list", style: "unordered", items: ["First", "Second"] },
-      ],
-      sortOrder: 10,
+      questionEnRich: richParagraph("Landing question"),
+      answerEnRich: richAnswer("First paragraph."),
       isActive: true,
       showOnLanding: true,
     });
     fixtureIds.push(landing.id);
     const inactive = await clients.adminClient.adminFaq.create({
-      questionEn: "Inactive question",
-      answerEn: [{ type: "paragraph", text: "Hidden answer." }],
-      sortOrder: 0,
+      questionEnRich: richParagraph("Inactive question"),
+      answerEnRich: richParagraph("Hidden answer."),
       isActive: false,
       showOnLanding: true,
     });
     fixtureIds.push(inactive.id);
 
+    const fullFaqs = await clients.publicClient.publicContent.faq.list({
+      locale: "en",
+      surface: "full",
+    });
     expect(
-      (
-        await clients.publicClient.publicContent.faq.list({
-          locale: "en",
-          surface: "full",
-        })
-      ).map((entry) => entry.id),
+      fullFaqs
+        .map((entry) => entry.id)
+        .filter((id) => id === landing.id || id === later.id),
     ).toEqual([landing.id, later.id]);
-    expect(
-      await clients.publicClient.publicContent.faq.list({
-        locale: "id",
-        surface: "landing",
-      }),
-    ).toEqual([
-      {
-        id: landing.id,
-        question: "Landing question",
-        answer: [
-          { type: "paragraph", text: "First paragraph." },
-          { type: "list", style: "unordered", items: ["First", "Second"] },
-        ],
-        sortOrder: 10,
-      },
-    ]);
+
+    const landingFaqs = await clients.publicClient.publicContent.faq.list({
+      locale: "id",
+      surface: "landing",
+    });
+    const landingIndex = landingFaqs.findIndex(
+      (entry) => entry.id === landing.id,
+    );
+    expect(landingFaqs[landingIndex]).toEqual({
+      id: landing.id,
+      question: "Landing question",
+      answer: [
+        { type: "paragraph", text: "First paragraph." },
+        {
+          type: "list",
+          style: "unordered",
+          items: ["First item", "Second item"],
+        },
+      ],
+      questionRich: richParagraph("Landing question"),
+      answerRich: richAnswer("First paragraph."),
+      sortOrder: landingIndex,
+    });
 
     const saved = await clients.adminClient.adminFaq.update({
       id: later.id,
       expectedVersion: later.version,
-      questionEn: "Updated question",
-      questionId: "Pertanyaan terbaru",
-      answerEn: [{ type: "paragraph", text: "Updated answer." }],
-      answerId: null,
-      sortOrder: 5,
+      questionEnRich: richParagraph("Updated question"),
+      questionIdRich: richParagraph("Pertanyaan terbaru"),
+      answerEnRich: richParagraph("Updated answer."),
+      answerIdRich: null,
       isActive: true,
       showOnLanding: true,
     });
     expect(saved.version).toBe(later.version + 1);
+    expect(saved.modifiedAt).not.toBe(later.modifiedAt);
     expect(
       await clients.publicClient.publicContent.faq.list({
         locale: "id",
@@ -141,28 +178,35 @@ describe("FAQ Postgres integration", () => {
       }),
     ).toEqual([
       {
-        id: later.id,
-        question: "Pertanyaan terbaru",
-        answer: [{ type: "paragraph", text: "Updated answer." }],
-        sortOrder: 5,
-      },
-      {
         id: landing.id,
         question: "Landing question",
         answer: [
           { type: "paragraph", text: "First paragraph." },
-          { type: "list", style: "unordered", items: ["First", "Second"] },
+          {
+            type: "list",
+            style: "unordered",
+            items: ["First item", "Second item"],
+          },
         ],
-        sortOrder: 10,
+        questionRich: richParagraph("Landing question"),
+        answerRich: richAnswer("First paragraph."),
+        sortOrder: 0,
+      },
+      {
+        id: later.id,
+        question: "Pertanyaan terbaru",
+        answer: [{ type: "paragraph", text: "Updated answer." }],
+        questionRich: richParagraph("Pertanyaan terbaru"),
+        answerRich: richParagraph("Updated answer."),
+        sortOrder: 1,
       },
     ]);
     await expect(
       clients.adminClient.adminFaq.update({
         id: later.id,
         expectedVersion: later.version,
-        questionEn: "Stale question",
-        answerEn: [{ type: "paragraph", text: "Stale answer." }],
-        sortOrder: 1,
+        questionEnRich: richParagraph("Stale question"),
+        answerEnRich: richParagraph("Stale answer."),
         isActive: true,
         showOnLanding: true,
       }),
@@ -171,15 +215,15 @@ describe("FAQ Postgres integration", () => {
     const deactivated = await clients.adminClient.adminFaq.update({
       id: later.id,
       expectedVersion: saved.version,
-      questionEn: saved.questionEn,
-      questionId: saved.questionId ?? undefined,
-      answerEn: saved.answerEn,
-      answerId: saved.answerId,
-      sortOrder: saved.sortOrder,
+      questionEnRich: saved.questionEnRich,
+      questionIdRich: saved.questionIdRich,
+      answerEnRich: saved.answerEnRich,
+      answerIdRich: saved.answerIdRich,
       isActive: false,
       showOnLanding: true,
     });
     expect(deactivated.isActive).toBe(false);
+    expect(deactivated.showOnLanding).toBe(false);
     expect(
       (
         await clients.publicClient.publicContent.faq.list({
@@ -196,5 +240,65 @@ describe("FAQ Postgres integration", () => {
         })
       ).map((entry) => entry.id),
     ).toEqual([landing.id]);
+  });
+
+  test("enforces the six-active-entry landing selection cap", async () => {
+    const selected = await db
+      .select({ id: faqEntry.id })
+      .from(faqEntry)
+      .where(
+        and(eq(faqEntry.isActive, true), eq(faqEntry.showOnLanding, true)),
+      );
+    originalLandingSelection = selected;
+    if (selected.length > 0) {
+      await db
+        .update(faqEntry)
+        .set({ showOnLanding: false })
+        .where(
+          inArray(
+            faqEntry.id,
+            selected.map(({ id }) => id),
+          ),
+        );
+    }
+
+    const entries = [];
+    for (let index = 0; index < 6; index += 1) {
+      const entry = await clients.adminClient.adminFaq.create({
+        questionEnRich: richParagraph(`Landing FAQ ${index}`),
+        answerEnRich: richParagraph("Answer."),
+        isActive: true,
+        showOnLanding: true,
+      });
+      fixtureIds.push(entry.id);
+      entries.push(entry);
+    }
+
+    await expect(
+      clients.adminClient.adminFaq.create({
+        questionEnRich: richParagraph("Seventh landing FAQ"),
+        answerEnRich: richParagraph("Answer."),
+        isActive: true,
+        showOnLanding: true,
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+    const unselected = await clients.adminClient.adminFaq.update({
+      id: entries[0]!.id,
+      expectedVersion: entries[0]!.version,
+      questionEnRich: entries[0]!.questionEnRich,
+      answerEnRich: entries[0]!.answerEnRich,
+      isActive: true,
+      showOnLanding: false,
+    });
+    const seventh = await clients.adminClient.adminFaq.create({
+      questionEnRich: richParagraph("Seventh landing FAQ"),
+      answerEnRich: richParagraph("Answer."),
+      isActive: true,
+      showOnLanding: true,
+    });
+    fixtureIds.push(seventh.id);
+    expect(unselected.showOnLanding).toBe(false);
+    expect(seventh.showOnLanding).toBe(true);
   });
 });

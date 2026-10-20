@@ -9,6 +9,7 @@ import {
   availabilitySlot,
   ledgerEntry,
   notification,
+  tutorSessionFee,
 } from "@cogito-app/db/schema";
 
 import {
@@ -229,6 +230,19 @@ describe("Booking solo flow", () => {
       bookingId,
     });
     expect(updated.currentState).toBe("completed");
+
+    const [fee] = await db
+      .select()
+      .from(tutorSessionFee)
+      .where(eq(tutorSessionFee.bookingId, bookingId));
+    expect(fee).toMatchObject({
+      bookingId,
+      bookingSessionId: null,
+      tutorId,
+      eventKey: `tutor-session-fee:booking:${bookingId}`,
+    });
+    expect(fee!.grossHonorariumIdr).toBeGreaterThan(0);
+    expect(fee!.priceSnapshot).not.toBeNull();
   });
 
   test("Marks deducted from wallet", async () => {
@@ -349,6 +363,11 @@ describe("Booking cancel flow", () => {
       cancellationReason: "Changed mind",
     });
     expect(updated.currentState).toBe("cancelled");
+    const fees = await db
+      .select()
+      .from(tutorSessionFee)
+      .where(eq(tutorSessionFee.bookingId, bookingId));
+    expect(fees).toHaveLength(0);
 
     const w = await studentClient.wallet.get({});
     expect(w.heldBalance).toBe(0);

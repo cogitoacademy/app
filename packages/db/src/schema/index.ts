@@ -17,5 +17,8 @@ export * from "./economy-config";
 export * from "./economy-v3-revision";
 export * from "./economy-v3-activation";
 export * from "./tutor-payout";
+export * from "./tutor-session-fee";
+export * from "./tutor-payout-allocation";
 export * from "./knowledge-bank-access";
 export * from "./faq";
+export * from "./academy-class";

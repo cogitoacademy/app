@@ -72,6 +72,41 @@ Changed legacy `baseRatesIdr` or `prices` updates are rejected, unchanged stale
 values are ignored, and admin edit approval discards queued legacy base rates.
 These projections do not change saved booking snapshots.
 
+## Tutor earned fees and manual payout allocations (2026-10-19)
+
+`booking/tutor-session-fee.ts` builds stable source keys for immutable earned-fee
+facts. The `tutor_session_fee` row records the tutor, booking/session identity,
+scheduled and earned timestamps, gross IDR amount, and pinned price snapshot.
+Payout reports use that row when present and retain the legacy booking/session
+snapshot adapter only for sources without a fee event.
+
+`tutor_payout_allocation` records one immutable source line per session included
+in a newly recorded manual tutor bank transfer. It snapshots source type,
+booking/session IDs and type, delivery status, timestamps, gross IDR, and price
+snapshot. `sourceKey` is globally unique across payout batches (and fee-event IDs
+are unique when present), so an earning cannot be allocated twice. The payout
+header and all source lines are inserted in the same transaction; the line total
+must equal the header gross amount. Pending admin details show the sources that
+would be paid, while paid details read the saved allocations.
+
+Pre-allocation paid batches are not backfilled: their stored aggregate and
+cutoff do not prove which individual sessions were included. Their detail API
+returns `detailsAvailable: false`. The owner confirmed that the V3 app is not
+in use and historical per-session reconciliation is not required for this
+release; current fee events are authoritative for new V3 completions. No rows
+were deleted or production data accessed. Do not fabricate allocation rows from
+the current series state; review any later-discovered legacy data before acting.
+
+## V3 class/session draft foundation (2026-10-19)
+
+`academy-class` owns the admin-only draft boundary. Migration `0061_academy_class_drafts.sql` adds `academy_class` and `academy_class_session`; session capacity, tutor, mode, room, dates, and tutor-fee snapshot are session-level. Class rows retain localized metadata, active competition identity, cohort minimum/check date and plan-rate defaults, masterclass seat-rate default, state, postponement count, and optimistic version.
+
+`admin.listAcademyClasses`, `admin.getAcademyClass`, and `admin.saveAcademyClassDraft` expose the current slice. Save creates or version-checks a draft and requires an audit reason. Audit actions are `academy_class.draft_created` and `academy_class.draft_updated`; snapshots include class/session terms but exclude tutor account data. Existing session IDs survive draft edits and sequence changes. Only draft classes are editable.
+
+Server validation requires an active competition (including an active parent for a specialization), a published tutor profile supporting the mode and capacity, an active managed room with sufficient capacity for in-person sessions, valid non-overlapping session times, English cohort curriculum, and a minimum-check date before the first cohort session. Masterclasses contain exactly one session. Approved draft defaults are cohort 20/22/25 Marks for full/half/single sessions and Rp400,000 tutor fee per session; masterclass 5 Marks and Rp300,000 tutor fee. Admin can edit draft values.
+
+Drafts are not public, do not reserve rooms, and do not check overlap against existing room bookings or other classes; those checks belong at publication. The admin editor uploads PNG/JPEG/WebP/GIF covers through the existing protected upload flow (max 5 MB) and saves the returned key on the draft; approved M01 cover/curriculum assets remain pending. Publish/Meet retry, notifications, student class views/enrollment, report/expiry settlement, and public website projection remain open. This is not a V3 activation or release checkpoint.
+
 ## V3 report input contract (2026-10-18)
 
 `booking/feedback-rules.ts` is shared by input schema and English completion UI.
@@ -483,18 +518,20 @@ The DTO exposes only `id` (tutor profile ID), `name`, `profileImageUrl`, `shortB
 
 ## FAQ Module
 
-**Purpose:** Manage bilingual FAQ content in the app and provide request-time public projections for the marketing website without exposing admin fields.
+**Purpose:** Manage bilingual FAQ content in the app and provide backward-compatible, request-time public projections with localized rich documents while keeping admin fields private.
 
 **Files:**
 
-- `faq.types.ts` — strict locale/surface inputs and paragraph/list answer block validation
-- `faq.repo.ts` — ordered admin reads, active public reads, create, and version-checked update
-- `faq.service.ts` — English fallback for each missing Indonesian question/answer field and strict admin/public DTO mapping
+- `faq.types.ts` — strict rich-document inputs, public/admin DTOs, and the six-entry landing limit
+- `faq-rich-text.ts` — rich-document validation, safe-link allowlist, and legacy plain-text/list projections
+- `faq.repo.ts` — alphabetized admin/public reads, create, version-checked update, and serialized landing-selection writes
+- `faq.service.ts` — locale fallback/sorting and strict admin/public DTO mapping
 - `faq.handler.ts` and `faq.router.ts` — anonymous `publicContent.faq.list` and admin-only `adminFaq.list/create/update` RPC procedures
-- `packages/db/src/schema/faq.ts` and migration `0058_faq_entries.sql` — localized fields, JSON answer blocks, visibility/order, and optimistic version
-- `apps/web/src/components/admin/faq-page.tsx` and `/admin-faq` — English-chrome Selia editor with optional Indonesian copy
+- `packages/db/src/schema/faq.ts`, migration `0058_faq_entries.sql`, and migration `0059_faq_rich_text.sql` — localized legacy fields, rich JSONB documents, visibility, and optimistic version
+- `apps/web/src/components/admin/faq-page.tsx`, `faq-rich-text-editor.tsx`, and `/admin-faq` — admin-only Selia editor with optional Indonesian fields, numbering, and modified dates
+- `apps/web/src/components/admin/faq-read-only-page.tsx`, `/faq`, and `packages/ui/components/selia/accordion.tsx` — authenticated student/tutor/admin read-only FAQ view using the public DTO and Selia accordion
 
-English question and answer are required. Answers are stored as plain paragraph/list blocks and rendered as text; raw HTML is not accepted. The landing projection includes active rows marked `showOnLanding`; full FAQ includes every active row. Admin updates use `expectedVersion`; deactivation retains a row for editing and hides it from public reads. The separate marketing site fetches both surfaces server-side with no-store caching and strict response validation; it keeps localized empty and API-error states distinct and does not use Sanity/legacy fallback. Migration 0058 has been applied only to local `cogito-test`; it has not been applied to development or production.
+English question and answer documents are required; Indonesian documents are optional and fall back independently to English. Rich documents support paragraphs, bold/italic text, safe links (`http:`, `https:`, `mailto:`, same-origin paths, and anchors), and ordered/unordered lists. Raw HTML is rejected. Migration 0059 backfills the rich JSONB columns while keeping the legacy question/answer columns for existing consumers. Public entries retain `{ id, question, answer, sortOrder }` and add locale-selected `questionRich` and `answerRich`; the marketing adapter accepts their absence from older APIs and falls back to legacy rendering. Public entries are alphabetized by the displayed localized question. Admin entries are alphabetized by English question and include `modifiedAt`. The landing projection includes active rows marked `showOnLanding`; create/update serialize selection changes with a transaction advisory lock and reject more than six active selections. Deactivating an entry clears its landing selection and hides it publicly while retaining it for editing. The marketing site fetches both surfaces server-side with no-store caching, requires the response `json` field, accepts omitted or array-valued `meta`, and validates rich documents and safe links; question links remain non-interactive inside button triggers, and FAQ JSON-LD continues to use the plain projection. Migrations 0058/0059 are applied to local `cogito-test`; 0059 is also applied to local development `cogito-app`. Shared/production migration remains a release operation.
 
 ## Content Module
 
@@ -892,8 +929,8 @@ The Participants fieldset owns the derived Solo/Group badge; summaries represent
 - `tutorAccept(bookingId, tutorId)` — Tutor accepts booking; attempts meeting creation for online bookings and schedules on success, while a provider failure leaves the booking `CONFIRMED` for scheduler retry; sets room approval for offline. **F6:** whenever meeting creation fails (provider throw or `status === "failed"`), `finalizeMeetingSchedule` bumps `deadlineAt` to `scheduledEndAt + 24h` so the 5-minute retry window is respected — the old tutor-review `now+12h` deadline can never expire the booking (release holds) or no-show the session while a meeting retry is pending. The proposer notification distinguishes `scheduled` from `confirmed`/meeting-setup attention, so a provider failure is not presented as a scheduled session. The booking-detail UI confirms the scheduled date/time, modality, and attendance before invoking this method; cancel/complete actions use the same in-app confirmation pattern.
 - `tutorDecline(bookingId, tutorId, reason)` — Requires a non-blank tutor reason, declines the request, and releases all holds
 - `tutorSetMeetingLink(bookingId, tutorId, url)` — Assigned tutor adds or replaces a manual URL for an online `CONFIRMED`/`SCHEDULED` booking when automatic meeting setup is unavailable; updates the active meeting row, notifies confirmed participants, and records `tutor_set_meeting_link`
-- `completeSession(bookingId, tutorId, sessionId?, feedback)` — Marks a session complete; deducts held marks (sessionId for series children). Requires `feedback { discussion[], strengths[], improvements[] }` (1–30 bullets each, 1–1000 chars, HTML-escaped); saves `session_completion_feedback` atomically; throws `BOOKING_COMPLETION_FEEDBACK_REQUIRED` when missing/empty
-- `listCompletionFeedback(bookingId, userId, userRole?)` — Lists completion feedback for student/tutor/admin payout review (admin bypasses access check)
+- `completeSession(bookingId, tutorId, sessionId?, feedback)` — Marks a session complete; deducts held marks (sessionId for series children). Requires `feedback { discussion[], strengths[], improvements[] }` (1–30 bullets each, 1–1000 chars, HTML-escaped); saves `session_completion_feedback` and appends one `tutor_session_fee` event in the same transaction. Fee identity is the booking for solo/group and the child session for series; the event pins the tutor, delivery times, price snapshot, and gross IDR honorarium. Throws `BOOKING_COMPLETION_FEEDBACK_REQUIRED` when missing/empty
+- `listCompletionFeedback(bookingId, userId, userRole?)` — Lists completion feedback for student/tutor/admin payout review (admin bypasses access check). A report is accepted only once per delivered booking/session; series no-show is rejected if a report already exists, preventing a no-show from bypassing completion/report fee gating.
 - `cancelSession(userId, sessionId)` — Student cancels an individual series session only before that session starts; pre-H2 releases its hold, a pre-start post-H2 cancellation forfeits it, and at/after start the call throws `BOOKING_CANCELLATION_DEADLINE_PASSED`.
 - `proposeReschedule(actorId, actorRole, bookingId, sessionId, start, reason)` — Shared service used by the student-proposer and tutor RPC routes; requires a non-blank reason and proposes a fixed 90-minute replacement for one session
 - `acceptReschedule(actorId, bookingId, proposalId?)` / `rejectReschedule(...)` — Records a required tutor/student vote against the active, unexpired proposal under a booking advisory lock; `proposalId` prevents stale UI actions from deciding a superseded proposal. Final acceptance additionally locks the tutor and rechecks booking overlap, target-series ownership/state, and sibling-session overlap before applying the schedule. Only unanimous acceptance applies the schedule, then the booking returns to its pre-proposal state; any rejection keeps the old schedule and also returns to that state. For booking-level offline proposals, the confirmed room assignment is synchronized with the new time on acceptance and restored to the original time on rejection/expiry. A missing or conflicting room returns the booking to `awaiting_admin_room_approval`, and the rollback path uses `roomPort.resyncRoomBookingToSchedule` so the room never stays blocked for the wrong window.
@@ -902,7 +939,7 @@ The Participants fieldset owns the derived Solo/Group badge; summaries represent
 - `markTutorAttendance(bookingId, tutorId, attendance)` — Marks tutor present/late; allowed only within `[scheduledStartAt ± 15 min]` (LATENESS_TOLERANCE_MS). Marking suppresses the lateness flag — unmarked sessions are surfaced to the admin queue (`tutor_lateness_pending`), never auto-cancelled. **F8:** the attendance row is inserted with `role='tutor'` and `confirmationState=confirmed`; `findConfirmedParticipants` excludes `role='tutor'` so the tutor row never inflates group repricing headcounts, hold recomputation, or no-show forfeit math
 - `markParticipantNoShow(bookingId, tutorId, participantUserId, sessionId?)` — Marks a participant as no-show 15 minutes after the session starts (U5/TC-30); a series `sessionId` is first required to belong to `bookingId`, preventing cross-booking wallet/attendance mutation. It forfeits the target's (per-session) hold and notifies them. Solo transitions to `no_show`; group stays live with only the target's hold forfeited and `holdAmount` recomputed (C1); series sessions keep their state so other participants are unaffected
 - `listSessions(bookingId, userId)` — Lists sessions for a series booking
-- `getTutorPayouts({ tutorId, dateFrom?, dateTo? })` — Aggregates completed sessions → `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }`; new IDR bookings sum tutor honorarium snapshots and legacy bookings use a compatibility fallback. `totalMarks` reports the **split basis** (`priceSnapshot.baseline`) so the ledger columns reconcile: `totalMarks = cogitoTake + tutorPayout`. Students may be charged `actualMarksPooled ≥ baseline` due to per-student rounding (surplus ≤ headcount marks per booking); the surplus is currently unallocated — flagged for product decision (documentation only, per lead decision 2026-08-25). The pending-payout path uses explicit completion timestamps (with a migration fallback for legacy completed rows), and completion is serialized with payout cutoff creation.
+- `getTutorPayouts({ tutorId, dateFrom?, dateTo? })` — Aggregates completed sessions → `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr }`; new IDR bookings sum tutor honorarium snapshots and legacy bookings use a compatibility fallback. Payout summaries consume `tutor_session_fee` events for recorded deliveries and use legacy payout-eligible booking/session snapshots only for sources without a fee event, including explicit no-show eligibility. Stable source keys suppress duplicate counting and expose a completed series child before its parent completes. Pending summaries filter new events by `earnedAt` after the latest payout cutoff while retaining the legacy completion-time fallback. This does not allocate individual fee events to paid batches, and there is no historical fee-event backfill. `totalMarks` reports the **split basis** (`priceSnapshot.baseline`) so the ledger columns reconcile: `totalMarks = cogitoTake + tutorPayout`. Students may be charged `actualMarksPooled ≥ baseline` due to per-student rounding (surplus ≤ headcount marks per booking); the surplus is currently unallocated — flagged for product decision (documentation only, per lead decision 2026-08-25). The pending-payout path uses explicit completion timestamps (with a migration fallback for legacy completed rows), and completion is serialized with payout cutoff creation.
 - `expireBookings()` — Batch expiry job; routes to correct terminal state based on current state
 - `releaseExpiredHolds()` — Transition-or-skip (M4): transitions past-deadline bookings to their terminal target (shared `EXPIRY_TARGET` with `expireBookings`) FIRST, then releases holds (or forfeits for NO_SHOW); version conflicts / terminal / RESCHEDULE_PROPOSED bookings are skipped without touching the wallet
 - `checkTutorLateness()` — Flags scheduled bookings where the tutor never marked attendance past the 15-min lateness tolerance: keeps the booking SCHEDULED with holds intact, sets `overrideMeta.category = "tutor_lateness_pending"` (admin-queue surface), writes a `tutor_lateness_pending_review` audit record, and notifies proposer + tutor; returns `{ flagged, failed }` (no auto-cancel, no hold release). **F9:** applies to **offline and online** bookings alike — `findBookingsWithTutorLateness` has no modality filter, so an absent offline tutor is flagged too

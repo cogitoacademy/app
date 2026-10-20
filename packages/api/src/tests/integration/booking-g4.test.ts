@@ -9,6 +9,7 @@ import {
   availabilitySlot,
   bookingParticipant,
   notification,
+  tutorSessionFee,
 } from "@cogito-app/db/schema";
 
 import {
@@ -307,5 +308,17 @@ describe("G4: group repricing on headcount change", () => {
 
     const b = await i1Client.booking.get({ bookingId });
     expect(b.holdAmount).toBe(0);
+
+    const fees = await db
+      .select()
+      .from(tutorSessionFee)
+      .where(eq(tutorSessionFee.bookingId, bookingId));
+    expect(fees).toHaveLength(1);
+    expect(fees[0]).toMatchObject({
+      bookingId,
+      bookingSessionId: null,
+      tutorId,
+      eventKey: `tutor-session-fee:booking:${bookingId}`,
+    });
   });
 });

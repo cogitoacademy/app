@@ -11,5 +11,15 @@ export function createFaqModule(deps: { db: DbType }) {
 }
 
 export { createFaqRouter } from "./faq.router";
-export { faqAnswerBlockSchema, faqAnswerBlocksSchema } from "./faq.types";
+export {
+  FAQ_LANDING_MAX_ITEMS,
+  faqAnswerBlockSchema,
+  faqAnswerBlocksSchema,
+} from "./faq.types";
+export {
+  faqAnswerRichTextSchema,
+  faqQuestionRichTextSchema,
+  faqRichTextDocumentSchema,
+} from "./faq-rich-text";
 export type { FaqAnswerBlock, AdminFaqDto, PublicFaqDto } from "./faq.types";
+export type { FaqRichTextDocument } from "@cogito-app/db/schema/faq";
