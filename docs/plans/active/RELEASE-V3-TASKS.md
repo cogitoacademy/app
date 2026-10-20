@@ -9,7 +9,12 @@ Date: 19 October 2026. Status: **T00A catalog CRUD/palette and T01 dynamic draft
   20261020` stash. Dev web and API health return HTTP 200 on ports 3000/3001.
   Public-read commit `0a0ce408` fixes class-router wiring, the detail route ID
   and the repository-factory call. Web typecheck and the public DTO allowlist
-  unit test pass. Publish/enrollment and browser acceptance remain open.
+  unit test pass. Publish and its review fixes are integrated through
+  `42e8358f`/`b353cb1d`; author class browser, 9 Postgres cases / 51
+  expectations and typechecks pass. Parent room/tutor checks pass 113 cases;
+  the full API unit suite passes 2,486 cases / 5,845 expectations. Enrollment
+  and downstream class flows remain open. Migration `0063` is applied to dev
+  and class test, with parent dev hash/table readback verified.
   Settlement through `de76a5b9` is merged. Independent integration-branch checks
   pass: 375 core unit tests / 949 expectations, 7 no-show Postgres tests / 69
   expectations, and web typecheck. Those database writes target only

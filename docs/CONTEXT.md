@@ -15,7 +15,12 @@ and `/health` on port 3001, with database, Redis and scheduler checks healthy.
 Class public-read commit `0a0ce408` registers `classes.list/get`, fixes the
 detail route ID and removes the invalid argument to the repository factory.
 The web typecheck now passes, as does the public DTO allowlist unit test.
-Publishing, class enrollment and browser acceptance remain incomplete.
+Class publishing and review fixes are merged through `42e8358f`, with room
+mock compatibility in `b353cb1d`. Author verification passed the class browser
+journey, 9 Postgres cases / 51 expectations, provider units and all three app
+typechecks. Parent additionally verified 113 room/tutor unit tests and the
+entire API unit suite (2,486 tests / 5,845 expectations). Enrollment and the
+downstream class delivery/report/cancellation flows remain incomplete.
 Settlement through `de76a5b9` is merged into `f/release-v3`: session-specific
 no-show allocations, completion/cancellation serialization, admin parent-hold
 recomputation and finalization with cancelled children. Verification on the
@@ -23,8 +28,13 @@ integration branch passed 375 core unit tests (949 expectations), 7 no-show
 Postgres tests (69 expectations), and web typecheck. The database suite used
 only the guarded `cogito-test-settlement` database. Browser settlement coverage
 remains open. Heavy typecheck/browser work is serialized after Windows
-virtual-memory allocation failures; class review fixes run before the next
-signup verification pass.
+virtual-memory allocation failures. Class checks are finished; signup owns
+the next heavy verification window.
+
+Migration `0063_academy_class_meetings.sql` is applied to local development
+and the class test database. Parent verified the dev table and migration hash
+`f3c0a5888c23dc94ef487f8e4d9aca7052e338705ab34c9c62b3be207ccfb41e`
+at timestamp `1792496861907`. Existing migration history was preserved.
 
 Read-only verification now confirms both local `cogito-app` and `cogito-test`
 have the same four fee, FAQ-rich-text, payout and class-draft migration hashes
