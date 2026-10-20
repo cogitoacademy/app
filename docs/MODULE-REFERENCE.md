@@ -1,5 +1,17 @@
 # Cogito Module Reference
 
+## Academy enrollment funding schema (2026-10-21)
+
+Migration `0064` adds enrollment, installment, session allocation and top-up
+attempt records. Allocation IDs identify each session's funding; a unique
+`fundingEventKey` and a `fundingSourceReference` retain wallet-operation identity.
+Database checks enforce nonnegative balances and
+`spentMarks + releasedMarks <= fundedMarks <= rateMarks`; reserved unfunded
+allocations have zero funding/spending/release balances. A partial unique index
+prevents duplicate active student/session allocations. Atomic funding, capacity,
+expiry and completion consumers remain under implementation and require tests;
+the schema alone does not enforce those transaction workflows.
+
 ## Competition catalog ownership — implementation in progress
 
 T00A / REQ-COMP-01..07 extends the existing subject-category hierarchy with

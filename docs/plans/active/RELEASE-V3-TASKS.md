@@ -2,7 +2,26 @@
 
 Date: 19 October 2026. Status: **T00A catalog CRUD/palette and T01 dynamic draft rates are implemented with focused isolated-DB and browser evidence; the non-video T11 landing slice is in progress; customer activation and full release acceptance remain pending**. Specs: [PRD](RELEASE-V3-PRD.md), [SPEC](RELEASE-V3-SPEC.md), [decisions](../../client/RELEASE-V3-DECISIONS.md), [audit](../../client/RELEASE-V3-AUDIT.md).
 
+## Execution priority — 21 October 2026
+
+The owner prioritizes booking and core app flows over content migration. The
+three active implementation workers cover enrollment/booking (T05), signup
+proof and security (T08/AUTH-01), and tutor tax/payout (T03). Follow enrollment
+with its cancellation, completion/report, and settlement integration; serialize
+heavy database/browser/compiler checks and migration generation. Knowledge Bank
+and Competition Calendar migration (T12) is tertiary: a read-only Sanity inventory
+found 63 published competitions, 3 resources with file references, and 8 related
+categories, but no destination import or cutover has run. Resume T12 after core
+app work; this priority does not remove its release acceptance requirements.
+
 ## Integration checkpoint — 20 October 2026
+
+21 October schema update: `385fc959` integrates enrollment schema `2f9786d0`.
+Parent reviewed additive `0064`, confirmed previous snapshot tables unchanged,
+applied it to guarded local dev, and verified four tables plus its journal
+hash/timestamp. T05 service/UI/DB/browser acceptance remains in progress;
+payout idx65 generation is now allowed from this lineage. No test DB reset or
+migration was performed in this checkpoint.
 
 - Baseline `10a733cd` is now fast-forwarded into `f/release-v3`. The prior
   dirty source is retained in the named `v3 pre-integration source backup
