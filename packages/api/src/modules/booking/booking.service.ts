@@ -2203,10 +2203,12 @@ export function createBookingService(deps: {
     });
 
     const sessions = await repo.listSessionsBySeriesId(tx, bookingId);
-    const allCompleted = sessions.every(
-      (s) => s.currentState === BOOKING_STATE.COMPLETED,
+    const allSettled = sessions.every(
+      (s) =>
+        s.currentState === BOOKING_STATE.COMPLETED ||
+        s.currentState === BOOKING_STATE.CANCELLED,
     );
-    if (!allCompleted) {
+    if (!allSettled) {
       const refreshed = await repo.findBookingById(tx, bookingId);
       if (!refreshed) throw new BookingNotFoundError(bookingId);
       return refreshed;
@@ -2253,7 +2255,7 @@ export function createBookingService(deps: {
     await transition(tx, bookingId, BOOKING_STATE.COMPLETED, {
       actorId: tutorId,
       actorType: ACTOR_TYPE.TUTOR,
-      reason: "All series sessions completed",
+      reason: "All series sessions settled",
     });
 
     await notification.writeBestEffort({
@@ -2263,7 +2265,7 @@ export function createBookingService(deps: {
       category: NOTIFICATION_CATEGORY.BOOKING,
       severity: NOTIFICATION_SEVERITY.INFO,
       title: "Series completed",
-      body: "All sessions in your series are completed. Remaining holds released.",
+      body: "All sessions in your series are settled. Remaining holds released.",
       eventKey: `booking.${bookingId}.series_completed.student`,
     });
     await notification.writeBestEffort({
@@ -2273,7 +2275,7 @@ export function createBookingService(deps: {
       category: NOTIFICATION_CATEGORY.BOOKING,
       severity: NOTIFICATION_SEVERITY.INFO,
       title: "Series completed",
-      body: "All sessions in the series are completed.",
+      body: "All sessions in the series are settled.",
       eventKey: `booking.${bookingId}.series_completed.tutor`,
     });
 

@@ -97,7 +97,7 @@ the parent. No destructive/browser E2E was run during this integration
 checkpoint. The local test DB guard does not replace the separate guarded test
 database requirement for automated destructive tests.
 
-## Series no-show settlement verification (2026-10-20)
+## Series cancellation and settlement verification (2026-10-20)
 
 Run these destructive integration suites only against the retained, dedicated
 loopback `cogito-test-settlement` database (`localhost:6767`). Its current
@@ -110,24 +110,28 @@ integration command, verify the exact target:
 bun --env-file apps/server/.env.settlement.test -e "const u = new URL(Bun.env.DATABASE_URL ?? ''); if (Bun.env.NODE_ENV !== 'test' || !['localhost','127.0.0.1','[::1]'].includes(u.hostname) || u.port !== '6767' || u.pathname !== '/cogito-test-settlement') throw new Error('Settlement DB guard failed'); console.log(JSON.stringify({nodeEnv:Bun.env.NODE_ENV,host:u.hostname,port:u.port,database:u.pathname.slice(1)}));"
 bun test --timeout 30000 --env-file apps/server/.env.settlement.test packages/api/src/tests/unit/booking.service.test.ts packages/api/src/tests/unit/admin-booking.service.test.ts packages/api/src/tests/unit/booking.repo.test.ts packages/api/src/tests/unit/admin-booking.repo.test.ts
 bun test --timeout 30000 --env-file apps/server/.env.settlement.test packages/api/src/tests/integration/admin-series-cancel-u6.test.ts
-bun test --timeout 30000 --env-file apps/server/.env.settlement.test packages/api/src/tests/integration/booking-series-cancel-m4.test.ts
 bun test --timeout 30000 --env-file apps/server/.env.settlement.test packages/api/src/tests/integration/booking-series-noshow-complete.test.ts
+bun test --timeout 30000 --env-file apps/server/.env.settlement.test packages/api/src/tests/integration/booking-series-g18.test.ts
+bun test --timeout 30000 --env-file apps/server/.env.settlement.test packages/api/src/tests/integration/booking-series-cancel-m4.test.ts
 ```
 
-The 20 October review follow-up passed: service/repository unit suites **446/446**;
-settlement Postgres suite **7/7 tests, 69 expectations**; admin U6 cancellation
-**3/3 tests, 10 expectations**; student M4 cancellation **1/1 test, 4
-expectations**. The settlement suite covers final full-series holds after a
-no-show, a lock-gated cancellation/completion race, solo/group no-show
-allocation, repeated and concurrent settlement, malformed V3 honorarium
-rejection, and fee-insert rollback. Logs showed the manual meeting adapter and
-email delivery was not configured; no Google/Meet, payment, or email provider
-call was made. Browser E2E and TypeScript checks were not run for this follow-up.
+The 20 October review follow-up passed: service/repository unit suites **447/447
+tests, 1,153 expectations**; admin U6 **7/7 tests, 70 expectations**; student
+M4 **1/1 test, 4 expectations**; no-show settlement **7/7 tests, 69
+expectations**; and G18 series completion **8/8 tests, 29 expectations**. U6
+uses real admin/tutor API clients to verify solo release, forfeit, partial
+release, and group-series release followed by completion; all cases assert
+wallet/participant/booking holds and the parent terminal state. Settlement also
+covers a lock-gated cancellation/completion race, solo/group no-show allocation,
+repeated and concurrent settlement, malformed V3 honorarium rejection, and
+fee-insert rollback. Logs showed the manual meeting adapter; email delivery was
+not configured. No Google/Meet, payment, or email provider call was made.
+Browser E2E and TypeScript checks were not run for this follow-up.
 The retained test database contains only local test data and remains available
-for review. After the final settlement run its snapshot was: `booking` 7,
-`booking_session` 21, `booking_participant` 8, `ledger_entry` 16,
-`tutor_session_fee` 8, and `session_completion_feedback` 7. A later integration
-suite may reset these counts.
+for review. After the last run (M4), its snapshot was: `booking` 2,
+`booking_session` 2, `booking_participant` 2, `ledger_entry` 3,
+`tutor_session_fee` 0, and `session_completion_feedback` 0. Each integration
+suite resets this database, so rerunning any suite changes the snapshot.
 
 ## Catalog migration/acceptance gate — implementation in progress
 

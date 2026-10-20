@@ -1929,4 +1929,62 @@ describe("AdminBookingService additional guards", () => {
     expect(wallet.release).not.toHaveBeenCalled();
     expect(wallet.deduct).not.toHaveBeenCalled();
   });
+
+  test("cancelSeriesSession recomputes parent hold from confirmed participants only", async () => {
+    const repo = mockRepo({
+      findBookingById: mock(async () => ({
+        id: "b1",
+        tutorId: "tutor-1",
+        currentState: "scheduled",
+        holdAmount: 1_035,
+      })),
+      findSessionById: mock(async () => ({
+        id: "s1",
+        seriesBookingId: "b1",
+        currentState: "scheduled",
+        holdAmount: 50,
+      })),
+      findParticipantsByBookingId: mock(async () => [
+        {
+          id: "p1",
+          userId: "student-1",
+          confirmationState: "confirmed",
+          heldAmount: 100,
+        },
+        {
+          id: "p2",
+          userId: "student-2",
+          confirmationState: "reconfirmed",
+          heldAmount: 35,
+        },
+        {
+          id: "p3",
+          userId: "invitee-pending",
+          confirmationState: "pending",
+          heldAmount: 900,
+        },
+      ]),
+    });
+    const wallet = makeWalletPort();
+    const service = createAdminBookingService({
+      db: makeDb(),
+      repo,
+      auditPort: makeAuditPort(),
+      wallet: wallet as any,
+      refund: makeRefundPort(),
+    });
+
+    await service.cancelSeriesSession("admin1", {
+      sessionId: "s1",
+      marksAction: "release",
+    });
+
+    expect(repo.updateBookingHoldAmount).toHaveBeenCalledWith(
+      expect.anything(),
+      "b1",
+      50,
+    );
+    expect(wallet.getByUserId).toHaveBeenCalledTimes(2);
+    expect(repo.updateParticipantHeldAmount).toHaveBeenCalledTimes(2);
+  });
 });
