@@ -16,6 +16,13 @@ app work; this priority does not remove its release acceptance requirements.
 
 ## Integration checkpoint — 20 October 2026
 
+21 October schema update: `385fc959` integrates enrollment schema `2f9786d0`.
+Parent reviewed additive `0064`, confirmed previous snapshot tables unchanged,
+applied it to guarded local dev, and verified four tables plus its journal
+hash/timestamp. T05 service/UI/DB/browser acceptance remains in progress;
+payout idx65 generation is now allowed from this lineage. No test DB reset or
+migration was performed in this checkpoint.
+
 - Baseline `10a733cd` is now fast-forwarded into `f/release-v3`. The prior
   dirty source is retained in the named `v3 pre-integration source backup
   20261020` stash. Dev web and API health return HTTP 200 on ports 3000/3001.

@@ -1,5 +1,9 @@
 # Cogito API Reference
 
+Enrollment schema milestone (2026-10-21): migration `0064` adds storage only.
+No new enrollment procedures are registered by this milestone; existing
+`classes.list/get` remain published-class reads, not enrollment checkout APIs.
+
 ## Competition catalog CRUD — working branch (2026-10-18)
 
 T00A / REQ-COMP-01..07 implementation is in progress; verification is recorded in

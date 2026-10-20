@@ -1,5 +1,13 @@
 # Cogito App — Codebase Context
 
+## Enrollment schema checkpoint (2026-10-21)
+
+`385fc959` integrates the additive enrollment schema from `2f9786d0`.
+Migration `0064` is applied to local dev with table and journal hash readback;
+no existing snapshot table changed. Enrollment runtime/API/UI and acceptance
+tests remain in progress. Payout migration generation may follow this idx64
+lineage; this schema checkpoint does not complete T05 or T07.
+
 ## V3 integration and local migration checkpoint (2026-10-20)
 
 Feature worktrees derive from `f/release-v3`; tested work merges there, and

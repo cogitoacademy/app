@@ -1,5 +1,21 @@
 # Cogito Runbook
 
+## Enrollment dev migration (2026-10-21)
+
+Parent reviewed and integrated additive `0064_academy_class_enrollment.sql`
+(`385fc959`, source `2f9786d0`). The first runner attempt failed because the
+Docker Linux engine was unavailable. After starting Docker Desktop hidden and
+the existing dev Postgres/Redis containers, the standard `bun run db:migrate`
+from `packages/db`, with `ENV_FILE` explicitly selecting `apps/server/.env`,
+succeeded against guarded loopback port 6767, database `cogito-app`.
+No volumes were reset and no prior migration SQL/snapshot tables were changed.
+
+Readback verified all four `academy_class_enrollment*` tables and latest journal
+timestamp `1792522475956`, hash
+`a9bced856633d71b70d5bfe4f3bf4b7a78c41122aa92eeb98f3845a6f8119c8b`.
+This operation did not migrate/reset a test database or validate enrollment
+runtime behavior. Generate the next migration from snapshot/journal idx64.
+
 ## Local V3 development startup (2026-10-20)
 
 `f/release-v3` contains integrated baseline `10a733cd`. The local web app at
