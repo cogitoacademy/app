@@ -4467,6 +4467,7 @@ export function createBookingService(deps: {
       dateTo?: Date;
       dateBasis?: "scheduledStartAt" | "completedAt";
       excludeAllocatedSources?: boolean;
+      excludedSourceKeys?: ReadonlySet<string>;
       legacyCutoffAt?: Date;
     },
   ): Promise<TutorPayoutAggregate> {
@@ -4511,6 +4512,7 @@ export function createBookingService(deps: {
       >,
       grossHonorariumIdr?: number,
     ) => {
+      if (input.excludedSourceKeys?.has(source.sourceKey)) return;
       completedSessions++;
       totalMarks +=
         snap?.engine === "v3" ? snap.collectedMarks : (snap?.baseline ?? 0);
@@ -4673,22 +4675,30 @@ export function createBookingService(deps: {
     };
   }
 
-  async function getUnpaidAggregate(conn: DbOrTx, tutorId: string) {
-    const lastPaid = await repo.findLatestLegacyTutorPayoutCutoff(
-      conn,
+  async function getUnpaidAggregate(
+    conn: DbOrTx,
+    tutorId: string,
+    dateTo?: Date,
+  ) {
+    const [lastPaid, blockedSourceRows] = await Promise.all([
+      repo.findLatestLegacyTutorPayoutCutoff(conn, tutorId),
+      repo.listTutorPayoutReconciliationSourceKeys(conn, tutorId),
+    ]);
+    const aggregate = await aggregateTutorPayouts(conn, {
       tutorId,
-    );
-    return aggregateTutorPayouts(conn, {
-      tutorId,
-      dateTo: new Date(),
+      dateTo,
       dateBasis: "completedAt",
       excludeAllocatedSources: true,
-      // The historical cutoff applies only to legacy booking rows. Immutable
-      // fee events remain visible and are excluded through their allocations.
+      excludedSourceKeys: new Set(
+        blockedSourceRows.map((row) => row.sourceKey),
+      ),
+      // The historical cutoff applies only to allocationless legacy rows.
+      // Allocations and unresolved reconciliation both exclude source keys.
       legacyCutoffAt: lastPaid
         ? new Date(lastPaid.cutoffAt.getTime() + 1)
         : undefined,
     });
+    return { ...aggregate, lastPaidAt: lastPaid?.paidAt ?? null };
   }
 
   function taxRateFor(
@@ -4899,19 +4909,7 @@ export function createBookingService(deps: {
       profiles,
       5,
       async (profile) => {
-        const lastPaid = await repo.findLatestLegacyTutorPayoutCutoff(
-          db,
-          profile.tutorId,
-        );
-        const result = await aggregateTutorPayouts(db, {
-          tutorId: profile.tutorId,
-          dateTo,
-          dateBasis: "completedAt",
-          excludeAllocatedSources: true,
-          legacyCutoffAt: lastPaid
-            ? new Date(lastPaid.cutoffAt.getTime() + 1)
-            : undefined,
-        });
+        const result = await getUnpaidAggregate(db, profile.tutorId, dateTo);
         if (result.completedSessions === 0) return null;
 
         const taxStatus = tutorTaxStatus({
@@ -5057,16 +5055,8 @@ export function createBookingService(deps: {
   }
 
   async function getPendingTutorPayouts(tutorId: string) {
-    const lastPaid = await repo.findLatestLegacyTutorPayoutCutoff(db, tutorId);
-    const result = await aggregateTutorPayouts(db, {
-      tutorId,
-      dateBasis: "completedAt",
-      excludeAllocatedSources: true,
-      legacyCutoffAt: lastPaid
-        ? new Date(lastPaid.cutoffAt.getTime() + 1)
-        : undefined,
-    });
-    return { ...result, lastPaidAt: lastPaid?.paidAt ?? null };
+    const result = await getUnpaidAggregate(db, tutorId);
+    return result;
   }
 
   async function prepareTutorPayout(
@@ -5308,13 +5298,20 @@ export function createBookingService(deps: {
         tx,
         row.id,
       );
-      const coveredSessions = allocations
-        .map((item) =>
-          escapeHtml(
-            `Booking #${item.bookingNumber} · ${item.bookingType} · ${item.scheduledStartAt.toLocaleDateString("id-ID", { dateStyle: "medium", timeZone: "Asia/Jakarta" })}`,
-          ),
-        )
-        .join("; ");
+      const coveredSessions =
+        allocations.length === 0
+          ? "Legacy aggregate (session details unavailable)"
+          : allocations
+              .map((item) =>
+                escapeHtml(
+                  `Booking #${item.bookingNumber} · ${item.bookingType} · ${item.scheduledStartAt.toLocaleDateString("id-ID", { dateStyle: "medium", timeZone: "Asia/Jakarta" })}`,
+                ),
+              )
+              .join("; ");
+      const taxSnapshot =
+        row.taxRateBps === null || row.taxHonorariumIdr === null
+          ? "Tax snapshot unavailable."
+          : `Tax Rp${row.taxHonorariumIdr.toLocaleString("id-ID")} (${(row.taxRateBps / 100).toFixed(2)}%).`;
       await notification.write({
         db: tx,
         userId: row.tutorId,
@@ -5324,7 +5321,7 @@ export function createBookingService(deps: {
         body: [
           `Payout recorded for covered sessions: ${coveredSessions}.`,
           `Gross Rp${row.grossHonorariumIdr.toLocaleString("id-ID")}.`,
-          `Tax Rp${row.taxHonorariumIdr?.toLocaleString("id-ID") ?? "0"} (${((row.taxRateBps ?? 0) / 100).toFixed(2)}%).`,
+          taxSnapshot,
           `Transfer fee Rp${row.transferFeeIdr.toLocaleString("id-ID")}.`,
           `Net Rp${updated.actualAmountIdr?.toLocaleString("id-ID") ?? "0"}.`,
           `Recorded transfer date: ${paidAt.toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta" })}.`,
@@ -5604,7 +5601,7 @@ export function createBookingService(deps: {
         throw new TutorPayoutProfileIncompleteError(tutorId, ["tutorProfile"]);
       }
       const [pending, config, payoutRows] = await Promise.all([
-        getUnpaidAggregate(tx, tutorId),
+        getUnpaidAggregate(tx, tutorId, new Date()),
         readTutorTaxConfig(tx),
         repo.listTutorPayoutsByTutorId(tx, tutorId),
       ]);

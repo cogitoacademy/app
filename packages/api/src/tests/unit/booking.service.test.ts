@@ -9156,6 +9156,44 @@ describe("BookingService additional coverage paths", () => {
     });
   });
 
+  test("keeps released sources blocked while payout reconciliation is required", async () => {
+    const released = makeBooking({
+      id: "b1",
+      currentState: "completed",
+      priceSnapshot: {
+        baseline: 50,
+        cogitoTake: 10,
+        tutorShare: 40,
+        tutorHonorariumIdr: 200_000,
+      },
+    });
+    const unrelated = makeBooking({
+      id: "b2",
+      currentState: "completed",
+      priceSnapshot: {
+        baseline: 50,
+        cogitoTake: 10,
+        tutorShare: 40,
+        tutorHonorariumIdr: 300_000,
+      },
+    });
+    const { service } = createService({
+      repo: {
+        findCompletedBookingsByTutor: mock(async () => [released, unrelated]),
+        listTutorPayoutReconciliationSourceKeys: mock(async () => [
+          {
+            sourceKey: "tutor-session-fee:booking:b1",
+            payoutId: "payout-1",
+          },
+        ]),
+      },
+    });
+
+    const result = await service.getPendingTutorPayouts("tutor1");
+    expect(result.items.map((item) => item.bookingId)).toEqual(["b2"]);
+    expect(result.tutorPayoutIdr).toBe(300_000);
+  });
+
   test("returns pending payouts since the last cutoff", async () => {
     const cutoffAt = new Date("2026-08-01T00:00:00Z");
     const findCompletedBookingsByTutor = mock(async () => []);

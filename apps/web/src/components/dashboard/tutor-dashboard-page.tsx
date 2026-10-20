@@ -38,6 +38,10 @@ import {
   getBookingStateVariant,
 } from "@/components/booking/booking-ui";
 import { useNow } from "@/hooks/use-now";
+import {
+  formatPayoutCoverageLabel,
+  formatTaxRateSnapshot,
+} from "@/lib/tutor-payout-presentation";
 import { orpc } from "@/utils/orpc";
 
 function formatIdr(value: number | null | undefined) {
@@ -261,44 +265,54 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
               <div className="mt-5 border-t border-border pt-4">
                 <Text className="font-semibold">Recent payout history</Text>
                 <div className="mt-2 divide-y divide-item-border">
-                  {payoutHistory.slice(0, 3).map((row) => (
-                    <div key={row.id} className="py-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <Text className="text-sm font-medium">
-                          {payoutStatusLabel(row.status)} ·{" "}
-                          {formatPayoutDate(row.paidAt)}
+                  {payoutHistory.slice(0, 3).map((row) => {
+                    const hasSavedSessionDetails =
+                      row.items.length > 0 || row.status === "prepared";
+                    const taxSnapshotUnavailable =
+                      row.taxRateBps === null || row.taxHonorariumIdr === null;
+                    return (
+                      <div key={row.id} className="py-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <Text className="text-sm font-medium">
+                            {payoutStatusLabel(row.status)} ·{" "}
+                            {formatPayoutDate(row.paidAt)}
+                          </Text>
+                          <Text className="text-sm font-semibold">
+                            {formatIdr(
+                              row.actualAmountIdr ?? row.netHonorariumIdr,
+                            )}
+                          </Text>
+                        </div>
+                        <Text className="mt-1 text-xs text-muted">
+                          {formatPayoutCoverageLabel(
+                            row.items.length,
+                            hasSavedSessionDetails,
+                          )}{" "}
+                          · gross {formatIdr(row.grossHonorariumIdr)} · tax{" "}
+                          {taxSnapshotUnavailable
+                            ? "Tax snapshot unavailable"
+                            : `${formatTaxRateSnapshot(row.taxRateBps)} / ${formatIdr(row.taxHonorariumIdr)}`}{" "}
+                          · fee {formatIdr(row.transferFeeIdr)}
                         </Text>
-                        <Text className="text-sm font-semibold">
-                          {formatIdr(
-                            row.actualAmountIdr ?? row.netHonorariumIdr,
-                          )}
-                        </Text>
+                        {row.items.length > 0 ? (
+                          <ul
+                            aria-label="Covered payout sessions"
+                            className="mt-2 space-y-1"
+                          >
+                            {row.items.map((item) => (
+                              <li key={item.sourceKey}>
+                                <Text className="text-xs text-muted">
+                                  Booking #{item.bookingNumber} ·{" "}
+                                  {item.bookingType} ·{" "}
+                                  {formatPayoutDate(item.scheduledStartAt)}
+                                </Text>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
                       </div>
-                      <Text className="mt-1 text-xs text-muted">
-                        {row.items.length} session(s) · gross{" "}
-                        {formatIdr(row.grossHonorariumIdr)} · tax{" "}
-                        {((row.taxRateBps ?? 0) / 100).toFixed(2)}% /{" "}
-                        {formatIdr(row.taxHonorariumIdr)} · fee{" "}
-                        {formatIdr(row.transferFeeIdr)}
-                      </Text>
-                      {row.items.length > 0 ? (
-                        <ul
-                          aria-label="Covered payout sessions"
-                          className="mt-2 space-y-1"
-                        >
-                          {row.items.map((item) => (
-                            <li key={item.sourceKey}>
-                              <Text className="text-xs text-muted">
-                                Booking #{item.bookingNumber} ·{" "}
-                                {item.bookingType} ·{" "}
-                                {formatPayoutDate(item.scheduledStartAt)}
-                              </Text>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : null}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ) : null}

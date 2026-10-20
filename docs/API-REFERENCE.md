@@ -700,7 +700,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **HTTP:** `POST /rpc/admin/getTutorPayoutReport`
 - **Auth:** Admin
 - **Input:** `{ dateFrom?, dateTo? }` (ISO datetimes; both are optional)
-- **Output:** `TutorPayoutReportRow[]`; rows include payout status, covered-session count, gross, saved tax status/rate/source/withholding, transfer fee, calculated net, actual amount/reference/proof, transfer-recorded actor/time, and reconciliation fields. New paid/void rows use saved tax and bank snapshots. Legacy aggregate rows retain nullable snapshots and never fall back to current identity/bank data.
+- **Output:** `TutorPayoutReportRow[]`; rows include payout status, covered-session count, gross, saved tax status/rate/source/withholding, transfer fee, calculated net, actual amount/reference/proof, transfer-recorded actor/time, and reconciliation fields. New paid/void rows use saved tax and bank snapshots. Legacy aggregate rows retain nullable snapshots and never fall back to current identity/bank data; admin history labels absent coverage and tax snapshots as unavailable instead of showing numeric zero.
 - **Description:** Returns paid and void transfer history in the requested Asia/Jakarta date window plus each tutor's current unpaid summary. Current unpaid sessions remain visible outside the selected history window. NIK/NPWP and bank details are admin-only fields; this procedure requires the admin role.
 
 ### `admin.getPendingTutorPayouts`
@@ -708,7 +708,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Admin
 - **Input:** `{ tutorId }`
 - **Output:** `{ completedSessions, totalMarks, cogitoTake, tutorPayout, tutorPayoutIdr, items, lastPaidAt }`; each `items[]` entry includes `{ sourceKey, sourceType, tutorSessionFeeId, bookingId, bookingNumber, bookingSessionId, bookingType, deliveryStatus, scheduledStartAt, earnedAt, grossHonorariumIdr, priceSnapshot }`.
-- **Description:** Returns unpaid fee-event sources and the legacy compatibility summary. New source-based payouts are excluded through their per-session allocations; the historical cutoff applies only to pre-T03 aggregate rows. An allocationless legacy payout voided with transfer reconciliation required retains its cutoff until audited resolution, after which the prior paid legacy cutoff still applies. A prepared batch reserves its exact sources. Existing published tutors can continue teaching while tax identity is incomplete, but a new batch cannot be prepared until legal name and a 16-digit NIK are present.
+- **Description:** Returns unpaid fee-event sources and the legacy compatibility summary. New source-based payouts are excluded through their per-session allocations; the historical cutoff applies only to true allocationless aggregate rows, including older T02 rows identified by their allocation records even when preview fields are NULL. Sources on a void payout with reconciliation required stay unavailable after its allocations are released. An allocationless legacy payout voided with transfer reconciliation required retains its cutoff until audited resolution, after which the prior paid legacy cutoff still applies. A prepared batch reserves its exact sources. Existing published tutors can continue teaching while tax identity is incomplete, but a new batch cannot be prepared until legal name and a 16-digit NIK are present.
 
 ### `admin.getTutorPayoutAllocations`
 
@@ -716,7 +716,7 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Auth:** Admin
 - **Input:** `{ payoutId }` (UUID string)
 - **Output:** `{ detailsAvailable, items }`; each item includes the persisted fee/source identity, booking/session, delivery status, gross snapshot, and whether the allocation remains active or was released with a reason.
-- **Description:** Returns the saved per-session allocations for a prepared, paid, or void payout. Historical aggregate-only rows return no items; no historical allocation is inferred or fabricated.
+- **Description:** Returns the saved per-session allocations for a prepared, paid, or void payout. Historical aggregate-only rows return no items; the admin and tutor history views identify unavailable coverage and tax snapshots without inferring or fabricating historical detail.
 
 ### `admin.previewTutorPayout` and `admin.prepareTutorPayout`
 

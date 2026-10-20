@@ -57,6 +57,10 @@ import {
 } from "@tabler/icons-react";
 import { EmptyState } from "@/components/empty-state";
 import { getUserFacingError } from "@/lib/error-message";
+import {
+  formatPayoutCoverageLabel,
+  formatTaxRateSnapshot,
+} from "@/lib/tutor-payout-presentation";
 import { client, orpc } from "@/utils/orpc";
 import { buildTutorPayoutCsv } from "./tutor-payout-csv";
 
@@ -175,7 +179,7 @@ function payoutPriority(row: PayoutReportRow) {
 }
 
 function formatRate(rateBps: number | null) {
-  return rateBps === null ? "—" : `${(rateBps / 100).toFixed(2)}%`;
+  return formatTaxRateSnapshot(rateBps);
 }
 
 function csvDownload(rows: PayoutReportRow[], from: string, to: string) {
@@ -833,7 +837,14 @@ export function AdminTutorPayoutsPage() {
                       <TableCell className="font-mono">
                         {row.bankAccountNumber || "—"}
                       </TableCell>
-                      <TableCell>{row.coveredSessionCount}</TableCell>
+                      <TableCell>
+                        {formatPayoutCoverageLabel(
+                          row.coveredSessionCount,
+                          row.status === "pending" ||
+                            row.status === "prepared" ||
+                            row.coveredSessionCount > 0,
+                        )}
+                      </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {formatIdr(row.grossHonorariumIdr)}
                       </TableCell>
@@ -973,7 +984,11 @@ export function AdminTutorPayoutsPage() {
                     />
                     <PayoutDetail
                       label="Tax withheld"
-                      value={formatIdr(selectedRow.taxHonorariumIdr)}
+                      value={
+                        selectedRow.taxHonorariumIdr === null
+                          ? "Tax snapshot unavailable"
+                          : formatIdr(selectedRow.taxHonorariumIdr)
+                      }
                     />
                     <PayoutDetail
                       label="Transfer fee"
@@ -1207,7 +1222,11 @@ export function AdminTutorPayoutsPage() {
                 {selectedRow.status !== "pending" ? (
                   <section className="space-y-3 rounded-lg border border-item-border p-4">
                     <Text className="font-semibold">
-                      Covered sessions ({selectedItems.length})
+                      {formatPayoutCoverageLabel(
+                        selectedItems.length,
+                        selectedRow.status === "prepared" ||
+                          selectedRow.coveredSessionCount > 0,
+                      )}
                     </Text>
                     {allocationQuery.isPending ? (
                       <Text className="text-sm text-muted">

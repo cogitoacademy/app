@@ -1291,6 +1291,12 @@ async function findLatestLegacyTutorPayoutCutoff(
   const legacyAggregateRow = and(
     isNull(tutorPayout.previewVersion),
     isNull(tutorPayout.sourceKeys),
+    notExists(
+      conn
+        .select({ id: tutorPayoutAllocation.id })
+        .from(tutorPayoutAllocation)
+        .where(eq(tutorPayoutAllocation.payoutId, tutorPayout.id)),
+    ),
   );
   const [row] = await conn
     .select({ ...getTableColumns(tutorPayout) })

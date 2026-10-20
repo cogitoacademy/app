@@ -80,7 +80,7 @@ const HEADERS = [
   "Voided at (Asia/Jakarta)",
   "Gross honorarium IDR",
   "Tax status snapshot",
-  "Tax rate basis points",
+  "Tax rate snapshot (basis points)",
   "Tax rate source snapshot",
   "Tax withheld IDR",
   "Transfer fee IDR",
@@ -120,15 +120,17 @@ export function buildTutorPayoutCsv(
     formatWibDateTime(row.transferRecordedAt),
     formatWibDateTime(row.voidedAt),
     row.grossHonorariumIdr,
-    row.taxStatus,
-    row.taxRateBps,
-    row.taxRateSource,
-    row.taxHonorariumIdr,
+    row.taxStatus ?? "Unavailable (legacy snapshot missing)",
+    row.taxRateBps ?? "Unavailable (legacy snapshot missing)",
+    row.taxRateSource ?? "Unavailable (legacy snapshot missing)",
+    row.taxHonorariumIdr ?? "Unavailable (legacy snapshot missing)",
     row.transferFeeIdr,
     row.netHonorariumIdr,
     row.actualAmountIdr,
     row.actualReference,
-    row.coveredSessionCount,
+    row.coveredSessionCount > 0
+      ? row.coveredSessionCount
+      : "Legacy aggregate (session details unavailable)",
     row.reconciliationStatus,
     row.voidReason,
     row.reconciliationReason,
@@ -153,7 +155,7 @@ export function buildTutorPayoutCsv(
           0,
         );
       case 21:
-        return paidRows.reduce((sum, row) => sum + row.coveredSessionCount, 0);
+        return `Known allocation rows only: ${paidRows.reduce((sum, row) => sum + row.coveredSessionCount, 0)}`;
       default:
         return "";
     }

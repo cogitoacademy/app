@@ -679,6 +679,7 @@ describe("Tutor payouts (G16)", () => {
       `Gross Rp${newFee!.grossHonorariumIdr.toLocaleString("id-ID")}`,
     );
     expect(payoutNotification?.body).toContain("Tax Rp");
+    expect(payoutNotification?.body).not.toContain("Tax snapshot unavailable");
     expect(payoutNotification?.body).toContain("Transfer fee Rp");
     expect(payoutNotification?.body).toContain("Net Rp");
     expect(payoutNotification?.body).toContain(
@@ -944,6 +945,152 @@ describe("Tutor payouts (G16)", () => {
     });
     expect(nextBatch.status).toBe("prepared");
     expect(nextBatch.sourceKeys).toHaveLength(3);
+  });
+
+  test("pre-T03 allocated payout rows do not cut off unrelated sessions and reconciliation blocks released sources", async () => {
+    const isolatedTutor = await createPublishedTutor(
+      `tutor.pay.pre-t03-allocation.${ts}@cogito.test`,
+      ts + 5,
+    );
+    const payoutTutorId = isolatedTutor.tutorId;
+    await db
+      .update(tutorProfile)
+      .set({
+        bankName: "BCA",
+        bankAccountNumber: "001188776655",
+        bankAccountHolderName: "Pre-T03 Allocation Tutor",
+        bankAccountOpeningCity: "Jakarta",
+        bankAccountOwnership: "self",
+        bankTransferDisclaimerAccepted: true,
+        taxLegalName: "Pre-T03 Allocation Tutor",
+        nik: "0000000000000067",
+        npwp: null,
+      })
+      .where(eq(tutorProfile.userId, payoutTutorId));
+
+    const cutoffAt = new Date(Date.now() - 60_000);
+    const firstLegacy = await insertBookingRow({
+      tutorId: payoutTutorId,
+      proposerId: studentId,
+      completedAt: new Date(cutoffAt.getTime() - 30_000),
+    });
+    const secondLegacy = await insertBookingRow({
+      tutorId: payoutTutorId,
+      proposerId: studentId,
+      completedAt: new Date(cutoffAt.getTime() - 15_000),
+    });
+    const available = await adminClient.admin.getPendingTutorPayouts({
+      tutorId: payoutTutorId,
+    });
+    const firstSource = available.items.find(
+      (item) => item.bookingId === firstLegacy.id,
+    )!;
+    const secondSource = available.items.find(
+      (item) => item.bookingId === secondLegacy.id,
+    )!;
+
+    // Models a T02-era manually paid row: its T03 preview fields are NULL,
+    // while the existing per-source allocation identifies the paid session.
+    const [preT03Payout] = await db
+      .insert(tutorPayout)
+      .values({
+        tutorId: payoutTutorId,
+        cutoffAt,
+        grossHonorariumIdr: firstSource.grossHonorariumIdr,
+        transferFeeIdr: 0,
+        netHonorariumIdr: firstSource.grossHonorariumIdr,
+        bankName: "BCA",
+        status: "paid",
+        paidAt: cutoffAt,
+        paidBy: adminId,
+      })
+      .returning();
+    expect(preT03Payout!.previewVersion).toBeNull();
+    expect(preT03Payout!.sourceKeys).toBeNull();
+    await db.insert(tutorPayoutAllocation).values({
+      payoutId: preT03Payout!.id,
+      sourceKey: firstSource.sourceKey,
+      sourceType: firstSource.sourceType,
+      tutorSessionFeeId: firstSource.tutorSessionFeeId,
+      bookingId: firstSource.bookingId,
+      bookingSessionId: firstSource.bookingSessionId,
+      bookingType: firstSource.bookingType,
+      deliveryStatus: firstSource.deliveryStatus,
+      scheduledStartAt: firstSource.scheduledStartAt,
+      earnedAt: firstSource.earnedAt,
+      grossHonorariumIdr: firstSource.grossHonorariumIdr,
+      priceSnapshot: firstSource.priceSnapshot,
+    });
+
+    const afterPaidAllocation = await adminClient.admin.getPendingTutorPayouts({
+      tutorId: payoutTutorId,
+    });
+    expect(afterPaidAllocation.items.map((item) => item.bookingId)).toEqual([
+      secondLegacy.id,
+    ]);
+
+    const voided = await adminClient.admin.voidTutorPayout({
+      payoutId: preT03Payout!.id,
+      reason: "Reconcile the existing transfer before releasing its source",
+    });
+    expect(voided.reconciliationStatus).toBe("required");
+    const whileUnresolved = await adminClient.admin.getPendingTutorPayouts({
+      tutorId: payoutTutorId,
+    });
+    expect(whileUnresolved.items.map((item) => item.bookingId)).toEqual([
+      secondLegacy.id,
+    ]);
+    await expect(
+      adminClient.admin.previewTutorPayout({
+        tutorId: payoutTutorId,
+        sourceKeys: [firstSource.sourceKey],
+      }),
+    ).rejects.toThrow();
+    expect(
+      (
+        await adminClient.admin.previewTutorPayout({
+          tutorId: payoutTutorId,
+          sourceKeys: [secondSource.sourceKey],
+        })
+      ).sourceKeys,
+    ).toEqual([secondSource.sourceKey]);
+
+    await adminClient.admin.resolveTutorPayoutReconciliation({
+      payoutId: preT03Payout!.id,
+      reason: "Bank record reviewed; the original source may be repaid once",
+    });
+    const afterResolution = await adminClient.admin.getPendingTutorPayouts({
+      tutorId: payoutTutorId,
+    });
+    expect(afterResolution.items.map((item) => item.bookingId)).toEqual(
+      expect.arrayContaining([firstLegacy.id, secondLegacy.id]),
+    );
+    const repaymentPreview = await adminClient.admin.previewTutorPayout({
+      tutorId: payoutTutorId,
+      sourceKeys: [firstSource.sourceKey],
+    });
+    const repayment = await adminClient.admin.prepareTutorPayout({
+      tutorId: payoutTutorId,
+      sourceKeys: repaymentPreview.sourceKeys,
+      previewVersion: repaymentPreview.previewVersion,
+      operationId: crypto.randomUUID(),
+    });
+    await adminClient.admin.recordTutorPayoutTransfer({
+      payoutId: repayment.id,
+      previewVersion: repaymentPreview.previewVersion,
+      actualAmountIdr: repayment.netHonorariumIdr,
+      paidAt: new Date().toISOString(),
+      reference: "BANK-REPAY-PRE-T03-001",
+    });
+    const afterRepayment = await adminClient.admin.getPendingTutorPayouts({
+      tutorId: payoutTutorId,
+    });
+    expect(afterRepayment.items.map((item) => item.bookingId)).toEqual([
+      secondLegacy.id,
+    ]);
+    expect(
+      afterRepayment.items.some((item) => item.bookingId === firstLegacy.id),
+    ).toBe(false);
   });
 
   test("unresolved allocationless legacy payout retains its cutoff until audited reconciliation", async () => {

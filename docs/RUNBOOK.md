@@ -2643,7 +2643,7 @@ move with the body.
 
 ## Tutor payout operations (2026-10-21)
 
-Migrations `0060_tutor_payout_allocations.sql` and the reviewed Release V3 payout migration must be applied before using the tax/payout workflow. For Release V3, review and apply `0065_*` only after verifying it was generated from the parent-integrated `0064` snapshot and contains only tutor tax/payout schema changes. Never regenerate or rewrite earlier SQL, snapshots, hashes, or timestamps as part of this rollout. Do not backfill historical paid aggregates or fabricate fee/tax snapshots.
+Migrations `0060_tutor_payout_allocations.sql` and the reviewed Release V3 payout migration must be applied before using the tax/payout workflow. For Release V3, review and apply `0065_*` only after verifying it was generated from the parent-integrated `0064` snapshot and contains only tutor tax/payout schema changes. Never regenerate or rewrite earlier SQL, snapshots, hashes, or timestamps as part of this rollout. Do not backfill historical paid aggregates or fabricate fee/tax snapshots. Payout review uses the legacy cutoff only for rows with no source allocations; existing T02 allocations remain source-scoped even when T03 preview columns are NULL. A void row with reconciliation required blocks its released source keys until audited resolution. Where legacy allocation or tax snapshots are absent, the admin/tutor history and export show that the details are unavailable instead of reporting zero sessions or a zero tax rate.
 
 Release V3 migration `0065_tutor_payout_tax.sql` was generated with the
 lockfile version of Drizzle Kit `0.31.10` after merging parent commit

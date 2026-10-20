@@ -91,4 +91,24 @@ describe("tutor payout CSV", () => {
     expect(csv).toContain('"\'000123456789000"');
     expect(csv).toContain("Confirm external transfer");
   });
+
+  it("labels legacy aggregate coverage and unavailable tax snapshots", () => {
+    const csv = buildTutorPayoutCsv(
+      [
+        row({
+          taxStatus: null,
+          taxRateBps: null,
+          taxRateSource: null,
+          taxHonorariumIdr: null,
+          coveredSessionCount: 0,
+        }),
+      ],
+      "2026-05-01",
+      "2026-05-31",
+    );
+
+    expect(csv).toContain('"Unavailable (legacy snapshot missing)"');
+    expect(csv).toContain('"Legacy aggregate (session details unavailable)"');
+    expect(csv).toContain('"Known allocation rows only: 0"');
+  });
 });

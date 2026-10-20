@@ -1,4 +1,5 @@
 import { describe, test, expect, mock } from "bun:test";
+import { sql } from "drizzle-orm";
 import { createBookingRepo } from "../../modules/booking/booking.repo";
 import {
   encodeBookingCursor,
@@ -125,13 +126,22 @@ describe("createBookingRepo", () => {
   test("returns the latest legacy payout cutoff or null when none exists", async () => {
     const row = { id: "p1", tutorId: "t1", status: "paid" };
     const repo = createBookingRepo({} as any);
+    const outerSelect = makeSelectConn([row]);
+    let selectCount = 0;
+    const conn = {
+      ...outerSelect,
+      select: mock(() => {
+        selectCount++;
+        return selectCount === 1
+          ? { from: () => ({ where: () => sql`select 1` }) }
+          : outerSelect.select();
+      }),
+    } as any;
 
     await expect(
-      repo.findLatestLegacyTutorPayoutCutoff(
-        makeSelectConn([row]) as any,
-        "t1",
-      ),
+      repo.findLatestLegacyTutorPayoutCutoff(conn, "t1"),
     ).resolves.toEqual(row);
+    expect(conn.select).toHaveBeenCalledTimes(2);
     await expect(
       repo.findLatestLegacyTutorPayoutCutoff(makeSelectConn() as any, "t1"),
     ).resolves.toBeNull();
