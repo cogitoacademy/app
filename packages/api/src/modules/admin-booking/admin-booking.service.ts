@@ -1,4 +1,8 @@
-import { BOOKING_STATE, TERMINAL_STATES } from "../booking/booking-state.types";
+import {
+  BOOKING_STATE,
+  TERMINAL_STATES,
+  type BookingState,
+} from "../booking/booking-state.types";
 import {
   BookingNotFoundError,
   BookingOverrideConflictError,
@@ -23,6 +27,7 @@ import {
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
 import { log } from "../../lib/logger";
+import { lockBookingReschedule } from "../../lib/locks";
 import { escapeHtml } from "../../lib/sanitize";
 import type { AdminBookingRepo } from "./admin-booking.repo";
 import { URGENCY_RANK, type UrgencyLevel } from "./admin-booking.repo";
@@ -941,8 +946,30 @@ export function createAdminBookingService(deps: {
     },
   ) {
     return db.transaction(async (tx) => {
-      const session = await repo.findSessionById(tx, input.sessionId);
-      if (!session) throw new BookingNotFoundError(input.sessionId);
+      const discoveredSession = await repo.findSessionById(tx, input.sessionId);
+      if (!discoveredSession) throw new BookingNotFoundError(input.sessionId);
+      await lockBookingReschedule(tx, discoveredSession.seriesBookingId);
+      const bookingRow = await repo.findBookingById(
+        tx,
+        discoveredSession.seriesBookingId,
+        { forUpdate: true },
+      );
+      if (!bookingRow) {
+        throw new BookingNotFoundError(discoveredSession.seriesBookingId);
+      }
+      const session = await repo.findSessionById(tx, input.sessionId, {
+        forUpdate: true,
+      });
+      if (!session || session.seriesBookingId !== bookingRow.id) {
+        throw new BookingNotFoundError(input.sessionId);
+      }
+      if (TERMINAL_STATES.includes(bookingRow.currentState as BookingState)) {
+        throw new BookingStateTransitionError(
+          bookingRow.currentState,
+          "cancelSeriesSession",
+          BOOKING_STATE.CANCELLED,
+        );
+      }
       if (session.currentState !== BOOKING_STATE.SCHEDULED) {
         throw new BookingStateTransitionError(
           session.currentState,
@@ -950,15 +977,10 @@ export function createAdminBookingService(deps: {
           BOOKING_STATE.CANCELLED,
         );
       }
-      const bookingRow = await repo.findBookingById(
-        tx,
-        session.seriesBookingId,
-      );
-      if (!bookingRow) throw new BookingNotFoundError(session.seriesBookingId);
-
       const participants = await repo.findParticipantsByBookingId(
         tx,
         session.seriesBookingId,
+        { forUpdate: true },
       );
       const confirmed = participants.filter(
         (p) =>
@@ -1030,7 +1052,13 @@ export function createAdminBookingService(deps: {
         });
       }
 
-      await repo.cancelSession(tx, session.id);
+      if (!(await repo.cancelSession(tx, session.id))) {
+        throw new BookingStateTransitionError(
+          session.currentState,
+          "cancelSeriesSession",
+          BOOKING_STATE.CANCELLED,
+        );
+      }
 
       await auditPort.record({
         db: tx,

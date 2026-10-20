@@ -2284,10 +2284,26 @@ export function createBookingService(deps: {
 
   async function cancelSession(userId: string, sessionId: string) {
     return db.transaction(async (tx) => {
-      const session = await repo.findSessionById(tx, sessionId);
-      if (!session) throw new BookingSessionNotFoundError(sessionId);
-      const b = await repo.findBookingById(tx, session.seriesBookingId);
-      if (!b) throw new BookingNotFoundError(session.seriesBookingId);
+      const discoveredSession = await repo.findSessionById(tx, sessionId);
+      if (!discoveredSession) throw new BookingSessionNotFoundError(sessionId);
+
+      // Share the reschedule lock before row locks so an accepted reschedule
+      // cannot move a session after cancellation has validated its old state.
+      await lockBookingReschedule(tx, discoveredSession.seriesBookingId);
+      const b = await repo.findBookingById(
+        tx,
+        discoveredSession.seriesBookingId,
+        { forUpdate: true },
+      );
+      if (!b) {
+        throw new BookingNotFoundError(discoveredSession.seriesBookingId);
+      }
+      const session = await repo.findSessionById(tx, sessionId, {
+        forUpdate: true,
+      });
+      if (!session || session.seriesBookingId !== b.id) {
+        throw new BookingSessionNotFoundError(sessionId);
+      }
       await assertBookingAccess(b, userId, tx, session.seriesBookingId);
       // PRD (prd.tex:887): only the student may cancel an individual future
       // series session; a tutor cannot skip the wallet release path.
@@ -2313,17 +2329,19 @@ export function createBookingService(deps: {
         );
       }
 
-      if (Date.now() >= session.scheduledStartAt.getTime()) {
+      const participant = await repo.findParticipant(tx, b.id, userId, {
+        forUpdate: true,
+      });
+      if (!participant) throw new BookingParticipantNotFoundError(b.id);
+      const now = new Date();
+      if (now.getTime() >= session.scheduledStartAt.getTime()) {
         throw new BookingCancellationDeadlinePassedError(sessionId);
       }
 
-      const now = new Date();
       const h2 = new Date(
         session.scheduledStartAt.getTime() - LATE_CANCEL_THRESHOLD_MS,
       );
       const isLate = now > h2;
-
-      const participant = await repo.findParticipant(tx, b.id, userId);
       // M4: cap the release/deduct at the participant's current held amount.
       // After an admin cancelSeriesSession(..., release) the participant may
       // hold less than session.holdAmount; releasing/deducting the full
@@ -2331,9 +2349,9 @@ export function createBookingService(deps: {
       // held balance (other bookings' holds) and strand later completions.
       const effective = Math.min(
         session.holdAmount,
-        participant?.heldAmount ?? session.holdAmount,
+        participant.heldAmount,
       );
-      if (participant && effective > 0) {
+      if (effective > 0) {
         const w = await wallet.getByUserId(tx, participant.userId);
         if (!w) throw new BookingNotFoundError(participant.userId);
         if (isLate) {
@@ -2364,7 +2382,13 @@ export function createBookingService(deps: {
         });
       }
 
-      await repo.cancelSession(tx, session.id);
+      if (!(await repo.cancelSession(tx, session.id))) {
+        throw new BookingStateTransitionError(
+          session.currentState,
+          "cancelSession",
+          BOOKING_STATE.CANCELLED,
+        );
+      }
       await repo.updateBookingHoldAmount(
         tx,
         b.id,

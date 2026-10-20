@@ -1376,7 +1376,8 @@ RPC contract.
 - **Auth:** Student (proposer)
 - **Input:** `{ sessionId }`
 - **Output:** `{ booking }`
-- **Description:** Student cancels an individual series session before that session starts; pre-H-2 releases the session hold and a pre-start post-H-2 cancellation forfeits it (per-session penalty, #46). At/after the session start it rejects with `BOOKING_CANCELLATION_DEADLINE_PASSED`. Group-series sessions cannot be cancelled (no opt-out).
+- **Errors:** `BOOKING_CANCELLATION_DEADLINE_PASSED` (400) after start; `BOOKING_STATE_TRANSITION` (409) if a concurrent action already moved the child; `BOOKING_PARTICIPANT_NOT_FOUND` (404) if the proposer hold row is missing
+- **Description:** Student cancels an individual series session before that session starts; pre-H-2 releases the session hold and a pre-start post-H-2 cancellation forfeits it (per-session penalty, #46). The booking, child session, and proposer hold are re-read under locks; the child moves to `cancelled` only from `scheduled`. If delivery completion wins a race, cancellation is rejected without a second wallet/hold change or overwriting the report. Cancellation shares the booking reschedule lock. At/after the session start it rejects with `BOOKING_CANCELLATION_DEADLINE_PASSED`. Group-series sessions cannot be cancelled (no opt-out).
 
 ### `booking.addSessionNote`
 
@@ -1703,7 +1704,7 @@ The successful mutation also best-effort updates the existing offline Calendar e
 - **Input:** `{ sessionId, marksAction, amount? }` (`marksAction` one of `release`/`forfeit`/`partial`; `amount` required when `partial`, max 1000)
 - **Output:** `{ sessionId, currentState: "cancelled", marksAction, affectedParticipants }`
 - **Errors:** `BOOKING_NOT_FOUND` (404), `BOOKING_STATE_TRANSITION` (409) if the session is not `scheduled`
-- **Description:** Cancels a single series session; the session hold is released, forfeited, or partially returned per `marksAction` (U6/TC-31); records audit + participant notifications
+- **Description:** Cancels a single scheduled series session; the booking, child, and participant holds are locked and refreshed before settling, then the child transition is conditional on `scheduled` (U6/TC-31). The booking reschedule lock serializes cancellation with proposal acceptance. It records audit + participant notifications; a concurrent completion that wins leaves settlement untouched and the cancel is rejected.
 
 ---
 

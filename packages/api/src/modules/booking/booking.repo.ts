@@ -807,10 +807,17 @@ async function updateSessionSchedule(
 }
 
 async function cancelSession(conn: DbOrTx, sessionId: string) {
-  await conn
+  const [cancelled] = await conn
     .update(bookingSession)
     .set({ currentState: "cancelled", holdAmount: 0 })
-    .where(eq(bookingSession.id, sessionId));
+    .where(
+      and(
+        eq(bookingSession.id, sessionId),
+        eq(bookingSession.currentState, BOOKING_STATE.SCHEDULED),
+      ),
+    )
+    .returning({ id: bookingSession.id });
+  return Boolean(cancelled);
 }
 
 async function completeSession(

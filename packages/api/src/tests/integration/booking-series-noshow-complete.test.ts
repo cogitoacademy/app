@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll } from "bun:test";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@cogito-app/db";
 import {
   availabilitySlot,
@@ -125,6 +125,58 @@ async function backdateSession(sessionId: string) {
       scheduledEndAt: new Date(Date.now() - 1 * 3600_000),
     })
     .where(eq(bookingSession.id, sessionId));
+}
+
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
+async function waitForBlockedQuery(fragment: string) {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    // eslint-disable-next-line no-await-in-loop -- wait for the database lock gate
+    const result = await db.execute(sql`
+      SELECT query
+      FROM pg_stat_activity
+      WHERE datname = current_database()
+        AND pid <> pg_backend_pid()
+        AND wait_event_type = 'Lock'
+    `);
+    const rows = (
+      Array.isArray(result)
+        ? result
+        : ((result as unknown as { rows?: unknown[] }).rows ?? [])
+    ) as Array<{ query: string }>;
+    if (
+      rows.some((row) =>
+        row.query.toLowerCase().includes(fragment.toLowerCase()),
+      )
+    ) {
+      return;
+    }
+    // eslint-disable-next-line no-await-in-loop -- bounded condition polling
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error(
+    `Timed out waiting for a blocked query containing ${fragment}`,
+  );
+}
+
+async function holdBookingRescheduleLock(bookingId: string) {
+  const acquired = deferred();
+  const release = deferred();
+  const transaction = db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(${bookingId}, 1))`,
+    );
+    acquired.resolve();
+    await release.promise;
+  });
+  await acquired.promise;
+  return { transaction, release: release.resolve };
 }
 
 describe("series no-show and completion settlement", () => {
@@ -336,6 +388,105 @@ describe("series no-show and completion settlement", () => {
         .from(tutorSessionFee)
         .where(eq(tutorSessionFee.bookingId, bookingId)),
     ).toHaveLength(2);
+
+    const third = sessions[2]!;
+    await backdateSession(third.id);
+    await tutorClient.tutorActions.completeSession({
+      bookingId,
+      sessionId: third.id,
+      feedback: TEST_COMPLETION_FEEDBACK,
+    });
+
+    expect((await getWallet(studentId)).heldBalance).toBe(
+      walletBefore.heldBalance - 3 * perSession,
+    );
+    expect((await getParticipant(bookingId, studentId)).heldAmount).toBe(0);
+    const finishedBooking = (
+      await db.select().from(bookingTable).where(eq(bookingTable.id, bookingId))
+    )[0]!;
+    expect(finishedBooking.currentState).toBe("completed");
+    expect(finishedBooking.holdAmount).toBe(0);
+    expect(
+      await db
+        .select()
+        .from(tutorSessionFee)
+        .where(eq(tutorSessionFee.bookingId, bookingId)),
+    ).toHaveLength(3);
+    expect(
+      await db
+        .select()
+        .from(sessionCompletionFeedback)
+        .where(eq(sessionCompletionFeedback.bookingId, bookingId)),
+    ).toHaveLength(3);
+  });
+
+  test("cancellation rechecks a session after completion wins the lock race", async () => {
+    const { bookingId, sessions } = await createSoloSeries(192);
+    const first = sessions[0]!;
+    const gate = await holdBookingRescheduleLock(bookingId);
+    const cancellation = studentClient.booking
+      .cancelSession({ sessionId: first.id })
+      .then(
+        () => ({ status: "fulfilled" as const }),
+        (reason) => ({ status: "rejected" as const, reason }),
+      );
+
+    try {
+      await waitForBlockedQuery("pg_advisory_xact_lock");
+      // Cancellation has discovered the booking but is blocked before it reads
+      // the locked session. Move through the start boundary, then let delivery
+      // completion win before cancellation refreshes its state.
+      await backdateSession(first.id);
+      await tutorClient.tutorActions.completeSession({
+        bookingId,
+        sessionId: first.id,
+        feedback: TEST_COMPLETION_FEEDBACK,
+      });
+      const afterCompletion = {
+        wallet: await getWallet(studentId),
+        participant: await getParticipant(bookingId, studentId),
+        booking: (
+          await db
+            .select()
+            .from(bookingTable)
+            .where(eq(bookingTable.id, bookingId))
+        )[0]!,
+      };
+
+      gate.release();
+      await gate.transaction;
+      expect((await cancellation).status).toBe("rejected");
+
+      expect((await getWallet(studentId)).heldBalance).toBe(
+        afterCompletion.wallet.heldBalance,
+      );
+      expect((await getParticipant(bookingId, studentId)).heldAmount).toBe(
+        afterCompletion.participant.heldAmount,
+      );
+      const finalBooking = (
+        await db
+          .select()
+          .from(bookingTable)
+          .where(eq(bookingTable.id, bookingId))
+      )[0]!;
+      expect(finalBooking.holdAmount).toBe(afterCompletion.booking.holdAmount);
+      expect(finalBooking.currentState).toBe("scheduled");
+      expect(
+        (await db
+          .select()
+          .from(bookingSession)
+          .where(eq(bookingSession.id, first.id)))[0]!.currentState,
+      ).toBe("completed");
+      expect(
+        await db
+          .select()
+          .from(tutorSessionFee)
+          .where(eq(tutorSessionFee.bookingSessionId, first.id)),
+      ).toHaveLength(1);
+    } finally {
+      gate.release();
+      await gate.transaction;
+    }
   });
 
   test("group-series no-show spends one absent allocation while delivered attendees settle with one fee", async () => {
@@ -601,7 +752,7 @@ describe("series no-show and completion settlement", () => {
   });
 
   test("malformed V3 honorarium is rejected before settlement writes", async () => {
-    const { bookingId, sessions } = await createSoloSeries(192);
+    const { bookingId, sessions } = await createSoloSeries(216);
     const first = sessions[0]!;
     await backdateSession(first.id);
     const malformedSnapshot = {

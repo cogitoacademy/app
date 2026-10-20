@@ -16,6 +16,7 @@ function makeDb() {
       const tx = {
         ...makeDb(),
         ...mockRepo(),
+        execute: mock(async () => {}),
       };
       return fn(tx);
     }),
@@ -36,6 +37,8 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     })),
     insertStateHistoryEntry: mock(async () => {}),
     findParticipantsByBookingId: mock(async () => []),
+    findSessionById: mock(async () => null),
+    cancelSession: mock(async () => true),
     findPaymentById: mock(async () => ({
       id: "pay1",
       userId: "u1",
@@ -83,6 +86,12 @@ function makeWalletPort(overrides: Record<string, unknown> = {}) {
       totalBalance: 200,
       heldBalance: 0,
       availableBalance: 200,
+    })),
+    deduct: mock(async () => ({
+      id: "w1",
+      totalBalance: 150,
+      heldBalance: 0,
+      availableBalance: 150,
     })),
     getById: mock(async () => ({
       id: "w1",
@@ -1879,5 +1888,47 @@ describe("AdminBookingService additional guards", () => {
         marksAction: "release",
       }),
     ).rejects.toThrow(BookingStateTransitionError);
+  });
+
+  test("cancelSeriesSession refreshes the child after locking before moving Marks", async () => {
+    let sessionReads = 0;
+    const repo = mockRepo({
+      findSessionById: mock(async () => ({
+        id: "s1",
+        seriesBookingId: "b1",
+        currentState: sessionReads++ === 0 ? "scheduled" : "completed",
+        holdAmount: 50,
+      })),
+    });
+    const wallet = makeWalletPort();
+    const service = createAdminBookingService({
+      db: makeDb(),
+      repo,
+      auditPort: makeAuditPort(),
+      wallet: wallet as any,
+      refund: makeRefundPort(),
+    });
+
+    await expect(
+      service.cancelSeriesSession("admin1", {
+        sessionId: "s1",
+        marksAction: "release",
+      }),
+    ).rejects.toThrow(BookingStateTransitionError);
+
+    expect(repo.findBookingById).toHaveBeenCalledWith(
+      expect.anything(),
+      "b1",
+      { forUpdate: true },
+    );
+    expect(repo.findSessionById).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      "s1",
+      { forUpdate: true },
+    );
+    expect(repo.findParticipantsByBookingId).not.toHaveBeenCalled();
+    expect(wallet.release).not.toHaveBeenCalled();
+    expect(wallet.deduct).not.toHaveBeenCalled();
   });
 });

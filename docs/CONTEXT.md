@@ -173,6 +173,13 @@ delivery or earn a tutor fee; the tutor must submit the completion report.
 Malformed V3 snapshots with a missing or invalid `tutorHonorariumIdr` fail
 before wallet/hold writes; an explicit zero honorarium remains valid.
 
+Student and admin per-session cancellation now use the booking's reschedule
+advisory lock, then lock and refresh the parent booking, child session, and
+participant rows. Cancellation changes a child only while it is still
+`scheduled`; a concurrent completion that commits first leaves the report,
+fee, wallet, and remaining holds intact, and the stale cancel is rejected.
+The shared advisory lock also serializes cancellation with proposal acceptance.
+
 Focused verification: tutor-fee unit tests **4/4**, booking-service unit tests
 **307/307**, admin-service unit tests **30/30**, solo booking integration
 **12/12**, standalone group integration **8/8**, group-series integration
@@ -196,6 +203,16 @@ completion, concurrent completion, the no-show/completion race, malformed V3
 honoraria, and transaction rollback on fee insertion failure. The tutor-fee
 unit suite passed **6/6**. Logs confirm the test meeting adapter was manual.
 Browser E2E was not run for this settlement slice.
+
+Review follow-up verification (2026-10-20): booking/admin service and repository
+unit suites passed **446/446 tests**. The expanded real-Postgres settlement suite
+passed **7/7 tests, 69 expectations**, including completion of the full series
+after a no-show with final wallet/participant/booking holds at zero, plus a
+lock-gated cancellation/completion race. Admin U6 cancellation passed **3/3**
+and the M4 student cancellation integration passed **1/1**. These integration
+runs used the retained loopback `cogito-test-settlement` database on port 6767;
+meeting creation used the manual adapter and email delivery was not configured.
+No browser E2E or typecheck was run for this follow-up.
 
 ## V3 class draft checkpoint (2026-10-19)
 
