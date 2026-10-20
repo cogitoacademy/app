@@ -30,9 +30,7 @@ function formatSessionDate(date: Date | string) {
 }
 
 export function ClassesPage() {
-  const classes = useQuery(
-    orpc.classes.list.queryOptions(),
-  );
+  const classes = useQuery(orpc.classes.list.queryOptions());
 
   if (classes.isPending) return <Loader />;
   if (classes.isError) {
@@ -51,16 +49,25 @@ export function ClassesPage() {
   const publishedClasses = classes.data.filter(
     (academyClass) => academyClass.sessions.length > 0,
   );
-  const cohorts = publishedClasses.filter((academyClass) => academyClass.kind === "cohort");
+  const cohorts = publishedClasses.filter(
+    (academyClass) => academyClass.kind === "cohort",
+  );
   const now = Date.now();
   const upcoming = publishedClasses
     .flatMap((academyClass) =>
       academyClass.sessions
         .filter((session) => new Date(session.startAt).getTime() > now)
-        .filter((session) => academyClass.kind === "masterclass" || session.sequenceNumber === 1)
+        .filter(
+          (session) =>
+            academyClass.kind === "masterclass" || session.sequenceNumber === 1,
+        )
         .map((session) => ({ academyClass, session })),
     )
-    .toSorted((left, right) => new Date(left.session.startAt).getTime() - new Date(right.session.startAt).getTime());
+    .toSorted(
+      (left, right) =>
+        new Date(left.session.startAt).getTime() -
+        new Date(right.session.startAt).getTime(),
+    );
 
   return (
     <Stack direction="column" spacing="lg" className="w-full min-w-0 pb-8">
@@ -74,7 +81,9 @@ export function ClassesPage() {
       <section aria-labelledby="cohort-classes-heading">
         <div className="mb-4 flex items-center gap-2">
           <IconSchool className="size-5 text-primary" aria-hidden="true" />
-          <Heading level={2} id="cohort-classes-heading">Cohorts</Heading>
+          <Heading level={2} id="cohort-classes-heading">
+            Cohorts
+          </Heading>
         </div>
         {cohorts.length === 0 ? (
           <EmptyStateCard
@@ -142,14 +151,23 @@ export function ClassesPage() {
                       </Text>
                       <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
                         <span>{academyClass.sessions.length} sessions</span>
-                        <span>Starts {formatSessionDate(firstSession.startAt)}</span>
+                        <span>
+                          Starts {formatSessionDate(firstSession.startAt)}
+                        </span>
                         <span>{tutorSummary}</span>
                       </div>
                       <Text className="text-sm">
-                        From <CogitoMarks value={academyClass.cohortFullRateMarks ?? 0} size="3" /> per session
+                        From{" "}
+                        <CogitoMarks
+                          value={academyClass.cohortFullRateMarks ?? 0}
+                          size="3"
+                        />{" "}
+                        per session
                       </Text>
                       <details className="rounded-lg border border-border p-3">
-                        <summary className="cursor-pointer font-medium">Curriculum</summary>
+                        <summary className="cursor-pointer font-medium">
+                          Curriculum
+                        </summary>
                         <ol className="mt-3 space-y-3">
                           {academyClass.sessions.map((session) => (
                             <li key={session.id}>
@@ -176,8 +194,13 @@ export function ClassesPage() {
 
       <section aria-labelledby="upcoming-classes-heading">
         <div className="mb-4 flex items-center gap-2">
-          <IconCalendarEvent className="size-5 text-primary" aria-hidden="true" />
-          <Heading level={2} id="upcoming-classes-heading">Upcoming classes</Heading>
+          <IconCalendarEvent
+            className="size-5 text-primary"
+            aria-hidden="true"
+          />
+          <Heading level={2} id="upcoming-classes-heading">
+            Upcoming classes
+          </Heading>
         </div>
         {upcoming.length === 0 ? (
           <EmptyStateCard
@@ -200,9 +223,13 @@ export function ClassesPage() {
                   <CardBody className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <Text className="font-medium">{academyClass.titleEn}</Text>
+                        <Text className="font-medium">
+                          {academyClass.titleEn}
+                        </Text>
                         <Badge variant="secondary">
-                          {academyClass.kind === "masterclass" ? "Masterclass" : "Cohort"}
+                          {academyClass.kind === "masterclass"
+                            ? "Masterclass"
+                            : "Cohort"}
                         </Badge>
                       </div>
                       <Text className="text-sm text-muted">
@@ -212,14 +239,19 @@ export function ClassesPage() {
                         {` · ${session.titleEn}`}
                       </Text>
                       <Text className="text-sm text-muted">
-                        {formatSessionDate(session.startAt)} · {session.mode === "online" ? "Online" : "In person"}
+                        {formatSessionDate(session.startAt)} ·{" "}
+                        {session.mode === "online" ? "Online" : "In person"}
                       </Text>
                     </div>
                     <Text className="shrink-0">
                       <CogitoMarks
-                        value={academyClass.kind === "masterclass"
-                          ? academyClass.masterclassRateMarks ?? 0
-                          : academyClass.cohortSingleRateMarks ?? academyClass.cohortFullRateMarks ?? 0}
+                        value={
+                          academyClass.kind === "masterclass"
+                            ? (academyClass.masterclassRateMarks ?? 0)
+                            : (academyClass.cohortSingleRateMarks ??
+                              academyClass.cohortFullRateMarks ??
+                              0)
+                        }
                         size="3"
                       />
                     </Text>

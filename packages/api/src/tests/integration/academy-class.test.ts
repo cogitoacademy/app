@@ -89,7 +89,6 @@ describe("academy class drafts and published reads", () => {
       .returning();
     if (!managedRoom) throw new Error("Room fixture was not created");
     roomId = managedRoom.id;
-
   });
 
   test("creates and edits auditable multi-mode cohort drafts without changing session IDs", async () => {
@@ -231,8 +230,6 @@ describe("academy class drafts and published reads", () => {
     const after = await db.select().from(academyClass);
     expect(after).toHaveLength(before.length);
   });
-
-
 
   test("rejects overlapping cohort sessions without creating a draft", async () => {
     const before = await db.select().from(academyClass);

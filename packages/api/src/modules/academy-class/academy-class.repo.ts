@@ -13,7 +13,8 @@ import type { z } from "zod";
 
 export type AcademyClassRepo = ReturnType<typeof createAcademyClassRepo>;
 
-export function createAcademyClassRepo() {  async function list(
+export function createAcademyClassRepo() {
+  async function list(
     conn: DbOrTx,
     input: z.infer<typeof listAcademyClassesInput>,
   ) {

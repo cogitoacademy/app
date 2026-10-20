@@ -8,8 +8,6 @@ import {
 
 export function createAcademyClassRouter(handler: AcademyClassHandler) {
   return {
-
-
     listAcademyClasses: adminProcedure
       .route({
         method: "POST",

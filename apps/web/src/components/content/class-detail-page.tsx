@@ -108,12 +108,14 @@ export function ClassDetailPage() {
           <CogitoMarks
             value={
               academyClass.data.kind === "cohort"
-                ? academyClass.data.cohortFullRateMarks ?? 0
-                : academyClass.data.masterclassRateMarks ?? 0
+                ? (academyClass.data.cohortFullRateMarks ?? 0)
+                : (academyClass.data.masterclassRateMarks ?? 0)
             }
           />
           <span className="ml-1 text-sm font-normal text-muted">
-            {academyClass.data.kind === "cohort" ? "per cohort session" : "per student"}
+            {academyClass.data.kind === "cohort"
+              ? "per cohort session"
+              : "per student"}
           </span>
         </div>
       </div>
@@ -124,15 +126,22 @@ export function ClassDetailPage() {
           <CardDescription>Class overview and learning plan</CardDescription>
         </CardHeader>
         <CardBody>
-          <Text className="whitespace-pre-wrap">{academyClass.data.descriptionEn}</Text>
+          <Text className="whitespace-pre-wrap">
+            {academyClass.data.descriptionEn}
+          </Text>
         </CardBody>
       </Card>
 
       <section aria-labelledby="class-sessions-heading">
         <div className="mb-4 flex items-center gap-2">
-          <IconCalendarEvent className="size-5 text-primary" aria-hidden="true" />
+          <IconCalendarEvent
+            className="size-5 text-primary"
+            aria-hidden="true"
+          />
           <Heading level={2} id="class-sessions-heading">
-            {academyClass.data.kind === "cohort" ? "Curriculum and schedule" : "Session details"}
+            {academyClass.data.kind === "cohort"
+              ? "Curriculum and schedule"
+              : "Session details"}
           </Heading>
         </div>
         <ol className="space-y-3">
@@ -148,17 +157,22 @@ export function ClassDetailPage() {
                           : session.titleEn}
                       </CardTitle>
                       <CardDescription>
-                        {formatSessionDate(session.startAt)} · {session.mode === "online" ? "Online" : "In person"}
+                        {formatSessionDate(session.startAt)} ·{" "}
+                        {session.mode === "online" ? "Online" : "In person"}
                       </CardDescription>
                     </div>
-                    <Badge variant={session.mode === "online" ? "info" : "success"}>
+                    <Badge
+                      variant={session.mode === "online" ? "info" : "success"}
+                    >
                       {session.mode === "online" ? "Online" : "In person"}
                     </Badge>
                   </div>
                 </CardHeader>
                 <CardBody className="space-y-3">
                   {session.curriculumEn ? (
-                    <Text className="whitespace-pre-wrap">{session.curriculumEn}</Text>
+                    <Text className="whitespace-pre-wrap">
+                      {session.curriculumEn}
+                    </Text>
                   ) : null}
                   <Text className="text-sm text-muted">
                     Tutor: {session.tutor?.name ?? "To be announced"}
