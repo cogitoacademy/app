@@ -1,5 +1,19 @@
 # Release v3 - SDD execution and acceptance plan
 
+## Test database reset incident and guard (2026-10-21)
+
+`academy-class.test.ts` invoked API `resetDatabase()` against loopback
+`cogito-test:6767` at about 13:17:59 UTC. Its broad truncate with `CASCADE`
+ran before test setup failed on missing `tax_legal_name`. Development
+`cogito-app` was read back intact; no test-data recovery, restore or reseed has
+been verified. The source guard now denies 6767/6768 resets unconditionally;
+only exact local `cogito-test:6769` and `cogito-test-payout:6770` targets may
+reset with both `TEST_DATABASE_ALLOW_RESET=true` and an exact matching
+`TEST_DATABASE_RESET_TARGET`. Reset-based API suites using older 6767 env files
+will now fail closed. The standalone guard suite passed 6 tests / 40
+expectations; no DB-backed verification was run. The non-reset T05 per-run E2E
+identity flow is unchanged.
+
 Current T07 implementation checkpoint (21 October): schema migration 0067,
 class-session report submission/listing, immutable correction history, atomic
 remaining-funded-Mark settlement, fixed tutor fee creation, genuine class identity
@@ -20,7 +34,7 @@ The owned API restarted; web 3000 and API 3001 return HTTP 200. No dev reset/see
 or live-provider test ran. At this baseline checkpoint T07 class reports/completion/settlement was next; lifecycle
 follow-ups, AUTH-02/referrals and full release acceptance remain open. Main is unchanged.
 
-T05 reset safety follow-up (21 October): every 6769 run now seeds a unique student identity and leaves earlier enrollment, cancellation, ledger and payment facts intact; the 6769 reset path is a no-op. Ports 6767/6768 remain no-write and 6770 keeps the legacy exact-Andre payout reset. Guard/identity coverage passes 7 tests / 19 expectations; the exact-6769 transactional preservation regression now passes 1 test / 7 assertions. This does not complete T07.
+T05 reset safety follow-up (21 October): every 6769 run now seeds a unique student identity and leaves earlier enrollment, cancellation, ledger and payment facts intact; the T05 6769 fixture path is a no-op for the shared seed student. The API broad reset helper now rejects 6767/6768 and requires explicit opt-in plus an exact configured target for 6769/6770. Guard/identity coverage passes 7 tests / 19 expectations; the exact-6769 transactional preservation regression now passes 1 test / 7 assertions. This does not complete T07.
 
 Admin whole-class cancellation now has preview/confirm UI and transactional
 future-hold return, no withdrawal fee, protected past liabilities, receipt replay,

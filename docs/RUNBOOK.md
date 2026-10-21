@@ -1,5 +1,26 @@
 # Cogito Runbook
 
+## Test database reset incident and current guard (2026-10-21)
+
+At about 13:17:59 UTC, `academy-class.test.ts` called the API helper's
+`resetDatabase()` with loopback `cogito-test` on port 6767. The helper truncated
+its broad table list with `CASCADE`, then fixture setup failed because
+`tax_legal_name` was missing. The separate development database `cogito-app`
+was read back intact. No test-data recovery, restore or reseed has been
+performed or verified.
+
+API integration helpers now reject reset on 6767 and 6768 unconditionally.
+The only resettable pairs are exact local `cogito-test:6769` and
+`cogito-test-payout:6770`, and each needs both `TEST_DATABASE_ALLOW_RESET=true`
+and `TEST_DATABASE_RESET_TARGET` exactly equal to `DATABASE_URL`. No current
+environment or example enables this opt-in. `test-setup.ts` has no database URL
+fallback; provide a target explicitly for DB-backed work. The retained 6769
+run-scoped financial fixtures were not reset in this task. The non-reset T05
+per-run E2E identity path remains unchanged. A source scan found 69 API test
+files calling the shared helper; their call sites are unchanged, but old
+6767/6768 env files now fail closed before the helper issues SQL. The pure
+guard suite passed 6 tests / 40 expectations; no DB-backed verification was run.
+
 ## T07 UI and browser acceptance checkpoint (21 October)
 
 The role-based `/class-reports` page uses real `classes.listSessionReports` and
@@ -285,12 +306,11 @@ Read-only post-migration verification confirmed both
 `db9f27f77c76201b609400077a530ca8d5141f79b904c6f9a7ef1595a4a366b8`; each also
 contains the preceding three hashes above. Their row IDs differ as expected.
 No migration in this four-file V3 integration set remains pending for these
-two local databases. Automated
-destructive/reset-based suites must use the E2E guard below and only the exact
-loopback test targets, never `cogito-app`. `cogito-test` is supported on its
-reserved worker ports 6767, 6768 and 6769; `cogito-test-payout` is supported
-only on port 6770. This local migration state does not authorize production
-changes.
+two local databases. The Playwright setup below has its own seed-target guard.
+Separately, API tests that call `resetDatabase()` can reset only the exact
+dedicated 6769/6770 pairs with explicit consent; port 6767/6768 are always
+rejected by that helper. Neither policy authorizes use of `cogito-app` or
+production.
 
 ## Guarded Playwright E2E runs (2026-10-20)
 
@@ -301,8 +321,9 @@ values preserved, then both validate the target. Set `NODE_ENV=test` exactly;
 on 6767/6768/6769 or `/cogito-test-payout` on 6770. API and web URLs must be
 loopback HTTP origins, and `PORT` / `WEB_PORT` must match those URLs. Optional
 `BETTER_AUTH_URL` and `VITE_SERVER_URL` must resolve to the same local API.
-Validation runs before seed setup. Global setup resets and seeds only the
-guarded test database, so never point it at development or production.
+Validation runs before seed setup. Global setup uses its own guarded seed path;
+this does not authorize the API test helper's broad `resetDatabase()` call.
+That helper has the stricter 6769/6770 reset policy documented above and below.
 
 Playwright starts its own API and web servers with `reuseExistingServer: false`;
 the default ports are 3101 and 3100. Keep both free, or configure different
@@ -330,12 +351,13 @@ database requirement for automated destructive tests.
 
 ## Series cancellation and settlement verification (2026-10-20)
 
-Run these destructive integration suites only against the retained, dedicated
-loopback `cogito-test-settlement` database (`localhost:6767`). Its current
-migration chain is applied. The local ignored `apps/server/.env.settlement.test`
-file is derived from the test environment and pins `NODE_ENV=test` plus that
-database; do not point it at the dev DB or shared `cogito-test`. Before each
-integration command, verify the exact target:
+Historical runs used the retained `cogito-test-settlement` database on port
+6767. The API reset helper now refuses every 6767 target, so the commands below
+will fail before truncation. Do not redirect them to the retained 6769 or 6770
+databases: those contain preserved fixtures and are not disposable reset
+targets for this incident follow-up. Reruns require a separately prepared
+fresh target matching the current reset guard. The test counts and snapshot
+below describe the prior run only.
 
 ```powershell
 bun --env-file apps/server/.env.settlement.test -e "const u = new URL(Bun.env.DATABASE_URL ?? ''); if (Bun.env.NODE_ENV !== 'test' || !['localhost','127.0.0.1','[::1]'].includes(u.hostname) || u.port !== '6767' || u.pathname !== '/cogito-test-settlement') throw new Error('Settlement DB guard failed'); console.log(JSON.stringify({nodeEnv:Bun.env.NODE_ENV,host:u.hostname,port:u.port,database:u.pathname.slice(1)}));"
@@ -561,7 +583,7 @@ Publish is version-checked under a class-row lock. Before commit the service rec
 
 The guarded API integration suite passed 9 tests / 51 expectations, including deterministic gated races where room capacity changes from 10 to 4, a room is deactivated, and a competition is archived while publication waits. The focused meeting-provider unit files passed 42 tests / 146 expectations. The Playwright admin-to-student journey passed 1 Chromium spec (15.8s; about 1.2m including server startup and fixture seed), including the controlled case where Calendar accepts the event, Meet URL generation is pending, and retry resumes the same event. The test adapter is local-only; Google Meet is disabled. All database work targeted loopback `cogito-test`; dev and production were not touched.
 
-Run the class API suite with `bun scripts/run-test-suite.mjs api --timeout 30000 packages/api/src/tests/integration/academy-class.test.ts`. Run provider units with `bun test packages/api/src/tests/unit/google-meeting.provider.test.ts packages/api/src/tests/unit/academy-class.meeting-provider.test.ts`. For the browser spec, set `NODE_ENV=test`, `ENV_FILE` to `apps/server/.env.test.example` (its database URL is `localhost:6767/cogito-test`), `GOMAXPROCS=2`, and `GOMEMLIMIT=768MiB`, then run `bun scripts/run-test-suite.mjs e2e src/specs/academy-class-publish.spec.ts`. Playwright launches the Vite test server via Bun's `run --bun` mode. Migration `0063_academy_class_meetings.sql` is applied to both local dev and the class test database; parent dev table/hash readback passed.
+Run provider unit tests with `bun test packages/api/src/tests/unit/google-meeting.provider.test.ts packages/api/src/tests/unit/academy-class.meeting-provider.test.ts`. Database-backed `academy-class.test.ts` callers of `resetDatabase()` now require a fresh approved target and explicit reset consent; the shared `.env.test.example` intentionally leaves `DATABASE_URL` unset. For the browser spec, provide an explicit E2E env file with `NODE_ENV=test`, `ENV_FILE`, `GOMAXPROCS=2`, and `GOMEMLIMIT=768MiB`, then run `bun scripts/run-test-suite.mjs e2e src/specs/academy-class-publish.spec.ts`. Playwright launches the Vite test server via Bun's `run --bun` mode. Migration `0063_academy_class_meetings.sql` is applied to both local dev and the class test database; parent dev table/hash readback passed.
 
 ## V3 draft economy editor (2026-10-18)
 
@@ -1478,8 +1500,10 @@ For a browser preview against the local development database, `apps/server/.env`
 selects `cogito-app` and the API's port; keep that database URL but disable
 external side effects (`PAYMENT_PROVIDER=stub`, `SCHEDULER_ENABLED=false`,
 `GOOGLE_MEET_ENABLED=false`, blank `RESEND_API_KEY`, and local-only analytics).
-Use `apps/server/.env.test` for integration tests. Never run the test suite's
-`resetDatabase()` helper against `cogito-app`.
+Use an explicitly configured local test environment for database-backed
+integration tests. `resetDatabase()` requires the exact dedicated 6769/6770
+target plus both reset-consent variables; 6767/6768 are always blocked, and
+`cogito-app` is never an allowed reset target.
 
 #### Migration rollback
 
@@ -2270,7 +2294,15 @@ redis-cli ZCARD "cogito-jobs:delayed" # Delayed jobs
 
 ## Test and Coverage
 
-Run the CI-equivalent coverage suite from the repository root after starting the test Postgres and Redis services:
+The API test tree includes reset-based integration callers. Do not run this
+coverage command against the old 6767/6768 targets or the retained 6769/6770
+fixtures. Reset-based suites now require an explicitly selected dedicated
+target, the independent reset flag and the exact target URL described above;
+the guard rejects 6767/6768 even when those values are set. The command remains
+the CI coverage invocation, not authorization to reset a local database.
+
+Run the CI-equivalent coverage suite from the repository root only after a
+fresh disposable test target has been explicitly prepared:
 
 ```bash
 bun test --coverage --coverage-reporter=lcov --timeout 30000 packages/api/src/tests/ packages/env/src/ packages/auth/src/ packages/db/src/ apps/server/src/openapi.test.ts
@@ -2440,8 +2472,8 @@ Concurrent modification conflict. The `version` field didn't match. Retry the op
 
 ### Test Safety Guard
 
-- `Refusing to run tests against a non-test database` — The test harness detected a `DATABASE_URL` whose database name does not include `test`.
-- `resetDatabase() is blocked outside a dedicated test database` — An integration test tried to truncate tables while pointed at a non-test database.
+- `Database URL must target an approved local test database` — The connection URL did not exactly match an approved local PostgreSQL test target.
+- `resetDatabase() requires explicit consent for an exact dedicated local test database` — Reset lacked the exact 6769/6770 target, `TEST_DATABASE_ALLOW_RESET=true`, or a matching `TEST_DATABASE_RESET_TARGET`; 6767/6768 are always refused.
 
 ### Role-boundary errors
 

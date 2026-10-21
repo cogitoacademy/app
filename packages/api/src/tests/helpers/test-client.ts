@@ -6,49 +6,13 @@ import { eq } from "drizzle-orm";
 
 import { appRouter } from "../../routers";
 import { services } from "../../services";
-
-function getDatabaseName(databaseUrl: string | undefined) {
-  if (!databaseUrl) return "";
-
-  try {
-    return new URL(databaseUrl).pathname.replace(/^\/+/, "");
-  } catch {
-    return "";
-  }
-}
-
-const TEST_DATABASE_PORTS = new Map([
-  ["cogito-test", new Set(["6767", "6768", "6769"])],
-  ["cogito-test-settlement", new Set(["6767"])],
-  ["cogito-test-payout", new Set(["6770"])],
-]);
-const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+import {
+  assertSafeTestDatabaseUrl,
+  assertTestDatabaseResetAllowed,
+} from "./test-database-safety";
 
 export function assertSafeTestDatabase() {
-  const databaseUrl = process.env.DATABASE_URL;
-  const databaseName = getDatabaseName(databaseUrl);
-  let parsedUrl: URL | undefined;
-  try {
-    if (databaseUrl) parsedUrl = new URL(databaseUrl);
-  } catch {
-    parsedUrl = undefined;
-  }
-  const hostname = parsedUrl?.hostname.toLowerCase().replace(/^\[|\]$/g, "");
-
-  if (
-    process.env.NODE_ENV !== "test" ||
-    !parsedUrl ||
-    !["postgres:", "postgresql:"].includes(parsedUrl.protocol) ||
-    !LOOPBACK_HOSTS.has(hostname ?? "") ||
-    !TEST_DATABASE_PORTS.get(databaseName)?.has(parsedUrl.port)
-  ) {
-    throw new Error(
-      [
-        "resetDatabase() is blocked outside a dedicated test database.",
-        `NODE_ENV='${process.env.NODE_ENV ?? ""}', DATABASE_URL database='${databaseName}', port='${parsedUrl?.port ?? ""}'.`,
-      ].join(" "),
-    );
-  }
+  assertSafeTestDatabaseUrl(process.env.DATABASE_URL, process.env.NODE_ENV);
 }
 
 export type TestClient = ReturnType<typeof createTestClient>;
@@ -166,7 +130,13 @@ const TRUNCATE_TABLES = [
 ];
 
 export async function resetDatabase() {
-  assertSafeTestDatabase();
+  assertSafeTestDatabaseUrl(process.env.DATABASE_URL, process.env.NODE_ENV);
+  assertTestDatabaseResetAllowed(
+    process.env.DATABASE_URL,
+    process.env.NODE_ENV,
+    process.env.TEST_DATABASE_ALLOW_RESET,
+    process.env.TEST_DATABASE_RESET_TARGET,
+  );
   await db.execute(
     `TRUNCATE TABLE ${TRUNCATE_TABLES.map((t) => `"${t}"`).join(", ")} CASCADE`,
   );

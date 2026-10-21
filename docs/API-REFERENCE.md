@@ -1,5 +1,24 @@
 # Cogito API Reference
 
+## Test database reset safety (2026-10-21)
+
+The API test helper separates a recognized local test connection from consent
+to truncate and reseed it. `resetDatabase()` always rejects ports 6767/6768;
+only exact `cogito-test:6769` or `cogito-test-payout:6770` targets can pass
+when `TEST_DATABASE_ALLOW_RESET` is exactly `true` and
+`TEST_DATABASE_RESET_TARGET` exactly equals `DATABASE_URL`. URL validation
+rejects remote hosts, query/hash overrides, encoded credentials, malformed
+URLs and non-PostgreSQL protocols without including credentials in errors.
+Neither the test preload nor `apps/server/.env.test.example` opts into resets
+or supplies a default database URL.
+
+On 2026-10-21, `academy-class.test.ts` reached `resetDatabase()` with
+`cogito-test` on 6767. The helper truncated its tables with `CASCADE` before
+fixture setup failed on missing `tax_legal_name`. The separate development
+`cogito-app` database was read back intact; no test-data recovery or reseed has
+been verified. The T05 per-run E2E student identity remains a separate fixture
+path and was not changed by this API helper guard.
+
 Admin class cancellation RPCs: `/rpc/classes/previewAdminCancellation` accepts
 `{"json":{"classId":"uuid","expectedVersion":1,"reason":"audited reason"}}`.
 `/rpc/classes/confirmAdminCancellation` adds requestKey (UUID) and quoteVersion.
@@ -28,10 +47,12 @@ transfer behavior are exercised against actual database transactions. Browser
 presentation coverage uses mocked payout RPC responses; it is not API acceptance.
 
 Local signup OTP test fixtures remain test-only and loopback-only for exact
-`cogito-test` on ports 6767/6768/6769. Port 6769 is the disposable parent
+`cogito-test` on ports 6767/6768/6769. This connection allowlist does not grant
+reset permission: API `resetDatabase()` rejects 6767/6768 and requires explicit
+consent plus the exact URL for 6769 or 6770. Port 6769 is the disposable parent
 verification target; this adds no production route or proof bypass.
 
-The Playwright global setup adds no API route. It accepts only loopback T05 `cogito-test` on port 6769, or the separate `cogito-test-payout` database on port 6770, and skips cleanup on 6767/6768. Each T05 run seeds a fresh student identity, so prior enrollment, cancellation, ledger, quote, and payment history remains intact. The legacy payout target at 6770 still resets only the exact Andre by Cogito seed identity in one transaction.
+The Playwright global setup adds no API route. It accepts loopback test targets through its own E2E guard. Each T05 run seeds a fresh student identity, so prior enrollment, cancellation, ledger, quote, and payment history remains intact. This E2E seed path is distinct from the API helper's broad `resetDatabase()` consent check.
 
 Enrollment confirmation revalidates checkout expiry after transaction locks and
 requires all reserved sessions to remain scheduled in the future before any

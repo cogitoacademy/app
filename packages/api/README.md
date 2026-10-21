@@ -73,6 +73,6 @@ Router (oRPC procedures) → Handler (request shaping, auth, errors) → Service
 ## Tests (`src/tests/`)
 
 - `unit/` — one test file per module layer (`<module>.router.test.ts`, `.handler.test.ts`, `.service.test.ts`, `.repo.test.ts`, `.errors.test.ts`), plus lib utilities (`rate-limit.test.ts`, `idempotency.test.ts`, `circuit-breaker.test.ts`, …).
-- `integration/` — DB-backed flows; `helpers/test-client.ts` builds an oRPC client against `appRouter` with a safety check that the target DB is a test database; `helpers/factories.ts` provides row factories.
-- `test-setup.ts` — defaults env vars (test DB URL, Redis URL, auth secrets) for local runs.
+- `integration/` — DB-backed flows; `helpers/test-client.ts` builds an oRPC client against `appRouter` and requires explicit consent plus an exact dedicated target before its destructive reset helper can run; `helpers/factories.ts` provides row factories.
+- `test-setup.ts` — defaults non-database test env vars for local runs. DB-backed tests must provide `DATABASE_URL` explicitly; reset-based tests also require `TEST_DATABASE_ALLOW_RESET=true` and an exact `TEST_DATABASE_RESET_TARGET` match.
 - CI enforces a **100% line coverage gate** on `packages/api` plus 100% overall lines/functions/branches (`.github/scripts/coverage-comment.ts`). Run the suite with `bun run test:coverage` or the per-package script `bun run test` in this package (`scripts/run-test-suite.mjs`).

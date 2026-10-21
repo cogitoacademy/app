@@ -1,5 +1,19 @@
 # Cogito App — Codebase Context
 
+## Test database reset incident and guard (2026-10-21)
+
+At about 13:17:59 UTC, `academy-class.test.ts` invoked the API test helper's
+`resetDatabase()` against loopback `cogito-test` on port 6767. The helper
+truncated its broad table list with `CASCADE`; setup then failed because
+`tax_legal_name` was missing. The separate development database `cogito-app`
+was read back intact. No test-data recovery, restore or reseed has been
+performed or verified. The reset guard now always rejects 6767/6768 and permits
+only exact dedicated `cogito-test:6769` or `cogito-test-payout:6770` targets
+when `TEST_DATABASE_ALLOW_RESET=true` and
+`TEST_DATABASE_RESET_TARGET` exactly matches `DATABASE_URL`. Test setup no
+longer supplies a default database URL. The standalone guard suite passes 6
+tests / 40 expectations; no database-backed tests were run for this fix.
+
 Integrated local checkpoint (21 October): f/release-v3 includes admin cancellation
 446e2cd0 and student cancellation a7065443, alongside signup and payout. Migration
 0066 applied through the standard runner to guarded loopback cogito-app/6767.
@@ -132,7 +146,7 @@ API/web typechecks remain blocked by duplicate linked Drizzle declarations; see
 
 ## T05 repeat-run fixture identity (2026-10-21)
 
-On exact loopback `cogito-test:6769`, Playwright global setup creates a run-scoped student email (`cogito.e2e.<uuid>@yopmail.com`), seeds the usual password and Andre display name, and passes that identity to each E2E worker. The T05 reset command returns without querying or changing the shared seed student. Existing enrollment, cancellation, ledger, quote and payment history remains untouched; the new student starts with an independent seed wallet. The disposable database accumulates one run-scoped account and its fixtures per run; volume cleanup remains a separately assigned lifecycle task. Ports 6767/6768 remain no-write targets and 6770 keeps its legacy reset path. This removes FK cleanup assumptions and lets later T07 report/payout rows remain attached to their original enrollments.
+On exact loopback `cogito-test:6769`, Playwright global setup creates a run-scoped student email (`cogito.e2e.<uuid>@yopmail.com`), seeds the usual password and Andre display name, and passes that identity to each E2E worker. The T05 reset command returns without querying or changing the shared seed student. Existing enrollment, cancellation, ledger, quote and payment history remains untouched; the new student starts with an independent seed wallet. The disposable database accumulates one run-scoped account and its fixtures per run; volume cleanup remains a separately assigned lifecycle task. This T05 identity flow remains separate from the API `resetDatabase()` helper. The API helper always rejects reset on 6767/6768; its only allowed reset targets are exact 6769/6770 database pairs with both explicit consent variables. This removes FK cleanup assumptions and lets later T07 report/payout rows remain attached to their original enrollments.
 
 Pure guard and identity tests pass. A transactionally isolated regression for the exact 6769 target is authored but was not run because the T07 worker owns the serialized database window. It checks that repeated T05 reset calls preserve cancellation spending and stub-payment rows, then rolls back its synthetic class fixture. No reset, migration, browser E2E or full typecheck was performed for this slice.
 

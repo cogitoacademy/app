@@ -1,5 +1,22 @@
 # Cogito Module Reference
 
+## API test database safety (2026-10-21)
+
+`packages/api/src/tests/helpers/test-database-safety.ts` is a standalone URL
+validator with no application or database imports. In test mode, its connection
+check accepts only exact local test database/port pairs; destructive reset
+consent is a separate check. `resetDatabase()` runs both checks before
+truncation or seeding,
+always rejects ports 6767/6768, and requires both
+`TEST_DATABASE_ALLOW_RESET=true` and an exact `TEST_DATABASE_RESET_TARGET` URL
+for `cogito-test:6769` or `cogito-test-payout:6770`. Validation errors never
+include URL credentials.
+
+The 2026-10-21 incident was triggered by `academy-class.test.ts` resetting
+`cogito-test` on 6767; its broad `TRUNCATE ... CASCADE` ran before fixture setup
+failed on missing `tax_legal_name`. Development `cogito-app` was read back
+intact. No recovery or reseed of the affected test data has been verified.
+
 Admin class cancellation locks class, sorted sessions, sorted enrollments,
 installments, allocations and sorted wallets. Future scheduled sessions are
 cancelled; remaining funded Marks on those allocations are released in full with
