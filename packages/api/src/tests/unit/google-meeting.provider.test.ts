@@ -1786,6 +1786,187 @@ describe("createGoogleMeetingProvider academy class events", () => {
     expect(localInsert).not.toHaveBeenCalled();
   });
 
+  for (const missing of [
+    { label: "404", status: 404, tombstone: false },
+    { label: "410", status: 410, tombstone: false },
+    { label: "cancelled tombstone", status: 410, tombstone: true },
+  ]) {
+    test(`recreates a missing class event with one durable generation after ${missing.label}`, async () => {
+      mockCalendarEventsInsert.mockReset();
+      mockCalendarEventsGet.mockReset();
+      mockCalendarEventsDelete.mockReset();
+
+      const sessionId = `class-session-recreate-${missing.label.replaceAll(" ", "-")}`;
+      const firstKey = `academy-class-session:${sessionId}`;
+      const nextKey = `${firstKey}:generation:2`;
+      const oldEventId = `cogito${createHash("sha256").update(firstKey).digest("hex")}`;
+      const nextEventId = `cogito${createHash("sha256").update(nextKey).digest("hex")}`;
+      const calendarEvents = new Map<string, Record<string, unknown>>();
+      calendarEvents.set(oldEventId, { id: oldEventId, status: "cancelled" });
+      let acceptedResponseLost = false;
+
+      mockCalendarEventsGet.mockImplementation(async () => {
+        const request = mockCalendarEventsGet.mock.calls.at(-1)?.[0] as
+          | { eventId?: string }
+          | undefined;
+        if (request?.eventId === oldEventId) {
+          if (missing.tombstone)
+            return { data: { id: oldEventId, status: "cancelled" } };
+          throw Object.assign(new Error("Stored event is gone"), {
+            response: { status: missing.status },
+          });
+        }
+        const event = calendarEvents.get(request?.eventId ?? "");
+        if (!event)
+          throw Object.assign(new Error("Event not found"), { code: 404 });
+        return { data: event };
+      });
+      mockCalendarEventsInsert.mockImplementation(async () => {
+        const request = mockCalendarEventsInsert.mock.calls.at(-1)?.[0] as
+          | {
+              requestBody?: {
+                id?: string;
+                attendees?: Array<{ email: string; displayName?: string }>;
+                conferenceData?: {
+                  createRequest?: { requestId?: string };
+                };
+              };
+            }
+          | undefined;
+        const eventId = request?.requestBody?.id;
+        if (eventId && calendarEvents.has(eventId))
+          throw Object.assign(
+            new Error("Requested identifier already exists"),
+            {
+              code: 409,
+            },
+          );
+        const created = {
+          ...request?.requestBody,
+          id: eventId,
+          status: "confirmed",
+          conferenceData: {
+            ...request?.requestBody?.conferenceData,
+            entryPoints: [
+              {
+                entryPointType: "video",
+                uri: "https://meet.google.com/generation-two",
+              },
+            ],
+          },
+        };
+        if (eventId) calendarEvents.set(eventId, created);
+        if (!acceptedResponseLost) {
+          acceptedResponseLost = true;
+          throw Object.assign(
+            new Error("Google accepted the insert but its response was lost"),
+            { code: 503 },
+          );
+        }
+        return { data: created };
+      });
+      mockCalendarEventsDelete.mockImplementation(async () => {
+        const request = mockCalendarEventsDelete.mock.calls.at(-1)?.[0] as
+          | { eventId?: string }
+          | undefined;
+        const event = calendarEvents.get(request?.eventId ?? "");
+        if (event && request?.eventId)
+          calendarEvents.set(request.eventId, {
+            ...event,
+            status: "cancelled",
+          });
+        return { data: "" };
+      });
+
+      const localInsert = mock(() => ({
+        values: mock(() => ({ returning: mock(async () => []) })),
+      }));
+      const provider = createGoogleMeetingProvider(config, {
+        insert: localInsert,
+      } as any);
+      const startAt = new Date("2035-02-01T10:00:00.000Z");
+      const endAt = new Date("2035-02-01T11:00:00.000Z");
+      const attendee = { email: "tutor@example.com", name: "Test Tutor" };
+      const stale = await provider.createAcademyClassEvent!(
+        sessionId,
+        startAt,
+        endAt,
+        attendee,
+        {
+          title: "Cogito class recreation",
+          creationGeneration: 1,
+          externalEventId: oldEventId,
+        },
+      );
+      expect(stale).toMatchObject({
+        status: "failed",
+        externalEventId: null,
+        missingEvent: true,
+      });
+
+      const nextDetails = {
+        title: "Cogito class recreation",
+        creationGeneration: 2,
+      };
+      const accepted = await provider.createAcademyClassEvent!(
+        sessionId,
+        startAt,
+        endAt,
+        attendee,
+        nextDetails,
+      );
+      expect(accepted.status).toBe("failed");
+      const retry = await provider.createAcademyClassEvent!(
+        sessionId,
+        startAt,
+        endAt,
+        attendee,
+        nextDetails,
+      );
+
+      expect(retry).toMatchObject({
+        status: "created",
+        externalEventId: nextEventId,
+        meetingUrl: "https://meet.google.com/generation-two",
+      });
+      expect(
+        [...calendarEvents.values()].filter(
+          (event) => event.status === "confirmed",
+        ),
+      ).toHaveLength(1);
+      expect(calendarEvents.get(nextEventId)).toMatchObject({
+        attendees: [{ email: attendee.email, displayName: attendee.name }],
+        conferenceData: { createRequest: { requestId: nextKey } },
+      });
+      expect(mockCalendarEventsInsert).toHaveBeenCalledTimes(2);
+      for (const call of mockCalendarEventsInsert.mock.calls) {
+        const request = call[0] as {
+          requestBody?: {
+            id?: string;
+            conferenceData?: { createRequest?: { requestId?: string } };
+          };
+        };
+        expect(request.requestBody?.id).toBe(nextEventId);
+        expect(
+          request.requestBody?.conferenceData?.createRequest?.requestId,
+        ).toBe(nextKey);
+      }
+
+      await provider.cancelAcademyClassEvent!(nextEventId, sessionId, 2);
+      expect(mockCalendarEventsDelete).toHaveBeenCalledWith({
+        calendarId: "primary",
+        eventId: nextEventId,
+        sendUpdates: "none",
+      });
+      expect(
+        [...calendarEvents.values()].filter(
+          (event) => event.status === "confirmed",
+        ),
+      ).toHaveLength(0);
+      expect(localInsert).not.toHaveBeenCalled();
+    });
+  }
+
   test("resumes the accepted event until the pending Meet link is available", async () => {
     mockCalendarEventsInsert.mockReset();
     mockCalendarEventsGet.mockReset();

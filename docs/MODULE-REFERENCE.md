@@ -57,46 +57,48 @@ the authorized Q04 policy.
 
 ## T06 admin session and minimum lifecycle (2026-10-21)
 
-Individual admin cancellation is separate from whole-class cancellation. The
-preview and confirmation lock the class, target session, affected enrollments,
+Individual admin cancellation is separate from whole-class cancellation. Preview
+and confirmation lock the class, target session, affected enrollments,
 installments, allocations and wallets, and require the exact class/session
 versions, audited reason, stable request UUID and SHA-256 quote. Only one future
-scheduled session is cancelled. The transaction returns the unspent funded
-balance for allocations on that session and releases only its reserved seat;
-other session allocations and the enrollment's original prices/session count do
-not move to a replacement plan. An affected unpaid installment is repriced to
-the remaining reserved sessions and its next due session/date is updated, or it
-is cancelled when no reserved sessions remain. An ongoing, past, completed or
-reported session cannot be cancelled. Past delivery holds, reports and earned
-tutor fees remain intact. Audit, student/tutor notification outboxes and durable
-calendar cancellation are recorded through existing module services. Class-session updates use the saved external event ID (or stable session-ID
-fallback) through direct Google transport; this path does not query booking
-`meeting_event`. OAuth and service-account paths fetch then update the full event,
-preserving its title, attendees and Meet conference. A 404/410 clears stale event
-identity for recreation on retry; transient failures such as 503 retain the ID.
-A stale provider completion queues the newer session version without clearing a
-newer active lease, and cancelled-session deletion remains durable. Migration
-0068 is test-only; parent dev integration and full release acceptance remain
-pending.
+scheduled session is cancelled. The transaction returns unspent funded Marks for
+allocations on that session and releases only its reserved seat; other session
+allocations and original enrollment prices/session count do not move. Affected
+unpaid installments are reduced to remaining reserved sessions, with the next
+due session/date updated, or cancelled when no reserved sessions remain.
+Ongoing, past, completed or reported sessions cannot be cancelled. Past delivery
+holds, reports and earned tutor fees remain intact. Audit, student/tutor
+notification outboxes and durable calendar cleanup use existing services.
 
-The minimum check applies only to an unresolved published cohort at or after its
-saved check time. The count is unique students with an active full/half plan and
-at least one funded, unspent allocation on a still-scheduled session. It excludes
-single-session buyers, expired checkouts, cancelled enrollments and any plan with
-a defaulted installment. Admin may continue even with a shortfall or postpone
-once. A postponement requires a replacement start for every scheduled session;
-each must start strictly after 72 hours from the authoritative confirmation
-clock. Session identities, ordering, duration, original enrollment/rate
-snapshots and funding allocation IDs stay unchanged. Class/session versions
-advance, pending second-half due dates/reminder markers follow the replacement
-times, and the existing meeting job updates the same provider event with retry.
+The minimum check applies once to an unresolved published cohort at or after its
+saved check time. It counts unique active students with paid full/half plans and
+at least one funded, unspent allocation on a scheduled session; single-session
+buyers, expired checkouts, cancelled enrollments and defaulted plans do not
+count. Admin may continue despite a shortfall or postpone once. A postponement
+requires one replacement for each scheduled session, strictly after the
+authoritative 72-hour deadline. Session identities/order/durations, enrollment
+prices, allocation IDs and funding remain unchanged; class/session versions
+advance, pending second-half due dates/reminder markers follow replacement
+dates, and capacity plus tutor/room overlaps are checked under shared locks.
+Postponed cohorts remain visible in the public class catalog/detail, but
+`createEnrollment` accepts only published classes. Existing students retain
+their owner-scoped enrollment view and can withdraw without a fee through the
+exact inclusive `freeExitUntil`. Q04 ordinary later-reschedule rights remain out
+of scope.
 
-Postponement opens whole-enrollment withdrawal without a fee through the exact
-inclusive `freeExitUntil`. That quote returns eligible remaining funded Marks
-and cancels unpaid second-half obligations; no later debit is scheduled. Past
-reports and fees remain protected by the existing T07 settlement path. Q04's
-ordinary later-reschedule rights remain open, so this module does not add a
-general reschedule action.
+Calendar updates use the saved external event ID directly and preserve title,
+attendees and Meet conference through OAuth or service-account transport.
+Transient failures keep the ID and return to the durable retry worker. On a
+404/410 tombstone, migration 0069's persisted `creationGeneration` advances
+before a new provider insert; accepted-but-response-lost retries reuse that
+generation key. Stale provider completions queue the latest session schedule
+even when a newer lease exists, without dropping cancellation work. Migration
+0069 adds a positive integer generation with default 1; its SQL hash is
+`A6A442562692E34CEA132CBD4BB20DE6561906FB45AD9441ADD19DBF8B8C2617`. Provider
+units passed 52 tests / 196 expectations in this continuation. Database
+integration and 0069 readback remain open because loopback `6769/cogito-test`
+was unavailable; the earlier 0068 test readback is not refreshed here. Parent
+integration and full release acceptance remain pending.
 
 T03 integrates with the current enrollment/signup baseline. Bank account ownership
 snapshots accept only self/trusted_person; unprepared preview projections include

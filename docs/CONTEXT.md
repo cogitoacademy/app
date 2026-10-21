@@ -14,41 +14,43 @@ when `TEST_DATABASE_ALLOW_RESET=true` and
 longer supplies a default database URL. The standalone guard suite passes 6
 tests / 40 expectations; no database-backed tests were run for this fix.
 
-Current local T06 lifecycle implementation checkpoint (21 October): this worktree
-adds preview/confirm for individual future class-session cancellation, the
-approved one-time minimum decision and postponement flow, and the exact 72-hour
-free-exit window. Quotes bind stable request UUIDs, class/session versions, and
-exact hashes. Cancellation releases only the target future seat and adjusts
-unpaid installments; original enrollment pricing/history, past delivery holds,
-reports, and earned fees remain. The minimum counts unique active full/half-plan
-students and excludes single-session buyers, expired checkouts, cancelled
-enrollments, and defaulted plans. Admin may continue or postpone once; a
-replacement start must be strictly after the free-exit deadline, which is
-inclusive for a no-fee student withdrawal. Ordinary later reschedule rights
-remain open under Q04.
+Current local T06 lifecycle checkpoint (21 October): branch `t3/finish-v3-t06`
+continues `f/release-v3` from `dc1da96a`; it is not integrated yet and `main` is
+unchanged. The existing implementation covers preview/confirm for individual
+future class-session cancellation, the approved one-time cohort minimum
+decision, and the exact 72-hour free-exit window. Quotes bind stable request
+UUIDs, class/session versions, reason and exact hashes. Admin cancellation
+releases only the target future seat with a zero fee; original enrollment/rate
+snapshots, past delivery holds, reports and earned fees remain. Minimum counts
+unique active paid full/half students, excludes single-session buyers and
+invalid or unpaid states, and supports continue or one postponement. Replacement
+sessions start strictly after the free-exit deadline, preserve session
+identity/order/duration and funding, reject tutor/room conflicts, and move
+pending installment due dates and reminders. Postponed cohorts stay visible to
+existing students while new enrollment is rejected. Q04 ordinary reschedule
+rights remain out of scope.
 
-Isolated evidence: migration 0068 was applied only to loopback test database
-6769 (journal row 69, timestamp 1792584327849, SHA-256
-cffb34e94821c878f2d897f59b1800395c7bc6ceefc44dc8cd9546db7116b173). The broad
-class-enrollment suite passes 35 tests / 252 expectations; pure cancellation
-and meeting tests pass 9 / 21; one real-RPC Chromium journey passes in 31.7s;
-targeted web and E2E typechecks pass. Parent review/dev integration remain
-pending. This milestone does not complete T06 or Release V3. See the T06
-runbook checkpoint for typecheck limits, logs, and the exact test boundaries.
+A saved earlier T06 checkpoint recorded 35 PostgreSQL tests / 252 expectations,
+one real-RPC Chromium journey and targeted web/E2E typechecks; the latest
+meeting and enrollment WIP changed those integration cases, so that database and
+browser evidence was not rerun here. This continuation ran
+`google-meeting.provider.test.ts` (52 tests / 196 expectations),
+`class-enrollment.cancellation.test.ts` (8 / 16), and
+`test-client.safety.test.ts` (6 / 40). Cached oxfmt 0.65.0 check and oxlint
+1.80.0 exited 0 on changed sources.
 
-Calendar recovery continuation in this checkout updates class meetings by their
-saved Google event ID through OAuth or service-account transport, preserving
-event metadata. A 404/410 clears stale identity for recreation, a transient 503
-keeps the ID for retry, and a late stale-lease completion requeues the newest
-schedule while preserving a newer lease and cancellation. The guard unit suite
-passes 6 tests / 40 expectations; cached oxfmt 0.65.0 and oxlint 1.80.0 pass on
-the changed TypeScript. Provider tests could not load because cached dependencies
-do not resolve `googleapis`; the NONRESET class-calendar retry and lease tests
-are authored but remain unrun. No database connection, live provider call, reset,
-seed, or development migration was performed in this continuation. Migration
-0068 remains test-only; parent review, dev integration and full Release V3
-acceptance remain pending. Logs and exit codes are in the ignored
-`C:\.Projects\cogito-app\tmp\v3-dev\t06-provider-safe-*`.
+The provider fixes update the stored Calendar event ID directly, propagate
+transient update failures for worker retry, durably requeue stale lease results
+against the latest schedule, and advance a persisted creation generation after a
+deleted/tombstoned event. Migration 0069 adds that positive generation column;
+its SQL SHA-256 is
+`A6A442562692E34CEA132CBD4BB20DE6561906FB45AD9441ADD19DBF8B8C2617`. No migration
+command ran in this continuation. The required non-reset `6769/cogito-test`
+integration suite and migration readback could not run because loopback port
+6769 refused connections and Docker Desktop's daemon was unavailable. Migration
+0069 remains unapplied by this work; the prior 0068 readback is retained as
+historical evidence, not refreshed. Parent review/integration and full Release
+V3 acceptance remain pending. No provider traffic or database writes ran.
 
 Prior integrated local checkpoint (21 October, before T06 lifecycle): f/release-v3 includes admin cancellation
 446e2cd0 and student cancellation a7065443, alongside signup and payout. Migration

@@ -26,6 +26,8 @@ export interface MeetingEventDetails {
   createConference?: boolean;
   /** Stable provider key used for idempotent class-session calendar events. */
   idempotencyKey?: string;
+  /** Persisted class-event generation; generation one retains the original ID. */
+  creationGeneration?: number;
   /** Existing provider event to resume when conference generation is pending. */
   externalEventId?: string;
 }
@@ -36,6 +38,8 @@ export interface AcademyClassMeetingResult {
   externalEventId: string | null;
   meetingUrl: string | null;
   errorReason: string | null;
+  /** The stored event is a deleted Calendar tombstone and needs a new generation. */
+  missingEvent?: true;
 }
 
 export interface MeetingPort {
@@ -43,6 +47,7 @@ export interface MeetingPort {
   cancelAcademyClassEvent?(
     externalEventId: string | null,
     sessionId?: string,
+    creationGeneration?: number,
   ): Promise<void>;
 
   /** Creates an idempotent Google Meet event without writing a booking row. */

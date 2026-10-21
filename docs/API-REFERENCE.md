@@ -84,14 +84,23 @@ second installment is cancelled without an automatic debit. This does not define
 ordinary later-reschedule rights; Q04 remains open for that policy.
 
 Class-session Calendar sync is internal worker behavior and adds no RPC input or
-output fields. It updates the saved external event ID (or the deterministic
-session-event ID when the row has no ID) through the configured OAuth or
-service-account transport while preserving the event title, attendees and Meet
-conference. Provider 404/410 clears the stale ID so a due retry recreates the
-event; transient errors such as 503 retain the ID for retry. A late provider
-completion after lease recovery durably queues the latest session version while
-keeping a newer active lease and preserving cancellation work. Migration 0068
-remains test-only; parent dev integration and full release acceptance are pending.
+output fields. It updates the saved external event ID through OAuth or
+service-account transport while preserving event metadata. Provider 503 and
+other transient failures retain the event ID for retry. Provider 404/410 clears
+the tombstoned identity and atomically advances a persisted creation generation
+before the next insert; an accepted-but-response-lost retry uses the same
+generation key. A stale provider completion durably queues the latest session
+version while retaining a newer lease and cancellation work. Migration 0069 adds
+`academy_class_meeting.creation_generation` with a positive-value constraint.
+The 0069 migration is not applied by this worktree; the prior 0068 test readback
+remains recorded, and parent dev integration/full release acceptance are
+pending.
+
+Postponed cohorts remain available through the public class list/detail read
+model so students can review the replacement schedule.
+`classes.createEnrollment` accepts only published classes, so postponed cohorts
+cannot accept new enrollments; an existing owner can still read their own
+enrollment state and use the approved withdrawal flow.
 
 T03 parent acceptance: selected-source prepare/record/void/reconcile procedures
 passed the real isolated Postgres acceptance suite on 6770. Exact-net and repeat

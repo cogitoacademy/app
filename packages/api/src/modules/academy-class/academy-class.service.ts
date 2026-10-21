@@ -692,10 +692,12 @@ export function createAcademyClassService(deps: {
       externalEventId: string | null;
       meetingUrl: string | null;
       errorReason: string | null;
+      missingEvent?: true;
     };
     let operation: "create" | "update" | "cancel" = "create";
     let processedScheduleVersion = claimed.scheduleVersion;
     let clearMissingEventId = false;
+    let advanceCreationGeneration = false;
     try {
       if (attempt?.session.state === "cancelled") {
         operation = "cancel";
@@ -707,6 +709,7 @@ export function createAcademyClassService(deps: {
           await deps.meeting.cancelAcademyClassEvent(
             attempt.meeting.externalEventId,
             attempt.session.id,
+            attempt.meeting.creationGeneration,
           );
         }
         result = {
@@ -759,6 +762,7 @@ export function createAcademyClassService(deps: {
             {
               title: `Cogito ${attempt.academyClass.titleEn}: ${attempt.session.titleEn}`,
               externalEventId: attempt.meeting.externalEventId ?? undefined,
+              creationGeneration: attempt.meeting.creationGeneration,
             },
           );
           processedScheduleVersion = attempt.session.version;
@@ -767,6 +771,7 @@ export function createAcademyClassService(deps: {
     } catch (error) {
       clearMissingEventId =
         operation === "update" && isMissingClassCalendarEvent(error);
+      advanceCreationGeneration = clearMissingEventId;
       result = {
         provider: attempt?.meeting.provider ?? "manual",
         status: "failed",
@@ -777,6 +782,12 @@ export function createAcademyClassService(deps: {
             : null,
         errorReason: String(error),
       };
+    }
+
+    if (result.missingEvent) {
+      clearMissingEventId = true;
+      advanceCreationGeneration = true;
+      result = { ...result, externalEventId: null, meetingUrl: null };
     }
 
     if (
@@ -813,6 +824,7 @@ export function createAcademyClassService(deps: {
             attempt?.meeting.externalEventId ??
             null),
         clearExternalEventId: clearMissingEventId,
+        advanceCreationGeneration,
         meetingUrl: result.meetingUrl,
         errorReason: result.errorReason,
         nextRetryAt:

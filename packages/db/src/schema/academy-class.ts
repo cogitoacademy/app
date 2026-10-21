@@ -164,6 +164,7 @@ export const academyClassMeeting = pgTable(
     meetingUrl: text("meeting_url"),
     status: text("status").notNull().default("pending"),
     scheduleVersion: integer("schedule_version").notNull().default(1),
+    creationGeneration: integer("creation_generation").notNull().default(1),
     attemptCount: integer("attempt_count").notNull().default(0),
     nextRetryAt: timestamp("next_retry_at", { withTimezone: true })
       .defaultNow()
@@ -194,6 +195,10 @@ export const academyClassMeeting = pgTable(
     check(
       "academy_class_meeting_schedule_version_positive",
       sql`${table.scheduleVersion} > 0`,
+    ),
+    check(
+      "academy_class_meeting_creation_generation_positive",
+      sql`${table.creationGeneration} > 0`,
     ),
     index("academy_class_meeting_retry_idx").on(
       table.status,

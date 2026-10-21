@@ -23,70 +23,72 @@ guard suite passed 6 tests / 40 expectations; no DB-backed verification was run.
 
 ## T06 class lifecycle implementation checkpoint (21 October)
 
-The local T06 slice implements preview/confirm for cancelling one future,
-scheduled class session, with a required reason, stable request UUID, quote hash,
-and class/session version checks. It releases that session's funded, unspent
-seat allocations, adjusts unpaid installment obligations, and preserves original
-registration rates/session history. Completed, ongoing, reported, and past
-delivery holds and earned report fees are retained. Audit and student/tutor
-notification outboxes commit with the cancellation. Durable calendar cleanup
-uses the existing retrying meeting worker.
+The `t3/finish-v3-t06` worktree continues `f/release-v3` from `dc1da96a`; do not
+treat this branch as integrated. It implements preview/confirm for cancelling
+one future scheduled class session with a required reason, stable request UUID,
+exact quote hash and class/session version checks. Cancellation returns only the
+target session's unspent funded Marks with a zero fee, adjusts/cancels the
+affected unpaid installment, and preserves original enrollment prices/session
+history, delivered holds, reports and earned fees. Audit and student/tutor
+notifications commit with the transaction; the meeting worker retries calendar
+cleanup.
 
 The minimum check runs once from the saved check date and counts unique active
-full/half-plan students; single-session buyers, expired checkouts, cancelled
-enrollments, and plans with a defaulted installment do not count. Admins may
-continue or postpone once. A postponement creates an authoritative 72-hour
-free-exit deadline, and the replacement start must be strictly after it. A
-student withdrawal through the inclusive deadline has no fee and cancels the
-unpaid second installment without an automatic debit. Original funding
-allocation identity and enrollment rate snapshots remain unchanged. Ordinary
-later reschedule rights remain open under Q04.
+paid full/half-plan students with funded scheduled allocations. Single-session
+buyers, expired checkouts, cancelled enrollments and plans with a defaulted
+installment do not count. Admin may continue or postpone once. Every replacement
+session must start strictly after the authoritative 72-hour free-exit deadline;
+session identity, order, duration, funding and rates remain unchanged. Tutor and
+managed-room conflicts are checked. Pending installment due dates and reminder
+markers follow the replacement schedule. Students can still see the postponed
+cohort and their own enrollment, while `createEnrollment` rejects new
+enrollments. Whole-enrollment withdrawal is fee-free through the inclusive
+deadline; ordinary later rescheduling stays out of scope.
 
-Isolated validation used Postgres `cogito-test` on loopback 6769, Redis 6381,
-API 3201, and web 3200, with one browser worker and stubbed providers. The broad
-class-enrollment integration suite passed 35 tests / 252 expectations; the
-focused cancellation/meeting pure suite passed 9 / 21. One real-RPC Chromium
-journey passed in 31.7s, covering individual admin cancellation, one postponement,
-student withdrawal through the exact free-exit deadline, wallet readback, and
-second-installment behavior. Targeted web and E2E no-emit typechecks passed.
-The package-wide API typecheck still reports 1,400 diagnostics across the
-existing package graph; changed production API modules have no diagnostics, and
-the touched integration file has two fixture type diagnostics. The full web
-compiler run hit Windows virtual-memory exhaustion, so only the targeted web
-typecheck is claimed.
+The existing meeting worker updates a class event using its stored Google event
+ID, preserves event metadata, and retries transient provider errors such as 503.
+If the saved event is deleted/tombstoned (404/410), a durable
+`creationGeneration` advances before the next insert; an
+accepted-but-response-lost attempt retries with the same generation key. A late
+provider write after lease recovery leaves the latest schedule queued while
+retaining a newer active lease and cancellation work. Additive migration
+`0069_academy_class_meeting_creation_generation.sql` adds an integer defaulting
+to 1 with a positive constraint. SQL SHA-256:
+`A6A442562692E34CEA132CBD4BB20DE6561906FB45AD9441ADD19DBF8B8C2617`.
 
-Reviewed migration `0068_modern_carmella_unuscione.sql` was applied with the
-normal Drizzle runner only to isolated test database 6769. Readback is journal
-row 69, timestamp `1792584327849`, SHA-256
-`cffb34e94821c878f2d897f59b1800395c7bc6ceefc44dc8cd9546db7116b173`; rows 67
-and 68 remain unchanged. No development migration, reset, or seed ran. Logs
-are in the ignored `C:\.Projects\cogito-app\tmp\v3-dev\t06-lifecycle-*`
-files. Parent review and dev integration remain pending. This does not complete
-all of T06 or Release V3; PDF, reminders, referrals, AUTH-02, and ordinary
-rescheduling are outside this slice.
+This continuation ran `bun --smol test
+packages/api/src/tests/unit/google-meeting.provider.test.ts` (52 passed / 196
+expectations), `.../class-enrollment.cancellation.test.ts` (8 / 16), and
+`.../test-client.safety.test.ts` (6 / 40). Cached oxfmt 0.65.0 `--check` passed
+on changed code/JSON files, and cached oxlint 1.80.0 exited 0 with warnings. The
+integration file was inspected: it requires `NODE_ENV=test`, loopback
+`6769/cogito-test`, no reset flags, and afterAll deletes only UUID-owned fixture
+rows; it contains no `resetDatabase()` or `TRUNCATE` path.
+
+The exact-target env preflight passed, but `6769` refused a read-only database
+connection and Docker Desktop's daemon was unavailable. Therefore the non-reset
+`class-enrollment.test.ts` suite, 0069 migration application, and migration
+journal readback were not run. No database write, migration command, reset,
+seed, Calendar/API provider traffic, email or payment call ran in this
+continuation. Migration 0069 remains unapplied by this work; the earlier 0068
+test readback is preserved as historical evidence, not reverified. A prior T06
+checkpoint recorded 35 Postgres tests / 252 expectations and one Chromium
+journey; those checks were not rerun against the latest provider/enrollment WIP.
+Package-wide API typechecking and the full web compiler remain unverified due
+the previously recorded baseline diagnostics/Windows memory limits. Parent
+review/dev integration and full Release V3 acceptance remain pending.
 
 ## T06 class Calendar retry continuation (21 October)
 
-The preserved calendar fix updates class events by their stored Google event ID
-through the configured OAuth or service-account transport, preserves event
-metadata, recreates after 404/410, and retries transient failures such as 503
-against the same ID. A provider update that returns after lease recovery marks
-the newest schedule dirty for durable convergence while preserving a newer active
-lease; cancellation and late-create handling remain in the existing worker. The
-NONRESET `class-enrollment.test.ts` suite now contains the external-status and
-expired-lease regression cases, using only UUID-owned fixtures and its scoped
-`afterAll` cleanup. A whole-file scan found no resetDatabase/TRUNCATE path.
-
-Verification in this continuation: the standalone reset guard suite passed 6
-tests / 40 expectations; cached oxfmt 0.65.0 and oxlint 1.80.0 passed for the
-changed TypeScript. `google-meeting.provider.test.ts` could not load because the
-cached dependency set cannot resolve `googleapis`; no install was attempted. The
-class-enrollment database regressions were not run, and this continuation made
-no database connection, reset, seed, live Calendar, email, or payment call. The
-existing 0068 readback remains test-only on 6769; no dev 0068 migration ran.
-Parent review, dev integration and full Release V3 acceptance remain pending.
-Logs and exit codes are in the ignored
-`C:\.Projects\cogito-app\tmp\v3-dev\t06-provider-safe-*` files.
+The provider and worker changes in this continuation are the calendar
+implementation above. Focused provider tests now pass; live Calendar behavior
+has not been exercised. Preserve migration 0068 unchanged and apply only
+additive 0069 to the exact approved test target after the DB is available and
+the migration journal confirms the expected predecessor. Never run reset-based
+suites for this work. The failure to connect to loopback `6769/cogito-test` is
+the active validation blocker; restore the existing test database service, then
+rerun the guarded suite and verify database identity plus migration journal
+readback. No dev database action is authorized in this continuation.
 
 ## Prior T07 UI and browser acceptance checkpoint (21 October)
 

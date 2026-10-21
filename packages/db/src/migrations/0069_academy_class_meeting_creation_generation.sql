@@ -1,0 +1,2 @@
+ALTER TABLE "academy_class_meeting" ADD COLUMN "creation_generation" integer DEFAULT 1 NOT NULL;--> statement-breakpoint
+ALTER TABLE "academy_class_meeting" ADD CONSTRAINT "academy_class_meeting_creation_generation_positive" CHECK ("academy_class_meeting"."creation_generation" > 0);

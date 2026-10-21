@@ -484,6 +484,13 @@
       "when": 1792584327849,
       "tag": "0068_modern_carmella_unuscione",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1792593114908,
+      "tag": "0069_academy_class_meeting_creation_generation",
+      "breakpoints": true
     }
   ]
 }

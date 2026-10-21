@@ -434,6 +434,7 @@ export function createAcademyClassRepo() {
       nextRetryAt: Date;
       scheduleVersion: number;
       clearExternalEventId?: boolean;
+      advanceCreationGeneration?: boolean;
     },
     claim: {
       lockedAt: Date;
@@ -441,7 +442,11 @@ export function createAcademyClassRepo() {
       operation: "create" | "update" | "cancel";
     },
   ) {
-    const { clearExternalEventId = false, ...attemptValues } = values;
+    const {
+      clearExternalEventId = false,
+      advanceCreationGeneration = false,
+      ...attemptValues
+    } = values;
     const cancelledSession = sql`EXISTS (SELECT 1 FROM ${academyClassSession} WHERE ${academyClassSession.id} = ${academyClassMeeting.sessionId} AND ${academyClassSession.state} = 'cancelled')`;
     const writingProviderEvent = claim.operation !== "cancel";
     const sameLease = sql`${academyClassMeeting.lockedAt} = ${claim.lockedAt.toISOString()}::timestamptz AND ${academyClassMeeting.attemptCount} = ${claim.attemptCount}`;
@@ -451,6 +456,11 @@ export function createAcademyClassRepo() {
       .update(academyClassMeeting)
       .set({
         ...attemptValues,
+        ...(advanceCreationGeneration
+          ? {
+              creationGeneration: sql`${academyClassMeeting.creationGeneration} + 1`,
+            }
+          : {}),
         externalEventId: clearExternalEventId
           ? null
           : sql`COALESCE(${values.externalEventId}, ${academyClassMeeting.externalEventId})`,
