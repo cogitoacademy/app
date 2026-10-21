@@ -1,5 +1,14 @@
 # Cogito App — Codebase Context
 
+Integrated local checkpoint (21 October): f/release-v3 includes admin cancellation
+446e2cd0 and student cancellation a7065443, alongside signup and payout. Migration
+0066 applied through the standard runner to guarded loopback cogito-app/6767.
+Dev readback: journal id 87, timestamp 1792559482042, hash
+70a47d6cbd1f7539d4af45071eaf643ca99ec73c7046c033108d7e1475d54afd.
+The owned API restarted; web 3000 and API 3001 return HTTP 200. No dev reset/seed
+or live-provider test ran. T07 class reports/completion/settlement is next; lifecycle
+follow-ups, AUTH-02/referrals and full release acceptance remain open. Main is unchanged.
+
 T06 administrator cancellation is implemented on f/v3-admin-class-cancellation
 with parent acceptance complete for this slice. Admins review exact zero-fee future-hold returns,
 then confirm a versioned/idempotent quote. The transaction cancels future sessions,

@@ -1,5 +1,14 @@
 # Cogito Runbook
 
+Integrated local checkpoint (21 October): f/release-v3 includes admin cancellation
+446e2cd0 and student cancellation a7065443, alongside signup and payout. Migration
+0066 applied through the standard runner to guarded loopback cogito-app/6767.
+Dev readback: journal id 87, timestamp 1792559482042, hash
+70a47d6cbd1f7539d4af45071eaf643ca99ec73c7046c033108d7e1475d54afd.
+The owned API restarted; web 3000 and API 3001 return HTTP 200. No dev reset/seed
+or live-provider test ran. T07 class reports/completion/settlement is next; lifecycle
+follow-ups, AUTH-02/referrals and full release acceptance remain open. Main is unchanged.
+
 Admin class cancellation migration 0066 was generated from snapshot 0065;
 only public.academy_class_meeting changes (terminal cancelled status check).
 SQL SHA-256: 70a47d6cbd1f7539d4af45071eaf643ca99ec73c7046c033108d7e1475d54afd;
