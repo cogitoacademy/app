@@ -1,5 +1,12 @@
 # Cogito Runbook
 
+Local dev checkpoint (21 October): f/release-v3 includes signup 3055ba54 and
+payout 2482d7ec. The standard migration runner applied 0065 only after the exact
+loopback cogito-app/6767 guard. Dev readback: journal id 86, timestamp 1792525224597,
+hash 876ec0367859d9ad5bd378d4e96cc4a29f49fab8e1d31ac17c9c95e98b041939,
+and tutor_tax_config exists. The owned API was restarted; no dev reset or seed ran.
+T06 cancellation and T07 completion/report remain next, and main is unchanged.
+
 T03 parent verification (21 October): reused only the dedicated payout container
 cogito-app-postgres-test-payout / volume cogito-t03-payout-20261021-data at 6770,
 with Redis 6382 and API/web 3111/3110. Its journal row 66 matches migration 0065,
