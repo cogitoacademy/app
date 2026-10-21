@@ -1,5 +1,19 @@
 # Cogito App — Codebase Context
 
+## T07 pending-report reminder integration checkpoint (2026-10-22)
+
+The class-report reminder worker is integrated on local `f/release-v3` at
+`1f9b6dd7`. It runs in the existing `class-enrollment-check` job alongside
+second-installment reminders, with separate report reminder counters. The
+guarded, non-reset PostgreSQL `class-enrollment.test.ts` suite passed 44 tests /
+354 expectations on exact loopback `6769/cogito-test` (exit 0, 9.62s); the
+pure report-reminder suite passed 7 tests / 25 expectations (exit 0, 0.15s).
+The integration fixture asserts only its owned installment event keys, student
+and enrollment while preserving the global report scan. `SELECT current_database()`
+was verified before fixture writes. No development seed or migration ran; no
+live email, browser or external provider ran. PDF export, dedicated on-demand
+admin correction, and legacy solo/group/series reminder coverage remain pending.
+
 ## T06 parent integration and local verification (2026-10-21)
 
 T06 is integrated into local `f/release-v3` through `cda99280`; `main` is
@@ -2028,7 +2042,7 @@ file are the permanent record; plan-file archives are not maintained.
 
 | Plan                                                  | Status                                                                                                                                                                                                                                                                                                                                                                        |
 | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `docs/plans/active/RELEASE-V3-PRD.md` + SPEC/TASKS    | `RELEASE-V3-TASKS.md` is the current status authority. T03 tax/payout, T05 enrollment, the integrated T06 core lifecycle, and T07 class report settlement/reminders have focused evidence; T07 PDF, dedicated on-demand admin correction, and legacy solo/group/series reminder coverage remain open. T04, T08, T10, T11 and overall release acceptance remain in progress; T09/T12 and OPS01 are open. |
+| `docs/plans/active/RELEASE-V3-PRD.md` + SPEC/TASKS    | `RELEASE-V3-TASKS.md` is the current status authority. T03 tax/payout, T05 enrollment, the integrated T06 core lifecycle, and T07 class report settlement/reminders have focused evidence; the T07 reminder worker is integrated at 1f9b6dd7 and parent-verified (44 PostgreSQL tests / 354 expectations; pure reminders 7 / 25); no development seed or migration ran in that checkpoint. T07 PDF, dedicated on-demand admin correction, and legacy solo/group/series reminder coverage remain open. T04, T08, T10, T11 and overall release acceptance remain in progress; T09/T12 and OPS01 are open. |
 | `docs/plans/active/DEFERRED-OPS-TASKS.md`             | Active — code gaps done, §3/§4 operator-console items pending                                                                                                                                                                                                                                                                                                                 |
 | `docs/plans/active/DEPLOYMENT-PLAN.md`                | Active — applied 2026-08-31; remaining scope tracked in the plan                                                                                                                                                                                                                                                                                                              |
 | `docs/plans/active/PAYMENT-INTEGRITY-FLAP.md`         | Active — payment-integrity alert stability                                                                                                                                                                                                                                                                                                                                    |

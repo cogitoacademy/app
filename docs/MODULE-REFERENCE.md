@@ -341,6 +341,15 @@ or financial state and does not use no-show expiry as proof of delivery. This
 class-only flow leaves legacy solo/group/series reminders unchanged; broader
 legacy reminder coverage remains pending.
 
+The integrated `createClassEnrollmentService.processDueJobs()` runs this bounded
+global report scan alongside installment reminder processing and returns
+separate `reportRemindersQueued` and `reportRemindersFailed` counters. At parent
+integration `1f9b6dd7`, the full guarded class-enrollment PostgreSQL suite passed
+44 tests / 354 expectations (exit 0, 9.62s); the pure reminder suite passed
+7 tests / 25 expectations (exit 0, 0.15s). No development seed or migration ran.
+PDF export, dedicated on-demand admin correction, and broader legacy solo/group/
+series reminder coverage remain pending.
+
 ## V3 class/session draft foundation (2026-10-19)
 
 `academy-class` owns the admin-only draft boundary. Migration `0061_academy_class_drafts.sql` adds `academy_class` and `academy_class_session`; session capacity, tutor, mode, room, dates, and tutor-fee snapshot are session-level. Class rows retain localized metadata, active competition identity, cohort minimum/check date and plan-rate defaults, masterclass seat-rate default, state, postponement count, and optimistic version.

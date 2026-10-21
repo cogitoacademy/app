@@ -176,6 +176,35 @@ the parent owns those checks and the development migration decision.
 
 ## T07 pending-report reminders (21 October)
 
+### Parent integration verification (22 October)
+
+The reminder worker is integrated into local `f/release-v3` at `1f9b6dd7`; the
+existing production job remains global. From the repository root, the guarded
+PostgreSQL `class-enrollment.test.ts` suite passed 44 tests / 354 expectations
+(exit 0, 9.62s), and the pure report-reminder suite passed 7 tests / 25
+expectations (exit 0, 0.15s). Reproduce sequentially from the repository root:
+
+```sh
+bun --smol --env-file=tmp/v3-dev/.env.signup-parent test --timeout 30000 packages/api/src/tests/integration/class-enrollment.test.ts
+bun --smol test --timeout 30000 packages/api/src/tests/unit/class-enrollment.report-reminders.test.ts
+```
+
+The installment assertions require the exact
+fixture-owned 7-day and 1-day event keys, recipient and enrollment; replay queues
+no additional installment notice, and a late join receives only its 1-day
+notice. The guard verified `NODE_ENV=test`, exact loopback `6769/cogito-test`, no
+URL query/hash, both reset overrides absent, and `SELECT current_database()`
+before fixture writes. Cleanup deletes only owned UUID fixtures. No reset,
+truncate, development seed or migration ran; no live email, browser or external
+provider ran. Focused oxfmt 0.65.0 `--check` and oxlint 1.80.0 exited 0 on the
+changed integration test; lint reported only existing file warnings. The full
+check was not a typecheck or browser acceptance run. PDF export, dedicated
+on-demand admin correction and broader legacy reminder coverage remain pending.
+Logs: `tmp/v3-dev/t07-reminders-integrated-db-final.log` and
+`tmp/v3-dev/t07-reminders-pure-final.log`.
+
+### Initial isolated implementation checkpoint
+
 In this isolated T07 worktree, the existing `class-enrollment-check` scheduler
 runs every minute and now queues
 at most 100 pending report reminders per pass for ended scheduled sessions in
@@ -210,12 +239,13 @@ The database cases verify the ISO-serialized timestamp query, concurrent/replay
 dedupe with one queued outbox row per period, current/next-day/catch-up periods,
 report and class-cancellation races, cancelled/completed exclusions, notification
 failure rollback/retry, and unchanged wallet/allocation/ledger/fee/report/session
-facts. No live email, browser, payment or Calendar provider was used. Full
-typecheck and browser acceptance were not run for this reminder verification.
+facts. No live email, browser, payment or Calendar provider was used. The initial isolated source slice did not include a broad typecheck or browser
+acceptance.
 
-Cached oxfmt 0.65.0 `--check` passes on the six changed source files. Focused
-oxlint 1.80.0 exits 0 with the existing non-fatal loop/scoping warnings. A
-broad typecheck and browser run were not run for this bounded source slice.
+Initial isolated source checks used cached oxfmt 0.65.0 `--check` on six source
+files and focused oxlint 1.80.0 (exit 0; existing non-fatal loop/scoping
+warnings). No broad typecheck or browser run was performed for that bounded
+source slice.
 
 PDF report export, the dedicated on-demand admin correction workflow, broader
 legacy report-reminder coverage and overall release acceptance remain pending T07

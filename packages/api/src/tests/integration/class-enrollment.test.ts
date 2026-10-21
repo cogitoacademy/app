@@ -958,7 +958,12 @@ describe("class enrollment PostgreSQL invariants [REQ-ENROLL-01..04]", () => {
 
   test("missed reminders catch up once, while a late join never gets historical notices", async () => {
     const missedJob = await createFixture({ sessions: 2, balance: 500 });
-    await makeEnrollment(missedJob, 0, "half");
+    const missedEnrollment = await makeEnrollment(missedJob, 0, "half");
+    const missedReminderPrefix = `class-enrollment:${missedEnrollment.id}:installment:2:reminder:`;
+    const missedReminderEventKeys = [
+      `${missedReminderPrefix}1d:${missedJob.startAt[1]!.toISOString()}`,
+      `${missedReminderPrefix}7d:${missedJob.startAt[1]!.toISOString()}`,
+    ];
     missedJob.setNow(
       new Date(missedJob.startAt[1]!.getTime() - 12 * 60 * 60 * 1000),
     );
@@ -968,24 +973,56 @@ describe("class enrollment PostgreSQL invariants [REQ-ENROLL-01..04]", () => {
     expect(await missedJob.service.processDueJobs()).toMatchObject({
       remindersQueued: 0,
     });
-    expect(missedJob.notifications.map((event) => event.eventKey)).toHaveLength(
-      2,
+    const missedInstallmentNotifications = missedJob.notifications.filter(
+      (event) =>
+        typeof event.eventKey === "string" &&
+        event.eventKey.startsWith(missedReminderPrefix),
     );
+    expect(
+      missedInstallmentNotifications.map((event) => event.eventKey).toSorted(),
+    ).toEqual(missedReminderEventKeys);
+    expect(
+      missedInstallmentNotifications.every(
+        (event) =>
+          event.userId === missedJob.studentIds[0] &&
+          (event.metadata as { enrollmentId?: string }).enrollmentId ===
+            missedEnrollment.id,
+      ),
+    ).toBe(true);
 
     const lateJoin = await createFixture({
       sessions: 2,
       balance: 500,
       startsInDays: [1, 6],
     });
-    await makeEnrollment(lateJoin, 0, "half");
+    const lateJoinEnrollment = await makeEnrollment(lateJoin, 0, "half");
+    const lateJoinReminderPrefix = `class-enrollment:${lateJoinEnrollment.id}:installment:2:reminder:`;
     lateJoin.setNow(
       new Date(lateJoin.startAt[1]!.getTime() - 12 * 60 * 60 * 1000),
     );
     expect(await lateJoin.service.processDueJobs()).toMatchObject({
       remindersQueued: 1,
     });
-    expect(lateJoin.notifications).toHaveLength(1);
-    expect(lateJoin.notifications[0]?.eventKey).toContain(":1d:");
+    const lateJoinInstallmentNotifications = lateJoin.notifications.filter(
+      (event) =>
+        typeof event.eventKey === "string" &&
+        event.eventKey.startsWith(lateJoinReminderPrefix),
+    );
+    expect(
+      lateJoinInstallmentNotifications.map((event) => event.eventKey),
+    ).toEqual([
+      `${lateJoinReminderPrefix}1d:${lateJoin.startAt[1]!.toISOString()}`,
+    ]);
+    expect(
+      lateJoinInstallmentNotifications.every(
+        (event) =>
+          event.userId === lateJoin.studentIds[0] &&
+          (event.metadata as { enrollmentId?: string }).enrollmentId ===
+            lateJoinEnrollment.id &&
+          (event.metadata as { reminderDaysBefore?: number })
+            .reminderDaysBefore === 1,
+      ),
+    ).toBe(true);
   });
 
   test("anonymous, tutor, and another student cannot read or pay an enrollment", async () => {
