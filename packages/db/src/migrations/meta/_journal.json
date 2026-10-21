@@ -470,6 +470,13 @@
       "when": 1792559482042,
       "tag": "0066_academy_class_cancellation",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1792572957418,
+      "tag": "0067_class-session-reports",
+      "breakpoints": true
     }
   ]
 }

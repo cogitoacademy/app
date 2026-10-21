@@ -12,6 +12,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { uuidPrimaryKey, user } from "./auth";
 import { booking, bookingSession, type BookingPriceSnapshot } from "./booking";
+import { academyClassSession } from "./academy-class";
 import { tutorPayout } from "./tutor-payout";
 import { tutorSessionFee } from "./tutor-session-fee";
 
@@ -34,13 +35,18 @@ export const tutorPayoutAllocation = pgTable(
       () => tutorSessionFee.id,
       { onDelete: "restrict" },
     ),
-    bookingId: text("booking_id")
-      .notNull()
-      .references(() => booking.id, { onDelete: "restrict" }),
+    bookingId: text("booking_id").references(() => booking.id, {
+      onDelete: "restrict",
+    }),
     bookingSessionId: text("booking_session_id").references(
       () => bookingSession.id,
       { onDelete: "restrict" },
     ),
+    academyClassSessionId: text("academy_class_session_id").references(
+      () => academyClassSession.id,
+      { onDelete: "restrict" },
+    ),
+    deliveryLabel: text("delivery_label"),
     bookingType: text("booking_type").notNull(),
     deliveryStatus: text("delivery_status").notNull(),
     scheduledStartAt: timestamp("scheduled_start_at", {
@@ -48,6 +54,7 @@ export const tutorPayoutAllocation = pgTable(
     }).notNull(),
     earnedAt: timestamp("earned_at", { withTimezone: true }).notNull(),
     grossHonorariumIdr: integer("gross_honorarium_idr").notNull(),
+    collectedMarks: integer("collected_marks").notNull().default(0),
     priceSnapshot: jsonb("price_snapshot").$type<BookingPriceSnapshot>(),
     active: boolean("active").notNull().default(true),
     releasedAt: timestamp("released_at", { withTimezone: true }),
@@ -61,12 +68,16 @@ export const tutorPayoutAllocation = pgTable(
   },
   (table) => [
     check(
+      "tutor_payout_allocation_source_identity_check",
+      sql`(${table.bookingId} IS NOT NULL AND ${table.academyClassSessionId} IS NULL) OR (${table.bookingId} IS NULL AND ${table.bookingSessionId} IS NULL AND ${table.academyClassSessionId} IS NOT NULL)`,
+    ),
+    check(
       "tutor_payout_allocation_source_type_check",
       sql`${table.sourceType} IN ('fee_event','legacy_booking','legacy_series_session')`,
     ),
     check(
       "tutor_payout_allocation_booking_type_check",
-      sql`${table.bookingType} IN ('solo','group','series')`,
+      sql`${table.bookingType} IN ('solo','group','series','cohort','masterclass')`,
     ),
     check(
       "tutor_payout_allocation_delivery_status_check",
@@ -75,6 +86,10 @@ export const tutorPayoutAllocation = pgTable(
     check(
       "tutor_payout_allocation_amount_check",
       sql`${table.grossHonorariumIdr} >= 0`,
+    ),
+    check(
+      "tutor_payout_allocation_collected_marks_check",
+      sql`${table.collectedMarks} >= 0`,
     ),
     uniqueIndex("tutor_payout_allocation_source_active_uniq")
       .on(table.sourceKey)
@@ -107,6 +122,10 @@ export const tutorPayoutAllocationRelations = relations(
     session: one(bookingSession, {
       fields: [tutorPayoutAllocation.bookingSessionId],
       references: [bookingSession.id],
+    }),
+    academyClassSession: one(academyClassSession, {
+      fields: [tutorPayoutAllocation.academyClassSessionId],
+      references: [academyClassSession.id],
     }),
   }),
 );
