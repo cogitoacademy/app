@@ -121,6 +121,12 @@ warnings; the E2E package typecheck passed before its final reload-wait update.
 API/web typechecks remain blocked by duplicate linked Drizzle declarations; see
 `RUNBOOK.md`. Do not infer T06, T07 or release readiness.
 
+## T05 repeated-run fixture reset safety (2026-10-21)
+
+Playwright global setup now resets only the exact Andre by Cogito student fixture on the dedicated loopback `cogito-test` database at port 6769. Class enrollment, allocation, installment and quote-only top-up-attempt cleanup runs in the same transaction as the existing wallet and legacy-booking reset. The reset skips cleanup on ports 6767 and 6768 so existing dev/signup setup can continue without this fixture reset; it rejects payout-linked/payment-linked class activity, mismatched allocation identity and unknown incoming foreign keys before any write. It does not alter class/session fixtures or other seeded students. The separate `cogito-test-payout` target at 6770 retains the legacy-only reset path.
+
+Offline reset guard coverage passes 6 tests / 17 expectations. No database reset, migration, browser run or full typecheck was performed for this slice; T07 report/payout integration remains open.
+
 ## V3 integration and local migration checkpoint (2026-10-20)
 
 Feature worktrees derive from `f/release-v3`; tested work merges there, and

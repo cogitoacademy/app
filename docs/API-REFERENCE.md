@@ -31,6 +31,8 @@ Local signup OTP test fixtures remain test-only and loopback-only for exact
 `cogito-test` on ports 6767/6768/6769. Port 6769 is the disposable parent
 verification target; this adds no production route or proof bypass.
 
+The Playwright global-setup reset adds no API route. It accepts only the dedicated loopback T05 `cogito-test` database on port 6769, or the separate `cogito-test-payout` database on port 6770. It skips cleanup on ports 6767 and 6768 so existing dev/signup setup can continue without this reset. On T05 it targets only the exact Andre by Cogito seed identity, clears that student’s class enrollment graph in a single transaction, and stops before writes if report/payout references or unsupported financial state are present.
+
 Enrollment confirmation revalidates checkout expiry after transaction locks and
 requires all reserved sessions to remain scheduled in the future before any
 Marks hold. A session that started during checkout requires a fresh enrollment;

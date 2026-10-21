@@ -124,6 +124,10 @@ this exact guarded test database; no customer pricing pointer or external
 provider is called. Vite uses `apps/web/node_modules/.vite-t05-enrollment` for
 the T05 browser server to avoid contending with the existing app's Vite cache.
 
+The Playwright global-setup reset now independently requires `NODE_ENV=test`, `T05_ENROLLMENT_TEST_DB_PORT=6769`, loopback PostgreSQL port 6769 and exact `/cogito-test`. It skips cleanup on 6767 and 6768, including when the preserved signup target uses `cogito-test`. On the T05 target it selects only `cogito.andre@yopmail.com` / Andre by Cogito / student, preflights incoming enrollment foreign keys, allocation source identity, recorded spending and paid top-ups, then deletes top-up attempts, allocations, installments and enrollments before resetting that wallet and legacy booking rows. All deletes and balance updates share one transaction. The payout test target at 6770 keeps its legacy-only reset path.
+
+Guard regression command: `bun --smol test --timeout 30000 apps/server/src/seed/reset-seed-student.guard.test.ts` (6 tests / 17 expectations). This code-only slice did not run reset, migration, database integration, browser E2E or full typecheck.
+
 The fresh T05 database was migrated through `0064_academy_class_enrollment.sql`
 using the normal Drizzle runner. Latest journal readback is timestamp
 `1792522475956`, hash

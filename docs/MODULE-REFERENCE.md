@@ -205,6 +205,8 @@ Financial mutations acquire sorted session row locks, then enrollment, installme
 
 T06 cancellation/withdrawal is intentionally not presented as a student action here. Its future service seam must release the selected session allocation only under the approved cancellation policy; Q04 ordinary reschedule rights remain open. T07 report completion and fee deduction remain downstream work.
 
+The T05 global-setup fixture reset is outside the class-enrollment service contract. It selects only the seeded Andre identity by exact email, name and student role, then removes that student’s allocations, installments, top-up attempts and enrollments in FK-safe order with the existing wallet/legacy reset in one transaction. Unknown references, paid top-ups, mismatched allocation identity or recorded session spending cause a preflight refusal. Other seeded students and class/session fixtures are not selected.
+
 ## V3 report input contract (2026-10-18)
 
 `booking/feedback-rules.ts` is shared by input schema and English completion UI.
