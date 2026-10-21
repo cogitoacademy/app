@@ -1,5 +1,23 @@
 # Cogito Module Reference
 
+Student class cancellation uses enrollment allocation identity. The first slice
+supports quote/confirm for an early funded seat and whole-plan withdrawal.
+Withdrawal rounds the current 20% fee once over the eligible remaining funded
+Marks, distributes that rounded fee deterministically across allocations, and
+cancels all unfunded reservations/pending installment obligations without charging
+them. Original enrollment/rate/session snapshots remain in history. Funded seats
+inside 24h and past/report-pending delivery holds remain funded for completion;
+withdrawal does not erase their liability. Fully cancelled seats become released
+with spentMarks = cancellation charge and releasedMarks = available-Marks return.
+Lock order: sorted sessions, owned enrollment, installments, allocations, wallet;
+clock is read after locks. The SHA-256 quote covers scope, allocation identities,
+amounts and deadlines. Confirmation rechecks it, writes fee/return ledger events,
+audit receipt and notification atomically. Receipt replay is serialized by the
+enrollment row lock. Stable keys are class-allocation:{allocationId}:cancel:charge
+and :cancel:return; the funding sourceReference is retained. No tutor fee is
+created by student cancellation. Configurable withdrawal-rate UI, administrator
+cancellation, minimum/postponement and rescheduling remain T06 follow-ups.
+
 T03 integrates with the current enrollment/signup baseline. Bank account ownership
 snapshots accept only self/trusted_person; unprepared preview projections include
 null proof/transfer audit fields. Parent checks cover allocation-aware legacy cutoffs,

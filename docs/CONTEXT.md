@@ -1,5 +1,13 @@
 # Cogito App — Codebase Context
 
+T06 student cancellation/withdrawal is implemented on its baseline-derived
+worktree: exact preview + versioned/idempotent confirmation, per-allocation
+Marks accounting, inclusive 24h deadline, unpaid-half cancellation and atomic
+audit/notification. Parent Postgres checks pass 15/101 and the combined web
+typecheck passes. Chromium acceptance passes (1 integrated journey / 1.2m), using real cancellation RPCs and wallet readback; E2E typecheck also passes. This is a partial T06 slice:
+admin cancellation, minimum/postponement/rescheduling and configurable withdrawal
+rate remain outstanding; completion/report T07 is not implemented.
+
 Local dev checkpoint (21 October): f/release-v3 includes signup 3055ba54 and
 payout 2482d7ec. The standard migration runner applied 0065 only after the exact
 loopback cogito-app/6767 guard. Dev readback: journal id 86, timestamp 1792525224597,

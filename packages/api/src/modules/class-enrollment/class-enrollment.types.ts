@@ -24,6 +24,39 @@ export const classEnrollmentIdInput = z.object({
   enrollmentId: z.string().uuid(),
 });
 
+export const classEnrollmentCancellationInput = classEnrollmentIdInput
+  .extend({
+    sessionId: z.string().uuid().optional(),
+  })
+  .strict();
+
+export const confirmClassEnrollmentCancellationInput =
+  classEnrollmentCancellationInput.extend({
+    requestKey: z.string().uuid(),
+    quoteVersion: z.string().regex(/^[a-f0-9]{64}$/),
+  });
+
+export const classEnrollmentCancellationOutput = z.object({
+  enrollmentId: z.string().uuid(),
+  sessionId: z.string().uuid().nullable(),
+  scope: z.enum(["session", "withdrawal"]),
+  feeRateBps: z.number().int().min(0).max(10000),
+  feeMarks: z.number().int().nonnegative(),
+  returnMarks: z.number().int().nonnegative(),
+  retainedMarks: z.number().int().nonnegative(),
+  quoteVersion: z.string(),
+  allocations: z.array(
+    z.object({
+      allocationId: z.string().uuid(),
+      sessionId: z.string().uuid(),
+      deadline: z.coerce.date(),
+      chargeMarks: z.number().int().nonnegative(),
+      returnMarks: z.number().int().nonnegative(),
+    }),
+  ),
+  unpaidAllocationIds: z.array(z.string().uuid()),
+});
+
 export const classEnrollmentInstallmentInput = z.object({
   enrollmentId: z.string().uuid(),
   ordinal: z.union([z.literal(1), z.literal(2)]),

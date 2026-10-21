@@ -7,7 +7,7 @@ import { createClassEnrollmentService } from "./class-enrollment.service";
 
 export function createClassEnrollmentModule(deps: {
   db: DbType;
-  wallet: Pick<WalletService, "hold" | "getOrCreate">;
+  wallet: Pick<WalletService, "hold" | "getOrCreate" | "release" | "deduct">;
   payment: Pick<
     PaymentService,
     "createTopUpQuote" | "createPurchaseFromTopUpQuote"

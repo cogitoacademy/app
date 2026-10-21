@@ -1,6 +1,9 @@
 import { studentProcedure, verifiedStudentProcedure } from "../../procedures";
 import type { ClassEnrollmentHandler } from "./class-enrollment.handler";
 import {
+  classEnrollmentCancellationInput,
+  confirmClassEnrollmentCancellationInput,
+  classEnrollmentCancellationOutput,
   classEnrollmentIdInput,
   classEnrollmentTopUpPurchaseInput,
   classEnrollmentTopUpQuoteInput,
@@ -15,6 +18,26 @@ import {
 
 export function createClassEnrollmentRouter(handler: ClassEnrollmentHandler) {
   return {
+    quoteCancellation: studentProcedure
+      .route({
+        method: "POST",
+        path: "/classes/enrollments/cancellation/quote",
+        tags: ["Classes", "Enrollment"],
+        summary: "Preview the exact cancellation fee and Marks return",
+      })
+      .input(classEnrollmentCancellationInput)
+      .output(classEnrollmentCancellationOutput)
+      .handler(handler.quoteCancellation),
+    confirmCancellation: studentProcedure
+      .route({
+        method: "POST",
+        path: "/classes/enrollments/cancellation/confirm",
+        tags: ["Classes", "Enrollment"],
+        summary: "Confirm a current cancellation quote once",
+      })
+      .input(confirmClassEnrollmentCancellationInput)
+      .output(classEnrollmentCancellationOutput)
+      .handler(handler.confirmCancellation),
     getMyEnrollments: studentProcedure
       .route({
         method: "POST",

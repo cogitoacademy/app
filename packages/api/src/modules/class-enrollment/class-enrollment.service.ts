@@ -1,3 +1,9 @@
+import { quoteEnrollmentCancellation } from "./class-enrollment.cancellation";
+import {
+  classEnrollmentCancellationOutput,
+  type classEnrollmentCancellationInput,
+  type confirmClassEnrollmentCancellationInput,
+} from "./class-enrollment.types";
 import { randomUUID } from "node:crypto";
 import { academyClassEnrollment } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
@@ -75,7 +81,7 @@ function matchesInstallmentAmount(
 
 export function createClassEnrollmentService(deps: {
   db: DbType;
-  wallet: Pick<WalletService, "hold" | "getOrCreate">;
+  wallet: Pick<WalletService, "hold" | "getOrCreate" | "release" | "deduct">;
   payment: Pick<
     PaymentService,
     "createTopUpQuote" | "createPurchaseFromTopUpQuote"
@@ -621,6 +627,132 @@ export function createClassEnrollmentService(deps: {
           ? 0
           : quote.firstInstallmentMarks - availableMarks,
       };
+    });
+  }
+
+  async function cancelEnrollment(
+    studentId: string,
+    input: z.infer<typeof classEnrollmentCancellationInput>,
+    confirmation?: z.infer<typeof confirmClassEnrollmentCancellationInput>,
+  ) {
+    const initial = await repo.findEnrollment(
+      deps.db,
+      studentId,
+      input.enrollmentId,
+    );
+    if (!initial) throw new ClassEnrollmentNotFoundError();
+    const initialAllocations = await repo.findAllocations(deps.db, initial.id);
+    return deps.db.transaction(async (tx) => {
+      // Same order as checkout and installment payment: sessions, enrollment,
+      // installments, allocations, wallet. Read the clock only after locks.
+      const sessions = await repo.lockSessions(
+        tx,
+        initialAllocations.map((row) => row.sessionId),
+      );
+      const enrollment = await repo.findEnrollment(
+        tx,
+        studentId,
+        initial.id,
+        true,
+      );
+      if (!enrollment) throw new ClassEnrollmentNotFoundError();
+      await repo.findInstallments(tx, enrollment.id, true);
+      const allocations = await repo.findAllocations(tx, enrollment.id, true);
+      if (confirmation) {
+        const receipt = await repo.findCancellationReceipt(
+          tx,
+          enrollment.id,
+          confirmation.requestKey,
+        );
+        if (receipt) {
+          const saved = classEnrollmentCancellationOutput.parse(receipt.quote);
+          if (
+            saved.quoteVersion !== confirmation.quoteVersion ||
+            saved.sessionId !== (input.sessionId ?? null)
+          ) {
+            throw new ClassEnrollmentConflictError(
+              "This cancellation request key was already used for another quote",
+            );
+          }
+          return saved;
+        }
+      }
+      if (enrollment.state !== "active") {
+        throw new ClassEnrollmentInvalidOperationError(
+          "Only an active enrollment can be cancelled or withdrawn",
+        );
+      }
+      const nowAt = currentTime();
+      const quote = quoteEnrollmentCancellation(
+        enrollment.id,
+        allocations,
+        sessions,
+        nowAt,
+        input.sessionId,
+      );
+      if (!quote.allocations.length && !quote.unpaidAllocationIds.length) {
+        throw new ClassEnrollmentInvalidOperationError(
+          "No cancellable future seats remain. Funded seats inside 24 hours stay held for session completion; no Marks were changed",
+        );
+      }
+      if (!confirmation) return quote;
+      if (confirmation.quoteVersion !== quote.quoteVersion) {
+        throw new ClassEnrollmentConflictError(
+          "The cancellation amount or deadline changed; review a fresh quote before confirming",
+        );
+      }
+      const wallet = await repo.getWalletByUser(tx, studentId, true);
+      if (!wallet && (quote.feeMarks || quote.returnMarks))
+        throw new ClassEnrollmentConflictError(
+          "Enrollment wallet is unavailable",
+        );
+      for (const item of quote.allocations) {
+        const funding = allocations.find(
+          (row) => row.id === item.allocationId,
+        )!;
+        const common = {
+          walletId: wallet!.id,
+          sourceReference: funding.fundingSourceReference,
+          actorType: "student" as const,
+          reason: `Class ${quote.scope}: ${enrollment.id}`,
+        };
+        if (item.chargeMarks > 0)
+          await deps.wallet.deduct(tx, {
+            ...common,
+            amount: item.chargeMarks,
+            eventKey: `class-allocation:${funding.id}:cancel:charge`,
+          });
+        if (item.returnMarks > 0)
+          await deps.wallet.release(tx, {
+            ...common,
+            amount: item.returnMarks,
+            eventKey: `class-allocation:${funding.id}:cancel:return`,
+          });
+      }
+      await repo.saveCancellation(
+        tx,
+        studentId,
+        quote,
+        confirmation.requestKey,
+        allocations,
+        nowAt,
+      );
+      await deps.notification.write({
+        db: tx,
+        userId: studentId,
+        category: "refund",
+        title:
+          quote.scope === "withdrawal"
+            ? "Class withdrawal confirmed"
+            : "Class seat cancelled",
+        body: `${quote.returnMarks} Marks returned to your available balance; ${quote.feeMarks} Marks cancellation fee. This is not a cash refund. ${quote.retainedMarks} Marks remain held for sessions inside the cancellation deadline.`,
+        eventKey: `class-enrollment:${enrollment.id}:cancel:${confirmation.requestKey}`,
+        metadata: {
+          enrollmentId: enrollment.id,
+          quoteVersion: quote.quoteVersion,
+        },
+      });
+      return quote;
     });
   }
 
@@ -1362,6 +1494,14 @@ export function createClassEnrollmentService(deps: {
 
   return {
     getMyClassEnrollments,
+    quoteCancellation: (
+      studentId: string,
+      input: z.infer<typeof classEnrollmentCancellationInput>,
+    ) => cancelEnrollment(studentId, input),
+    confirmCancellation: (
+      studentId: string,
+      input: z.infer<typeof confirmClassEnrollmentCancellationInput>,
+    ) => cancelEnrollment(studentId, input, input),
     createEnrollment,
     completeCheckout,
     paySecondInstallment,

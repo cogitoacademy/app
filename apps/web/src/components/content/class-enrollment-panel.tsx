@@ -31,6 +31,8 @@ import { getUserFacingError } from "@/lib/error-message";
 import { authClient } from "@/lib/auth-client";
 import { orpc } from "@/utils/orpc";
 
+import { ClassCancellationPanel } from "./class-cancellation-panel";
+
 type Plan = "full" | "half" | "single" | "masterclass";
 
 type ClassEnrollmentPanelProps = {
@@ -531,6 +533,14 @@ export function ClassEnrollmentPanel({
                           rejoin future sessions.
                         </Text>
                       </CardFooter>
+                    ) : null}
+                    {enrollment.state === "active" ? (
+                      <ClassCancellationPanel
+                        enrollmentId={enrollment.id}
+                        allocations={enrollment.allocations}
+                        sessions={sessions}
+                        onChanged={refreshEnrollmentState}
+                      />
                     ) : null}
                   </Card>
                 );

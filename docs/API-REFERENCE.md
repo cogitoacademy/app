@@ -1,5 +1,16 @@
 # Cogito API Reference
 
+Student class cancellation RPCs: `POST /rpc/classes/quoteCancellation` accepts
+`{"json":{"enrollmentId":"uuid","sessionId":"optional owned session UUID"}}`.
+Omit sessionId for withdrawal. `POST /rpc/classes/confirmCancellation` adds
+`requestKey` (UUID) and `quoteVersion` from the preview. Responses use the normal
+JSON envelope and include feeRateBps, feeMarks, returnMarks, retainedMarks,
+per-allocation deadlines and unpaid allocation IDs. Quotes are ownership-scoped;
+stale quotes return conflict. Replaying the same request/quote returns its saved
+receipt without another wallet mutation. Only active enrollments qualify.
+Individual cancellation applies to funded future scheduled seats at least 24h
+before start, inclusive; unpaid-half removal uses withdrawal.
+
 T03 parent acceptance: selected-source prepare/record/void/reconcile procedures
 passed the real isolated Postgres acceptance suite on 6770. Exact-net and repeat
 transfer behavior are exercised against actual database transactions. Browser

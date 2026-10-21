@@ -1,5 +1,23 @@
 # Cogito Runbook
 
+Cancellation browser command from packages/e2e: with the guarded T05 ENV_FILE,
+run `bun run test src/specs/class-enrollment.spec.ts --config=playwright.class-enrollment.config.ts --workers=1`.
+The wrapper changes only Vite config loading to runner: the standard bundler timed
+out against linked worktree config-cache state, while runner starts in 1.3s.
+The disposable T05 DB was migrated through existing 0065 before the integrated
+browser seed (no schema was generated). Dev and T05 now both include payout tax
+columns; no dev reset or seed was performed.
+
+
+Student class cancellation requires no new migration beyond enrollment 0064.
+The parent implementation is on f/v3-class-cancellation, based on integrated
+f/release-v3. Verification uses only the disposable T05 target 6769/6381,
+API/web 3201/3200. Its PostgreSQL enrollment/cancellation suite passes 15 tests /
+101 assertions, including replay, pay/withdraw race, rollback after fee deduction,
+24h boundary and late-seat retention. Web no-emit typecheck passes with one Go
+worker and reduced GC memory settings. Seven focused policy units pass. Chromium acceptance passes (1 integrated journey / 1.2m) using real RPCs; E2E typecheck passes. Do not mark the full T06 complete. This slice returns available
+Marks only; it performs no bank/cash refund and sends no real-provider test mail.
+
 Local dev checkpoint (21 October): f/release-v3 includes signup 3055ba54 and
 payout 2482d7ec. The standard migration runner applied 0065 only after the exact
 loopback cogito-app/6767 guard. Dev readback: journal id 86, timestamp 1792525224597,

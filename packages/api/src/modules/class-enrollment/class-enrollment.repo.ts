@@ -19,10 +19,12 @@ import {
   academyClassEnrollmentInstallment,
   academyClassEnrollmentTopUpAttempt,
   academyClassSession,
+  auditLog,
   wallet,
 } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { DbOrTx } from "../../lib/tx";
+import type { EnrollmentCancellationQuote } from "./class-enrollment.cancellation";
 import {
   assertAllocationCanBeFunded,
   planAllocationRelease,
@@ -35,6 +37,79 @@ const BLOCKING_ALLOCATION_STATES = [
 ] as const;
 
 export function createClassEnrollmentRepo() {
+  async function findCancellationReceipt(
+    conn: DbOrTx,
+    enrollmentId: string,
+    requestKey: string,
+  ) {
+    const [receipt] = await conn
+      .select({ details: auditLog.details })
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.targetId, enrollmentId),
+          eq(auditLog.action, "class_enrollment_cancelled"),
+          sql`${auditLog.details}->>'requestKey' = ${requestKey}`,
+        ),
+      )
+      .limit(1);
+    return receipt?.details ?? null;
+  }
+
+  async function saveCancellation(
+    conn: DbOrTx,
+    studentId: string,
+    quote: EnrollmentCancellationQuote,
+    requestKey: string,
+    allocations: readonly (typeof academyClassEnrollmentAllocation.$inferSelect)[],
+    now: Date,
+  ) {
+    for (const item of quote.allocations) {
+      const allocation = allocations.find(
+        (row) => row.id === item.allocationId,
+      );
+      if (!allocation) throw new Error("Cancellation allocation missing");
+      await conn
+        .update(academyClassEnrollmentAllocation)
+        .set({
+          state: "released",
+          spentMarks: allocation.spentMarks + item.chargeMarks,
+          releasedMarks: allocation.releasedMarks + item.returnMarks,
+          updatedAt: now,
+        })
+        .where(eq(academyClassEnrollmentAllocation.id, allocation.id));
+    }
+    const unpaid = allocations.filter((row) =>
+      quote.unpaidAllocationIds.includes(row.id),
+    );
+    await markUnfundedAllocationsReleased(conn, unpaid, now);
+    if (quote.scope === "withdrawal") {
+      await conn
+        .update(academyClassEnrollmentInstallment)
+        .set({ state: "cancelled", updatedAt: now })
+        .where(
+          and(
+            eq(
+              academyClassEnrollmentInstallment.enrollmentId,
+              quote.enrollmentId,
+            ),
+            eq(academyClassEnrollmentInstallment.state, "pending"),
+          ),
+        );
+      await conn
+        .update(academyClassEnrollment)
+        .set({ state: "cancelled", updatedAt: now })
+        .where(eq(academyClassEnrollment.id, quote.enrollmentId));
+    }
+    await conn.insert(auditLog).values({
+      actorId: studentId,
+      actorType: "student",
+      action: "class_enrollment_cancelled",
+      targetId: quote.enrollmentId,
+      targetType: "class_enrollment",
+      details: { requestKey, quote },
+    });
+  }
   async function getClassForEnrollment(
     conn: DbOrTx,
     classId: string,
@@ -1076,6 +1151,8 @@ export function createClassEnrollmentRepo() {
   }
 
   return {
+    findCancellationReceipt,
+    saveCancellation,
     getClassForEnrollment,
     listClassSessions,
     lockSessions,

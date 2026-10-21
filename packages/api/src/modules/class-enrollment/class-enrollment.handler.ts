@@ -3,6 +3,8 @@ import { withDomainMap } from "../../lib/handler-utils";
 import { mapClassEnrollmentError } from "./class-enrollment.errors";
 import type { ClassEnrollmentService } from "./class-enrollment.service";
 import {
+  classEnrollmentCancellationInput,
+  confirmClassEnrollmentCancellationInput,
   classEnrollmentIdInput,
   classEnrollmentTopUpPurchaseInput,
   classEnrollmentTopUpQuoteInput,
@@ -13,6 +15,28 @@ import type { z } from "zod";
 
 export function createClassEnrollmentHandler(service: ClassEnrollmentService) {
   return {
+    quoteCancellation: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: z.infer<typeof classEnrollmentCancellationInput>;
+    }) =>
+      withDomainMap(
+        () => service.quoteCancellation(context.session!.user.id, input),
+        mapClassEnrollmentError,
+      ),
+    confirmCancellation: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: z.infer<typeof confirmClassEnrollmentCancellationInput>;
+    }) =>
+      withDomainMap(
+        () => service.confirmCancellation(context.session!.user.id, input),
+        mapClassEnrollmentError,
+      ),
     getMyClassEnrollments: async ({
       context,
       input,

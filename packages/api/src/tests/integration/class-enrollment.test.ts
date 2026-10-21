@@ -2,6 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@cogito-app/db";
 import {
+  auditLog,
   academyClass,
   academyClassEnrollment,
   academyClassEnrollmentAllocation,
@@ -255,6 +256,20 @@ afterAll(async () => {
   const classIds = [...ownedClassIds];
   const userIds = [...ownedUserIds];
   if (classIds.length > 0) {
+    const enrollments = await db
+      .select({ id: academyClassEnrollment.id })
+      .from(academyClassEnrollment)
+      .where(inArray(academyClassEnrollment.classId, classIds));
+    if (enrollments.length)
+      await db.delete(auditLog).where(
+        and(
+          eq(auditLog.action, "class_enrollment_cancelled"),
+          inArray(
+            auditLog.targetId,
+            enrollments.map((row) => row.id),
+          ),
+        ),
+      );
     await db
       .delete(academyClassEnrollment)
       .where(inArray(academyClassEnrollment.classId, classIds));
@@ -680,7 +695,275 @@ describe("class enrollment PostgreSQL invariants [REQ-ENROLL-01..04]", () => {
     await expect(
       otherStudent.classes.completeCheckout({ enrollmentId: pending.id }),
     ).rejects.toThrow();
+    await expect(
+      anonymous.classes.quoteCancellation({ enrollmentId: pending.id }),
+    ).rejects.toThrow();
+    await expect(
+      tutor.classes.quoteCancellation({ enrollmentId: pending.id }),
+    ).rejects.toThrow();
+    await expect(
+      otherStudent.classes.quoteCancellation({ enrollmentId: pending.id }),
+    ).rejects.toThrow();
     expect(await ledgerHolds(fixture)).toHaveLength(0);
     expect(await enrollmentRows(fixture)).toHaveLength(1);
+  });
+  test("cancellation quotes an exact return and concurrent confirmation settles once", async () => {
+    const fixture = await createFixture({ sessions: 2, balance: 100 });
+    const enrollment = await makeEnrollment(fixture, 0, "full");
+    const studentId = fixture.studentIds[0]!;
+    const input = {
+      enrollmentId: enrollment.id,
+      sessionId: fixture.sessionIds[0]!,
+    };
+    const quote = await fixture.service.quoteCancellation(studentId, input);
+    expect(quote).toMatchObject({ feeMarks: 4, returnMarks: 16 });
+    const confirm = {
+      ...input,
+      quoteVersion: quote.quoteVersion,
+      requestKey: crypto.randomUUID(),
+    };
+    const results = await Promise.all([
+      fixture.service.confirmCancellation(studentId, confirm),
+      fixture.service.confirmCancellation(studentId, confirm),
+    ]);
+    expect(results[0]?.quoteVersion).toBe(results[1]?.quoteVersion);
+    const [balance] = await db
+      .select()
+      .from(walletTable)
+      .where(eq(walletTable.id, fixture.walletIds[0]!));
+    expect(balance).toMatchObject({
+      totalBalance: 96,
+      heldBalance: 20,
+      availableBalance: 76,
+    });
+    const rows = await allocationRows(fixture);
+    expect(
+      rows.find((row) => row.sessionId === fixture.sessionIds[0]),
+    ).toMatchObject({ state: "released", spentMarks: 4, releasedMarks: 16 });
+    expect(
+      rows.find((row) => row.sessionId === fixture.sessionIds[1]),
+    ).toMatchObject({ state: "funded", spentMarks: 0, releasedMarks: 0 });
+    const receipts = await db
+      .select()
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.targetId, enrollment.id),
+          eq(auditLog.action, "class_enrollment_cancelled"),
+        ),
+      );
+    expect(receipts).toHaveLength(1);
+    expect(fixture.notifications).toHaveLength(1);
+    await expect(
+      fixture.service.confirmCancellation(studentId, {
+        ...confirm,
+        sessionId: fixture.sessionIds[1]!,
+      }),
+    ).rejects.toThrow("already used");
+  });
+
+  test("withdrawal stops the unpaid half, returns only funded remainder and cannot pay again", async () => {
+    const fixture = await createFixture({ sessions: 4, balance: 100 });
+    const enrollment = await makeEnrollment(fixture, 0, "half");
+    const studentId = fixture.studentIds[0]!;
+    const input = { enrollmentId: enrollment.id };
+    const quote = await fixture.service.quoteCancellation(studentId, input);
+    expect(quote).toMatchObject({ feeMarks: 9, returnMarks: 35 });
+    expect(quote.unpaidAllocationIds).toHaveLength(2);
+    const confirmation = {
+      ...input,
+      requestKey: crypto.randomUUID(),
+      quoteVersion: quote.quoteVersion,
+    };
+    await fixture.service.confirmCancellation(studentId, confirmation);
+    expect(
+      (await allocationRows(fixture)).every((row) => row.state === "released"),
+    ).toBe(true);
+    expect(
+      (await fixture.service.paySecondInstallment(studentId, enrollment.id))
+        .outcome,
+    ).toBe("expired");
+    const [balance] = await db
+      .select()
+      .from(walletTable)
+      .where(eq(walletTable.id, fixture.walletIds[0]!));
+    expect(balance).toMatchObject({
+      totalBalance: 91,
+      heldBalance: 0,
+      availableBalance: 91,
+    });
+    expect(
+      (await fixture.service.confirmCancellation(studentId, confirmation))
+        .returnMarks,
+    ).toBe(35);
+  });
+
+  test("a cancellation quote crossing the inclusive 24h boundary is rejected without financial writes", async () => {
+    const fixture = await createFixture({
+      sessions: 1,
+      balance: 100,
+      startsInDays: [1],
+    });
+    const enrollment = await makeEnrollment(
+      fixture,
+      0,
+      "single",
+      crypto.randomUUID(),
+      fixture.sessionIds[0],
+    );
+    const input = {
+      enrollmentId: enrollment.id,
+      sessionId: fixture.sessionIds[0]!,
+    };
+    const quote = await fixture.service.quoteCancellation(
+      fixture.studentIds[0]!,
+      input,
+    );
+    expect(quote.returnMarks).toBe(20);
+    fixture.setNow(new Date(BASE_TIME.getTime() + 1));
+    await expect(
+      fixture.service.confirmCancellation(fixture.studentIds[0]!, {
+        ...input,
+        requestKey: crypto.randomUUID(),
+        quoteVersion: quote.quoteVersion,
+      }),
+    ).rejects.toThrow();
+    expect((await allocationRows(fixture))[0]).toMatchObject({
+      state: "funded",
+      spentMarks: 0,
+      releasedMarks: 0,
+    });
+  });
+
+  test("withdrawal versus second payment serializes without residual held Marks", async () => {
+    const fixture = await createFixture({ sessions: 2, balance: 100 });
+    const enrollment = await makeEnrollment(fixture, 0, "half");
+    const studentId = fixture.studentIds[0]!;
+    const input = { enrollmentId: enrollment.id };
+    const quote = await fixture.service.quoteCancellation(studentId, input);
+    const [withdrawal] = await Promise.allSettled([
+      fixture.service.confirmCancellation(studentId, {
+        ...input,
+        requestKey: crypto.randomUUID(),
+        quoteVersion: quote.quoteVersion,
+      }),
+      fixture.service.paySecondInstallment(studentId, enrollment.id),
+    ]);
+    if (withdrawal.status === "rejected") {
+      const fresh = await fixture.service.quoteCancellation(studentId, input);
+      await fixture.service.confirmCancellation(studentId, {
+        ...input,
+        requestKey: crypto.randomUUID(),
+        quoteVersion: fresh.quoteVersion,
+      });
+    }
+    const [balance] = await db
+      .select()
+      .from(walletTable)
+      .where(eq(walletTable.id, fixture.walletIds[0]!));
+    expect(balance!.heldBalance).toBe(0);
+    expect(balance!.availableBalance).toBe(balance!.totalBalance);
+    expect(
+      (await allocationRows(fixture)).every((row) => row.state === "released"),
+    ).toBe(true);
+  });
+  test("failed wallet return rolls back the preceding fee, receipt and allocation release", async () => {
+    const fixture = await createFixture({
+      sessions: 1,
+      balance: 100,
+      walletPort: {
+        ...services.wallet,
+        release: async () => {
+          throw new Error("Injected cancellation release failure");
+        },
+      },
+    });
+    const enrollment = await makeEnrollment(
+      fixture,
+      0,
+      "single",
+      crypto.randomUUID(),
+      fixture.sessionIds[0],
+    );
+    const input = {
+      enrollmentId: enrollment.id,
+      sessionId: fixture.sessionIds[0]!,
+    };
+    const quote = await fixture.service.quoteCancellation(
+      fixture.studentIds[0]!,
+      input,
+    );
+    await expect(
+      fixture.service.confirmCancellation(fixture.studentIds[0]!, {
+        ...input,
+        requestKey: crypto.randomUUID(),
+        quoteVersion: quote.quoteVersion,
+      }),
+    ).rejects.toThrow("Injected cancellation");
+    const [balance] = await db
+      .select()
+      .from(walletTable)
+      .where(eq(walletTable.id, fixture.walletIds[0]!));
+    expect(balance).toMatchObject({
+      totalBalance: 100,
+      heldBalance: 25,
+      availableBalance: 75,
+    });
+    expect((await allocationRows(fixture))[0]).toMatchObject({
+      state: "funded",
+      spentMarks: 0,
+      releasedMarks: 0,
+    });
+    const receipts = await db
+      .select()
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.targetId, enrollment.id),
+          eq(auditLog.action, "class_enrollment_cancelled"),
+        ),
+      );
+    expect(receipts).toHaveLength(0);
+    expect(fixture.notifications).toHaveLength(0);
+  });
+
+  test("withdrawal retains late funded delivery liability and releases only early seats", async () => {
+    const fixture = await createFixture({
+      sessions: 2,
+      balance: 100,
+      startsInDays: [0.5, 2],
+    });
+    const enrollment = await makeEnrollment(fixture, 0, "full");
+    const input = { enrollmentId: enrollment.id };
+    const quote = await fixture.service.quoteCancellation(
+      fixture.studentIds[0]!,
+      input,
+    );
+    expect(quote).toMatchObject({
+      feeMarks: 4,
+      returnMarks: 16,
+      retainedMarks: 20,
+    });
+    await fixture.service.confirmCancellation(fixture.studentIds[0]!, {
+      ...input,
+      requestKey: crypto.randomUUID(),
+      quoteVersion: quote.quoteVersion,
+    });
+    const rows = await allocationRows(fixture);
+    expect(
+      rows.find((row) => row.sessionId === fixture.sessionIds[0]),
+    ).toMatchObject({ state: "funded", spentMarks: 0, releasedMarks: 0 });
+    expect(
+      rows.find((row) => row.sessionId === fixture.sessionIds[1]),
+    ).toMatchObject({ state: "released", spentMarks: 4, releasedMarks: 16 });
+    const [balance] = await db
+      .select()
+      .from(walletTable)
+      .where(eq(walletTable.id, fixture.walletIds[0]!));
+    expect(balance).toMatchObject({
+      totalBalance: 96,
+      heldBalance: 20,
+      availableBalance: 76,
+    });
   });
 });

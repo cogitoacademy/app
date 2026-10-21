@@ -187,7 +187,7 @@ test("student enrolls in full, half, and single plans with stable checkout and i
   page,
   browser,
 }) => {
-  test.setTimeout(90_000);
+  test.setTimeout(120_000);
   assertT05EnrollmentTarget();
   const adminApi = await createApiContext(ADMIN_EMAIL, ADMIN_PASSWORD);
   const studentApi = await createApiContext(STUDENT_EMAIL, STUDENT_PASSWORD);
@@ -558,6 +558,65 @@ test("student enrolls in full, half, and single plans with stable checkout and i
       quoteId: quote.quoteId,
       requestedMarks: shortfallMarks,
     });
+    // Cancellation uses real RPCs and wallet readback, after the enrollment
+    // shortfall assertions so returned Marks cannot alter those expectations.
+    await continuationPage.goto(`/classes/${singleClass.id}`);
+    const walletBeforeCancel = await rpc<{
+      availableBalance: number;
+      heldBalance: number;
+      totalBalance: number;
+    }>(studentApi, "wallet/get", {});
+    await continuationPage
+      .getByRole("button", { name: "Cancel session 1", exact: true })
+      .click();
+    const cancellationReview = continuationPage.getByRole("region", {
+      name: "Cancellation review",
+    });
+    await expect(
+      cancellationReview.getByText("Fee: 5 Marks · Return: 20 Marks"),
+    ).toBeVisible();
+    await cancellationReview
+      .getByRole("button", { name: "Confirm seat cancellation", exact: true })
+      .click();
+    await expect(cancellationReview).toHaveCount(0);
+    const walletAfterCancel = await rpc<{
+      availableBalance: number;
+      heldBalance: number;
+      totalBalance: number;
+    }>(studentApi, "wallet/get", {});
+    expect(walletAfterCancel.availableBalance).toBe(
+      walletBeforeCancel.availableBalance + 20,
+    );
+    expect(walletAfterCancel.heldBalance).toBe(
+      walletBeforeCancel.heldBalance - 25,
+    );
+    expect(walletAfterCancel.totalBalance).toBe(
+      walletBeforeCancel.totalBalance - 5,
+    );
+    await continuationPage.goto(`/classes/${halfClass.id}`);
+    await continuationPage
+      .getByRole("button", { name: "Review withdrawal", exact: true })
+      .click();
+    await expect(
+      cancellationReview.getByText("Fee: 9 Marks · Return: 35 Marks"),
+    ).toBeVisible();
+    await cancellationReview
+      .getByRole("button", { name: "Confirm withdrawal", exact: true })
+      .click();
+    await expect(
+      continuationPage.getByText("cancelled", { exact: true }),
+    ).toBeVisible();
+    const withdrawn = await rpc<{ enrollments: Enrollment[] }>(
+      studentApi,
+      "classes/getMyEnrollments",
+      { classId: halfClass.id },
+    );
+    expect(withdrawn.enrollments[0]?.state).toBe("cancelled");
+    expect(
+      withdrawn.enrollments[0]?.allocations.every(
+        (row) => row.state === "released",
+      ),
+    ).toBe(true);
   } finally {
     await friendContext?.close();
     await continuationContext?.close();
