@@ -1,5 +1,13 @@
 # Cogito App — Codebase Context
 
+Enrollment is integrated into local `f/release-v3` through `bd123ce4`.
+Parent verification passed 9 guarded Postgres cases / 69 expectations, 12
+pricing/funding/public DTO units / 37 expectations, 5 public tutor projection
+units / 28 expectations, and the integrated Chromium enrollment journey (1.6m).
+The web typecheck passed in the enrollment worktree after direct fixes. Local
+web/API health returned 200 with DB/Redis/scheduler/DLQ healthy. T06/T07 and the
+remaining release scope are not completed by this enrollment checkpoint.
+
 Parent enrollment follow-up (21 October): checkout confirmation and second
 installment payment read authoritative time after acquiring transaction locks.
 Confirmation rejects reserved sessions that have started or are no longer

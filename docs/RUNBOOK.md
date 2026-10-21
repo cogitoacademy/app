@@ -1,5 +1,13 @@
 # Cogito Runbook
 
+Integrated parent checkpoint: `f/release-v3` fast-forwarded to `bd123ce4` and
+the owned API process was restarted. Web port 3000 and API port 3001 returned
+200; API DB/Redis/scheduler/DLQ checks were healthy. The parent reran
+`src/specs/class-enrollment.spec.ts` from the integrated root against the exact
+T05 target and observed 1 Chromium pass in 1.6m. No dev data was seeded/reset.
+Parent evidence logs are local under `tmp/v3-dev/`; they contain synthetic test
+identities and are not release/client artifacts.
+
 Parent verification follow-up (21 October): the enrollment worktree's Drizzle
 links were aligned, source-level allocation state and public tutor relation
 query type errors were corrected, and web `check-types` passed with

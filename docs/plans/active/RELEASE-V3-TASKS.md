@@ -4,6 +4,12 @@ Date: 19 October 2026. Status: **T00A catalog CRUD/palette and T01 dynamic draft
 
 ## Execution priority — 21 October 2026
 
+Enrollment source and direct parent fixes are integrated through `bd123ce4`.
+The integrated root Chromium journey passes (1 spec / 1.6m), complementing the
+9 Postgres cases / 69 expectations and the parent web typecheck. Local dev
+3000/3001 is healthy. Signup/payout integration, T06/T07 and full acceptance
+remain open; do not treat this checkpoint as completion of Release V3.
+
 Parent T05 verification follow-up: web typecheck passes after resolving the
 Drizzle link mismatch and source type errors. The guarded enrollment Postgres
 suite passes 9 tests / 69 expectations, including expiry after DB waits and
