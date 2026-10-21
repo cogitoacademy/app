@@ -42,6 +42,7 @@ import { getUserFacingError } from "@/lib/error-message";
 import { resolveProfileImageUrl } from "@/lib/profile-image-url";
 import { client, orpc } from "@/utils/orpc";
 
+import { mergeAcademyClassQueryResults } from "./academy-class-page-utils";
 import { ClassAdminCancellationPanel } from "./class-admin-cancellation-panel";
 import { ClassAdminLifecyclePanel } from "./class-admin-lifecycle-panel";
 
@@ -389,10 +390,10 @@ export function AcademyClassPage() {
   );
 
   const classes = classesQuery.data ?? [];
-  const publishedClasses = [
-    ...(publishedClassesQuery.data ?? []),
-    ...(postponedClassesQuery.data ?? []),
-  ].toSorted(
+  const publishedClasses = mergeAcademyClassQueryResults(
+    publishedClassesQuery.data ?? [],
+    postponedClassesQuery.data ?? [],
+  ).toSorted(
     (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
   );
   const competitions = competitionsQuery.data ?? [];
