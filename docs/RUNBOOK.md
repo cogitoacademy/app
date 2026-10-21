@@ -32,7 +32,9 @@ cancellation 8/16 and reset-guard 6/40 checks passed earlier. Browser logs also
 exposed a duplicate class-card React key during list refresh. The admin page now
 keeps the highest-version row per class ID across its published/postponed query
 snapshots. Its focused helper regression passes 2 tests / 4 expectations in the
-implementation worktree; the integrated Chromium rerun remains pending.
+implementation worktree. Parent integrated `ede98094`; the root regression
+passes 2 / 4 and lifecycle Chromium passes (35.1s, exit 0), with zero
+duplicate-key warnings in the captured server/browser logs.
 Ordinary rescheduling policy, broader V3 acceptance and previously recorded
 API/web full-compiler limitations remain open.
 

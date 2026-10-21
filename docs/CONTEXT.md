@@ -29,7 +29,10 @@ focused rerun passed (1 Chromium test, 32.4s; exit 0), covering session
 cancellation, one-time postponement and exact fee-free withdrawal. Integrated
 root web and E2E typechecks passed (exit 0). Focused provider 52/196,
 cancellation 8/16 and reset-guard 6/40 checks passed earlier. Browser logs also
-exposed a duplicate class-card React key during list refresh; follow-up remains.
+exposed a duplicate class-card React key during list refresh. The fix is
+integrated through `ede98094`; its focused regression passes 2 tests / 4
+expectations and the integrated lifecycle Chromium rerun passes (35.1s, exit 0)
+with zero duplicate-key warnings.
 Ordinary rescheduling policy, broader V3 acceptance and previously recorded
 API/web full-compiler limitations remain open.
 
