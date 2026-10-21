@@ -1,5 +1,9 @@
 # Cogito API Reference
 
+Local signup OTP test fixtures remain test-only and loopback-only for exact
+`cogito-test` on ports 6767/6768/6769. Port 6769 is the disposable parent
+verification target; this adds no production route or proof bypass.
+
 Enrollment confirmation revalidates checkout expiry after transaction locks and
 requires all reserved sessions to remain scheduled in the future before any
 Marks hold. A session that started during checkout requires a fresh enrollment;

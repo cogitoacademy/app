@@ -45,7 +45,7 @@ function isLocalSignupOtpTestTarget() {
     return (
       ["postgres:", "postgresql:"].includes(databaseUrl.protocol) &&
       LOOPBACK_HOSTS.has(hostname) &&
-      ["6767", "6768"].includes(databaseUrl.port) &&
+      ["6767", "6768", "6769"].includes(databaseUrl.port) &&
       databaseUrl.pathname === "/cogito-test"
     );
   } catch {

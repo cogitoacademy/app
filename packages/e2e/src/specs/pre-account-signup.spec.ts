@@ -70,6 +70,10 @@ test("public signup requires the email OTP before creating an account", async ({
     });
     expect(unsupportedMethod.status()).toBe(405);
 
+    // Security probes intentionally consume the IP bucket; isolate the UI
+    // journey while keeping the real application limiter enabled.
+    fixture.resetAuthRateLimit();
+
     await page.context().clearCookies();
     await page.goto("/login");
     await page

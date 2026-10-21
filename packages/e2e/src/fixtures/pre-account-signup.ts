@@ -7,6 +7,19 @@ import { resolveE2eEnvironment } from "./e2e-environment";
 
 export async function createPreAccountSignupFixture() {
   const environment = resolveE2eEnvironment(process.env);
+  function resetAuthRateLimit() {
+    execFileSync("bun", ["run", "src/seed/reset-e2e-signup-rate-limit.ts"], {
+      cwd: path.resolve(process.cwd(), "../../apps/server"),
+      env: {
+        ...process.env,
+        NODE_ENV: "test",
+        DATABASE_URL: environment.databaseUrl,
+      },
+      stdio: "pipe",
+      timeout: 10_000,
+    });
+  }
+  resetAuthRateLimit();
   const api = await request.newContext({
     baseURL: environment.serverUrl,
     extraHTTPHeaders: { Origin: environment.webUrl },
@@ -20,6 +33,7 @@ export async function createPreAccountSignupFixture() {
     api,
     apiWithoutOrigin,
     email,
+    resetAuthRateLimit,
     async readOtp() {
       const response = await api.get(
         `/api/__test/auth/signup-otp?email=${encodeURIComponent(email)}`,

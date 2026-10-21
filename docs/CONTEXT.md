@@ -1,5 +1,14 @@
 # Cogito App — Codebase Context
 
+Final parent web typecheck could not complete: Windows VirtualAlloc errno 1455 (virtual memory exhausted); no successful final compiler result is claimed.
+
+Parent AUTH-01 verification (21 October): signup and existing-account OTP DB
+regressions pass 15 / 73; auth path/rate-reset safety checks pass 19 / 69; both
+Edge signup browser journeys pass (1.4m), including an aborted successful create
+response followed by outcome recovery. Security probes and browser journeys
+use isolated auth rate buckets on the disposable test Redis; the application's
+limiter is unchanged. These checks do not complete AUTH-02 or referral rewards.
+
 Enrollment is integrated into local `f/release-v3` through `bd123ce4`.
 Parent verification passed 9 guarded Postgres cases / 69 expectations, 12
 pricing/funding/public DTO units / 37 expectations, 5 public tutor projection
@@ -1970,7 +1979,7 @@ still pending).
 Status column: **Fixed** = verified in code on main after #17 merge; **Open** = not yet implemented.
 
 | ID  | Bug                                                                    | Priority | Story | Status                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| --- | ---------------------------------------------------------------------- | -------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| --- | ---------------------------------------------------------------------- | -------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | A1  | Group booking cancel doesn't release invitee holds                     | P0       | 1     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | A2  | Group booking tutorDecline doesn't release invitee holds               | P0       | 1     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | A3  | expireBookings doesn't release invitee holds                           | P0       | 1     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |

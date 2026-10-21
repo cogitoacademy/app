@@ -1,5 +1,23 @@
 # Cogito Runbook
 
+Final parent web typecheck could not complete: Windows VirtualAlloc errno 1455 (virtual memory exhausted); no successful final compiler result is claimed.
+
+Parent signup verification (21 October): after the enrollment browser pass,
+the known disposable T05 volume at 6769/6381 was reused serially for signup,
+without resetting dev or the preserved older signup volume. The combined
+signup and existing-account OTP DB suites pass 15 tests / 73 assertions.
+The local test OTP fixture/cleanup also accepts this exact port with the same
+test-mode, loopback and database-name guards. Browser security probes consume
+the real auth IP budget; the fixture resets only `cogito:rl:auth:*` between
+test phases using a guarded paired test DB/Redis script and a 10-second child
+timeout. Application rate limits remain enabled. The reset safety and path
+matching checks pass 19 tests / 69 assertions.
+The final Edge run passes both `pre-account-signup.spec.ts` journeys in 1.4m.
+The fixture reset uses Bun's native Redis client and a bounded child timeout;
+the earlier helper/client and shared-cache failures are superseded by this
+completed run. Fonts from the shared package cache emitted a Vite allow-list
+warning in this isolated worktree; the assertions and app journeys still passed.
+
 Integrated parent checkpoint: `f/release-v3` fast-forwarded to `bd123ce4` and
 the owned API process was restarted. Web port 3000 and API port 3001 returned
 200; API DB/Redis/scheduler/DLQ checks were healthy. The parent reran

@@ -1,5 +1,10 @@
 # Cogito Module Reference
 
+Signup E2E runs isolate the auth IP rate-limit bucket between security probes
+and UI journeys through a local seed script, not an HTTP bypass. It requires
+test mode, exact loopback `cogito-test`, and a paired test Redis port before
+deleting only auth-rate keys; all other Redis state remains intact.
+
 Enrollment timing invariant: creation refreshes its clock after session locks;
 confirmation and second-installment funding read time after transaction locks.
 Confirmation rechecks scheduled/future session state before creating holds.
