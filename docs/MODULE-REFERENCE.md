@@ -1,5 +1,38 @@
 # Cogito Module Reference
 
+## T06 parent integration and local verification (2026-10-21)
+
+T06 is integrated into local `f/release-v3` through `cda99280`; `main` is
+unchanged. After restarting Docker, the parent applied additive migration 0069
+to guarded loopback `6769/cogito-test` with the normal migration runner and no
+reset flags. The non-reset enrollment/lifecycle/report suite passed 41 tests /
+319 expectations (exit 0), including payment-first and cancellation-first lock
+orders, stale-lease requeue, and durable generation recovery after event deletion.
+A second run from the integrated root checkout also passed 41 / 319 in 12.68s.
+
+Development `6767/cogito-app` is migrated through 0069 using the normal runner:
+journal id 90, timestamp `1792593114908`, SQL SHA-256
+`a6a442562692e34cea132cbd4bb20de6561906fb45ad9441add19dbf8b8c2617`.
+Migration 0068 is journal id 89, timestamp `1792584327849`, hash
+`cffb34e94821c878f2d897f59b1800395c7bc6ceefc44dc8cd9546db7116b173`.
+Dev ledger count 89 and booking count 34 were unchanged across migration; no dev
+reset or seed ran. Root workspace dependency junctions were repaired to resolve
+root packages rather than a saved feature worktree, then local API/web restarted.
+API port 3001 health reports database/Redis/scheduler healthy; web port 3000
+returns 200. These checks do not exercise live Google Calendar or payments.
+
+Browser acceptance: the integrated enrollment and whole-class cancellation
+journeys passed in the two-case run. The new lifecycle journey initially found
+missing admin storage state, then an ambiguous text locator; it now signs in
+using the per-run credentials and matches the postponed badge exactly. Its
+focused rerun passed (1 Chromium test, 32.4s; exit 0), covering session
+cancellation, one-time postponement and exact fee-free withdrawal. Integrated
+root web and E2E typechecks passed (exit 0). Focused provider 52/196,
+cancellation 8/16 and reset-guard 6/40 checks passed earlier. Browser logs also
+exposed a duplicate class-card React key during list refresh; follow-up remains.
+Ordinary rescheduling policy, broader V3 acceptance and previously recorded
+API/web full-compiler limitations remain open.
+
 ## API test database safety (2026-10-21)
 
 `packages/api/src/tests/helpers/test-database-safety.ts` is a standalone URL
@@ -1291,7 +1324,7 @@ chat directory.
 
 - `createEvent(bookingId, scheduledStartAt?, scheduledEndAt?, attendees?, conn?, details?)` — Creates a Google Calendar event with optional title/description/location metadata. `details.createConference` defaults to true for the unchanged online Meet flow; offline scheduling passes false, producing no conference data or Meet URL. Offline descriptions start with `Site: {room.location}` and `Room: {room.name}`. Repeated offline creation reuses the live provider row.
 - `updateAcademyClassEvent(externalEventId, sessionId, startAt, endAt)` — Internal class-worker update of the saved Calendar event, with a stable session-ID fallback when no external ID was stored.
-- `updateEvent(bookingId, changes) — Best-effort updates provider-side start/end, physical location, and/or description while preserving the rest of the event resource. Updates use `conferenceDataVersion=1` so the existing online Meet conference survives the full-resource update, with attendee emails controlled by `GOOGLE_CALENDAR_SEND_UPDATES` (`none` by default, `all` in production) (OQ-05, #46). Cogito always sends its own booking notifications; Calendar attendee emails stay suppressed outside production to avoid duplicate mail and DSN bounces to undeliverable seed addresses.
+- `updateEvent(bookingId, changes) — Best-effort updates provider-side start/end, physical location, and/or description while preserving the rest of the event resource. Updates use `conferenceDataVersion=1`so the existing online Meet conference survives the full-resource update, with attendee emails controlled by`GOOGLE_CALENDAR_SEND_UPDATES` (`none`by default,`all` in production) (OQ-05, #46). Cogito always sends its own booking notifications; Calendar attendee emails stay suppressed outside production to avoid duplicate mail and DSN bounces to undeliverable seed addresses.
 - `cancelEvent(bookingId)` — Idempotently cancels the Google event on terminal online or offline booking states (cancel/late-cancel/decline/expire; best-effort via circuit breaker) (#46)
 - `probe()` — Boot-time connectivity probe (P4.2/X3): `calendarList.get` with a 10s timeout, logs loudly on failure (wired into the server bootstrap so a broken Google Meet swap is visible at boot, not only at the first booking; the server keeps manual fallback available)
 - Falls back to manual link URL format when circuit breaker is open

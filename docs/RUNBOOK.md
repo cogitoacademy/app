@@ -1,5 +1,38 @@
 # Cogito Runbook
 
+## T06 parent integration and local verification (2026-10-21)
+
+T06 is integrated into local `f/release-v3` through `cda99280`; `main` is
+unchanged. After restarting Docker, the parent applied additive migration 0069
+to guarded loopback `6769/cogito-test` with the normal migration runner and no
+reset flags. The non-reset enrollment/lifecycle/report suite passed 41 tests /
+319 expectations (exit 0), including payment-first and cancellation-first lock
+orders, stale-lease requeue, and durable generation recovery after event deletion.
+A second run from the integrated root checkout also passed 41 / 319 in 12.68s.
+
+Development `6767/cogito-app` is migrated through 0069 using the normal runner:
+journal id 90, timestamp `1792593114908`, SQL SHA-256
+`a6a442562692e34cea132cbd4bb20de6561906fb45ad9441add19dbf8b8c2617`.
+Migration 0068 is journal id 89, timestamp `1792584327849`, hash
+`cffb34e94821c878f2d897f59b1800395c7bc6ceefc44dc8cd9546db7116b173`.
+Dev ledger count 89 and booking count 34 were unchanged across migration; no dev
+reset or seed ran. Root workspace dependency junctions were repaired to resolve
+root packages rather than a saved feature worktree, then local API/web restarted.
+API port 3001 health reports database/Redis/scheduler healthy; web port 3000
+returns 200. These checks do not exercise live Google Calendar or payments.
+
+Browser acceptance: the integrated enrollment and whole-class cancellation
+journeys passed in the two-case run. The new lifecycle journey initially found
+missing admin storage state, then an ambiguous text locator; it now signs in
+using the per-run credentials and matches the postponed badge exactly. Its
+focused rerun passed (1 Chromium test, 32.4s; exit 0), covering session
+cancellation, one-time postponement and exact fee-free withdrawal. Integrated
+root web and E2E typechecks passed (exit 0). Focused provider 52/196,
+cancellation 8/16 and reset-guard 6/40 checks passed earlier. Browser logs also
+exposed a duplicate class-card React key during list refresh; follow-up remains.
+Ordinary rescheduling policy, broader V3 acceptance and previously recorded
+API/web full-compiler limitations remain open.
+
 ## Test database reset incident and current guard (2026-10-21)
 
 At about 13:17:59 UTC, `academy-class.test.ts` called the API helper's
@@ -21,10 +54,10 @@ files calling the shared helper; their call sites are unchanged, but old
 6767/6768 env files now fail closed before the helper issues SQL. The pure
 guard suite passed 6 tests / 40 expectations; no DB-backed verification was run.
 
-## T06 class lifecycle implementation checkpoint (21 October)
+## Earlier T06 worker checkpoint (superseded by parent verification above)
 
-The `t3/finish-v3-t06` worktree continues `f/release-v3` from `dc1da96a`; do not
-treat this branch as integrated. It implements preview/confirm for cancelling
+At the earlier worker handoff, `t3/finish-v3-t06` continued `f/release-v3`
+from `dc1da96a` and was not yet integrated. It implements preview/confirm for cancelling
 one future scheduled class session with a required reason, stable request UUID,
 exact quote hash and class/session version checks. Cancellation returns only the
 target session's unspent funded Marks with a zero fee, adjusts/cancels the
@@ -173,7 +206,6 @@ can isolate the T05 dependency cache without deleting shared dev cache files.
 The disposable T05 DB was migrated through existing 0065 before the integrated
 browser seed (no schema was generated). Dev and T05 now both include payout tax
 columns; no dev reset or seed was performed.
-
 
 Student class cancellation requires no new migration beyond enrollment 0064.
 The parent implementation is on f/v3-class-cancellation, based on integrated
@@ -420,8 +452,7 @@ database requirement for automated destructive tests.
 
 ## Series cancellation and settlement verification (2026-10-20)
 
-Historical runs used the retained `cogito-test-settlement` database on port
-6767. The API reset helper now refuses every 6767 target, so the commands below
+Historical runs used the retained `cogito-test-settlement` database on port 6767. The API reset helper now refuses every 6767 target, so the commands below
 will fail before truncation. Do not redirect them to the retained 6769 or 6770
 databases: those contain preserved fixtures and are not disposable reset
 targets for this incident follow-up. Reruns require a separately prepared

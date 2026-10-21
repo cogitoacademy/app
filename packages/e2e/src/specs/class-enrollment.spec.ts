@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import path from "node:path";
 import {
   expect,
   request,
@@ -98,13 +97,6 @@ async function createApiContext(email: string, password: string) {
     throw new Error(`API sign-in returned ${response.status()}`);
   }
   return context;
-}
-
-async function createSavedApiContext(role: "admin" | "student") {
-  return request.newContext({
-    baseURL: process.env.SERVER_URL ?? "http://localhost:3201",
-    storageState: path.resolve(process.cwd(), ".auth", `${role}.json`),
-  });
 }
 
 function toDateTimeLocal(value: Date) {
@@ -743,8 +735,8 @@ test("admin cancels one session, postpones once, and student confirms the exact 
 }) => {
   test.setTimeout(120_000);
   assertT05EnrollmentTarget();
-  const adminApi = await createSavedApiContext("admin");
-  const studentApi = await createSavedApiContext("student");
+  const adminApi = await createApiContext(ADMIN_EMAIL, ADMIN_PASSWORD);
+  const studentApi = await createApiContext(STUDENT_EMAIL, STUDENT_PASSWORD);
   let adminContext: Awaited<ReturnType<typeof browser.newContext>> | undefined;
   let studentContext:
     | Awaited<ReturnType<typeof browser.newContext>>
@@ -902,7 +894,9 @@ test("admin cancels one session, postpones once, and student confirms the exact 
     });
     const studentPage = await studentContext.newPage();
     await studentPage.goto(`/classes/${academyClass.id}`);
-    await expect(studentPage.getByText("Postponed once")).toBeVisible();
+    await expect(
+      studentPage.getByText("Postponed once", { exact: true }),
+    ).toBeVisible();
     await expect(
       studentPage.getByText(formattedFreeExitUntil, { exact: false }).first(),
     ).toBeVisible();
