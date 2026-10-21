@@ -4,6 +4,13 @@ Date: 19 October 2026. Status: **T00A catalog CRUD/palette and T01 dynamic draft
 
 ## Execution priority — 21 October 2026
 
+Parent T05 verification follow-up: web typecheck passes after resolving the
+Drizzle link mismatch and source type errors. The guarded enrollment Postgres
+suite passes 9 tests / 69 expectations, including expiry after DB waits and
+started-session checkout rejection; pure pricing/funding/public DTO checks pass
+12 / 37. These checks supplement the author's prior Chromium journey. Broader
+T06/T07 and final release acceptance remain open.
+
 The owner prioritizes booking and core app flows over content migration. The
 three active implementation workers cover enrollment/booking (T05), signup
 proof and security (T08/AUTH-01), and tutor tax/payout (T03). Follow enrollment

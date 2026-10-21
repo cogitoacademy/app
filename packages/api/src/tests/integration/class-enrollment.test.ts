@@ -267,6 +267,53 @@ afterAll(async () => {
 });
 
 describe("class enrollment PostgreSQL invariants [REQ-ENROLL-01..04]", () => {
+  test("checkout rechecks the deadline after database waits before holding Marks", async () => {
+    const fixture = await createFixture({ sessions: 1, balance: 0 });
+    const enrollment = await makeEnrollment(
+      fixture,
+      0,
+      "single",
+      crypto.randomUUID(),
+      fixture.sessionIds[0],
+    );
+    await db
+      .update(walletTable)
+      .set({ totalBalance: 25, availableBalance: 25 })
+      .where(eq(walletTable.id, fixture.walletIds[0]!));
+    const pending = fixture.service.completeCheckout(
+      fixture.studentIds[0]!,
+      enrollment.id,
+    );
+    fixture.setNow(new Date(BASE_TIME.getTime() + 16 * 60_000));
+    expect(await pending).toMatchObject({ outcome: "expired" });
+    expect(await ledgerHolds(fixture)).toHaveLength(0);
+    expect((await allocationRows(fixture))[0]?.state).toBe("released");
+  });
+
+  test("checkout cannot fund a reserved session after it starts", async () => {
+    const fixture = await createFixture({ sessions: 1, balance: 0 });
+    const enrollment = await makeEnrollment(
+      fixture,
+      0,
+      "single",
+      crypto.randomUUID(),
+      fixture.sessionIds[0],
+    );
+    await db
+      .update(walletTable)
+      .set({ totalBalance: 25, availableBalance: 25 })
+      .where(eq(walletTable.id, fixture.walletIds[0]!));
+    await db
+      .update(academyClassSession)
+      .set({ startAt: new Date(BASE_TIME.getTime() + 60_000) })
+      .where(eq(academyClassSession.id, fixture.sessionIds[0]!));
+    fixture.setNow(new Date(BASE_TIME.getTime() + 2 * 60_000));
+    await expect(
+      fixture.service.completeCheckout(fixture.studentIds[0]!, enrollment.id),
+    ).rejects.toThrow("no longer scheduled in the future");
+    expect(await ledgerHolds(fixture)).toHaveLength(0);
+  });
+
   test("same request retries create one hold, and a last-seat race has one winner", async () => {
     const duplicate = await createFixture({ sessions: 1, balance: 25 });
     const requestKey = crypto.randomUUID();

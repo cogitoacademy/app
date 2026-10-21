@@ -244,7 +244,7 @@ export function createClassEnrollmentService(deps: {
   }
 
   async function createEnrollment(studentId: string, input: CreateInput) {
-    const nowAt = currentTime();
+    let nowAt = currentTime();
     return deps.db.transaction(async (tx) => {
       await repo.lockEnrollmentRequestKey(tx, studentId, input.requestKey);
       const existing = await repo.findEnrollmentByRequestKey(
@@ -265,6 +265,7 @@ export function createClassEnrollmentService(deps: {
           true,
         );
         if (!lockedExisting) throw new ClassEnrollmentNotFoundError();
+        nowAt = currentTime();
         const sameRequest =
           lockedExisting.classId === input.classId &&
           lockedExisting.plan === input.plan &&
@@ -371,6 +372,7 @@ export function createClassEnrollmentService(deps: {
         tx,
         quote.selectedSessionIds,
       );
+      nowAt = currentTime();
       if (
         lockedSessions.length !== quote.selectedSessionIds.length ||
         lockedSessions.some(
@@ -521,7 +523,7 @@ export function createClassEnrollmentService(deps: {
           ordinal: allocation.ordinal,
           sequenceNumber: allocation.sequenceNumber,
           rateMarks: allocation.rateMarks,
-          state: "checkout_reserved",
+          state: "checkout_reserved" as const,
           fundingEventKey: `class-enrollment:${enrollmentId}:session:${allocation.sessionId}:hold:v1`,
           fundingSourceReference: `academy-class-enrollment/${enrollmentId}/allocation/${allocationId}`,
           fundedMarks: 0,
@@ -623,7 +625,6 @@ export function createClassEnrollmentService(deps: {
   }
 
   async function completeCheckout(studentId: string, enrollmentId: string) {
-    const nowAt = currentTime();
     const initial = await repo.findEnrollment(deps.db, studentId, enrollmentId);
     if (!initial) throw new ClassEnrollmentNotFoundError();
     const sessionIds = (await repo.findAllocations(deps.db, enrollmentId)).map(
@@ -631,7 +632,7 @@ export function createClassEnrollmentService(deps: {
     );
 
     return deps.db.transaction(async (tx) => {
-      await repo.lockSessions(tx, sessionIds);
+      const lockedSessions = await repo.lockSessions(tx, sessionIds);
       const enrollment = await repo.findEnrollment(
         tx,
         studentId,
@@ -642,6 +643,7 @@ export function createClassEnrollmentService(deps: {
       const installments = await repo.findInstallments(tx, enrollmentId, true);
       const first = installments.find((item) => item.ordinal === 1);
       if (!first) throw new ClassEnrollmentNotFoundError();
+      const nowAt = currentTime();
 
       if (enrollment.state === "active") {
         const wallet = await repo.getWalletByUser(tx, studentId);
@@ -673,6 +675,17 @@ export function createClassEnrollmentService(deps: {
       if (!classRecord || classRecord.state !== "published") {
         throw new ClassEnrollmentConflictError(
           "This class is not accepting checkout confirmation",
+        );
+      }
+      if (
+        lockedSessions.length !== sessionIds.length ||
+        lockedSessions.some(
+          (session) =>
+            session.state !== "scheduled" || session.startAt <= nowAt,
+        )
+      ) {
+        throw new ClassEnrollmentConflictError(
+          "One or more reserved sessions are no longer scheduled in the future; request a fresh enrollment",
         );
       }
       const firstAllocations = (
@@ -746,7 +759,6 @@ export function createClassEnrollmentService(deps: {
   }
 
   async function paySecondInstallment(studentId: string, enrollmentId: string) {
-    const nowAt = currentTime();
     const initial = await repo.findEnrollment(deps.db, studentId, enrollmentId);
     if (!initial) throw new ClassEnrollmentNotFoundError();
     const allocationRows = await repo.findAllocations(deps.db, enrollmentId);
@@ -762,6 +774,7 @@ export function createClassEnrollmentService(deps: {
       );
       if (!enrollment) throw new ClassEnrollmentNotFoundError();
       const installment = await repo.findInstallment(tx, enrollmentId, 2, true);
+      const nowAt = currentTime();
       if (!installment) {
         throw new ClassEnrollmentInvalidOperationError(
           "This enrollment has no second installment",

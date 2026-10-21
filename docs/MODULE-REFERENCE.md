@@ -1,5 +1,12 @@
 # Cogito Module Reference
 
+Enrollment timing invariant: creation refreshes its clock after session locks;
+confirmation and second-installment funding read time after transaction locks.
+Confirmation rechecks scheduled/future session state before creating holds.
+This prevents a request started before expiry from funding after a database
+wait crosses its deadline. Allocation state TypeScript literals match the
+existing SQL state check; no migration change is required for that annotation.
+
 ## Academy enrollment funding schema (2026-10-21)
 
 Migration `0064` adds enrollment, installment, session allocation and top-up

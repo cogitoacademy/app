@@ -1,5 +1,11 @@
 # Cogito API Reference
 
+Enrollment confirmation revalidates checkout expiry after transaction locks and
+requires all reserved sessions to remain scheduled in the future before any
+Marks hold. A session that started during checkout requires a fresh enrollment;
+an expired checkout returns the existing expired outcome. Second-installment
+deadline checks also use time read after transaction locks.
+
 Enrollment schema milestone (2026-10-21): additive migration `0064` stores
 enrollment snapshots, installment state, per-session seat/funding allocations,
 and immutable top-up attempts. T05 registers authenticated enrollment

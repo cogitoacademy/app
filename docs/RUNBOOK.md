@@ -1,5 +1,18 @@
 # Cogito Runbook
 
+Parent verification follow-up (21 October): the enrollment worktree's Drizzle
+links were aligned, source-level allocation state and public tutor relation
+query type errors were corrected, and web `check-types` passed with
+`GOMAXPROCS=1`, `GOMEMLIMIT=256MiB`, `GOGC=20`. Earlier failed typecheck attempts
+remain historical evidence; the parent pass supersedes the web blocker below.
+Docker processes were restarted without resetting volumes after its CLI hung.
+The parent then ran the complete guarded T05 Postgres suite on the verified
+`cogito-t05-enrollment-pgdata` volume: 9 tests / 69 expectations passed, including
+new regressions for expiry during database waits and sessions starting before
+checkout confirmation. Pricing/funding/public DTO units passed 12 / 37.
+The initial DB attempt used the example credentials and failed authentication;
+the verified test container's credentials were loaded privately for the rerun.
+
 ## T05 enrollment isolated test target and evidence (2026-10-21)
 
 Destructive seed/reset and enrollment integration work used only the newly

@@ -1,6 +1,6 @@
 import { asc, desc, eq } from "drizzle-orm";
 
-import { subjectCategory, tutorProfile } from "@cogito-app/db/schema";
+import { tutorProfile } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 
 async function listPublishedTutors(db: DbType) {
@@ -31,7 +31,6 @@ async function listPublishedTutors(db: DbType) {
         },
         with: {
           subject: {
-            where: eq(subjectCategory.isActive, true),
             columns: {
               id: true,
               slug: true,
@@ -42,7 +41,6 @@ async function listPublishedTutors(db: DbType) {
             },
             with: {
               parent: {
-                where: eq(subjectCategory.isActive, true),
                 columns: {
                   id: true,
                   slug: true,

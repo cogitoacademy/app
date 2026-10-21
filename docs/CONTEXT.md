@@ -1,5 +1,13 @@
 # Cogito App — Codebase Context
 
+Parent enrollment follow-up (21 October): checkout confirmation and second
+installment payment read authoritative time after acquiring transaction locks.
+Confirmation rejects reserved sessions that have started or are no longer
+scheduled. Allocation state types now match the database check constraint;
+unsupported filters on public tutor one-to-one relations were removed, with
+active-subject/parent filtering retained in the public DTO mapper. Parent web
+typecheck passes after these fixes and the worktree Drizzle link repair.
+
 ## Enrollment schema checkpoint (2026-10-21)
 
 `385fc959` integrates the additive enrollment schema from `2f9786d0`.
