@@ -48,6 +48,13 @@ and UI journeys through a local seed script, not an HTTP bypass. It requires
 test mode, exact loopback `cogito-test`, and a paired test Redis port before
 deleting only auth-rate keys; all other Redis state remains intact.
 
+The T05 enrollment E2E runner uses a new seeded student email for each run on
+loopback `cogito-test:6769`. The student retains the familiar Andre display
+name, while each run owns a separate wallet and enrollment history. Global
+setup does not delete T05 ledger, payment, cancellation, or enrollment rows;
+the dedicated `cogito-test-payout:6770` runner keeps its existing fixed-seed
+reset path.
+
 Enrollment timing invariant: creation refreshes its clock after session locks;
 confirmation and second-installment funding read time after transaction locks.
 Confirmation rechecks scheduled/future session state before creating holds.
@@ -205,7 +212,7 @@ Financial mutations acquire sorted session row locks, then enrollment, installme
 
 T06 cancellation/withdrawal is intentionally not presented as a student action here. Its future service seam must release the selected session allocation only under the approved cancellation policy; Q04 ordinary reschedule rights remain open. T07 report completion and fee deduction remain downstream work.
 
-The T05 global-setup fixture reset is outside the class-enrollment service contract. It selects only the seeded Andre identity by exact email, name and student role, then removes that student’s allocations, installments, top-up attempts and enrollments in FK-safe order with the existing wallet/legacy reset in one transaction. Unknown references, paid top-ups, mismatched allocation identity or recorded session spending cause a preflight refusal. Other seeded students and class/session fixtures are not selected.
+The T05 global setup gives each 6769 run a fresh seeded student (keeping the Andre display name) and leaves earlier enrollment, allocation, ledger, quote and payment rows untouched. Its reset command is a no-op on T05, remains no-write on 6767/6768, and keeps the exact seed-Andre legacy reset on payout target 6770. This avoids FK cleanup assumptions and keeps later T07 session report and payout facts attached to their original enrollment history.
 
 ## V3 report input contract (2026-10-18)
 

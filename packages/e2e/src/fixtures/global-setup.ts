@@ -1,10 +1,14 @@
 import { execSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { request } from "@playwright/test";
 import dotenv from "dotenv";
 import { resolveE2eEnvironment, resolveE2eEnvFile } from "./e2e-environment";
-import { STUDENT_EMAIL } from "./test-accounts";
+import {
+  createRunScopedStudentEmail,
+  DEFAULT_STUDENT_EMAIL,
+} from "./student-identity";
 
 /**
  * T05 uses its own disposable database. Keep this opt-in guard scoped to that
@@ -72,8 +76,21 @@ async function globalSetup() {
   assertT05EnrollmentTarget(process.env);
   const e2eEnvironment = resolveE2eEnvironment(process.env);
   const serverDir = path.resolve(process.cwd(), "../../apps/server");
+  const runScopedStudentEmail =
+    process.env.T05_ENROLLMENT_TEST_DB_PORT === "6769"
+      ? createRunScopedStudentEmail(randomUUID())
+      : DEFAULT_STUDENT_EMAIL;
 
-  console.log("Resetting seed student state...");
+  // The T05 disposable database keeps each run's enrollment, cancellation and
+  // payment history attached to its own seeded student instead of deleting it.
+  process.env.E2E_STUDENT_EMAIL = runScopedStudentEmail;
+  process.env.SEED_REVIEW_STUDENT_EMAIL = runScopedStudentEmail;
+
+  console.log(
+    process.env.T05_ENROLLMENT_TEST_DB_PORT === "6769"
+      ? "Creating a fresh T05 student identity for this run..."
+      : "Resetting seed student state...",
+  );
   const testSeedEnv = {
     ...process.env,
     NODE_ENV: "test",
@@ -92,6 +109,9 @@ async function globalSetup() {
     GOOGLE_CLIENT_EMAIL: "",
     GOOGLE_PRIVATE_KEY: "",
     GOOGLE_IMPERSONATED_USER: "",
+    RESEND_API_KEY: "",
+    E2E_STUDENT_EMAIL: runScopedStudentEmail,
+    SEED_REVIEW_STUDENT_EMAIL: runScopedStudentEmail,
     SEED_ADMIN_PASSWORD: process.env.SEED_ADMIN_PASSWORD ?? "AdminPassword123!",
     SEED_TUTOR_PASSWORD: process.env.SEED_TUTOR_PASSWORD ?? "Tutor123!",
     SEED_STUDENT_PASSWORD: process.env.SEED_STUDENT_PASSWORD ?? "Student123!",
@@ -128,7 +148,7 @@ async function globalSetup() {
   });
   const signIn = await authContext.post("/api/auth/sign-in/email", {
     data: {
-      email: STUDENT_EMAIL,
+      email: runScopedStudentEmail,
       password: testSeedEnv.SEED_STUDENT_PASSWORD,
     },
   });

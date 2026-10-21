@@ -1,11 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
   assertSeedStudentFixture,
-  assertSupportedEnrollmentForeignKeys,
   RESET_TARGET_ERROR,
   resolveSeedStudentResetTarget,
   SEED_STUDENT_FIXTURE,
-  type EnrollmentForeignKey,
 } from "./reset-seed-student.guard";
 
 function t05Environment(
@@ -103,52 +101,5 @@ describe("seed student reset safety", () => {
     expect(() =>
       assertSeedStudentFixture({ ...SEED_STUDENT_FIXTURE, role: "admin" }),
     ).toThrow("exact fixture identity");
-  });
-
-  test("allows only current enrollment child foreign keys and refuses new report or payout links", () => {
-    const currentReferences: EnrollmentForeignKey[] = [
-      {
-        sourceTable: "academy_class_enrollment_installment",
-        targetTable: "academy_class_enrollment",
-        constraintName:
-          "academy_class_enrollment_installment_enrollment_id_academy_class_enrollment_id_fk",
-      },
-      {
-        sourceTable: "academy_class_enrollment_allocation",
-        targetTable: "academy_class_enrollment",
-        constraintName:
-          "academy_class_enrollment_allocation_enrollment_id_academy_class_enrollment_id_fk",
-      },
-      {
-        sourceTable: "academy_class_enrollment_allocation",
-        targetTable: "academy_class_enrollment_installment",
-        constraintName:
-          "academy_class_enrollment_allocation_installment_id_academy_class_enrollment_installment_id_fk",
-      },
-      {
-        sourceTable: "academy_class_enrollment_top_up_attempt",
-        targetTable: "academy_class_enrollment_installment",
-        constraintName:
-          "academy_class_enrollment_top_up_attempt_installment_id_academy_class_enrollment_installment_id_fk",
-      },
-    ];
-    expect(() =>
-      assertSupportedEnrollmentForeignKeys(currentReferences),
-    ).not.toThrow();
-    expect(() =>
-      assertSupportedEnrollmentForeignKeys([
-        ...currentReferences,
-        {
-          sourceTable: "academy_class_session_report",
-          targetTable: "academy_class_enrollment_allocation",
-          constraintName: "academy_class_session_report_allocation_id_fk",
-        },
-        {
-          sourceTable: "class_payment_record",
-          targetTable: "academy_class_enrollment_top_up_attempt",
-          constraintName: "class_payment_record_attempt_id_fk",
-        },
-      ]),
-    ).toThrow("unsupported financial or report references");
   });
 });

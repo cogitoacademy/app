@@ -121,11 +121,11 @@ warnings; the E2E package typecheck passed before its final reload-wait update.
 API/web typechecks remain blocked by duplicate linked Drizzle declarations; see
 `RUNBOOK.md`. Do not infer T06, T07 or release readiness.
 
-## T05 repeated-run fixture reset safety (2026-10-21)
+## T05 repeat-run fixture identity (2026-10-21)
 
-Playwright global setup now resets only the exact Andre by Cogito student fixture on the dedicated loopback `cogito-test` database at port 6769. Class enrollment, allocation, installment and quote-only top-up-attempt cleanup runs in the same transaction as the existing wallet and legacy-booking reset. The reset skips cleanup on ports 6767 and 6768 so existing dev/signup setup can continue without this fixture reset; it rejects payout-linked/payment-linked class activity, mismatched allocation identity and unknown incoming foreign keys before any write. It does not alter class/session fixtures or other seeded students. The separate `cogito-test-payout` target at 6770 retains the legacy-only reset path.
+On exact loopback `cogito-test:6769`, Playwright global setup creates a run-scoped student email (`cogito.e2e.<uuid>@yopmail.com`), seeds the usual password and Andre display name, and passes that identity to each E2E worker. The T05 reset command returns without querying or changing the shared seed student. Existing enrollment, cancellation, ledger, quote and payment history remains untouched; the new student starts with an independent seed wallet. The disposable database accumulates one run-scoped account and its fixtures per run; volume cleanup remains a separately assigned lifecycle task. Ports 6767/6768 remain no-write targets and 6770 keeps its legacy reset path. This removes FK cleanup assumptions and lets later T07 report/payout rows remain attached to their original enrollments.
 
-Offline reset guard coverage passes 6 tests / 17 expectations. No database reset, migration, browser run or full typecheck was performed for this slice; T07 report/payout integration remains open.
+Pure guard and identity tests pass. A transactionally isolated regression for the exact 6769 target is authored but was not run because the T07 worker owns the serialized database window. It checks that repeated T05 reset calls preserve cancellation spending and stub-payment rows, then rolls back its synthetic class fixture. No reset, migration, browser E2E or full typecheck was performed for this slice.
 
 ## V3 integration and local migration checkpoint (2026-10-20)
 

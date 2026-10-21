@@ -9,23 +9,10 @@ export const SEED_STUDENT_FIXTURE = {
 export const RESET_TARGET_ERROR =
   "Seed student reset requires a dedicated loopback test database: T05 cogito-test on port 6769 or cogito-test-payout on port 6770.";
 
-const SUPPORTED_ENROLLMENT_FOREIGN_KEYS = new Set([
-  "academy_class_enrollment_installment:academy_class_enrollment:academy_class_enrollment_installment_enrollment_id_academy_class_enrollment_id_fk",
-  "academy_class_enrollment_allocation:academy_class_enrollment:academy_class_enrollment_allocation_enrollment_id_academy_class_enrollment_id_fk",
-  "academy_class_enrollment_allocation:academy_class_enrollment_installment:academy_class_enrollment_allocation_installment_id_academy_class_enrollment_installment_id_fk",
-  "academy_class_enrollment_top_up_attempt:academy_class_enrollment_installment:academy_class_enrollment_top_up_attempt_installment_id_academy_class_enrollment_installment_id_fk",
-]);
-
 export type SeedStudentIdentity = {
   email: string;
   name: string;
   role: string;
-};
-
-export type EnrollmentForeignKey = {
-  sourceTable: string;
-  targetTable: string;
-  constraintName: string;
 };
 
 export function resolveSeedStudentResetTarget(
@@ -83,23 +70,6 @@ export function assertSeedStudentFixture(identity: SeedStudentIdentity) {
   ) {
     throw new Error(
       "Seed student reset refused because the exact fixture identity did not match.",
-    );
-  }
-}
-
-export function assertSupportedEnrollmentForeignKeys(
-  foreignKeys: readonly EnrollmentForeignKey[],
-) {
-  if (
-    foreignKeys.some(
-      ({ sourceTable, targetTable, constraintName }) =>
-        !SUPPORTED_ENROLLMENT_FOREIGN_KEYS.has(
-          `${sourceTable}:${targetTable}:${constraintName}`,
-        ),
-    )
-  ) {
-    throw new Error(
-      "Seed student reset refused because class enrollment rows have unsupported financial or report references.",
     );
   }
 }

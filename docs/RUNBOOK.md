@@ -112,7 +112,8 @@ volume was created because the pre-existing `cogito-test` volume contained
 signup fixtures and user data; it was preserved. Development Postgres
 `localhost:6767/cogito-app`, signup Postgres `localhost:6768`, and the signup
 volume were not reset or migrated by T05 testing. The T05 volume is the only
-target that may be reset by this feature's tests.
+target used by this feature's guarded database tests; the current 6769 seed
+reset path is a no-op.
 
 The integration test asserts `NODE_ENV=test`, PostgreSQL, a loopback hostname,
 port `6769`, and exact database path `/cogito-test` before its first database
@@ -124,9 +125,9 @@ this exact guarded test database; no customer pricing pointer or external
 provider is called. Vite uses `apps/web/node_modules/.vite-t05-enrollment` for
 the T05 browser server to avoid contending with the existing app's Vite cache.
 
-The Playwright global-setup reset now independently requires `NODE_ENV=test`, `T05_ENROLLMENT_TEST_DB_PORT=6769`, loopback PostgreSQL port 6769 and exact `/cogito-test`. It skips cleanup on 6767 and 6768, including when the preserved signup target uses `cogito-test`. On the T05 target it selects only `cogito.andre@yopmail.com` / Andre by Cogito / student, preflights incoming enrollment foreign keys, allocation source identity, recorded spending and paid top-ups, then deletes top-up attempts, allocations, installments and enrollments before resetting that wallet and legacy booking rows. All deletes and balance updates share one transaction. The payout test target at 6770 keeps its legacy-only reset path.
+The Playwright global setup requires `NODE_ENV=test`, `T05_ENROLLMENT_TEST_DB_PORT=6769`, loopback PostgreSQL port 6769 and exact `/cogito-test`. It skips cleanup on 6767 and 6768. Each 6769 run gets a fresh seeded student email and the familiar Andre display name; existing enrollment, cancellation, ledger, quote and payment history is left unchanged. This avoids rewriting financial history and gives the new run an independent wallet. The test seed blanks Resend credentials. The disposable T05 database accumulates one run-scoped account and its fixtures per run; volume cleanup remains a separately assigned lifecycle task. The separate payout target at 6770 keeps the legacy-only reset for the exact Andre seed identity.
 
-Guard regression command: `bun --smol test --timeout 30000 apps/server/src/seed/reset-seed-student.guard.test.ts` (6 tests / 17 expectations). This code-only slice did not run reset, migration, database integration, browser E2E or full typecheck.
+Pure guard and identity regression commands: `bun --smol test --timeout 30000 apps/server/src/seed/reset-seed-student.guard.test.ts packages/e2e/src/fixtures/test-accounts.test.ts`. The 6769 integration guard is authored in `apps/server/src/seed/reset-seed-student.integration.test.ts`; run it only during the assigned database window. The current authoring slice did not run reset, database integration, migration, browser E2E or full typecheck.
 
 The fresh T05 database was migrated through `0064_academy_class_enrollment.sql`
 using the normal Drizzle runner. Latest journal readback is timestamp
