@@ -9,8 +9,13 @@ import {
   academyClassEnrollmentAllocation,
   academyClassEnrollmentInstallment,
   academyClassSession,
+  academyClassSessionReport,
+  academyClassSessionReportRevision,
   ledgerEntry,
   subjectCategory,
+  tutorInvite,
+  tutorProfile,
+  tutorSessionFee,
   user,
   wallet as walletTable,
 } from "@cogito-app/db/schema";
@@ -255,10 +260,85 @@ async function makeEnrollment(
   });
 }
 
+const CLASS_REPORT_FEEDBACK = {
+  discussion: ["Reviewed the session topic and practice questions."],
+  strengths: ["Explained the key steps clearly."],
+  improvements: ["Show each intermediate calculation next time."],
+};
+
+function makeClassReportInput(
+  fixture: Fixture,
+  overrides: Partial<{
+    expectedVersion: number;
+    requestKey: string;
+    feedback: typeof CLASS_REPORT_FEEDBACK;
+    adminReason: string;
+  }> = {},
+) {
+  return {
+    classId: fixture.classId,
+    sessionId: fixture.sessionIds[0]!,
+    expectedVersion: 0,
+    requestKey: crypto.randomUUID(),
+    deliveryConfirmed: true as const,
+    feedback: CLASS_REPORT_FEEDBACK,
+    ...overrides,
+  };
+}
+
+async function createReportAdmin() {
+  const id = crypto.randomUUID();
+  await db.insert(user).values({
+    id,
+    name: "Class report admin",
+    email: `class-report-admin-${id}@example.test`,
+    emailVerified: true,
+    role: "admin",
+  });
+  ownedUserIds.add(id);
+  return id;
+}
+
 afterAll(async () => {
   const classIds = [...ownedClassIds];
   const userIds = [...ownedUserIds];
   if (classIds.length > 0) {
+    const sessions = await db
+      .select({ id: academyClassSession.id })
+      .from(academyClassSession)
+      .where(inArray(academyClassSession.classId, classIds));
+    const sessionIds = sessions.map((row) => row.id);
+    if (sessionIds.length > 0) {
+      const reports = await db
+        .select({ id: academyClassSessionReport.id })
+        .from(academyClassSessionReport)
+        .where(inArray(academyClassSessionReport.sessionId, sessionIds));
+      const reportIds = reports.map((row) => row.id);
+      if (reportIds.length > 0) {
+        await db
+          .delete(auditLog)
+          .where(
+            and(
+              inArray(auditLog.targetId, reportIds),
+              inArray(auditLog.action, [
+                "academy_class_session.report_submitted",
+                "academy_class_session.report_updated",
+              ]),
+            ),
+          );
+        await db
+          .delete(academyClassSessionReportRevision)
+          .where(
+            inArray(academyClassSessionReportRevision.reportId, reportIds),
+          );
+      }
+      await db
+        .delete(tutorSessionFee)
+        .where(inArray(tutorSessionFee.academyClassSessionId, sessionIds));
+      await db
+        .delete(academyClassSessionReport)
+        .where(inArray(academyClassSessionReport.sessionId, sessionIds));
+    }
     await db
       .delete(auditLog)
       .where(
@@ -1282,13 +1362,11 @@ describe("class enrollment PostgreSQL invariants [REQ-ENROLL-01..04]", () => {
   });
   test("a creator resuming after lease recovery queues another cancellation instead of losing the provider event", async () => {
     const fixture = await createFixture({ sessions: 1 });
-    await db
-      .insert(academyClassMeeting)
-      .values({
-        sessionId: fixture.sessionIds[0]!,
-        status: "pending",
-        nextRetryAt: new Date(0),
-      });
+    await db.insert(academyClassMeeting).values({
+      sessionId: fixture.sessionIds[0]!,
+      status: "pending",
+      nextRetryAt: new Date(0),
+    });
     let started!: () => void;
     let finish!: () => void;
     const entered = new Promise<void>((resolve) => {
@@ -1419,5 +1497,529 @@ describe("class enrollment PostgreSQL invariants [REQ-ENROLL-01..04]", () => {
       )[0]?.state,
     ).toBe("published");
     expect(fixture.notifications).toHaveLength(0);
+  });
+});
+
+describe("class session reports and settlement [REQ-REPORT-01..03]", () => {
+  test("concurrent identical submission settles a funded seat once and exposes no student identity", async () => {
+    const fixture = await createFixture({ sessions: 1, balance: 25 });
+    await makeEnrollment(
+      fixture,
+      0,
+      "single",
+      crypto.randomUUID(),
+      fixture.sessionIds[0],
+    );
+    fixture.setNow(new Date(fixture.startAt[0]!.getTime() + 60 * 60_000 + 1));
+    const input = makeClassReportInput(fixture);
+
+    const [first, replay] = await Promise.all([
+      fixture.service.submitSessionReport(fixture.tutorId, "tutor", input),
+      fixture.service.submitSessionReport(fixture.tutorId, "tutor", input),
+    ]);
+
+    expect(first.id).toBe(replay.id);
+    expect(first.version).toBe(1);
+    expect((await allocationRows(fixture))[0]).toMatchObject({
+      state: "funded",
+      fundedMarks: 25,
+      spentMarks: 25,
+      releasedMarks: 0,
+    });
+    const deductions = await db
+      .select()
+      .from(ledgerEntry)
+      .where(
+        and(
+          inArray(ledgerEntry.walletId, fixture.walletIds),
+          eq(ledgerEntry.entryType, "deduct"),
+        ),
+      );
+    expect(deductions).toHaveLength(1);
+    const fees = await db
+      .select()
+      .from(tutorSessionFee)
+      .where(eq(tutorSessionFee.academyClassSessionId, fixture.sessionIds[0]!));
+    expect(fees).toHaveLength(1);
+    expect(fees[0]).toMatchObject({
+      bookingId: null,
+      bookingSessionId: null,
+      academyClassSessionId: fixture.sessionIds[0],
+      collectedMarks: 25,
+      eventKey: `academy-class-session:${fixture.sessionIds[0]}:earned-fee`,
+      grossHonorariumIdr: 400_000,
+      priceSnapshot: null,
+    });
+    expect(
+      await db
+        .select()
+        .from(academyClassSessionReportRevision)
+        .where(eq(academyClassSessionReportRevision.reportId, first.id)),
+    ).toHaveLength(1);
+
+    const studentView = await fixture.service.listSessionReports(
+      fixture.studentIds[0]!,
+      "student",
+      { classId: fixture.classId },
+    );
+    expect(studentView).toHaveLength(1);
+    expect(studentView[0]?.report?.id).toBe(first.id);
+    expect(studentView[0]).not.toHaveProperty("studentId");
+    expect(studentView[0]).not.toHaveProperty("privateMeet");
+
+    await expect(
+      fixture.service.submitSessionReport(
+        fixture.studentIds[0]!,
+        "student",
+        input,
+      ),
+    ).rejects.toThrow();
+    await expect(
+      fixture.service.submitSessionReport(fixture.studentIds[0]!, "tutor", {
+        ...input,
+        requestKey: crypto.randomUUID(),
+      }),
+    ).rejects.toThrow();
+    await expect(
+      fixture.service.submitSessionReport(fixture.tutorId, "tutor", {
+        ...input,
+        feedback: {
+          ...CLASS_REPORT_FEEDBACK,
+          improvements: ["Different text under the original request key."],
+        },
+      }),
+    ).rejects.toThrow("already used with different content");
+    await expect(
+      fixture.service.submitSessionReport(fixture.tutorId, "tutor", {
+        ...input,
+        requestKey: crypto.randomUUID(),
+        feedback: {
+          ...CLASS_REPORT_FEEDBACK,
+          improvements: ["A stale write with changed content."],
+        },
+      }),
+    ).rejects.toThrow("changed");
+  });
+
+  test("early-released seats cannot read reports or change the flat delivered fee; admin corrections add history only", async () => {
+    const fixture = await createFixture({
+      sessions: 1,
+      studentCount: 2,
+      balance: 25,
+    });
+    const earlyEnrollment = await makeEnrollment(
+      fixture,
+      0,
+      "single",
+      crypto.randomUUID(),
+      fixture.sessionIds[0],
+    );
+    await makeEnrollment(
+      fixture,
+      1,
+      "single",
+      crypto.randomUUID(),
+      fixture.sessionIds[0],
+    );
+    const cancellationInput = {
+      enrollmentId: earlyEnrollment.id,
+      sessionId: fixture.sessionIds[0]!,
+    };
+    const quote = await fixture.service.quoteCancellation(
+      fixture.studentIds[0]!,
+      cancellationInput,
+    );
+    await fixture.service.confirmCancellation(fixture.studentIds[0]!, {
+      ...cancellationInput,
+      requestKey: crypto.randomUUID(),
+      quoteVersion: quote.quoteVersion,
+    });
+    fixture.setNow(new Date(fixture.startAt[0]!.getTime() + 60 * 60_000 + 1));
+
+    const input = makeClassReportInput(fixture);
+    const report = await fixture.service.submitSessionReport(
+      fixture.tutorId,
+      "tutor",
+      input,
+    );
+    const allocations = await allocationRows(fixture);
+    expect(
+      allocations.find((row) => row.studentId === fixture.studentIds[0]),
+    ).toMatchObject({
+      state: "released",
+      spentMarks: 5,
+      releasedMarks: 20,
+    });
+    expect(
+      allocations.find((row) => row.studentId === fixture.studentIds[1]),
+    ).toMatchObject({
+      state: "funded",
+      spentMarks: 25,
+    });
+    const [fee] = await db
+      .select()
+      .from(tutorSessionFee)
+      .where(eq(tutorSessionFee.academyClassSessionId, fixture.sessionIds[0]!));
+    expect(fee).toMatchObject({
+      grossHonorariumIdr: 400_000,
+      collectedMarks: 25,
+    });
+    expect(
+      await fixture.service.listSessionReports(
+        fixture.studentIds[0]!,
+        "student",
+        {
+          classId: fixture.classId,
+        },
+      ),
+    ).toHaveLength(0);
+    const eligibleStudentView = await fixture.service.listSessionReports(
+      fixture.studentIds[1]!,
+      "student",
+      { classId: fixture.classId },
+    );
+    expect(eligibleStudentView).toHaveLength(1);
+    expect(eligibleStudentView[0]?.report?.id).toBe(report.id);
+    expect(eligibleStudentView[0]).not.toHaveProperty("studentId");
+
+    const adminId = await createReportAdmin();
+    const correctedFeedback = {
+      ...CLASS_REPORT_FEEDBACK,
+      improvements: [
+        "Show each intermediate calculation in the worked example.",
+      ],
+    };
+    const correction = makeClassReportInput(fixture, {
+      expectedVersion: 1,
+      requestKey: crypto.randomUUID(),
+      feedback: correctedFeedback,
+      adminReason: "Correct wording after the tutor review",
+    });
+    await expect(
+      fixture.service.submitSessionReport(adminId, "admin", {
+        ...correction,
+        requestKey: crypto.randomUUID(),
+        adminReason: undefined,
+      }),
+    ).rejects.toThrow("reason is required");
+    const deductionsBeforeCorrection = await db
+      .select()
+      .from(ledgerEntry)
+      .where(
+        and(
+          inArray(ledgerEntry.walletId, fixture.walletIds),
+          eq(ledgerEntry.entryType, "deduct"),
+        ),
+      );
+    const corrected = await fixture.service.submitSessionReport(
+      adminId,
+      "admin",
+      correction,
+    );
+    expect(corrected).toMatchObject({ id: report.id, version: 2 });
+    await fixture.service.submitSessionReport(adminId, "admin", correction);
+    await expect(
+      fixture.service.submitSessionReport(adminId, "admin", {
+        ...correction,
+        feedback: CLASS_REPORT_FEEDBACK,
+      }),
+    ).rejects.toThrow("already used with different content");
+    await expect(
+      fixture.service.submitSessionReport(adminId, "admin", {
+        ...correction,
+        requestKey: crypto.randomUUID(),
+        feedback: {
+          ...correctedFeedback,
+          strengths: ["A stale correction."],
+        },
+      }),
+    ).rejects.toThrow("changed");
+
+    const deductionsAfterCorrection = await db
+      .select()
+      .from(ledgerEntry)
+      .where(
+        and(
+          inArray(ledgerEntry.walletId, fixture.walletIds),
+          eq(ledgerEntry.entryType, "deduct"),
+        ),
+      );
+    expect(deductionsAfterCorrection).toHaveLength(
+      deductionsBeforeCorrection.length,
+    );
+    expect(
+      await db
+        .select()
+        .from(tutorSessionFee)
+        .where(
+          eq(tutorSessionFee.academyClassSessionId, fixture.sessionIds[0]!),
+        ),
+    ).toHaveLength(1);
+    const revisions = await db
+      .select()
+      .from(academyClassSessionReportRevision)
+      .where(eq(academyClassSessionReportRevision.reportId, report.id));
+    expect(revisions).toHaveLength(2);
+    expect(revisions[1]).toMatchObject({
+      actorId: adminId,
+      actorRole: "admin",
+      adminReason: "Correct wording after the tutor review",
+      version: 2,
+    });
+    const reportAudits = await db
+      .select()
+      .from(auditLog)
+      .where(eq(auditLog.targetId, report.id));
+    expect(reportAudits.map((row) => row.action).sort()).toEqual([
+      "academy_class_session.report_submitted",
+      "academy_class_session.report_updated",
+    ]);
+    expect(
+      fixture.notifications.find(
+        (row) =>
+          row.eventKey ===
+          `academy-class-session:${fixture.sessionIds[0]}:admin-report:v2:tutor`,
+      ),
+    ).toMatchObject({ userId: fixture.tutorId, category: "override" });
+  });
+
+  test("a later wallet failure rolls back the first deduction and report writes", async () => {
+    let deductions = 0;
+    const walletPort = {
+      ...services.wallet,
+      deduct: async (...args: Parameters<typeof services.wallet.deduct>) => {
+        deductions += 1;
+        if (deductions === 2)
+          throw new Error("Injected class report deduction failure");
+        return services.wallet.deduct(...args);
+      },
+    };
+    const fixture = await createFixture({
+      sessions: 1,
+      studentCount: 2,
+      balance: 25,
+      walletPort,
+    });
+    await makeEnrollment(
+      fixture,
+      0,
+      "single",
+      crypto.randomUUID(),
+      fixture.sessionIds[0],
+    );
+    await makeEnrollment(
+      fixture,
+      1,
+      "single",
+      crypto.randomUUID(),
+      fixture.sessionIds[0],
+    );
+    fixture.setNow(new Date(fixture.startAt[0]!.getTime() + 60 * 60_000 + 1));
+
+    await expect(
+      fixture.service.submitSessionReport(
+        fixture.tutorId,
+        "tutor",
+        makeClassReportInput(fixture),
+      ),
+    ).rejects.toThrow("Injected class report deduction failure");
+
+    expect(deductions).toBe(2);
+    expect(
+      await db
+        .select()
+        .from(academyClassSessionReport)
+        .where(eq(academyClassSessionReport.sessionId, fixture.sessionIds[0]!)),
+    ).toHaveLength(0);
+    expect(
+      await db
+        .select()
+        .from(tutorSessionFee)
+        .where(
+          eq(tutorSessionFee.academyClassSessionId, fixture.sessionIds[0]!),
+        ),
+    ).toHaveLength(0);
+    expect(
+      (await allocationRows(fixture)).every((row) => row.spentMarks === 0),
+    ).toBe(true);
+    const walletRows = await db
+      .select()
+      .from(walletTable)
+      .where(inArray(walletTable.id, fixture.walletIds));
+    expect(
+      walletRows.every(
+        (row) => row.totalBalance === 25 && row.heldBalance === 25,
+      ),
+    ).toBe(true);
+    expect(
+      await db
+        .select()
+        .from(ledgerEntry)
+        .where(
+          and(
+            inArray(ledgerEntry.walletId, fixture.walletIds),
+            eq(ledgerEntry.entryType, "deduct"),
+          ),
+        ),
+    ).toHaveLength(0);
+    expect(
+      fixture.notifications.filter((row) =>
+        String(row.eventKey).startsWith("academy-class-session:"),
+      ),
+    ).toHaveLength(0);
+    const [session] = await db
+      .select()
+      .from(academyClassSession)
+      .where(eq(academyClassSession.id, fixture.sessionIds[0]!));
+    expect(session?.state).toBe("scheduled");
+  });
+
+  test("a retained past seat settles after parent cancellation without reviving the class", async () => {
+    const fixture = await createFixture({ sessions: 1, balance: 25 });
+    await makeEnrollment(
+      fixture,
+      0,
+      "single",
+      crypto.randomUUID(),
+      fixture.sessionIds[0],
+    );
+    await db
+      .update(academyClass)
+      .set({ state: "cancelled" })
+      .where(eq(academyClass.id, fixture.classId));
+    fixture.setNow(new Date(fixture.startAt[0]!.getTime() + 60 * 60_000 + 1));
+
+    await fixture.service.submitSessionReport(
+      fixture.tutorId,
+      "tutor",
+      makeClassReportInput(fixture),
+    );
+
+    const [session] = await db
+      .select()
+      .from(academyClassSession)
+      .where(eq(academyClassSession.id, fixture.sessionIds[0]!));
+    const [classRow] = await db
+      .select()
+      .from(academyClass)
+      .where(eq(academyClass.id, fixture.classId));
+    expect(session?.state).toBe("completed");
+    expect(classRow?.state).toBe("cancelled");
+    expect((await allocationRows(fixture))[0]).toMatchObject({
+      spentMarks: 25,
+    });
+    expect(
+      await db
+        .select()
+        .from(tutorSessionFee)
+        .where(
+          eq(tutorSessionFee.academyClassSessionId, fixture.sessionIds[0]!),
+        ),
+    ).toHaveLength(1);
+  });
+
+  test("a delivered session with zero chargeable seats creates no tutor fee", async () => {
+    const fixture = await createFixture({ sessions: 1 });
+    fixture.setNow(new Date(fixture.startAt[0]!.getTime() + 60 * 60_000 + 1));
+
+    const report = await fixture.service.submitSessionReport(
+      fixture.tutorId,
+      "tutor",
+      makeClassReportInput(fixture),
+    );
+
+    expect(report.version).toBe(1);
+    expect(
+      await db
+        .select()
+        .from(tutorSessionFee)
+        .where(
+          eq(tutorSessionFee.academyClassSessionId, fixture.sessionIds[0]!),
+        ),
+    ).toHaveLength(0);
+    const [session] = await db
+      .select()
+      .from(academyClassSession)
+      .where(eq(academyClassSession.id, fixture.sessionIds[0]!));
+    const [classRow] = await db
+      .select()
+      .from(academyClass)
+      .where(eq(academyClass.id, fixture.classId));
+    expect(session?.state).toBe("completed");
+    expect(classRow?.state).toBe("completed");
+  });
+
+  test("payout preview selects the real class fee with collected Marks and exact net", async () => {
+    const fixture = await createFixture({ sessions: 1, balance: 25 });
+    await makeEnrollment(
+      fixture,
+      0,
+      "single",
+      crypto.randomUUID(),
+      fixture.sessionIds[0],
+    );
+    const reportNow = new Date();
+    await db
+      .update(academyClassSession)
+      .set({
+        startAt: new Date(reportNow.getTime() - 2 * 60 * 60_000),
+        endAt: new Date(reportNow.getTime() - 60 * 60_000),
+      })
+      .where(eq(academyClassSession.id, fixture.sessionIds[0]!));
+    fixture.setNow(reportNow);
+    await fixture.service.submitSessionReport(
+      fixture.tutorId,
+      "tutor",
+      makeClassReportInput(fixture),
+    );
+    const [fee] = await db
+      .select()
+      .from(tutorSessionFee)
+      .where(eq(tutorSessionFee.academyClassSessionId, fixture.sessionIds[0]!));
+    expect(fee).toBeDefined();
+
+    const inviteId = crypto.randomUUID();
+    await db.insert(tutorInvite).values({
+      id: inviteId,
+      email: `class-payout-${inviteId}@example.test`,
+      displayName: "Enrollment test tutor",
+      token: `class-payout-${inviteId}`,
+      status: "accepted",
+      invitedBy: fixture.tutorId,
+      acceptedBy: fixture.tutorId,
+      expiresAt: new Date(reportNow.getTime() + DAY_MS),
+      acceptedAt: reportNow,
+    });
+    await db.insert(tutorProfile).values({
+      userId: fixture.tutorId,
+      inviteId,
+      onboardingStatus: "published",
+      publishedAt: reportNow,
+      bankName: "Mandiri",
+    });
+
+    const preview = await services.booking.previewTutorPayout(fixture.tutorId, [
+      fee!.eventKey,
+    ]);
+    expect(preview).toMatchObject({
+      grossHonorariumIdr: 400_000,
+      taxRateBps: 300,
+      taxHonorariumIdr: 12_000,
+      transferFeeIdr: 2_500,
+      netHonorariumIdr: 385_500,
+    });
+    expect(preview.items).toHaveLength(1);
+    expect(preview.items[0]).toMatchObject({
+      sourceKey: fee!.eventKey,
+      bookingId: null,
+      bookingNumber: null,
+      bookingSessionId: null,
+      classSessionId: fixture.sessionIds[0],
+      bookingType: "cohort",
+      deliveryLabel: expect.stringContaining("Session 1"),
+      collectedMarks: 25,
+      priceSnapshot: null,
+      grossHonorariumIdr: 400_000,
+    });
   });
 });

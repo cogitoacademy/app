@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { completionFeedbackInput } from "../booking/booking.types";
 
 export const enrollmentPlanSchema = z.enum([
   "full",
@@ -214,3 +215,46 @@ export const adminClassCancellationOutput = z.object({
   releasedAllocationIds: z.array(z.string().uuid()),
   quoteVersion: z.string(),
 });
+
+export const submitClassSessionReportInput = z
+  .object({
+    classId: z.string().uuid(),
+    sessionId: z.string().uuid(),
+    expectedVersion: z.number().int().nonnegative(),
+    requestKey: z.string().uuid(),
+    deliveryConfirmed: z.literal(true),
+    feedback: completionFeedbackInput,
+    adminReason: z.string().trim().min(3).max(500).optional(),
+  })
+  .strict();
+
+export const classSessionReportOutput = z.object({
+  id: z.string().uuid(),
+  sessionId: z.string().uuid(),
+  version: z.number().int().positive(),
+  discussion: z.array(z.string()).min(1),
+  strengths: z.array(z.string()).min(1),
+  improvements: z.array(z.string()).min(1),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+
+export const listClassSessionReportsInput = z
+  .object({ classId: z.string().uuid().optional() })
+  .strict();
+
+export const listClassSessionReportsOutput = z.array(
+  z.object({
+    classId: z.string().uuid(),
+    classTitle: z.string(),
+    classKind: z.enum(["cohort", "masterclass"]),
+    sessionId: z.string().uuid(),
+    sequenceNumber: z.number().int().positive(),
+    sessionTitle: z.string(),
+    startAt: z.date(),
+    endAt: z.date(),
+    mode: z.enum(["online", "in_person"]),
+    state: z.enum(["scheduled", "completed", "cancelled"]),
+    report: classSessionReportOutput.nullable(),
+  }),
+);

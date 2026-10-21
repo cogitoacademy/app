@@ -302,8 +302,11 @@ export function TutorDashboardPage({ tutorName }: { tutorName: string }) {
                             {row.items.map((item) => (
                               <li key={item.sourceKey}>
                                 <Text className="text-xs text-muted">
-                                  Booking #{item.bookingNumber} ·{" "}
-                                  {item.bookingType} ·{" "}
+                                  {item.deliveryLabel ??
+                                    (item.bookingNumber === null
+                                      ? `Class session ${item.classSessionId ?? ""}`
+                                      : `Booking #${item.bookingNumber}`)}{" "}
+                                  · {item.bookingType} ·{" "}
                                   {formatPayoutDate(item.scheduledStartAt)}
                                 </Text>
                               </li>

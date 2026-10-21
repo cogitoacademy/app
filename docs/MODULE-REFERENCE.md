@@ -149,10 +149,12 @@ These projections do not change saved booking snapshots.
 ## Tutor earned fees and manual payout allocations (2026-10-19)
 
 `booking/tutor-session-fee.ts` builds stable source keys for immutable earned-fee
-facts. The `tutor_session_fee` row records the tutor, booking/session identity,
-scheduled and earned timestamps, gross IDR amount, and pinned price snapshot.
-Payout reports use that row when present and retain the legacy booking/session
-snapshot adapter only for sources without a fee event.
+facts. The `tutor_session_fee` row records the tutor, delivery identity, scheduled
+and earned timestamps, gross IDR amount, and pinned price snapshot. A fee belongs
+to either a booking session or an academy class session; class fees store the
+class/session label and collected Marks without inventing a booking or price
+snapshot. Payout reports use that row when present and retain the legacy
+booking/session snapshot adapter only for sources without a fee event.
 
 For series settlement, no-show and completion lock the parent booking before
 the child session and participant rows. The existing session-scoped no-show
@@ -182,6 +184,40 @@ release; current fee events are authoritative for new V3 completions. No rows
 were deleted or production data accessed. Do not fabricate allocation rows from
 the current series state; review any later-discovered legacy data before acting.
 
+Class delivery fees participate in the same pending and manual payout flow.
+Repository reads left-join the nullable booking source and resolve class
+identity from `academy_class_session`; payout source lines preserve the class
+session ID, delivery label, class kind, collected Marks, and exact gross/net
+amounts. They keep `bookingId` and price snapshot null for class fees. Active
+source uniqueness and fee-event identity still prevent double allocation, while
+the existing tax, transfer-fee, void, and reconciliation behavior is shared.
+
+## V3 class session report and settlement boundary (2026-10-21)
+
+`class-enrollment.reports.ts` owns `classes.submitSessionReport` and
+`classes.listSessionReports`. The shared booking feedback schema normalizes the
+three bullet fields and enforces the 600-code-point per-field limit. Only the
+assigned tutor or an admin can submit/correct; admin writes require a reason.
+Student reads require a funded seat and an existing report, and the read DTO
+does not expose student identities or private meeting links.
+
+Settlement locks class, session, report, allocations sorted by ID, then wallets
+sorted by ID, and reads the current time only after those locks. Initial report,
+immutable revision, residual funded-Mark deductions, session completion, audit,
+notifications, and the earned-fee event commit atomically. The stable wallet
+event is `class-allocation:${allocationId}:complete:deduct`; the fee event is
+`academy-class-session:${sessionId}:earned-fee`. Late withdrawal and parent
+cancellation do not erase a retained past funded seat; early-released and
+unfunded allocations are excluded. A fee uses the fixed session IDR amount and
+is emitted only when at least one funded allocation is chargeable. Replays are
+idempotent; stale versions conflict. Admin corrections append revision/audit
+history and notify the tutor without repeating economic effects. The parent
+class completes only after every non-cancelled session is complete and is never
+resurrected from cancelled state.
+
+The backend and payout source support are implemented. Report workspaces/PDF,
+repeated reminders, and the admin correction screen remain follow-up UI/ops work.
+
 ## V3 class/session draft foundation (2026-10-19)
 
 `academy-class` owns the admin-only draft boundary. Migration `0061_academy_class_drafts.sql` adds `academy_class` and `academy_class_session`; session capacity, tutor, mode, room, dates, and tutor-fee snapshot are session-level. Class rows retain localized metadata, active competition identity, cohort minimum/check date and plan-rate defaults, masterclass seat-rate default, state, postponement count, and optimistic version.
@@ -210,7 +246,7 @@ Wallet hold identity for each funded session is `class-enrollment:${enrollmentId
 
 Financial mutations acquire sorted session row locks, then enrollment, installment, per-session allocation rows in session order and wallet locks, followed by ledger writes, all in one database transaction. Enrollment creation also serializes the student request key and locks the class before selected sessions. This order is the T07 integration contract; any new settlement path must preserve it and must leave no wallet or seat residue if a later write fails. Notifications are written through the existing notification service with stable event keys. The scheduler checks checkout expiry, second-installment deadlines and 7-day/1-day reminders; catch-up uses the current time and never creates historical reminders for late joiners.
 
-T06 cancellation/withdrawal is intentionally not presented as a student action here. Its future service seam must release the selected session allocation only under the approved cancellation policy; Q04 ordinary reschedule rights remain open. T07 report completion and fee deduction remain downstream work.
+T06 student/admin cancellation releases only future unspent allocation balances under the approved policy and preserves past funded delivery liability; Q04 ordinary reschedule rights remain open. T07 report completion and fee deduction are implemented by the class report settlement path below.
 
 The T05 global setup gives each 6769 run a fresh seeded student (keeping the Andre display name) and leaves earlier enrollment, allocation, ledger, quote and payment rows untouched. Its reset command is a no-op on T05, remains no-write on 6767/6768, and keeps the exact seed-Andre legacy reset on payout target 6770. This avoids FK cleanup assumptions and keeps later T07 session report and payout facts attached to their original enrollment history.
 

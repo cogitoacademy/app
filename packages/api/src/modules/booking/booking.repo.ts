@@ -25,6 +25,8 @@ import {
   bookingStateHistory,
   bookingRescheduleProposal,
   bookingSession,
+  academyClass,
+  academyClassSession,
   sessionNote,
   sessionCompletionFeedback,
   availabilitySlot,
@@ -1205,10 +1207,15 @@ async function findTutorSessionFeesByTutor(
     .select({
       ...getTableColumns(tutorSessionFee),
       bookingNumber: booking.bookingNumber,
-      bookingType: booking.type,
+      bookingType: sql<string>`coalesce(${booking.type}, ${academyClass.kind})`,
     })
     .from(tutorSessionFee)
-    .innerJoin(booking, eq(tutorSessionFee.bookingId, booking.id))
+    .leftJoin(booking, eq(tutorSessionFee.bookingId, booking.id))
+    .leftJoin(
+      academyClassSession,
+      eq(tutorSessionFee.academyClassSessionId, academyClassSession.id),
+    )
+    .leftJoin(academyClass, eq(academyClassSession.classId, academyClass.id))
     .where(and(...conditions));
 }
 
@@ -1251,11 +1258,14 @@ async function listTutorPayoutAllocationsByPayoutId(
       bookingId: tutorPayoutAllocation.bookingId,
       bookingNumber: booking.bookingNumber,
       bookingSessionId: tutorPayoutAllocation.bookingSessionId,
+      classSessionId: tutorPayoutAllocation.academyClassSessionId,
+      deliveryLabel: tutorPayoutAllocation.deliveryLabel,
       bookingType: tutorPayoutAllocation.bookingType,
       deliveryStatus: tutorPayoutAllocation.deliveryStatus,
       scheduledStartAt: tutorPayoutAllocation.scheduledStartAt,
       earnedAt: tutorPayoutAllocation.earnedAt,
       grossHonorariumIdr: tutorPayoutAllocation.grossHonorariumIdr,
+      collectedMarks: tutorPayoutAllocation.collectedMarks,
       priceSnapshot: tutorPayoutAllocation.priceSnapshot,
       createdAt: tutorPayoutAllocation.createdAt,
       active: tutorPayoutAllocation.active,
@@ -1263,7 +1273,7 @@ async function listTutorPayoutAllocationsByPayoutId(
       releaseReason: tutorPayoutAllocation.releaseReason,
     })
     .from(tutorPayoutAllocation)
-    .innerJoin(booking, eq(tutorPayoutAllocation.bookingId, booking.id))
+    .leftJoin(booking, eq(tutorPayoutAllocation.bookingId, booking.id))
     .where(eq(tutorPayoutAllocation.payoutId, payoutId))
     .orderBy(
       asc(tutorPayoutAllocation.scheduledStartAt),

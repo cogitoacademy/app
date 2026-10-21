@@ -1107,11 +1107,14 @@ export function AdminTutorPayoutsPage() {
                                         ),
                                   )
                                 }
-                                aria-label={`Select session ${item.bookingNumber}`}
+                                aria-label={`Select session ${item.deliveryLabel ?? (item.bookingNumber === null ? `Class session ${item.classSessionId ?? ""}` : `Booking #${item.bookingNumber}`)}`}
                               />
                               <span className="min-w-0 flex-1">
                                 <Text className="font-medium">
-                                  {item.bookingType} · #{item.bookingNumber}
+                                  {item.deliveryLabel ??
+                                    (item.bookingNumber === null
+                                      ? `Class session ${item.classSessionId ?? ""}`
+                                      : `${item.bookingType} · #${item.bookingNumber}`)}
                                   {item.bookingSessionId
                                     ? " · series session"
                                     : ""}
@@ -1246,7 +1249,10 @@ export function AdminTutorPayoutsPage() {
                           >
                             <div>
                               <Text className="font-medium">
-                                {item.bookingType} · #{item.bookingNumber}
+                                {item.deliveryLabel ??
+                                  (item.bookingNumber === null
+                                    ? `Class session ${item.classSessionId ?? ""}`
+                                    : `${item.bookingType} · #${item.bookingNumber}`)}
                                 {item.bookingSessionId
                                   ? " · series session"
                                   : ""}

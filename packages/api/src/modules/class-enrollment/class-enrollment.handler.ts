@@ -12,11 +12,45 @@ import {
   classEnrollmentTopUpQuoteInput,
   createClassEnrollmentInput,
   getMyClassEnrollmentsInput,
+  listClassSessionReportsInput,
+  submitClassSessionReportInput,
 } from "./class-enrollment.types";
 import type { z } from "zod";
 
 export function createClassEnrollmentHandler(service: ClassEnrollmentService) {
   return {
+    submitSessionReport: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: z.infer<typeof submitClassSessionReportInput>;
+    }) =>
+      withDomainMap(
+        () =>
+          service.submitSessionReport(
+            context.session!.user.id,
+            context.session!.user.role,
+            input,
+          ),
+        mapClassEnrollmentError,
+      ),
+    listSessionReports: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: z.infer<typeof listClassSessionReportsInput>;
+    }) =>
+      withDomainMap(
+        () =>
+          service.listSessionReports(
+            context.session!.user.id,
+            context.session!.user.role,
+            input,
+          ),
+        mapClassEnrollmentError,
+      ),
     previewAdminCancellation: async ({
       context,
       input,

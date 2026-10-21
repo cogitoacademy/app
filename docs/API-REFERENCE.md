@@ -905,6 +905,22 @@ used to retrieve production OTPs.
 - **Output:** Quote returns the existing V3 top-up quote fields plus a stable `attemptId`, immutable requested shortfall Marks, quote ID, revision and expiry. Purchase returns payment ID, nullable checkout URL, status and recovery state.
 - **Rules:** An attempt is keyed to one installment and request key; its shortfall amount and payment quote identity cannot be replaced on retry. The student's top-up completion credits the wallet through the existing payment flow. It does not extend an expired class seat reservation or promise re-enrollment.
 
+### `classes.submitSessionReport`
+
+- **RPC path:** `/rpc/classes/sessions/report/submit` (oRPC procedure key `classes.submitSessionReport`)
+- **Auth:** Signed-in tutor or admin. A tutor must be the session's assigned delivery tutor; an admin must provide `adminReason`.
+- **Input:** `{ classId, sessionId, expectedVersion, requestKey, deliveryConfirmed: true, feedback: { discussion, strengths, improvements }, adminReason? }`. Both IDs and `requestKey` are UUIDs. Each feedback field uses the shared normalized bullet input and is limited to 600 Unicode code points.
+- **Output:** `{ id, sessionId, version, discussion, strengths, improvements, createdAt, updatedAt }`.
+- **Rules:** Submit the first report only for a scheduled session after `endAt`, with `expectedVersion: 0`. A retained past session on a cancelled class may still be reported; a cancelled session cannot. The transaction saves the report and immutable revision, deducts only each funded allocation's remaining Marks, creates the fixed session tutor fee only when at least one funded allocation is chargeable, completes the session, and writes audit/notifications atomically. A zero-chargeable-seat report has no earned-fee event. Corrections require the current report version, append a revision and audit record, and never repeat deductions or fees. Admin correction requires a reason and notifies the tutor. Reusing a request key with different content or submitting a stale version returns a conflict; an identical replay has no economic effect.
+
+### `classes.listSessionReports`
+
+- **RPC path:** `/rpc/classes/sessions/reports/list` (oRPC procedure key `classes.listSessionReports`)
+- **Auth:** Signed-in admin, tutor, or student. Tutors see assigned sessions; students see only sessions where they hold a funded seat and a report exists; admins can list all class sessions.
+- **Input:** `{ classId? }`.
+- **Output:** Ordered session rows containing class/session titles and IDs, class kind, sequence, schedule, mode, state, and a nullable report with its version and three feedback fields.
+- **Privacy:** The DTO contains no student identity/roster or private meeting URL. A released/unfunded seat does not grant report access; funded students retain access to a report after settlement spends the allocation.
+
 ## Admin Knowledge Bank Access (`adminKnowledgeBank.*`)
 
 All routes are admin-only. Each student has at most one live grant; the expiry

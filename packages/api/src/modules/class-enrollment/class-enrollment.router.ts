@@ -2,6 +2,7 @@ import {
   adminProcedure,
   studentProcedure,
   verifiedStudentProcedure,
+  protectedProcedure,
 } from "../../procedures";
 import type { ClassEnrollmentHandler } from "./class-enrollment.handler";
 import {
@@ -21,10 +22,34 @@ import {
   classEnrollmentPaymentOutput,
   classEnrollmentTopUpQuoteOutput,
   classEnrollmentTopUpPurchaseOutput,
+  submitClassSessionReportInput,
+  classSessionReportOutput,
+  listClassSessionReportsInput,
+  listClassSessionReportsOutput,
 } from "./class-enrollment.types";
 
 export function createClassEnrollmentRouter(handler: ClassEnrollmentHandler) {
   return {
+    submitSessionReport: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/classes/sessions/report/submit",
+        tags: ["Classes", "Reports"],
+        summary: "Submit or correct a delivered class session report",
+      })
+      .input(submitClassSessionReportInput)
+      .output(classSessionReportOutput)
+      .handler(handler.submitSessionReport),
+    listSessionReports: protectedProcedure
+      .route({
+        method: "POST",
+        path: "/classes/sessions/reports/list",
+        tags: ["Classes", "Reports"],
+        summary: "List private class sessions and eligible reports",
+      })
+      .input(listClassSessionReportsInput)
+      .output(listClassSessionReportsOutput)
+      .handler(handler.listSessionReports),
     previewAdminCancellation: adminProcedure
       .route({
         method: "POST",

@@ -6,7 +6,7 @@ Integrated local checkpoint (21 October): f/release-v3 includes admin cancellati
 Dev readback: journal id 87, timestamp 1792559482042, hash
 70a47d6cbd1f7539d4af45071eaf643ca99ec73c7046c033108d7e1475d54afd.
 The owned API restarted; web 3000 and API 3001 return HTTP 200. No dev reset/seed
-or live-provider test ran. T07 class reports/completion/settlement is next; lifecycle
+or live-provider test ran. T07 report settlement and class payout identity are implemented in this worktree; lifecycle
 follow-ups, AUTH-02/referrals and full release acceptance remain open. Main is unchanged.
 
 T06 administrator cancellation is implemented on f/v3-admin-class-cancellation
@@ -20,7 +20,9 @@ including late creates after cancellation or lease recovery. Postgres checks pas
 22 / 140; Google provider fake checks pass 46 / 148. Migration 0066 only expands
 the class-meeting status check and is applied to disposable 6769, not dev yet.
 Minimum/postponement, one-session administrator cancellation, rescheduling,
-withdrawal-rate settings, T07 and remaining release acceptance stay open.
+withdrawal-rate settings, T07 report workspace/PDF, reminders, admin correction
+UI and remaining release acceptance stay open. T07 report settlement and payout
+identity are implemented in this worktree.
 
 T06 student cancellation/withdrawal is implemented on its baseline-derived
 worktree: exact preview + versioned/idempotent confirmation, per-allocation
@@ -440,7 +442,7 @@ browser E2E or typecheck was run for this follow-up.
 
 Migration `0061_academy_class_drafts.sql` adds the class and session draft model. The admin-only `admin-classes` page creates/edits drafts with localized titles/descriptions, cohort curriculum and enrollment defaults, per-session schedule/capacity/tutor/mode/room, and required audit reason. Approved defaults are cohort 20/22/25 Marks per full/half/single session with Rp400,000 tutor fee per session, and masterclass 5 Marks with Rp300,000 tutor fee. Both online and in-person are available; in-person requires an active managed room. Drafts are not public and do not reserve rooms.
 
-The service validates active competition, published mode-compatible tutors and session capacities, active room capacity, non-overlapping class sessions, cohort curriculum/check date, and the one-session masterclass rule. Draft updates are optimistic-versioned and preserve supplied session IDs; audit actions are `academy_class.draft_created` and `academy_class.draft_updated`. The admin editor uploads PNG/JPEG/WebP/GIF covers through the existing protected upload flow (max 5 MB) and stores the returned key on the draft; approved M01 cover/curriculum assets remain pending. Publication-time room/tutor conflict checks, Meet setup, admin publish controls, and T05 student enrollment are implemented. T02 delivery fees, T06 cancellation and T07 class reports/expiry settlement remain open.
+The service validates active competition, published mode-compatible tutors and session capacities, active room capacity, non-overlapping class sessions, cohort curriculum/check date, and the one-session masterclass rule. Draft updates are optimistic-versioned and preserve supplied session IDs; audit actions are `academy_class.draft_created` and `academy_class.draft_updated`. The admin editor uploads PNG/JPEG/WebP/GIF covers through the existing protected upload flow (max 5 MB) and stores the returned key on the draft; approved M01 cover/curriculum assets remain pending. Publication-time room/tutor conflict checks, Meet setup, admin publish controls, and T05 student enrollment are implemented. T02 delivery fees and T06 cancellation remain separate work; T07 report settlement and class payout identity are implemented, with report UI/PDF, reminders, and admin correction UI pending.
 
 Focused integration verification: **4/4 tests, 18 expectations** against the guarded local `cogito-test` database after additive migration. A server TypeScript-Go check attempt again failed with Windows `Out of memory`; Vite build and web typecheck have not been rerun for this slice. No production database, V3 activation, or external provider was used.
 
@@ -465,9 +467,24 @@ strips UI bullet prefixes, trims line edges and removes empty lines. UI counters
 submit gating, RPC schema and direct service validation use the same rules.
 The service rejects overlong input before settlement instead of silently slicing
 30 bullets/1000 characters; existing HTML escaping remains, without truncating
-the escaped result. Old stored reports/read APIs remain unchanged. PDF export,
-reminders and shared cohort report settlement are still pending T07/T02.
+the escaped result. Old stored reports/read APIs remain unchanged. Class report
+settlement is implemented in the T07 backend; reminders, report UI/PDF, and
+admin correction UI remain pending.
 Focused report + booking regression: 295 tests pass; web typecheck passes.
+
+## V3 class session reports and payout identity (2026-10-21)
+
+The `class-enrollment.reports.ts` service implements private class-session
+reports with immutable revisions and atomic settlement of remaining funded seat
+Marks. It writes the fixed tutor fee only when at least one funded seat is
+chargeable, preserves report access for funded students after settlement, and
+keeps cancelled parents cancelled while allowing retained past sessions to
+settle. Corrections append revision/audit history without replaying wallet or
+fee effects. The payout source model supports a nullable booking plus real class
+session identity, delivery label, and collected-Mark snapshot; class earnings
+use the existing exact-net and allocation workflow without fabricated booking
+price data. Migration 0067 is applied only to the guarded disposable test DB on
+6769. The report workspace/PDF, reminders, and admin correction UI remain open.
 
 ## V3 draft economy editor and revision storage (2026-10-18)
 

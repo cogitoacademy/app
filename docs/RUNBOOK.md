@@ -1,12 +1,28 @@
 # Cogito Runbook
 
-Integrated local checkpoint (21 October): f/release-v3 includes admin cancellation
+## T07 report and payout checkpoint (21 October)
+
+Migration `0067_class-session-reports.sql` was reviewed against snapshot
+0066 and applied with the standard Drizzle migration runner only to the guarded
+loopback `cogito-test` database on port 6769. Readback shows migration journal
+row 68, timestamp `1792572957418`, SQL hash
+`0510e3bd5f1fd36860b8f289c81db5034b4ba40a2f1527736ea280ea77651037`, and both
+report tables present. The focused class-report integration group passed 6 tests
+and 53 assertions; report, revision, and class-fee row counts were zero after
+fixture cleanup. Two pure report-settlement unit cases, direct formatting, and
+focused oxlint passed. The run used provider fakes only and did not reset or seed
+the database. No development migration, browser run, or broad typecheck was run;
+the parent owns those checks and the development migration decision.
+
+## Prior local integration checkpoint (21 October)
+
+f/release-v3 includes admin cancellation
 446e2cd0 and student cancellation a7065443, alongside signup and payout. Migration
 0066 applied through the standard runner to guarded loopback cogito-app/6767.
 Dev readback: journal id 87, timestamp 1792559482042, hash
 70a47d6cbd1f7539d4af45071eaf643ca99ec73c7046c033108d7e1475d54afd.
 The owned API restarted; web 3000 and API 3001 return HTTP 200. No dev reset/seed
-or live-provider test ran. T07 class reports/completion/settlement is next; lifecycle
+or live-provider test ran. At this baseline checkpoint T07 class reports/completion/settlement was next; lifecycle
 follow-ups, AUTH-02/referrals and full release acceptance remain open. Main is unchanged.
 
 Admin class cancellation migration 0066 was generated from snapshot 0065;

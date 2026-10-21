@@ -342,14 +342,17 @@ export interface TutorPayoutSourceItem {
   sourceKey: string;
   sourceType: TutorPayoutAllocationSourceType;
   tutorSessionFeeId: string | null;
-  bookingId: string;
-  bookingNumber: number;
+  bookingId: string | null;
+  bookingNumber: number | null;
   bookingSessionId: string | null;
-  bookingType: "solo" | "group" | "series";
+  classSessionId: string | null;
+  deliveryLabel: string | null;
+  bookingType: "solo" | "group" | "series" | "cohort" | "masterclass";
   deliveryStatus: "completed" | "no_show";
   scheduledStartAt: Date;
   earnedAt: Date;
   grossHonorariumIdr: number;
+  collectedMarks: number;
   priceSnapshot: BookingPriceSnapshot | null;
 }
 
@@ -4508,14 +4511,16 @@ export function createBookingService(deps: {
       snap: BookingPriceSnapshot | null | undefined,
       source: Omit<
         TutorPayoutSourceItem,
-        "grossHonorariumIdr" | "priceSnapshot"
-      >,
+        "grossHonorariumIdr" | "priceSnapshot" | "collectedMarks"
+      > & { collectedMarks?: number },
       grossHonorariumIdr?: number,
     ) => {
       if (input.excludedSourceKeys?.has(source.sourceKey)) return;
       completedSessions++;
-      totalMarks +=
-        snap?.engine === "v3" ? snap.collectedMarks : (snap?.baseline ?? 0);
+      const collectedMarks =
+        source.collectedMarks ??
+        (snap?.engine === "v3" ? snap.collectedMarks : (snap?.baseline ?? 0));
+      totalMarks += collectedMarks;
       if (snap?.engine !== "v3") cogitoTake += snap?.cogitoTake ?? 0;
       if (snap?.engine !== "v3") tutorPayout += snap?.tutorShare ?? 0;
       const sourceGrossHonorariumIdr =
@@ -4526,6 +4531,7 @@ export function createBookingService(deps: {
       items.push({
         ...source,
         grossHonorariumIdr: Math.round(sourceGrossHonorariumIdr),
+        collectedMarks,
         priceSnapshot: snap ?? null,
       });
     };
@@ -4543,10 +4549,15 @@ export function createBookingService(deps: {
           bookingId: fee.bookingId,
           bookingNumber: fee.bookingNumber,
           bookingSessionId: fee.bookingSessionId,
+          classSessionId: fee.academyClassSessionId,
+          deliveryLabel: fee.deliveryLabel,
           bookingType: fee.bookingType as TutorPayoutSourceItem["bookingType"],
           deliveryStatus: "completed",
           scheduledStartAt: fee.scheduledStartAt,
           earnedAt: fee.earnedAt,
+          ...(fee.academyClassSessionId
+            ? { collectedMarks: fee.collectedMarks }
+            : {}),
         },
         fee.grossHonorariumIdr,
       );
@@ -4574,6 +4585,8 @@ export function createBookingService(deps: {
               bookingId: b.id,
               bookingNumber: b.bookingNumber,
               bookingSessionId: s.id,
+              classSessionId: null,
+              deliveryLabel: null,
               bookingType: "series",
               deliveryStatus: "completed",
               scheduledStartAt: s.scheduledStartAt,
@@ -4593,6 +4606,8 @@ export function createBookingService(deps: {
               bookingId: b.id,
               bookingNumber: b.bookingNumber,
               bookingSessionId: null,
+              classSessionId: null,
+              deliveryLabel: null,
               bookingType: "series",
               deliveryStatus: "completed",
               scheduledStartAt: b.scheduledStartAt,
@@ -4612,6 +4627,8 @@ export function createBookingService(deps: {
           bookingId: b.id,
           bookingNumber: b.bookingNumber,
           bookingSessionId: null,
+          classSessionId: null,
+          deliveryLabel: null,
           bookingType: b.type as TutorPayoutSourceItem["bookingType"],
           deliveryStatus:
             b.currentState === BOOKING_STATE.NO_SHOW ? "no_show" : "completed",
@@ -5176,11 +5193,14 @@ export function createBookingService(deps: {
           tutorSessionFeeId: item.tutorSessionFeeId,
           bookingId: item.bookingId,
           bookingSessionId: item.bookingSessionId,
+          academyClassSessionId: item.classSessionId,
+          deliveryLabel: item.deliveryLabel,
           bookingType: item.bookingType,
           deliveryStatus: item.deliveryStatus,
           scheduledStartAt: item.scheduledStartAt,
           earnedAt: item.earnedAt,
           grossHonorariumIdr: item.grossHonorariumIdr,
+          collectedMarks: item.collectedMarks,
           priceSnapshot: item.priceSnapshot,
           active: true,
         })),
@@ -5315,7 +5335,7 @@ export function createBookingService(deps: {
           : allocations
               .map((item) =>
                 escapeHtml(
-                  `Booking #${item.bookingNumber} · ${item.bookingType} · ${item.scheduledStartAt.toLocaleDateString("id-ID", { dateStyle: "medium", timeZone: "Asia/Jakarta" })}`,
+                  `${item.deliveryLabel ?? (item.bookingNumber === null ? `Class session ${item.classSessionId ?? ""}` : `Booking #${item.bookingNumber}`)} · ${item.bookingType} · ${item.scheduledStartAt.toLocaleDateString("id-ID", { dateStyle: "medium", timeZone: "Asia/Jakarta" })}`,
                 ),
               )
               .join("; ");

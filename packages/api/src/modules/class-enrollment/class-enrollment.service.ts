@@ -1,4 +1,5 @@
 import { createAdminClassCancellation } from "./class-enrollment.admin-cancellation";
+import { createClassSessionReportService } from "./class-enrollment.reports";
 import { quoteEnrollmentCancellation } from "./class-enrollment.cancellation";
 import {
   classEnrollmentCancellationOutput,
@@ -93,6 +94,7 @@ export function createClassEnrollmentService(deps: {
 }) {
   const repo = createClassEnrollmentRepo();
   const adminCancellation = createAdminClassCancellation(deps);
+  const sessionReports = createClassSessionReportService(deps);
   const now = () => deps.clock?.() ?? new Date();
 
   function currentTime() {
@@ -1506,6 +1508,7 @@ export function createClassEnrollmentService(deps: {
   }
 
   return {
+    ...sessionReports,
     previewAdminCancellation: adminCancellation.preview,
     confirmAdminCancellation: adminCancellation.confirm,
     getMyClassEnrollments,
