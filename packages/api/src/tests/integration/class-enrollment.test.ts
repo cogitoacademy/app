@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@cogito-app/db";
 import {
@@ -12,6 +12,8 @@ import {
   academyClassSessionReport,
   academyClassSessionReportRevision,
   ledgerEntry,
+  notification,
+  notificationDispatch,
   subjectCategory,
   tutorInvite,
   tutorPayout,
@@ -26,6 +28,14 @@ import { services } from "../../services";
 import { createAcademyClassService } from "../../modules/academy-class/academy-class.service";
 import type { MeetingPort } from "../../modules/meeting/meeting.types";
 import { createClassEnrollmentService } from "../../modules/class-enrollment/class-enrollment.service";
+import {
+  classReportReminderEventKey,
+  createClassReportReminderProcessor,
+  createClassReportReminderRepo,
+  type ClassReportReminderCandidate,
+  type ClassReportReminderRepo,
+} from "../../modules/class-enrollment/class-enrollment.report-reminders";
+import type { NotificationService } from "../../modules/notification/notification.service";
 
 function assertDedicatedEnrollmentTestDatabase() {
   let url: URL;
@@ -39,24 +49,45 @@ function assertDedicatedEnrollmentTestDatabase() {
   const host = url.hostname.toLowerCase();
   if (
     process.env.NODE_ENV !== "test" ||
+    process.env.TEST_DATABASE_ALLOW_RESET !== undefined ||
+    process.env.TEST_DATABASE_RESET_TARGET !== undefined ||
     !["postgres:", "postgresql:"].includes(url.protocol) ||
     !["localhost", "127.0.0.1", "::1", "[::1]"].includes(host) ||
     url.port !== "6769" ||
-    url.pathname !== "/cogito-test"
+    url.pathname !== "/cogito-test" ||
+    url.search !== "" ||
+    url.hash !== ""
   ) {
     throw new Error(
-      "Class enrollment integration tests require NODE_ENV=test and loopback:6769/cogito-test; no data was changed.",
+      "Class enrollment integration tests require NODE_ENV=test, loopback:6769/cogito-test, no URL query/hash, and absent reset override variables; no data was changed.",
     );
   }
 }
 
 assertDedicatedEnrollmentTestDatabase();
 
+beforeAll(async () => {
+  const result = await db.execute(
+    sql`SELECT current_database() AS database_name`,
+  );
+  const rows = (
+    Array.isArray(result)
+      ? result
+      : ((result as unknown as { rows?: unknown[] }).rows ?? [])
+  ) as Array<{ database_name?: unknown }>;
+  if (rows[0]?.database_name !== "cogito-test") {
+    throw new Error(
+      "Class enrollment integration tests require current_database() = cogito-test; no data was changed.",
+    );
+  }
+});
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 const BASE_TIME = new Date("2040-01-01T00:00:00.000Z");
 const ownedClassIds = new Set<string>();
 const ownedPayoutIds = new Set<string>();
 const ownedUserIds = new Set<string>();
+const ownedReminderEventKeys = new Set<string>();
 
 type Fixture = {
   classId: string;
@@ -97,6 +128,137 @@ function makeService(
     appBaseUrl: "http://localhost:3200",
     clock: now,
   });
+}
+
+function makeReportReminderProcessor(
+  clock: () => Date,
+  notificationPort: Pick<NotificationService, "write"> = services.notification,
+  repo: ClassReportReminderRepo = createClassReportReminderRepo(),
+) {
+  return createClassReportReminderProcessor({
+    db,
+    repo,
+    notification: notificationPort,
+    appBaseUrl: "http://localhost:3200",
+    clock,
+  });
+}
+
+function onlyReminderSessions(sessionIds: readonly string[]) {
+  const repo = createClassReportReminderRepo();
+  const ownedIds = new Set(sessionIds);
+  return {
+    async findDue(database: typeof db, nowAt: Date, limit: number) {
+      return (await repo.findDue(database, nowAt, limit)).filter((candidate) =>
+        ownedIds.has(candidate.id),
+      );
+    },
+    writeIfPending: repo.writeIfPending,
+  } satisfies ClassReportReminderRepo;
+}
+
+async function setReminderSessionEnd(fixture: Fixture, endAt: Date) {
+  const startAt = new Date(endAt.getTime() - 60 * 60_000);
+  await db
+    .update(academyClassSession)
+    .set({ startAt, endAt })
+    .where(eq(academyClassSession.id, fixture.sessionIds[0]!));
+  fixture.setNow(endAt);
+}
+
+async function reminderFinancialSnapshot(fixture: Fixture) {
+  const [wallets, allocations, ledger, fees, classRows, sessions, reports] =
+    await Promise.all([
+      db
+        .select()
+        .from(walletTable)
+        .where(inArray(walletTable.id, fixture.walletIds)),
+      db
+        .select()
+        .from(academyClassEnrollmentAllocation)
+        .where(eq(academyClassEnrollmentAllocation.classId, fixture.classId)),
+      db
+        .select()
+        .from(ledgerEntry)
+        .where(inArray(ledgerEntry.walletId, fixture.walletIds)),
+      db
+        .select()
+        .from(tutorSessionFee)
+        .where(
+          inArray(tutorSessionFee.academyClassSessionId, fixture.sessionIds),
+        ),
+      db
+        .select({ id: academyClass.id, state: academyClass.state })
+        .from(academyClass)
+        .where(eq(academyClass.id, fixture.classId)),
+      db
+        .select({
+          id: academyClassSession.id,
+          state: academyClassSession.state,
+          tutorId: academyClassSession.tutorId,
+          startAt: academyClassSession.startAt,
+          endAt: academyClassSession.endAt,
+        })
+        .from(academyClassSession)
+        .where(inArray(academyClassSession.id, fixture.sessionIds)),
+      db
+        .select()
+        .from(academyClassSessionReport)
+        .where(
+          inArray(academyClassSessionReport.sessionId, fixture.sessionIds),
+        ),
+    ]);
+  return { wallets, allocations, ledger, fees, classRows, sessions, reports };
+}
+
+async function reminderRecords(sessionId: string, periods: number[]) {
+  const eventKeys = periods.map((period) =>
+    classReportReminderEventKey(sessionId, period),
+  );
+  const notifications = await db
+    .select()
+    .from(notification)
+    .where(inArray(notification.eventKey, eventKeys));
+  const notificationIds = notifications.map((row) => row.id);
+  const dispatches = notificationIds.length
+    ? await db
+        .select()
+        .from(notificationDispatch)
+        .where(inArray(notificationDispatch.notificationId, notificationIds))
+    : [];
+  return { notifications, dispatches };
+}
+
+async function writeReminderCandidate(
+  candidate: ClassReportReminderCandidate,
+  nowAt: Date,
+) {
+  const period = Math.floor(
+    (nowAt.getTime() - candidate.endAt.getTime()) / DAY_MS,
+  );
+  const eventKey = classReportReminderEventKey(candidate.id, period);
+  ownedReminderEventKeys.add(eventKey);
+  return createClassReportReminderRepo().writeIfPending(
+    db,
+    candidate,
+    nowAt,
+    eventKey,
+    (tx) =>
+      services.notification.write({
+        db: tx,
+        userId: candidate.tutorId,
+        category: "schedule",
+        title: "Class session report needed",
+        body: "Please submit the report for your delivered Cogito class session.",
+        severity: "action",
+        emailRequired: true,
+        eventKey,
+        metadata: {
+          action: "class-session-report",
+          actionUrl: "http://localhost:3200/class-reports",
+        },
+      }),
+  );
 }
 
 async function createFixture(options: {
@@ -358,6 +520,24 @@ async function createReportAdmin() {
 }
 
 afterAll(async () => {
+  const reminderEventKeys = [...ownedReminderEventKeys];
+  if (reminderEventKeys.length > 0) {
+    const reminders = await db
+      .select({ id: notification.id })
+      .from(notification)
+      .where(inArray(notification.eventKey, reminderEventKeys));
+    if (reminders.length > 0) {
+      await db.delete(notificationDispatch).where(
+        inArray(
+          notificationDispatch.notificationId,
+          reminders.map((row) => row.id),
+        ),
+      );
+      await db
+        .delete(notification)
+        .where(inArray(notification.eventKey, reminderEventKeys));
+    }
+  }
   const classIds = [...ownedClassIds];
   const userIds = [...ownedUserIds];
   if (classIds.length > 0) {
@@ -3374,5 +3554,282 @@ describe("class session reports and settlement [REQ-REPORT-01..03]", () => {
       grossHonorariumIdr: 400_000,
       priceSnapshot: null,
     });
+  });
+});
+
+describe("class report reminders PostgreSQL invariants [REQ-REPORT-02]", () => {
+  test("serializes concurrent processors, repeats daily and catches up with one outbox row per period", async () => {
+    const fixture = await createFixture({ sessions: 1, balance: 25 });
+    await makeEnrollment(
+      fixture,
+      0,
+      "single",
+      crypto.randomUUID(),
+      fixture.sessionIds[0],
+    );
+    const endAt = new Date("1900-01-01T01:00:00.000Z");
+    await setReminderSessionEnd(fixture, endAt);
+    const sessionId = fixture.sessionIds[0]!;
+    const periods = [0, 1, 5];
+    for (const period of periods)
+      ownedReminderEventKeys.add(
+        classReportReminderEventKey(sessionId, period),
+      );
+    const before = await reminderFinancialSnapshot(fixture);
+
+    const [concurrentA, concurrentB] = await Promise.all([
+      makeReportReminderProcessor(
+        fixture.getNow,
+        services.notification,
+        onlyReminderSessions(fixture.sessionIds),
+      ).processPendingReportReminders(),
+      makeReportReminderProcessor(
+        fixture.getNow,
+        services.notification,
+        onlyReminderSessions(fixture.sessionIds),
+      ).processPendingReportReminders(),
+    ]);
+    expect(concurrentA.queued + concurrentB.queued).toBe(1);
+    expect(concurrentA.failed + concurrentB.failed).toBe(0);
+    expect(
+      await makeReportReminderProcessor(
+        fixture.getNow,
+        services.notification,
+        onlyReminderSessions(fixture.sessionIds),
+      ).processPendingReportReminders(),
+    ).toMatchObject({ checked: 0, queued: 0, failed: 0 });
+
+    fixture.setNow(new Date(endAt.getTime() + DAY_MS));
+    expect(
+      await makeReportReminderProcessor(
+        fixture.getNow,
+        services.notification,
+        onlyReminderSessions(fixture.sessionIds),
+      ).processPendingReportReminders(),
+    ).toMatchObject({ queued: 1, failed: 0 });
+
+    fixture.setNow(new Date(endAt.getTime() + 5 * DAY_MS));
+    expect(
+      await makeReportReminderProcessor(
+        fixture.getNow,
+        services.notification,
+        onlyReminderSessions(fixture.sessionIds),
+      ).processPendingReportReminders(),
+    ).toMatchObject({ queued: 1, failed: 0 });
+    expect(
+      await makeReportReminderProcessor(
+        fixture.getNow,
+        services.notification,
+        onlyReminderSessions(fixture.sessionIds),
+      ).processPendingReportReminders(),
+    ).toMatchObject({ checked: 0, queued: 0, failed: 0 });
+
+    const reminders = await reminderRecords(sessionId, periods);
+    expect(
+      reminders.notifications.map((row) => row.eventKey).toSorted(),
+    ).toEqual(
+      periods
+        .map((period) => classReportReminderEventKey(sessionId, period))
+        .toSorted(),
+    );
+    expect(reminders.notifications).toHaveLength(3);
+    expect(
+      reminders.notifications.every((row) => row.userId === fixture.tutorId),
+    ).toBe(true);
+    expect(
+      reminders.notifications.every((row) => row.category === "schedule"),
+    ).toBe(true);
+    expect(reminders.dispatches).toHaveLength(3);
+    expect(reminders.dispatches.every((row) => row.status === "queued")).toBe(
+      true,
+    );
+    expect(await reminderFinancialSnapshot(fixture)).toEqual(before);
+  });
+
+  test("rechecks report and whole-class cancellation before locked writes", async () => {
+    const reportFixture = await createFixture({ sessions: 1, balance: 25 });
+    await makeEnrollment(
+      reportFixture,
+      0,
+      "single",
+      crypto.randomUUID(),
+      reportFixture.sessionIds[0],
+    );
+    const endAt = new Date("1900-01-02T01:00:00.000Z");
+    await setReminderSessionEnd(reportFixture, endAt);
+
+    const cancelledFixture = await createFixture({ sessions: 1, balance: 25 });
+    await makeEnrollment(
+      cancelledFixture,
+      0,
+      "single",
+      crypto.randomUUID(),
+      cancelledFixture.sessionIds[0],
+    );
+    await setReminderSessionEnd(cancelledFixture, endAt);
+
+    const cancelledSessionFixture = await createFixture({ sessions: 1 });
+    await setReminderSessionEnd(cancelledSessionFixture, endAt);
+    await db
+      .update(academyClassSession)
+      .set({ state: "cancelled" })
+      .where(
+        eq(academyClassSession.id, cancelledSessionFixture.sessionIds[0]!),
+      );
+
+    const completedClassFixture = await createFixture({ sessions: 1 });
+    await setReminderSessionEnd(completedClassFixture, endAt);
+    await db
+      .update(academyClass)
+      .set({ state: "completed" })
+      .where(eq(academyClass.id, completedClassFixture.classId));
+
+    const repo = createClassReportReminderRepo();
+    const initiallyDue = await repo.findDue(db, endAt, 100);
+    const reportCandidate = initiallyDue.find(
+      (candidate) => candidate.id === reportFixture.sessionIds[0],
+    );
+    const cancelledCandidate = initiallyDue.find(
+      (candidate) => candidate.id === cancelledFixture.sessionIds[0],
+    );
+    expect(reportCandidate).toBeDefined();
+    expect(cancelledCandidate).toBeDefined();
+
+    const reportEventKey = classReportReminderEventKey(
+      reportFixture.sessionIds[0]!,
+      0,
+    );
+    ownedReminderEventKeys.add(reportEventKey);
+    await reportFixture.service.submitSessionReport(
+      reportFixture.tutorId,
+      "tutor",
+      makeClassReportInput(reportFixture),
+    );
+    const reportStateBeforeReminder =
+      await reminderFinancialSnapshot(reportFixture);
+    expect(await writeReminderCandidate(reportCandidate!, endAt)).toBe(false);
+    expect(await reminderRecords(reportFixture.sessionIds[0]!, [0])).toEqual({
+      notifications: [],
+      dispatches: [],
+    });
+    expect(await reminderFinancialSnapshot(reportFixture)).toEqual(
+      reportStateBeforeReminder,
+    );
+
+    const cancellationInput = {
+      classId: cancelledFixture.classId,
+      expectedVersion: 1,
+      reason: "Retain past report liability after class cancellation",
+    };
+    const cancellationQuote =
+      await cancelledFixture.service.previewAdminCancellation(
+        cancelledFixture.tutorId,
+        cancellationInput,
+      );
+    expect(cancellationQuote).toMatchObject({
+      returnMarks: 0,
+      retainedMarks: 25,
+    });
+    await cancelledFixture.service.confirmAdminCancellation(
+      cancelledFixture.tutorId,
+      {
+        ...cancellationInput,
+        quoteVersion: cancellationQuote.quoteVersion,
+        requestKey: crypto.randomUUID(),
+      },
+    );
+    const cancelledEventKey = classReportReminderEventKey(
+      cancelledFixture.sessionIds[0]!,
+      0,
+    );
+    ownedReminderEventKeys.add(cancelledEventKey);
+
+    const dueAfterCancel = await repo.findDue(db, endAt, 100);
+    expect(
+      dueAfterCancel.some(
+        (candidate) => candidate.id === cancelledFixture.sessionIds[0],
+      ),
+    ).toBe(true);
+    expect(
+      dueAfterCancel.some(
+        (candidate) =>
+          candidate.id === cancelledSessionFixture.sessionIds[0] ||
+          candidate.id === completedClassFixture.sessionIds[0] ||
+          candidate.id === reportFixture.sessionIds[0],
+      ),
+    ).toBe(false);
+
+    const cancellationStateBeforeReminder =
+      await reminderFinancialSnapshot(cancelledFixture);
+    expect(await writeReminderCandidate(cancelledCandidate!, endAt)).toBe(true);
+    expect(
+      await makeReportReminderProcessor(
+        () => endAt,
+        services.notification,
+        onlyReminderSessions(cancelledFixture.sessionIds),
+      ).processPendingReportReminders(),
+    ).toMatchObject({ checked: 0, queued: 0, failed: 0 });
+    const reminders = await reminderRecords(
+      cancelledFixture.sessionIds[0]!,
+      [0],
+    );
+    expect(reminders.notifications).toHaveLength(1);
+    expect(reminders.dispatches).toHaveLength(1);
+    expect(await reminderFinancialSnapshot(cancelledFixture)).toEqual(
+      cancellationStateBeforeReminder,
+    );
+    expect(cancellationStateBeforeReminder.classRows[0]?.state).toBe(
+      "cancelled",
+    );
+    expect(cancellationStateBeforeReminder.sessions[0]?.state).toBe(
+      "scheduled",
+    );
+  });
+
+  test("rolls back partial notification writes and retries the same period", async () => {
+    const fixture = await createFixture({ sessions: 1, balance: 25 });
+    await makeEnrollment(
+      fixture,
+      0,
+      "single",
+      crypto.randomUUID(),
+      fixture.sessionIds[0],
+    );
+    const endAt = new Date("1900-01-03T01:00:00.000Z");
+    await setReminderSessionEnd(fixture, endAt);
+    const sessionId = fixture.sessionIds[0]!;
+    ownedReminderEventKeys.add(classReportReminderEventKey(sessionId, 0));
+    const before = await reminderFinancialSnapshot(fixture);
+    const ownedRepo = onlyReminderSessions(fixture.sessionIds);
+    const failingNotification: Pick<NotificationService, "write"> = {
+      write: async (params) => {
+        await services.notification.write(params);
+        throw new Error("injected reminder outbox failure");
+      },
+    };
+
+    expect(
+      await makeReportReminderProcessor(
+        fixture.getNow,
+        failingNotification,
+        ownedRepo,
+      ).processPendingReportReminders(),
+    ).toMatchObject({ checked: 1, queued: 0, failed: 1 });
+    expect(await reminderRecords(sessionId, [0])).toEqual({
+      notifications: [],
+      dispatches: [],
+    });
+
+    expect(
+      await makeReportReminderProcessor(
+        fixture.getNow,
+        services.notification,
+        ownedRepo,
+      ).processPendingReportReminders(),
+    ).toMatchObject({ queued: 1, failed: 0 });
+    const reminders = await reminderRecords(sessionId, [0]);
+    expect(reminders.notifications).toHaveLength(1);
+    expect(reminders.dispatches).toHaveLength(1);
+    expect(await reminderFinancialSnapshot(fixture)).toEqual(before);
   });
 });

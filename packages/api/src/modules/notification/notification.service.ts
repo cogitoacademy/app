@@ -111,6 +111,33 @@ export interface DispatchResult {
   failed: number;
 }
 
+export function notificationEmailHtml(notification: {
+  body: string;
+  metadata: Record<string, unknown> | null;
+}) {
+  if (
+    notification.metadata?.action !== "class-session-report" ||
+    typeof notification.metadata.actionUrl !== "string"
+  ) {
+    return notification.body;
+  }
+
+  try {
+    const actionUrl = new URL(notification.metadata.actionUrl);
+    if (actionUrl.protocol !== "https:" && actionUrl.protocol !== "http:") {
+      return notification.body;
+    }
+    const href = actionUrl.href
+      .replaceAll("&", "&amp;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;");
+    return `${notification.body}<p><a href="${href}">Open your tutor report workspace</a></p>`;
+  } catch {
+    return notification.body;
+  }
+}
+
 export type DispatchConsumer = (limit?: number) => Promise<DispatchResult>;
 
 /**
@@ -261,7 +288,7 @@ export function createNotificationService(
         const res = await emailPort.send({
           to: row.recipientEmail,
           subject: notif.title,
-          html: notif.body,
+          html: notificationEmailHtml(notif),
           category: notif.category as
             | "booking"
             | "payment"

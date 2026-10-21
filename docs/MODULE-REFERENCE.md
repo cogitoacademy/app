@@ -314,12 +314,32 @@ history and notify the tutor without repeating economic effects. The parent
 class completes only after every non-cancelled session is complete and is never
 resurrected from cancelled state.
 
-The backend, payout source support, and role-based `/class-reports` workspace are
-implemented. The shared page shows settlement preview/readback to tutors/admins,
-keeps student settlement fields null, normalizes feedback bullets, and preserves
-unsaved edits on stale-version conflicts. It supports versioned admin edits with a
-required reason; the dedicated on-demand admin correction workflow, PDF, and
-repeated reminders remain follow-up UI/ops work.
+The backend, payout source support, role-based `/class-reports` workspace, and
+pending-report reminder worker are implemented. The shared page shows settlement
+preview/readback to tutors/admins, keeps student settlement fields null,
+normalizes feedback bullets, and preserves unsaved edits on stale-version
+conflicts. It supports versioned admin edits with a required reason; the
+dedicated on-demand admin correction workflow and PDF remain pending.
+
+`class-enrollment.report-reminders.ts` runs from the existing one-minute
+`class-enrollment-check` job. It selects at most 100 ended, scheduled sessions in
+published/postponed cohorts and masterclasses that have no report and no current
+reminder event, plus retained past scheduled sessions on cancelled classes. The
+first reminder is due at `endAt`; later reminders are due in 24-hour elapsed
+periods from that time. A delayed scheduler writes only the current due period.
+Cancelled sessions, completed sessions/classes, and sessions with a report are
+ineligible. The notification event key is
+`academy-class-session:${sessionId}:missing-report:day:${period}`; the unique
+notification event-key index and existing email outbox make replay/restart safe
+without a migration. Before writing, the worker locks the class then session and
+rechecks class/session state, schedule, tutor, report, and current period. It sends an action
+notification and email only to the assigned tutor with a private `/class-reports`
+link. A submitted report, cancelled session, completed state, or stale schedule/
+tutor candidate suppresses the write; cancelling the parent class does not suppress
+a still-scheduled retained past session. The worker never changes report, session
+or financial state and does not use no-show expiry as proof of delivery. This
+class-only flow leaves legacy solo/group/series reminders unchanged; broader
+legacy reminder coverage remains pending.
 
 ## V3 class/session draft foundation (2026-10-19)
 
@@ -331,7 +351,7 @@ Server validation requires an active competition (including an active parent for
 
 `classes.list` and `classes.get` are public procedures backed by `listPublished` and `getPublished`. Both map through an explicit student DTO; detail treats drafts as not found. It includes only catalog fields and tutor display name, with no payout/tax fields, private tutor account data, room details, audit/version values, or roster.
 
-Drafts are not public and do not reserve rooms; conflict checks happen at publication. The admin editor uploads PNG/JPEG/WebP/GIF covers through the existing protected upload flow (max 5 MB) and saves the returned key on the draft; approved M01 cover/curriculum assets remain pending. Admin publish controls, notifications, and durable Meet retry are implemented and browser-verified. Student enrollment is implemented in the T05 module below; T06 cancellation and T07 report/expiry settlement are implemented. The role-based report workspace is documented above; PDF, reminders, and the dedicated on-demand admin correction workflow remain open. Public list/detail projection is implemented as described above. This is not a V3 activation or release checkpoint.
+Drafts are not public and do not reserve rooms; conflict checks happen at publication. The admin editor uploads PNG/JPEG/WebP/GIF covers through the existing protected upload flow (max 5 MB) and saves the returned key on the draft; approved M01 cover/curriculum assets remain pending. Admin publish controls, notifications, and durable Meet retry are implemented and browser-verified. Student enrollment is implemented in the T05 module below; T06 cancellation and T07 report/expiry settlement and reminders are implemented. The role-based report workspace is documented above; PDF and the dedicated on-demand admin correction workflow remain open. Public list/detail projection is implemented as described above. This is not a V3 activation or release checkpoint.
 
 ## V3 class publication and meeting jobs (2026-10-20)
 
@@ -347,7 +367,7 @@ Public `classes.list/get` remain a separate allowlisted read model. The student 
 
 Wallet hold identity for each funded session is `class-enrollment:${enrollmentId}:session:${sessionId}:hold:v1`, with source reference `academy-class-enrollment/${enrollmentId}/allocation/${allocationId}`. The wallet hold, ledger entry, allocation funded state and installment state commit together. `academy_class_enrollment_allocation` is the stable T07 funding identity. T07 may spend only the remaining funded Marks on that same session allocation after delivery; enrollment/payment does not deduct a class fee or settle a report. The invariant is `spentMarks + releasedMarks <= fundedMarks <= rateMarks`. An unfunded reservation cannot be spent or released as funded balance. A funded allocation is terminally released only when its remaining balance is zero, before its seat is freed; replay cannot hold, spend, release or fund a terminal allocation again.
 
-Financial mutations acquire sorted session row locks, then enrollment, installment, per-session allocation rows in session order and wallet locks, followed by ledger writes, all in one database transaction. Enrollment creation also serializes the student request key and locks the class before selected sessions. This order is the T07 integration contract; any new settlement path must preserve it and must leave no wallet or seat residue if a later write fails. Notifications are written through the existing notification service with stable event keys. The scheduler checks checkout expiry, second-installment deadlines and 7-day/1-day reminders; catch-up uses the current time and never creates historical reminders for late joiners.
+Financial mutations acquire sorted session row locks, then enrollment, installment, per-session allocation rows in session order and wallet locks, followed by ledger writes, all in one database transaction. Enrollment creation also serializes the student request key and locks the class before selected sessions. This order is the T07 integration contract; any new settlement path must preserve it and must leave no wallet or seat residue if a later write fails. Notifications are written through the existing notification service with stable event keys. The existing one-minute scheduler checks checkout expiry, second-installment deadlines, 7-day/1-day installment reminders, and bounded pending class-report reminders; catch-up creates only the currently due report reminder period and never historical reminders for late joiners.
 
 T06 student/admin cancellation releases only future unspent allocation balances under the approved policy and preserves past funded delivery liability; Q04 ordinary reschedule rights remain open. T07 report completion and fee deduction are implemented by the class report settlement path below.
 

@@ -551,10 +551,19 @@ price data. Migration 0067 is applied only to the guarded disposable test DB on 
 600-code-point feedback, delivery confirmation, draft-preserving version conflicts,
 and settlement preview/readback. The shared page supports versioned admin edits
 with a required reason; the dedicated on-demand admin correction workflow remains
-pending. PDF and reminders remain open. Tutor, admin, and student browser
-acceptance passes against real RPCs, as do web and E2E no-emit typechecks. Existing
-enrollment browser cases pass twice with a fresh student identity per run. No
-development migration or live provider was used.
+pending. Reminder verification passes 7 fake-clock unit tests / 25 expectations
+and 3 guarded, non-reset PostgreSQL tests / 34 expectations on loopback
+`6769/cogito-test`. It covers current/next-day/catch-up periods, concurrent
+processors and one email-outbox row per period, report and parent-cancellation
+races, cancelled/completed exclusions, transactional rollback/retry, and unchanged
+wallet, allocation, ledger, fee, report and session facts across reminder writes.
+Whole-class cancellation leaves a retained past scheduled session eligible until
+its report is submitted; cancelled/completed sessions and completed classes stop.
+The legacy solo/group/series reminder policy is unchanged and broader coverage is
+still pending. PDF remains open. Tutor, admin, and student browser acceptance
+passes against real RPCs, as do web and E2E no-emit typechecks from the earlier
+report implementation checkpoint. This reminder verification used no browser,
+live email or external provider and required no migration.
 
 ## V3 draft economy editor and revision storage (2026-10-18)
 
@@ -2019,7 +2028,7 @@ file are the permanent record; plan-file archives are not maintained.
 
 | Plan                                                  | Status                                                                                                                                                                                                                                                                                                                                                                        |
 | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `docs/plans/active/RELEASE-V3-PRD.md` + SPEC/TASKS    | T00A catalog CRUD/palette and T01 dynamic rates/tutor guard/group-series repricing are implemented; T03 tax/payout workflow and focused units are implemented, with isolated database/browser acceptance pending. Pricing-snapshot counts are available; booked-service analytics Q15, website cutover, OPS01 tax-adviser confirmation, and activation acceptance remain open |
+| `docs/plans/active/RELEASE-V3-PRD.md` + SPEC/TASKS    | `RELEASE-V3-TASKS.md` is the current status authority. T03 tax/payout, T05 enrollment, the integrated T06 core lifecycle, and T07 class report settlement/reminders have focused evidence; T07 PDF, dedicated on-demand admin correction, and legacy solo/group/series reminder coverage remain open. T04, T08, T10, T11 and overall release acceptance remain in progress; T09/T12 and OPS01 are open. |
 | `docs/plans/active/DEFERRED-OPS-TASKS.md`             | Active — code gaps done, §3/§4 operator-console items pending                                                                                                                                                                                                                                                                                                                 |
 | `docs/plans/active/DEPLOYMENT-PLAN.md`                | Active — applied 2026-08-31; remaining scope tracked in the plan                                                                                                                                                                                                                                                                                                              |
 | `docs/plans/active/PAYMENT-INTEGRITY-FLAP.md`         | Active — payment-integrity alert stability                                                                                                                                                                                                                                                                                                                                    |
@@ -2485,4 +2494,22 @@ Student- and admin-facing numeric Marks amounts use the shared `CogitoMarks` com
 
 ### T07 integrated development checkpoint (21 October)
 
-Report workspace, class settlement, immutable revisions and class fee payout identity are integrated through `d508467b` on local `f/release-v3`. Development DB 6767 is migrated through 0067 (journal id 88; hash `0510e3bd5f1fd36860b8f289c81db5034b4ba40a2f1527736ea280ea77651037`), with API health and protected report route verified after restart. Isolated acceptance: report journey 1 pass, enrollment 2 passes on each of two runs, web/E2E typechecks passed; the saved DB suite passed 29 tests / 203 assertions. PDF export, recurring report reminders, on-demand admin correction and remaining T06 lifecycle rules are still open; main is unchanged.
+Report workspace, class settlement, immutable revisions and class fee payout identity are integrated through `d508467b` on local `f/release-v3`. Development DB 6767 is migrated through 0067 (journal id 88; hash `0510e3bd5f1fd36860b8f289c81db5034b4ba40a2f1527736ea280ea77651037`), with API health and protected report route verified after restart. Isolated acceptance: report journey 1 pass, enrollment 2 passes on each of two runs, web/E2E typechecks passed; the saved DB suite passed 29 tests / 203 assertions. PDF export, on-demand admin correction and remaining T06 lifecycle rules are still open; main is unchanged.
+
+### T07 pending-report reminder implementation (21 October)
+
+This isolated T07 worktree wires pending report reminders into the existing
+one-minute class-enrollment scheduler. It queues a bounded batch of
+private tutor reminders for ended, scheduled cohort/masterclass sessions with no
+report. The first reminder is due at session end and repeats per 24 elapsed
+hours; catch-up writes only the current period. Existing unique notification
+event keys and the email outbox provide restart/replay idempotence without a
+migration. The worker rechecks report, class/session state, schedule and tutor
+under the class/session locks. A whole-class cancellation keeps a retained past
+scheduled session eligible; cancelled/completed sessions, completed classes and
+submitted reports stop reminders. It does not touch report, delivery, wallet,
+allocation or tutor-fee state. Fake-clock unit tests pass 7 / 25; guarded non-reset
+PostgreSQL regressions pass 3 / 34 on exact loopback `6769/cogito-test`, using
+only owned UUID fixtures. No live email, browser or external provider was used.
+Legacy solo/group/series reminder coverage remains pending. PDF export and the
+dedicated on-demand admin correction workflow remain pending.

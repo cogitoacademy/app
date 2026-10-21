@@ -2,6 +2,10 @@ import { createAdminClassCancellation } from "./class-enrollment.admin-cancellat
 import { createAdminClassSessionCancellation } from "./class-enrollment.admin-session-cancellation";
 import { createClassMinimumLifecycle } from "./class-enrollment.minimum";
 import { createClassSessionReportService } from "./class-enrollment.reports";
+import {
+  createClassReportReminderProcessor,
+  createClassReportReminderRepo,
+} from "./class-enrollment.report-reminders";
 import { quoteEnrollmentCancellation } from "./class-enrollment.cancellation";
 import {
   classEnrollmentCancellationOutput,
@@ -99,6 +103,13 @@ export function createClassEnrollmentService(deps: {
   const adminSessionCancellation = createAdminClassSessionCancellation(deps);
   const minimumLifecycle = createClassMinimumLifecycle(deps);
   const sessionReports = createClassSessionReportService(deps);
+  const reportReminders = createClassReportReminderProcessor({
+    db: deps.db,
+    repo: createClassReportReminderRepo(),
+    notification: deps.notification,
+    appBaseUrl: deps.appBaseUrl,
+    clock: deps.clock,
+  });
   const now = () => deps.clock?.() ?? new Date();
 
   function currentTime() {
@@ -1481,14 +1492,24 @@ export function createClassEnrollmentService(deps: {
         nowAt,
       );
     }
+    const reportReminderResult =
+      await reportReminders.processPendingReportReminders();
     log({
-      level: "info",
+      level: reportReminderResult.failed > 0 ? "warn" : "info",
       action: "class_enrollment_due_jobs_complete",
       expiredCheckouts,
       defaultedInstallments,
       remindersQueued,
+      reportRemindersQueued: reportReminderResult.queued,
+      reportRemindersFailed: reportReminderResult.failed,
     });
-    return { expiredCheckouts, defaultedInstallments, remindersQueued };
+    return {
+      expiredCheckouts,
+      defaultedInstallments,
+      remindersQueued,
+      reportRemindersQueued: reportReminderResult.queued,
+      reportRemindersFailed: reportReminderResult.failed,
+    };
   }
 
   async function thisPaymentSummary(

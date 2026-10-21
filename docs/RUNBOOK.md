@@ -174,6 +174,53 @@ focused oxlint passed. The run used provider fakes only and did not reset or see
 the database. No development migration, browser run, or broad typecheck was run;
 the parent owns those checks and the development migration decision.
 
+## T07 pending-report reminders (21 October)
+
+In this isolated T07 worktree, the existing `class-enrollment-check` scheduler
+runs every minute and now queues
+at most 100 pending report reminders per pass for ended scheduled sessions in
+published/postponed cohorts and masterclasses, plus retained past scheduled
+sessions on cancelled classes. The first reminder is due at the session `endAt`;
+later reminders are due once per 24 elapsed hours. A late or restarted scheduler
+emits only the current due period, not missed daily copies. Cancelled or completed
+sessions, completed classes and sessions with a report are ineligible.
+The key `academy-class-session:{sessionId}:missing-report:day:{period}` is
+deduplicated by the existing unique notification event-key index. The existing
+notification dispatch job sends the paired email from its durable outbox and
+retries dispatch failures. Notifications go only to the assigned tutor and link
+to the authenticated `/class-reports` workspace; no student identity is included.
+
+The worker locks and rechecks the class/session before writing. A new report,
+session cancellation, completion, or stale schedule/tutor candidate suppresses a
+stale write; parent class cancellation preserves reminder eligibility for a past
+session that remains scheduled. It does not mutate reports, session state, holds,
+or tutor fees, and does not interpret a no-show expiry as delivery. No migration
+or new environment variable is required. Observe `class_report_reminder_failed` and the
+`class_enrollment_due_jobs_complete` `reportRemindersQueued`/
+`reportRemindersFailed` fields; email sends still appear under the existing
+notification dispatch logs. Legacy solo/group/series reminder coverage remains
+pending and their existing report/expiry behavior is unchanged.
+
+The focused fake-clock suite passed 7 tests / 25 expectations. Guarded PostgreSQL
+tests passed 3 / 34 on exact loopback `6769/cogito-test`; the integration test
+refuses URL query/hash, requires both reset override variables to be absent, and
+checks `SELECT current_database()` before fixture writes. It creates and cleans
+only its own UUID fixtures and never calls `resetDatabase()` or truncates tables.
+The database cases verify the ISO-serialized timestamp query, concurrent/replay
+dedupe with one queued outbox row per period, current/next-day/catch-up periods,
+report and class-cancellation races, cancelled/completed exclusions, notification
+failure rollback/retry, and unchanged wallet/allocation/ledger/fee/report/session
+facts. No live email, browser, payment or Calendar provider was used. Full
+typecheck and browser acceptance were not run for this reminder verification.
+
+Cached oxfmt 0.65.0 `--check` passes on the six changed source files. Focused
+oxlint 1.80.0 exits 0 with the existing non-fatal loop/scoping warnings. A
+broad typecheck and browser run were not run for this bounded source slice.
+
+PDF report export, the dedicated on-demand admin correction workflow, broader
+legacy report-reminder coverage and overall release acceptance remain pending T07
+work.
+
 ## Prior local integration checkpoint (21 October)
 
 f/release-v3 includes admin cancellation

@@ -90,7 +90,11 @@ export function NotificationBell() {
   function openNotification(notification: {
     bookingId: string | null;
     category: string;
+    metadata: Record<string, unknown> | null;
   }) {
+    if (notification.metadata?.action === "class-session-report") {
+      return navigate({ to: "/class-reports" });
+    }
     if (notification.bookingId) {
       return navigate({
         to: "/bookings/$bookingId",
