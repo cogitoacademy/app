@@ -6,6 +6,7 @@ export type PublicAcademyClassSource = {
   descriptionEn: string;
   coverKey: string | null;
   cohortFullRateMarks: number | null;
+  cohortHalfRateMarks: number | null;
   cohortSingleRateMarks: number | null;
   masterclassRateMarks: number | null;
   competition: {
@@ -32,6 +33,7 @@ export function toPublicAcademyClass(record: PublicAcademyClassSource) {
     descriptionEn: record.descriptionEn,
     coverKey: record.coverKey,
     cohortFullRateMarks: record.cohortFullRateMarks,
+    cohortHalfRateMarks: record.cohortHalfRateMarks,
     cohortSingleRateMarks: record.cohortSingleRateMarks,
     masterclassRateMarks: record.masterclassRateMarks,
     competition: {

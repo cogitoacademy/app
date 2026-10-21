@@ -11,6 +11,7 @@ describe("toPublicAcademyClass", () => {
       descriptionEn: "Test catalog description",
       coverKey: null,
       cohortFullRateMarks: 20,
+      cohortHalfRateMarks: 22,
       cohortSingleRateMarks: 25,
       masterclassRateMarks: null,
       tutorFeeIdr: 400_000,
@@ -50,6 +51,7 @@ describe("toPublicAcademyClass", () => {
       descriptionEn: "Test catalog description",
       coverKey: null,
       cohortFullRateMarks: 20,
+      cohortHalfRateMarks: 22,
       cohortSingleRateMarks: 25,
       masterclassRateMarks: null,
       competition: {
