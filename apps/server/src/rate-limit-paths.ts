@@ -41,15 +41,55 @@ const READ_ONLY_BOOKING_PATHS = new Set([
   "/rpc/booking/listSessions",
 ]);
 
+/**
+ * Canonicalize a URL pathname the same way the auth router does before it
+ * dispatches auth endpoints. Repeated decoding matters because a proxy or
+ * client may encode separators more than once; paths are case-insensitive in
+ * the auth route guard, so the rate limiter must use the same form.
+ */
+export function normalizeRequestPath(
+  path: string,
+  options: { caseInsensitive?: boolean } = {},
+): string {
+  let decoded = path.split("?")[0] ?? path;
+  for (let depth = 0; depth < 32; depth += 1) {
+    const next = decodeURIComponent(decoded);
+    if (next === decoded) {
+      const normalized = decoded.replace(/\/{2,}/g, "/").replace(/\/+$/, "");
+      return options.caseInsensitive === false
+        ? normalized
+        : normalized.toLowerCase();
+    }
+    decoded = next;
+  }
+  throw new URIError("Request path has too many encoding layers.");
+}
+
+function rawAuthPathFallback(path: string): boolean {
+  // Malformed or excessively nested encoding must not create an unthrottled
+  // way into the /api/auth catch-all route.
+  return (path.split("?")[0] ?? path).toLowerCase().includes("/api/auth");
+}
+
 export function matchAuthPath(path: string): boolean {
-  const urlPath = path.split("?")[0] ?? path;
+  let urlPath: string;
+  try {
+    urlPath = normalizeRequestPath(path);
+  } catch {
+    return rawAuthPathFallback(path);
+  }
   return AUTH_PATH_PREFIXES.some(
     (p) => urlPath === p || urlPath.startsWith(`${p}/`),
   );
 }
 
 export function matchRateLimitPath(path: string): RateLimitKind | null {
-  const urlPath = path.split("?")[0] ?? path;
+  let urlPath: string;
+  try {
+    urlPath = normalizeRequestPath(path, { caseInsensitive: false });
+  } catch {
+    return null;
+  }
 
   if (urlPath === "/rpc/payment/createPurchase") return "payment";
   if (urlPath.startsWith("/rpc/invite/verify")) return "invite";

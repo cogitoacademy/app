@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
 
-import { db } from "@cogito-app/db";
-import { user as userRow } from "@cogito-app/db/schema";
 import { DEFAULT_PRODUCTION_ADMIN_EMAIL } from "@cogito-app/env/admin";
 import { env } from "@cogito-app/env/server";
 
@@ -10,6 +7,8 @@ import {
   assertPasswordPolicy,
   auth,
   setAuthEmailSender,
+  setPreAccountSignupEmailSender,
+  setSignupWelcomeEmailSender,
   setVerificationEmailSender,
   resolveGoogleSocialProviders,
 } from "./index";
@@ -28,66 +27,34 @@ const user = {
 const resetPassword = (auth as any).options.emailAndPassword.sendResetPassword;
 const sendVerificationOTP = (auth as any).options.plugins[0].options
   .sendVerificationOTP;
-const afterUserCreate = (auth as any).options.databaseHooks.user.create.after;
+const beforeUserCreate = (auth as any).options.databaseHooks.user.create.before;
 
 afterEach(() => {
   setAuthEmailSender(null as any);
   setVerificationEmailSender(null as any);
+  setPreAccountSignupEmailSender(null);
+  setSignupWelcomeEmailSender(null);
 });
 
 describe("auth email hooks", () => {
-  test("production signup promotes a configured operator account", async () => {
+  test("production signup stores the configured operator role on insert", async () => {
     const originalNodeEnv = env.NODE_ENV;
-    const operatorId = crypto.randomUUID();
-    const operator = {
-      ...user,
-      id: operatorId,
-      email: DEFAULT_PRODUCTION_ADMIN_EMAIL,
-    };
-
-    await db.insert(userRow).values({
-      id: operatorId,
-      name: operator.name,
-      email: operator.email,
-      role: "student",
-    });
-
     try {
       (env as { NODE_ENV: string }).NODE_ENV = "production";
-      await afterUserCreate(operator);
-
-      const [promoted] = await db
-        .select({ role: userRow.role })
-        .from(userRow)
-        .where(eq(userRow.id, operatorId));
-      expect(promoted?.role).toBe("admin");
+      const result = await beforeUserCreate({
+        ...user,
+        email: DEFAULT_PRODUCTION_ADMIN_EMAIL,
+      });
+      expect(result.data.role).toBe("admin");
+      expect(result.data.emailVerified).toBe(false);
     } finally {
-      await db.delete(userRow).where(eq(userRow.id, operatorId));
       (env as { NODE_ENV: string }).NODE_ENV = originalNodeEnv;
     }
   });
 
-  test("production signup swallows operator promotion failures", async () => {
-    const originalNodeEnv = env.NODE_ENV;
-    const originalUpdate = (db as any).update;
-
-    try {
-      (env as { NODE_ENV: string }).NODE_ENV = "production";
-      (db as any).update = () => {
-        throw new Error("db unavailable");
-      };
-
-      await expect(
-        afterUserCreate({
-          ...user,
-          id: crypto.randomUUID(),
-          email: DEFAULT_PRODUCTION_ADMIN_EMAIL,
-        }),
-      ).resolves.toBeUndefined();
-    } finally {
-      (db as any).update = originalUpdate;
-      (env as { NODE_ENV: string }).NODE_ENV = originalNodeEnv;
-    }
+  test("ordinary signup keeps the default student role", async () => {
+    const result = await beforeUserCreate(user);
+    expect(result.data.role).toBe("student");
   });
 
   test("reset-password hook is a no-op when no sender is configured", async () => {
@@ -122,7 +89,7 @@ describe("auth email hooks", () => {
     ).resolves.toBeUndefined();
   });
 
-  test("verification hook is a no-op without a sender and marks signup OTPs", async () => {
+  test("verification hook is a no-op without a sender and forwards existing-account OTPs", async () => {
     await expect(
       sendVerificationOTP({
         email: user.email,
@@ -141,14 +108,12 @@ describe("auth email hooks", () => {
         otp: "123456",
         type: "email-verification",
       },
-      { path: "/sign-up/email" },
     );
     expect(calls).toEqual([
       {
         email: user.email,
         otp: "123456",
         type: "email-verification",
-        isSignup: true,
       },
     ]);
 

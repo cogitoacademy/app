@@ -4,7 +4,7 @@ import { db } from "@cogito-app/db";
 import { economyConfig, user } from "@cogito-app/db/schema";
 import { eq } from "drizzle-orm";
 
-import { appRouter, type AppRouter } from "../../routers";
+import { appRouter } from "../../routers";
 import { services } from "../../services";
 
 function getDatabaseName(databaseUrl: string | undefined) {
@@ -73,7 +73,7 @@ export async function createTestContext(sessionCookie?: string) {
 export function createTestClient(
   context: Awaited<ReturnType<typeof createTestContext>>,
 ) {
-  return createRouterClient<AppRouter>(appRouter, { context });
+  return createRouterClient(appRouter, { context });
 }
 
 export async function signUpAndSignIn(

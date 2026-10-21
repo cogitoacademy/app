@@ -51,4 +51,22 @@ describe("test client database safety", () => {
       );
     }
   });
+
+  test("rejects remote database hosts", async () => {
+    process.env.NODE_ENV = "test";
+    process.env.DATABASE_URL =
+      "postgresql://postgres:password@db.example.com:6768/cogito-test";
+    await expect(resetDatabase()).rejects.toThrow(
+      "resetDatabase() is blocked outside a dedicated test database",
+    );
+  });
+
+  test("rejects database names that only contain a safe name", async () => {
+    process.env.NODE_ENV = "test";
+    process.env.DATABASE_URL =
+      "postgresql://postgres:password@localhost:6768/cogito-test-shadow";
+    await expect(resetDatabase()).rejects.toThrow(
+      "resetDatabase() is blocked outside a dedicated test database",
+    );
+  });
 });

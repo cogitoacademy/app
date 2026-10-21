@@ -185,7 +185,11 @@ export const academyClassEnrollmentAllocation = pgTable(
     ordinal: integer("ordinal").notNull(),
     sequenceNumber: integer("sequence_number").notNull(),
     rateMarks: integer("rate_marks").notNull(),
-    state: text("state").notNull(),
+    state: text("state")
+      .$type<
+        "checkout_reserved" | "unfunded_reserved" | "funded" | "released"
+      >()
+      .notNull(),
     fundingEventKey: text("funding_event_key").notNull(),
     fundingSourceReference: text("funding_source_reference").notNull(),
     fundedMarks: integer("funded_marks").notNull().default(0),

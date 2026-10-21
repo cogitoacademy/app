@@ -1,5 +1,79 @@
 # Cogito App — Codebase Context
 
+Final parent web typecheck could not complete: Windows VirtualAlloc errno 1455 (virtual memory exhausted); no successful final compiler result is claimed.
+
+Parent AUTH-01 verification (21 October): signup and existing-account OTP DB
+regressions pass 15 / 73; auth path/rate-reset safety checks pass 19 / 69; both
+Edge signup browser journeys pass (1.4m), including an aborted successful create
+response followed by outcome recovery. Security probes and browser journeys
+use isolated auth rate buckets on the disposable test Redis; the application's
+limiter is unchanged. These checks do not complete AUTH-02 or referral rewards.
+
+Enrollment is integrated into local `f/release-v3` through `bd123ce4`.
+Parent verification passed 9 guarded Postgres cases / 69 expectations, 12
+pricing/funding/public DTO units / 37 expectations, 5 public tutor projection
+units / 28 expectations, and the integrated Chromium enrollment journey (1.6m).
+The web typecheck passed in the enrollment worktree after direct fixes. Local
+web/API health returned 200 with DB/Redis/scheduler/DLQ healthy. T06/T07 and the
+remaining release scope are not completed by this enrollment checkpoint.
+
+Parent enrollment follow-up (21 October): checkout confirmation and second
+installment payment read authoritative time after acquiring transaction locks.
+Confirmation rejects reserved sessions that have started or are no longer
+scheduled. Allocation state types now match the database check constraint;
+unsupported filters on public tutor one-to-one relations were removed, with
+active-subject/parent filtering retained in the public DTO mapper. Parent web
+typecheck passes after these fixes and the worktree Drizzle link repair.
+
+## Enrollment schema checkpoint (2026-10-21)
+
+`385fc959` integrates the additive enrollment schema from `2f9786d0`.
+Migration `0064` is applied to local dev with table and journal hash readback;
+no existing snapshot table changed. T05 runtime/API/student UI now implement
+cohort and masterclass enrollment, immutable session/rate snapshots, per-session
+wallet holds, checkout expiry, half-plan installments, due reminders and
+test-only top-up quoting. Acceptance evidence and remaining checks are recorded
+below and in `RUNBOOK.md`; this checkpoint does not complete T06 or T07.
+Payout migration generation may follow this idx64 lineage.
+
+## T05 class enrollment checkpoint (2026-10-21)
+
+Student class detail now contains an authenticated enrollment panel separate
+from the public class DTO. The enrollment API reports only the signed-in
+student's own seats and exposes full/half/single cohort plans plus the one-seat
+masterclass plan. Current rates and selected future session IDs are snapshotted
+on the enrollment. Full enrollment reserves all selected seats and holds each
+session's Marks atomically. Half enrollment holds the first ceil-half and keeps
+the remaining seats reserved without wallet funds until the second installment
+deadline. A 15-minute pending checkout owns its seats; expiry releases all of
+them and a new request receives a fresh quote. Late join prices only scheduled
+future sessions, and a missed second installment releases its unpaid future
+allocations without charging them.
+
+The downstream T07 funding boundary is an immutable allocation row per
+enrollment/session. Its hold event key is
+`class-enrollment:${enrollmentId}:session:${sessionId}:hold:v1`; its stable
+source reference is
+`academy-class-enrollment/${enrollmentId}/allocation/${allocationId}`. Wallet
+hold and funded-state writes share the enrollment transaction. Allocation
+accounting requires `spentMarks + releasedMarks <= fundedMarks <= rateMarks`;
+unfunded future-half rows cannot be spent, and a released row must have zero
+remaining funded Marks before its seat is freed. T07 completion may deduct only
+from that session allocation. Enrollment and payment do not settle class fees or
+complete reports. T06 cancellation remains pending; no cancellation action is
+presented as available.
+
+Pure pricing/funding tests passed 11 tests / 36 expectations; the isolated
+PostgreSQL suite passed 7 tests / 64 expectations, including duplicate requests,
+last-seat contention, rollback, immutable rates, expiry, installment default,
+reminder catch-up and role denial. The focused Chromium student journey passed
+1 spec in 58.7s covering full, half, single and insufficient-balance checkout,
+retry, reload, second installment and immutable top-up quote. The DTO allowlist
+unit test passed 1 expectation. Focused lint and formatting passed with lint
+warnings; the E2E package typecheck passed before its final reload-wait update.
+API/web typechecks remain blocked by duplicate linked Drizzle declarations; see
+`RUNBOOK.md`. Do not infer T06, T07 or release readiness.
+
 ## V3 integration and local migration checkpoint (2026-10-20)
 
 Feature worktrees derive from `f/release-v3`; tested work merges there, and
@@ -83,6 +157,48 @@ timestamp `1792525224597` (SHA-256
 parent confirms `0064` is applied to local development; this worktree has not
 applied `0065`. No schema change is part of these review fixes; `0065` remains
 gated on parent review and the assigned database verification window.
+
+## V3 pre-account email signup checkpoint (2026-10-21)
+
+REQ-AUTH-01 changes public email/password signup so no account exists before a
+valid email OTP is proved. `POST /api/auth/sign-up/email-otp` sends a six-digit
+code with a 60-second per-email resend cooldown; a resend replaces the prior
+proof. The proof and cooldown commit in a short transaction before the server
+calls the mail provider, so provider latency does not hold a database
+connection or email lock. A failed delivery removes only the proof row created
+by that request and returns an inline error. `POST /api/auth/sign-up/email`
+requires the code and attempt UUID.
+Account/session creation, proof consumption, and a 24-hour email/attempt outcome
+record commit in one PostgreSQL transaction. Failed account creation rolls back
+and keeps the proof reusable. The UI starts with an empty code, clears proof
+when the email changes, shows inline send/verification errors, and checks
+`POST /api/auth/sign-up/email-outcome` after an uncertain network response
+instead of retrying account creation.
+
+These custom POST routes validate `Origin` or `Referer` against the configured
+frontend-origin policy. Auth path matching uses the same repeated-decoding,
+slash-normalizing canonicalizer as the 10/minute/IP auth limiter, so encoded
+separator, case, or trailing-slash variants share the same budget. The browser
+keeps only its attempt UUID per normalized email in session storage to recover
+after an address edit or reload; changing email still clears the visible OTP
+and proof state. Auth logs omit OTP values, attempt IDs, passwords, and
+password-reset URLs/tokens. Better Auth's email-OTP plugin also sets
+`disableSignUp: true`, so its sign-in OTP route cannot provision an account
+outside this transaction.
+
+The proof uses the existing Better Auth `verification` table; this slice has no
+schema, index, or migration change. The local OTP capture route is registered
+only for `NODE_ENV=test` on loopback `cogito-test` and reads an in-memory code;
+test mode suppresses signup and welcome mail. Existing-user verification,
+password reset, tutor invitation claiming, and internal seed/provisioning remain
+on their scoped paths. Welcome delivery is attempted once by the successful
+consumer after commit and is best-effort. This completes only the REQ-AUTH-01
+slice; Google pending-referral resume (REQ-AUTH-02), referral economics, and
+Google-choice behavior remain outside this checkpoint.
+
+The isolated browser run uses loopback PostgreSQL `cogito-test` on 6768,
+Redis 6380, API 3201, and web 3200. See the [runbook](./RUNBOOK.md) for the
+dedicated port overrides, migration, and guarded E2E command.
 
 ## Competition catalog language
 
@@ -271,19 +387,19 @@ browser E2E or typecheck was run for this follow-up.
 
 Migration `0061_academy_class_drafts.sql` adds the class and session draft model. The admin-only `admin-classes` page creates/edits drafts with localized titles/descriptions, cohort curriculum and enrollment defaults, per-session schedule/capacity/tutor/mode/room, and required audit reason. Approved defaults are cohort 20/22/25 Marks per full/half/single session with Rp400,000 tutor fee per session, and masterclass 5 Marks with Rp300,000 tutor fee. Both online and in-person are available; in-person requires an active managed room. Drafts are not public and do not reserve rooms.
 
-The service validates active competition, published mode-compatible tutors and session capacities, active room capacity, non-overlapping class sessions, cohort curriculum/check date, and the one-session masterclass rule. Draft updates are optimistic-versioned and preserve supplied session IDs; audit actions are `academy_class.draft_created` and `academy_class.draft_updated`. The admin editor uploads PNG/JPEG/WebP/GIF covers through the existing protected upload flow (max 5 MB) and stores the returned key on save; approved M01 cover/curriculum assets are still pending. Room/tutor conflict checks and Meet creation at publication, admin publish controls, enrollment, and T02/T06/T07 report/expiry integration remain open.
+The service validates active competition, published mode-compatible tutors and session capacities, active room capacity, non-overlapping class sessions, cohort curriculum/check date, and the one-session masterclass rule. Draft updates are optimistic-versioned and preserve supplied session IDs; audit actions are `academy_class.draft_created` and `academy_class.draft_updated`. The admin editor uploads PNG/JPEG/WebP/GIF covers through the existing protected upload flow (max 5 MB) and stores the returned key on the draft; approved M01 cover/curriculum assets remain pending. Publication-time room/tutor conflict checks, Meet setup, admin publish controls, and T05 student enrollment are implemented. T02 delivery fees, T06 cancellation and T07 class reports/expiry settlement remain open.
 
 Focused integration verification: **4/4 tests, 18 expectations** against the guarded local `cogito-test` database after additive migration. A server TypeScript-Go check attempt again failed with Windows `Out of memory`; Vite build and web typecheck have not been rerun for this slice. No production database, V3 activation, or external provider was used.
 
 ## V3 published class read contract (2026-10-20)
 
-The public `classes.list` and `classes.get` procedures expose published classes only. Their explicit DTO includes the student catalog fields and tutor display name, while omitting tutor identifiers and account fields, tutor fees, room details, admin version/audit fields, and student roster data. A missing or unpublished detail is returned as not found. The catalog and detail pages consume this contract; enrollment remains unavailable until T05.
+The public `classes.list` and `classes.get` procedures expose published classes only. Their explicit DTO includes student catalog fields, the published class-plan rates and tutor display name, while omitting tutor identifiers and account fields, tutor fees, room details, admin version/audit fields, and student roster data. A missing or unpublished detail is returned as not found. The catalog and detail pages consume this contract; signed-in students use the separate T05 enrollment procedures and never receive another student's records.
 
 ## V3 class publication and meeting setup checkpoint (2026-10-20)
 
 Admin can publish a versioned class draft after the service rechecks active competition ancestry, published tutor assignments and mode/capacity, future session times, cohort minimum/curriculum, managed-room capacity and conflicts, and the approved tutor fee (Rp400,000 per cohort session or Rp300,000 per masterclass session in either mode). Publication marks sessions scheduled, writes audit state, deduplicates one tutor notification per class, and creates one durable meeting job per online session in the same transaction. In-person sessions use managed rooms and have no Meet job.
 
-Migration `0063_academy_class_meetings.sql` adds the per-session meeting job/status record. Provider work runs after commit under a claim lease with exponential retry; stable Google event IDs recover an event after an ambiguous provider response. If Calendar accepted an event but Meet URL generation is still pending, the job remains retryable and the next attempt fetches that same event ID instead of inserting another. Admin can retry failed setup. Test mode uses a controlled local adapter; no Google Calendar call is made in tests. The admin Class studio now exposes draft/edit/publish controls and failed-meeting retry. Public list/detail pages use the allowlisted DTO and keep enrollment visibly unavailable.
+Migration `0063_academy_class_meetings.sql` adds the per-session meeting job/status record. Provider work runs after commit under a claim lease with exponential retry; stable Google event IDs recover an event after an ambiguous provider response. If Calendar accepted an event but Meet URL generation is still pending, the job remains retryable and the next attempt fetches that same event ID instead of inserting another. Admin can retry failed setup. Test mode uses a controlled local adapter; no Google Calendar call is made in tests. The admin Class studio exposes draft/edit/publish controls and failed-meeting retry. Public list/detail pages use the allowlisted DTO; the student detail route shows the separate T05 enrollment panel only to signed-in students. T04 still depends on T02/T06/T07 report, fee, absence and cancellation integration plus approved client curriculum and cover inputs.
 
 Publication takes the competition-catalog lock, sorted tutor locks, and sorted room locks before fresh row-locked reference reads. Catalog archive, tutor status, and room update/deactivation use the matching locks so publication cannot validate stale mutable references. The class publish API suite passed 9 tests / 51 expectations, including gated room-capacity, room-deactivation, and catalog-archive races. The admin-to-public Chromium journey passed 1 spec and covers pending-link retry, hidden drafts, role denial, empty/error states, and DTO privacy. Migration `0063` is applied only to isolated `cogito-test`; dev migration review remains with the parent. T04 remains in progress for enrollment, class absence/cancellation/report/expiry integration, and approved client curriculum/cover inputs. This checkpoint is not a V3 activation or release gate.
 
@@ -1300,7 +1416,7 @@ Booking detail also renders the current response window for deadline-bound state
 
 - **Group/group-series invitee email (P1):** the invitee notification written by `booking.service.ts` (`createGroup`/`createGroupSeries`) carries the PRD-mandated content in its body — full schedule, per-student price, total Marks hold, the no-opt-out disclaimer (series only), and a direct in-platform CTA (`${CORS_ORIGIN}/bookings/{bookingId}`). Because `notification.write` uses `notif.body` as the email `html`, the CTA is present in both the in-app notification and the dispatched email.
 - **Invitation-phase closure:** `declineInvite` and proposer-side `withdrawInvite` lock the parent booking before mutating an invitation, then query remaining pending invitees. Concurrent final responses therefore serialize. While any remain, participant confirmation continues. Once none remain, fewer than two confirmed participants causes hold release and expiry (plus group-series session cancellation), a viable partial group enters fresh reconfirmation, and a full group advances to tutor review.
-- **Signup verification/welcome email (P2/G2):** a new email/password signup receives one `auth` email through Better Auth's email-OTP signup hook. The combined template includes the welcome/onboarding entry point, login link, brief platform intro, and six-digit verification OTP, saving one provider delivery compared with separate messages. Resends, legacy-account verification, sign-in OTPs, and password/change-email OTPs remain scoped to their existing authentication purpose; an existing-user sign-in never re-sends signup welcome copy.
+- **Signup verification/welcome email (P2/G2, REQ-AUTH-01):** public email/password signup sends the pre-account OTP before creating a user; it no longer uses Better Auth's automatic signup-verification email. After the proof transaction commits, the winning request attempts one separate welcome/onboarding email with the login link. Welcome delivery is best-effort and does not roll back signup. Resends, legacy-account verification, sign-in OTPs, and password/change-email OTPs remain scoped to their existing authentication purpose; an existing-user sign-in never receives signup welcome copy.
 
 ## Tutor invite flow
 
@@ -1719,7 +1835,7 @@ Internal-only modules with no RPC procedures: `audit`, `economy`, `email`, `meet
 - `CogitoUser` type exported with role field.
 - Web email sign-in and sign-up treat authentication as one awaited handoff: Better Auth must return success, the client reads a fresh session with `disableCookieCache`, and then TanStack Router navigates by a validated return path or the role/onboarding default. Tutor accounts without a profile, or with `draft`/`changes_requested` onboarding status, go to `/profile`; tutors in review, approved, published, or suspended states and admins go to `/dashboard`, as do students by default. The client suppresses Better Auth's overlapping session signal refresh during that handoff so the form does not remount into the global pending loader; the authenticated shell uses the same fresh session source for its parent route guard. A user whose fresh session has `emailVerified !== true` is sent to `/verify-email` after a new OTP request, including legacy accounts created before verification was introduced; the selected post-login destination is preserved for after verification. Existing users are not backfilled as verified. This is frontend-only and does not change auth endpoints or persistence.
 - The `/login` email forms validate each touched field on change and blur, keep the client rules aligned with the server password policy, show inline Selia field errors and danger outlines for touched or blocked fields, and normalize name/email whitespace before calling Better Auth. This is presentation and client-validation behavior only; it does not change auth endpoints or persistence.
-- **Pending (foundation hardening):** password policy — **fully implemented (C6 closed by REVIEW-FIXES-3 P6)** — min 8 via `minPasswordLength` + upper/lower/digit via `assertPasswordPolicy` enforced in the server auth route at sign-up (`apps/server/src/routes.ts`), mirrored in the sign-up form (single consistent statement — 2026-08-17). Conditional Google OAuth — implemented (gated on env vars). Session expiry is set (7 days, `expiresIn`); the authenticated web shell warns during the final 30 minutes and keeps the existing unauthorized redirect as the fallback. **Email verification (G2) — implemented (REVIEW-FIXES-4 P4.4, #76), enforcement level: sign-up/sign-in routing plus paid actions** — better-auth `emailOTP` plugin (6-digit OTP, 5 min expiry, `sendVerificationOnSignUp`), OTP delivered via the shared email port (`setVerificationEmailSender` + `buildVerificationEmail`); the automatic email/password signup OTP uses the same message as the P2 welcome/onboarding copy, so it creates one provider delivery instead of separate welcome and verification emails. `/verify-email` UI route collects the code; `auth.api.verifyEmailOTP` marks the user verified. New and legacy users with `emailVerified !== true` are sent to `/verify-email` after email/password or Google sign-in, with a new OTP request and a validated return path; existing users are not backfilled as verified. **Enforcement (backend finalization):** the four booking-create procedures (`booking.createSolo/createGroup/createSeries/createGroupSeries`) and `payment.createPurchase` run on `verifiedStudentProcedure` (`procedures.ts`), which throws `FORBIDDEN` ("Email verification required") unless the session user is a student with `emailVerified === true` — an unverified user cannot create bookings or purchase Marks.
+- **Pending (foundation hardening):** password policy — **fully implemented (C6 closed by REVIEW-FIXES-3 P6)** — min 8 via `minPasswordLength` + upper/lower/digit via `assertPasswordPolicy` enforced in the server auth route at sign-up (`apps/server/src/routes.ts`), mirrored in the sign-up form (single consistent statement — 2026-08-17). Conditional Google OAuth — implemented (gated on env vars). Session expiry is set (7 days, `expiresIn`); the authenticated web shell warns during the final 30 minutes and keeps the existing unauthorized redirect as the fallback. **Email verification (G2) — implemented (REVIEW-FIXES-4 P4.4, #76), enforcement level: sign-up/sign-in routing plus paid actions** — Better Auth `emailOTP` plugin (6-digit OTP, 5 min expiry) handles existing-account verification via the shared email port (`setVerificationEmailSender` + `buildVerificationEmail`); public email/password signup uses the REQ-AUTH-01 pre-account OTP flow and attempts separate welcome mail after the account-creation transaction commits. `/verify-email` UI route collects the code; `auth.api.verifyEmailOTP` marks the user verified. New and legacy users with `emailVerified !== true` are sent to `/verify-email` after email/password or Google sign-in, with a new OTP request and a validated return path; existing users are not backfilled as verified. **Enforcement (backend finalization):** the four booking-create procedures (`booking.createSolo/createGroup/createSeries/createGroupSeries`) and `payment.createPurchase` run on `verifiedStudentProcedure` (`procedures.ts`), which throws `FORBIDDEN` ("Email verification required") unless the session user is a student with `emailVerified === true` — an unverified user cannot create bookings or purchase Marks.
 
 ## CI/CD
 
@@ -1895,7 +2011,7 @@ still pending).
 Status column: **Fixed** = verified in code on main after #17 merge; **Open** = not yet implemented.
 
 | ID  | Bug                                                                    | Priority | Story | Status                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| --- | ---------------------------------------------------------------------- | -------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| --- | ---------------------------------------------------------------------- | -------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | A1  | Group booking cancel doesn't release invitee holds                     | P0       | 1     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | A2  | Group booking tutorDecline doesn't release invitee holds               | P0       | 1     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | A3  | expireBookings doesn't release invitee holds                           | P0       | 1     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
@@ -1924,7 +2040,7 @@ Status column: **Fixed** = verified in code on main after #17 merge; **Open** = 
 | F2  | Unbounded array inputs (no .max())                                     | P2       | 4     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | F3  | Dates not validated to be in the future                                | P2       | 4     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | G1  | No session expiry configured                                           | P1       | 4     | **Fixed** (`packages/auth/src/index.ts:39` — `expiresIn: 60*60*24*7`)                                                                                                                                                                                                                                                                                                                                                                                       |
-| G2  | No email verification flow (DEFERRED to production-readiness/PRD-gaps) | P1       | 4     | **Fixed (REVIEW-FIXES-4 P4.4)** — better-auth `emailOTP` plugin (6-digit OTP, 5 min expiry, `sendVerificationOnSignUp`) plus sign-in routing for legacy and new unverified accounts, OTP delivered via the shared email port (`setVerificationEmailSender` + `buildVerificationEmail`); the automatic signup OTP also carries the P2 welcome/onboarding copy in the same email, `/verify-email` UI route; `auth.api.verifyEmailOTP` marks the user verified |
+| G2  | No email verification flow (DEFERRED to production-readiness/PRD-gaps) | P1       | 4     | **Fixed (REVIEW-FIXES-4 P4.4)** — the Better Auth emailOTP plugin for existing-account email verification and sign-in routing for legacy and new unverified accounts, with OTP delivery through the shared email port (`setVerificationEmailSender` + `buildVerificationEmail`). Public email/password signup now uses the REQ-AUTH-01 pre-account proof flow and sends welcome/onboarding mail separately after commit, `/verify-email` UI route; `auth.api.verifyEmailOTP` marks the user verified |
 | G3  | Google OAuth credentials fall back to empty string                     | P2       | 4     | Fixed                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | G4  | No CSRF token (sameSite=none in production)                            | P0       | 4     | Fixed — session cookies remain sameSite=strict in production; the short-lived OAuth state cookie is sameSite=lax for the Google top-level callback and remains signed, secure, and httpOnly                                                                                                                                                                                                                                                                 |
 | H1  | CSP incomplete — production-breaking (no connect-src)                  | P0       | 8     | **Fixed** (`packages/api/src/lib/security-headers.ts:15` — `connect-src 'self' ${corsOrigin}`)                                                                                                                                                                                                                                                                                                                                                              |
@@ -2010,7 +2126,7 @@ Status: verified at git HEAD `ec8b16c` (post-#46 merge). B3/B4/B6/B8/B9 are **Fi
 | M7  | MED      | Withdraw from `AWAITING_ADMIN_ROOM_APPROVAL` regresses to reconfirmation but leaves the `requested` roomBooking live for admin assign. **FIXED** (REVIEW-FIXES-4 P2.13): both the group regression path and the solo/series cancel path call `roomPort.cancelRequestedRoomForBooking` (new room-service method: cancels the pending `requested` row, no-op if already confirmed/cancelled) so an admin `assignRoom` mid-reconfirmation cannot resurrect a room for a booking heading back to tutor review                                                                                                                                                                                                                                                                                                                                                                                                                                           | `booking.service.ts` (withdraw), `room.service.ts`                                                               |
 | M8  | MED      | Pre-H2 withdraw group reprice throws `InsufficientMarksError` and rolls back the withdrawal (PRD TC-19: fall through to expiry). **FIXED** (REVIEW-FIXES-4 P2.15): the withdraw regression branch catches `InsufficientMarksError` from `repriceGroupForHeadcount`, releases the remaining participants' holds, zeroes the booking hold and transitions to EXPIRED (mirroring the B5 expiry fallback) — the withdrawer is never stuck in a group they cannot leave                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `booking.service.ts` (withdraw/repriceGroupForHeadcount)                                                         |
 | M9  | MED      | Knowledge Bank eligibility was previously exposed to every protected role. **UPDATED (2026-09-01):** the endpoint and content/file paths admit students, tutors, and admins; students retain the 35-Mark total-balance gate while tutors and admins bypass it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | `wallet.router.ts`, `content.router.ts`, `apps/server/src/routes.ts`                                             |
-| L1  | LOW      | `completeSeriesSession` can deduct more than the remaining hold after an admin `cancelSeriesSession(..., release)` → `InsufficientBalanceError`; guard with `Math.min`. **FIXED** (REVIEW-FIXES-4 P2.16): both the solo-series and group-series completion deducts are capped at the participant's remaining held amount (`Math.min(session.holdAmount, p.heldAmount)`) so a delivered session never throws on an exhausted hold. P2 follow-up recomputes the admin-cancelled parent hold from remaining confirmed participants and finalizes the series after every child is completed or cancelled, releasing residual holds                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `admin-booking.service.ts`, `booking.service.ts`                                                                 |
+| L1  | LOW      | `completeSeriesSession` can deduct more than the remaining hold after an admin `cancelSeriesSession(..., release)` → `InsufficientBalanceError`; guard with `Math.min`. **FIXED** (REVIEW-FIXES-4 P2.16): both the solo-series and group-series completion deducts are capped at the participant's remaining held amount (`Math.min(session.holdAmount, p.heldAmount)`) so a delivered session never throws on an exhausted hold. P2 follow-up recomputes the admin-cancelled parent hold from remaining confirmed participants and finalizes the series after every child is completed or cancelled, releasing residual holds                                                                                                                                                                                                                                                                                                                      | `admin-booking.service.ts`, `booking.service.ts`                                                                 |
 | L2  | LOW      | `meetingEvent` row written on the global `db`, not the booking tx → tx rollback after Google event creation leaves an orphan event + row; tutor re-accept duplicates the event. **FIXED** (REVIEW-FIXES-4 P2.17): `MeetingPort.createEvent` accepts an optional `conn` (DbOrTx) and both providers write the local row through it, so the row commits/rolls back with the booking; `finalizeMeetingSchedule` passes the booking `tx` and best-effort `cancelEvent`s the provider event when the tx fails after creation (no orphan, no duplicate on re-accept)                                                                                                                                                                                                                                                                                                                                                                                      | `google-meeting.provider.ts`, `booking.service.ts`                                                               |
 | L3  | LOW      | "Meeting link ready" notification sent even with no URL (fallback provider) — should say "link pending". **FIXED** (REVIEW-FIXES-4 P2.17): `finalizeMeetingSchedule` derives the copy from `meetingResult.meetingUrl` — "Meeting link ready" only when a URL exists, otherwise "Meeting link pending" (manual/fallback rows)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `booking.service.ts`                                                                                             |
 | L4  | LOW      | Webhook timestamp validation was provider-agnostic; Midtrans notifications use a body signature and no timestamp header. **FIXED**: timestamp validation is provider-conditional and skipped for Midtrans                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `apps/server/src/webhooks/payments.ts`                                                                           |

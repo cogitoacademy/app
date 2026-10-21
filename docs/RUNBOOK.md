@@ -1,5 +1,117 @@
 # Cogito Runbook
 
+Final parent web typecheck could not complete: Windows VirtualAlloc errno 1455 (virtual memory exhausted); no successful final compiler result is claimed.
+
+Parent signup verification (21 October): after the enrollment browser pass,
+the known disposable T05 volume at 6769/6381 was reused serially for signup,
+without resetting dev or the preserved older signup volume. The combined
+signup and existing-account OTP DB suites pass 15 tests / 73 assertions.
+The local test OTP fixture/cleanup also accepts this exact port with the same
+test-mode, loopback and database-name guards. Browser security probes consume
+the real auth IP budget; the fixture resets only `cogito:rl:auth:*` between
+test phases using a guarded paired test DB/Redis script and a 10-second child
+timeout. Application rate limits remain enabled. The reset safety and path
+matching checks pass 19 tests / 69 assertions.
+The final Edge run passes both `pre-account-signup.spec.ts` journeys in 1.4m.
+The fixture reset uses Bun's native Redis client and a bounded child timeout;
+the earlier helper/client and shared-cache failures are superseded by this
+completed run. Fonts from the shared package cache emitted a Vite allow-list
+warning in this isolated worktree; the assertions and app journeys still passed.
+
+Integrated parent checkpoint: `f/release-v3` fast-forwarded to `bd123ce4` and
+the owned API process was restarted. Web port 3000 and API port 3001 returned
+200; API DB/Redis/scheduler/DLQ checks were healthy. The parent reran
+`src/specs/class-enrollment.spec.ts` from the integrated root against the exact
+T05 target and observed 1 Chromium pass in 1.6m. No dev data was seeded/reset.
+Parent evidence logs are local under `tmp/v3-dev/`; they contain synthetic test
+identities and are not release/client artifacts.
+
+Parent verification follow-up (21 October): the enrollment worktree's Drizzle
+links were aligned, source-level allocation state and public tutor relation
+query type errors were corrected, and web `check-types` passed with
+`GOMAXPROCS=1`, `GOMEMLIMIT=256MiB`, `GOGC=20`. Earlier failed typecheck attempts
+remain historical evidence; the parent pass supersedes the web blocker below.
+Docker processes were restarted without resetting volumes after its CLI hung.
+The parent then ran the complete guarded T05 Postgres suite on the verified
+`cogito-t05-enrollment-pgdata` volume: 9 tests / 69 expectations passed, including
+new regressions for expiry during database waits and sessions starting before
+checkout confirmation. Pricing/funding/public DTO units passed 12 / 37.
+The initial DB attempt used the example credentials and failed authentication;
+the verified test container's credentials were loaded privately for the rerun.
+
+## T05 enrollment isolated test target and evidence (2026-10-21)
+
+Destructive seed/reset and enrollment integration work used only the newly
+created disposable Docker resources `cogito-t05-enrollment-postgres` with named
+volume `cogito-t05-enrollment-pgdata` at loopback port 6769, database
+`cogito-test`, and `cogito-t05-enrollment-redis` at loopback port 6381. This
+volume was created because the pre-existing `cogito-test` volume contained
+signup fixtures and user data; it was preserved. Development Postgres
+`localhost:6767/cogito-app`, signup Postgres `localhost:6768`, and the signup
+volume were not reset or migrated by T05 testing. The T05 volume is the only
+target that may be reset by this feature's tests.
+
+The integration test asserts `NODE_ENV=test`, PostgreSQL, a loopback hostname,
+port `6769`, and exact database path `/cogito-test` before its first database
+write. The Playwright spec additionally checks T05 DB/Redis/server/web ports
+`6769/6381/3201/3200`; its global setup uses the same exact DB guard before
+seeding. Provider behavior is stubbed. The synthetic V3 economy revision used
+to exercise the existing top-up quote path is appended/activated only inside
+this exact guarded test database; no customer pricing pointer or external
+provider is called. Vite uses `apps/web/node_modules/.vite-t05-enrollment` for
+the T05 browser server to avoid contending with the existing app's Vite cache.
+
+The fresh T05 database was migrated through `0064_academy_class_enrollment.sql`
+using the normal Drizzle runner. Latest journal readback is timestamp
+`1792522475956`, hash
+`a9bced856633d71b70d5bfe4f3bf4b7a78c41122aa92eeb98f3845a6f8119c8b`. The same
+additive migration was applied to dev by the parent; T05 did not apply it to
+dev. No existing migration, journal, snapshot, or test data outside the named
+T05 volume was changed.
+
+Focused evidence, with no dependency installation or browser download:
+
+| Check                                           | Command / target                                                                                                                                                                                                                                        | Result                            |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Pricing + funding invariants                    | `bun --smol test --timeout 30000 packages/api/src/tests/unit/class-enrollment.pricing.test.ts packages/api/src/tests/unit/class-enrollment.funding.test.ts`                                                                                             | 11 tests / 36 expectations passed |
+| PostgreSQL enrollment concurrency and lifecycle | `bun --smol --env-file=$env:ENV_FILE test --timeout 30000 packages/api/src/tests/integration/class-enrollment.test.ts`, with the guarded T05 env file and 6769 DB                                                                                       | 7 tests / 64 expectations passed  |
+| Public class DTO allowlist                      | `bun --smol test --timeout 30000 packages/api/src/tests/unit/academy-class.public.test.ts`                                                                                                                                                              | 1 test / 1 expectation passed     |
+| Student enrollment browser journey              | From `packages/e2e`, `bun --smol --env-file=$envPath C:\.Projects\cogito-app\node_modules\.bun\@playwright+test@1.62.1\node_modules\@playwright\test\cli.js test src/specs/class-enrollment.spec.ts --workers=1 --reporter=line`; exact T05 ports above | 1 Chromium spec passed in 58.7s   |
+
+The API database cases cover request replay and last-seat contention, atomic
+rollback, rate snapshot immutability, insufficient balance and expiry, late
+join/rejoin, deadline default and reminder catch-up, and role/ownership denial.
+The browser journey covers full, half and single enrollment, no-seat denial,
+repeat request and reload, insufficient Marks/top-up quote, and concurrent
+duplicate second-installment payment. Reload waits for navigation commit and
+then asserts the reloaded enrollment state; this avoids waiting on Vite's full
+`load` event, which stalled on unresolved dev-source requests in the isolated
+test server. The E2E package typecheck passed before the final reload-wait
+assertions. API/web typechecks were attempted but are blocked by the existing
+worktree dependency links resolving two distinct Drizzle ORM 0.45.2 builds in
+`packages/api` and `packages/db` (`shouldInlineParams` type conflicts across
+unrelated modules); no dependency link or installation was changed. Focused
+`oxlint` exited 0 with style warnings, and `oxfmt --check` passed 27 changed
+source/doc files; the very wide task table was excluded to avoid reflow. No T05
+browser/API process remains on 3200/3201; the T05 Postgres/Redis containers
+remain on 6769/6381 for parent review.
+
+## Enrollment dev migration (2026-10-21)
+
+Parent reviewed and integrated additive `0064_academy_class_enrollment.sql`
+(`385fc959`, source `2f9786d0`). The first runner attempt failed because the
+Docker Linux engine was unavailable. After starting Docker Desktop hidden and
+the existing dev Postgres/Redis containers, the standard `bun run db:migrate`
+from `packages/db`, with `ENV_FILE` explicitly selecting `apps/server/.env`,
+succeeded against guarded loopback port 6767, database `cogito-app`.
+No volumes were reset and no prior migration SQL/snapshot tables were changed.
+
+Readback verified all four `academy_class_enrollment*` tables and latest journal
+timestamp `1792522475956`, hash
+`a9bced856633d71b70d5bfe4f3bf4b7a78c41122aa92eeb98f3845a6f8119c8b`.
+This operation did not migrate/reset a test database or validate enrollment
+runtime behavior. Generate the next migration from snapshot/journal idx64.
+
 ## Local V3 development startup (2026-10-20)
 
 `f/release-v3` contains integrated baseline `10a733cd`. The local web app at
@@ -313,7 +425,7 @@ bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests
 
 It passed 4 tests / 18 expectations, including admin-only access, audit reason/snapshots, optimistic version conflicts, online + managed-room draft sessions, stable session IDs after reorder, room/tutor capacity and modality validation, and overlapping-session rejection. The guarded test helper truncates class/session tables only in `cogito-test`; never run it against development or production data.
 
-Local UI smoke: sign in as admin, open `/admin-classes`, create/edit a cohort draft with at least one online and one in-person session, verify an active competition, published mode-compatible tutor and managed room are selectable, and save a reason. Reorder sessions and confirm their identities remain. Drafts are not public and do not reserve rooms; publication-time overlap checks, Meet creation, cover upload, student enrollment, and notifications are not available. Published-only public list/detail procedures are now implemented; no browser E2E has verified them. Do not present this draft page as launch-ready; M01 class content/assets remain pending. Server typecheck hit Windows memory exhaustion in this attempt; web typecheck and production builds remain unverified for this slice.
+Local UI smoke: sign in as admin, open `/admin-classes`, create/edit a cohort draft with at least one online and one in-person session, verify an active competition, published mode-compatible tutor and managed room are selectable, and save a reason. Reorder sessions and confirm their identities remain. Drafts are not public and do not reserve rooms; publication-time overlap checks, Meet creation, cover upload and notifications are implemented and browser-verified. Published-only public list/detail and the student enrollment flow are browser-verified. T02 delivery fees, T06 cancellation and T07 report/expiry settlement remain open. Do not present the draft page as launch-ready; M01 class content/assets remain pending. The T05 API/web typecheck blocker and focused evidence are recorded above.
 
 ## V3 published class read contract (2026-10-20)
 
@@ -2425,14 +2537,18 @@ The production env schema requires `RESEND_API_KEY` and a non-default `EMAIL_FRO
 
 Accounts created before mandatory email verification remain `email_verified=false`; do not run a data backfill that marks them verified. On the next email/password or Google sign-in, the web client requests a fresh verification OTP and routes the account to `/verify-email`. After the code is accepted, the user continues to the original destination.
 
-New email/password signups receive one combined welcome + verification email: it contains the onboarding/dashboard entry point, login link, platform introduction, and six-digit OTP. **Resend code** and verification for legacy accounts remain verification-only, so they do not repeat the signup welcome copy.
+New email/password signups receive the six-digit OTP before any account exists. The server commits the proof and cooldown before calling the mail provider, so provider latency does not hold a database transaction or email lock. A send failure deletes only that request's proof row and returns an inline error; it cannot remove a newer resend. After verified account creation commits, the server makes one separate best-effort attempt to send the welcome/onboarding email with the login link and platform introduction. Resending a code sends only the OTP. Legacy account verification and email-OTP sign-in remain verification-only; the email-OTP plugin cannot create users and does not send sign-in codes to unknown emails.
 
 Manual signup smoke test:
 
-1. Create a new email/password account with a fresh address.
-2. Confirm exactly one auth email is delivered and that it contains both the welcome content and the six-digit verification code.
-3. Enter the code on `/verify-email` and confirm the account reaches its normal destination.
-4. Use **Resend code** and confirm the replacement message is verification-only.
+1. Create a new email/password account with a fresh address and confirm the OTP email arrives before an account exists.
+2. Enter the six-digit code in the signup form. Confirm the account is created only after the code is accepted and the separate welcome email is attempted after commit.
+3. Request another code after the cooldown and confirm the new code works while the previous code is rejected.
+4. Change the email field and confirm the code input clears; return to the original address during cooldown and confirm the browser recovers its own attempt without exposing another attempt ID.
+5. Confirm existing-account email verification/sign-in still works and an unknown address cannot receive a sign-in OTP or create an account through the Better Auth email-OTP plugin.
+6. Simulate a provider send failure and confirm no account is created, the failed proof cannot be used, and a later resend remains usable if it replaced the failed request's proof while delivery was pending.
+
+Auth diagnostics must not print OTP values, signup attempt IDs, passwords, reset URLs, or reset tokens. The development reset-mail log may identify the user and action but omits the one-time link.
 
 Manual smoke test after an auth or web deploy:
 
@@ -2559,7 +2675,56 @@ Default local test ports:
 
 - Web: `3100`
 - Server: `3101`
-- PostgreSQL: `6767` (test container; shared with dev container — see note above)
+- PostgreSQL: `6767` (test container; override with `TEST_POSTGRES_PORT`)
+- Redis: `6379` (override with `TEST_REDIS_PORT`)
+
+### Isolated pre-account signup E2E (REQ-AUTH-01)
+
+Use a task-local ignored env file such as
+`apps/server/.env.signup-test.local`. Keep it pointed at loopback PostgreSQL
+`cogito-test` and Redis, with `SERVER_URL=http://localhost:3201`,
+`WEB_URL=http://localhost:3200`, `PORT=3201`, and `WEB_PORT=3200`. Leave
+`RESEND_API_KEY` and Google/Meet credentials blank. The test server captures
+signup OTPs in memory and suppresses signup/welcome mail; the browser fixture
+reads that code through a route available only in the exact local test target.
+
+To avoid colliding with the shared `6767`/`6379` test services, start a separate
+local Compose project with loopback-only port overrides:
+
+```powershell
+$env:TEST_POSTGRES_PORT = "6768"
+$env:TEST_REDIS_PORT = "6380"
+docker compose -p cogito-signup -f docker-compose.test.yml up -d
+```
+
+Before reusing a previously initialized target, inspect its data and preserve
+anything unexpected. Do not use `down --volumes` or remove database volumes.
+Run the standard migration before Playwright setup, and keep `ENV_FILE` pointed
+at the same task-local file in both commands:
+
+```powershell
+$env:NODE_ENV = "test"
+$env:ENV_FILE = "../../apps/server/.env.signup-test.local"
+bun run db:migrate
+
+Push-Location packages/e2e
+$env:ENV_FILE = "../../apps/server/.env.signup-test.local"
+bun run test --config=playwright.signup.config.ts src/specs/pre-account-signup.spec.ts
+Pop-Location
+```
+
+The Playwright guard checks `NODE_ENV=test`, loopback HTTP origins, and the
+exact `cogito-test` database before its seed/reset setup. The spec must use a
+free dedicated API/web pair, and server reuse stays disabled. Do not point this
+run at development data or add live mail, Google OAuth, or Google Meet
+credentials.
+
+Signup verification covers the same 10/minute/IP auth bucket for canonical,
+encoded, repeatedly encoded, case-varied, and trailing-slash forms of auth
+paths. The browser keeps the per-email attempt UUID in session storage so it
+can recover its own cooldown after changing the email field or reloading; the
+OTP input is cleared on email change and must be entered again. The test-only
+OTP capture remains in memory and emits no OTP or credential values to logs.
 
 Economy role checks:
 

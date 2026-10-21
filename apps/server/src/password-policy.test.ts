@@ -1,7 +1,7 @@
 import { describe, test, expect } from "bun:test";
 import { readFileSync } from "node:fs";
 import { assertPasswordPolicy } from "@cogito-app/auth";
-import { parseSignupBody } from "./signup-body";
+import { hasSignupEmailProof, parseSignupBody } from "./signup-body";
 
 // C6: password policy (upper/lower/digit, min 8) — validator unit tests plus
 // a source-level assertion that the server route wires the guard at sign-up
@@ -31,6 +31,18 @@ describe("C6: password policy", () => {
     });
   });
 
+  test("raw sign-up bodies without an email proof are not authorized", () => {
+    const parsed = parseSignupBody(
+      JSON.stringify({
+        email: "student@example.com",
+        password: "Test1234!",
+        name: "Student",
+      }),
+    );
+    expect(parsed).not.toBeNull();
+    expect(hasSignupEmailProof(parsed!)).toBe(false);
+  });
+
   test("server route guards sign-up with the policy", () => {
     const routes = readFileSync(
       new URL("./routes/auth-routes.ts", import.meta.url),
@@ -38,5 +50,7 @@ describe("C6: password policy", () => {
     );
     expect(routes).toContain("assertPasswordPolicy");
     expect(routes).toContain('"/api/auth/sign-up/email"');
+    expect(routes).toContain("completePreAccountSignup");
+    expect(routes).toContain("hasSignupEmailProof");
   });
 });

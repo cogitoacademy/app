@@ -1,5 +1,20 @@
 # Cogito API Reference
 
+Local signup OTP test fixtures remain test-only and loopback-only for exact
+`cogito-test` on ports 6767/6768/6769. Port 6769 is the disposable parent
+verification target; this adds no production route or proof bypass.
+
+Enrollment confirmation revalidates checkout expiry after transaction locks and
+requires all reserved sessions to remain scheduled in the future before any
+Marks hold. A session that started during checkout requires a fresh enrollment;
+an expired checkout returns the existing expired outcome. Second-installment
+deadline checks also use time read after transaction locks.
+
+Enrollment schema milestone (2026-10-21): additive migration `0064` stores
+enrollment snapshots, installment state, per-session seat/funding allocations,
+and immutable top-up attempts. T05 registers authenticated enrollment
+procedures below; public `classes.list/get` remain published-class reads.
+
 ## Competition catalog CRUD — working branch (2026-10-18)
 
 T00A / REQ-COMP-01..07 implementation is in progress; verification is recorded in
@@ -404,7 +419,7 @@ checks. When the API is linked to Coolify's bundled private PostgreSQL, set
 serve TLS. `DB_SSL_REJECT_UNAUTHORIZED` is only relevant when database TLS is
 enabled.
 
-Email/password sign-in and sign-up use Better Auth endpoints under `/api/auth`. The server's sign-up password-policy preflight returns 400 for malformed JSON instead of allowing a parser exception to become a 500. A new email/password signup receives one combined `auth` email containing the welcome/onboarding copy, dashboard/login link, platform intro, and six-digit verification OTP; later verification resends and other OTP types remain verification-only. The web client validates the email forms on the client and surfaces invalid fields with Selia's inline error state and danger outline, waits for the successful auth response and a fresh session read before entering an authenticated route, and the authenticated route guard also reads the non-cookie-cached session so role-based redirects do not briefly fall back to `/login`. If that fresh session has `emailVerified !== true`, the web client requests an email-verification OTP and routes the user to `/verify-email` before the normal role/return-path destination; this also covers legacy accounts created before verification was introduced. The validated destination is preserved after verification. This changes no successful request or response shape.
+Email/password sign-in and sign-up use Better Auth endpoints under `/api/auth`. The server's sign-up password-policy preflight returns 400 for malformed JSON instead of allowing a parser exception to become a 500. Public email/password signup requests a six-digit OTP before account creation, then attempts a separate welcome/onboarding email after proof-backed creation commits; existing-account verification resends and other OTP types remain verification-only. The detailed request contracts are documented below. The web client validates the email forms on the client and surfaces invalid fields with Selia's inline error state and danger outline, waits for the successful auth response and a fresh session read before entering an authenticated route, and the authenticated route guard also reads the non-cookie-cached session so role-based redirects do not briefly fall back to `/login`. If that fresh session has `emailVerified !== true`, the web client requests an email-verification OTP and routes the user to `/verify-email` before the normal role/return-path destination; this also covers legacy accounts created before verification was introduced. The validated destination is preserved after verification. This changes no successful request or response shape.
 
 Google sign-in starts through Better Auth on the API and uses `GET /api/auth/callback/google` as the provider callback (`BETTER_AUTH_URL`), then redirects the browser to the frontend callback route supplied by the web client (`https://app.cogitoacademy.id/auth/callback`). The web client supplies `callbackURL` for an existing account and `newUserCallbackURL` for a newly-created account; both carry the validated return path, so PostHog can capture `account_signed_in` or `account_created` only after the callback identifies the user. The Google provider explicitly sends `prompt=consent`, so the Google OAuth permission screen is shown even when the account has authorized the client before. Sign-in requests Google's identity scopes only; the broader Calendar scope used by the server-side Meet integration remains a separate operator OAuth flow. In production, session cookies remain `SameSite=Strict`; Better Auth's short-lived signed OAuth state cookie is scoped to `SameSite=Lax` so a top-level `GET` callback from Google can return it for state verification. The state cookie remains `Secure`/`HttpOnly`, and the database-backed state record plus signed cookie must both validate before a session is created. This changes no endpoint input or output shape.
 
@@ -637,6 +652,49 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - `/forgot-password` — email request form (always shows success state after submit)
 - `/reset-password` — token entry + new password form; renders invalid/expired state on `error=INVALID_TOKEN`
 
+## Pre-account email signup verification (REQ-AUTH-01)
+
+These Better Auth HTTP endpoints are mounted on the API under `/api/auth`; they
+are not oRPC procedures. A public account is created only after the signup OTP
+is valid for the submitted email and signup attempt.
+The custom signup, OTP-send, and outcome POST routes require an allowed browser
+`Origin` or `Referer` under the configured frontend-origin policy. Better
+Auth's email-OTP plugin has `disableSignUp: true`; its sign-in OTP routes cannot
+send a code to or create an unknown account.
+
+### `POST /api/auth/sign-up/email-otp`
+
+- **Auth:** Public
+- **Input:** `{ email, signupAttemptId }`, where `signupAttemptId` is a client-generated UUID
+- **Output:** `200 { ok: true, signupAttemptId, resendAfterSeconds: 60 }`
+- **Errors:** `400` for an invalid email or attempt ID; `403` for a missing or untrusted browser origin; `429` during the 60-second per-email cooldown (includes `Retry-After` and `retryAfterSeconds`, plus the attempt ID only when it matches the caller's submitted ID); `502` when the mail provider fails
+- **Behavior:** Commits the proof and cooldown in a short transaction, then sends a six-digit code that expires in five minutes outside the transaction and email lock. If delivery fails, the server deletes only the proof row created by that request and returns an inline error. Resend after the cooldown replaces the stored proof and invalidates the previous code. Three incorrect submissions exhaust the attempt. The OTP is stored as an HMAC digest in the existing Better Auth `verification` table. Auth routes share a 10-request/minute/IP bucket across canonical, percent-encoded, repeatedly encoded, case-varied, and trailing-slash path forms. The browser stores only its per-address attempt ID in session storage; changing email clears the visible code and proof state, and returning to that address can recover the same attempt through its cooldown response.
+
+### `POST /api/auth/sign-up/email`
+
+- **Auth:** Public; the normal email/password sign-in and session response is preserved
+- **Input:** `{ name, email, password, signupAttemptId, otp }`
+- **Output:** The Better Auth signup response with the newly created user and session on success
+- **Errors:** `400` without proof or with an incorrect/expired code; `403` for a missing or untrusted browser origin; `409` for an existing account or already-completed attempt; `429` after three incorrect codes; otherwise the underlying Better Auth create error
+- **Behavior:** Raw signup without both proof fields fails. Account creation, proof consumption, and the attempt outcome record commit in one PostgreSQL transaction; a failed create rolls back and leaves the proof usable until expiry or resend. Concurrent requests for the same email/attempt can create at most one account and one welcome-email attempt. After commit, the browser establishes the returned session as with existing sign-in flows.
+
+### `POST /api/auth/sign-up/email-outcome`
+
+- **Auth:** Public
+- **Input:** `{ email, signupAttemptId }`
+- **Output:** `{ created: boolean }`
+- **Errors:** `403` for a missing or untrusted browser origin
+- **Behavior:** Returns `true` only for the completed attempt bound to the exact normalized email. The result record expires after 24 hours; a cooldown response never discloses a different caller's attempt ID. The web client checks this endpoint after a network-uncertain signup response and asks the user to sign in if the account committed without a browser session; it does not replay signup.
+
+### Local test-only OTP capture
+
+`GET /api/__test/auth/signup-otp?email=...` exists only when `NODE_ENV=test`
+and the server is connected to loopback PostgreSQL database `cogito-test` on
+port `6767` or `6768`. It also requires a loopback request peer and loopback
+Host. The route reads an in-memory test capture; test signup mail is suppressed.
+It is not registered for production or ordinary development and must not be
+used to retrieve production OTPs.
+
 ---
 
 ## Admin (`admin.*`)
@@ -784,15 +842,39 @@ Not part of the oRPC namespace. Mounted under `/api/auth` on the Elysia server.
 - **Output:** Updated admin class/session rows, including per-online-session meeting status for admin reads.
 - **Publish rules:** Publication locks and version-checks the draft, then takes the competition-catalog lock, sorted tutor locks, and sorted room locks before rereading current references under row locks. It revalidates active competition ancestry, published tutor assignment and capacity, approved flat tutor fee, future schedule, managed room capacity, and overlap against active bookings and other published classes. Catalog archive, tutor status changes, and room update/deactivation coordinate through the matching locks. One online-session meeting job is inserted with publication and audit writes in the same transaction; in-person sessions use managed rooms and do not create Meet work. Assigned tutors receive one deduplicated schedule notification each.
 - **Meeting retry rules:** Provider work runs after publication commits and uses durable per-session jobs, a lease, exponential retries, and stable Google event IDs. If Google accepted an event but has not generated its Meet URL, the job remains failed/retryable with that event ID; retry fetches the same event rather than inserting another. A manual fallback is not reported ready. Repeated/concurrent publication cannot add duplicate jobs or notifications. Admin retry queues failed jobs; scheduled retries continue automatically. Test mode injects a controlled local adapter and never calls Google.
-- **Enrollment:** Not implemented; public class screens state that registration is not available.
+- **Enrollment:** Student checkout is a separate T05 API/UI slice described below; class publishing remains an admin-only operation.
 
 ### `classes.list`, `classes.get`
 
 - **RPC paths:** `/rpc/classes/list`, `/rpc/classes/get`
 - **Auth:** Public read
 - **Inputs:** `list` has no input; `get` accepts `{ id }`.
-- **Output:** Published class catalog fields, competition and parent names, ordered sessions, schedule/mode/curriculum, and tutor display name. The DTO excludes tutor IDs/account data, IDR tutor fees/payout/tax data, meeting/room details, audit/version fields, and student roster data.
-- **Rules:** The list filters to `published`; detail returns not found for missing or unpublished classes. Enrollment and booking are not included in this read contract.
+- **Output:** Published class catalog fields, current published cohort/masterclass rates, competition and parent names, ordered sessions, schedule/mode/curriculum, and tutor display name. The DTO excludes tutor IDs/account data, IDR tutor fees/payout/tax data, meeting/room details, audit/version fields, and student roster data.
+- **Rules:** The list filters to `published`; detail returns not found for missing or unpublished classes. Enrollment data is never included in this public read contract.
+
+### `classes.getMyEnrollments`, `classes.createEnrollment`
+
+- **RPC paths:** `/rpc/classes/getMyEnrollments`, `/rpc/classes/createEnrollment`
+- **Auth:** `getMyEnrollments` requires the signed-in student role. `createEnrollment` requires a verified student. Tutors, admins and other students cannot read or mutate another student's enrollment.
+- **Inputs:** Read `{ classId }`. Create `{ classId, requestKey, plan: "full" | "half" | "single" | "masterclass", sessionId? }`; `requestKey` is a UUID scoped to the student. A single plan requires one eligible `sessionId`; other plans select the eligible sessions on the server.
+- **Output:** Read returns `{ classId, eligibleSessions, enrollments }`, scoped to the caller. Each eligible session reports `seatsAvailable` and `alreadyEntitled`; each enrollment returns its plan/state, immutable quote totals, installment summaries and per-session allocation balances. Create returns the same enrollment summary plus `outcome: "confirmed" | "checkout_pending" | "already_exists"`, wallet `availableMarks` and `shortfallMarks`.
+- **Rules:** Create uses current published rates and snapshots selected future scheduled session IDs and per-session rates. Cohort full holds every selected session at the full rate; half splits remaining count with ceil/floor, charging the first half now and reserving the second half without Marks until its due session; single reserves one selected session. A masterclass requires its one scheduled session. A pending checkout reserves all selected seats for 15 minutes. The request key makes retries return the original enrollment without another hold. Active entitlements cannot be switched to another plan; after a missed half deadline, rejoin is a new quote for future sessions only.
+
+### `classes.completeCheckout`, `classes.paySecondInstallment`
+
+- **RPC paths:** `/rpc/classes/completeCheckout`, `/rpc/classes/paySecondInstallment`
+- **Auth:** Verified student; both operations verify enrollment ownership in the service.
+- **Inputs:** `{ enrollmentId }`.
+- **Output:** `{ enrollment, outcome, availableMarks, shortfallMarks }`; checkout/payment outcomes are `funded`, `checkout_pending`, `defaulted`, `expired` or `insufficient`.
+- **Rules:** Checkout holds the first installment from the current wallet inside the seat-allocation transaction. Insufficient balance leaves the checkout pending and returns the shortfall without a partial hold. The second installment uses the saved rate and due session; duplicate calls after funding are no-ops. At the due session start, an unpaid installment defaults and releases only its unfunded future reservations; missed sessions are not charged. Reminder jobs are idempotent and skip historical notices for late joiners.
+
+### `classes.createTopUpQuote`, `classes.purchaseTopUp`
+
+- **RPC paths:** `/rpc/classes/createTopUpQuote`, `/rpc/classes/purchaseTopUp`
+- **Auth:** Verified student; both operations verify ownership of the associated enrollment/installment or attempt.
+- **Inputs:** Quote `{ enrollmentId, ordinal: 1 | 2, requestKey }`; purchase `{ attemptId, choice: "package" | "custom" | "recommended" }`.
+- **Output:** Quote returns the existing V3 top-up quote fields plus a stable `attemptId`, immutable requested shortfall Marks, quote ID, revision and expiry. Purchase returns payment ID, nullable checkout URL, status and recovery state.
+- **Rules:** An attempt is keyed to one installment and request key; its shortfall amount and payment quote identity cannot be replaced on retry. The student's top-up completion credits the wallet through the existing payment flow. It does not extend an expired class seat reservation or promise re-enrollment.
 
 ## Admin Knowledge Bank Access (`adminKnowledgeBank.*`)
 

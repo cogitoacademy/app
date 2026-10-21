@@ -6,6 +6,61 @@ import dotenv from "dotenv";
 import { resolveE2eEnvironment, resolveE2eEnvFile } from "./e2e-environment";
 import { STUDENT_EMAIL } from "./test-accounts";
 
+/**
+ * T05 uses its own disposable database. Keep this opt-in guard scoped to that
+ * runner so existing 6767/6768 test workflows keep their own target rules.
+ */
+function assertT05EnrollmentTarget(env: NodeJS.ProcessEnv) {
+  const dbPort = env.T05_ENROLLMENT_TEST_DB_PORT;
+  if (dbPort === undefined) return;
+
+  const redisPort = env.T05_ENROLLMENT_TEST_REDIS_PORT;
+  const serverPort = env.T05_ENROLLMENT_TEST_SERVER_PORT;
+  const webPort = env.T05_ENROLLMENT_TEST_WEB_PORT;
+  let databaseUrl: URL;
+  let redisUrl: URL;
+  let serverUrl: URL;
+  let webUrl: URL;
+  try {
+    databaseUrl = new URL(env.DATABASE_URL ?? "");
+    redisUrl = new URL(env.REDIS_URL ?? "");
+    serverUrl = new URL(env.SERVER_URL ?? env.BETTER_AUTH_URL ?? "");
+    webUrl = new URL(env.WEB_URL ?? "");
+  } catch {
+    throw new Error("T05 E2E target configuration is incomplete.");
+  }
+
+  const loopback = new Set(["localhost", "127.0.0.1", "::1"]);
+  if (
+    env.NODE_ENV !== "test" ||
+    dbPort !== "6769" ||
+    redisPort !== "6381" ||
+    serverPort !== "3201" ||
+    webPort !== "3200" ||
+    !/^\d+$/.test(dbPort) ||
+    !/^\d+$/.test(redisPort ?? "") ||
+    !/^\d+$/.test(serverPort ?? "") ||
+    !/^\d+$/.test(webPort ?? "") ||
+    !["postgres:", "postgresql:"].includes(databaseUrl.protocol) ||
+    !loopback.has(databaseUrl.hostname.toLowerCase()) ||
+    databaseUrl.port !== dbPort ||
+    databaseUrl.pathname !== "/cogito-test" ||
+    redisUrl.protocol !== "redis:" ||
+    !loopback.has(redisUrl.hostname.toLowerCase()) ||
+    redisUrl.port !== redisPort ||
+    serverUrl.protocol !== "http:" ||
+    !loopback.has(serverUrl.hostname.toLowerCase()) ||
+    serverUrl.port !== serverPort ||
+    webUrl.protocol !== "http:" ||
+    !loopback.has(webUrl.hostname.toLowerCase()) ||
+    webUrl.port !== webPort
+  ) {
+    throw new Error(
+      "T05 E2E requires NODE_ENV=test, loopback cogito-test, and the configured isolated DB/Redis/API/web ports.",
+    );
+  }
+}
+
 async function globalSetup() {
   const envFile = resolveE2eEnvFile(process.cwd(), process.env);
   const envLoadResult = dotenv.config({ path: envFile, override: false });
@@ -14,6 +69,7 @@ async function globalSetup() {
   }
   // Keep setup and Playwright servers on the same resolved test configuration.
   process.env.ENV_FILE = envFile;
+  assertT05EnrollmentTarget(process.env);
   const e2eEnvironment = resolveE2eEnvironment(process.env);
   const serverDir = path.resolve(process.cwd(), "../../apps/server");
 
@@ -52,6 +108,14 @@ async function globalSetup() {
     env: testSeedEnv,
     stdio: "inherit",
   });
+
+  if (process.env.T05_ENROLLMENT_TEST_DB_PORT === "6769") {
+    execSync("bun run src/seed/enable-t05-top-up-fixture.ts", {
+      cwd: serverDir,
+      env: testSeedEnv,
+      stdio: "inherit",
+    });
+  }
 
   // Reuse one authenticated student session across specs. The server's auth
   // limiter intentionally allows only 10 sign-in attempts per IP/minute;

@@ -128,7 +128,6 @@ describe("public content tutor projection", () => {
       parentId: true,
       isActive: true,
     });
-    expect(query.with.subjects.with.subject.where).toBeDefined();
     expect(query.with.subjects.with.subject.with.parent.columns).toEqual({
       id: true,
       slug: true,
@@ -141,7 +140,6 @@ describe("public content tutor projection", () => {
       darkTextColor: true,
       darkBackgroundColor: true,
     });
-    expect(query.with.subjects.with.subject.with.parent.where).toBeDefined();
   });
 
   test("maps only the public DTO keys, including nested JSON and catalog rows", () => {

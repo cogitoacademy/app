@@ -2,8 +2,11 @@ export type VerificationEmailParams = {
   name: string;
   otp: string;
   expiresInMinutes: number;
-  includeWelcome?: boolean;
-  loginUrl?: string;
+};
+
+export type SignupWelcomeEmailParams = {
+  name: string;
+  loginUrl: string;
 };
 
 function escapeHtml(value: string): string {
@@ -19,37 +22,11 @@ export function buildVerificationEmail({
   name,
   otp,
   expiresInMinutes,
-  includeWelcome = false,
-  loginUrl,
 }: VerificationEmailParams): { subject: string; html: string } {
   const safeName = escapeHtml(name);
   const safeOtp = escapeHtml(otp);
-  const safeLoginUrl = loginUrl ? escapeHtml(loginUrl) : "";
-  const welcomeContent = includeWelcome
-    ? `
-                <p style="margin:12px 0 0 0;font-size:14px;line-height:22px;color:#525252;">
-                  Your account has been created. Cogito is where you book 1-on-1 and group sessions with great tutors, and earn Marks toward your Knowledge Bank.
-                </p>
-                <p style="margin:12px 0 0 0;font-size:14px;line-height:22px;color:#525252;">
-                  Verify your email with the code below. It expires in ${expiresInMinutes} minutes. After verification, start exploring your dashboard to browse tutors, manage your Marks, and book your first session.
-                </p>`
-    : `
-                <p style="margin:12px 0 0 0;font-size:14px;line-height:22px;color:#525252;">
-                  Use the code below to verify your Cogito account email. It expires in ${expiresInMinutes} minutes.
-                </p>`;
-  const dashboardLink =
-    includeWelcome && safeLoginUrl
-      ? `
-            <tr>
-              <td align="center" style="padding:0 32px 24px 32px;">
-                <a href="${safeLoginUrl}" style="display:inline-block;background-color:#111111;color:#ffffff;font-size:14px;font-weight:600;line-height:20px;padding:12px 24px;border-radius:8px;text-decoration:none;">Go to your dashboard</a>
-              </td>
-            </tr>`
-      : "";
   return {
-    subject: includeWelcome
-      ? "Welcome to Cogito — verify your email"
-      : "Verify your Cogito email",
+    subject: "Verify your Cogito email",
     html: `
 <!DOCTYPE html>
 <html lang="en">
@@ -60,9 +37,11 @@ export function buildVerificationEmail({
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background-color:#ffffff;border:1px solid #e5e5e5;border-radius:12px;overflow:hidden;">
             <tr>
               <td style="padding:32px 32px 8px 32px;">
-                <h1 style="margin:0 0 8px 0;font-size:20px;line-height:28px;color:#111111;">${includeWelcome ? `Welcome to Cogito, ${safeName}!` : "Verify your email"}</h1>
+                <h1 style="margin:0 0 8px 0;font-size:20px;line-height:28px;color:#111111;">Verify your email</h1>
                 <p style="margin:0;font-size:14px;line-height:22px;color:#525252;">Hi ${safeName},</p>
-${welcomeContent}
+                <p style="margin:12px 0 0 0;font-size:14px;line-height:22px;color:#525252;">
+                  Use the code below to verify your Cogito account email. It expires in ${expiresInMinutes} minutes.
+                </p>
               </td>
             </tr>
             <tr>
@@ -70,12 +49,46 @@ ${welcomeContent}
                 <div style="display:inline-block;background-color:#f3f4f6;border:1px solid #e5e5e5;border-radius:8px;padding:16px 32px;font-size:28px;font-weight:700;letter-spacing:8px;color:#111111;">${safeOtp}</div>
               </td>
             </tr>
-${dashboardLink}
             <tr>
               <td style="padding:0 32px 32px 32px;">
                 <p style="margin:0;font-size:12px;line-height:18px;color:#737373;">
                   If you didn't create a Cogito account, you can safely ignore this email.
                 </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
+`,
+  };
+}
+
+export function buildSignupWelcomeEmail({
+  name,
+  loginUrl,
+}: SignupWelcomeEmailParams): { subject: string; html: string } {
+  const safeName = escapeHtml(name);
+  const safeLoginUrl = escapeHtml(loginUrl);
+  return {
+    subject: "Welcome to Cogito",
+    html: `
+<!DOCTYPE html>
+<html lang="en">
+  <body style="margin:0;padding:0;background-color:#f6f6f6;font-family:Inter,Arial,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f6f6f6;padding:24px 0;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background-color:#ffffff;border:1px solid #e5e5e5;border-radius:12px;overflow:hidden;">
+            <tr>
+              <td style="padding:32px;">
+                <h1 style="margin:0 0 8px 0;font-size:20px;line-height:28px;color:#111111;">Welcome to Cogito, ${safeName}!</h1>
+                <p style="margin:12px 0 20px 0;font-size:14px;line-height:22px;color:#525252;">
+                  Your email is verified. Browse tutors, manage your Marks, and book your first session.
+                </p>
+                <a href="${safeLoginUrl}" style="display:inline-block;background-color:#111111;color:#ffffff;font-size:14px;font-weight:600;line-height:20px;padding:12px 24px;border-radius:8px;text-decoration:none;">Go to Cogito</a>
               </td>
             </tr>
           </table>
