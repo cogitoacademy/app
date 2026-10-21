@@ -1,5 +1,11 @@
 # Cogito Module Reference
 
+T03 integrates with the current enrollment/signup baseline. Bank account ownership
+snapshots accept only self/trusted_person; unprepared preview projections include
+null proof/transfer audit fields. Parent checks cover allocation-aware legacy cutoffs,
+reconciliation blocking and repayment, exact-net retries, and CSV/UI presentation.
+No historical payout backfill is performed.
+
 Signup E2E runs isolate the auth IP rate-limit bucket between security probes
 and UI journeys through a local seed script, not an HTTP bypass. It requires
 test mode, exact loopback `cogito-test`, and a paired test Redis port before

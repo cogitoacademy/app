@@ -1,5 +1,15 @@
 # Cogito Runbook
 
+T03 parent verification (21 October): reused only the dedicated payout container
+cogito-app-postgres-test-payout / volume cogito-t03-payout-20261021-data at 6770,
+with Redis 6382 and API/web 3111/3110. Its journal row 66 matches migration 0065,
+timestamp 1792525224597 and hash 876ec0367859d9ad5bd378d4e96cc4a29f49fab8e1d31ac17c9c95e98b041939.
+Postgres 11/105, units 11/32, service 7/13, Chromium 3/3 and E2E typecheck pass.
+Evidence is preserved locally in the root tmp/v3-dev/payout-parent-* logs.
+Dev migration must use its normal runner with exact loopback cogito-app/6767 guard;
+never point these reset/seed suites at development. Final broad compiler acceptance
+is still unverified; the parent encountered Windows VirtualAlloc errno 1455.
+
 Final parent web typecheck could not complete: Windows VirtualAlloc errno 1455 (virtual memory exhausted); no successful final compiler result is claimed.
 
 Parent signup verification (21 October): after the enrollment browser pass,

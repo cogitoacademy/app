@@ -1,5 +1,10 @@
 # Cogito API Reference
 
+T03 parent acceptance: selected-source prepare/record/void/reconcile procedures
+passed the real isolated Postgres acceptance suite on 6770. Exact-net and repeat
+transfer behavior are exercised against actual database transactions. Browser
+presentation coverage uses mocked payout RPC responses; it is not API acceptance.
+
 Local signup OTP test fixtures remain test-only and loopback-only for exact
 `cogito-test` on ports 6767/6768/6769. Port 6769 is the disposable parent
 verification target; this adds no production route or proof bypass.

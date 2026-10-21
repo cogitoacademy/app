@@ -1,5 +1,15 @@
 # Cogito App — Codebase Context
 
+Parent integration verification (21 October): T03 on the current enrollment/signup
+baseline passes 11 isolated Postgres tests / 105 assertions, 11 tax/profile/test-target
+units / 32 assertions, 7 payout service cases / 13 assertions, and 3 Chromium
+UI journeys (1.3m). The UI scenarios mock payout RPC responses; the Postgres suite
+covers actual transaction invariants separately. E2E no-emit typecheck passes.
+Final full web/API compiler acceptance remains unverified after Windows virtual-memory
+exhaustion in the parent signup check. Isolated migration 0065 readback matches
+row 66 / timestamp 1792525224597 / SQL hash 876ec0367859d9ad5bd378d4e96cc4a29f49fab8e1d31ac17c9c95e98b041939.
+Local development application of 0065 follows integration; OPS01 remains open.
+
 Final parent web typecheck could not complete: Windows VirtualAlloc errno 1455 (virtual memory exhausted); no successful final compiler result is claimed.
 
 Parent AUTH-01 verification (21 October): signup and existing-account OTP DB
