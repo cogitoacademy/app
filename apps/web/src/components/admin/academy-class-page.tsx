@@ -43,6 +43,7 @@ import { resolveProfileImageUrl } from "@/lib/profile-image-url";
 import { client, orpc } from "@/utils/orpc";
 
 import { ClassAdminCancellationPanel } from "./class-admin-cancellation-panel";
+import { ClassAdminLifecyclePanel } from "./class-admin-lifecycle-panel";
 
 type ClassRecord = Awaited<ReturnType<typeof client.admin.getAcademyClass>>;
 type ClassKind = "cohort" | "masterclass";
@@ -283,6 +284,11 @@ export function AcademyClassPage() {
       input: { state: "published" },
     }),
   );
+  const postponedClassesQuery = useQuery(
+    orpc.admin.listAcademyClasses.queryOptions({
+      input: { state: "postponed" },
+    }),
+  );
   const competitionsQuery = useQuery(
     orpc.admin.listCompetitionCatalog.queryOptions({
       input: { includeArchived: false },
@@ -361,6 +367,11 @@ export function AcademyClassPage() {
             input: { state: "published" },
           }),
         });
+        await queryClient.invalidateQueries({
+          queryKey: orpc.admin.listAcademyClasses.key({
+            input: { state: "postponed" },
+          }),
+        });
         toastManager.add({
           title: "Meeting setup retried",
           description: `${record.titleEn} meeting setup has been retried.`,
@@ -378,7 +389,12 @@ export function AcademyClassPage() {
   );
 
   const classes = classesQuery.data ?? [];
-  const publishedClasses = publishedClassesQuery.data ?? [];
+  const publishedClasses = [
+    ...(publishedClassesQuery.data ?? []),
+    ...(postponedClassesQuery.data ?? []),
+  ].toSorted(
+    (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
+  );
   const competitions = competitionsQuery.data ?? [];
   const tutors = tutorsQuery.data ?? [];
   const rooms = roomsQuery.data ?? [];
@@ -1175,15 +1191,19 @@ export function AcademyClassPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Published classes</CardTitle>
+          <CardTitle>Published and postponed classes</CardTitle>
         </CardHeader>
         <CardBody>
           <Stack direction="column" spacing="sm">
             {publishedClassesQuery.isLoading ? (
               <Text className="text-muted">Loading published classes…</Text>
-            ) : publishedClassesQuery.isError ? (
+            ) : postponedClassesQuery.isLoading ? (
+              <Text className="text-muted">Loading postponed classes…</Text>
+            ) : publishedClassesQuery.isError ||
+              postponedClassesQuery.isError ? (
               <Text className="text-danger-foreground">
-                Published classes could not be loaded. Refresh to try again.
+                Published or postponed classes could not be loaded. Refresh to
+                try again.
               </Text>
             ) : publishedClasses.length === 0 ? (
               <Text className="text-muted">
@@ -1215,7 +1235,17 @@ export function AcademyClassPage() {
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
                           <Text className="font-medium">{record.titleEn}</Text>
-                          <Badge variant="success">Published</Badge>
+                          <Badge
+                            variant={
+                              record.state === "postponed"
+                                ? "warning"
+                                : "success"
+                            }
+                          >
+                            {record.state === "postponed"
+                              ? "Postponed"
+                              : "Published"}
+                          </Badge>
                           <Badge variant="secondary">{record.kind}</Badge>
                         </div>
                         <Text className="mt-1 text-sm text-muted">
@@ -1274,9 +1304,35 @@ export function AcademyClassPage() {
                       classId={record.id}
                       expectedVersion={record.version}
                       onChanged={() =>
-                        queryClient.invalidateQueries({
-                          queryKey: orpc.admin.listAcademyClasses.key(),
-                        })
+                        Promise.all([
+                          queryClient.invalidateQueries({
+                            queryKey: orpc.admin.listAcademyClasses.key({
+                              input: { state: "published" },
+                            }),
+                          }),
+                          queryClient.invalidateQueries({
+                            queryKey: orpc.admin.listAcademyClasses.key({
+                              input: { state: "postponed" },
+                            }),
+                          }),
+                        ])
+                      }
+                    />
+                    <ClassAdminLifecyclePanel
+                      classRecord={record}
+                      onChanged={() =>
+                        Promise.all([
+                          queryClient.invalidateQueries({
+                            queryKey: orpc.admin.listAcademyClasses.key({
+                              input: { state: "published" },
+                            }),
+                          }),
+                          queryClient.invalidateQueries({
+                            queryKey: orpc.admin.listAcademyClasses.key({
+                              input: { state: "postponed" },
+                            }),
+                          }),
+                        ])
                       }
                     />
                   </div>

@@ -41,6 +41,48 @@ receipt without another wallet mutation. Only active enrollments qualify.
 Individual cancellation applies to funded future scheduled seats at least 24h
 before start, inclusive; unpaid-half removal uses withdrawal.
 
+Admin one-session cancellation uses the procedure-key RPCs
+`/rpc/classes/previewAdminSessionCancellation` and
+`/rpc/classes/confirmAdminSessionCancellation` (the HTTP body is wrapped in
+`{"json": ...}`). Preview input is `{ classId, sessionId,
+expectedClassVersion, expectedSessionVersion, reason }`; confirmation adds a
+stable UUID `requestKey` and the preview's SHA-256 `quoteVersion`. The output
+quotes `feeMarks: 0`, exact `returnMarks`, released allocation IDs and the
+class/session versions. Confirmation cancels only one future scheduled session,
+returns only that session's unspent funded Marks and updates/cancels its unpaid
+installment obligation. The enrollment's original price/session snapshot stays
+unchanged. Ongoing, completed, reported, past and otherwise held delivery seats
+are not cancellable or released by this procedure. Student and assigned tutor
+notification outboxes commit with the audit and financial rows; the durable
+meeting worker retries calendar deletion.
+
+The admin minimum lifecycle uses `/rpc/classes/getAdminMinimumCheck`,
+`/rpc/classes/previewAdminMinimumDecision` and
+`/rpc/classes/confirmAdminMinimumDecision`. Check input is `{ classId }`; its
+output includes class version, minimum/check dates, eligibility, unique active
+full/half student count, shortfall, postponement count and any free-exit
+deadline. Eligibility begins at the saved `minimumCheckAt`, once, for a
+published unresolved cohort. It counts unique active full/half-plan students
+with at least one funded, unspent allocation on a scheduled session, excluding
+single-session buyers, expired checkouts, cancelled enrollments and plans with a
+defaulted installment.
+Decision input is `{ classId, expectedClassVersion, decision: "continue" |
+"postpone", reason, replacementStarts }`; confirmation also requires a stable
+UUID `requestKey` and the preview's exact `quoteVersion`. Continue resolves the
+check without changing the schedule. One postponement is allowed; include each
+scheduled session exactly once with its current `expectedSessionVersion` and
+replacement `startAt`. Every replacement must begin strictly after the
+authoritative 72-hour deadline. Session identity/order/duration and enrollment
+funding/rate snapshots remain fixed; class and session versions advance, and
+unpaid installment due dates/reminders follow the replacement schedule.
+
+After postponement, `/rpc/classes/quoteCancellation` and
+`/rpc/classes/confirmCancellation` expose `freeExit` and `freeExitUntil` for a
+whole-enrollment withdrawal. The fee is zero through the exact inclusive
+deadline, the remaining eligible funded balances are returned, and any unpaid
+second installment is cancelled without an automatic debit. This does not define
+ordinary later-reschedule rights; Q04 remains open for that policy.
+
 T03 parent acceptance: selected-source prepare/record/void/reconcile procedures
 passed the real isolated Postgres acceptance suite on 6770. Exact-net and repeat
 transfer behavior are exercised against actual database transactions. Browser

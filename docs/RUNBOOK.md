@@ -23,6 +23,52 @@ guard suite passed 6 tests / 40 expectations; no DB-backed verification was run.
 
 ## T07 UI and browser acceptance checkpoint (21 October)
 
+## T06 class lifecycle implementation checkpoint (21 October)
+
+The local T06 slice implements preview/confirm for cancelling one future,
+scheduled class session, with a required reason, stable request UUID, quote hash,
+and class/session version checks. It releases that session's funded, unspent
+seat allocations, adjusts unpaid installment obligations, and preserves original
+registration rates/session history. Completed, ongoing, reported, and past
+delivery holds and earned report fees are retained. Audit and student/tutor
+notification outboxes commit with the cancellation. Durable calendar cleanup
+uses the existing retrying meeting worker.
+
+The minimum check runs once from the saved check date and counts unique active
+full/half-plan students; single-session buyers, expired checkouts, cancelled
+enrollments, and plans with a defaulted installment do not count. Admins may
+continue or postpone once. A postponement creates an authoritative 72-hour
+free-exit deadline, and the replacement start must be strictly after it. A
+student withdrawal through the inclusive deadline has no fee and cancels the
+unpaid second installment without an automatic debit. Original funding
+allocation identity and enrollment rate snapshots remain unchanged. Ordinary
+later reschedule rights remain open under Q04.
+
+Isolated validation used Postgres `cogito-test` on loopback 6769, Redis 6381,
+API 3201, and web 3200, with one browser worker and stubbed providers. The broad
+class-enrollment integration suite passed 35 tests / 252 expectations; the
+focused cancellation/meeting pure suite passed 9 / 21. One real-RPC Chromium
+journey passed in 31.7s, covering individual admin cancellation, one postponement,
+student withdrawal through the exact free-exit deadline, wallet readback, and
+second-installment behavior. Targeted web and E2E no-emit typechecks passed.
+The package-wide API typecheck still reports 1,400 diagnostics across the
+existing package graph; changed production API modules have no diagnostics, and
+the touched integration file has two fixture type diagnostics. The full web
+compiler run hit Windows virtual-memory exhaustion, so only the targeted web
+typecheck is claimed.
+
+Reviewed migration `0068_modern_carmella_unuscione.sql` was applied with the
+normal Drizzle runner only to isolated test database 6769. Readback is journal
+row 69, timestamp `1792584327849`, SHA-256
+`cffb34e94821c878f2d897f59b1800395c7bc6ceefc44dc8cd9546db7116b173`; rows 67
+and 68 remain unchanged. No development migration, reset, or seed ran. Logs
+are in the ignored `C:\.Projects\cogito-app\tmp\v3-dev\t06-lifecycle-*`
+files. Parent review and dev integration remain pending. This does not complete
+all of T06 or Release V3; PDF, reminders, referrals, AUTH-02, and ordinary
+rescheduling are outside this slice.
+
+## Prior T07 UI and browser acceptance checkpoint (21 October)
+
 The role-based `/class-reports` page uses real `classes.listSessionReports` and
 `classes.submitSessionReport` RPCs. Tutor/admin rows include a settlement preview
 or persisted readback; student rows carry `settlement: null` and no peer identity.
@@ -563,7 +609,7 @@ bun test --timeout 30000 --env-file apps/server/.env.test packages/api/src/tests
 
 It passed 4 tests / 18 expectations, including admin-only access, audit reason/snapshots, optimistic version conflicts, online + managed-room draft sessions, stable session IDs after reorder, room/tutor capacity and modality validation, and overlapping-session rejection. The guarded test helper truncates class/session tables only in `cogito-test`; never run it against development or production data.
 
-Local UI smoke: sign in as admin, open `/admin-classes`, create/edit a cohort draft with at least one online and one in-person session, verify an active competition, published mode-compatible tutor and managed room are selectable, and save a reason. Reorder sessions and confirm their identities remain. Drafts are not public and do not reserve rooms; publication-time overlap checks, Meet creation, cover upload and notifications are implemented and browser-verified. Published-only public list/detail and the student enrollment flow are browser-verified. T02 delivery fees, T06 cancellation and T07 report/expiry settlement remain open. Do not present the draft page as launch-ready; M01 class content/assets remain pending. The T05 API/web typecheck blocker and focused evidence are recorded above.
+Local UI smoke: sign in as admin, open `/admin-classes`, create/edit a cohort draft with at least one online and one in-person session, verify an active competition, published mode-compatible tutor and managed room are selectable, and save a reason. Reorder sessions and confirm their identities remain. Drafts are not public and do not reserve rooms; publication-time overlap checks, Meet creation, cover upload and notifications are implemented and browser-verified. Published-only public list/detail and the student enrollment flow are browser-verified. T02 delivery fees and T07 report/expiry settlement remain open. T06 lifecycle controls are implemented in the current worktree, with parent review/dev integration pending. Do not present the draft page as launch-ready; M01 class content/assets remain pending. The T05 API/web typecheck blocker and focused evidence are recorded above.
 
 ## V3 published class read contract (2026-10-20)
 

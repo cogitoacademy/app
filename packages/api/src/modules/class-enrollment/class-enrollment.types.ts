@@ -41,6 +41,8 @@ export const classEnrollmentCancellationOutput = z.object({
   enrollmentId: z.string().uuid(),
   sessionId: z.string().uuid().nullable(),
   scope: z.enum(["session", "withdrawal"]),
+  freeExit: z.boolean(),
+  freeExitUntil: z.date().nullable(),
   feeRateBps: z.number().int().min(0).max(10000),
   feeMarks: z.number().int().nonnegative(),
   returnMarks: z.number().int().nonnegative(),
@@ -126,6 +128,14 @@ export const studentClassEnrollmentOutput = z.object({
 
 export const getMyClassEnrollmentsOutput = z.object({
   classId: z.string().uuid(),
+  classState: z.enum([
+    "draft",
+    "published",
+    "postponed",
+    "cancelled",
+    "completed",
+  ]),
+  freeExitUntil: z.date().nullable(),
   eligibleSessions: z.array(
     z.object({
       sessionId: z.string().uuid(),
@@ -214,6 +224,112 @@ export const adminClassCancellationOutput = z.object({
   cancelledSessionIds: z.array(z.string().uuid()),
   releasedAllocationIds: z.array(z.string().uuid()),
   quoteVersion: z.string(),
+});
+
+export const adminClassSessionCancellationInput = z
+  .object({
+    classId: z.string().uuid(),
+    sessionId: z.string().uuid(),
+    expectedClassVersion: z.number().int().positive(),
+    expectedSessionVersion: z.number().int().positive(),
+    reason: z.string().trim().min(3).max(500),
+  })
+  .strict();
+export const confirmAdminClassSessionCancellationInput =
+  adminClassSessionCancellationInput.extend({
+    requestKey: z.string().uuid(),
+    quoteVersion: z.string().regex(/^[a-f0-9]{64}$/),
+  });
+export const adminClassSessionCancellationOutput = z.object({
+  classId: z.string().uuid(),
+  sessionId: z.string().uuid(),
+  expectedClassVersion: z.number().int().positive(),
+  expectedSessionVersion: z.number().int().positive(),
+  feeMarks: z.literal(0),
+  returnMarks: z.number().int().nonnegative(),
+  releasedAllocationIds: z.array(z.string().uuid()),
+  quoteVersion: z.string().regex(/^[a-f0-9]{64}$/),
+});
+
+const replacementSessionStartInput = z.object({
+  sessionId: z.string().uuid(),
+  expectedSessionVersion: z.number().int().positive(),
+  startAt: z.coerce.date(),
+});
+export const adminClassMinimumCheckInput = z
+  .object({ classId: z.string().uuid() })
+  .strict();
+export const adminClassMinimumCheckOutput = z.object({
+  classId: z.string().uuid(),
+  classVersion: z.number().int().positive(),
+  minimumCheckAt: z.date(),
+  checkedAt: z.date(),
+  proposedFreeExitUntil: z.date().nullable(),
+  minimumCheckResolvedAt: z.date().nullable(),
+  minimumEnrollment: z.number().int().positive(),
+  activeFullHalfStudents: z.number().int().nonnegative(),
+  shortfall: z.number().int().nonnegative(),
+  eligible: z.boolean(),
+  postponementCount: z.number().int().min(0).max(1),
+  freeExitUntil: z.date().nullable(),
+});
+const adminClassMinimumDecisionFields = z
+  .object({
+    classId: z.string().uuid(),
+    expectedClassVersion: z.number().int().positive(),
+    decision: z.enum(["continue", "postpone"]),
+    reason: z.string().trim().min(3).max(500),
+    replacementStarts: z.array(replacementSessionStartInput).max(64),
+  })
+  .strict();
+function validateAdminClassMinimumDecision(
+  input: z.infer<typeof adminClassMinimumDecisionFields>,
+  ctx: z.RefinementCtx,
+) {
+  if (input.decision === "continue" && input.replacementStarts.length > 0) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["replacementStarts"],
+      message: "A continue decision cannot change the class schedule",
+    });
+  }
+  if (input.decision === "postpone" && input.replacementStarts.length === 0) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["replacementStarts"],
+      message: "Enter a replacement start for every scheduled session",
+    });
+  }
+}
+export const adminClassMinimumDecisionInput =
+  adminClassMinimumDecisionFields.superRefine(
+    validateAdminClassMinimumDecision,
+  );
+export const confirmAdminClassMinimumDecisionInput =
+  adminClassMinimumDecisionFields
+    .extend({
+      requestKey: z.string().uuid(),
+      quoteVersion: z.string().regex(/^[a-f0-9]{64}$/),
+    })
+    .strict()
+    .superRefine(validateAdminClassMinimumDecision);
+export const adminClassMinimumDecisionOutput = z.object({
+  classId: z.string().uuid(),
+  classVersion: z.number().int().positive(),
+  decision: z.enum(["continue", "postpone"]),
+  minimumEnrollment: z.number().int().positive(),
+  activeFullHalfStudents: z.number().int().nonnegative(),
+  shortfall: z.number().int().nonnegative(),
+  freeExitUntil: z.coerce.date().nullable(),
+  replacementSessions: z.array(
+    z.object({
+      sessionId: z.string().uuid(),
+      startAt: z.coerce.date(),
+      endAt: z.coerce.date(),
+      version: z.number().int().positive(),
+    }),
+  ),
+  quoteVersion: z.string().regex(/^[a-f0-9]{64}$/),
 });
 
 export const submitClassSessionReportInput = z

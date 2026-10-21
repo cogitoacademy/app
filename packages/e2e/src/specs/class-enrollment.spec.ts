@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import path from "node:path";
 import {
   expect,
   request,
@@ -99,6 +100,18 @@ async function createApiContext(email: string, password: string) {
   return context;
 }
 
+async function createSavedApiContext(role: "admin" | "student") {
+  return request.newContext({
+    baseURL: process.env.SERVER_URL ?? "http://localhost:3201",
+    storageState: path.resolve(process.cwd(), ".auth", `${role}.json`),
+  });
+}
+
+function toDateTimeLocal(value: Date) {
+  const local = new Date(value.getTime() - value.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
 async function rpc<T>(
   context: APIRequestContext,
   procedure: string,
@@ -122,6 +135,8 @@ async function createPublishedCohort(
     title: string;
     sessions: number;
     capacity?: number;
+    minimumEnrollment?: number;
+    minimumCheckAt?: string;
   },
 ): Promise<AdminClass> {
   const cohortIndex = nextCohortIndex++;
@@ -153,8 +168,9 @@ async function createPublishedCohort(
     coverKey: null,
     tutorFeeIdr: 400_000,
     reason: "Create a dedicated enrollment browser-test fixture",
-    minimumEnrollment: 1,
-    minimumCheckAt: new Date(Date.UTC(2044, 0, 1)).toISOString(),
+    minimumEnrollment: options.minimumEnrollment ?? 1,
+    minimumCheckAt:
+      options.minimumCheckAt ?? new Date(Date.UTC(2044, 0, 1)).toISOString(),
     fullRateMarks: 20,
     halfRateMarks: 22,
     singleRateMarks: 25,
@@ -715,6 +731,222 @@ test("admin cancels a class with an exact future-hold return and retained studen
     );
     expect(history.enrollments[0]?.state).toBe("cancelled");
   } finally {
+    await adminContext?.close();
+    await studentApi.dispose();
+    await adminApi.dispose();
+  }
+});
+
+test("admin cancels one session, postpones once, and student confirms the exact free exit", async ({
+  page,
+  browser,
+}) => {
+  test.setTimeout(120_000);
+  assertT05EnrollmentTarget();
+  const adminApi = await createSavedApiContext("admin");
+  const studentApi = await createSavedApiContext("student");
+  let adminContext: Awaited<ReturnType<typeof browser.newContext>> | undefined;
+  let studentContext:
+    | Awaited<ReturnType<typeof browser.newContext>>
+    | undefined;
+  try {
+    const competitions = await rpc<{ id: string; isActive: boolean }[]>(
+      adminApi,
+      "admin/listCompetitionCatalog",
+      { includeArchived: false },
+    );
+    const tutors = await rpc<{ user: { id: string; role: string } }[]>(
+      adminApi,
+      "adminTutor/listTutorProfiles",
+      { status: "published", limit: 100, offset: 0 },
+    );
+    const competition = competitions.find((row) => row.isActive);
+    const tutor = tutors.find((row) => row.user.role === "tutor");
+    if (!competition || !tutor)
+      throw new Error("Missing lifecycle browser fixture references");
+
+    const suffix = randomUUID().slice(0, 8);
+    testRunStartOffsetDays = Number.parseInt(suffix, 16) % 100_000;
+    const academyClass = await createPublishedCohort(
+      adminApi,
+      { competitionId: competition.id, tutorId: tutor.user.id },
+      {
+        title: `T06 lifecycle ${suffix}`,
+        sessions: 3,
+        capacity: 2,
+        minimumEnrollment: 2,
+        minimumCheckAt: new Date(Date.now() - 86_400_000).toISOString(),
+      },
+    );
+    const walletBefore = await rpc<{
+      availableBalance: number;
+      heldBalance: number;
+      totalBalance: number;
+    }>(studentApi, "wallet/get", {});
+    const enrollment = await rpc<Enrollment & { outcome: string }>(
+      studentApi,
+      "classes/createEnrollment",
+      {
+        classId: academyClass.id,
+        plan: "half",
+        requestKey: randomUUID(),
+      },
+    );
+    expect(enrollment.outcome).toBe("confirmed");
+
+    await page.close();
+    await page.context().close();
+    adminContext = await browser.newContext({
+      baseURL: process.env.WEB_URL ?? "http://localhost:3200",
+      storageState: await adminApi.storageState(),
+    });
+    const adminPage = await adminContext.newPage();
+    await adminPage.goto("/admin-classes");
+    const card = adminPage.getByTestId(`published-class-${academyClass.id}`);
+    await expect(card).toBeVisible();
+    await expect(
+      card.getByText("1 / 2 active full/half students"),
+    ).toBeVisible();
+    await expect(card.getByText("Shortfall: 1")).toBeVisible();
+
+    await card
+      .getByRole("button", { name: "Review cancellation" })
+      .first()
+      .click();
+    await card
+      .getByLabel("Cancellation reason", { exact: true })
+      .fill("Cancel the first future session for lifecycle acceptance");
+    await card.getByRole("button", { name: "Preview exact return" }).click();
+    const cancelReview = card.getByRole("region", {
+      name: "Session cancellation review",
+    });
+    await expect(
+      cancelReview.getByText(
+        "Return: 22 Marks · Fee: 0 Marks · 1 seat allocation(s) released.",
+      ),
+    ).toBeVisible();
+    await cancelReview
+      .getByRole("button", { name: "Confirm session cancellation" })
+      .click();
+    await expect(
+      adminPage.getByText("Class session cancelled", { exact: true }),
+    ).toBeVisible();
+
+    const refreshed = await rpc<{
+      version: number;
+      sessions: {
+        id: string;
+        sequenceNumber: number;
+        startAt: string;
+        state: string;
+      }[];
+    }>(adminApi, "admin/getAcademyClass", { id: academyClass.id });
+    expect(refreshed.version).toBe(academyClass.version + 1);
+    const replacements = refreshed.sessions
+      .filter((session) => session.state === "scheduled")
+      .map((session, index) => ({
+        sessionId: session.id,
+        sequenceNumber: session.sequenceNumber,
+        startAt: new Date(
+          new Date(session.startAt).getTime() + (30 + index * 7) * 86_400_000,
+        ),
+      }));
+    for (const replacement of replacements) {
+      await card
+        .getByLabel(`Replacement start · session ${replacement.sequenceNumber}`)
+        .fill(toDateTimeLocal(replacement.startAt));
+    }
+    await card
+      .getByLabel("Decision reason")
+      .fill("Postpone once to meet the minimum enrollment policy");
+    await card
+      .getByRole("button", { name: "Review one-time postponement" })
+      .click();
+    const postponeReview = card.getByRole("region", {
+      name: "Minimum decision review",
+    });
+    await expect(
+      postponeReview.getByText(
+        "1 / 2 unique active full/half students · shortfall 1.",
+      ),
+    ).toBeVisible();
+    await expect(
+      postponeReview.getByText(/Free withdrawal deadline:/),
+    ).toBeVisible();
+    await postponeReview
+      .getByRole("button", { name: "Confirm postpone" })
+      .click();
+    await expect(card.getByText("Postponed", { exact: true })).toBeVisible();
+
+    const lifecycle = await rpc<{
+      classState: string;
+      freeExitUntil: string;
+      enrollments: Enrollment[];
+    }>(studentApi, "classes/getMyEnrollments", { classId: academyClass.id });
+    expect(lifecycle.classState).toBe("postponed");
+    expect(lifecycle.enrollments[0]?.id).toBe(enrollment.id);
+    if (!lifecycle.freeExitUntil)
+      throw new Error("The postponed cohort has no free-exit deadline");
+    const freeExitUntil = new Date(lifecycle.freeExitUntil);
+    const formattedFreeExitUntil = new Intl.DateTimeFormat("en", {
+      dateStyle: "full",
+      timeStyle: "short",
+      timeZone: "Asia/Jakarta",
+    }).format(freeExitUntil);
+
+    await adminContext.close();
+    adminContext = undefined;
+    studentContext = await browser.newContext({
+      baseURL: process.env.WEB_URL ?? "http://localhost:3200",
+      storageState: await studentApi.storageState(),
+    });
+    const studentPage = await studentContext.newPage();
+    await studentPage.goto(`/classes/${academyClass.id}`);
+    await expect(studentPage.getByText("Postponed once")).toBeVisible();
+    await expect(
+      studentPage.getByText(formattedFreeExitUntil, { exact: false }).first(),
+    ).toBeVisible();
+    await studentPage
+      .getByRole("button", { name: "Review withdrawal" })
+      .click();
+    const withdrawalReview = studentPage.getByRole("region", {
+      name: "Cancellation review",
+    });
+    await expect(
+      withdrawalReview.getByText("Fee: 0 Marks · Return: 22 Marks"),
+    ).toBeVisible();
+    await expect(
+      withdrawalReview.getByText(
+        "No second-half payment will be triggered automatically.",
+      ),
+    ).toBeVisible();
+    await expect(withdrawalReview.getByText(/fee-free through/)).toBeVisible();
+    await expect(
+      withdrawalReview.getByText(formattedFreeExitUntil, { exact: false }),
+    ).toBeVisible();
+    await withdrawalReview
+      .getByRole("button", { name: "Confirm free withdrawal" })
+      .click();
+    await expect(
+      studentPage.getByText("cancelled", { exact: true }),
+    ).toBeVisible();
+
+    const after = await rpc<{
+      availableBalance: number;
+      heldBalance: number;
+      totalBalance: number;
+    }>(studentApi, "wallet/get", {});
+    expect(after.availableBalance).toBe(walletBefore.availableBalance);
+    expect(after.heldBalance).toBe(walletBefore.heldBalance);
+    expect(after.totalBalance).toBe(walletBefore.totalBalance);
+    const noSecondCharge = await rpc<{ outcome: string }>(
+      studentApi,
+      "classes/paySecondInstallment",
+      { enrollmentId: enrollment.id },
+    );
+    expect(noSecondCharge.outcome).toBe("expired");
+  } finally {
+    await studentContext?.close();
     await adminContext?.close();
     await studentApi.dispose();
     await adminApi.dispose();

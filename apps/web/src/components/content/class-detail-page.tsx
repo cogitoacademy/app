@@ -41,7 +41,10 @@ export function ClassDetailPage() {
   );
 
   if (academyClass.isPending) return <Loader />;
-  if (academyClass.isError || academyClass.data.state !== "published") {
+  if (
+    academyClass.isError ||
+    !["published", "postponed"].includes(academyClass.data.state)
+  ) {
     return (
       <EmptyStateCard
         icon={<IconSchool />}
@@ -101,6 +104,9 @@ export function ClassDetailPage() {
               {academyClass.data.sessions.length} session
               {academyClass.data.sessions.length === 1 ? "" : "s"}
             </Badge>
+            {academyClass.data.state === "postponed" ? (
+              <Badge variant="warning">Postponed once</Badge>
+            ) : null}
           </div>
           <Heading level={1}>{academyClass.data.titleEn}</Heading>
           <Text className="mt-2 text-muted">
@@ -109,6 +115,13 @@ export function ClassDetailPage() {
               : ""}
             {academyClass.data.competition.name}
           </Text>
+          {academyClass.data.state === "postponed" ? (
+            <Text className="mt-2 text-sm text-warning-foreground">
+              This cohort has a replacement schedule. Signed-in students can
+              review their penalty-free withdrawal deadline with their
+              enrollment.
+            </Text>
+          ) : null}
         </div>
         <div className="text-lg font-semibold">
           <CogitoMarks

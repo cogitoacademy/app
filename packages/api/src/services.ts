@@ -26,7 +26,10 @@ import { createRoomModule } from "./modules/room";
 import { createAdminBookingModule } from "./modules/admin-booking";
 import { createRefundModule } from "./modules/refund";
 import { createMeetingModule } from "./modules/meeting";
-import { createTestClassMeetingProvider } from "./modules/meeting/test-class-meeting.provider";
+import {
+  createTestClassMeetingProvider,
+  updateTestClassMeetingEvent,
+} from "./modules/meeting/test-class-meeting.provider";
 import type { MeetingModule } from "./modules/meeting";
 import { createContentModule } from "./modules/content";
 import type { ContentService } from "./modules/content/content.service";
@@ -303,6 +306,7 @@ function createServices() {
             failFirstTitlePrefix:
               process.env.ACADEMY_CLASS_MEETING_TEST_FAIL_FIRST_TITLE_PREFIX,
           }),
+          classMeetingUpdateProvider: updateTestClassMeetingEvent,
         }
       : {}),
   });

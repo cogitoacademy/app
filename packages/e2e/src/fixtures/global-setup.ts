@@ -186,7 +186,10 @@ async function globalSetup() {
   await authContext.storageState({ path: path.join(authDir, "student.json") });
   await authContext.dispose();
 
-  if (process.env.T07_CLASS_REPORTS_E2E === "1") {
+  if (
+    process.env.T06_CLASS_LIFECYCLE_E2E === "1" ||
+    process.env.T07_CLASS_REPORTS_E2E === "1"
+  ) {
     await saveRoleStorageState(
       "admin",
       ADMIN_EMAIL,
@@ -194,6 +197,8 @@ async function globalSetup() {
       e2eEnvironment.serverUrl,
       authDir,
     );
+  }
+  if (process.env.T07_CLASS_REPORTS_E2E === "1") {
     await saveRoleStorageState(
       "tutor",
       TUTOR_EMAIL,

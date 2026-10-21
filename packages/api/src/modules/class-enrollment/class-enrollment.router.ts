@@ -9,6 +9,14 @@ import {
   adminClassCancellationInput,
   confirmAdminClassCancellationInput,
   adminClassCancellationOutput,
+  adminClassMinimumCheckInput,
+  adminClassMinimumCheckOutput,
+  adminClassMinimumDecisionInput,
+  adminClassMinimumDecisionOutput,
+  adminClassSessionCancellationInput,
+  adminClassSessionCancellationOutput,
+  confirmAdminClassMinimumDecisionInput,
+  confirmAdminClassSessionCancellationInput,
   classEnrollmentCancellationInput,
   confirmClassEnrollmentCancellationInput,
   classEnrollmentCancellationOutput,
@@ -71,6 +79,58 @@ export function createClassEnrollmentRouter(handler: ClassEnrollmentHandler) {
       .input(confirmAdminClassCancellationInput)
       .output(adminClassCancellationOutput)
       .handler(handler.confirmAdminCancellation),
+    previewAdminSessionCancellation: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/classes/session-cancellation/quote",
+        tags: ["Admin", "Classes"],
+        summary:
+          "Review exact returns before cancelling one future class session",
+      })
+      .input(adminClassSessionCancellationInput)
+      .output(adminClassSessionCancellationOutput)
+      .handler(handler.previewAdminSessionCancellation),
+    confirmAdminSessionCancellation: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/classes/session-cancellation/confirm",
+        tags: ["Admin", "Classes"],
+        summary:
+          "Cancel one future class session and release only its seat holds",
+      })
+      .input(confirmAdminClassSessionCancellationInput)
+      .output(adminClassSessionCancellationOutput)
+      .handler(handler.confirmAdminSessionCancellation),
+    getAdminMinimumCheck: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/classes/minimum-check",
+        tags: ["Admin", "Classes"],
+        summary: "Count unique active paid full/half-plan cohort students",
+      })
+      .input(adminClassMinimumCheckInput)
+      .output(adminClassMinimumCheckOutput)
+      .handler(handler.getAdminMinimumCheck),
+    previewAdminMinimumDecision: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/classes/minimum-decision/quote",
+        tags: ["Admin", "Classes"],
+        summary: "Review a cohort continue or once-only postponement decision",
+      })
+      .input(adminClassMinimumDecisionInput)
+      .output(adminClassMinimumDecisionOutput)
+      .handler(handler.previewAdminMinimumDecision),
+    confirmAdminMinimumDecision: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/classes/minimum-decision/confirm",
+        tags: ["Admin", "Classes"],
+        summary: "Record a cohort minimum decision and replacement schedule",
+      })
+      .input(confirmAdminClassMinimumDecisionInput)
+      .output(adminClassMinimumDecisionOutput)
+      .handler(handler.confirmAdminMinimumDecision),
     quoteCancellation: studentProcedure
       .route({
         method: "POST",

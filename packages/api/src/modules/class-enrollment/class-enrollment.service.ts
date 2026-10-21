@@ -1,4 +1,6 @@
 import { createAdminClassCancellation } from "./class-enrollment.admin-cancellation";
+import { createAdminClassSessionCancellation } from "./class-enrollment.admin-session-cancellation";
+import { createClassMinimumLifecycle } from "./class-enrollment.minimum";
 import { createClassSessionReportService } from "./class-enrollment.reports";
 import { quoteEnrollmentCancellation } from "./class-enrollment.cancellation";
 import {
@@ -94,6 +96,8 @@ export function createClassEnrollmentService(deps: {
 }) {
   const repo = createClassEnrollmentRepo();
   const adminCancellation = createAdminClassCancellation(deps);
+  const adminSessionCancellation = createAdminClassSessionCancellation(deps);
+  const minimumLifecycle = createClassMinimumLifecycle(deps);
   const sessionReports = createClassSessionReportService(deps);
   const now = () => deps.clock?.() ?? new Date();
 
@@ -167,7 +171,7 @@ export function createClassEnrollmentService(deps: {
   ) {
     const classRecord = await repo.getClassForEnrollment(conn, classId);
     if (!classRecord) throw new ClassEnrollmentNotFoundError();
-    if (classRecord.state !== "published") {
+    if (!["published", "postponed"].includes(classRecord.state)) {
       const records = await repo.findStudentClassRecords(
         conn,
         studentId,
@@ -176,6 +180,32 @@ export function createClassEnrollmentService(deps: {
       if (!records.enrollments.length) throw new ClassEnrollmentNotFoundError();
       return {
         classId,
+        classState: classRecord.state as
+          | "draft"
+          | "published"
+          | "postponed"
+          | "cancelled"
+          | "completed",
+        freeExitUntil: classRecord.freeExitUntil,
+        eligibleSessions: [],
+        enrollments: mapRecords(records),
+      };
+    }
+    if (classRecord.state === "postponed") {
+      const records = await repo.findStudentClassRecords(
+        conn,
+        studentId,
+        classId,
+      );
+      return {
+        classId,
+        classState: classRecord.state as
+          | "draft"
+          | "published"
+          | "postponed"
+          | "cancelled"
+          | "completed",
+        freeExitUntil: classRecord.freeExitUntil,
         eligibleSessions: [],
         enrollments: mapRecords(records),
       };
@@ -194,6 +224,13 @@ export function createClassEnrollmentService(deps: {
     ]);
     return {
       classId,
+      classState: classRecord.state as
+        | "draft"
+        | "published"
+        | "postponed"
+        | "cancelled"
+        | "completed",
+      freeExitUntil: classRecord.freeExitUntil,
       eligibleSessions,
       enrollments: mapRecords(records),
     };
@@ -698,12 +735,17 @@ export function createClassEnrollmentService(deps: {
         );
       }
       const nowAt = currentTime();
+      const classRecord = await repo.getClassForEnrollment(
+        tx,
+        enrollment.classId,
+      );
       const quote = quoteEnrollmentCancellation(
         enrollment.id,
         allocations,
         sessions,
         nowAt,
         input.sessionId,
+        classRecord?.state === "postponed" ? classRecord.freeExitUntil : null,
       );
       if (!quote.allocations.length && !quote.unpaidAllocationIds.length) {
         throw new ClassEnrollmentInvalidOperationError(
@@ -774,9 +816,9 @@ export function createClassEnrollmentService(deps: {
   async function completeCheckout(studentId: string, enrollmentId: string) {
     const initial = await repo.findEnrollment(deps.db, studentId, enrollmentId);
     if (!initial) throw new ClassEnrollmentNotFoundError();
-    const sessionIds = (await repo.findAllocations(deps.db, enrollmentId)).map(
-      (allocation) => allocation.sessionId,
-    );
+    const sessionIds = (await repo.findAllocations(deps.db, enrollmentId))
+      .filter((allocation) => allocation.state !== "released")
+      .map((allocation) => allocation.sessionId);
 
     return deps.db.transaction(async (tx) => {
       const lockedSessions = await repo.lockSessions(tx, sessionIds);
@@ -819,7 +861,10 @@ export function createClassEnrollmentService(deps: {
         tx,
         enrollment.classId,
       );
-      if (!classRecord || classRecord.state !== "published") {
+      if (
+        !classRecord ||
+        !["published", "postponed"].includes(classRecord.state)
+      ) {
         throw new ClassEnrollmentConflictError(
           "This class is not accepting checkout confirmation",
         );
@@ -837,7 +882,11 @@ export function createClassEnrollmentService(deps: {
       }
       const firstAllocations = (
         await repo.findAllocations(tx, enrollmentId, true)
-      ).filter((allocation) => allocation.installmentId === first.id);
+      ).filter(
+        (allocation) =>
+          allocation.installmentId === first.id &&
+          allocation.state !== "released",
+      );
       if (
         !matchesInstallmentAmount(first, firstAllocations) ||
         firstAllocations.some(
@@ -909,7 +958,9 @@ export function createClassEnrollmentService(deps: {
     const initial = await repo.findEnrollment(deps.db, studentId, enrollmentId);
     if (!initial) throw new ClassEnrollmentNotFoundError();
     const allocationRows = await repo.findAllocations(deps.db, enrollmentId);
-    const sessionIds = allocationRows.map((allocation) => allocation.sessionId);
+    const sessionIds = allocationRows
+      .filter((allocation) => allocation.state !== "released")
+      .map((allocation) => allocation.sessionId);
 
     return deps.db.transaction(async (tx) => {
       const lockedSessions = await repo.lockSessions(tx, sessionIds);
@@ -993,7 +1044,11 @@ export function createClassEnrollmentService(deps: {
 
       const secondAllocations = (
         await repo.findAllocations(tx, enrollmentId, true)
-      ).filter((allocation) => allocation.installmentId === installment.id);
+      ).filter(
+        (allocation) =>
+          allocation.installmentId === installment.id &&
+          allocation.state !== "released",
+      );
       if (
         !matchesInstallmentAmount(installment, secondAllocations) ||
         secondAllocations.some(
@@ -1511,6 +1566,11 @@ export function createClassEnrollmentService(deps: {
     ...sessionReports,
     previewAdminCancellation: adminCancellation.preview,
     confirmAdminCancellation: adminCancellation.confirm,
+    previewAdminSessionCancellation: adminSessionCancellation.preview,
+    confirmAdminSessionCancellation: adminSessionCancellation.confirm,
+    getAdminMinimumCheck: minimumLifecycle.getMinimumCheck,
+    previewAdminMinimumDecision: minimumLifecycle.preview,
+    confirmAdminMinimumDecision: minimumLifecycle.confirm,
     getMyClassEnrollments,
     quoteCancellation: (
       studentId: string,

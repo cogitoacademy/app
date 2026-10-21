@@ -975,9 +975,22 @@ export function createGoogleMeetingProvider(
     };
   }
 
+  async function updateAcademyClassEvent(
+    _externalEventId: string | null,
+    sessionId: string,
+    scheduledStartAt: Date,
+    scheduledEndAt: Date,
+  ) {
+    await updateEvent(`academy-class-session:${sessionId}`, {
+      startAt: scheduledStartAt,
+      endAt: scheduledEndAt,
+    });
+  }
+
   return {
     createEvent,
     createAcademyClassEvent,
+    updateAcademyClassEvent,
     cancelAcademyClassEvent,
     updateEvent,
     cancelEvent,
@@ -1073,6 +1086,7 @@ export function createGoogleMeetingProviderWithFallback(
         attendee,
         details,
       ),
+    updateAcademyClassEvent: googleProvider.updateAcademyClassEvent,
     cancelAcademyClassEvent: googleProvider.cancelAcademyClassEvent,
     updateEvent: googleProvider.updateEvent,
     cancelEvent: googleProvider.cancelEvent,

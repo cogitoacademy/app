@@ -5,7 +5,12 @@ import { mapClassEnrollmentError } from "./class-enrollment.errors";
 import type { ClassEnrollmentService } from "./class-enrollment.service";
 import {
   adminClassCancellationInput,
+  adminClassMinimumCheckInput,
+  adminClassMinimumDecisionInput,
+  adminClassSessionCancellationInput,
   confirmAdminClassCancellationInput,
+  confirmAdminClassMinimumDecisionInput,
+  confirmAdminClassSessionCancellationInput,
   classEnrollmentCancellationInput,
   confirmClassEnrollmentCancellationInput,
   classEnrollmentIdInput,
@@ -71,6 +76,66 @@ export function createClassEnrollmentHandler(service: ClassEnrollmentService) {
     }) =>
       withDomainMap(
         () => service.confirmAdminCancellation(context.session!.user.id, input),
+        mapClassEnrollmentError,
+      ),
+    previewAdminSessionCancellation: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: z.infer<typeof adminClassSessionCancellationInput>;
+    }) =>
+      withDomainMap(
+        () =>
+          service.previewAdminSessionCancellation(
+            context.session!.user.id,
+            input,
+          ),
+        mapClassEnrollmentError,
+      ),
+    confirmAdminSessionCancellation: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: z.infer<typeof confirmAdminClassSessionCancellationInput>;
+    }) =>
+      withDomainMap(
+        () =>
+          service.confirmAdminSessionCancellation(
+            context.session!.user.id,
+            input,
+          ),
+        mapClassEnrollmentError,
+      ),
+    getAdminMinimumCheck: async ({
+      input,
+    }: {
+      input: z.infer<typeof adminClassMinimumCheckInput>;
+    }) =>
+      withDomainMap(
+        () => service.getAdminMinimumCheck(input.classId),
+        mapClassEnrollmentError,
+      ),
+    previewAdminMinimumDecision: async ({
+      input,
+    }: {
+      input: z.infer<typeof adminClassMinimumDecisionInput>;
+    }) =>
+      withDomainMap(
+        () => service.previewAdminMinimumDecision(input),
+        mapClassEnrollmentError,
+      ),
+    confirmAdminMinimumDecision: async ({
+      context,
+      input,
+    }: {
+      context: Context;
+      input: z.infer<typeof confirmAdminClassMinimumDecisionInput>;
+    }) =>
+      withDomainMap(
+        () =>
+          service.confirmAdminMinimumDecision(context.session!.user.id, input),
         mapClassEnrollmentError,
       ),
     quoteCancellation: async ({

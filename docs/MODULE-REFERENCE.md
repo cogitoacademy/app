@@ -51,8 +51,44 @@ amounts and deadlines. Confirmation rechecks it, writes fee/return ledger events
 audit receipt and notification atomically. Receipt replay is serialized by the
 enrollment row lock. Stable keys are class-allocation:{allocationId}:cancel:charge
 and :cancel:return; the funding sourceReference is retained. No tutor fee is
-created by student cancellation. Configurable withdrawal-rate UI, administrator
-cancellation, minimum/postponement and rescheduling remain T06 follow-ups.
+created by student cancellation. Ordinary later schedule changes remain outside
+the authorized Q04 policy.
+
+## T06 admin session and minimum lifecycle (2026-10-21)
+
+Individual admin cancellation is separate from whole-class cancellation. The
+preview and confirmation lock the class, target session, affected enrollments,
+installments, allocations and wallets, and require the exact class/session
+versions, audited reason, stable request UUID and SHA-256 quote. Only one future
+scheduled session is cancelled. The transaction returns the unspent funded
+balance for allocations on that session and releases only its reserved seat;
+other session allocations and the enrollment's original prices/session count do
+not move to a replacement plan. An affected unpaid installment is repriced to
+the remaining reserved sessions and its next due session/date is updated, or it
+is cancelled when no reserved sessions remain. An ongoing, past, completed or
+reported session cannot be cancelled. Past delivery holds, reports and earned
+tutor fees remain intact. Audit, student/tutor notification outboxes and durable
+calendar cancellation are recorded through existing module services. Calendar
+update retries preserve the existing provider event ID and meeting URL.
+
+The minimum check applies only to an unresolved published cohort at or after its
+saved check time. The count is unique students with an active full/half plan and
+at least one funded, unspent allocation on a still-scheduled session. It excludes
+single-session buyers, expired checkouts, cancelled enrollments and any plan with
+a defaulted installment. Admin may continue even with a shortfall or postpone
+once. A postponement requires a replacement start for every scheduled session;
+each must start strictly after 72 hours from the authoritative confirmation
+clock. Session identities, ordering, duration, original enrollment/rate
+snapshots and funding allocation IDs stay unchanged. Class/session versions
+advance, pending second-half due dates/reminder markers follow the replacement
+times, and the existing meeting job updates the same provider event with retry.
+
+Postponement opens whole-enrollment withdrawal without a fee through the exact
+inclusive `freeExitUntil`. That quote returns eligible remaining funded Marks
+and cancels unpaid second-half obligations; no later debit is scheduled. Past
+reports and fees remain protected by the existing T07 settlement path. Q04's
+ordinary later-reschedule rights remain open, so this module does not add a
+general reschedule action.
 
 T03 integrates with the current enrollment/signup baseline. Bank account ownership
 snapshots accept only self/trusted_person; unprepared preview projections include
@@ -257,7 +293,7 @@ Drafts are not public and do not reserve rooms; conflict checks happen at public
 
 `academy_class_meeting` stores provider event identity, URL, status, attempts, retry time, and a five-minute processing lease. Provider calls happen after the publication transaction commits. Workers claim rows conditionally, retry failures with exponential backoff capped at six hours, and use session-scoped stable Google event IDs so a retry can recover an event created before a process failure. An accepted Calendar event without a usable Meet URL stays failed/retryable; the retry fetches the preserved event ID and never inserts a duplicate event. Manual fallback is not marked ready. Admin retry resets failed rows to pending; the existing scheduler also drains due class jobs. In-person sessions never receive a meeting row. The class adapter is injected only in `NODE_ENV=test`; its controlled title prefix accepts an event without a Meet URL once, then returns the link on retry without a network call.
 
-Public `classes.list/get` remain a separate allowlisted read model. The student DTO contains catalog, schedule, curriculum, published cohort/masterclass rates, and tutor display fields only; it omits IDR fees, payout/tax/account fields, rooms, meeting links/status, admin audit/version values, and student data. Enrollment is not exposed by these routes. T04 still depends on T02/T06/T07 delivery, report, expiry and cancellation integration; approved curriculum and cover content are external inputs.
+Public `classes.list/get` remain a separate allowlisted read model. The student DTO contains catalog, schedule, curriculum, published cohort/masterclass rates, and tutor display fields only; it omits IDR fees, payout/tax/account fields, rooms, meeting links/status, admin audit/version values, and student data. Enrollment is not exposed by these routes. T04 still depends on T02/T07 delivery, report and expiry integration, plus parent review/dev integration of the T06 lifecycle worktree; approved curriculum and cover content are external inputs.
 
 ## V3 class enrollment and session funding boundary (2026-10-21)
 

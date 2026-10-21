@@ -27,6 +27,10 @@ export const academyClass = pgTable(
     coverKey: text("cover_key"),
     minimumEnrollment: integer("minimum_enrollment"),
     minimumCheckAt: timestamp("minimum_check_at", { withTimezone: true }),
+    minimumCheckResolvedAt: timestamp("minimum_check_resolved_at", {
+      withTimezone: true,
+    }),
+    freeExitUntil: timestamp("free_exit_until", { withTimezone: true }),
     cohortFullRateMarks: integer("cohort_full_rate_marks"),
     cohortHalfRateMarks: integer("cohort_half_rate_marks"),
     cohortSingleRateMarks: integer("cohort_single_rate_marks"),
@@ -96,6 +100,7 @@ export const academyClassSession = pgTable(
       .references(() => user.id, { onDelete: "restrict" }),
     tutorFeeIdr: integer("tutor_fee_idr").notNull(),
     state: text("state").notNull().default("draft"),
+    version: integer("version").notNull().default(1),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -130,6 +135,7 @@ export const academyClassSession = pgTable(
       "academy_class_session_state_check",
       sql`${table.state} IN ('draft', 'scheduled', 'completed', 'cancelled')`,
     ),
+    check("academy_class_session_version_positive", sql`${table.version} > 0`),
     uniqueIndex("academy_class_session_class_sequence_uniq").on(
       table.classId,
       table.sequenceNumber,
@@ -157,6 +163,7 @@ export const academyClassMeeting = pgTable(
     externalEventId: text("external_event_id"),
     meetingUrl: text("meeting_url"),
     status: text("status").notNull().default("pending"),
+    scheduleVersion: integer("schedule_version").notNull().default(1),
     attemptCount: integer("attempt_count").notNull().default(0),
     nextRetryAt: timestamp("next_retry_at", { withTimezone: true })
       .defaultNow()
@@ -183,6 +190,10 @@ export const academyClassMeeting = pgTable(
     check(
       "academy_class_meeting_attempt_count_check",
       sql`${table.attemptCount} >= 0`,
+    ),
+    check(
+      "academy_class_meeting_schedule_version_positive",
+      sql`${table.scheduleVersion} > 0`,
     ),
     index("academy_class_meeting_retry_idx").on(
       table.status,

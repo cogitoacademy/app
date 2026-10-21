@@ -32,6 +32,9 @@ export function createMeetingModule(deps: {
     MeetingPort["cancelAcademyClassEvent"]
   >;
   classMeetingProvider?: NonNullable<MeetingPort["createAcademyClassEvent"]>;
+  classMeetingUpdateProvider?: NonNullable<
+    MeetingPort["updateAcademyClassEvent"]
+  >;
 }): MeetingPort {
   const provider =
     deps.googleMeetEnabled && deps.googleConfig
@@ -48,6 +51,9 @@ export function createMeetingModule(deps: {
       : {}),
     ...(deps.classMeetingCancellationProvider
       ? { cancelAcademyClassEvent: deps.classMeetingCancellationProvider }
+      : {}),
+    ...(deps.classMeetingUpdateProvider
+      ? { updateAcademyClassEvent: deps.classMeetingUpdateProvider }
       : {}),
   };
 }

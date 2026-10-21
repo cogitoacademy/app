@@ -14,6 +14,8 @@ export function ClassCancellationPanel({
   enrollmentId,
   allocations,
   sessions,
+  classState,
+  freeExitUntil,
   onChanged,
 }: {
   enrollmentId: string;
@@ -25,6 +27,8 @@ export function ClassCancellationPanel({
     releasedMarks: number;
   }[];
   sessions: { id: string; sequenceNumber: number; startAt: Date | string }[];
+  classState: string;
+  freeExitUntil: Date | string | null;
   onChanged: () => Promise<unknown>;
 }) {
   const [requestKey, setRequestKey] = useState("");
@@ -85,6 +89,17 @@ export function ClassCancellationPanel({
         fee and return before confirming. Funded seats cancelled inside 24 hours
         remain held for session completion.
       </Text>
+      {classState === "postponed" && freeExitUntil ? (
+        <Text className="text-sm text-warning-foreground">
+          Penalty-free withdrawal is available through{" "}
+          {new Intl.DateTimeFormat("en", {
+            dateStyle: "full",
+            timeStyle: "short",
+            timeZone: "Asia/Jakarta",
+          }).format(new Date(freeExitUntil))}{" "}
+          WIB.
+        </Text>
+      ) : null}
       <Stack direction="row" spacing="sm" className="flex-wrap">
         <Button
           variant="secondary"
@@ -122,6 +137,17 @@ export function ClassCancellationPanel({
           <Text>
             Fee: {quote.feeMarks} Marks · Return: {quote.returnMarks} Marks
           </Text>
+          {quote.freeExit ? (
+            <Text className="text-sm text-success-foreground">
+              This withdrawal is fee-free through{" "}
+              {new Intl.DateTimeFormat("en", {
+                dateStyle: "full",
+                timeStyle: "short",
+                timeZone: "Asia/Jakarta",
+              }).format(new Date(quote.freeExitUntil!))}{" "}
+              WIB. No second-half payment will be triggered automatically.
+            </Text>
+          ) : null}
           {quote.retainedMarks > 0 ? (
             <Text>
               {quote.retainedMarks} Marks stay held for sessions inside the
@@ -164,7 +190,9 @@ export function ClassCancellationPanel({
             >
               Confirm{" "}
               {quote.scope === "withdrawal"
-                ? "withdrawal"
+                ? quote.freeExit
+                  ? "free withdrawal"
+                  : "withdrawal"
                 : "seat cancellation"}
             </Button>
             <Button

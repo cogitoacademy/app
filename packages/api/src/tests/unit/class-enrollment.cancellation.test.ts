@@ -68,6 +68,55 @@ test("withdrawal cancels only unfunded reservations and does not charge them", (
     quoteEnrollmentCancellation("e", [unpaid], [session("u")], now, "u"),
   ).toThrow("Only funded seats");
 });
+test("72-hour postponement exit is free through the exact deadline only", () => {
+  const row = allocation("a", 20);
+  const deadline = new Date(now.getTime() + 72 * 60 * 60 * 1000);
+  const atDeadline = quoteEnrollmentCancellation(
+    "e",
+    [row],
+    [session("a", 120)],
+    deadline,
+    undefined,
+    deadline,
+  );
+  expect(atDeadline).toMatchObject({
+    scope: "withdrawal",
+    freeExit: true,
+    freeExitUntil: deadline,
+    feeRateBps: 0,
+    feeMarks: 0,
+    returnMarks: 20,
+  });
+  const afterDeadline = quoteEnrollmentCancellation(
+    "e",
+    [row],
+    [session("a", 120)],
+    new Date(deadline.getTime() + 1),
+    undefined,
+    deadline,
+  );
+  expect(afterDeadline).toMatchObject({
+    freeExit: false,
+    freeExitUntil: null,
+    feeRateBps: 2000,
+    feeMarks: 4,
+    returnMarks: 16,
+  });
+  const individualSeat = quoteEnrollmentCancellation(
+    "e",
+    [row],
+    [session("a", 120)],
+    now,
+    "a",
+    deadline,
+  );
+  expect(individualSeat).toMatchObject({
+    scope: "session",
+    freeExit: false,
+    feeMarks: 4,
+    returnMarks: 16,
+  });
+});
 test("released/past/completed seats never return Marks; schedule changes invalidate quotes", () => {
   const row = allocation("a", 25);
   expect(

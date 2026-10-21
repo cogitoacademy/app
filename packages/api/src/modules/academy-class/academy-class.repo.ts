@@ -222,7 +222,7 @@ export function createAcademyClassRepo() {
         and(
           eq(academyClassSession.tutorId, tutorId),
           eq(academyClassSession.state, "scheduled"),
-          eq(academyClass.state, "published"),
+          inArray(academyClass.state, ["published", "postponed"]),
           sql`${academyClassSession.classId} <> ${classId}`,
           lt(academyClassSession.startAt, endAt),
           gt(academyClassSession.endAt, startAt),
@@ -268,7 +268,7 @@ export function createAcademyClassRepo() {
         and(
           eq(academyClassSession.roomId, roomId),
           eq(academyClassSession.state, "scheduled"),
-          eq(academyClass.state, "published"),
+          inArray(academyClass.state, ["published", "postponed"]),
           sql`${academyClassSession.classId} <> ${classId}`,
           lt(academyClassSession.startAt, endAt),
           gt(academyClassSession.endAt, startAt),
@@ -285,6 +285,10 @@ export function createAcademyClassRepo() {
     limit = 50,
     classId?: string,
   ) {
+    const staleSchedule = lt(
+      academyClassMeeting.scheduleVersion,
+      academyClassSession.version,
+    );
     const ready = or(
       and(
         inArray(academyClassMeeting.status, ["pending", "failed"]),
@@ -301,9 +305,12 @@ export function createAcademyClassRepo() {
     const conditions = [
       or(
         and(
-          eq(academyClass.state, "published"),
+          inArray(academyClass.state, ["published", "postponed"]),
           eq(academyClassSession.state, "scheduled"),
-          ready,
+          or(
+            ready,
+            and(eq(academyClassMeeting.status, "created"), staleSchedule),
+          ),
         ),
         and(
           eq(academyClassSession.state, "cancelled"),
@@ -361,12 +368,32 @@ export function createAcademyClassRepo() {
             eligible,
             and(
               eq(academyClassMeeting.status, "created"),
-              inArray(
-                academyClassMeeting.sessionId,
-                conn
-                  .select({ id: academyClassSession.id })
-                  .from(academyClassSession)
-                  .where(eq(academyClassSession.state, "cancelled")),
+              or(
+                inArray(
+                  academyClassMeeting.sessionId,
+                  conn
+                    .select({ id: academyClassSession.id })
+                    .from(academyClassSession)
+                    .where(eq(academyClassSession.state, "cancelled")),
+                ),
+                inArray(
+                  academyClassMeeting.sessionId,
+                  conn
+                    .select({ id: academyClassSession.id })
+                    .from(academyClassSession)
+                    .where(
+                      and(
+                        eq(
+                          academyClassSession.id,
+                          academyClassMeeting.sessionId,
+                        ),
+                        gt(
+                          academyClassSession.version,
+                          academyClassMeeting.scheduleVersion,
+                        ),
+                      ),
+                    ),
+                ),
               ),
             ),
           ),
@@ -407,15 +434,16 @@ export function createAcademyClassRepo() {
       meetingUrl: string | null;
       errorReason: string | null;
       nextRetryAt: Date;
+      scheduleVersion: number;
     },
     claim: {
       lockedAt: Date;
       attemptCount: number;
-      operation: "create" | "cancel";
+      operation: "create" | "update" | "cancel";
     },
   ) {
     const cancelledSession = sql`EXISTS (SELECT 1 FROM ${academyClassSession} WHERE ${academyClassSession.id} = ${academyClassMeeting.sessionId} AND ${academyClassSession.state} = 'cancelled')`;
-    const creating = claim.operation === "create";
+    const writingProviderEvent = claim.operation !== "cancel";
     const [row] = await conn
       .update(academyClassMeeting)
       .set({
@@ -423,16 +451,17 @@ export function createAcademyClassRepo() {
         lockedAt: null,
         // A late creator must queue deletion even if another worker already
         // deleted an absent event. Its provider request may have completed later.
-        status: creating
+        status: writingProviderEvent
           ? sql`CASE WHEN ${cancelledSession} THEN 'pending' ELSE ${values.status} END`
           : values.status,
         externalEventId: sql`COALESCE(${values.externalEventId}, ${academyClassMeeting.externalEventId})`,
-        attemptCount: creating
+        attemptCount: writingProviderEvent
           ? sql`CASE WHEN ${cancelledSession} THEN 1 ELSE ${academyClassMeeting.attemptCount} END`
           : academyClassMeeting.attemptCount,
-        nextRetryAt: creating
+        nextRetryAt: writingProviderEvent
           ? sql`CASE WHEN ${cancelledSession} THEN NOW() ELSE ${values.nextRetryAt.toISOString()}::timestamptz END`
           : values.nextRetryAt,
+        scheduleVersion: values.scheduleVersion,
       })
       .where(
         and(
@@ -443,7 +472,7 @@ export function createAcademyClassRepo() {
               eq(academyClassMeeting.lockedAt, claim.lockedAt),
               eq(academyClassMeeting.attemptCount, claim.attemptCount),
             ),
-            creating ? cancelledSession : sql`false`,
+            writingProviderEvent ? cancelledSession : sql`false`,
           ),
         ),
       )

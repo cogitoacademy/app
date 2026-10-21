@@ -50,3 +50,11 @@ export const createTestClassMeetingProvider = (
     };
   };
 };
+
+/** A deterministic update fake that rejects any event outside its namespace. */
+export const updateTestClassMeetingEvent: NonNullable<
+  MeetingPort["updateAcademyClassEvent"]
+> = async (externalEventId, sessionId) => {
+  if (externalEventId !== `test-class-event-${sessionId}`)
+    throw new Error("Refusing to update a non-synthetic class event in tests");
+};

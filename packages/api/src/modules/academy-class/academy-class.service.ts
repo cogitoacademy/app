@@ -62,13 +62,20 @@ export function createAcademyClassService(deps: {
   }
 
   async function listPublished() {
-    const records = await repo.list(deps.db, { state: "published" });
-    return records.map(toPublicAcademyClass);
+    const [published, postponed] = await Promise.all([
+      repo.list(deps.db, { state: "published" }),
+      repo.list(deps.db, { state: "postponed" }),
+    ]);
+    return [...published, ...postponed]
+      .toSorted(
+        (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
+      )
+      .map(toPublicAcademyClass);
   }
 
   async function getPublished(id: string) {
     const record = await repo.get(deps.db, id);
-    if (!record || record.state !== "published") {
+    if (!record || !["published", "postponed"].includes(record.state)) {
       throw new AcademyClassNotFoundError(id);
     }
     return toPublicAcademyClass(record);
@@ -676,8 +683,11 @@ export function createAcademyClassService(deps: {
       meetingUrl: string | null;
       errorReason: string | null;
     };
+    let operation: "create" | "update" | "cancel" = "create";
+    let processedScheduleVersion = claimed.scheduleVersion;
     try {
       if (attempt?.session.state === "cancelled") {
+        operation = "cancel";
         if (attempt.meeting.externalEventId || claimed.attemptCount > 1) {
           if (!deps.meeting.cancelAcademyClassEvent)
             throw new Error(
@@ -696,32 +706,60 @@ export function createAcademyClassService(deps: {
           errorReason: null,
         };
       } else {
-        if (!attempt || attempt.academyClass.state !== "published") {
+        if (
+          !attempt ||
+          !["published", "postponed"].includes(attempt.academyClass.state)
+        ) {
           throw new Error(
-            "Published class meeting work no longer has a class session",
+            "Published or postponed class meeting work no longer has a class session",
           );
         }
-        const createEvent = deps.meeting.createAcademyClassEvent;
-        if (!createEvent) {
-          throw new Error("Class meeting provider is not configured");
+        if (
+          attempt.meeting.externalEventId &&
+          attempt.meeting.scheduleVersion < attempt.session.version
+        ) {
+          operation = "update";
+          if (!deps.meeting.updateAcademyClassEvent)
+            throw new Error("Class meeting update provider is not configured");
+          await deps.meeting.updateAcademyClassEvent(
+            attempt.meeting.externalEventId,
+            attempt.session.id,
+            attempt.session.startAt,
+            attempt.session.endAt,
+          );
+          processedScheduleVersion = attempt.session.version;
+          result = {
+            provider: attempt.meeting.provider,
+            status: "created",
+            externalEventId: attempt.meeting.externalEventId,
+            meetingUrl: attempt.meeting.meetingUrl,
+            errorReason: null,
+          };
+        } else {
+          const createEvent = deps.meeting.createAcademyClassEvent;
+          if (!createEvent) {
+            throw new Error("Class meeting provider is not configured");
+          }
+          result = await createEvent(
+            attempt.session.id,
+            attempt.session.startAt,
+            attempt.session.endAt,
+            { email: attempt.tutorEmail, name: attempt.tutorName },
+            {
+              title: `Cogito ${attempt.academyClass.titleEn}: ${attempt.session.titleEn}`,
+              externalEventId: attempt.meeting.externalEventId ?? undefined,
+            },
+          );
+          processedScheduleVersion = attempt.session.version;
         }
-        result = await createEvent(
-          attempt.session.id,
-          attempt.session.startAt,
-          attempt.session.endAt,
-          { email: attempt.tutorEmail, name: attempt.tutorName },
-          {
-            title: `Cogito ${attempt.academyClass.titleEn}: ${attempt.session.titleEn}`,
-            externalEventId: attempt.meeting.externalEventId ?? undefined,
-          },
-        );
       }
     } catch (error) {
       result = {
         provider: attempt?.meeting.provider ?? "manual",
         status: "failed",
         externalEventId: null,
-        meetingUrl: null,
+        meetingUrl:
+          operation === "update" ? (attempt?.meeting.meetingUrl ?? null) : null,
         errorReason: String(error),
       };
     }
@@ -742,7 +780,7 @@ export function createAcademyClassService(deps: {
     }
 
     const retryDelay =
-      attempt?.session.state === "cancelled"
+      operation === "cancel"
         ? 30_000
         : Math.min(
             MAX_MEETING_RETRY_DELAY_MS,
@@ -762,11 +800,12 @@ export function createAcademyClassService(deps: {
           result.status === "created"
             ? now
             : new Date(now.getTime() + retryDelay),
+        scheduleVersion: processedScheduleVersion,
       },
       {
         lockedAt: claimed.lockedAt!,
         attemptCount: claimed.attemptCount,
-        operation: attempt?.session.state === "cancelled" ? "cancel" : "create",
+        operation,
       },
     );
     return saved?.status ?? null;
@@ -901,9 +940,9 @@ export function createAcademyClassService(deps: {
       if (!locked) throw new AcademyClassNotFoundError(input.id);
       const record = await repo.get(tx, input.id);
       if (!record) throw new AcademyClassNotFoundError(input.id);
-      if (record.state !== "published") {
+      if (!["published", "postponed"].includes(record.state)) {
         throw new AcademyClassStateConflictError(
-          "Only published class meetings can be retried",
+          "Only published or postponed class meetings can be retried",
           { id: input.id, state: record.state },
         );
       }

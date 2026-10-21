@@ -53,6 +53,13 @@ export interface MeetingPort {
     attendee?: MeetingAttendee,
     details?: MeetingEventDetails,
   ): Promise<AcademyClassMeetingResult>;
+  /** Updates the durable calendar event after a one-time cohort postponement. */
+  updateAcademyClassEvent?(
+    externalEventId: string | null,
+    sessionId: string,
+    scheduledStartAt: Date,
+    scheduledEndAt: Date,
+  ): Promise<void>;
   /**
    * Creates a provider-side meeting event and persists the local
    * `meetingEvent` row.

@@ -14,7 +14,30 @@ when `TEST_DATABASE_ALLOW_RESET=true` and
 longer supplies a default database URL. The standalone guard suite passes 6
 tests / 40 expectations; no database-backed tests were run for this fix.
 
-Integrated local checkpoint (21 October): f/release-v3 includes admin cancellation
+
+Current local T06 lifecycle implementation checkpoint (21 October): this worktree
+adds preview/confirm for individual future class-session cancellation, the
+approved one-time minimum decision and postponement flow, and the exact 72-hour
+free-exit window. Quotes bind stable request UUIDs, class/session versions, and
+exact hashes. Cancellation releases only the target future seat and adjusts
+unpaid installments; original enrollment pricing/history, past delivery holds,
+reports, and earned fees remain. The minimum counts unique active full/half-plan
+students and excludes single-session buyers, expired checkouts, cancelled
+enrollments, and defaulted plans. Admin may continue or postpone once; a
+replacement start must be strictly after the free-exit deadline, which is
+inclusive for a no-fee student withdrawal. Ordinary later reschedule rights
+remain open under Q04.
+
+Isolated evidence: migration 0068 was applied only to loopback test database
+6769 (journal row 69, timestamp 1792584327849, SHA-256
+cffb34e94821c878f2d897f59b1800395c7bc6ceefc44dc8cd9546db7116b173). The broad
+class-enrollment suite passes 35 tests / 252 expectations; pure cancellation
+and meeting tests pass 9 / 21; one real-RPC Chromium journey passes in 31.7s;
+targeted web and E2E typechecks pass. Parent review/dev integration remain
+pending. This milestone does not complete T06 or Release V3. See the T06
+runbook checkpoint for typecheck limits, logs, and the exact test boundaries.
+
+Prior integrated local checkpoint (21 October, before T06 lifecycle): f/release-v3 includes admin cancellation
 446e2cd0 and student cancellation a7065443, alongside signup and payout. Migration
 0066 applied through the standard runner to guarded loopback cogito-app/6767.
 Dev readback: journal id 87, timestamp 1792559482042, hash
@@ -27,7 +50,8 @@ runbook checkpoint. PDF, reminders, the dedicated on-demand admin correction
 workflow, lifecycle follow-ups, AUTH-02/referrals and full release acceptance
 remain open. Main is unchanged.
 
-T06 administrator cancellation is implemented on f/v3-admin-class-cancellation
+Prior T06 whole-class administrator cancellation checkpoint (before current lifecycle work):
+implementation on f/v3-admin-class-cancellation
 with parent acceptance complete for this slice. Admins review exact zero-fee future-hold returns,
 then confirm a versioned/idempotent quote. The transaction cancels future sessions,
 releases only unspent future allocations, stops unpaid/checkout obligations,
@@ -43,7 +67,8 @@ and the shared report workspace are implemented in this worktree; PDF, reminders
 the dedicated on-demand admin correction workflow and remaining release acceptance
 stay open.
 
-T06 student cancellation/withdrawal is implemented on its baseline-derived
+Prior T06 student cancellation checkpoint (before current lifecycle work):
+withdrawal was implemented on its baseline-derived
 worktree: exact preview + versioned/idempotent confirmation, per-allocation
 Marks accounting, inclusive 24h deadline, unpaid-half cancellation and atomic
 audit/notification. Parent Postgres checks pass 15/101 and the combined web
@@ -463,7 +488,7 @@ browser E2E or typecheck was run for this follow-up.
 
 Migration `0061_academy_class_drafts.sql` adds the class and session draft model. The admin-only `admin-classes` page creates/edits drafts with localized titles/descriptions, cohort curriculum and enrollment defaults, per-session schedule/capacity/tutor/mode/room, and required audit reason. Approved defaults are cohort 20/22/25 Marks per full/half/single session with Rp400,000 tutor fee per session, and masterclass 5 Marks with Rp300,000 tutor fee. Both online and in-person are available; in-person requires an active managed room. Drafts are not public and do not reserve rooms.
 
-The service validates active competition, published mode-compatible tutors and session capacities, active room capacity, non-overlapping class sessions, cohort curriculum/check date, and the one-session masterclass rule. Draft updates are optimistic-versioned and preserve supplied session IDs; audit actions are `academy_class.draft_created` and `academy_class.draft_updated`. The admin editor uploads PNG/JPEG/WebP/GIF covers through the existing protected upload flow (max 5 MB) and stores the returned key on the draft; approved M01 cover/curriculum assets remain pending. Publication-time room/tutor conflict checks, Meet setup, admin publish controls, and T05 student enrollment are implemented. T02 delivery fees and T06 cancellation remain separate work. T07 report settlement, class payout identity, and the role-based report workspace are implemented; PDF, reminders, and the dedicated on-demand admin correction workflow remain pending.
+The service validates active competition, published mode-compatible tutors and session capacities, active room capacity, non-overlapping class sessions, cohort curriculum/check date, and the one-session masterclass rule. Draft updates are optimistic-versioned and preserve supplied session IDs; audit actions are `academy_class.draft_created` and `academy_class.draft_updated`. The admin editor uploads PNG/JPEG/WebP/GIF covers through the existing protected upload flow (max 5 MB) and stores the returned key on the draft; approved M01 cover/curriculum assets remain pending. Publication-time room/tutor conflict checks, Meet setup, admin publish controls, and T05 student enrollment are implemented. At this dated 19 October checkpoint, T02 delivery fees and T06 cancellation remained separate work. T07 report settlement, class payout identity, and the role-based report workspace are implemented; PDF, reminders, and the dedicated on-demand admin correction workflow remain pending.
 
 Focused integration verification: **4/4 tests, 18 expectations** against the guarded local `cogito-test` database after additive migration. A server TypeScript-Go check attempt again failed with Windows `Out of memory`; Vite build and web typecheck have not been rerun for this slice. No production database, V3 activation, or external provider was used.
 
@@ -475,9 +500,9 @@ The public `classes.list` and `classes.get` procedures expose published classes 
 
 Admin can publish a versioned class draft after the service rechecks active competition ancestry, published tutor assignments and mode/capacity, future session times, cohort minimum/curriculum, managed-room capacity and conflicts, and the approved tutor fee (Rp400,000 per cohort session or Rp300,000 per masterclass session in either mode). Publication marks sessions scheduled, writes audit state, deduplicates one tutor notification per class, and creates one durable meeting job per online session in the same transaction. In-person sessions use managed rooms and have no Meet job.
 
-Migration `0063_academy_class_meetings.sql` adds the per-session meeting job/status record. Provider work runs after commit under a claim lease with exponential retry; stable Google event IDs recover an event after an ambiguous provider response. If Calendar accepted an event but Meet URL generation is still pending, the job remains retryable and the next attempt fetches that same event ID instead of inserting another. Admin can retry failed setup. Test mode uses a controlled local adapter; no Google Calendar call is made in tests. The admin Class studio exposes draft/edit/publish controls and failed-meeting retry. Public list/detail pages use the allowlisted DTO; the student detail route shows the separate T05 enrollment panel only to signed-in students. T04 still depends on T02/T06/T07 report, fee, absence and cancellation integration plus approved client curriculum and cover inputs.
+Migration `0063_academy_class_meetings.sql` adds the per-session meeting job/status record. Provider work runs after commit under a claim lease with exponential retry; stable Google event IDs recover an event after an ambiguous provider response. If Calendar accepted an event but Meet URL generation is still pending, the job remains retryable and the next attempt fetches that same event ID instead of inserting another. Admin can retry failed setup. Test mode uses a controlled local adapter; no Google Calendar call is made in tests. The admin Class studio exposes draft/edit/publish controls and failed-meeting retry. Public list/detail pages use the allowlisted DTO; the student detail route shows the separate T05 enrollment panel only to signed-in students. T04 still depends on T02 delivery/fee and T07 report integration. The 21 October T06 lifecycle implementation is in a parent-review worktree and is not yet integrated; absence/expiry handling and approved client curriculum and cover inputs remain separate.
 
-Publication takes the competition-catalog lock, sorted tutor locks, and sorted room locks before fresh row-locked reference reads. Catalog archive, tutor status, and room update/deactivation use the matching locks so publication cannot validate stale mutable references. The class publish API suite passed 9 tests / 51 expectations, including gated room-capacity, room-deactivation, and catalog-archive races. The admin-to-public Chromium journey passed 1 spec and covers pending-link retry, hidden drafts, role denial, empty/error states, and DTO privacy. Migration `0063` is applied only to isolated `cogito-test`; dev migration review remains with the parent. T04 remains in progress for enrollment, class absence/cancellation/report/expiry integration, and approved client curriculum/cover inputs. This checkpoint is not a V3 activation or release gate.
+Publication takes the competition-catalog lock, sorted tutor locks, and sorted room locks before fresh row-locked reference reads. Catalog archive, tutor status, and room update/deactivation use the matching locks so publication cannot validate stale mutable references. The class publish API suite passed 9 tests / 51 expectations, including gated room-capacity, room-deactivation, and catalog-archive races. The admin-to-public Chromium journey passed 1 spec and covers pending-link retry, hidden drafts, role denial, empty/error states, and DTO privacy. Migration `0063` is applied only to isolated `cogito-test`; dev migration review remains with the parent. At this 20 October checkpoint, T04 remained in progress for enrollment, class absence/cancellation/report/expiry integration, and approved client curriculum/cover inputs. This checkpoint is not a V3 activation or release gate.
 
 ## V3 report-field character limits (2026-10-18)
 

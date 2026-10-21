@@ -16,7 +16,12 @@ export function quoteEnrollmentCancellation(
   sessions: readonly Session[],
   now: Date,
   sessionId?: string,
+  freeExitUntil: Date | null = null,
 ) {
+  const freeExit =
+    !sessionId &&
+    freeExitUntil !== null &&
+    now.getTime() <= freeExitUntil.getTime();
   const selected = [];
   let retainedMarks = 0;
   let fundedMarks = 0;
@@ -30,8 +35,10 @@ export function quoteEnrollmentCancellation(
     if (!session || session.state !== "scheduled" || session.startAt <= now)
       continue;
     const remaining = remainingAllocationMarks(allocation);
-    const deadline = new Date(session.startAt.getTime() - 24 * 60 * 60 * 1000);
-    if (remaining > 0 && now > deadline) {
+    const deadline = freeExit
+      ? freeExitUntil!
+      : new Date(session.startAt.getTime() - 24 * 60 * 60 * 1000);
+    if (!freeExit && remaining > 0 && now > deadline) {
       retainedMarks += remaining;
       continue;
     }
@@ -47,9 +54,9 @@ export function quoteEnrollmentCancellation(
       throw new ClassEnrollmentInvalidOperationError(
         "Cancellation Marks exceed the supported range",
       );
-    const cumulativeFee = Number(
-      (BigInt(fundedMarks) * 2000n + 5000n) / 10000n,
-    );
+    const cumulativeFee = freeExit
+      ? 0
+      : Number((BigInt(fundedMarks) * 2000n + 5000n) / 10000n);
     selected.push({
       allocationId: allocation.id,
       sessionId: allocation.sessionId,
@@ -71,7 +78,9 @@ export function quoteEnrollmentCancellation(
     enrollmentId,
     sessionId: sessionId ?? null,
     scope: sessionId ? ("session" as const) : ("withdrawal" as const),
-    feeRateBps: 2000,
+    freeExit,
+    freeExitUntil: freeExit ? freeExitUntil : null,
+    feeRateBps: freeExit ? 0 : 2000,
     feeMarks,
     returnMarks: fundedMarks - feeMarks,
     retainedMarks,

@@ -120,6 +120,12 @@ export function createClassEnrollmentRepo() {
         id: academyClass.id,
         kind: academyClass.kind,
         state: academyClass.state,
+        version: academyClass.version,
+        minimumCheckAt: academyClass.minimumCheckAt,
+        minimumCheckResolvedAt: academyClass.minimumCheckResolvedAt,
+        minimumEnrollment: academyClass.minimumEnrollment,
+        postponementCount: academyClass.postponementCount,
+        freeExitUntil: academyClass.freeExitUntil,
         cohortFullRateMarks: academyClass.cohortFullRateMarks,
         cohortHalfRateMarks: academyClass.cohortHalfRateMarks,
         cohortSingleRateMarks: academyClass.cohortSingleRateMarks,
@@ -141,6 +147,7 @@ export function createClassEnrollmentRepo() {
         sequenceNumber: academyClassSession.sequenceNumber,
         startAt: academyClassSession.startAt,
         state: academyClassSession.state,
+        version: academyClassSession.version,
         capacity: academyClassSession.capacity,
       })
       .from(academyClassSession)
@@ -743,7 +750,15 @@ export function createClassEnrollmentRepo() {
     const allocations = await conn
       .select()
       .from(academyClassEnrollmentAllocation)
-      .where(eq(academyClassEnrollmentAllocation.installmentId, installmentId))
+      .where(
+        and(
+          eq(academyClassEnrollmentAllocation.installmentId, installmentId),
+          inArray(academyClassEnrollmentAllocation.state, [
+            "checkout_reserved",
+            "unfunded_reserved",
+          ]),
+        ),
+      )
       .orderBy(asc(academyClassEnrollmentAllocation.sessionId))
       .for("update");
     if (allocations.length !== expectedAllocationCount) {

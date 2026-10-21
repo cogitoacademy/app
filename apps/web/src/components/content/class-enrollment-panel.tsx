@@ -137,15 +137,17 @@ export function ClassEnrollmentPanel({
   );
 
   const allowedPlans: Plan[] =
-    pendingCheckout || activeNonSingle || (activeHalf && !defaultedHalf)
+    enrollmentsData?.classState === "postponed"
       ? []
-      : defaultedHalf
-        ? ["half"]
-        : activeSingles
-          ? ["single"]
-          : kind === "cohort"
-            ? ["full", "half", "single"]
-            : ["masterclass"];
+      : pendingCheckout || activeNonSingle || (activeHalf && !defaultedHalf)
+        ? []
+        : defaultedHalf
+          ? ["half"]
+          : activeSingles
+            ? ["single"]
+            : kind === "cohort"
+              ? ["full", "half", "single"]
+              : ["masterclass"];
   const selectedPlan = allowedPlans.includes(plan)
     ? plan
     : (allowedPlans[0] ?? plan);
@@ -386,6 +388,16 @@ export function ClassEnrollmentPanel({
           </CardDescription>
         </CardHeader>
         <CardBody className="space-y-4">
+          {enrollmentsData?.classState === "postponed" ? (
+            <Text className="text-sm text-warning-foreground">
+              This cohort was postponed once. Your penalty-free full withdrawal
+              deadline is{" "}
+              {enrollmentsData.freeExitUntil
+                ? formatDate(enrollmentsData.freeExitUntil)
+                : "not recorded"}{" "}
+              WIB. The server shows the exact fee and return before you confirm.
+            </Text>
+          ) : null}
           {studentEnrollments.length > 0 ? (
             <Stack direction="column" spacing="md">
               {studentEnrollments.map((enrollment) => {
@@ -539,6 +551,8 @@ export function ClassEnrollmentPanel({
                         enrollmentId={enrollment.id}
                         allocations={enrollment.allocations}
                         sessions={sessions}
+                        classState={enrollmentsData?.classState ?? "published"}
+                        freeExitUntil={enrollmentsData?.freeExitUntil ?? null}
                         onChanged={refreshEnrollmentState}
                       />
                     ) : null}
