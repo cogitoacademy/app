@@ -1802,7 +1802,7 @@ RPC contract.
 
 - **RPC path:** `/rpc/tutorActions/completeSession`
 - **Auth:** Tutor
-- **Input:** `{ bookingId, sessionId?, feedback: { discussion: string[1..30], strengths: string[1..30], improvements: string[1..30] } }` (`sessionId` required for series child sessions; each bullet 1–1000 chars)
+- **Input:** `{ bookingId, sessionId?, feedback: { discussion: string[], strengths: string[], improvements: string[] }, requestKey? }` (`sessionId` required for series child sessions; each normalized nonempty field is limited to 600 Unicode code points including separators; `requestKey` is an optional UUID for identical retry replay)
 - **Output:** `{ booking }`
 - **Description:** Marks a scheduled session completed and deducts held Marks. Requires session discussion, strengths observed, and areas for improvement; saves one `session_completion_feedback` row atomically (per booking for solo/group, per session for series). In the same transaction it appends one `tutor_session_fee` event for the completed delivery (booking identity for solo/group; child-session identity for series), including the pinned price snapshot and gross IDR honorarium. For a series session with a prior participant no-show ledger entry, completion skips that already-charged allocation and preserves future holds; a no-show without this completion report earns no tutor fee. Malformed V3 honoraria fail before settlement writes. Concurrent completion is serialized so only one report, deduction, and fee is recorded. A series parent completes after every child is completed or cancelled, then releases residual participant holds. This is an earned-fee fact, not a payout; the RPC output is unchanged. Missing/empty feedback returns `BOOKING_COMPLETION_FEEDBACK_REQUIRED` (400).
 - **Frontend note:** Cancel uses Selia confirmation dialog; complete uses `CompleteSessionDialog` for three textarea-backed tutor feedback sections (each line is a bullet and Enter adds another). Booking detail shows read-only Student notes with Session feedback directly beneath it in the same Session overview block after completion. Mutation feedback is emitted through the global toast layer and does not change this RPC contract.
@@ -1810,10 +1810,26 @@ RPC contract.
 ### `booking.listCompletionFeedback`
 
 - **RPC path:** `/rpc/booking/listCompletionFeedback`
-- **Auth:** Protected (student/tutor with booking access, admin bypass)
+- **Auth:** Protected (assigned tutor/admin may read; students need booking access plus a chargeable delivered seat)
 - **Input:** `{ bookingId }`
-- **Output:** `SessionCompletionFeedback[]` (`{ id, bookingId, sessionId|null, authorId, discussion[], strengths[], improvements[], createdAt }`)
-- **Description:** Lists required completion feedback for payout review. Student and admin read after completion; series shows per-session rows.
+- **Output:** `SessionCompletionFeedback[]` (`{ id, bookingId, sessionId|null, authorId, discussion[], strengths[], improvements[], version, createdAt }`)
+- **Description:** Lists required completion feedback for payout review. A student sees a row only when that booking/session is completed and their wallet has the matching `deduct` ledger event, including a chargeable no-show. Pending, withdrawn, unpaid, and unfunded seats do not receive the report; a delivered series child remains readable after its parent is cancelled.
+
+### `booking.submitAdminCompletionReport`
+
+- **RPC path:** `/rpc/booking/submitAdminCompletionReport`
+- **Auth:** Admin
+- **Input:** `{ bookingId, sessionId?, feedback: { discussion[], strengths[], improvements[] }, deliveryConfirmed: true, reason, expectedVersion?, requestKey }` (`sessionId` is required for a series child; each feedback field and the trimmed audit reason are limited to 600 Unicode code points; `expectedVersion` is required to correct an existing report; `requestKey` is a required UUID)
+- **Output:** Immutable report-history event (`{ id, feedbackId, bookingId, sessionId|null, version, status, actorId, actorRole, reason, deliveryConfirmed, discussion[], strengths[], improvements[], createdAt }`)
+- **Description:** On the existing booking-detail admin surface, records or corrects a report for the assigned tutor after delivery confirmation and with an audited reason. Initial submission uses the tutor-completion locks and transaction, retaining the assigned tutor fee and participant funding identities. Corrections require the current version and change report text/version/history only; they do not repeat wallet deductions, fees, referrals, or rewards. Identical request-key replay returns its saved event; changed payload or stale version conflicts. The transaction appends a tutor notification.
+
+### `booking.listCompletionFeedbackHistory`
+
+- **RPC path:** `/rpc/booking/listCompletionFeedbackHistory`
+- **Auth:** Admin
+- **Input:** `{ bookingId }`
+- **Output:** Immutable report-history events without private idempotency payloads
+- **Description:** Lists submitted/corrected versions and legacy snapshots, including actor, delivery confirmation, reason, full text snapshot, and timestamp. Existing reports retain their original IDs, text, and creation times; missing historical actor facts remain unknown.
 
 ### `tutorActions.markAttendance`
 

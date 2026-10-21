@@ -6,6 +6,7 @@ import {
   integer,
   boolean,
   jsonb,
+  uuid,
   serial,
   index,
   uniqueIndex,
@@ -369,6 +370,7 @@ export const sessionCompletionFeedback = pgTable(
     discussion: jsonb("discussion").$type<string[]>().notNull(),
     strengths: jsonb("strengths").$type<string[]>().notNull(),
     improvements: jsonb("improvements").$type<string[]>().notNull(),
+    version: integer("version").notNull().default(1),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
@@ -379,6 +381,58 @@ export const sessionCompletionFeedback = pgTable(
     index("session_feedback_bookingId_idx").on(table.bookingId),
     index("session_feedback_sessionId_idx").on(table.sessionId),
     index("session_feedback_authorId_idx").on(table.authorId),
+  ],
+);
+
+export const sessionCompletionFeedbackHistory = pgTable(
+  "session_completion_feedback_history",
+  {
+    id: uuidPrimaryKey,
+    feedbackId: text("feedback_id")
+      .notNull()
+      .references(() => sessionCompletionFeedback.id, { onDelete: "cascade" }),
+    bookingId: text("booking_id")
+      .notNull()
+      .references(() => booking.id, { onDelete: "cascade" }),
+    // Keep the session ID as audit text so a later session deletion cannot erase its history.
+    sessionId: text("session_id"),
+    version: integer("version").notNull(),
+    status: text("status").notNull(),
+    actorId: text("actor_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    actorRole: text("actor_role").notNull(),
+    reason: text("reason"),
+    deliveryConfirmed: boolean("delivery_confirmed"),
+    discussion: jsonb("discussion").$type<string[]>().notNull(),
+    strengths: jsonb("strengths").$type<string[]>().notNull(),
+    improvements: jsonb("improvements").$type<string[]>().notNull(),
+    requestKey: uuid("request_key"),
+    requestPayload: jsonb("request_payload").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    check("session_feedback_history_version_check", sql`${table.version} > 0`),
+    check(
+      "session_feedback_history_status_check",
+      sql`${table.status} IN ('submitted','corrected','legacy_snapshot')`,
+    ),
+    check(
+      "session_feedback_history_actor_check",
+      sql`${table.actorRole} IN ('admin','tutor','legacy')`,
+    ),
+    uniqueIndex("session_feedback_history_feedback_version_uniq").on(
+      table.feedbackId,
+      table.version,
+    ),
+    index("session_feedback_history_booking_session_idx").on(
+      table.bookingId,
+      table.sessionId,
+      table.createdAt,
+    ),
+    uniqueIndex("session_feedback_history_request_key_uniq").on(
+      table.requestKey,
+    ),
   ],
 );
 
@@ -566,7 +620,7 @@ export const sessionNoteRelations = relations(sessionNote, ({ one }) => ({
 
 export const sessionCompletionFeedbackRelations = relations(
   sessionCompletionFeedback,
-  ({ one }) => ({
+  ({ one, many }) => ({
     booking: one(booking, {
       fields: [sessionCompletionFeedback.bookingId],
       references: [booking.id],
@@ -577,6 +631,21 @@ export const sessionCompletionFeedbackRelations = relations(
     }),
     author: one(user, {
       fields: [sessionCompletionFeedback.authorId],
+      references: [user.id],
+    }),
+    history: many(sessionCompletionFeedbackHistory),
+  }),
+);
+
+export const sessionCompletionFeedbackHistoryRelations = relations(
+  sessionCompletionFeedbackHistory,
+  ({ one }) => ({
+    feedback: one(sessionCompletionFeedback, {
+      fields: [sessionCompletionFeedbackHistory.feedbackId],
+      references: [sessionCompletionFeedback.id],
+    }),
+    actor: one(user, {
+      fields: [sessionCompletionFeedbackHistory.actorId],
       references: [user.id],
     }),
   }),

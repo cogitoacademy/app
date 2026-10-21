@@ -62,6 +62,7 @@ import {
   BookingCancellationDeadlinePassedError,
   BookingCompletionFeedbackRequiredError,
   BookingCompletionFeedbackTooLongError,
+  BookingCompletionReportConflictError,
   BookingTutorCapacityError,
   BookingV3CompetitionRequiredError,
   BookingV3CompetitionUnavailableError,
@@ -384,14 +385,34 @@ export type CompletionFeedback = {
   improvements: string[];
 };
 
+type CompletionReportAudit = {
+  actorId: string;
+  actorRole: "admin" | "tutor";
+  reason: string | null;
+  deliveryConfirmed: true;
+  requestKey?: string;
+  requestPayload?: Record<string, unknown>;
+};
+
+type AdminCompletionReportInput = {
+  bookingId: string;
+  adminId: string;
+  sessionId?: string;
+  feedback: CompletionFeedback;
+  deliveryConfirmed: boolean;
+  reason: string;
+  expectedVersion?: number;
+  requestKey: string;
+};
+
 type BookingRow = NonNullable<
   Awaited<ReturnType<BookingRepo["findBookingById"]>>
 >;
 
-function assertCompletionFeedback(
+function normalizeCompletionFeedback(
   bookingId: string,
   feedback: CompletionFeedback | undefined,
-): asserts feedback is CompletionFeedback {
+): CompletionFeedback {
   const parsed = completionFeedbackInput.safeParse(feedback);
   if (!parsed.success) {
     if (
@@ -403,9 +424,93 @@ function assertCompletionFeedback(
     }
     throw new BookingCompletionFeedbackRequiredError(bookingId);
   }
-  feedback!.discussion = parsed.data.discussion.map(escapeHtml);
-  feedback!.strengths = parsed.data.strengths.map(escapeHtml);
-  feedback!.improvements = parsed.data.improvements.map(escapeHtml);
+  return {
+    discussion: parsed.data.discussion.map(escapeHtml),
+    strengths: parsed.data.strengths.map(escapeHtml),
+    improvements: parsed.data.improvements.map(escapeHtml),
+  };
+}
+
+function completionReportPayloadKey(value: unknown): string {
+  if (value === undefined || value === null) return "null";
+  if (Array.isArray(value)) {
+    return `[${value.map(completionReportPayloadKey).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value).toSorted(([a], [b]) =>
+      a.localeCompare(b),
+    );
+    return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${completionReportPayloadKey(item)}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function makeCompletionReportRequestPayload(
+  feedback: CompletionFeedback,
+  reason: string | null,
+  expectedVersion: number | null,
+) {
+  return {
+    feedback,
+    deliveryConfirmed: true,
+    reason,
+    expectedVersion,
+  } satisfies Record<string, unknown>;
+}
+
+export function completionFeedbackEntitlementEventKeys(input: {
+  bookingId: string;
+  bookingType: "solo" | "group" | "series";
+  userId: string;
+  sessionId?: string | null;
+  seriesTargetGroupSize?: number;
+}) {
+  const {
+    bookingId,
+    bookingType,
+    userId,
+    sessionId,
+    seriesTargetGroupSize = 1,
+  } = input;
+  if (bookingType === BOOKING_TYPE.SERIES && sessionId) {
+    return [
+      seriesTargetGroupSize > 1
+        ? `booking.${bookingId}.session.${sessionId}.deduct.${userId}`
+        : `booking.${bookingId}.session.${sessionId}.deduct`,
+      `booking.${bookingId}.no_show.${userId}.${sessionId}`,
+    ];
+  }
+  if (bookingType === BOOKING_TYPE.GROUP) {
+    return [
+      `booking.${bookingId}.complete.${userId}`,
+      `booking.${bookingId}.no_show.${userId}.solo`,
+    ];
+  }
+  return [
+    `booking.${bookingId}.deduct`,
+    `booking.${bookingId}.no_show.${userId}.solo`,
+  ];
+}
+
+function completionReportHistoryMatches(
+  history: {
+    bookingId: string;
+    sessionId: string | null;
+    requestPayload: unknown;
+  },
+  bookingId: string,
+  sessionId: string | undefined,
+  requestPayload: Record<string, unknown>,
+) {
+  return (
+    history.bookingId === bookingId &&
+    history.sessionId === (sessionId ?? null) &&
+    completionReportPayloadKey(history.requestPayload) ===
+      completionReportPayloadKey(requestPayload)
+  );
 }
 
 /**
@@ -1921,12 +2026,69 @@ export function createBookingService(deps: {
     });
   }
 
+  async function insertCompletionFeedbackWithAudit(
+    tx: DbOrTx,
+    values: {
+      bookingId: string;
+      sessionId: string | null;
+      tutorId: string;
+      feedback: CompletionFeedback;
+      audit: CompletionReportAudit;
+    },
+  ) {
+    const report = await repo.insertCompletionFeedback(tx, {
+      bookingId: values.bookingId,
+      sessionId: values.sessionId,
+      authorId: values.tutorId,
+      discussion: values.feedback.discussion,
+      strengths: values.feedback.strengths,
+      improvements: values.feedback.improvements,
+    });
+    await repo.insertCompletionFeedbackHistory(tx, {
+      feedbackId: report.id,
+      bookingId: values.bookingId,
+      sessionId: values.sessionId,
+      version: report.version,
+      status: "submitted",
+      actorId: values.audit.actorId,
+      actorRole: values.audit.actorRole,
+      reason: values.audit.reason,
+      deliveryConfirmed: values.audit.deliveryConfirmed,
+      discussion: report.discussion,
+      strengths: report.strengths,
+      improvements: report.improvements,
+      requestKey: values.audit.requestKey ?? null,
+      requestPayload: values.audit.requestPayload ?? null,
+    });
+    if (values.audit.actorRole === ACTOR_TYPE.ADMIN) {
+      await notification.write({
+        db: tx,
+        userId: values.tutorId,
+        bookingId: values.bookingId,
+        category: NOTIFICATION_CATEGORY.BOOKING,
+        severity: NOTIFICATION_SEVERITY.INFO,
+        title: "Session report recorded by admin",
+        body: "An admin recorded the session report on your behalf.",
+        eventKey: `booking.${values.bookingId}.session.${values.sessionId ?? "solo"}.report.${report.version}.admin`,
+      });
+    }
+    return report;
+  }
+
   async function completeSession(
     bookingId: string,
     tutorId: string,
     sessionId?: string,
     feedback?: CompletionFeedback,
+    requestKey?: string,
   ) {
+    const normalizedFeedback = normalizeCompletionFeedback(bookingId, feedback);
+    if (requestKey && !UUID_PATTERN.test(requestKey)) {
+      throw new BookingNotEditableError(
+        bookingId,
+        "A valid request key is required",
+      );
+    }
     return db.transaction(async (tx) => {
       let b = await repo.findBookingById(tx, bookingId);
       if (!b) throw new BookingNotFoundError(bookingId);
@@ -1936,30 +2098,333 @@ export function createBookingService(deps: {
       // completed while a payout is being marked must land wholly before or
       // after that cutoff, never disappear between the two reads.
       await lockTutorForPayout(tx, b.tutorId);
+      const lockedBooking = await repo.findBookingById(tx, bookingId, {
+        forUpdate: true,
+      });
+      if (!lockedBooking) throw new BookingNotFoundError(bookingId);
+      if (lockedBooking.tutorId !== tutorId) {
+        throw new BookingNotOwnedError(bookingId, tutorId);
+      }
+      b = lockedBooking;
+
+      const requestPayload = makeCompletionReportRequestPayload(
+        normalizedFeedback,
+        null,
+        null,
+      );
+      if (requestKey) {
+        const prior = await repo.findCompletionFeedbackHistoryByRequestKey(
+          tx,
+          requestKey,
+        );
+        if (prior) {
+          if (
+            !completionReportHistoryMatches(
+              prior,
+              bookingId,
+              sessionId,
+              requestPayload,
+            )
+          ) {
+            throw new BookingCompletionReportConflictError(
+              "This request key was already used for a different report submission",
+            );
+          }
+          return b;
+        }
+      }
+
+      const reportAudit: CompletionReportAudit = {
+        actorId: tutorId,
+        actorRole: ACTOR_TYPE.TUTOR,
+        reason: null,
+        deliveryConfirmed: true,
+        requestKey,
+        requestPayload: requestKey ? requestPayload : undefined,
+      };
 
       if (b.type !== BOOKING_TYPE.SERIES) {
-        return completeSingleSession(tx, b, bookingId, tutorId, feedback);
+        return completeSingleSession(
+          tx,
+          b,
+          bookingId,
+          tutorId,
+          normalizedFeedback,
+          reportAudit,
+        );
       }
 
       // No-show and completion take the parent booking lock before session and
       // participant locks. Refresh after waiting so hold math includes any
       // no-show allocation committed while we waited.
-      const lockedBooking = await repo.findBookingById(tx, bookingId, {
-        forUpdate: true,
-      });
-      if (!lockedBooking) throw new BookingNotFoundError(bookingId);
-      if (lockedBooking.tutorId !== tutorId)
-        throw new BookingNotOwnedError(bookingId, tutorId);
-      b = lockedBooking;
-
       return completeSeriesSession(
         tx,
         b,
         bookingId,
         tutorId,
         sessionId,
-        feedback,
+        normalizedFeedback,
+        reportAudit,
       );
+    });
+  }
+
+  async function submitAdminCompletionReport(
+    input: AdminCompletionReportInput,
+  ) {
+    const feedback = normalizeCompletionFeedback(
+      input.bookingId,
+      input.feedback,
+    );
+    const reason = input.reason.trim();
+    if (input.deliveryConfirmed !== true) {
+      throw new BookingNotEditableError(
+        input.bookingId,
+        "Confirm that the session was delivered before submitting its report",
+      );
+    }
+    if (!reason || Array.from(reason).length > 600) {
+      throw new BookingNotEditableError(
+        input.bookingId,
+        "An audit reason of at most 600 characters is required",
+      );
+    }
+    if (!UUID_PATTERN.test(input.requestKey)) {
+      throw new BookingNotEditableError(
+        input.bookingId,
+        "A valid request key is required",
+      );
+    }
+    if (
+      input.expectedVersion !== undefined &&
+      (!Number.isInteger(input.expectedVersion) || input.expectedVersion < 1)
+    ) {
+      throw new BookingCompletionReportConflictError(
+        "The expected report version is invalid",
+      );
+    }
+
+    const requestPayload = makeCompletionReportRequestPayload(
+      feedback,
+      reason,
+      input.expectedVersion ?? null,
+    );
+    const reportAudit: CompletionReportAudit = {
+      actorId: input.adminId,
+      actorRole: ACTOR_TYPE.ADMIN,
+      reason,
+      deliveryConfirmed: true,
+      requestKey: input.requestKey,
+      requestPayload,
+    };
+
+    return db.transaction(async (tx) => {
+      let b = await repo.findBookingById(tx, input.bookingId);
+      if (!b) throw new BookingNotFoundError(input.bookingId);
+      await lockTutorForPayout(tx, b.tutorId);
+      const lockedBooking = await repo.findBookingById(tx, input.bookingId, {
+        forUpdate: true,
+      });
+      if (!lockedBooking) throw new BookingNotFoundError(input.bookingId);
+      b = lockedBooking;
+
+      let session: Awaited<ReturnType<BookingRepo["findSessionById"]>> = null;
+      if (b.type === BOOKING_TYPE.SERIES) {
+        if (!input.sessionId) throw new BookingSessionRequiredError(b.id);
+        session = await repo.findSessionById(tx, input.sessionId, {
+          forUpdate: true,
+        });
+        if (!session || session.seriesBookingId !== b.id) {
+          throw new BookingSessionNotFoundError(input.sessionId);
+        }
+      } else if (input.sessionId) {
+        throw new BookingNotEditableError(
+          b.id,
+          "A session ID is only valid for a series booking",
+        );
+      }
+
+      const prior = await repo.findCompletionFeedbackHistoryByRequestKey(
+        tx,
+        input.requestKey,
+      );
+      if (prior) {
+        if (
+          !completionReportHistoryMatches(
+            prior,
+            input.bookingId,
+            input.sessionId,
+            requestPayload,
+          )
+        ) {
+          throw new BookingCompletionReportConflictError(
+            "This request key was already used for a different report submission",
+          );
+        }
+        return prior;
+      }
+
+      const report = await repo.findCompletionFeedback(
+        tx,
+        input.bookingId,
+        input.sessionId ?? null,
+        { forUpdate: true },
+      );
+      const delivered =
+        b.type === BOOKING_TYPE.SERIES
+          ? session?.currentState === BOOKING_STATE.COMPLETED
+          : b.currentState === BOOKING_STATE.COMPLETED;
+
+      if (report) {
+        if (input.expectedVersion === undefined) {
+          throw new BookingCompletionReportConflictError(
+            "The report already exists; reload it before correcting",
+          );
+        }
+        if (report.version !== input.expectedVersion) {
+          throw new BookingCompletionReportConflictError();
+        }
+        if (!delivered) {
+          throw new BookingNotEditableError(
+            b.id,
+            "A report can only be corrected for a delivered session",
+          );
+        }
+
+        const history = await repo.listCompletionFeedbackHistoryByFeedback(
+          tx,
+          report.id,
+        );
+        if (!history.some((entry) => entry.version === report.version)) {
+          await repo.insertCompletionFeedbackHistory(tx, {
+            feedbackId: report.id,
+            bookingId: report.bookingId,
+            sessionId: report.sessionId,
+            version: report.version,
+            status: "legacy_snapshot",
+            actorId: null,
+            actorRole: "legacy",
+            reason: null,
+            deliveryConfirmed: null,
+            discussion: report.discussion,
+            strengths: report.strengths,
+            improvements: report.improvements,
+            requestKey: null,
+            requestPayload: null,
+            createdAt: report.createdAt,
+          });
+        }
+        const updated = await repo.updateCompletionFeedback(tx, {
+          id: report.id,
+          expectedVersion: input.expectedVersion,
+          version: input.expectedVersion + 1,
+          discussion: feedback.discussion,
+          strengths: feedback.strengths,
+          improvements: feedback.improvements,
+        });
+        if (!updated) throw new BookingCompletionReportConflictError();
+        const event = await repo.insertCompletionFeedbackHistory(tx, {
+          feedbackId: updated.id,
+          bookingId: updated.bookingId,
+          sessionId: updated.sessionId,
+          version: updated.version,
+          status: "corrected",
+          actorId: reportAudit.actorId,
+          actorRole: reportAudit.actorRole,
+          reason: reportAudit.reason,
+          deliveryConfirmed: reportAudit.deliveryConfirmed,
+          discussion: updated.discussion,
+          strengths: updated.strengths,
+          improvements: updated.improvements,
+          requestKey: reportAudit.requestKey,
+          requestPayload: reportAudit.requestPayload,
+        });
+        await notification.write({
+          db: tx,
+          userId: b.tutorId,
+          bookingId: b.id,
+          category: NOTIFICATION_CATEGORY.BOOKING,
+          severity: NOTIFICATION_SEVERITY.INFO,
+          title: "Session report corrected by admin",
+          body: "An admin corrected the session report on your behalf.",
+          eventKey: `booking.${b.id}.session.${updated.sessionId ?? "solo"}.report.${updated.version}.admin`,
+        });
+        return event;
+      }
+
+      if (input.expectedVersion !== undefined) {
+        throw new BookingCompletionReportConflictError(
+          "The report no longer exists; reload before retrying",
+        );
+      }
+
+      const sessionEndAt = session?.scheduledEndAt ?? b.scheduledEndAt;
+      const ended = sessionEndAt.getTime() <= Date.now();
+      if (!delivered && !ended) {
+        throw new BookingNotEditableError(
+          b.id,
+          "A report can only be submitted after the session has ended",
+        );
+      }
+
+      if (b.type === BOOKING_TYPE.SERIES && session) {
+        if (
+          b.currentState === BOOKING_STATE.SCHEDULED &&
+          session.currentState === BOOKING_STATE.SCHEDULED
+        ) {
+          await completeSeriesSession(
+            tx,
+            b,
+            b.id,
+            b.tutorId,
+            session.id,
+            feedback,
+            reportAudit,
+          );
+        } else if (session.currentState === BOOKING_STATE.COMPLETED) {
+          await insertCompletionFeedbackWithAudit(tx, {
+            bookingId: b.id,
+            sessionId: session.id,
+            tutorId: b.tutorId,
+            feedback,
+            reportAudit,
+          });
+        } else {
+          throw new BookingNotEditableError(
+            b.id,
+            "A report can only be submitted for a delivered or scheduled session",
+          );
+        }
+      } else if (b.currentState === BOOKING_STATE.SCHEDULED) {
+        await completeSingleSession(
+          tx,
+          b,
+          b.id,
+          b.tutorId,
+          feedback,
+          reportAudit,
+        );
+      } else if (b.currentState === BOOKING_STATE.COMPLETED) {
+        await insertCompletionFeedbackWithAudit(tx, {
+          bookingId: b.id,
+          sessionId: null,
+          tutorId: b.tutorId,
+          feedback,
+          reportAudit,
+        });
+      } else {
+        throw new BookingNotEditableError(
+          b.id,
+          "A report can only be submitted for a delivered or scheduled session",
+        );
+      }
+
+      const event = await repo.findCompletionFeedbackHistoryByRequestKey(
+        tx,
+        input.requestKey,
+      );
+      if (!event) throw new BookingNotFoundError(b.id);
+      return event;
     });
   }
 
@@ -1968,7 +2433,8 @@ export function createBookingService(deps: {
     b: BookingRow,
     bookingId: string,
     tutorId: string,
-    feedback?: CompletionFeedback,
+    feedback: CompletionFeedback,
+    reportAudit: CompletionReportAudit,
   ) {
     if (b.currentState !== BOOKING_STATE.SCHEDULED) {
       throw new BookingStateTransitionError(
@@ -1987,8 +2453,6 @@ export function createBookingService(deps: {
         "A session report has already been submitted",
       );
     }
-
-    assertCompletionFeedback(bookingId, feedback);
 
     if (b.scheduledStartAt.getTime() > Date.now()) {
       throw new BookingSessionNotStartedError(bookingId);
@@ -2039,19 +2503,19 @@ export function createBookingService(deps: {
     }
 
     const updated = await transition(tx, bookingId, BOOKING_STATE.COMPLETED, {
-      actorId: tutorId,
-      actorType: ACTOR_TYPE.TUTOR,
+      actorId: reportAudit.actorId,
+      actorType: reportAudit.actorRole,
+      reason: reportAudit.reason ?? undefined,
     });
 
     await repo.updateBookingHoldAmount(tx, bookingId, 0);
 
-    await repo.insertCompletionFeedback(tx, {
+    await insertCompletionFeedbackWithAudit(tx, {
       bookingId,
       sessionId: null,
-      authorId: tutorId,
-      discussion: feedback!.discussion,
-      strengths: feedback!.strengths,
-      improvements: feedback!.improvements,
+      tutorId,
+      feedback,
+      audit: reportAudit,
     });
 
     feeRecord.earnedAt = updated.completedAt ?? new Date();
@@ -2078,6 +2542,7 @@ export function createBookingService(deps: {
     tutorId: string,
     sessionId?: string,
     feedback?: CompletionFeedback,
+    reportAudit?: CompletionReportAudit,
   ) {
     if (b.currentState !== BOOKING_STATE.SCHEDULED) {
       throw new BookingStateTransitionError(
@@ -2087,7 +2552,9 @@ export function createBookingService(deps: {
       );
     }
     if (!sessionId) throw new BookingSessionRequiredError(bookingId);
-    assertCompletionFeedback(bookingId, feedback);
+    if (!feedback || !reportAudit) {
+      throw new BookingCompletionFeedbackRequiredError(bookingId);
+    }
 
     const session = await repo.findSessionById(tx, sessionId, {
       forUpdate: true,
@@ -2244,13 +2711,12 @@ export function createBookingService(deps: {
     feeRecord.earnedAt = sessionCompletedAt;
     await repo.insertTutorSessionFee(tx, feeRecord);
 
-    await repo.insertCompletionFeedback(tx, {
+    await insertCompletionFeedbackWithAudit(tx, {
       bookingId,
       sessionId: session.id,
-      authorId: tutorId,
-      discussion: feedback!.discussion,
-      strengths: feedback!.strengths,
-      improvements: feedback!.improvements,
+      tutorId,
+      feedback,
+      audit: reportAudit,
     });
 
     await notification.writeBestEffort({
@@ -2325,9 +2791,9 @@ export function createBookingService(deps: {
 
     await repo.updateBookingHoldAmount(tx, bookingId, 0);
     await transition(tx, bookingId, BOOKING_STATE.COMPLETED, {
-      actorId: tutorId,
-      actorType: ACTOR_TYPE.TUTOR,
-      reason: "All series sessions settled",
+      actorId: reportAudit.actorId,
+      actorType: reportAudit.actorRole,
+      reason: reportAudit.reason ?? "All series sessions settled",
     });
 
     await notification.writeBestEffort({
@@ -2520,10 +2986,64 @@ export function createBookingService(deps: {
   ) {
     const b = await repo.findBookingById(db, bookingId);
     if (!b) throw new BookingNotFoundError(bookingId);
-    if (userRole !== "admin") {
-      await assertBookingAccess(b, userId, db, bookingId);
+    if (userRole === "admin" || b.tutorId === userId) {
+      return repo.listCompletionFeedbackByBooking(db, bookingId);
     }
-    return repo.listCompletionFeedbackByBooking(db, bookingId);
+    await assertBookingAccess(b, userId, db, bookingId);
+    const reports = await repo.listCompletionFeedbackByBooking(db, bookingId);
+    const entitled = [];
+    const bookingType =
+      b.type === BOOKING_TYPE.SERIES
+        ? BOOKING_TYPE.SERIES
+        : b.type === BOOKING_TYPE.GROUP
+          ? BOOKING_TYPE.GROUP
+          : BOOKING_TYPE.SOLO;
+    for (const report of reports) {
+      let delivered = false;
+      if (report.sessionId) {
+        if (b.type !== BOOKING_TYPE.SERIES) continue;
+        const session = await repo.findSessionById(db, report.sessionId);
+        delivered =
+          session?.seriesBookingId === bookingId &&
+          session.currentState === BOOKING_STATE.COMPLETED;
+      } else {
+        delivered =
+          b.type !== BOOKING_TYPE.SERIES &&
+          b.currentState === BOOKING_STATE.COMPLETED;
+      }
+      if (!delivered) continue;
+      const eventKeys = completionFeedbackEntitlementEventKeys({
+        bookingId,
+        bookingType,
+        userId,
+        sessionId: report.sessionId,
+        seriesTargetGroupSize: b.targetGroupSize,
+      });
+      if (
+        await repo.hasChargeableFeedbackEntitlement(
+          db,
+          bookingId,
+          userId,
+          eventKeys,
+        )
+      ) {
+        entitled.push(report);
+      }
+    }
+    return entitled;
+  }
+
+  async function listCompletionFeedbackHistory(
+    bookingId: string,
+    userId: string,
+    userRole?: string,
+  ) {
+    if (userRole !== "admin") {
+      throw new BookingNotOwnedError(bookingId, userId);
+    }
+    const b = await repo.findBookingById(db, bookingId);
+    if (!b) throw new BookingNotFoundError(bookingId);
+    return repo.listCompletionFeedbackHistoryByBooking(db, bookingId);
   }
 
   /**
@@ -6552,6 +7072,7 @@ export function createBookingService(deps: {
     tutorDecline,
     tutorSetMeetingLink,
     completeSession,
+    submitAdminCompletionReport,
     markTutorAttendance,
     markParticipantNoShow,
     proposeReschedule,
@@ -6561,6 +7082,7 @@ export function createBookingService(deps: {
     addSessionNote,
     getSessionNotes,
     listCompletionFeedback,
+    listCompletionFeedbackHistory,
     listSessions,
     getTutorPayoutReport,
     getTutorPayouts,

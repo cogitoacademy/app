@@ -1,5 +1,7 @@
 "use client";
 
+"use client";
+
 import { useState, type ReactNode } from "react";
 import { usePostHog } from "@posthog/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -123,6 +125,10 @@ type BookingConfirmation = {
 
 type CompleteDialogState = {
   sessionId?: string;
+  adminMode?: boolean;
+  report?: CompletionFeedbackDraft;
+  expectedVersion?: number;
+  requestScope: string;
 } | null;
 
 type BookingDetail = Awaited<ReturnType<typeof client.booking.get>>;
@@ -214,6 +220,11 @@ export function BookingDetailPage({
             queryClient.invalidateQueries({
               queryKey: orpc.adminBooking.listBookings.key(),
             }),
+            queryClient.invalidateQueries({
+              queryKey: orpc.booking.listCompletionFeedbackHistory.queryKey({
+                input: { bookingId },
+              }),
+            }),
           ]
         : []),
     ]);
@@ -290,6 +301,38 @@ export function BookingDetailPage({
         }),
     }),
   );
+  const adminReport = useMutation(
+    orpc.booking.submitAdminCompletionReport.mutationOptions({
+      onSuccess: () => {
+        setCompleteDialog(null);
+        toastManager.add({
+          title: completeDialog?.expectedVersion
+            ? "Session report corrected"
+            : "Session report recorded",
+          type: "success",
+        });
+        refreshBookingQueries();
+        void Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: orpc.booking.listCompletionFeedback.queryKey({
+              input: { bookingId },
+            }),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: orpc.booking.listCompletionFeedbackHistory.queryKey({
+              input: { bookingId },
+            }),
+          }),
+        ]);
+      },
+      onError: (error: Error) =>
+        toastManager.add({
+          title: "Session report could not be saved",
+          description: getUserFacingError(error),
+          type: "error",
+        }),
+    }),
+  );
   const tutorSetMeetingLink = useMutation(
     orpc.tutorActions.setMeetingLink.mutationOptions({
       onSuccess: () => {
@@ -340,8 +383,17 @@ export function BookingDetailPage({
   const feedbackQuery = useQuery(
     orpc.booking.listCompletionFeedback.queryOptions({ input: { bookingId } }),
   );
+  const feedbackHistoryQuery = useQuery({
+    ...orpc.booking.listCompletionFeedbackHistory.queryOptions({
+      input: { bookingId },
+    }),
+    enabled: isAdmin,
+  });
   const completeSessionById = (sessionId: string) => {
-    setCompleteDialog({ sessionId });
+    setCompleteDialog({
+      sessionId,
+      requestScope: `tutor:${bookingId}:${sessionId}`,
+    });
   };
 
   if (bookingQuery.isPending) return <Loader />;
@@ -489,6 +541,14 @@ export function BookingDetailPage({
       : (booking.priceSnapshot?.tutorShare ?? 0)) *
       LEGACY_TUTOR_PAYOUT_RATE_IDR;
   const completionFeedbacks = feedbackQuery.data ?? [];
+  const singleSessionFeedback =
+    completionFeedbacks.find((entry) => entry.sessionId === null) ?? null;
+  const canAdminManageSingleReport =
+    isAdmin &&
+    !isSeriesBooking &&
+    (booking.currentState === "completed" ||
+      (booking.currentState === "scheduled" && sessionHasEnded));
+  const reportHistory = feedbackHistoryQuery.data ?? [];
   const sessionLabels: Record<string, string> = {};
   for (const s of seriesSessions ?? []) {
     sessionLabels[s.id] =
@@ -508,18 +568,59 @@ export function BookingDetailPage({
   }
 
   function completeSession() {
-    setCompleteDialog({});
+    setCompleteDialog({ requestScope: `tutor:${bookingId}:solo` });
   }
 
-  function confirmCompleteSession(feedback: CompletionFeedbackDraft) {
+  function openAdminCompletionReport(sessionId?: string) {
+    const report =
+      completionFeedbacks.find(
+        (entry) => entry.sessionId === (sessionId ?? null),
+      ) ?? null;
+    setCompleteDialog({
+      sessionId,
+      adminMode: true,
+      report: report
+        ? {
+            discussion: report.discussion,
+            strengths: report.strengths,
+            improvements: report.improvements,
+          }
+        : undefined,
+      expectedVersion: report?.version,
+      requestScope: `admin:${bookingId}:${sessionId ?? "solo"}:${report?.id ?? "new"}:${report?.version ?? 0}`,
+    });
+  }
+
+  function confirmCompleteSession(
+    feedback: CompletionFeedbackDraft,
+    admin: { deliveryConfirmed: boolean; reason: string; requestKey: string },
+  ) {
+    if (completeDialog?.adminMode) {
+      if (!admin.deliveryConfirmed) return;
+      adminReport.mutate({
+        bookingId,
+        ...(completeDialog.sessionId
+          ? { sessionId: completeDialog.sessionId }
+          : {}),
+        feedback,
+        deliveryConfirmed: true,
+        reason: admin.reason,
+        ...(completeDialog.expectedVersion !== undefined
+          ? { expectedVersion: completeDialog.expectedVersion }
+          : {}),
+        requestKey: admin.requestKey,
+      });
+      return;
+    }
     if (completeDialog?.sessionId) {
       complete.mutate({
         bookingId,
         sessionId: completeDialog.sessionId,
         feedback,
+        requestKey: admin.requestKey,
       });
     } else {
-      complete.mutate({ bookingId, feedback });
+      complete.mutate({ bookingId, feedback, requestKey: admin.requestKey });
     }
   }
 
@@ -679,6 +780,17 @@ export function BookingDetailPage({
                       />
                     </div>
                   </div>
+                ) : null}
+                {canAdminManageSingleReport ? (
+                  <Button
+                    size="sm"
+                    variant={singleSessionFeedback ? "secondary" : "primary"}
+                    onClick={() => openAdminCompletionReport()}
+                    progress={adminReport.isPending}
+                    disabled={adminReport.isPending}
+                  >
+                    {singleSessionFeedback ? "Correct report" : "Record report"}
+                  </Button>
                 ) : null}
               </div>
             ) : null}
@@ -901,6 +1013,7 @@ export function BookingDetailPage({
                     feedbacks={completionFeedbacks}
                     timezone={booking.timezone}
                     sessionLabels={sessionLabels}
+                    adminHistory={isAdmin ? reportHistory : undefined}
                   />
                 </>
               ) : null}
@@ -958,6 +1071,16 @@ export function BookingDetailPage({
                   sessionsQuery.data.map((session) => {
                     const sessionEnded =
                       new Date(session.scheduledEndAt).getTime() <= now;
+                    const sessionFeedback =
+                      completionFeedbacks.find(
+                        (entry) => entry.sessionId === session.id,
+                      ) ?? null;
+                    const canAdminManageReport =
+                      isAdmin &&
+                      (session.currentState === "completed" ||
+                        (booking.currentState === "scheduled" &&
+                          session.currentState === "scheduled" &&
+                          sessionEnded));
                     const completed =
                       session.currentState === "completed" ||
                       session.currentState === "cancelled";
@@ -1020,6 +1143,23 @@ export function BookingDetailPage({
                           ) : (
                             <Badge pill>{session.currentState}</Badge>
                           )}
+                          {canAdminManageReport ? (
+                            <Button
+                              size="sm"
+                              variant={
+                                sessionFeedback ? "secondary" : "primary"
+                              }
+                              onClick={() =>
+                                openAdminCompletionReport(session.id)
+                              }
+                              progress={adminReport.isPending}
+                              disabled={adminReport.isPending}
+                            >
+                              {sessionFeedback
+                                ? "Correct report"
+                                : "Record report"}
+                            </Button>
+                          ) : null}
                         </div>
                       </div>
                     );
@@ -1354,8 +1494,12 @@ export function BookingDetailPage({
         </Field>
       </ConfirmationDialog>
       <CompleteSessionDialog
+        key={completeDialog?.requestScope ?? "closed"}
         open={completeDialog !== null}
-        pending={complete.isPending}
+        pending={complete.isPending || adminReport.isPending}
+        adminMode={completeDialog?.adminMode}
+        initialFeedback={completeDialog?.report}
+        requestScope={completeDialog?.requestScope}
         onOpenChange={(open) => {
           if (!open) setCompleteDialog(null);
         }}

@@ -29,6 +29,7 @@ import {
   academyClassSession,
   sessionNote,
   sessionCompletionFeedback,
+  sessionCompletionFeedbackHistory,
   availabilitySlot,
   tutorProfile,
   user,
@@ -36,6 +37,7 @@ import {
   tutorPayout,
   tutorSessionFee,
   ledgerEntry,
+  wallet,
   tutorPayoutAllocation,
   tutorTaxConfig,
   type booking as bookingTable,
@@ -875,6 +877,124 @@ async function insertCompletionFeedback(
   return row!;
 }
 
+async function updateCompletionFeedback(
+  conn: DbOrTx,
+  values: {
+    id: string;
+    expectedVersion: number;
+    version: number;
+    discussion: string[];
+    strengths: string[];
+    improvements: string[];
+  },
+) {
+  const [row] = await conn
+    .update(sessionCompletionFeedback)
+    .set({
+      version: values.version,
+      discussion: values.discussion,
+      strengths: values.strengths,
+      improvements: values.improvements,
+    })
+    .where(
+      and(
+        eq(sessionCompletionFeedback.id, values.id),
+        eq(sessionCompletionFeedback.version, values.expectedVersion),
+      ),
+    )
+    .returning();
+  return row ?? null;
+}
+
+async function insertCompletionFeedbackHistory(
+  conn: DbOrTx,
+  values: typeof sessionCompletionFeedbackHistory.$inferInsert,
+) {
+  const [row] = await conn
+    .insert(sessionCompletionFeedbackHistory)
+    .values(values)
+    .returning();
+  return row!;
+}
+
+async function findCompletionFeedbackHistoryByRequestKey(
+  conn: DbOrTx,
+  requestKey: string,
+) {
+  const [row] = await conn
+    .select({ ...getTableColumns(sessionCompletionFeedbackHistory) })
+    .from(sessionCompletionFeedbackHistory)
+    .where(eq(sessionCompletionFeedbackHistory.requestKey, requestKey))
+    .limit(1);
+  return row ?? null;
+}
+
+async function listCompletionFeedbackHistoryByBooking(
+  conn: DbOrTx,
+  bookingId: string,
+) {
+  return conn
+    .select({
+      id: sessionCompletionFeedbackHistory.id,
+      feedbackId: sessionCompletionFeedbackHistory.feedbackId,
+      bookingId: sessionCompletionFeedbackHistory.bookingId,
+      sessionId: sessionCompletionFeedbackHistory.sessionId,
+      version: sessionCompletionFeedbackHistory.version,
+      status: sessionCompletionFeedbackHistory.status,
+      actorId: sessionCompletionFeedbackHistory.actorId,
+      actorRole: sessionCompletionFeedbackHistory.actorRole,
+      reason: sessionCompletionFeedbackHistory.reason,
+      deliveryConfirmed: sessionCompletionFeedbackHistory.deliveryConfirmed,
+      discussion: sessionCompletionFeedbackHistory.discussion,
+      strengths: sessionCompletionFeedbackHistory.strengths,
+      improvements: sessionCompletionFeedbackHistory.improvements,
+      createdAt: sessionCompletionFeedbackHistory.createdAt,
+    })
+    .from(sessionCompletionFeedbackHistory)
+    .where(eq(sessionCompletionFeedbackHistory.bookingId, bookingId))
+    .orderBy(
+      asc(sessionCompletionFeedbackHistory.createdAt),
+      asc(sessionCompletionFeedbackHistory.version),
+    );
+}
+
+async function listCompletionFeedbackHistoryByFeedback(
+  conn: DbOrTx,
+  feedbackId: string,
+) {
+  return conn
+    .select({ ...getTableColumns(sessionCompletionFeedbackHistory) })
+    .from(sessionCompletionFeedbackHistory)
+    .where(eq(sessionCompletionFeedbackHistory.feedbackId, feedbackId))
+    .orderBy(asc(sessionCompletionFeedbackHistory.version));
+}
+
+async function hasChargeableFeedbackEntitlement(
+  conn: DbOrTx,
+  bookingId: string,
+  userId: string,
+  eventKeys: string[],
+) {
+  const participant = await findParticipant(conn, bookingId, userId);
+  if (!participant || participant.role === "tutor" || eventKeys.length === 0) {
+    return false;
+  }
+  const [entry] = await conn
+    .select({ id: ledgerEntry.id })
+    .from(ledgerEntry)
+    .innerJoin(wallet, eq(wallet.id, ledgerEntry.walletId))
+    .where(
+      and(
+        eq(ledgerEntry.bookingId, bookingId),
+        eq(ledgerEntry.entryType, "deduct"),
+        eq(wallet.userId, userId),
+        inArray(ledgerEntry.eventKey, eventKeys),
+      ),
+    )
+    .limit(1);
+  return Boolean(entry);
+}
+
 async function listCompletionFeedbackByBooking(
   conn: DbOrTx,
   bookingId: string,
@@ -890,8 +1010,9 @@ async function findCompletionFeedback(
   conn: DbOrTx,
   bookingId: string,
   sessionId: string | null,
+  options: { forUpdate?: boolean } = {},
 ) {
-  const rows = await conn
+  const query = conn
     .select({ ...getTableColumns(sessionCompletionFeedback) })
     .from(sessionCompletionFeedback)
     .where(
@@ -906,7 +1027,8 @@ async function findCompletionFeedback(
           ),
     )
     .limit(1);
-  return rows[0] ?? null;
+  const results = options.forUpdate ? await query.for("update") : await query;
+  return results[0] ?? null;
 }
 
 /**
@@ -1870,6 +1992,12 @@ export function createBookingRepo(db: DbType) {
     insertSessionNote,
     listSessionNotes,
     insertCompletionFeedback,
+    updateCompletionFeedback,
+    insertCompletionFeedbackHistory,
+    findCompletionFeedbackHistoryByRequestKey,
+    listCompletionFeedbackHistoryByBooking,
+    listCompletionFeedbackHistoryByFeedback,
+    hasChargeableFeedbackEntitlement,
     listCompletionFeedbackByBooking,
     findCompletionFeedback,
     listSessionsBySeriesId,
