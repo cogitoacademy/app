@@ -2427,3 +2427,7 @@ Admin payout uses immutable selected-source previews and two phases: prepare the
 ## Cogito Marks amount presentation (2026-09-08)
 
 Student- and admin-facing numeric Marks amounts use the shared `CogitoMarks` component, which prefixes the value with the Cogito mark symbol and supplies an accessible `N Marks` label. Conceptual copy such as “Top Up Marks” remains plain text.
+
+### T07 integrated development checkpoint (21 October)
+
+Report workspace, class settlement, immutable revisions and class fee payout identity are integrated through `d508467b` on local `f/release-v3`. Development DB 6767 is migrated through 0067 (journal id 88; hash `0510e3bd5f1fd36860b8f289c81db5034b4ba40a2f1527736ea280ea77651037`), with API health and protected report route verified after restart. Isolated acceptance: report journey 1 pass, enrollment 2 passes on each of two runs, web/E2E typechecks passed; the saved DB suite passed 29 tests / 203 assertions. PDF export, recurring report reminders, on-demand admin correction and remaining T06 lifecycle rules are still open; main is unchanged.

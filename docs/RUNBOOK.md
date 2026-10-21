@@ -3009,3 +3009,7 @@ Check wallet balances/history, tutor pricing, booking creation/detail/cards, Kno
 ## Invite Tutor card visual smoke check
 
 On `/admin-tutors` at desktop width, verify the Invite Tutor card ends directly after its footer. The adjacent Invitations card may be taller, but it must not stretch the form card or leave a white strip below the footer. Filter Invitations to reduce its records and verify pagination stays aligned to the bottom of the height supplied by its parent grid row.
+
+## T07 development migration acceptance (21 October)
+
+Integrated report workspace and settlement through `d508467b` into local `f/release-v3`. Applied `0067_class-session-reports.sql` to verified loopback development `cogito-app:6767` with the normal Drizzle runner, without reset or seed. Readback: journal id 88, timestamp `1792572957418`, SHA-256 `0510e3bd5f1fd36860b8f289c81db5034b4ba40a2f1527736ea280ea77651037`. The session-owned API was restarted; `/health` reports database/Redis/scheduler healthy and anonymous `/rpc/classes/listSessionReports` returns 401. `/class-reports` on web port 3000 returns 200. Authenticated browser acceptance remains the isolated test result, not a development seed or production-provider test.
