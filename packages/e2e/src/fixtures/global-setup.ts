@@ -1,10 +1,11 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { request } from "@playwright/test";
 import dotenv from "dotenv";
 import { resolveE2eEnvironment, resolveE2eEnvFile } from "./e2e-environment";
+import { ADMIN_EMAIL, TUTOR_EMAIL } from "./test-accounts";
 import {
   createRunScopedStudentEmail,
   DEFAULT_STUDENT_EMAIL,
@@ -65,6 +66,31 @@ function assertT05EnrollmentTarget(env: NodeJS.ProcessEnv) {
   }
 }
 
+async function saveRoleStorageState(
+  role: "admin" | "tutor",
+  email: string,
+  password: string,
+  serverUrl: string,
+  authDir: string,
+) {
+  const roleContext = await request.newContext({ baseURL: serverUrl });
+  try {
+    const roleSignIn = await roleContext.post("/api/auth/sign-in/email", {
+      data: { email, password },
+    });
+    if (!roleSignIn.ok()) {
+      throw new Error(
+        `Failed to create E2E ${role} storage state (${roleSignIn.status()})`,
+      );
+    }
+    await roleContext.storageState({
+      path: path.join(authDir, `${role}.json`),
+    });
+  } finally {
+    await roleContext.dispose();
+  }
+}
+
 async function globalSetup() {
   const envFile = resolveE2eEnvFile(process.cwd(), process.env);
   const envLoadResult = dotenv.config({ path: envFile, override: false });
@@ -117,20 +143,20 @@ async function globalSetup() {
     SEED_STUDENT_PASSWORD: process.env.SEED_STUDENT_PASSWORD ?? "Student123!",
   };
 
-  execSync("bun run src/seed/reset-seed-student.ts", {
+  execFileSync("bun", ["run", "src/seed/reset-seed-student.ts"], {
     cwd: serverDir,
     env: testSeedEnv,
     stdio: "inherit",
   });
   console.log("Seeding database for E2E tests...");
-  execSync("bun run src/seed/seed.ts", {
+  execFileSync("bun", ["run", "src/seed/seed.ts"], {
     cwd: serverDir,
     env: testSeedEnv,
     stdio: "inherit",
   });
 
   if (process.env.T05_ENROLLMENT_TEST_DB_PORT === "6769") {
-    execSync("bun run src/seed/enable-t05-top-up-fixture.ts", {
+    execFileSync("bun", ["run", "src/seed/enable-t05-top-up-fixture.ts"], {
       cwd: serverDir,
       env: testSeedEnv,
       stdio: "inherit",
@@ -159,6 +185,23 @@ async function globalSetup() {
   }
   await authContext.storageState({ path: path.join(authDir, "student.json") });
   await authContext.dispose();
+
+  if (process.env.T07_CLASS_REPORTS_E2E === "1") {
+    await saveRoleStorageState(
+      "admin",
+      ADMIN_EMAIL,
+      testSeedEnv.SEED_ADMIN_PASSWORD,
+      e2eEnvironment.serverUrl,
+      authDir,
+    );
+    await saveRoleStorageState(
+      "tutor",
+      TUTOR_EMAIL,
+      testSeedEnv.SEED_TUTOR_PASSWORD,
+      e2eEnvironment.serverUrl,
+      authDir,
+    );
+  }
   console.log("Seed complete.");
 }
 

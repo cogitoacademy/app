@@ -14,6 +14,8 @@ import {
   ledgerEntry,
   subjectCategory,
   tutorInvite,
+  tutorPayout,
+  tutorPayoutAllocation,
   tutorProfile,
   tutorSessionFee,
   user,
@@ -53,6 +55,7 @@ assertDedicatedEnrollmentTestDatabase();
 const DAY_MS = 24 * 60 * 60 * 1000;
 const BASE_TIME = new Date("2040-01-01T00:00:00.000Z");
 const ownedClassIds = new Set<string>();
+const ownedPayoutIds = new Set<string>();
 const ownedUserIds = new Set<string>();
 
 type Fixture = {
@@ -331,6 +334,21 @@ afterAll(async () => {
           .where(
             inArray(academyClassSessionReportRevision.reportId, reportIds),
           );
+      }
+      const payoutIds = [...ownedPayoutIds];
+      if (payoutIds.length > 0) {
+        await db
+          .delete(tutorPayoutAllocation)
+          .where(inArray(tutorPayoutAllocation.payoutId, payoutIds));
+        await db
+          .delete(auditLog)
+          .where(
+            and(
+              eq(auditLog.action, "tutor_payout_prepared"),
+              inArray(auditLog.targetId, payoutIds),
+            ),
+          );
+        await db.delete(tutorPayout).where(inArray(tutorPayout.id, payoutIds));
       }
       await db
         .delete(tutorSessionFee)
@@ -1520,6 +1538,12 @@ describe("class session reports and settlement [REQ-REPORT-01..03]", () => {
 
     expect(first.id).toBe(replay.id);
     expect(first.version).toBe(1);
+    await expect(
+      fixture.service.submitSessionReport(fixture.tutorId, "tutor", {
+        ...input,
+        requestKey: crypto.randomUUID(),
+      }),
+    ).rejects.toThrow("changed");
     expect((await allocationRows(fixture))[0]).toMatchObject({
       state: "funded",
       fundedMarks: 25,
@@ -1564,8 +1588,19 @@ describe("class session reports and settlement [REQ-REPORT-01..03]", () => {
     );
     expect(studentView).toHaveLength(1);
     expect(studentView[0]?.report?.id).toBe(first.id);
+    expect(studentView[0]?.settlement).toBeNull();
     expect(studentView[0]).not.toHaveProperty("studentId");
     expect(studentView[0]).not.toHaveProperty("privateMeet");
+    const tutorView = await fixture.service.listSessionReports(
+      fixture.tutorId,
+      "tutor",
+      { classId: fixture.classId },
+    );
+    expect(tutorView[0]?.settlement).toEqual({
+      deductedMarks: 25,
+      tutorFeeIdr: 400_000,
+      settled: true,
+    });
 
     await expect(
       fixture.service.submitSessionReport(
@@ -1783,6 +1818,59 @@ describe("class session reports and settlement [REQ-REPORT-01..03]", () => {
     ).toMatchObject({ userId: fixture.tutorId, category: "override" });
   });
 
+  test("report history and correction rights stay with the delivery tutor after reassignment", async () => {
+    const fixture = await createFixture({ sessions: 1, balance: 25 });
+    await makeEnrollment(
+      fixture,
+      0,
+      "single",
+      crypto.randomUUID(),
+      fixture.sessionIds[0],
+    );
+    fixture.setNow(new Date(fixture.startAt[0]!.getTime() + 60 * 60_000 + 1));
+    const report = await fixture.service.submitSessionReport(
+      fixture.tutorId,
+      "tutor",
+      makeClassReportInput(fixture),
+    );
+
+    const replacementTutorId = crypto.randomUUID();
+    await db.insert(user).values({
+      id: replacementTutorId,
+      name: "Replacement enrollment test tutor",
+      email: `enrollment-replacement-${crypto.randomUUID()}@example.test`,
+      emailVerified: true,
+      role: "tutor",
+    });
+    ownedUserIds.add(replacementTutorId);
+    await db
+      .update(academyClassSession)
+      .set({ tutorId: replacementTutorId })
+      .where(eq(academyClassSession.id, fixture.sessionIds[0]!));
+
+    const originalTutorRows = await fixture.service.listSessionReports(
+      fixture.tutorId,
+      "tutor",
+      { classId: fixture.classId },
+    );
+    const replacementTutorRows = await fixture.service.listSessionReports(
+      replacementTutorId,
+      "tutor",
+      { classId: fixture.classId },
+    );
+    expect(originalTutorRows.map((row) => row.sessionId)).toEqual([
+      fixture.sessionIds[0],
+    ]);
+    expect(replacementTutorRows).toHaveLength(0);
+    await expect(
+      fixture.service.submitSessionReport(replacementTutorId, "tutor", {
+        ...makeClassReportInput(fixture, { expectedVersion: 1 }),
+        requestKey: crypto.randomUUID(),
+      }),
+    ).rejects.toThrow();
+    expect(originalTutorRows[0]?.report?.id).toBe(report.id);
+  });
+
   test("a later wallet failure rolls back the first deduction and report writes", async () => {
     let deductions = 0;
     const walletPort = {
@@ -1889,11 +1977,22 @@ describe("class session reports and settlement [REQ-REPORT-01..03]", () => {
       .where(eq(academyClass.id, fixture.classId));
     fixture.setNow(new Date(fixture.startAt[0]!.getTime() + 60 * 60_000 + 1));
 
+    expect(
+      (
+        await fixture.service.listSessionReports(fixture.tutorId, "tutor", {})
+      )[0]?.settlement,
+    ).toEqual({ deductedMarks: 25, tutorFeeIdr: 400_000, settled: false });
+
     await fixture.service.submitSessionReport(
       fixture.tutorId,
       "tutor",
       makeClassReportInput(fixture),
     );
+    expect(
+      (
+        await fixture.service.listSessionReports(fixture.tutorId, "tutor", {})
+      )[0]?.settlement,
+    ).toEqual({ deductedMarks: 25, tutorFeeIdr: 400_000, settled: true });
 
     const [session] = await db
       .select()
@@ -1996,6 +2095,13 @@ describe("class session reports and settlement [REQ-REPORT-01..03]", () => {
       onboardingStatus: "published",
       publishedAt: reportNow,
       bankName: "Mandiri",
+      bankAccountNumber: "001234567890",
+      bankAccountHolderName: "Enrollment Test Tutor",
+      bankAccountOpeningCity: "Jakarta",
+      bankAccountOwnership: "self",
+      bankTransferDisclaimerAccepted: true,
+      taxLegalName: "Enrollment Test Tutor",
+      nik: "0012345678901234",
     });
 
     const preview = await services.booking.previewTutorPayout(fixture.tutorId, [
@@ -2020,6 +2126,31 @@ describe("class session reports and settlement [REQ-REPORT-01..03]", () => {
       collectedMarks: 25,
       priceSnapshot: null,
       grossHonorariumIdr: 400_000,
+    });
+
+    const adminId = await createReportAdmin();
+    const prepared = await services.booking.prepareTutorPayout(adminId, {
+      tutorId: fixture.tutorId,
+      sourceKeys: preview.sourceKeys,
+      previewVersion: preview.previewVersion,
+      operationId: crypto.randomUUID(),
+    });
+    ownedPayoutIds.add(prepared.id);
+    const [payoutAllocation] = await db
+      .select()
+      .from(tutorPayoutAllocation)
+      .where(eq(tutorPayoutAllocation.payoutId, prepared.id));
+    expect(payoutAllocation).toMatchObject({
+      sourceType: "fee_event",
+      tutorSessionFeeId: fee!.id,
+      bookingId: null,
+      bookingSessionId: null,
+      academyClassSessionId: fixture.sessionIds[0],
+      deliveryLabel: fee!.deliveryLabel,
+      bookingType: "cohort",
+      collectedMarks: 25,
+      grossHonorariumIdr: 400_000,
+      priceSnapshot: null,
     });
   });
 });

@@ -61,6 +61,11 @@ const BOOKING_ACTION_QUERY_INPUT = {
 const studentNavItems = [
   { to: "/dashboard", label: "Dashboard", icon: IconHome },
   { to: "/classes", label: "Classes", icon: IconCalendarEvent },
+  {
+    to: "/class-reports",
+    label: "Session reports",
+    icon: IconTimelineEventText,
+  },
   { to: "/tutors", label: "Tutors", icon: IconUserSquare },
   { to: "/bookings", label: "My Bookings", icon: IconCalendarEvent },
   { to: "/balance", label: "Balance", icon: IconCoins },
@@ -71,6 +76,11 @@ const studentNavItems = [
 const tutorNavItems = [
   { to: "/dashboard", label: "Dashboard", icon: IconHome },
   { to: "/bookings", label: "Bookings", icon: IconCalendarEvent },
+  {
+    to: "/class-reports",
+    label: "Session reports",
+    icon: IconTimelineEventText,
+  },
   { to: "/availability", label: "Availability", icon: IconTimelineEventText },
   { to: "/profile", label: "Tutor Profile", icon: IconUser },
   { to: "/faq", label: "FAQ", icon: IconHelp },
@@ -81,6 +91,11 @@ const adminNavItems = [
   { to: "/admin-operations", label: "Operations", icon: IconSettings },
   { to: "/bookings", label: "Bookings", icon: IconCalendarEvent },
   { to: "/admin-classes", label: "Classes", icon: IconCalendarEvent },
+  {
+    to: "/class-reports",
+    label: "Session reports",
+    icon: IconTimelineEventText,
+  },
   { to: "/admin-tutors", label: "Tutors", icon: IconUsersGroup },
   { to: "/admin-tutor-payouts", label: "Tutor payouts", icon: IconWallet },
   { to: "/admin-economy", label: "Economy", icon: IconAdjustments },

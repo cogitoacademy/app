@@ -224,7 +224,20 @@ export const submitClassSessionReportInput = z
     requestKey: z.string().uuid(),
     deliveryConfirmed: z.literal(true),
     feedback: completionFeedbackInput,
-    adminReason: z.string().trim().min(3).max(500).optional(),
+    adminReason: z
+      .string()
+      .trim()
+      .max(1000)
+      .refine(
+        (reason) => {
+          const length = Array.from(reason).length;
+          return length >= 3 && length <= 500;
+        },
+        {
+          message: "The admin reason must contain 3 to 500 characters",
+        },
+      )
+      .optional(),
   })
   .strict();
 
@@ -256,5 +269,12 @@ export const listClassSessionReportsOutput = z.array(
     mode: z.enum(["online", "in_person"]),
     state: z.enum(["scheduled", "completed", "cancelled"]),
     report: classSessionReportOutput.nullable(),
+    settlement: z
+      .object({
+        deductedMarks: z.number().int().nonnegative(),
+        tutorFeeIdr: z.number().int().nonnegative(),
+        settled: z.boolean(),
+      })
+      .nullable(),
   }),
 );

@@ -1,5 +1,15 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, asc, eq, exists, gt, inArray, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  exists,
+  gt,
+  inArray,
+  isNull,
+  or,
+  sql,
+} from "drizzle-orm";
 import {
   academyClass,
   academyClassEnrollmentAllocation,
@@ -86,9 +96,13 @@ export function createClassSessionReportService(deps: {
       throw new ClassEnrollmentNotFoundError();
     const adminReason =
       actorRole === "admin" ? rawInput.adminReason?.trim() : undefined;
-    if (actorRole === "admin" && (!adminReason || adminReason.length < 3))
+    const adminReasonLength = adminReason ? Array.from(adminReason).length : 0;
+    if (
+      actorRole === "admin" &&
+      (!adminReason || adminReasonLength < 3 || adminReasonLength > 500)
+    )
       throw new ClassEnrollmentInvalidOperationError(
-        "An admin reason is required to submit or correct a class report",
+        "An admin reason is required to submit or correct a class report; it must contain 3 to 500 characters",
       );
 
     const normalizedFeedback = feedback.data;
@@ -170,17 +184,6 @@ export function createClassSessionReportService(deps: {
             );
           return toReport(report);
         }
-        const [priorFingerprint] = await tx
-          .select({ id: academyClassSessionReportRevision.id })
-          .from(academyClassSessionReportRevision)
-          .where(
-            and(
-              eq(academyClassSessionReportRevision.reportId, report.id),
-              eq(academyClassSessionReportRevision.fingerprint, fingerprint),
-            ),
-          )
-          .limit(1);
-        if (priorFingerprint) return toReport(report);
       }
 
       const now = currentTime();
@@ -466,7 +469,15 @@ export function createClassSessionReportService(deps: {
       ? [eq(academyClass.id, rawInput.classId)]
       : [];
     if (actorRole === "tutor")
-      conditions.push(eq(academyClassSession.tutorId, actorId));
+      conditions.push(
+        or(
+          eq(academyClassSessionReport.deliveryTutorId, actorId),
+          and(
+            isNull(academyClassSessionReport.id),
+            eq(academyClassSession.tutorId, actorId),
+          ),
+        )!,
+      );
     if (actorRole === "student") {
       conditions.push(
         exists(
@@ -515,6 +526,7 @@ export function createClassSessionReportService(deps: {
         endAt: academyClassSession.endAt,
         mode: academyClassSession.mode,
         state: academyClassSession.state,
+        tutorFeeIdr: academyClassSession.tutorFeeIdr,
         reportId: academyClassSessionReport.id,
         reportVersion: academyClassSessionReport.version,
         discussion: academyClassSessionReport.discussion,
@@ -535,6 +547,43 @@ export function createClassSessionReportService(deps: {
         asc(academyClassSession.sequenceNumber),
         asc(academyClassSession.id),
       );
+    const sessionIds = rows.map((row) => row.sessionId);
+    let allocations: (typeof academyClassEnrollmentAllocation.$inferSelect)[] =
+      [];
+    let fees: {
+      sessionId: string | null;
+      collectedMarks: number;
+      grossHonorariumIdr: number;
+    }[] = [];
+    if (actorRole !== "student" && sessionIds.length > 0) {
+      [allocations, fees] = await Promise.all([
+        deps.db
+          .select()
+          .from(academyClassEnrollmentAllocation)
+          .where(
+            inArray(academyClassEnrollmentAllocation.sessionId, sessionIds),
+          ),
+        deps.db
+          .select({
+            sessionId: tutorSessionFee.academyClassSessionId,
+            collectedMarks: tutorSessionFee.collectedMarks,
+            grossHonorariumIdr: tutorSessionFee.grossHonorariumIdr,
+          })
+          .from(tutorSessionFee)
+          .where(inArray(tutorSessionFee.academyClassSessionId, sessionIds)),
+      ]);
+    }
+    const allocationsBySession = new Map<
+      string,
+      (typeof academyClassEnrollmentAllocation.$inferSelect)[]
+    >();
+    for (const allocation of allocations) {
+      const sessionAllocations =
+        allocationsBySession.get(allocation.sessionId) ?? [];
+      sessionAllocations.push(allocation);
+      allocationsBySession.set(allocation.sessionId, sessionAllocations);
+    }
+    const feesBySession = new Map(fees.map((fee) => [fee.sessionId, fee]));
     return rows.map((row) => ({
       classId: row.classId,
       classTitle: row.classTitle,
@@ -558,6 +607,27 @@ export function createClassSessionReportService(deps: {
             updatedAt: row.reportUpdatedAt!,
           }
         : null,
+      settlement:
+        actorRole === "student"
+          ? null
+          : row.reportId
+            ? {
+                deductedMarks:
+                  feesBySession.get(row.sessionId)?.collectedMarks ?? 0,
+                tutorFeeIdr:
+                  feesBySession.get(row.sessionId)?.grossHonorariumIdr ?? 0,
+                settled: true,
+              }
+            : (() => {
+                const deductedMarks = classSessionSettlementAmounts(
+                  allocationsBySession.get(row.sessionId) ?? [],
+                ).reduce((total, item) => total + item.amount, 0);
+                return {
+                  deductedMarks,
+                  tutorFeeIdr: deductedMarks > 0 ? row.tutorFeeIdr : 0,
+                  settled: false,
+                };
+              })(),
     }));
   }
 

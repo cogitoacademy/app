@@ -1,3 +1,4 @@
+import { ORPCError } from "@orpc/server";
 import type { Context } from "../../context";
 import { withDomainMap } from "../../lib/handler-utils";
 import { mapClassEnrollmentError } from "./class-enrollment.errors";
@@ -17,6 +18,15 @@ import {
 } from "./class-enrollment.types";
 import type { z } from "zod";
 
+function getReportActor(context: Context) {
+  const user = context.session?.user;
+  if (typeof user?.id !== "string" || user.id.length === 0)
+    throw new ORPCError("UNAUTHORIZED");
+  if (user.role !== "admin" && user.role !== "tutor" && user.role !== "student")
+    throw new ORPCError("UNAUTHORIZED");
+  return { id: user.id, role: user.role };
+}
+
 export function createClassEnrollmentHandler(service: ClassEnrollmentService) {
   return {
     submitSessionReport: async ({
@@ -26,15 +36,10 @@ export function createClassEnrollmentHandler(service: ClassEnrollmentService) {
       context: Context;
       input: z.infer<typeof submitClassSessionReportInput>;
     }) =>
-      withDomainMap(
-        () =>
-          service.submitSessionReport(
-            context.session!.user.id,
-            context.session!.user.role,
-            input,
-          ),
-        mapClassEnrollmentError,
-      ),
+      withDomainMap(() => {
+        const actor = getReportActor(context);
+        return service.submitSessionReport(actor.id, actor.role, input);
+      }, mapClassEnrollmentError),
     listSessionReports: async ({
       context,
       input,
@@ -42,15 +47,10 @@ export function createClassEnrollmentHandler(service: ClassEnrollmentService) {
       context: Context;
       input: z.infer<typeof listClassSessionReportsInput>;
     }) =>
-      withDomainMap(
-        () =>
-          service.listSessionReports(
-            context.session!.user.id,
-            context.session!.user.role,
-            input,
-          ),
-        mapClassEnrollmentError,
-      ),
+      withDomainMap(() => {
+        const actor = getReportActor(context);
+        return service.listSessionReports(actor.id, actor.role, input);
+      }, mapClassEnrollmentError),
     previewAdminCancellation: async ({
       context,
       input,

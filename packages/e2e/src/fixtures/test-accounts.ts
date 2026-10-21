@@ -1,7 +1,9 @@
 import { DEFAULT_STUDENT_EMAIL, resolveStudentEmail } from "./student-identity";
 
 export { DEFAULT_STUDENT_EMAIL };
-export const STUDENT_EMAIL = resolveStudentEmail(process.env);
+export const STUDENT_EMAIL = resolveStudentEmail({
+  E2E_STUDENT_EMAIL: process.env.E2E_STUDENT_EMAIL,
+});
 export const STUDENT_NAME = "Andre by Cogito";
 export const STUDENT_PASSWORD =
   process.env.SEED_STUDENT_PASSWORD ?? "Student123!";

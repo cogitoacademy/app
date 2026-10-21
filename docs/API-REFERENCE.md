@@ -907,7 +907,8 @@ used to retrieve production OTPs.
 
 ### `classes.submitSessionReport`
 
-- **RPC path:** `/rpc/classes/sessions/report/submit` (oRPC procedure key `classes.submitSessionReport`)
+- **RPC path:** `/rpc/classes/submitSessionReport` (oRPC procedure key `classes.submitSessionReport`)
+- **OpenAPI route:** `/classes/sessions/report/submit`
 - **Auth:** Signed-in tutor or admin. A tutor must be the session's assigned delivery tutor; an admin must provide `adminReason`.
 - **Input:** `{ classId, sessionId, expectedVersion, requestKey, deliveryConfirmed: true, feedback: { discussion, strengths, improvements }, adminReason? }`. Both IDs and `requestKey` are UUIDs. Each feedback field uses the shared normalized bullet input and is limited to 600 Unicode code points.
 - **Output:** `{ id, sessionId, version, discussion, strengths, improvements, createdAt, updatedAt }`.
@@ -915,10 +916,12 @@ used to retrieve production OTPs.
 
 ### `classes.listSessionReports`
 
-- **RPC path:** `/rpc/classes/sessions/reports/list` (oRPC procedure key `classes.listSessionReports`)
+- **RPC path:** `/rpc/classes/listSessionReports` (oRPC procedure key `classes.listSessionReports`)
+- **OpenAPI route:** `/classes/sessions/reports/list`
 - **Auth:** Signed-in admin, tutor, or student. Tutors see assigned sessions; students see only sessions where they hold a funded seat and a report exists; admins can list all class sessions.
 - **Input:** `{ classId? }`.
 - **Output:** Ordered session rows containing class/session titles and IDs, class kind, sequence, schedule, mode, state, and a nullable report with its version and three feedback fields.
+  `settlement` is `{ deductedMarks, tutorFeeIdr, settled }` for tutors/admins and `null` for students; before submission it previews the remaining funded-Mark deduction and fee, and after settlement it reflects persisted values.
 - **Privacy:** The DTO contains no student identity/roster or private meeting URL. A released/unfunded seat does not grant report access; funded students retain access to a report after settlement spends the allocation.
 
 ## Admin Knowledge Bank Access (`adminKnowledgeBank.*`)

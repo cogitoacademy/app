@@ -1,5 +1,37 @@
 # Cogito Runbook
 
+## T07 UI and browser acceptance checkpoint (21 October)
+
+The role-based `/class-reports` page uses real `classes.listSessionReports` and
+`classes.submitSessionReport` RPCs. Tutor/admin rows include a settlement preview
+or persisted readback; student rows carry `settlement: null` and no peer identity.
+The shared page supports versioned admin edits with a required reason, while a
+dedicated on-demand admin correction workflow, PDF export, and repeated reminders
+remain pending. Stale-version conflicts preserve the user's draft.
+
+Validation used the guarded loopback test targets only: Postgres `cogito-test`
+6769, Redis 6381, API 3201 and web 3200. The class-report Chromium journey passed
+1 test in 52.7s with tutor submission, admin correction, student read/privacy,
+settlement, replay/edit behavior and a stale-version conflict. The existing class
+enrollment spec passed 2 Chromium tests twice (42.6s and 41.5s); the fresh T05
+student ID differed between runs. Web and E2E no-emit typechecks passed with
+reduced Go memory settings. Saved parent-run report evidence remains 29 focused
+class-enrollment/report tests / 203 assertions, one reset-fixture test / 7
+assertions, and 2 pure report-settlement cases; those database suites were not
+rerun in this UI recovery.
+
+The runs used one Playwright worker and the cached Playwright 1.62.1 CLI through
+Bun. T07 role sessions were authenticated sequentially before Chromium launch
+with real Better Auth and reused via storage state; no auth or RPC behavior was
+mocked. Providers were stubs/fakes only; no email, payment, Calendar, or other
+external provider was called. A final read-only query matched migration 0067
+journal row 68, timestamp `1792572957418`, and SQL hash
+`0510e3bd5f1fd36860b8f289c81db5034b4ba40a2f1527736ea280ea77651037`. Its
+lineage/hash remains unchanged and test-only on 6769. No development migration or
+development DB reset/seed ran; guarded test runs used their per-run synthetic
+fixtures. The parent retains ownership of the development migration. Logs are in the ignored
+`tmp/v3-dev/t07-recovery-*` files.
+
 ## T07 report and payout checkpoint (21 October)
 
 Migration `0067_class-session-reports.sql` was reviewed against snapshot

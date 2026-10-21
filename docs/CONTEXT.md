@@ -6,8 +6,12 @@ Integrated local checkpoint (21 October): f/release-v3 includes admin cancellati
 Dev readback: journal id 87, timestamp 1792559482042, hash
 70a47d6cbd1f7539d4af45071eaf643ca99ec73c7046c033108d7e1475d54afd.
 The owned API restarted; web 3000 and API 3001 return HTTP 200. No dev reset/seed
-or live-provider test ran. T07 report settlement and class payout identity are implemented in this worktree; lifecycle
-follow-ups, AUTH-02/referrals and full release acceptance remain open. Main is unchanged.
+or live-provider test ran. T07 report settlement, class payout identity, and the
+role-based `/class-reports` workspace are implemented in this worktree. Focused
+report/enrollment browser acceptance and web/E2E typechecks pass; see the T07
+runbook checkpoint. PDF, reminders, the dedicated on-demand admin correction
+workflow, lifecycle follow-ups, AUTH-02/referrals and full release acceptance
+remain open. Main is unchanged.
 
 T06 administrator cancellation is implemented on f/v3-admin-class-cancellation
 with parent acceptance complete for this slice. Admins review exact zero-fee future-hold returns,
@@ -20,9 +24,10 @@ including late creates after cancellation or lease recovery. Postgres checks pas
 22 / 140; Google provider fake checks pass 46 / 148. Migration 0066 only expands
 the class-meeting status check and is applied to disposable 6769, not dev yet.
 Minimum/postponement, one-session administrator cancellation, rescheduling,
-withdrawal-rate settings, T07 report workspace/PDF, reminders, admin correction
-UI and remaining release acceptance stay open. T07 report settlement and payout
-identity are implemented in this worktree.
+and withdrawal-rate settings remain open. T07 report settlement, payout identity,
+and the shared report workspace are implemented in this worktree; PDF, reminders,
+the dedicated on-demand admin correction workflow and remaining release acceptance
+stay open.
 
 T06 student cancellation/withdrawal is implemented on its baseline-derived
 worktree: exact preview + versioned/idempotent confirmation, per-allocation
@@ -30,14 +35,16 @@ Marks accounting, inclusive 24h deadline, unpaid-half cancellation and atomic
 audit/notification. Parent Postgres checks pass 15/101 and the combined web
 typecheck passes. Chromium acceptance passes (1 integrated journey / 1.2m), using real cancellation RPCs and wallet readback; E2E typecheck also passes. This is a partial T06 slice:
 admin cancellation, minimum/postponement/rescheduling and configurable withdrawal
-rate remain outstanding; completion/report T07 is not implemented.
+rate remain outstanding; at that baseline checkpoint, completion/report T07 was
+not yet implemented.
 
 Local dev checkpoint (21 October): f/release-v3 includes signup 3055ba54 and
 payout 2482d7ec. The standard migration runner applied 0065 only after the exact
 loopback cogito-app/6767 guard. Dev readback: journal id 86, timestamp 1792525224597,
 hash 876ec0367859d9ad5bd378d4e96cc4a29f49fab8e1d31ac17c9c95e98b041939,
 and tutor_tax_config exists. The owned API was restarted; no dev reset or seed ran.
-T06 cancellation and T07 completion/report remain next, and main is unchanged.
+At that earlier local checkpoint, T06 cancellation and T07 completion/report
+remained next; main is unchanged.
 
 Parent integration verification (21 October): T03 on the current enrollment/signup
 baseline passes 11 isolated Postgres tests / 105 assertions, 11 tax/profile/test-target
@@ -442,7 +449,7 @@ browser E2E or typecheck was run for this follow-up.
 
 Migration `0061_academy_class_drafts.sql` adds the class and session draft model. The admin-only `admin-classes` page creates/edits drafts with localized titles/descriptions, cohort curriculum and enrollment defaults, per-session schedule/capacity/tutor/mode/room, and required audit reason. Approved defaults are cohort 20/22/25 Marks per full/half/single session with Rp400,000 tutor fee per session, and masterclass 5 Marks with Rp300,000 tutor fee. Both online and in-person are available; in-person requires an active managed room. Drafts are not public and do not reserve rooms.
 
-The service validates active competition, published mode-compatible tutors and session capacities, active room capacity, non-overlapping class sessions, cohort curriculum/check date, and the one-session masterclass rule. Draft updates are optimistic-versioned and preserve supplied session IDs; audit actions are `academy_class.draft_created` and `academy_class.draft_updated`. The admin editor uploads PNG/JPEG/WebP/GIF covers through the existing protected upload flow (max 5 MB) and stores the returned key on the draft; approved M01 cover/curriculum assets remain pending. Publication-time room/tutor conflict checks, Meet setup, admin publish controls, and T05 student enrollment are implemented. T02 delivery fees and T06 cancellation remain separate work; T07 report settlement and class payout identity are implemented, with report UI/PDF, reminders, and admin correction UI pending.
+The service validates active competition, published mode-compatible tutors and session capacities, active room capacity, non-overlapping class sessions, cohort curriculum/check date, and the one-session masterclass rule. Draft updates are optimistic-versioned and preserve supplied session IDs; audit actions are `academy_class.draft_created` and `academy_class.draft_updated`. The admin editor uploads PNG/JPEG/WebP/GIF covers through the existing protected upload flow (max 5 MB) and stores the returned key on the draft; approved M01 cover/curriculum assets remain pending. Publication-time room/tutor conflict checks, Meet setup, admin publish controls, and T05 student enrollment are implemented. T02 delivery fees and T06 cancellation remain separate work. T07 report settlement, class payout identity, and the role-based report workspace are implemented; PDF, reminders, and the dedicated on-demand admin correction workflow remain pending.
 
 Focused integration verification: **4/4 tests, 18 expectations** against the guarded local `cogito-test` database after additive migration. A server TypeScript-Go check attempt again failed with Windows `Out of memory`; Vite build and web typecheck have not been rerun for this slice. No production database, V3 activation, or external provider was used.
 
@@ -468,8 +475,9 @@ submit gating, RPC schema and direct service validation use the same rules.
 The service rejects overlong input before settlement instead of silently slicing
 30 bullets/1000 characters; existing HTML escaping remains, without truncating
 the escaped result. Old stored reports/read APIs remain unchanged. Class report
-settlement is implemented in the T07 backend; reminders, report UI/PDF, and
-admin correction UI remain pending.
+settlement is implemented in the T07 backend. The role-based report workspace
+is documented below; PDF, reminders, and the dedicated on-demand admin correction
+workflow remain pending.
 Focused report + booking regression: 295 tests pass; web typecheck passes.
 
 ## V3 class session reports and payout identity (2026-10-21)
@@ -484,7 +492,14 @@ fee effects. The payout source model supports a nullable booking plus real class
 session identity, delivery label, and collected-Mark snapshot; class earnings
 use the existing exact-net and allocation workflow without fabricated booking
 price data. Migration 0067 is applied only to the guarded disposable test DB on
-6769. The report workspace/PDF, reminders, and admin correction UI remain open.
+6769. The role-based `/class-reports` workspace uses Selia controls, normalized
+600-code-point feedback, delivery confirmation, draft-preserving version conflicts,
+and settlement preview/readback. The shared page supports versioned admin edits
+with a required reason; the dedicated on-demand admin correction workflow remains
+pending. PDF and reminders remain open. Tutor, admin, and student browser
+acceptance passes against real RPCs, as do web and E2E no-emit typechecks. Existing
+enrollment browser cases pass twice with a fresh student identity per run. No
+development migration or live provider was used.
 
 ## V3 draft economy editor and revision storage (2026-10-18)
 

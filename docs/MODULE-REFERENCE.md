@@ -215,8 +215,12 @@ history and notify the tutor without repeating economic effects. The parent
 class completes only after every non-cancelled session is complete and is never
 resurrected from cancelled state.
 
-The backend and payout source support are implemented. Report workspaces/PDF,
-repeated reminders, and the admin correction screen remain follow-up UI/ops work.
+The backend, payout source support, and role-based `/class-reports` workspace are
+implemented. The shared page shows settlement preview/readback to tutors/admins,
+keeps student settlement fields null, normalizes feedback bullets, and preserves
+unsaved edits on stale-version conflicts. It supports versioned admin edits with a
+required reason; the dedicated on-demand admin correction workflow, PDF, and
+repeated reminders remain follow-up UI/ops work.
 
 ## V3 class/session draft foundation (2026-10-19)
 
@@ -228,7 +232,7 @@ Server validation requires an active competition (including an active parent for
 
 `classes.list` and `classes.get` are public procedures backed by `listPublished` and `getPublished`. Both map through an explicit student DTO; detail treats drafts as not found. It includes only catalog fields and tutor display name, with no payout/tax fields, private tutor account data, room details, audit/version values, or roster.
 
-Drafts are not public and do not reserve rooms; conflict checks happen at publication. The admin editor uploads PNG/JPEG/WebP/GIF covers through the existing protected upload flow (max 5 MB) and saves the returned key on the draft; approved M01 cover/curriculum assets remain pending. Admin publish controls, notifications, and durable Meet retry are implemented and browser-verified. Student enrollment is implemented in the T05 module below; T06 cancellation and T07 report/expiry settlement remain open. Public list/detail projection is implemented as described above. This is not a V3 activation or release checkpoint.
+Drafts are not public and do not reserve rooms; conflict checks happen at publication. The admin editor uploads PNG/JPEG/WebP/GIF covers through the existing protected upload flow (max 5 MB) and saves the returned key on the draft; approved M01 cover/curriculum assets remain pending. Admin publish controls, notifications, and durable Meet retry are implemented and browser-verified. Student enrollment is implemented in the T05 module below; T06 cancellation and T07 report/expiry settlement are implemented. The role-based report workspace is documented above; PDF, reminders, and the dedicated on-demand admin correction workflow remain open. Public list/detail projection is implemented as described above. This is not a V3 activation or release checkpoint.
 
 ## V3 class publication and meeting jobs (2026-10-20)
 

@@ -31,6 +31,7 @@ import { Route as AppAvailabilityRouteImport } from './routes/_app.availability'
 import { Route as AppBalanceRouteImport } from './routes/_app.balance'
 import { Route as AppBookingsRouteImport } from './routes/_app.bookings'
 import { Route as AppCalendarRouteImport } from './routes/_app.calendar'
+import { Route as AppClassReportsRouteImport } from './routes/_app.class-reports'
 import { Route as AppClassesRouteImport } from './routes/_app.classes'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppFaqRouteImport } from './routes/_app.faq'
@@ -157,6 +158,11 @@ const AppCalendarRoute = AppCalendarRouteImport.update({
   path: '/calendar',
   getParentRoute: () => AppRoute,
 } as any)
+const AppClassReportsRoute = AppClassReportsRouteImport.update({
+  id: '/class-reports',
+  path: '/class-reports',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppClassesRoute = AppClassesRouteImport.update({
   id: '/classes',
   path: '/classes',
@@ -261,6 +267,7 @@ export interface FileRoutesByFullPath {
   '/balance': typeof AppBalanceRoute
   '/bookings': typeof AppBookingsRoute
   '/calendar': typeof AppCalendarRoute
+  '/class-reports': typeof AppClassReportsRoute
   '/classes': typeof AppClassesRoute
   '/dashboard': typeof AppDashboardRoute
   '/faq': typeof AppFaqRoute
@@ -300,6 +307,7 @@ export interface FileRoutesByTo {
   '/balance': typeof AppBalanceRoute
   '/bookings': typeof AppBookingsRoute
   '/calendar': typeof AppCalendarRoute
+  '/class-reports': typeof AppClassReportsRoute
   '/classes': typeof AppClassesRoute
   '/dashboard': typeof AppDashboardRoute
   '/faq': typeof AppFaqRoute
@@ -341,6 +349,7 @@ export interface FileRoutesById {
   '/_app/balance': typeof AppBalanceRoute
   '/_app/bookings': typeof AppBookingsRoute
   '/_app/calendar': typeof AppCalendarRoute
+  '/_app/class-reports': typeof AppClassReportsRoute
   '/_app/classes': typeof AppClassesRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/faq': typeof AppFaqRoute
@@ -382,6 +391,7 @@ export interface FileRouteTypes {
     | '/balance'
     | '/bookings'
     | '/calendar'
+    | '/class-reports'
     | '/classes'
     | '/dashboard'
     | '/faq'
@@ -421,6 +431,7 @@ export interface FileRouteTypes {
     | '/balance'
     | '/bookings'
     | '/calendar'
+    | '/class-reports'
     | '/classes'
     | '/dashboard'
     | '/faq'
@@ -461,6 +472,7 @@ export interface FileRouteTypes {
     | '/_app/balance'
     | '/_app/bookings'
     | '/_app/calendar'
+    | '/_app/class-reports'
     | '/_app/classes'
     | '/_app/dashboard'
     | '/_app/faq'
@@ -646,6 +658,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCalendarRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/class-reports': {
+      id: '/_app/class-reports'
+      path: '/class-reports'
+      fullPath: '/class-reports'
+      preLoaderRoute: typeof AppClassReportsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/classes': {
       id: '/_app/classes'
       path: '/classes'
@@ -777,6 +796,7 @@ interface AppRouteChildren {
   AppBalanceRoute: typeof AppBalanceRoute
   AppBookingsRoute: typeof AppBookingsRoute
   AppCalendarRoute: typeof AppCalendarRoute
+  AppClassReportsRoute: typeof AppClassReportsRoute
   AppClassesRoute: typeof AppClassesRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppFaqRoute: typeof AppFaqRoute
@@ -810,6 +830,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppBalanceRoute: AppBalanceRoute,
   AppBookingsRoute: AppBookingsRoute,
   AppCalendarRoute: AppCalendarRoute,
+  AppClassReportsRoute: AppClassReportsRoute,
   AppClassesRoute: AppClassesRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppFaqRoute: AppFaqRoute,
