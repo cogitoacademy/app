@@ -391,6 +391,99 @@ export function createGoogleMeetingProvider(
     return row;
   }
 
+  async function updateProviderEvent(
+    eventId: string,
+    changes: {
+      startAt?: Date;
+      endAt?: Date;
+      location?: string;
+      description?: string;
+    },
+  ): Promise<void> {
+    await googleMeetBreaker.execute(async () => {
+      const TIMEOUT_MS = 30_000;
+      const oauthAccessToken =
+        config.authType === "oauth_refresh_token"
+          ? await refreshOAuthAccessToken(TIMEOUT_MS)
+          : null;
+      if (config.authType === "oauth_refresh_token") {
+        const current = await getEventWithOauth(
+          oauthAccessToken!,
+          eventId,
+          TIMEOUT_MS,
+        );
+        const calendarId = encodeURIComponent(config.calendarId);
+        const encodedEventId = encodeURIComponent(eventId);
+        await fetchJson<GoogleCalendarEvent>(
+          `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodedEventId}?sendUpdates=${sendUpdates}&conferenceDataVersion=1`,
+          {
+            method: "PUT",
+            headers: {
+              authorization: `Bearer ${oauthAccessToken}`,
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({
+              ...current,
+              ...(changes.startAt
+                ? { start: { dateTime: changes.startAt.toISOString() } }
+                : {}),
+              ...(changes.endAt
+                ? { end: { dateTime: changes.endAt.toISOString() } }
+                : {}),
+              ...(changes.location !== undefined
+                ? { location: changes.location }
+                : {}),
+              ...(changes.description !== undefined
+                ? { description: changes.description }
+                : {}),
+            }),
+          },
+          TIMEOUT_MS,
+        );
+      } else {
+        // `events.update` replaces the full resource; fetch first to retain
+        // the current title, attendees, and Meet conference.
+        const current = await withTimeout(
+          Promise.resolve(
+            calendar!.events.get({
+              calendarId: config.calendarId,
+              eventId,
+            }),
+          ).then((response) => response.data as GoogleCalendarEvent),
+          TIMEOUT_MS,
+          "Google Meet API timeout after 30s",
+        );
+        await withTimeout(
+          Promise.resolve(
+            calendar!.events.update({
+              calendarId: config.calendarId,
+              eventId,
+              sendUpdates,
+              conferenceDataVersion: 1,
+              requestBody: {
+                ...current,
+                ...(changes.startAt
+                  ? { start: { dateTime: changes.startAt.toISOString() } }
+                  : {}),
+                ...(changes.endAt
+                  ? { end: { dateTime: changes.endAt.toISOString() } }
+                  : {}),
+                ...(changes.location !== undefined
+                  ? { location: changes.location }
+                  : {}),
+                ...(changes.description !== undefined
+                  ? { description: changes.description }
+                  : {}),
+              },
+            }),
+          ).then(() => undefined),
+          TIMEOUT_MS,
+          "Google Meet API timeout after 30s",
+        );
+      }
+    });
+  }
+
   async function updateEvent(
     bookingId: string,
     changes: {
@@ -412,89 +505,7 @@ export function createGoogleMeetingProvider(
     if (!row) return;
 
     try {
-      await googleMeetBreaker.execute(async () => {
-        const TIMEOUT_MS = 30_000;
-        const oauthAccessToken =
-          config.authType === "oauth_refresh_token"
-            ? await refreshOAuthAccessToken(TIMEOUT_MS)
-            : null;
-        if (config.authType === "oauth_refresh_token") {
-          const current = await getEventWithOauth(
-            oauthAccessToken!,
-            row.externalEventId!,
-            TIMEOUT_MS,
-          );
-          const calendarId = encodeURIComponent(config.calendarId);
-          const encodedEventId = encodeURIComponent(row.externalEventId!);
-          await fetchJson<GoogleCalendarEvent>(
-            `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodedEventId}?sendUpdates=${sendUpdates}&conferenceDataVersion=1`,
-            {
-              method: "PUT",
-              headers: {
-                authorization: `Bearer ${oauthAccessToken}`,
-                "content-type": "application/json",
-              },
-              body: JSON.stringify({
-                ...current,
-                ...(changes.startAt
-                  ? { start: { dateTime: changes.startAt.toISOString() } }
-                  : {}),
-                ...(changes.endAt
-                  ? { end: { dateTime: changes.endAt.toISOString() } }
-                  : {}),
-                ...(changes.location !== undefined
-                  ? { location: changes.location }
-                  : {}),
-                ...(changes.description !== undefined
-                  ? { description: changes.description }
-                  : {}),
-              }),
-            },
-            TIMEOUT_MS,
-          );
-        } else {
-          // `events.update` replaces the entire event resource. Fetch the
-          // current event first so the human-readable title, description,
-          // attendees, and Meet conference are preserved on reschedule.
-          const current = await withTimeout(
-            Promise.resolve(
-              calendar!.events.get({
-                calendarId: config.calendarId,
-                eventId: row.externalEventId!,
-              }),
-            ).then((response) => response.data as GoogleCalendarEvent),
-            TIMEOUT_MS,
-            "Google Meet API timeout after 30s",
-          );
-          await withTimeout(
-            Promise.resolve(
-              calendar!.events.update({
-                calendarId: config.calendarId,
-                eventId: row.externalEventId!,
-                sendUpdates,
-                conferenceDataVersion: 1,
-                requestBody: {
-                  ...current,
-                  ...(changes.startAt
-                    ? { start: { dateTime: changes.startAt.toISOString() } }
-                    : {}),
-                  ...(changes.endAt
-                    ? { end: { dateTime: changes.endAt.toISOString() } }
-                    : {}),
-                  ...(changes.location !== undefined
-                    ? { location: changes.location }
-                    : {}),
-                  ...(changes.description !== undefined
-                    ? { description: changes.description }
-                    : {}),
-                },
-              }),
-            ).then(() => undefined),
-            TIMEOUT_MS,
-            "Google Meet API timeout after 30s",
-          );
-        }
-      });
+      await updateProviderEvent(row.externalEventId!, changes);
       log({
         level: "info",
         action: "google_meet_event_updated",
@@ -976,15 +987,38 @@ export function createGoogleMeetingProvider(
   }
 
   async function updateAcademyClassEvent(
-    _externalEventId: string | null,
+    externalEventId: string | null,
     sessionId: string,
     scheduledStartAt: Date,
     scheduledEndAt: Date,
   ) {
-    await updateEvent(`academy-class-session:${sessionId}`, {
-      startAt: scheduledStartAt,
-      endAt: scheduledEndAt,
-    });
+    const startedAt = Date.now();
+    const eventId =
+      externalEventId ??
+      offlineCalendarEventId(`academy-class-session:${sessionId}`);
+    try {
+      await updateProviderEvent(eventId, {
+        startAt: scheduledStartAt,
+        endAt: scheduledEndAt,
+      });
+      log({
+        level: "info",
+        action: "google_meet_class_event_updated",
+        sessionId,
+        eventId,
+        durationMs: Date.now() - startedAt,
+      });
+    } catch (error) {
+      log({
+        level: "error",
+        action: "google_meet_class_update_failed",
+        sessionId,
+        eventId,
+        durationMs: Date.now() - startedAt,
+        error: { message: String(error) },
+      });
+      throw error;
+    }
   }
 
   return {

@@ -289,18 +289,17 @@ export function createAcademyClassRepo() {
       academyClassMeeting.scheduleVersion,
       academyClassSession.version,
     );
+    const leaseAvailable = or(
+      isNull(academyClassMeeting.lockedAt),
+      lte(academyClassMeeting.lockedAt, staleProcessingBefore),
+    );
     const ready = or(
       and(
         inArray(academyClassMeeting.status, ["pending", "failed"]),
         lte(academyClassMeeting.nextRetryAt, now),
+        leaseAvailable,
       ),
-      and(
-        eq(academyClassMeeting.status, "processing"),
-        or(
-          isNull(academyClassMeeting.lockedAt),
-          lte(academyClassMeeting.lockedAt, staleProcessingBefore),
-        ),
-      ),
+      and(eq(academyClassMeeting.status, "processing"), leaseAvailable),
     );
     const conditions = [
       or(
@@ -341,18 +340,17 @@ export function createAcademyClassRepo() {
     now: Date,
     staleProcessingBefore: Date,
   ) {
+    const leaseAvailable = or(
+      isNull(academyClassMeeting.lockedAt),
+      lte(academyClassMeeting.lockedAt, staleProcessingBefore),
+    );
     const eligible = or(
       and(
         inArray(academyClassMeeting.status, ["pending", "failed"]),
         lte(academyClassMeeting.nextRetryAt, now),
+        leaseAvailable,
       ),
-      and(
-        eq(academyClassMeeting.status, "processing"),
-        or(
-          isNull(academyClassMeeting.lockedAt),
-          lte(academyClassMeeting.lockedAt, staleProcessingBefore),
-        ),
-      ),
+      and(eq(academyClassMeeting.status, "processing"), leaseAvailable),
     );
     const [row] = await conn
       .update(academyClassMeeting)
@@ -435,6 +433,7 @@ export function createAcademyClassRepo() {
       errorReason: string | null;
       nextRetryAt: Date;
       scheduleVersion: number;
+      clearExternalEventId?: boolean;
     },
     claim: {
       lockedAt: Date;
@@ -442,42 +441,63 @@ export function createAcademyClassRepo() {
       operation: "create" | "update" | "cancel";
     },
   ) {
+    const { clearExternalEventId = false, ...attemptValues } = values;
     const cancelledSession = sql`EXISTS (SELECT 1 FROM ${academyClassSession} WHERE ${academyClassSession.id} = ${academyClassMeeting.sessionId} AND ${academyClassSession.state} = 'cancelled')`;
     const writingProviderEvent = claim.operation !== "cancel";
+    const sameLease = sql`${academyClassMeeting.lockedAt} = ${claim.lockedAt.toISOString()}::timestamptz AND ${academyClassMeeting.attemptCount} = ${claim.attemptCount}`;
+    const pendingLeaseMarker = sql`${academyClassMeeting.status} = 'pending' AND ${sameLease}`;
+    const newerScheduledSession = sql`EXISTS (SELECT 1 FROM ${academyClassSession} WHERE ${academyClassSession.id} = ${academyClassMeeting.sessionId} AND ${academyClassSession.state} = 'scheduled' AND ${academyClassSession.version} > ${values.scheduleVersion})`;
     const [row] = await conn
       .update(academyClassMeeting)
       .set({
-        ...values,
+        ...attemptValues,
+        externalEventId: clearExternalEventId
+          ? null
+          : sql`COALESCE(${values.externalEventId}, ${academyClassMeeting.externalEventId})`,
         lockedAt: null,
-        // A late creator must queue deletion even if another worker already
-        // deleted an absent event. Its provider request may have completed later.
         status: writingProviderEvent
-          ? sql`CASE WHEN ${cancelledSession} THEN 'pending' ELSE ${values.status} END`
-          : values.status,
-        externalEventId: sql`COALESCE(${values.externalEventId}, ${academyClassMeeting.externalEventId})`,
+          ? sql`CASE WHEN ${cancelledSession} OR ${pendingLeaseMarker} THEN 'pending' ELSE ${values.status} END`
+          : sql`CASE WHEN ${pendingLeaseMarker} THEN 'pending' ELSE ${values.status} END`,
         attemptCount: writingProviderEvent
           ? sql`CASE WHEN ${cancelledSession} THEN 1 ELSE ${academyClassMeeting.attemptCount} END`
           : academyClassMeeting.attemptCount,
         nextRetryAt: writingProviderEvent
-          ? sql`CASE WHEN ${cancelledSession} THEN NOW() ELSE ${values.nextRetryAt.toISOString()}::timestamptz END`
-          : values.nextRetryAt,
-        scheduleVersion: values.scheduleVersion,
+          ? sql`CASE WHEN ${cancelledSession} OR ${pendingLeaseMarker} THEN NOW() ELSE ${values.nextRetryAt.toISOString()}::timestamptz END`
+          : sql`CASE WHEN ${pendingLeaseMarker} THEN NOW() ELSE ${values.nextRetryAt.toISOString()}::timestamptz END`,
+        scheduleVersion: sql`CASE WHEN ${pendingLeaseMarker} AND NOT ${cancelledSession} THEN LEAST(${values.scheduleVersion}, COALESCE((SELECT ${academyClassSession.version} - 1 FROM ${academyClassSession} WHERE ${academyClassSession.id} = ${academyClassMeeting.sessionId}), ${values.scheduleVersion})) ELSE ${values.scheduleVersion} END`,
       })
       .where(
         and(
           eq(academyClassMeeting.id, id),
           or(
-            and(
-              eq(academyClassMeeting.status, "processing"),
-              eq(academyClassMeeting.lockedAt, claim.lockedAt),
-              eq(academyClassMeeting.attemptCount, claim.attemptCount),
-            ),
-            writingProviderEvent ? cancelledSession : sql`false`,
+            and(eq(academyClassMeeting.status, "processing"), sameLease),
+            and(eq(academyClassMeeting.status, "pending"), sameLease),
           ),
         ),
       )
       .returning();
-    return row ?? null;
+    if (row || !writingProviderEvent) return row ?? null;
+
+    const lateProviderWrite =
+      values.status === "created"
+        ? or(cancelledSession, newerScheduledSession)
+        : cancelledSession;
+    const [requeued] = await conn
+      .update(academyClassMeeting)
+      .set({
+        status: "pending",
+        externalEventId: sql`COALESCE(${values.externalEventId}, ${academyClassMeeting.externalEventId})`,
+        meetingUrl: sql`COALESCE(${values.meetingUrl}, ${academyClassMeeting.meetingUrl})`,
+        errorReason: "Provider write completed after the meeting lease changed",
+        nextRetryAt: sql`NOW()`,
+        scheduleVersion: sql`CASE WHEN ${cancelledSession} THEN ${academyClassMeeting.scheduleVersion} ELSE LEAST(${academyClassMeeting.scheduleVersion}, ${values.scheduleVersion}) END`,
+        // Keep a newer worker's lease while marking its work dirty. The owner
+        // will finish the attempt and release this durable pending marker.
+        lockedAt: sql`CASE WHEN ${academyClassMeeting.lockedAt} IS NOT NULL AND (${academyClassMeeting.lockedAt} <> ${claim.lockedAt.toISOString()}::timestamptz OR ${academyClassMeeting.attemptCount} <> ${claim.attemptCount}) THEN ${academyClassMeeting.lockedAt} ELSE NULL END`,
+      })
+      .where(and(eq(academyClassMeeting.id, id), lateProviderWrite))
+      .returning();
+    return requeued ?? null;
   }
 
   async function queueFailedClassMeetings(

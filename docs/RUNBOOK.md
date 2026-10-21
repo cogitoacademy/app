@@ -6,8 +6,8 @@ At about 13:17:59 UTC, `academy-class.test.ts` called the API helper's
 `resetDatabase()` with loopback `cogito-test` on port 6767. The helper truncated
 its broad table list with `CASCADE`, then fixture setup failed because
 `tax_legal_name` was missing. The separate development database `cogito-app`
-was read back intact. No test-data recovery, restore or reseed has been
-performed or verified.
+on 6767 was read back intact and was not truncated. No test-data recovery,
+restore or reseed has been verified.
 
 API integration helpers now reject reset on 6767 and 6768 unconditionally.
 The only resettable pairs are exact local `cogito-test:6769` and
@@ -20,8 +20,6 @@ per-run E2E identity path remains unchanged. A source scan found 69 API test
 files calling the shared helper; their call sites are unchanged, but old
 6767/6768 env files now fail closed before the helper issues SQL. The pure
 guard suite passed 6 tests / 40 expectations; no DB-backed verification was run.
-
-## T07 UI and browser acceptance checkpoint (21 October)
 
 ## T06 class lifecycle implementation checkpoint (21 October)
 
@@ -66,6 +64,29 @@ are in the ignored `C:\.Projects\cogito-app\tmp\v3-dev\t06-lifecycle-*`
 files. Parent review and dev integration remain pending. This does not complete
 all of T06 or Release V3; PDF, reminders, referrals, AUTH-02, and ordinary
 rescheduling are outside this slice.
+
+## T06 class Calendar retry continuation (21 October)
+
+The preserved calendar fix updates class events by their stored Google event ID
+through the configured OAuth or service-account transport, preserves event
+metadata, recreates after 404/410, and retries transient failures such as 503
+against the same ID. A provider update that returns after lease recovery marks
+the newest schedule dirty for durable convergence while preserving a newer active
+lease; cancellation and late-create handling remain in the existing worker. The
+NONRESET `class-enrollment.test.ts` suite now contains the external-status and
+expired-lease regression cases, using only UUID-owned fixtures and its scoped
+`afterAll` cleanup. A whole-file scan found no resetDatabase/TRUNCATE path.
+
+Verification in this continuation: the standalone reset guard suite passed 6
+tests / 40 expectations; cached oxfmt 0.65.0 and oxlint 1.80.0 passed for the
+changed TypeScript. `google-meeting.provider.test.ts` could not load because the
+cached dependency set cannot resolve `googleapis`; no install was attempted. The
+class-enrollment database regressions were not run, and this continuation made
+no database connection, reset, seed, live Calendar, email, or payment call. The
+existing 0068 readback remains test-only on 6769; no dev 0068 migration ran.
+Parent review, dev integration and full Release V3 acceptance remain pending.
+Logs and exit codes are in the ignored
+`C:\.Projects\cogito-app\tmp\v3-dev\t06-provider-safe-*` files.
 
 ## Prior T07 UI and browser acceptance checkpoint (21 October)
 

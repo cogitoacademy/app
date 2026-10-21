@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@cogito-app/db";
 import {
   auditLog,
@@ -261,6 +261,25 @@ async function makeEnrollment(
     requestKey,
     ...(sessionId ? { sessionId } : {}),
   });
+}
+
+async function createCreatedMeetingFixture(fixture: Fixture) {
+  const sessionId = fixture.sessionIds[0];
+  if (!sessionId)
+    throw new Error("Meeting fixture is missing its first session ID");
+  const [meeting] = await db
+    .insert(academyClassMeeting)
+    .values({
+      sessionId,
+      provider: "google_meet",
+      status: "created",
+      externalEventId: `test-class-event-${sessionId}`,
+      meetingUrl: `https://meet.example.test/${sessionId}`,
+      scheduleVersion: 1,
+    })
+    .returning();
+  if (!meeting) throw new Error("Class meeting fixture was not created");
+  return { sessionId, meeting };
 }
 
 const CLASS_REPORT_FEEDBACK = {
@@ -710,12 +729,15 @@ describe("class enrollment PostgreSQL invariants [REQ-ENROLL-01..04]", () => {
       .set({ cohortHalfRateMarks: 30 })
       .where(eq(academyClass.id, fixture.classId));
     const rejoin = await makeEnrollment(fixture, 0, "half");
+    const rejoinedSessionId = fixture.sessionIds[3];
+    if (!rejoinedSessionId)
+      throw new Error("Rejoin fixture is missing its final session ID");
     expect(rejoin.sessionCount).toBe(1);
     expect(rejoin.firstInstallmentMarks).toBe(30);
     expect(rejoin.secondInstallmentMarks).toBe(0);
     expect(
       rejoin.allocations.map((allocation) => allocation.sessionId),
-    ).toEqual([fixture.sessionIds[3]]);
+    ).toEqual([rejoinedSessionId]);
   });
 
   test("missed reminders catch up once, while a late join never gets historical notices", async () => {
@@ -2070,6 +2092,205 @@ describe("T06 class lifecycle minimum, postponement and session cancellation", (
     });
   });
 
+  test("a late expired-lease update requeues the newest class schedule", async () => {
+    const fixture = await createFixture({ sessions: 1 });
+    const { sessionId, meeting } = await createCreatedMeetingFixture(fixture);
+    const originalStartAt = fixture.startAt[0];
+    if (!originalStartAt)
+      throw new Error("Meeting fixture is missing its start time");
+    const v2StartAt = new Date(originalStartAt.getTime() + 7 * DAY_MS);
+    const [v2Session] = await db
+      .update(academyClassSession)
+      .set({
+        startAt: v2StartAt,
+        endAt: new Date(v2StartAt.getTime() + 60 * 60 * 1000),
+        version: sql`${academyClassSession.version} + 1`,
+      })
+      .where(eq(academyClassSession.id, sessionId))
+      .returning();
+    if (!v2Session) throw new Error("Version two session was not found");
+
+    let startOldUpdate!: () => void;
+    let releaseOldUpdate!: () => void;
+    const oldUpdateStarted = new Promise<void>((resolve) => {
+      startOldUpdate = resolve;
+    });
+    const oldUpdateGate = new Promise<void>((resolve) => {
+      releaseOldUpdate = resolve;
+    });
+    const updateCalls: Array<{ startAt: Date; endAt: Date }> = [];
+    const worker = createAcademyClassService({
+      db,
+      audit: {} as never,
+      notification: {} as never,
+      meeting: {
+        updateAcademyClassEvent: async (
+          _externalEventId: string | null,
+          _sessionId: string,
+          startAt: Date,
+          endAt: Date,
+        ) => {
+          updateCalls.push({ startAt, endAt });
+          if (updateCalls.length === 1) {
+            startOldUpdate();
+            await oldUpdateGate;
+          }
+        },
+      } as never,
+    });
+
+    const oldWorker = worker.processReadyMeetings(fixture.classId);
+    await oldUpdateStarted;
+    const v3StartAt = new Date(v2Session.startAt.getTime() + 7 * DAY_MS);
+    try {
+      await db
+        .update(academyClassSession)
+        .set({
+          startAt: v3StartAt,
+          endAt: new Date(v3StartAt.getTime() + 60 * 60 * 1000),
+          version: sql`${academyClassSession.version} + 1`,
+        })
+        .where(eq(academyClassSession.id, sessionId));
+      await db
+        .update(academyClassMeeting)
+        .set({ lockedAt: new Date(Date.now() - 6 * 60 * 1000) })
+        .where(eq(academyClassMeeting.id, meeting.id));
+
+      await expect(
+        worker.processReadyMeetings(fixture.classId),
+      ).resolves.toMatchObject({
+        created: 1,
+      });
+    } finally {
+      releaseOldUpdate();
+      await oldWorker;
+    }
+
+    const [queued] = await db
+      .select({ meeting: academyClassMeeting, session: academyClassSession })
+      .from(academyClassMeeting)
+      .innerJoin(
+        academyClassSession,
+        eq(academyClassMeeting.sessionId, academyClassSession.id),
+      )
+      .where(eq(academyClassMeeting.id, meeting.id));
+    expect(queued?.meeting.status).toBe("pending");
+    expect(queued?.meeting.scheduleVersion).toBeLessThan(
+      queued?.session.version ?? Number.MAX_SAFE_INTEGER,
+    );
+    expect(queued?.meeting.lockedAt).toBeNull();
+
+    await worker.processReadyMeetings(fixture.classId);
+    const [converged] = await db
+      .select({ meeting: academyClassMeeting, session: academyClassSession })
+      .from(academyClassMeeting)
+      .innerJoin(
+        academyClassSession,
+        eq(academyClassMeeting.sessionId, academyClassSession.id),
+      )
+      .where(eq(academyClassMeeting.id, meeting.id));
+    expect(updateCalls.map((call) => call.startAt)).toEqual([
+      v2Session.startAt,
+      v3StartAt,
+      v3StartAt,
+    ]);
+    expect(converged?.meeting.status).toBe("created");
+    expect(converged?.meeting.scheduleVersion).toBe(converged?.session.version);
+  });
+
+  for (const providerStatus of [404, 410, 503]) {
+    test(`class calendar update error ${providerStatus} retries consistently`, async () => {
+      const fixture = await createFixture({ sessions: 1 });
+      const { sessionId, meeting } = await createCreatedMeetingFixture(fixture);
+      const originalStartAt = fixture.startAt[0];
+      if (!originalStartAt)
+        throw new Error("Meeting fixture is missing its start time");
+      const nextStartAt = new Date(originalStartAt.getTime() + 7 * DAY_MS);
+      const [session] = await db
+        .update(academyClassSession)
+        .set({
+          startAt: nextStartAt,
+          endAt: new Date(nextStartAt.getTime() + 60 * 60 * 1000),
+          version: sql`${academyClassSession.version} + 1`,
+        })
+        .where(eq(academyClassSession.id, sessionId))
+        .returning();
+      if (!session) throw new Error("Updated class session was not found");
+
+      let updateCalls = 0;
+      let createCalls = 0;
+      const worker = createAcademyClassService({
+        db,
+        audit: {} as never,
+        notification: {} as never,
+        meeting: {
+          updateAcademyClassEvent: async () => {
+            updateCalls += 1;
+            if (updateCalls === 1) {
+              throw Object.assign(new Error("Calendar event unavailable"), {
+                response: { status: providerStatus },
+              });
+            }
+          },
+          createAcademyClassEvent: async (createdSessionId: string) => {
+            createCalls += 1;
+            return {
+              provider: "google_meet",
+              status: "created",
+              externalEventId: `recreated-${createdSessionId}`,
+              meetingUrl: `https://meet.example.test/${createdSessionId}`,
+              errorReason: null,
+            };
+          },
+        } as never,
+      });
+
+      await expect(
+        worker.processReadyMeetings(fixture.classId),
+      ).resolves.toMatchObject({
+        processed: 1,
+        failed: 1,
+      });
+      const [retryState] = await db
+        .select()
+        .from(academyClassMeeting)
+        .where(eq(academyClassMeeting.id, meeting.id));
+      expect(retryState?.status).toBe("failed");
+      expect(retryState?.scheduleVersion).toBe(meeting.scheduleVersion);
+      expect(retryState?.externalEventId).toBe(
+        providerStatus === 404 || providerStatus === 410
+          ? null
+          : meeting.externalEventId,
+      );
+      expect(retryState?.meetingUrl).toBe(
+        providerStatus === 404 || providerStatus === 410
+          ? null
+          : meeting.meetingUrl,
+      );
+
+      await db
+        .update(academyClassMeeting)
+        .set({ nextRetryAt: new Date(0) })
+        .where(eq(academyClassMeeting.id, meeting.id));
+      await worker.processReadyMeetings(fixture.classId);
+      const [recovered] = await db
+        .select()
+        .from(academyClassMeeting)
+        .where(eq(academyClassMeeting.id, meeting.id));
+      expect(recovered?.status).toBe("created");
+      expect(recovered?.scheduleVersion).toBe(session.version);
+      expect(recovered?.externalEventId).toBe(
+        providerStatus === 404 || providerStatus === 410
+          ? `recreated-${sessionId}`
+          : meeting.externalEventId,
+      );
+      expect(updateCalls).toBe(providerStatus === 503 ? 2 : 1);
+      expect(createCalls).toBe(
+        providerStatus === 404 || providerStatus === 410 ? 1 : 0,
+      );
+    });
+  }
+
   test("a report racing a session cancellation retains delivery and fee facts", async () => {
     const fixture = await createFixture({ sessions: 2, balance: 100 });
     await makeEnrollment(fixture, 0, "full");
@@ -2500,8 +2721,11 @@ describe("class session reports and settlement [REQ-REPORT-01..03]", () => {
       "tutor",
       { classId: fixture.classId },
     );
+    const originalSessionId = fixture.sessionIds[0];
+    if (!originalSessionId)
+      throw new Error("Report fixture is missing its first session ID");
     expect(originalTutorRows.map((row) => row.sessionId)).toEqual([
-      fixture.sessionIds[0],
+      originalSessionId,
     ]);
     expect(replacementTutorRows).toHaveLength(0);
     await expect(

@@ -43,6 +43,16 @@ const APPROVED_TUTOR_FEE_IDR = {
 const MEETING_LEASE_MS = 5 * 60 * 1000;
 const MAX_MEETING_RETRY_DELAY_MS = 6 * 60 * 60 * 1000;
 
+function isMissingClassCalendarEvent(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const value = error as {
+    code?: number | string;
+    response?: { status?: number };
+  };
+  const status = Number(value.response?.status ?? value.code);
+  return status === 404 || status === 410;
+}
+
 export function createAcademyClassService(deps: {
   db: DbType;
   audit: AuditPort;
@@ -685,6 +695,7 @@ export function createAcademyClassService(deps: {
     };
     let operation: "create" | "update" | "cancel" = "create";
     let processedScheduleVersion = claimed.scheduleVersion;
+    let clearMissingEventId = false;
     try {
       if (attempt?.session.state === "cancelled") {
         operation = "cancel";
@@ -754,12 +765,16 @@ export function createAcademyClassService(deps: {
         }
       }
     } catch (error) {
+      clearMissingEventId =
+        operation === "update" && isMissingClassCalendarEvent(error);
       result = {
         provider: attempt?.meeting.provider ?? "manual",
         status: "failed",
         externalEventId: null,
         meetingUrl:
-          operation === "update" ? (attempt?.meeting.meetingUrl ?? null) : null,
+          operation === "update" && !clearMissingEventId
+            ? (attempt?.meeting.meetingUrl ?? null)
+            : null,
         errorReason: String(error),
       };
     }
@@ -792,8 +807,12 @@ export function createAcademyClassService(deps: {
       {
         provider: result.provider,
         status: result.status,
-        externalEventId:
-          result.externalEventId ?? attempt?.meeting.externalEventId ?? null,
+        externalEventId: clearMissingEventId
+          ? null
+          : (result.externalEventId ??
+            attempt?.meeting.externalEventId ??
+            null),
+        clearExternalEventId: clearMissingEventId,
         meetingUrl: result.meetingUrl,
         errorReason: result.errorReason,
         nextRetryAt:

@@ -15,7 +15,8 @@ include URL credentials.
 The 2026-10-21 incident was triggered by `academy-class.test.ts` resetting
 `cogito-test` on 6767; its broad `TRUNCATE ... CASCADE` ran before fixture setup
 failed on missing `tax_legal_name`. Development `cogito-app` was read back
-intact. No recovery or reseed of the affected test data has been verified.
+intact and was not truncated. No recovery or reseed of the affected test data
+has been verified.
 
 Admin class cancellation locks class, sorted sessions, sorted enrollments,
 installments, allocations and sorted wallets. Future scheduled sessions are
@@ -68,8 +69,15 @@ the remaining reserved sessions and its next due session/date is updated, or it
 is cancelled when no reserved sessions remain. An ongoing, past, completed or
 reported session cannot be cancelled. Past delivery holds, reports and earned
 tutor fees remain intact. Audit, student/tutor notification outboxes and durable
-calendar cancellation are recorded through existing module services. Calendar
-update retries preserve the existing provider event ID and meeting URL.
+calendar cancellation are recorded through existing module services. Class-session updates use the saved external event ID (or stable session-ID
+fallback) through direct Google transport; this path does not query booking
+`meeting_event`. OAuth and service-account paths fetch then update the full event,
+preserving its title, attendees and Meet conference. A 404/410 clears stale event
+identity for recreation on retry; transient failures such as 503 retain the ID.
+A stale provider completion queues the newer session version without clearing a
+newer active lease, and cancelled-session deletion remains durable. Migration
+0068 is test-only; parent dev integration and full release acceptance remain
+pending.
 
 The minimum check applies only to an unresolved published cohort at or after its
 saved check time. The count is unique students with an active full/half plan and
@@ -1280,7 +1288,8 @@ chat directory.
 **Service Methods:**
 
 - `createEvent(bookingId, scheduledStartAt?, scheduledEndAt?, attendees?, conn?, details?)` — Creates a Google Calendar event with optional title/description/location metadata. `details.createConference` defaults to true for the unchanged online Meet flow; offline scheduling passes false, producing no conference data or Meet URL. Offline descriptions start with `Site: {room.location}` and `Room: {room.name}`. Repeated offline creation reuses the live provider row.
-- `updateEvent(bookingId, changes)` — Best-effort updates provider-side start/end, physical location, and/or description while preserving the rest of the event resource. Updates use `conferenceDataVersion=1` so the existing online Meet conference survives the full-resource update, with attendee emails controlled by `GOOGLE_CALENDAR_SEND_UPDATES` (`none` by default, `all` in production) (OQ-05, #46). Cogito always sends its own booking notifications; Calendar attendee emails stay suppressed outside production to avoid duplicate mail and DSN bounces to undeliverable seed addresses.
+- `updateAcademyClassEvent(externalEventId, sessionId, startAt, endAt)` — Internal class-worker update of the saved Calendar event, with a stable session-ID fallback when no external ID was stored.
+- `updateEvent(bookingId, changes) — Best-effort updates provider-side start/end, physical location, and/or description while preserving the rest of the event resource. Updates use `conferenceDataVersion=1` so the existing online Meet conference survives the full-resource update, with attendee emails controlled by `GOOGLE_CALENDAR_SEND_UPDATES` (`none` by default, `all` in production) (OQ-05, #46). Cogito always sends its own booking notifications; Calendar attendee emails stay suppressed outside production to avoid duplicate mail and DSN bounces to undeliverable seed addresses.
 - `cancelEvent(bookingId)` — Idempotently cancels the Google event on terminal online or offline booking states (cancel/late-cancel/decline/expire; best-effort via circuit breaker) (#46)
 - `probe()` — Boot-time connectivity probe (P4.2/X3): `calendarList.get` with a 10s timeout, logs loudly on failure (wired into the server bootstrap so a broken Google Meet swap is visible at boot, not only at the first booking; the server keeps manual fallback available)
 - Falls back to manual link URL format when circuit breaker is open

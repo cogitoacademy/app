@@ -6,14 +6,13 @@ At about 13:17:59 UTC, `academy-class.test.ts` invoked the API test helper's
 `resetDatabase()` against loopback `cogito-test` on port 6767. The helper
 truncated its broad table list with `CASCADE`; setup then failed because
 `tax_legal_name` was missing. The separate development database `cogito-app`
-was read back intact. No test-data recovery, restore or reseed has been
-performed or verified. The reset guard now always rejects 6767/6768 and permits
+was read back intact and was not truncated. No test-data recovery, restore or
+reseed has been performed or verified. The reset guard now always rejects 6767/6768 and permits
 only exact dedicated `cogito-test:6769` or `cogito-test-payout:6770` targets
 when `TEST_DATABASE_ALLOW_RESET=true` and
 `TEST_DATABASE_RESET_TARGET` exactly matches `DATABASE_URL`. Test setup no
 longer supplies a default database URL. The standalone guard suite passes 6
 tests / 40 expectations; no database-backed tests were run for this fix.
-
 
 Current local T06 lifecycle implementation checkpoint (21 October): this worktree
 adds preview/confirm for individual future class-session cancellation, the
@@ -36,6 +35,20 @@ and meeting tests pass 9 / 21; one real-RPC Chromium journey passes in 31.7s;
 targeted web and E2E typechecks pass. Parent review/dev integration remain
 pending. This milestone does not complete T06 or Release V3. See the T06
 runbook checkpoint for typecheck limits, logs, and the exact test boundaries.
+
+Calendar recovery continuation in this checkout updates class meetings by their
+saved Google event ID through OAuth or service-account transport, preserving
+event metadata. A 404/410 clears stale identity for recreation, a transient 503
+keeps the ID for retry, and a late stale-lease completion requeues the newest
+schedule while preserving a newer lease and cancellation. The guard unit suite
+passes 6 tests / 40 expectations; cached oxfmt 0.65.0 and oxlint 1.80.0 pass on
+the changed TypeScript. Provider tests could not load because cached dependencies
+do not resolve `googleapis`; the NONRESET class-calendar retry and lease tests
+are authored but remain unrun. No database connection, live provider call, reset,
+seed, or development migration was performed in this continuation. Migration
+0068 remains test-only; parent review, dev integration and full Release V3
+acceptance remain pending. Logs and exit codes are in the ignored
+`C:\.Projects\cogito-app\tmp\v3-dev\t06-provider-safe-*`.
 
 Prior integrated local checkpoint (21 October, before T06 lifecycle): f/release-v3 includes admin cancellation
 446e2cd0 and student cancellation a7065443, alongside signup and payout. Migration

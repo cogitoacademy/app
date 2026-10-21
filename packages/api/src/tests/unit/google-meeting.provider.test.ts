@@ -1878,6 +1878,151 @@ describe("createGoogleMeetingProvider academy class events", () => {
       globalThis.setTimeout = originalSetTimeout;
     }
   });
+
+  test("updates the class event by its external ID without a booking-row lookup", async () => {
+    mockCalendarEventsGet.mockReset();
+    mockCalendarEventsUpdate.mockReset();
+    const currentEvent = {
+      id: "class-calendar-event-42",
+      summary: "Cogito class: debate",
+      attendees: [{ email: "tutor@example.com" }],
+      conferenceData: {
+        entryPoints: [
+          { entryPointType: "video", uri: "https://meet.google.com/kept" },
+        ],
+      },
+      start: { dateTime: "2035-02-01T10:00:00.000Z" },
+      end: { dateTime: "2035-02-01T11:00:00.000Z" },
+    };
+    mockCalendarEventsGet.mockImplementationOnce(async () => ({
+      data: currentEvent,
+    }));
+    const select = mock(() => {
+      throw new Error("Class event must not query meetingEvent.bookingId");
+    });
+    const provider = createGoogleMeetingProvider(config, { select } as never);
+    const startAt = new Date("2035-02-08T10:00:00.000Z");
+    const endAt = new Date("2035-02-08T11:00:00.000Z");
+
+    await provider.updateAcademyClassEvent!(
+      "class-calendar-event-42",
+      "session-42",
+      startAt,
+      endAt,
+    );
+
+    expect(select).not.toHaveBeenCalled();
+    expect(mockCalendarEventsGet).toHaveBeenCalledWith({
+      calendarId: "primary",
+      eventId: "class-calendar-event-42",
+    });
+    expect(mockCalendarEventsUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        calendarId: "primary",
+        eventId: "class-calendar-event-42",
+        requestBody: expect.objectContaining({
+          summary: currentEvent.summary,
+          attendees: currentEvent.attendees,
+          conferenceData: currentEvent.conferenceData,
+          start: { dateTime: startAt.toISOString() },
+          end: { dateTime: endAt.toISOString() },
+        }),
+      }),
+    );
+  });
+
+  test("class update propagates provider failure for durable worker retry", async () => {
+    mockCalendarEventsGet.mockReset();
+    mockCalendarEventsUpdate.mockReset();
+    mockCalendarEventsGet.mockImplementationOnce(async () => ({
+      data: { id: "class-calendar-event-503" },
+    }));
+    mockCalendarEventsUpdate.mockImplementationOnce(async () => {
+      throw Object.assign(new Error("Provider temporarily unavailable"), {
+        code: 503,
+      });
+    });
+    const provider = createGoogleMeetingProvider(config, {} as never);
+
+    await expect(
+      provider.updateAcademyClassEvent!(
+        "class-calendar-event-503",
+        "session-503",
+        new Date("2035-02-08T10:00:00.000Z"),
+        new Date("2035-02-08T11:00:00.000Z"),
+      ),
+    ).rejects.toThrow("temporarily unavailable");
+  });
+
+  test("OAuth class update PUTs the supplied external event ID and new times", async () => {
+    const currentEvent = {
+      id: "oauth-class-event",
+      summary: "Cogito class: debate",
+      attendees: [{ email: "tutor@example.com" }],
+      conferenceData: {
+        entryPoints: [
+          { entryPointType: "video", uri: "https://meet.google.com/kept" },
+        ],
+      },
+    };
+    const calls: Array<{
+      method: string;
+      url: string;
+      body: string | undefined;
+    }> = [];
+    globalThis.fetch = (async (
+      input: string | URL | Request,
+      init?: RequestInit,
+    ) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      calls.push({
+        method,
+        url,
+        body: typeof init?.body === "string" ? init.body : undefined,
+      });
+      if (url.includes("oauth2.googleapis.com"))
+        return new Response(
+          JSON.stringify({ access_token: "synthetic-token", expires_in: 3600 }),
+          { status: 200 },
+        );
+      return new Response(JSON.stringify(currentEvent), { status: 200 });
+    }) as typeof fetch;
+    const select = mock(() => {
+      throw new Error("Class event must not query meetingEvent.bookingId");
+    });
+    const provider = createGoogleMeetingProvider(
+      {
+        authType: "oauth_refresh_token",
+        calendarId: "primary",
+        clientId: "synthetic-client",
+        clientSecret: "synthetic-secret",
+        refreshToken: "synthetic-refresh-token",
+      },
+      { select } as never,
+    );
+    const startAt = new Date("2035-02-15T10:00:00.000Z");
+    const endAt = new Date("2035-02-15T11:00:00.000Z");
+
+    await provider.updateAcademyClassEvent!(
+      "oauth-class-event",
+      "session-oauth",
+      startAt,
+      endAt,
+    );
+
+    expect(select).not.toHaveBeenCalled();
+    expect(calls.map(({ method }) => method)).toEqual(["POST", "GET", "PUT"]);
+    expect(calls[1]?.url).toContain("/events/oauth-class-event");
+    expect(calls[2]?.url).toContain("/events/oauth-class-event?");
+    expect(JSON.parse(calls[2]?.body ?? "{}")).toMatchObject({
+      summary: currentEvent.summary,
+      attendees: currentEvent.attendees,
+      conferenceData: currentEvent.conferenceData,
+      start: { dateTime: startAt.toISOString() },
+      end: { dateTime: endAt.toISOString() },
+    });
+  });
 });
 
 describe("durable class event deletion", () => {

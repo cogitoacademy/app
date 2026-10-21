@@ -15,8 +15,8 @@ or supplies a default database URL.
 On 2026-10-21, `academy-class.test.ts` reached `resetDatabase()` with
 `cogito-test` on 6767. The helper truncated its tables with `CASCADE` before
 fixture setup failed on missing `tax_legal_name`. The separate development
-`cogito-app` database was read back intact; no test-data recovery or reseed has
-been verified. The T05 per-run E2E student identity remains a separate fixture
+`cogito-app` database on 6767 was read back intact and was not truncated; no
+test-data recovery or reseed has been verified. The T05 per-run E2E student identity remains a separate fixture
 path and was not changed by this API helper guard.
 
 Admin class cancellation RPCs: `/rpc/classes/previewAdminCancellation` accepts
@@ -82,6 +82,16 @@ whole-enrollment withdrawal. The fee is zero through the exact inclusive
 deadline, the remaining eligible funded balances are returned, and any unpaid
 second installment is cancelled without an automatic debit. This does not define
 ordinary later-reschedule rights; Q04 remains open for that policy.
+
+Class-session Calendar sync is internal worker behavior and adds no RPC input or
+output fields. It updates the saved external event ID (or the deterministic
+session-event ID when the row has no ID) through the configured OAuth or
+service-account transport while preserving the event title, attendees and Meet
+conference. Provider 404/410 clears the stale ID so a due retry recreates the
+event; transient errors such as 503 retain the ID for retry. A late provider
+completion after lease recovery durably queues the latest session version while
+keeping a newer active lease and preserving cancellation work. Migration 0068
+remains test-only; parent dev integration and full release acceptance are pending.
 
 T03 parent acceptance: selected-source prepare/record/void/reconcile procedures
 passed the real isolated Postgres acceptance suite on 6770. Exact-net and repeat
