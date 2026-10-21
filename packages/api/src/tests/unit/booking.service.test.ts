@@ -9102,6 +9102,7 @@ describe("BookingService additional coverage paths", () => {
         tutorHonorariumIdr: 45_000,
       },
     };
+    const findCompletedBookingsByTutor = mock(async () => []);
     const findTutorSessionFeesByTutor = mock(async () => [fee]);
     const { service } = createService({
       repo: {
@@ -9109,6 +9110,7 @@ describe("BookingService additional coverage paths", () => {
           cutoffAt,
           paidAt: cutoffAt,
         })),
+        findCompletedBookingsByTutor,
         findTutorSessionFeesByTutor,
         listTutorSessionFeeEventKeysByBookings: mock(async () => [
           fee.eventKey,
@@ -9119,10 +9121,17 @@ describe("BookingService additional coverage paths", () => {
     await expect(
       service.getPendingTutorPayouts("tutor1"),
     ).resolves.toMatchObject({ completedSessions: 1, tutorPayoutIdr: 45_000 });
-    expect(findTutorSessionFeesByTutor).toHaveBeenCalledWith(
+    expect(findCompletedBookingsByTutor).toHaveBeenCalledWith(
       expect.anything(),
       "tutor1",
       new Date(cutoffAt.getTime() + 1),
+      undefined,
+      "completedAt",
+    );
+    expect(findTutorSessionFeesByTutor).toHaveBeenCalledWith(
+      expect.anything(),
+      "tutor1",
+      undefined,
       undefined,
       "completedAt",
     );

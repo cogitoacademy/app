@@ -98,6 +98,25 @@ async function createPublishedTutor(email: string, ts: number) {
   return { tutorId, tutorClient, slotId: slot!.id };
 }
 
+function legacyPriceSnapshot(
+  perStudent: number,
+  baseline: number,
+  tutorShare: number,
+  cogitoTake: number,
+) {
+  return {
+    perStudent,
+    baseline,
+    tutorShare,
+    cogitoTake,
+    baselineCogitoTake: cogitoTake,
+    baselineTutorShare: tutorShare,
+    extraTotal: 0,
+    cogitoExtraTake: 0,
+    tutorExtraShare: 0,
+  };
+}
+
 async function insertBookingRow(
   overrides: Partial<typeof bookingTable.$inferInsert>,
 ) {
@@ -116,12 +135,7 @@ async function insertBookingRow(
       scheduledStartAt: new Date(Date.now() + 48 * 3600_000),
       scheduledEndAt: new Date(Date.now() + 48 * 3600_000 + 3600_000),
       timezone: "Asia/Jakarta",
-      priceSnapshot: {
-        perStudent: 50,
-        baseline: 50,
-        tutorShare: 40,
-        cogitoTake: 10,
-      },
+      priceSnapshot: legacyPriceSnapshot(50, 50, 40, 10),
       originalMarks: 50,
       holdAmount: 0,
       deadlineAt: new Date(Date.now() + 86400000),
@@ -266,12 +280,7 @@ describe("Tutor payouts (G16)", () => {
       targetGroupSize: 3,
       minConfirmedHeadcount: 2,
       confirmedHeadcount: 3,
-      priceSnapshot: {
-        perStudent: 50,
-        baseline: 150,
-        tutorShare: 120,
-        cogitoTake: 30,
-      },
+      priceSnapshot: legacyPriceSnapshot(50, 150, 120, 30),
       originalMarks: 150,
       completedAt: new Date(Date.now() - 60_000),
     });
@@ -281,12 +290,7 @@ describe("Tutor payouts (G16)", () => {
       tutorId,
       proposerId: studentId,
       currentState: "cancelled",
-      priceSnapshot: {
-        perStudent: 50,
-        baseline: 50,
-        tutorShare: 40,
-        cogitoTake: 10,
-      },
+      priceSnapshot: legacyPriceSnapshot(50, 50, 40, 10),
       originalMarks: 50,
     });
 
@@ -294,12 +298,7 @@ describe("Tutor payouts (G16)", () => {
       type: "series",
       tutorId,
       proposerId: studentId,
-      priceSnapshot: {
-        perStudent: 50,
-        baseline: 50,
-        tutorShare: 40,
-        cogitoTake: 10,
-      },
+      priceSnapshot: legacyPriceSnapshot(50, 50, 40, 10),
       originalMarks: 100,
       completedAt: new Date(Date.now() - 60_000),
     });
@@ -313,12 +312,7 @@ describe("Tutor payouts (G16)", () => {
         scheduledEndAt: new Date(s1.getTime() + 3600_000),
         currentState: "completed",
         holdAmount: 50,
-        priceSnapshot: {
-          perStudent: 50,
-          baseline: 50,
-          tutorShare: 40,
-          cogitoTake: 10,
-        },
+        priceSnapshot: legacyPriceSnapshot(50, 50, 40, 10),
       },
       {
         seriesBookingId: series.id,
@@ -326,12 +320,7 @@ describe("Tutor payouts (G16)", () => {
         scheduledEndAt: new Date(s2.getTime() + 3600_000),
         currentState: "completed",
         holdAmount: 50,
-        priceSnapshot: {
-          perStudent: 50,
-          baseline: 50,
-          tutorShare: 40,
-          cogitoTake: 10,
-        },
+        priceSnapshot: legacyPriceSnapshot(50, 50, 40, 10),
       },
     ]);
   });
@@ -402,7 +391,7 @@ describe("Tutor payouts (G16)", () => {
     const result = await other.tutorClient.tutor.getMyPayouts({});
     expect(result.completedSessions).toBe(0);
     expect(result.tutorPayout).toBe(0);
-    const otherFinance = await other.tutorClient.tutor.getMyPayoutFinance({});
+    const otherFinance = await other.tutorClient.tutor.getMyPayoutFinance();
     expect(otherFinance.pending.grossHonorariumIdr).toBe(0);
     expect(otherFinance.history).toHaveLength(0);
   });
@@ -501,7 +490,7 @@ describe("Tutor payouts (G16)", () => {
     await expect(configChangedPrepare).rejects.toThrow();
 
     const beforeProfileChange =
-      await isolatedTutor.tutorClient.tutor.getMyProfile({});
+      await isolatedTutor.tutorClient.tutor.getMyProfile();
     await isolatedTutor.tutorClient.tutor.updateMyProfile({
       version: beforeProfileChange.version,
       bankAccountNumber: "009876543210",
@@ -703,9 +692,8 @@ describe("Tutor payouts (G16)", () => {
       .where(eq(notificationDispatch.notificationId, payoutNotification!.id));
     expect(emailDispatches).toHaveLength(1);
 
-    const snapshotProfile = await isolatedTutor.tutorClient.tutor.getMyProfile(
-      {},
-    );
+    const snapshotProfile =
+      await isolatedTutor.tutorClient.tutor.getMyProfile();
     await isolatedTutor.tutorClient.tutor.updateMyProfile({
       version: snapshotProfile.version,
       bankName: "Mandiri",
@@ -731,7 +719,7 @@ describe("Tutor payouts (G16)", () => {
     });
 
     const tutorFinance =
-      await isolatedTutor.tutorClient.tutor.getMyPayoutFinance({});
+      await isolatedTutor.tutorClient.tutor.getMyPayoutFinance();
     expect(tutorFinance.pending).toMatchObject({
       grossHonorariumIdr: 0,
       completedSessions: 0,
@@ -754,7 +742,7 @@ describe("Tutor payouts (G16)", () => {
     expect(tutorFinance.history[0]).not.toHaveProperty("nik");
     expect(tutorFinance.history[0]).not.toHaveProperty("taxNik");
     expect(tutorFinance.history[0]).not.toHaveProperty("taxNpwp");
-    await expect(studentClient.tutor.getMyPayoutFinance({})).rejects.toThrow();
+    await expect(studentClient.tutor.getMyPayoutFinance()).rejects.toThrow();
     await expect(
       studentClient.admin.getTutorPayoutReport({}),
     ).rejects.toThrow();
@@ -825,23 +813,13 @@ describe("Tutor payouts (G16)", () => {
       tutorId: payoutTutorId,
       proposerId: studentId,
       completedAt: new Date(Date.now() - 6 * 60_000),
-      priceSnapshot: {
-        perStudent: 50,
-        baseline: 50,
-        tutorShare: 40,
-        cogitoTake: 10,
-      },
+      priceSnapshot: legacyPriceSnapshot(50, 50, 40, 10),
     });
     const secondLegacy = await insertBookingRow({
       tutorId: payoutTutorId,
       proposerId: studentId,
       completedAt: new Date(Date.now() - 5 * 60_000),
-      priceSnapshot: {
-        perStudent: 50,
-        baseline: 50,
-        tutorShare: 40,
-        cogitoTake: 10,
-      },
+      priceSnapshot: legacyPriceSnapshot(50, 50, 40, 10),
     });
     const before = await adminClient.admin.getPendingTutorPayouts({
       tutorId: payoutTutorId,
@@ -901,12 +879,7 @@ describe("Tutor payouts (G16)", () => {
       tutorId: payoutTutorId,
       proposerId: studentId,
       completedAt: new Date(),
-      priceSnapshot: {
-        perStudent: 50,
-        baseline: 50,
-        tutorShare: 40,
-        cogitoTake: 10,
-      },
+      priceSnapshot: legacyPriceSnapshot(50, 50, 40, 10),
     });
     const after = await adminClient.admin.getPendingTutorPayouts({
       tutorId: payoutTutorId,

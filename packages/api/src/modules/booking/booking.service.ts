@@ -4643,6 +4643,10 @@ export function createBookingService(deps: {
     return normalized || null;
   }
 
+  function normalizeBankAccountOwnership(value: string | null | undefined) {
+    return value === "self" || value === "trusted_person" ? value : null;
+  }
+
   function hasCompletePayoutDetails(profile: {
     bankName: string | null;
     bankAccountNumber: string | null;
@@ -4656,7 +4660,7 @@ export function createBookingService(deps: {
       profile.bankAccountNumber?.trim() &&
       profile.bankAccountHolderName?.trim() &&
       profile.bankAccountOpeningCity?.trim() &&
-      profile.bankAccountOwnership &&
+      normalizeBankAccountOwnership(profile.bankAccountOwnership) &&
       profile.bankTransferDisclaimerAccepted,
     );
   }
@@ -4952,7 +4956,9 @@ export function createBookingService(deps: {
           bankAccountOpeningCity: normalizeOptionalText(
             profile.bankAccountOpeningCity,
           ),
-          bankAccountOwnership: profile.bankAccountOwnership ?? null,
+          bankAccountOwnership: normalizeBankAccountOwnership(
+            profile.bankAccountOwnership,
+          ),
           taxLegalName: normalizeOptionalText(profile.taxLegalName),
           taxNik: normalizeOptionalText(profile.nik),
           taxNpwp: normalizeOptionalText(profile.npwp),
@@ -4971,6 +4977,9 @@ export function createBookingService(deps: {
           taxHonorariumIdr,
           actualAmountIdr: null,
           actualReference: null,
+          actualProofUrl: null,
+          transferRecordedAt: null,
+          transferRecordedBy: null,
           preparedAt: null,
           voidedAt: null,
           voidReason: null,
@@ -4998,7 +5007,9 @@ export function createBookingService(deps: {
           bankAccountOpeningCity: normalizeOptionalText(
             row.bankAccountOpeningCity,
           ),
-          bankAccountOwnership: row.bankAccountOwnership ?? null,
+          bankAccountOwnership: normalizeBankAccountOwnership(
+            row.bankAccountOwnership,
+          ),
           taxLegalName: normalizeOptionalText(row.taxLegalName),
           taxNik: normalizeOptionalText(row.taxNik),
           taxNpwp: normalizeOptionalText(row.taxNpwp),
@@ -5525,8 +5536,8 @@ export function createBookingService(deps: {
         action: "tutor_tax_config_updated",
         targetId: "default",
         targetType: "tutor_tax_config",
-        beforeState: before,
-        afterState: result,
+        beforeState: { ...before },
+        afterState: { ...result },
         details: { reason },
       });
       return result;

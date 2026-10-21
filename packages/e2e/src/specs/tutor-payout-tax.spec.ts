@@ -397,19 +397,23 @@ test("admin reviews the selected snapshot and exports paid/void CSV rows", async
     const downloadPath = await download.path();
     expect(downloadPath).not.toBeNull();
     const csv = await readFile(downloadPath!, "utf8");
-    expect(csv).toContain("Tax rate basis points");
+    expect(csv).toContain("Tax rate snapshot (basis points)");
     expect(csv).toContain("BANK-CSV-001");
     expect(csv).toContain("Void and reconciliation records");
     expect(csv).toContain("'=HYPERLINK");
     expect(csv).toContain("'000000123456");
 
-    await session.page.getByRole("button", { name: "Details" }).click();
+    await session.page
+      .getByRole("button", { name: "Details", exact: true })
+      .click();
     await session.page.getByRole("button", { name: "Select all" }).click();
     await expect(
       session.page.getByText("Versioned payout preview"),
     ).toBeVisible();
     await expect(session.page.getByText("Rp292.500").last()).toBeVisible();
-    await expect(session.page.getByText("Account number")).toBeVisible();
+    await expect(
+      session.page.getByText("Account number", { exact: true }).last(),
+    ).toBeVisible();
     await expect(
       session.page.getByRole("button", { name: "Prepare selected batch" }),
     ).toBeEnabled();
@@ -567,7 +571,9 @@ test("admin prepares a payout, rejects a mismatch, records the exact transfer, a
     });
 
     await session.page.goto("/admin-tutor-payouts");
-    await session.page.getByRole("button", { name: "Details" }).click();
+    await session.page
+      .getByRole("button", { name: "Details", exact: true })
+      .click();
     await session.page.getByRole("button", { name: "Select all" }).click();
     await expect(
       session.page.getByText("Versioned payout preview"),
@@ -580,7 +586,9 @@ test("admin prepares a payout, rejects a mismatch, records the exact transfer, a
     const statusSelect = session.page.getByRole("combobox").first();
     await statusSelect.click();
     await session.page.getByRole("option", { name: "Prepared" }).click();
-    await session.page.getByRole("button", { name: "Details" }).click();
+    await session.page
+      .getByRole("button", { name: "Details", exact: true })
+      .click();
     await session.page.getByLabel("Actual amount (IDR)").fill("292499");
     await session.page
       .getByRole("button", { name: "Record transfer as paid" })
@@ -606,7 +614,9 @@ test("admin prepares a payout, rejects a mismatch, records the exact transfer, a
     await session.page
       .getByRole("option", { name: "Recorded transfer" })
       .click();
-    await session.page.getByRole("button", { name: "Details" }).click();
+    await session.page
+      .getByRole("button", { name: "Details", exact: true })
+      .click();
     await expect(session.page.getByText("BANK-UI-001")).toBeVisible();
     await session.page
       .getByLabel("Void reason")
@@ -621,9 +631,13 @@ test("admin prepares a payout, rejects a mismatch, records the exact transfer, a
       .getByRole("option", { name: "Void / reconcile" })
       .click();
     await expect(
-      session.page.getByText("External transfer must be reconciled"),
+      session.page.getByText("External transfer must be reconciled", {
+        exact: true,
+      }),
     ).toBeVisible();
-    await session.page.getByRole("button", { name: "Details" }).click();
+    await session.page
+      .getByRole("button", { name: "Details", exact: true })
+      .click();
     await expect(
       session.page.getByText("External transfer reconciliation required"),
     ).toBeVisible();
