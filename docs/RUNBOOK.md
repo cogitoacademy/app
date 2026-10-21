@@ -1,5 +1,23 @@
 # Cogito Runbook
 
+## Local runtime checkpoint (22 October)
+
+The integrated reminder source and combined regression are on local
+`f/release-v3` through `e5a7ec41`: 44 PostgreSQL cases / 354 expectations and
+7 reminder units / 25 expectations passed. The session-owned API was restarted
+on port 3001 using the ignored local helper `tmp/v3-dev/start-local-safe.ts`.
+It retains the existing loopback `6767/cogito-app` database and overrides only
+this process to stub email/payments and disable Google Calendar. The saved
+server env file is unchanged; its normal launch still uses its configured
+providers. `/health` reports database, Redis and scheduler healthy. No migration
+or development seed was needed for reminders.
+
+The additional post-reminder full web typecheck was deliberately stopped when
+C: free space reached approximately 136 MiB. It has no passing result; the
+previous T06 web typecheck does not verify the later notification UI changes.
+Keep subsequent work bounded and avoid installs/browser downloads while storage
+is constrained. On-demand report implementation remains in an isolated worker.
+
 ## T06 parent integration and local verification (2026-10-21)
 
 T06 is integrated into local `f/release-v3` through `cda99280`; `main` is
