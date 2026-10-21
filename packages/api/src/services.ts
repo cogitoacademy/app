@@ -289,6 +289,16 @@ function createServices() {
     redis,
     ...(env.NODE_ENV === "test"
       ? {
+          classMeetingCancellationProvider: async (
+            externalEventId: string | null,
+            sessionId?: string,
+          ) => {
+            const eventId = externalEventId ?? `test-class-event-${sessionId}`;
+            if (!eventId.startsWith("test-class-event-"))
+              throw new Error(
+                "Refusing non-synthetic class event in the test provider",
+              );
+          },
           classMeetingProvider: createTestClassMeetingProvider({
             failFirstTitlePrefix:
               process.env.ACADEMY_CLASS_MEETING_TEST_FAIL_FIRST_TITLE_PREFIX,

@@ -1,6 +1,13 @@
-import { studentProcedure, verifiedStudentProcedure } from "../../procedures";
+import {
+  adminProcedure,
+  studentProcedure,
+  verifiedStudentProcedure,
+} from "../../procedures";
 import type { ClassEnrollmentHandler } from "./class-enrollment.handler";
 import {
+  adminClassCancellationInput,
+  confirmAdminClassCancellationInput,
+  adminClassCancellationOutput,
   classEnrollmentCancellationInput,
   confirmClassEnrollmentCancellationInput,
   classEnrollmentCancellationOutput,
@@ -18,6 +25,27 @@ import {
 
 export function createClassEnrollmentRouter(handler: ClassEnrollmentHandler) {
   return {
+    previewAdminCancellation: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/classes/cancellation/quote",
+        tags: ["Admin", "Classes"],
+        summary: "Review exact future-hold returns before cancelling a class",
+      })
+      .input(adminClassCancellationInput)
+      .output(adminClassCancellationOutput)
+      .handler(handler.previewAdminCancellation),
+    confirmAdminCancellation: adminProcedure
+      .route({
+        method: "POST",
+        path: "/admin/classes/cancellation/confirm",
+        tags: ["Admin", "Classes"],
+        summary:
+          "Cancel future class sessions and return unspent future holds once",
+      })
+      .input(confirmAdminClassCancellationInput)
+      .output(adminClassCancellationOutput)
+      .handler(handler.confirmAdminCancellation),
     quoteCancellation: studentProcedure
       .route({
         method: "POST",

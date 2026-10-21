@@ -42,6 +42,8 @@ import { getUserFacingError } from "@/lib/error-message";
 import { resolveProfileImageUrl } from "@/lib/profile-image-url";
 import { client, orpc } from "@/utils/orpc";
 
+import { ClassAdminCancellationPanel } from "./class-admin-cancellation-panel";
+
 type ClassRecord = Awaited<ReturnType<typeof client.admin.getAcademyClass>>;
 type ClassKind = "cohort" | "masterclass";
 type SessionMode = "online" | "in_person";
@@ -1206,6 +1208,7 @@ export function AcademyClassPage() {
                 return (
                   <div
                     key={record.id}
+                    data-testid={`published-class-${record.id}`}
                     className="rounded-lg border border-card-border bg-card p-4"
                   >
                     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1267,6 +1270,15 @@ export function AcademyClassPage() {
                         retried automatically.
                       </Text>
                     ) : null}
+                    <ClassAdminCancellationPanel
+                      classId={record.id}
+                      expectedVersion={record.version}
+                      onChanged={() =>
+                        queryClient.invalidateQueries({
+                          queryKey: orpc.admin.listAcademyClasses.key(),
+                        })
+                      }
+                    />
                   </div>
                 );
               })

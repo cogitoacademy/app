@@ -120,6 +120,11 @@ export function createFallbackMeetingProvider(db: DbOrTx): MeetingPort {
 
   return {
     createEvent,
+    cancelAcademyClassEvent: async () => {
+      throw new Error(
+        "Google Calendar cancellation is unavailable; configure the provider before retrying",
+      );
+    },
     createAcademyClassEvent,
     updateEvent,
     cancelEvent,

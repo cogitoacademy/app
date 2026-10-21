@@ -191,3 +191,26 @@ export const classEnrollmentTopUpPurchaseOutput = z.object({
   status: z.string(),
   recoveryRequired: z.boolean(),
 });
+
+export const adminClassCancellationInput = z
+  .object({
+    classId: z.string().uuid(),
+    expectedVersion: z.number().int().positive(),
+    reason: z.string().trim().min(3).max(500),
+  })
+  .strict();
+export const confirmAdminClassCancellationInput =
+  adminClassCancellationInput.extend({
+    requestKey: z.string().uuid(),
+    quoteVersion: z.string().regex(/^[a-f0-9]{64}$/),
+  });
+export const adminClassCancellationOutput = z.object({
+  classId: z.string().uuid(),
+  expectedVersion: z.number().int().positive(),
+  feeMarks: z.literal(0),
+  returnMarks: z.number().int().nonnegative(),
+  retainedMarks: z.number().int().nonnegative(),
+  cancelledSessionIds: z.array(z.string().uuid()),
+  releasedAllocationIds: z.array(z.string().uuid()),
+  quoteVersion: z.string(),
+});

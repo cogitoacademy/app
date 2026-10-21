@@ -625,3 +625,98 @@ test("student enrolls in full, half, and single plans with stable checkout and i
     await adminApi.dispose();
   }
 });
+
+test("admin cancels a class with an exact future-hold return and retained student history", async ({
+  page,
+  browser,
+}) => {
+  test.setTimeout(90_000);
+  assertT05EnrollmentTarget();
+  const adminApi = await createApiContext(ADMIN_EMAIL, ADMIN_PASSWORD);
+  const studentApi = await createApiContext(STUDENT_EMAIL, STUDENT_PASSWORD);
+  const adminStorageState = await adminApi.storageState();
+  let adminContext: Awaited<ReturnType<typeof browser.newContext>> | undefined;
+  try {
+    const competitions = await rpc<{ id: string; isActive: boolean }[]>(
+      adminApi,
+      "admin/listCompetitionCatalog",
+      { includeArchived: false },
+    );
+    const tutors = await rpc<{ user: { id: string; role: string } }[]>(
+      adminApi,
+      "adminTutor/listTutorProfiles",
+      { status: "published", limit: 100, offset: 0 },
+    );
+    const competition = competitions.find((row) => row.isActive);
+    const tutor = tutors.find((row) => row.user.role === "tutor");
+    if (!competition || !tutor)
+      throw new Error("Missing class cancellation fixture references");
+    const suffix = randomUUID().slice(0, 8);
+    testRunStartOffsetDays = Number.parseInt(suffix, 16) % 100_000;
+    const adminClass = await createPublishedCohort(
+      adminApi,
+      { competitionId: competition.id, tutorId: tutor.user.id },
+      { title: `T06 admin cancellation ${suffix}`, sessions: 2 },
+    );
+    const enrolled = await rpc<Enrollment & { outcome: string }>(
+      studentApi,
+      "classes/createEnrollment",
+      { classId: adminClass.id, plan: "full", requestKey: randomUUID() },
+    );
+    expect(enrolled.outcome).toBe("confirmed");
+    const before = await rpc<{
+      availableBalance: number;
+      heldBalance: number;
+      totalBalance: number;
+    }>(studentApi, "wallet/get", {});
+    await page.close();
+    adminContext = await browser.newContext({
+      baseURL: process.env.WEB_URL ?? "http://localhost:3200",
+      storageState: adminStorageState,
+    });
+    const adminPage = await adminContext.newPage();
+    await adminPage.goto("/admin-classes");
+    const card = adminPage.getByTestId(`published-class-${adminClass.id}`);
+    await card
+      .getByLabel("Class cancellation reason")
+      .fill("Class cancellation browser acceptance");
+    await card
+      .getByRole("button", { name: "Review class cancellation", exact: true })
+      .click();
+    const review = card.getByRole("region", {
+      name: "Admin class cancellation review",
+    });
+    await expect(
+      review.getByText("Cancellation fee: 0 Marks · Return: 40 Marks"),
+    ).toBeVisible();
+    await review
+      .getByRole("button", { name: "Confirm class cancellation", exact: true })
+      .click();
+    await expect(card).toHaveCount(0);
+    const after = await rpc<{
+      availableBalance: number;
+      heldBalance: number;
+      totalBalance: number;
+    }>(studentApi, "wallet/get", {});
+    expect(after.availableBalance).toBe(before.availableBalance + 40);
+    expect(after.heldBalance).toBe(before.heldBalance - 40);
+    expect(after.totalBalance).toBe(before.totalBalance);
+    expect(
+      (
+        await rpc<AdminClass>(adminApi, "admin/getAcademyClass", {
+          id: adminClass.id,
+        })
+      ).state,
+    ).toBe("cancelled");
+    const history = await rpc<{ enrollments: Enrollment[] }>(
+      studentApi,
+      "classes/getMyEnrollments",
+      { classId: adminClass.id },
+    );
+    expect(history.enrollments[0]?.state).toBe("cancelled");
+  } finally {
+    await adminContext?.close();
+    await studentApi.dispose();
+    await adminApi.dispose();
+  }
+});

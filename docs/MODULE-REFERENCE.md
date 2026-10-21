@@ -1,5 +1,24 @@
 # Cogito Module Reference
 
+Admin class cancellation locks class, sorted sessions, sorted enrollments,
+installments, allocations and sorted wallets. Future scheduled sessions are
+cancelled; remaining funded Marks on those allocations are released in full with
+`class-allocation:{id}:admin-cancel:return` and their original funding source.
+Unfunded reservations and pending checkouts/installments are cancelled without
+charging. Past/ongoing funded delivery holds, spent Marks and existing tutor fees
+remain intact. Audit `academy_class.cancelled` stores actor, reason, before/after
+version, quote and request key; all wallet changes and notification outboxes share
+the transaction. The admin UI requires an exact return preview before confirmation.
+Cancelled sessions drive durable meeting deletion in the existing retry worker.
+Provider DELETE 404/410 counts as success; retryable failure remains failed with
+30-second retry delay. An ambiguous accepted create can be deleted using the
+stable class-session provider event ID. Claim timestamp/count fences prevent an
+old cancellation worker from overwriting newer work. A late creator always queues
+a fresh deletion, even if lease recovery already deleted an absent event. A
+pending event with no creation attempt needs no provider call. `processReadyMeetings`
+is an internal service operation; `retryFailedMeetings` also processes deletion.
+No new public provider endpoint or live-provider test is introduced.
+
 Student class cancellation uses enrollment allocation identity. The first slice
 supports quote/confirm for an early funded seat and whole-plan withdrawal.
 Withdrawal rounds the current 20% fee once over the eligible remaining funded

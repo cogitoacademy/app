@@ -24,7 +24,8 @@ export default defineConfig({
   // The guarded T05 server shares linked dependencies with dev; keep Vite's
   // optimize cache separate so the two servers do not block each other's lock.
   ...(process.env.T05_ENROLLMENT_TEST_DB_PORT === "6769" && {
-    cacheDir: "node_modules/.vite-t05-enrollment",
+    cacheDir:
+      process.env.VITE_TEST_CACHE_DIR ?? "node_modules/.vite-t05-enrollment",
   }),
   server: {
     port: Number(process.env.WEB_PORT ?? 3000),

@@ -1879,3 +1879,97 @@ describe("createGoogleMeetingProvider academy class events", () => {
     }
   });
 });
+
+describe("durable class event deletion", () => {
+  const config = {
+    authType: "service_account" as const,
+    clientEmail: "test@example.test",
+    privateKey: "synthetic",
+    calendarId: "primary",
+    sendUpdates: "all" as const,
+  };
+  test("deletes the exact class event and propagates retryable failures", async () => {
+    mockCalendarEventsDelete.mockReset();
+    mockCalendarEventsDelete.mockImplementationOnce(async () => ({ data: "" }));
+    const provider = createGoogleMeetingProvider(config, {} as never);
+    await provider.cancelAcademyClassEvent!("class-event-001");
+    expect(mockCalendarEventsDelete).toHaveBeenCalledWith({
+      calendarId: "primary",
+      eventId: "class-event-001",
+      sendUpdates: "all",
+    });
+    mockCalendarEventsDelete.mockImplementationOnce(async () => {
+      throw Object.assign(new Error("Provider temporarily unavailable"), {
+        code: 503,
+      });
+    });
+    await expect(
+      provider.cancelAcademyClassEvent!("class-event-001"),
+    ).rejects.toThrow("temporarily unavailable");
+  });
+  test.each([404, 410])(
+    "already deleted class event (%i) is an idempotent success",
+    async (code) => {
+      mockCalendarEventsDelete.mockReset();
+      mockCalendarEventsDelete.mockImplementationOnce(async () => {
+        throw Object.assign(new Error("Event absent"), {
+          response: { status: code },
+        });
+      });
+      const provider = createGoogleMeetingProvider(config, {} as never);
+      await expect(
+        provider.cancelAcademyClassEvent!("already-deleted"),
+      ).resolves.toBeUndefined();
+    },
+  );
+  test("an ambiguous class create can be deleted using its stable session identity", async () => {
+    mockCalendarEventsDelete.mockReset();
+    mockCalendarEventsDelete.mockImplementationOnce(async () => ({ data: "" }));
+    const provider = createGoogleMeetingProvider(config, {} as never);
+    await provider.cancelAcademyClassEvent!(null, "stable-session");
+    expect(mockCalendarEventsDelete).toHaveBeenCalledWith({
+      calendarId: "primary",
+      eventId: `cogito${createHash("sha256").update("academy-class-session:stable-session").digest("hex")}`,
+      sendUpdates: "all",
+    });
+  });
+  test("OAuth deletion preserves HTTP status for idempotent absence handling", async () => {
+    const calls: string[] = [];
+    globalThis.fetch = (async (
+      input: string | URL | Request,
+      init?: RequestInit,
+    ) => {
+      const url = String(input);
+      calls.push(`${init?.method} ${url}`);
+      if (url.includes("oauth2.googleapis.com"))
+        return new Response(
+          JSON.stringify({ access_token: "synthetic-token", expires_in: 3600 }),
+          { status: 200 },
+        );
+      return new Response(JSON.stringify({ error: { message: "Not found" } }), {
+        status: 404,
+      });
+    }) as typeof fetch;
+    const provider = createGoogleMeetingProvider(
+      {
+        authType: "oauth_refresh_token",
+        calendarId: "primary",
+        clientId: "synthetic",
+        clientSecret: "synthetic",
+        refreshToken: "synthetic",
+        sendUpdates: "all",
+      },
+      {} as never,
+    );
+    await expect(
+      provider.cancelAcademyClassEvent!("event / id"),
+    ).resolves.toBeUndefined();
+    expect(
+      calls.some(
+        (url) =>
+          url.includes("DELETE ") &&
+          url.includes("event%20%2F%20id?sendUpdates=all"),
+      ),
+    ).toBe(true);
+  });
+});

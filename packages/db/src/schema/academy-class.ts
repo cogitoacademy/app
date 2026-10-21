@@ -178,7 +178,7 @@ export const academyClassMeeting = pgTable(
     ),
     check(
       "academy_class_meeting_status_check",
-      sql`${table.status} IN ('pending', 'processing', 'created', 'failed')`,
+      sql`${table.status} IN ('pending', 'processing', 'created', 'failed', 'cancelled')`,
     ),
     check(
       "academy_class_meeting_attempt_count_check",

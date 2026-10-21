@@ -28,6 +28,9 @@ export function createMeetingModule(deps: {
   googleMeetEnabled?: boolean;
   googleConfig?: GoogleMeetingConfig;
   redis?: RedisClient;
+  classMeetingCancellationProvider?: NonNullable<
+    MeetingPort["cancelAcademyClassEvent"]
+  >;
   classMeetingProvider?: NonNullable<MeetingPort["createAcademyClassEvent"]>;
 }): MeetingPort {
   const provider =
@@ -38,9 +41,15 @@ export function createMeetingModule(deps: {
           deps.redis,
         )
       : createFallbackMeetingProvider(deps.db);
-  return deps.classMeetingProvider
-    ? { ...provider, createAcademyClassEvent: deps.classMeetingProvider }
-    : provider;
+  return {
+    ...provider,
+    ...(deps.classMeetingProvider
+      ? { createAcademyClassEvent: deps.classMeetingProvider }
+      : {}),
+    ...(deps.classMeetingCancellationProvider
+      ? { cancelAcademyClassEvent: deps.classMeetingCancellationProvider }
+      : {}),
+  };
 }
 
 export type {

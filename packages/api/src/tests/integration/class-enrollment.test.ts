@@ -3,6 +3,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@cogito-app/db";
 import {
   auditLog,
+  academyClassMeeting,
   academyClass,
   academyClassEnrollment,
   academyClassEnrollmentAllocation,
@@ -15,6 +16,8 @@ import {
 } from "@cogito-app/db/schema";
 import { createTestClient } from "../helpers/test-client";
 import { services } from "../../services";
+import { createAcademyClassService } from "../../modules/academy-class/academy-class.service";
+import type { MeetingPort } from "../../modules/meeting/meeting.types";
 import { createClassEnrollmentService } from "../../modules/class-enrollment/class-enrollment.service";
 
 function assertDedicatedEnrollmentTestDatabase() {
@@ -256,6 +259,14 @@ afterAll(async () => {
   const classIds = [...ownedClassIds];
   const userIds = [...ownedUserIds];
   if (classIds.length > 0) {
+    await db
+      .delete(auditLog)
+      .where(
+        and(
+          eq(auditLog.action, "academy_class.cancelled"),
+          inArray(auditLog.targetId, classIds),
+        ),
+      );
     const enrollments = await db
       .select({ id: academyClassEnrollment.id })
       .from(academyClassEnrollment)
@@ -705,6 +716,20 @@ describe("class enrollment PostgreSQL invariants [REQ-ENROLL-01..04]", () => {
       otherStudent.classes.quoteCancellation({ enrollmentId: pending.id }),
     ).rejects.toThrow();
     expect(await ledgerHolds(fixture)).toHaveLength(0);
+    await expect(
+      otherStudent.classes.previewAdminCancellation({
+        classId: fixture.classId,
+        expectedVersion: 1,
+        reason: "Unauthorized cancellation",
+      }),
+    ).rejects.toThrow();
+    await expect(
+      tutor.classes.previewAdminCancellation({
+        classId: fixture.classId,
+        expectedVersion: 1,
+        reason: "Unauthorized cancellation",
+      }),
+    ).rejects.toThrow();
     expect(await enrollmentRows(fixture)).toHaveLength(1);
   });
   test("cancellation quotes an exact return and concurrent confirmation settles once", async () => {
@@ -965,5 +990,434 @@ describe("class enrollment PostgreSQL invariants [REQ-ENROLL-01..04]", () => {
       heldBalance: 20,
       availableBalance: 76,
     });
+  });
+  test("admin cancellation returns all future holds once, expires checkouts and preserves snapshots", async () => {
+    const fixture = await createFixture({
+      sessions: 4,
+      balance: 100,
+      studentCount: 3,
+    });
+    const full = await makeEnrollment(fixture, 0, "full");
+    await makeEnrollment(fixture, 1, "half");
+    await db
+      .update(walletTable)
+      .set({ totalBalance: 0, availableBalance: 0 })
+      .where(eq(walletTable.id, fixture.walletIds[2]!));
+    await makeEnrollment(fixture, 2, "full");
+    const input = {
+      classId: fixture.classId,
+      expectedVersion: 1,
+      reason: "Admin cancellation fixture",
+    };
+    const quote = await fixture.service.previewAdminCancellation(
+      fixture.tutorId,
+      input,
+    );
+    expect(quote).toMatchObject({
+      feeMarks: 0,
+      returnMarks: 124,
+      retainedMarks: 0,
+    });
+    const confirm = {
+      ...input,
+      quoteVersion: quote.quoteVersion,
+      requestKey: crypto.randomUUID(),
+    };
+    const result = await Promise.all([
+      fixture.service.confirmAdminCancellation(fixture.tutorId, confirm),
+      fixture.service.confirmAdminCancellation(fixture.tutorId, confirm),
+    ]);
+    expect(result[0]?.quoteVersion).toBe(result[1]?.quoteVersion);
+    const balances = await db
+      .select()
+      .from(walletTable)
+      .where(inArray(walletTable.id, fixture.walletIds));
+    expect(
+      balances.every(
+        (row) =>
+          row.heldBalance === 0 && row.availableBalance === row.totalBalance,
+      ),
+    ).toBe(true);
+    expect(
+      (await allocationRows(fixture)).every((row) => row.state === "released"),
+    ).toBe(true);
+    expect(fixture.notifications).toHaveLength(4);
+    const rows = await enrollmentRows(fixture);
+    expect(rows.every((row) => row.state === "cancelled")).toBe(true);
+    expect(rows.find((row) => row.id === full.id)).toMatchObject({
+      totalMarks: 80,
+      firstInstallmentMarks: 80,
+    });
+    expect(
+      (
+        await fixture.service.getMyClassEnrollments(
+          fixture.studentIds[0]!,
+          fixture.classId,
+        )
+      ).enrollments[0]?.state,
+    ).toBe("cancelled");
+    await expect(
+      fixture.service.getMyClassEnrollments(
+        crypto.randomUUID(),
+        fixture.classId,
+      ),
+    ).rejects.toThrow();
+  });
+
+  test("admin cancellation of a running cohort retains past delivery holds", async () => {
+    const fixture = await createFixture({ sessions: 2, balance: 100 });
+    await makeEnrollment(fixture, 0, "full");
+    fixture.setNow(new Date(fixture.startAt[0]!.getTime() + 60_000));
+    const input = {
+      classId: fixture.classId,
+      expectedVersion: 1,
+      reason: "Cancel remaining delivery",
+    };
+    const quote = await fixture.service.previewAdminCancellation(
+      fixture.tutorId,
+      input,
+    );
+    expect(quote).toMatchObject({ returnMarks: 20, retainedMarks: 20 });
+    await fixture.service.confirmAdminCancellation(fixture.tutorId, {
+      ...input,
+      quoteVersion: quote.quoteVersion,
+      requestKey: crypto.randomUUID(),
+    });
+    const [balance] = await db
+      .select()
+      .from(walletTable)
+      .where(eq(walletTable.id, fixture.walletIds[0]!));
+    expect(balance).toMatchObject({
+      totalBalance: 100,
+      heldBalance: 20,
+      availableBalance: 80,
+    });
+    const sessions = await db
+      .select()
+      .from(academyClassSession)
+      .where(eq(academyClassSession.classId, fixture.classId))
+      .orderBy(academyClassSession.sequenceNumber);
+    expect(sessions.map((row) => row.state)).toEqual([
+      "scheduled",
+      "cancelled",
+    ]);
+  });
+
+  test("admin preview cannot cancel a newly funded checkout using an old return amount", async () => {
+    const fixture = await createFixture({ sessions: 1, balance: 0 });
+    const enrollment = await makeEnrollment(
+      fixture,
+      0,
+      "single",
+      crypto.randomUUID(),
+      fixture.sessionIds[0],
+    );
+    const input = {
+      classId: fixture.classId,
+      expectedVersion: 1,
+      reason: "Cancel after quote race",
+    };
+    const quote = await fixture.service.previewAdminCancellation(
+      fixture.tutorId,
+      input,
+    );
+    expect(quote.returnMarks).toBe(0);
+    await db
+      .update(walletTable)
+      .set({ totalBalance: 25, availableBalance: 25 })
+      .where(eq(walletTable.id, fixture.walletIds[0]!));
+    await fixture.service.completeCheckout(
+      fixture.studentIds[0]!,
+      enrollment.id,
+    );
+    await expect(
+      fixture.service.confirmAdminCancellation(fixture.tutorId, {
+        ...input,
+        quoteVersion: quote.quoteVersion,
+        requestKey: crypto.randomUUID(),
+      }),
+    ).rejects.toThrow("amounts changed");
+    expect((await allocationRows(fixture))[0]?.state).toBe("funded");
+    expect(
+      (
+        await db
+          .select()
+          .from(academyClass)
+          .where(eq(academyClass.id, fixture.classId))
+      )[0]?.state,
+    ).toBe("published");
+  });
+
+  test("class calendar cancellation retries provider failure and becomes terminal", async () => {
+    const fixture = await createFixture({ sessions: 1 });
+    await db.insert(academyClassMeeting).values({
+      sessionId: fixture.sessionIds[0]!,
+      status: "created",
+      externalEventId: "test-class-event-cancel",
+      meetingUrl: "https://meet.google.com/test",
+    });
+    const input = {
+      classId: fixture.classId,
+      expectedVersion: 1,
+      reason: "Cancel meeting retry test",
+    };
+    const quote = await fixture.service.previewAdminCancellation(
+      fixture.tutorId,
+      input,
+    );
+    await fixture.service.confirmAdminCancellation(fixture.tutorId, {
+      ...input,
+      quoteVersion: quote.quoteVersion,
+      requestKey: crypto.randomUUID(),
+    });
+    let attempts = 0;
+    const worker = createAcademyClassService({
+      db,
+      audit: {} as never,
+      notification: {} as never,
+      meeting: {
+        cancelAcademyClassEvent: async (eventId: string) => {
+          expect(eventId).toBe("test-class-event-cancel");
+          attempts++;
+          if (attempts === 1) throw new Error("Synthetic provider unavailable");
+        },
+        createAcademyClassEvent: async () => {
+          throw new Error("Cancelled session must not create an event");
+        },
+      } as MeetingPort,
+    });
+    expect(await worker.processReadyMeetings(fixture.classId)).toMatchObject({
+      processed: 1,
+      failed: 1,
+    });
+    await db
+      .update(academyClassMeeting)
+      .set({ nextRetryAt: new Date(0) })
+      .where(eq(academyClassMeeting.sessionId, fixture.sessionIds[0]!));
+    expect(await worker.processReadyMeetings(fixture.classId)).toMatchObject({
+      processed: 1,
+      cancelled: 1,
+    });
+    expect(await worker.processReadyMeetings(fixture.classId)).toMatchObject({
+      processed: 0,
+    });
+    expect(attempts).toBe(2);
+    expect(
+      (
+        await db
+          .select()
+          .from(academyClassMeeting)
+          .where(eq(academyClassMeeting.sessionId, fixture.sessionIds[0]!))
+      )[0],
+    ).toMatchObject({
+      status: "cancelled",
+      externalEventId: "test-class-event-cancel",
+      meetingUrl: null,
+    });
+  });
+
+  test("a class event created during cancellation is picked up for deletion after its worker commits", async () => {
+    const fixture = await createFixture({ sessions: 1 });
+    await db.insert(academyClassMeeting).values({
+      sessionId: fixture.sessionIds[0]!,
+      status: "pending",
+      nextRetryAt: new Date(0),
+    });
+    let started!: () => void;
+    let finish!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const gate = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    let deleted = 0;
+    const worker = createAcademyClassService({
+      db,
+      audit: {} as never,
+      notification: {} as never,
+      meeting: {
+        createAcademyClassEvent: async () => {
+          started();
+          await gate;
+          return {
+            provider: "google_meet",
+            status: "created",
+            externalEventId: "test-class-event-race",
+            meetingUrl: "https://meet.google.com/test",
+            errorReason: null,
+          };
+        },
+        cancelAcademyClassEvent: async (id: string) => {
+          expect(id).toBe("test-class-event-race");
+          deleted++;
+        },
+      } as MeetingPort,
+    });
+    const creating = worker.processReadyMeetings(fixture.classId);
+    await entered;
+    try {
+      const input = {
+        classId: fixture.classId,
+        expectedVersion: 1,
+        reason: "Cancel while provider is creating",
+      };
+      const quote = await fixture.service.previewAdminCancellation(
+        fixture.tutorId,
+        input,
+      );
+      await fixture.service.confirmAdminCancellation(fixture.tutorId, {
+        ...input,
+        quoteVersion: quote.quoteVersion,
+        requestKey: crypto.randomUUID(),
+      });
+    } finally {
+      finish();
+    }
+    await creating;
+    expect(await worker.processReadyMeetings(fixture.classId)).toMatchObject({
+      cancelled: 1,
+    });
+    expect(deleted).toBe(1);
+  });
+  test("a creator resuming after lease recovery queues another cancellation instead of losing the provider event", async () => {
+    const fixture = await createFixture({ sessions: 1 });
+    await db
+      .insert(academyClassMeeting)
+      .values({
+        sessionId: fixture.sessionIds[0]!,
+        status: "pending",
+        nextRetryAt: new Date(0),
+      });
+    let started!: () => void;
+    let finish!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const gate = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const deleted: (string | null)[] = [];
+    const worker = createAcademyClassService({
+      db,
+      audit: {} as never,
+      notification: {} as never,
+      meeting: {
+        createAcademyClassEvent: async () => {
+          started();
+          await gate;
+          return {
+            provider: "google_meet",
+            status: "created",
+            externalEventId: "test-class-event-after-lease",
+            meetingUrl: "https://meet.google.com/test",
+            errorReason: null,
+          };
+        },
+        cancelAcademyClassEvent: async (
+          id: string | null,
+          sessionId?: string,
+        ) => {
+          expect(sessionId).toBe(fixture.sessionIds[0]);
+          deleted.push(id);
+        },
+      } as MeetingPort,
+    });
+    const creating = worker.processReadyMeetings(fixture.classId);
+    await entered;
+    try {
+      const input = {
+        classId: fixture.classId,
+        expectedVersion: 1,
+        reason: "Cancel expired creation lease",
+      };
+      const quote = await fixture.service.previewAdminCancellation(
+        fixture.tutorId,
+        input,
+      );
+      await fixture.service.confirmAdminCancellation(fixture.tutorId, {
+        ...input,
+        requestKey: crypto.randomUUID(),
+        quoteVersion: quote.quoteVersion,
+      });
+      await db
+        .update(academyClassMeeting)
+        .set({ lockedAt: new Date(0) })
+        .where(eq(academyClassMeeting.sessionId, fixture.sessionIds[0]!));
+      expect(await worker.processReadyMeetings(fixture.classId)).toMatchObject({
+        cancelled: 1,
+      });
+    } finally {
+      finish();
+    }
+    await creating;
+    expect(
+      (
+        await db
+          .select()
+          .from(academyClassMeeting)
+          .where(eq(academyClassMeeting.sessionId, fixture.sessionIds[0]!))
+      )[0]?.status,
+    ).toBe("pending");
+    expect(await worker.processReadyMeetings(fixture.classId)).toMatchObject({
+      cancelled: 1,
+    });
+    expect(deleted).toEqual([null, "test-class-event-after-lease"]);
+  });
+
+  test("admin cancellation rolls back every return if a later student release fails", async () => {
+    let releases = 0;
+    const fixture = await createFixture({
+      sessions: 2,
+      balance: 100,
+      walletPort: {
+        ...services.wallet,
+        release: async (...args) => {
+          releases++;
+          if (releases === 2) throw new Error("Injected admin return failure");
+          return services.wallet.release(...args);
+        },
+      },
+    });
+    await makeEnrollment(fixture, 0, "full");
+    const input = {
+      classId: fixture.classId,
+      expectedVersion: 1,
+      reason: "Atomic class cancellation",
+    };
+    const quote = await fixture.service.previewAdminCancellation(
+      fixture.tutorId,
+      input,
+    );
+    await expect(
+      fixture.service.confirmAdminCancellation(fixture.tutorId, {
+        ...input,
+        requestKey: crypto.randomUUID(),
+        quoteVersion: quote.quoteVersion,
+      }),
+    ).rejects.toThrow("Injected admin return failure");
+    const [balance] = await db
+      .select()
+      .from(walletTable)
+      .where(eq(walletTable.id, fixture.walletIds[0]!));
+    expect(balance).toMatchObject({
+      totalBalance: 100,
+      availableBalance: 60,
+      heldBalance: 40,
+    });
+    expect(
+      (await allocationRows(fixture)).every(
+        (row) => row.state === "funded" && row.releasedMarks === 0,
+      ),
+    ).toBe(true);
+    expect(
+      (
+        await db
+          .select()
+          .from(academyClass)
+          .where(eq(academyClass.id, fixture.classId))
+      )[0]?.state,
+    ).toBe("published");
+    expect(fixture.notifications).toHaveLength(0);
   });
 });

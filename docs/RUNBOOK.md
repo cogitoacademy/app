@@ -1,9 +1,28 @@
 # Cogito Runbook
 
+Admin class cancellation migration 0066 was generated from snapshot 0065;
+only public.academy_class_meeting changes (terminal cancelled status check).
+SQL SHA-256: 70a47d6cbd1f7539d4af45071eaf643ca99ec73c7046c033108d7e1475d54afd;
+journal timestamp 1792559482042. It is applied only to the verified disposable
+T05 DB on 6769. Dev still has 0065 until final integration. No old migration
+SQL/snapshot was rewritten and no database was reset for this change.
+The normal class meeting scheduler also retries deletion after cancellation;
+restore Google credentials/configuration to clear failed deletes. Manual fallback
+refuses to claim a known provider event deleted while Google is unavailable.
+Creation and cancellation provider operations remain outside database transactions;
+financial cancellation and notifications commit independently from provider retry.
+Verification currently passes 22 Postgres cases / 140 assertions and 46 Google
+provider fake tests / 148 assertions, including in-flight and expired-lease creates.
+Web and E2E typechecks pass; two Chromium real-RPC journeys pass in 59.2s. No real Calendar or
+email provider was contacted by these tests.
+
 Cancellation browser command from packages/e2e: with the guarded T05 ENV_FILE,
 run `bun run test src/specs/class-enrollment.spec.ts --config=playwright.class-enrollment.config.ts --workers=1`.
-The wrapper changes only Vite config loading to runner: the standard bundler timed
-out against linked worktree config-cache state, while runner starts in 1.3s.
+The wrapper runs Vite directly on Bun with native TypeScript config loading.
+The Windows executable shim spawned Node and intermittently stalled before
+startup; a direct Bun probe started in 901ms. Student and admin journeys use
+separate tests to release browser renderers between roles. VITE_TEST_CACHE_DIR
+can isolate the T05 dependency cache without deleting shared dev cache files.
 The disposable T05 DB was migrated through existing 0065 before the integrated
 browser seed (no schema was generated). Dev and T05 now both include payout tax
 columns; no dev reset or seed was performed.

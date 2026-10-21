@@ -39,6 +39,12 @@ export interface AcademyClassMeetingResult {
 }
 
 export interface MeetingPort {
+  /** Throws on provider failure so the class cancellation worker can retry. */
+  cancelAcademyClassEvent?(
+    externalEventId: string | null,
+    sessionId?: string,
+  ): Promise<void>;
+
   /** Creates an idempotent Google Meet event without writing a booking row. */
   createAcademyClassEvent?(
     sessionId: string,

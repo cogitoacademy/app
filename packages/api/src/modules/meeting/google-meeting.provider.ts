@@ -148,7 +148,7 @@ export function createGoogleMeetingProvider(
           body?.error?.message ??
           body?.error_description ??
           `Google Calendar API request failed with ${response.status}`;
-        throw new Error(errorMessage);
+        throw Object.assign(new Error(errorMessage), { code: response.status });
       }
 
       return body as T;
@@ -897,6 +897,48 @@ export function createGoogleMeetingProvider(
     }
   }
 
+  async function cancelAcademyClassEvent(
+    externalEventId: string | null,
+    sessionId?: string,
+  ): Promise<void> {
+    if (!externalEventId && !sessionId)
+      throw new Error(
+        "Class event cancellation requires a provider or session identity",
+      );
+    const eventId =
+      externalEventId ??
+      offlineCalendarEventId(`academy-class-session:${sessionId}`);
+    await googleMeetBreaker.execute(async () => {
+      try {
+        const timeoutMs = 30_000;
+        if (config.authType === "oauth_refresh_token") {
+          const token = await refreshOAuthAccessToken(timeoutMs);
+          await deleteEventWithOauth(token, eventId, timeoutMs);
+        } else {
+          await withTimeout(
+            Promise.resolve(
+              calendar!.events.delete({
+                calendarId: config.calendarId,
+                eventId,
+                sendUpdates,
+              }),
+            ).then(() => undefined),
+            timeoutMs,
+            "Google Meet cancellation timed out",
+          );
+        }
+      } catch (error) {
+        const value = error as {
+          code?: number | string;
+          response?: { status?: number };
+        };
+        const code = Number(value?.response?.status ?? value?.code);
+        // Already absent is success, including after a lost DELETE response.
+        if (code !== 404 && code !== 410) throw error;
+      }
+    });
+  }
+
   async function createAcademyClassEvent(
     sessionId: string,
     scheduledStartAt: Date,
@@ -936,6 +978,7 @@ export function createGoogleMeetingProvider(
   return {
     createEvent,
     createAcademyClassEvent,
+    cancelAcademyClassEvent,
     updateEvent,
     cancelEvent,
     setManualLink,
@@ -1030,6 +1073,7 @@ export function createGoogleMeetingProviderWithFallback(
         attendee,
         details,
       ),
+    cancelAcademyClassEvent: googleProvider.cancelAcademyClassEvent,
     updateEvent: googleProvider.updateEvent,
     cancelEvent: googleProvider.cancelEvent,
     setManualLink: googleProvider.setManualLink,

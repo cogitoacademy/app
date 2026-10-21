@@ -1,5 +1,16 @@
 # Cogito API Reference
 
+Admin class cancellation RPCs: `/rpc/classes/previewAdminCancellation` accepts
+`{"json":{"classId":"uuid","expectedVersion":1,"reason":"audited reason"}}`.
+`/rpc/classes/confirmAdminCancellation` adds requestKey (UUID) and quoteVersion.
+Both require admin authentication. Response includes classId, expectedVersion,
+feeMarks (zero), returnMarks, retainedMarks, cancelledSessionIds,
+releasedAllocationIds and quoteVersion. Confirmation rechecks amounts and class
+version under locks; same request/quote replay returns its saved receipt.
+Student `/rpc/classes/getMyEnrollments` also returns the owner's historical
+enrollments after parent cancellation, with no sellable sessions. Unrelated
+students cannot discover a non-published class through this history read.
+
 Student class cancellation RPCs: `POST /rpc/classes/quoteCancellation` accepts
 `{"json":{"enrollmentId":"uuid","sessionId":"optional owned session UUID"}}`.
 Omit sessionId for withdrawal. `POST /rpc/classes/confirmCancellation` adds

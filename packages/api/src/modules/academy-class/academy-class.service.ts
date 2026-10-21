@@ -671,34 +671,54 @@ export function createAcademyClassService(deps: {
     const attempt = await repo.findMeetingAttemptDetails(deps.db, meetingId);
     let result: {
       provider: string;
-      status: "created" | "failed";
+      status: "created" | "failed" | "cancelled";
       externalEventId: string | null;
       meetingUrl: string | null;
       errorReason: string | null;
     };
     try {
-      if (!attempt || attempt.academyClass.state !== "published") {
-        throw new Error(
-          "Published class meeting work no longer has a class session",
+      if (attempt?.session.state === "cancelled") {
+        if (attempt.meeting.externalEventId || claimed.attemptCount > 1) {
+          if (!deps.meeting.cancelAcademyClassEvent)
+            throw new Error(
+              "Class meeting cancellation provider is not configured",
+            );
+          await deps.meeting.cancelAcademyClassEvent(
+            attempt.meeting.externalEventId,
+            attempt.session.id,
+          );
+        }
+        result = {
+          provider: attempt.meeting.provider,
+          status: "cancelled",
+          externalEventId: attempt.meeting.externalEventId,
+          meetingUrl: null,
+          errorReason: null,
+        };
+      } else {
+        if (!attempt || attempt.academyClass.state !== "published") {
+          throw new Error(
+            "Published class meeting work no longer has a class session",
+          );
+        }
+        const createEvent = deps.meeting.createAcademyClassEvent;
+        if (!createEvent) {
+          throw new Error("Class meeting provider is not configured");
+        }
+        result = await createEvent(
+          attempt.session.id,
+          attempt.session.startAt,
+          attempt.session.endAt,
+          { email: attempt.tutorEmail, name: attempt.tutorName },
+          {
+            title: `Cogito ${attempt.academyClass.titleEn}: ${attempt.session.titleEn}`,
+            externalEventId: attempt.meeting.externalEventId ?? undefined,
+          },
         );
       }
-      const createEvent = deps.meeting.createAcademyClassEvent;
-      if (!createEvent) {
-        throw new Error("Class meeting provider is not configured");
-      }
-      result = await createEvent(
-        attempt.session.id,
-        attempt.session.startAt,
-        attempt.session.endAt,
-        { email: attempt.tutorEmail, name: attempt.tutorName },
-        {
-          title: `Cogito ${attempt.academyClass.titleEn}: ${attempt.session.titleEn}`,
-          externalEventId: attempt.meeting.externalEventId ?? undefined,
-        },
-      );
     } catch (error) {
       result = {
-        provider: "manual",
+        provider: attempt?.meeting.provider ?? "manual",
         status: "failed",
         externalEventId: null,
         meetingUrl: null,
@@ -721,23 +741,35 @@ export function createAcademyClassService(deps: {
       };
     }
 
-    const retryDelay = Math.min(
-      MAX_MEETING_RETRY_DELAY_MS,
-      30_000 * 2 ** Math.min(10, Math.max(0, claimed.attemptCount - 1)),
+    const retryDelay =
+      attempt?.session.state === "cancelled"
+        ? 30_000
+        : Math.min(
+            MAX_MEETING_RETRY_DELAY_MS,
+            30_000 * 2 ** Math.min(10, Math.max(0, claimed.attemptCount - 1)),
+          );
+    const saved = await repo.finishMeetingAttempt(
+      deps.db,
+      meetingId,
+      {
+        provider: result.provider,
+        status: result.status,
+        externalEventId:
+          result.externalEventId ?? attempt?.meeting.externalEventId ?? null,
+        meetingUrl: result.meetingUrl,
+        errorReason: result.errorReason,
+        nextRetryAt:
+          result.status === "created"
+            ? now
+            : new Date(now.getTime() + retryDelay),
+      },
+      {
+        lockedAt: claimed.lockedAt!,
+        attemptCount: claimed.attemptCount,
+        operation: attempt?.session.state === "cancelled" ? "cancel" : "create",
+      },
     );
-    await repo.finishMeetingAttempt(deps.db, meetingId, {
-      provider: result.provider,
-      status: result.status,
-      externalEventId:
-        result.externalEventId ?? attempt?.meeting.externalEventId ?? null,
-      meetingUrl: result.meetingUrl,
-      errorReason: result.errorReason,
-      nextRetryAt:
-        result.status === "created"
-          ? now
-          : new Date(now.getTime() + retryDelay),
-    });
-    return result.status;
+    return saved?.status ?? null;
   }
 
   async function processReadyMeetings(classId?: string) {
@@ -751,14 +783,23 @@ export function createAcademyClassService(deps: {
     );
     let created = 0;
     let failed = 0;
+    let cancelled = 0;
+    let processed = 0;
     for (let index = 0; index < ready.length; index += 4) {
       const outcomes = await Promise.all(
         ready.slice(index, index + 4).map(({ id }) => runMeetingAttempt(id)),
       );
+      processed += outcomes.filter((outcome) => outcome !== null).length;
       created += outcomes.filter((outcome) => outcome === "created").length;
       failed += outcomes.filter((outcome) => outcome === "failed").length;
+      cancelled += outcomes.filter((outcome) => outcome === "cancelled").length;
     }
-    return { processed: created + failed, created, failed };
+    return {
+      processed: created + failed + cancelled,
+      created,
+      failed,
+      cancelled,
+    };
   }
 
   async function publish(actorId: string, input: PublishInput) {
@@ -895,7 +936,10 @@ export function createAcademyClassService(deps: {
 
   async function retryFailedMeetings() {
     const result = await processReadyMeetings();
-    return { succeeded: result.created, failed: result.failed };
+    return {
+      succeeded: result.created + result.cancelled,
+      failed: result.failed,
+    };
   }
 
   return {
@@ -907,5 +951,6 @@ export function createAcademyClassService(deps: {
     publish,
     retryMeetings,
     retryFailedMeetings,
+    processReadyMeetings,
   };
 }

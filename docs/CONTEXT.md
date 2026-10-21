@@ -1,5 +1,18 @@
 # Cogito App — Codebase Context
 
+T06 administrator cancellation is implemented on f/v3-admin-class-cancellation
+with parent acceptance complete for this slice. Admins review exact zero-fee future-hold returns,
+then confirm a versioned/idempotent quote. The transaction cancels future sessions,
+releases only unspent future allocations, stops unpaid/checkout obligations,
+preserves past delivery holds and earned fees, and writes audit plus student/tutor
+notification outboxes. Class ownership history remains readable after cancellation.
+The existing meeting worker durably deletes cancelled-session provider events,
+including late creates after cancellation or lease recovery. Postgres checks pass
+22 / 140; Google provider fake checks pass 46 / 148. Migration 0066 only expands
+the class-meeting status check and is applied to disposable 6769, not dev yet.
+Minimum/postponement, one-session administrator cancellation, rescheduling,
+withdrawal-rate settings, T07 and remaining release acceptance stay open.
+
 T06 student cancellation/withdrawal is implemented on its baseline-derived
 worktree: exact preview + versioned/idempotent confirmation, per-allocation
 Marks accounting, inclusive 24h deadline, unpaid-half cancellation and atomic

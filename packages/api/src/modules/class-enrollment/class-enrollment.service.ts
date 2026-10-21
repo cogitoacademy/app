@@ -1,3 +1,4 @@
+import { createAdminClassCancellation } from "./class-enrollment.admin-cancellation";
 import { quoteEnrollmentCancellation } from "./class-enrollment.cancellation";
 import {
   classEnrollmentCancellationOutput,
@@ -91,6 +92,7 @@ export function createClassEnrollmentService(deps: {
   clock?: () => Date;
 }) {
   const repo = createClassEnrollmentRepo();
+  const adminCancellation = createAdminClassCancellation(deps);
   const now = () => deps.clock?.() ?? new Date();
 
   function currentTime() {
@@ -162,8 +164,19 @@ export function createClassEnrollmentService(deps: {
     expireStale = true,
   ) {
     const classRecord = await repo.getClassForEnrollment(conn, classId);
-    if (!classRecord || classRecord.state !== "published") {
-      throw new ClassEnrollmentNotFoundError();
+    if (!classRecord) throw new ClassEnrollmentNotFoundError();
+    if (classRecord.state !== "published") {
+      const records = await repo.findStudentClassRecords(
+        conn,
+        studentId,
+        classId,
+      );
+      if (!records.enrollments.length) throw new ClassEnrollmentNotFoundError();
+      return {
+        classId,
+        eligibleSessions: [],
+        enrollments: mapRecords(records),
+      };
     }
     if (expireStale) {
       await repo.expireStaleCheckoutForStudentClass(
@@ -1493,6 +1506,8 @@ export function createClassEnrollmentService(deps: {
   }
 
   return {
+    previewAdminCancellation: adminCancellation.preview,
+    confirmAdminCancellation: adminCancellation.confirm,
     getMyClassEnrollments,
     quoteCancellation: (
       studentId: string,
