@@ -11,6 +11,9 @@ FAQ regressions are recorded in the PR. No API or storage contract changed.
 
 ## UI controls and Card/Table repair (22 October 2026)
 
+Payout tax default and custom tutor fields now use percentages and a rupiah
+deduction example. API rates remain integer basis points; no stored rate changed.
+
 Web numeric fields use the shared Selia NumberField with styled steppers. Academy,
 lifecycle and payout date/time fields reuse CrossBrowserDateTimeInput. Card/Table
 width, spacing and narrow-card header actions are handled in shared components;
