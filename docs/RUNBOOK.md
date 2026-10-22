@@ -14,6 +14,13 @@ still pending and is separate from this startup health check.
 
 ## UI control and table verification (22 October 2026)
 
+Spacing regression: on `/admin-economy`, measure from the lower of the take and
+preview Cards to the V3 rate card. It should be the normal 24px Stack gap, at
+both mobile and desktop widths, not the 128–250px blank region seen with Card-root
+inline-size containment. Confirm icon-header actions still use column 3 on wide
+headers and wrap below the title on narrow headers. The E2E economy spec includes
+this rendered-gap assertion.
+
 Tax form follow-up: defaults and custom tutor rates use percentages, not bps.
 Verify default 250 displays as 2.5, 300 as 3; typing 2.55 should show Rp10,200
 tax on Rp400,000. Save payloads retain 255 basis points. Empty override restores

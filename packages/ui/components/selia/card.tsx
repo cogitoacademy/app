@@ -16,7 +16,7 @@ export function Card({
     props: {
       "data-slot": "card",
       className: cn(
-        "@container/card min-w-0 text-foreground ring ring-card-border rounded-xl shadow-card bg-card",
+        "min-w-0 text-foreground ring ring-card-border rounded-xl shadow-card bg-card",
         className,
       ),
       ...props,
@@ -26,7 +26,7 @@ export function Card({
 
 export const cardHeaderVariants = cva(
   [
-    "p-6 gap-x-3.5 gap-y-2 border-b border-card-separator",
+    "@container/card p-6 gap-x-3.5 gap-y-2 border-b border-card-separator",
     "min-w-0 grid grid-cols-[minmax(0,1fr)_auto]",
     "has-[>svg]:grid-cols-[auto_minmax(0,1fr)_auto]",
     "has-[[data-slot=iconbox]]:grid-cols-[auto_minmax(0,1fr)_auto]",

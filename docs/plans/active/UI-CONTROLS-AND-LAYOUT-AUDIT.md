@@ -35,6 +35,12 @@ date/time/number widgets and Card/Table composition without changing API contrac
 
 ## Verification
 
+- Follow-up spacing regression: Card-root inline-size containment inflated grid
+  row heights in a column Stack. Moving the named container to CardHeader reduced
+  the measured economy section gap from 251.25px to the intended 24px while
+  preserving the icon-header action's column 3. Reloaded desktop page also reports
+  a 24px gap. The economy E2E spec now asserts the gap at mobile/desktop widths.
+
 - Tax copy/usability follow-up: default and custom tutor tax fields use percent
   labels and 0..100 inputs with two decimal places, retaining integer API units.
   Default fields include a sample deduction from Rp400,000. Authenticated browser

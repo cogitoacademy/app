@@ -19,6 +19,10 @@ FAQ regressions are recorded in the PR. No API or storage contract changed.
 
 ## UI controls and Card/Table repair (22 October 2026)
 
+Card responsive containment is scoped to CardHeader. Applying inline-size
+containment to the whole Card inflated grid row heights and caused large blank
+gaps on the economy page; the measured section gap is restored to 24px.
+
 Payout tax default and custom tutor fields now use percentages and a rupiah
 deduction example. API rates remain integer basis points; no stored rate changed.
 
