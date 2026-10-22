@@ -117,6 +117,13 @@ async function createWallet(userId: string, heldAmount: number) {
       heldBalance: heldAmount,
       availableBalance: 0,
     })
+    .onConflictDoUpdate({
+      target: wallet.userId,
+      set: {
+        totalBalance: sql`${wallet.totalBalance} + ${heldAmount}`,
+        heldBalance: sql`${wallet.heldBalance} + ${heldAmount}`,
+      },
+    })
     .returning();
   return row!;
 }
@@ -317,6 +324,9 @@ describe("on-demand booking report admin coverage (non-reset UUID fixtures)", ()
   afterAll(async () => {
     const bookingIds = [...ownedBookingIds];
     if (bookingIds.length > 0) {
+      await db
+        .delete(tutorSessionFee)
+        .where(inArray(tutorSessionFee.bookingId, bookingIds));
       await db.delete(bookingTable).where(inArray(bookingTable.id, bookingIds));
     }
     const userIds = [...ownedUserIds];

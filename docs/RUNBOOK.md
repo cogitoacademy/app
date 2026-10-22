@@ -1,5 +1,21 @@
 # Cogito Runbook
 
+## On-demand report DB checkpoint (22 October 2026)
+
+The feature is implemented in `f/v3-admin-session-reports`, synced with the UI
+and percentage-tax integration checkpoints. The guarded non-reset PostgreSQL
+suite now passes 11 tests / 106 assertions against exact loopback
+6769/cogito-test. The fixture reuses the signup-created wallet and adds holds
+for shared users rather than overwriting earlier fixtures. Cleanup deletes owned
+fee facts before owned bookings, then owned users. Pure feedback/service checks
+pass 31 tests / 112 assertions. Test migration 0070 was read back at journal id
+71 with hash eacfa97b013f23fa2e74be6d6d8e410b2b9c0f354b1d9ae6bb121370f40fc0f4.
+No development migration, reset, seed or live provider ran. Earlier notes saying
+the guarded DB cases are unrun are superseded by this checkpoint. The isolated
+Chromium journey and development rollout remain pending; low C: free space
+blocked a responsible browser-suite launch. Keep the feature PR in draft until
+its browser/rollout acceptance is resolved. The report PDF is separate work.
+
 ## Local development restarted (22 October 2026)
 
 Docker Desktop and the existing development Postgres/Redis containers are running.
