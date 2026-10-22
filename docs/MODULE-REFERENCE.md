@@ -2,6 +2,11 @@
 
 ## Shared UI control contracts (22 October 2026)
 
+The named Card container query lives on CardHeader, not the Card root. Root
+inline-size containment inflated grid intrinsic row heights inside column Stacks,
+leaving empty vertical space below Cards; header containment keeps action wrapping
+without changing the whole Card's grid contribution.
+
 Payout tax controls display and accept percentages (0..100, two decimal places).
 `percentToBasisPoints` rounds the percentage times 100 before it enters the
 existing integer draft/API fields, avoiding floating-point fractions such as
