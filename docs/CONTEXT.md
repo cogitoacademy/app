@@ -1,5 +1,19 @@
 # Cogito App — Codebase Context
 
+## Windows TypeScript-Go memory guard (22 October 2026)
+
+The earlier Windows workspace check failed with `VirtualAlloc` errno 1455.
+Every package check script that runs `tsgo` now passes `--checkers 1`; the root
+`check-types` script serializes Turbo tasks with `--concurrency=1`, and
+Lefthook runs pre-push typecheck and lint-baseline commands sequentially. This
+reduces concurrent compiler pressure while keeping TypeScript-Go;
+`NODE_OPTIONS` does not control its Go checker parallelism.
+
+In this worktree, `bun run check-types` passed with 4/4 uncached tasks in
+12.832 seconds. The parent also measured the web check at 6.51 seconds with one
+checker after the default four-checker invocation ran out of memory. See the
+[typecheck memory plan](plans/active/WINDOWS-TYPECHECK-MEMORY.md).
+
 ## Classes UI workspace (22 October 2026)
 
 Student `/classes` is a single searchable catalog with Cohort/Masterclass filters,

@@ -14,7 +14,7 @@ pre-commit:
       run: bun scripts/check-sops-encrypted.ts {staged_files}
 
 pre-push:
-  parallel: true
+  parallel: false
   commands:
     typecheck:
       run: bun run check-types
