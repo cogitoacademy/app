@@ -1291,6 +1291,24 @@ grant and verify the student is locked again. An expired grant must remain
 visible as **Expired** but must not bypass the 35-Mark gate; this behavior is
 read-time and does not depend on a scheduler.
 
+### Role-based sidebar grouping smoke check
+
+As an admin, confirm the sidebar shows Overview (Dashboard, Operations),
+Teaching (Bookings, Classes, Session reports, Tutors), Finance (Tutor payouts,
+Economy), Content & reviews (Competitions, Achievements, Knowledge access, FAQ,
+Manage FAQs), then Resources. Verify every link opens its existing route,
+selected links retain their active styling, and Bookings retains its action
+badge when there are actionable bookings. At desktop and mobile widths, scroll
+the sidebar to reach Resources and the account menu.
+
+As a student, confirm Overview contains Dashboard and Balance, followed by
+Learning with Tutors, Classes, My Bookings, Session reports, and Achievements.
+As a tutor, confirm Overview contains Dashboard, followed by Teaching with
+Bookings, Session reports, Availability, and Tutor Profile. Both roles show FAQ
+in Resources after Knowledge Bank, exactly once. Check the booking action badge,
+active-link styling, mobile sidebar scrolling, and account footer for both roles.
+No environment or service changes are required.
+
 ### Empty-state consistency smoke check
 
 With signed-in student, tutor, and admin sessions, exercise empty data and no-match states in the calendar, tutor discovery, Knowledge Bank, bookings, notifications, achievements, balance history, availability preview, booking detail, and admin operations surfaces. Confirm collection and event-free agenda states have the shared Selia icon/title/description treatment where applicable, while an event-free month keeps its normal calendar grid instead of an empty-state replacement. Confirm each state uses the right density for its context, distinguishes an empty collection from an active filter with no matches, and keeps its action usable when one exists. Check the notification menu, calendar popup, dialog sections, field-level specialization/proof-link states, and table/list sections for blank areas or orphaned headers. Repeat in light and dark themes and at narrow width; there should be no page-level horizontal overflow or duplicate empty copy, while intentional table containers may scroll horizontally when their minimum column widths exceed the viewport. This is frontend-only and must not change request payloads.
