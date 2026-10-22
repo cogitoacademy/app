@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ORPCError } from "@orpc/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CogitoUser } from "@cogito-app/auth";
@@ -155,6 +155,8 @@ export function ClassSessionReportsPage() {
     null,
   );
 
+  const reportPanelRef = useRef<HTMLElement>(null);
+
   if (reportsQuery.isPending) return <Loader />;
 
   const selectedSessionIdResolved = selectedSessionId ?? rows[0]?.sessionId;
@@ -183,6 +185,12 @@ export function ClassSessionReportsPage() {
 
   function selectRow(row: ReportRow) {
     setSelectedSessionId(row.sessionId);
+    if (window.matchMedia("(max-width: 1023px)").matches) {
+      requestAnimationFrame(() => {
+        reportPanelRef.current?.focus({ preventScroll: true });
+        reportPanelRef.current?.scrollIntoView({ block: "start" });
+      });
+    }
     setDrafts((current) => ({
       ...current,
       [row.sessionId]: current[row.sessionId] ?? createDraft(row),
@@ -365,84 +373,98 @@ export function ClassSessionReportsPage() {
         </Badge>
       </div>
 
-      <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(17rem,0.85fr)_minmax(0,1.4fr)]">
-        <section aria-label="Class sessions" className="min-w-0 space-y-3">
-          {rows.length === 0 ? (
-            <Card>
-              <CardBody className="space-y-2 py-7">
-                <Text className="font-medium">
-                  {isStudent ? "No reports yet" : "No past sessions to review"}
-                </Text>
-                <Text className="text-sm text-muted">
-                  {isStudent
-                    ? "Your eligible session reports will appear here after a tutor records them."
-                    : "Sessions awaiting a report will appear here after their scheduled end time."}
-                </Text>
-              </CardBody>
-            </Card>
-          ) : (
-            rows.map((row) => {
-              const selected = row.sessionId === selectedSessionIdResolved;
-              const status = row.report ? "Report recorded" : "Report pending";
-              return (
-                <Card
-                  key={row.sessionId}
-                  data-testid={`session-report-row-${row.sessionId}`}
-                  className={selected ? "ring-2 ring-primary" : undefined}
-                >
-                  <CardHeader className="items-start! gap-3">
-                    <div className="min-w-0 space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant={row.report ? "success" : "warning"}>
-                          {status}
-                        </Badge>
-                        <Badge variant="secondary">
-                          {row.classKind === "cohort"
-                            ? "Cohort"
-                            : "Masterclass"}
-                        </Badge>
+      <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,19rem)_minmax(0,1fr)]">
+        <section
+          aria-label="Class sessions"
+          className="min-w-0 space-y-3 lg:sticky lg:top-6"
+        >
+          <Heading level={2} size="sm">
+            Choose a session
+          </Heading>
+          <div className="max-h-96 space-y-3 overflow-y-auto rounded-xl p-1 lg:max-h-[calc(100dvh-14rem)]">
+            {rows.length === 0 ? (
+              <Card>
+                <CardBody className="space-y-2 py-7">
+                  <Text className="font-medium">
+                    {isStudent
+                      ? "No reports yet"
+                      : "No past sessions to review"}
+                  </Text>
+                  <Text className="text-sm text-muted">
+                    {isStudent
+                      ? "Your eligible session reports will appear here after a tutor records them."
+                      : "Sessions awaiting a report will appear here after their scheduled end time."}
+                  </Text>
+                </CardBody>
+              </Card>
+            ) : (
+              rows.map((row) => {
+                const selected = row.sessionId === selectedSessionIdResolved;
+                const status = row.report
+                  ? "Report recorded"
+                  : "Report pending";
+                return (
+                  <Card
+                    key={row.sessionId}
+                    data-testid={`session-report-row-${row.sessionId}`}
+                    className={selected ? "ring-2 ring-primary" : undefined}
+                  >
+                    <CardBody className="space-y-3">
+                      <div className="min-w-0 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant={row.report ? "success" : "warning"}>
+                            {status}
+                          </Badge>
+                          <Badge variant="secondary">
+                            {row.classKind === "cohort"
+                              ? "Cohort"
+                              : "Masterclass"}
+                          </Badge>
+                        </div>
+                        <CardTitle className="break-words">
+                          {row.classTitle}
+                        </CardTitle>
+                        <CardDescription>
+                          Session {row.sequenceNumber} · {row.sessionTitle}
+                        </CardDescription>
+                        <Text className="text-xs text-muted">
+                          {formatSessionDate(row.startAt)}
+                        </Text>
                       </div>
-                      <CardTitle className="break-words">
-                        {row.classTitle}
-                      </CardTitle>
-                      <CardDescription>
-                        Session {row.sequenceNumber} · {row.sessionTitle}
-                      </CardDescription>
-                      <Text className="text-xs text-muted">
-                        {formatSessionDate(row.startAt)}
-                      </Text>
-                    </div>
-                  </CardHeader>
-                  <CardBody className="flex items-center justify-between gap-3 pt-0">
-                    <Badge variant="secondary-outline">
-                      {row.mode === "online" ? "Online" : "In person"}
-                    </Badge>
-                    <Button
-                      variant="plain"
-                      size="sm"
-                      aria-pressed={selected}
-                      onClick={() => selectRow(row)}
-                    >
-                      {isStudent
-                        ? "View report"
-                        : selected
-                          ? "Selected"
-                          : "Open session"}
-                    </Button>
-                  </CardBody>
-                </Card>
-              );
-            })
-          )}
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <Badge variant="secondary-outline">
+                          {row.mode === "online" ? "Online" : "In person"}
+                        </Badge>
+                        <Button
+                          variant="plain"
+                          size="sm"
+                          aria-pressed={selected}
+                          onClick={() => selectRow(row)}
+                        >
+                          {selected
+                            ? "Selected"
+                            : isStudent
+                              ? "View report"
+                              : "Open session"}
+                        </Button>
+                      </div>
+                    </CardBody>
+                  </Card>
+                );
+              })
+            )}
+          </div>
         </section>
 
         <section
+          ref={reportPanelRef}
+          tabIndex={-1}
           aria-label={
             isStudent
               ? "Selected session report"
               : "Selected session report editor"
           }
-          className="min-w-0 space-y-4"
+          className="min-w-0 scroll-mt-6 space-y-4 rounded-xl outline-none focus-visible:outline-2 focus-visible:outline-primary"
         >
           {!selectedRow || !activeDraft ? (
             <Card>

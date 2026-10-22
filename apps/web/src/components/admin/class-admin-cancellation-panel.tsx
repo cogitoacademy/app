@@ -93,7 +93,7 @@ export function ClassAdminCancellationPanel({
             delivery/report resolution. Earned tutor fees are preserved.
             Students and tutors will be notified.
           </Text>
-          <Stack direction="row" spacing="sm">
+          <Stack direction="row" spacing="sm" className="flex-wrap">
             <Button
               variant="danger"
               disabled={busy || !requestKey}

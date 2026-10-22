@@ -6,16 +6,12 @@ import {
   IconArrowLeft,
   IconCalendarEvent,
   IconSchool,
+  IconClock,
+  IconUser,
 } from "@tabler/icons-react";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
 import { Button } from "@cogito-app/ui/components/selia/button";
-import {
-  Card,
-  CardBody,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@cogito-app/ui/components/selia/card";
+import { Card, CardBody } from "@cogito-app/ui/components/selia/card";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
@@ -26,9 +22,17 @@ import Loader from "@/components/loader";
 import { resolveProfileImageUrl } from "@/lib/profile-image-url";
 import { orpc } from "@/utils/orpc";
 
-function formatSessionDate(date: Date | string) {
+function formatDate(date: Date | string) {
   return new Intl.DateTimeFormat("en", {
-    dateStyle: "full",
+    weekday: "short",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "Asia/Jakarta",
+  }).format(new Date(date));
+}
+function formatTime(date: Date | string) {
+  return new Intl.DateTimeFormat("en", {
     timeStyle: "short",
     timeZone: "Asia/Jakarta",
   }).format(new Date(date));
@@ -39,7 +43,6 @@ export function ClassDetailPage() {
   const academyClass = useQuery(
     orpc.classes.get.queryOptions({ input: { id: classId } }),
   );
-
   if (academyClass.isPending) return <Loader />;
   if (
     academyClass.isError ||
@@ -49,32 +52,28 @@ export function ClassDetailPage() {
       <EmptyStateCard
         icon={<IconSchool />}
         title="Class unavailable"
-        description="This class is no longer available. Return to the class catalog to browse current offerings."
+        description="This class is no longer available. Browse the catalog for current classes."
         action={
           <Button
             nativeButton={false}
-            render={<Link to="/classes">Browse classes</Link>}
+            render={<Link to="/classes" aria-label="Browse classes" />}
           >
-            <IconArrowLeft />
-            Browse classes
+            <IconArrowLeft /> Browse classes
           </Button>
         }
       />
     );
   }
-
-  const coverUrl = academyClass.data.coverKey?.startsWith("http")
-    ? resolveProfileImageUrl(academyClass.data.coverKey)
-    : resolveProfileImageUrl(
-        academyClass.data.coverKey
-          ? `/uploads/${academyClass.data.coverKey}`
-          : undefined,
-      );
+  const item = academyClass.data;
+  const coverUrl = resolveProfileImageUrl(
+    item.coverKey?.startsWith("http")
+      ? item.coverKey
+      : item.coverKey
+        ? `/uploads/${item.coverKey}`
+        : undefined,
+  );
   const enrollmentKind =
-    academyClass.data.kind === "cohort" ||
-    academyClass.data.kind === "masterclass"
-      ? academyClass.data.kind
-      : null;
+    item.kind === "cohort" || item.kind === "masterclass" ? item.kind : null;
 
   return (
     <Stack direction="column" spacing="lg" className="w-full min-w-0 pb-8">
@@ -84,148 +83,172 @@ export function ClassDetailPage() {
         render={<Link to="/classes" aria-label="Browse classes" />}
         className="w-fit"
       >
-        <IconArrowLeft />
-        All classes
+        <IconArrowLeft /> All classes
       </Button>
-      {coverUrl ? (
-        <img
-          src={coverUrl}
-          alt=""
-          className="aspect-[2.2/1] max-h-96 w-full rounded-xl border border-card-border object-cover"
-        />
-      ) : null}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="mb-2 flex flex-wrap items-center gap-2">
+      <Card className="overflow-hidden">
+        {coverUrl ? (
+          <img src={coverUrl} alt="" className="max-h-64 w-full object-cover" />
+        ) : null}
+        <CardBody className="space-y-5">
+          <div className="flex flex-wrap items-center gap-2">
             <Badge variant="secondary">
-              {academyClass.data.kind === "cohort" ? "Cohort" : "Masterclass"}
+              {item.kind === "cohort" ? "Cohort" : "Masterclass"}
             </Badge>
-            <Badge variant="info">
-              {academyClass.data.sessions.length} session
-              {academyClass.data.sessions.length === 1 ? "" : "s"}
-            </Badge>
-            {academyClass.data.state === "postponed" ? (
+            <Text className="text-sm text-muted">
+              {item.competition.parent
+                ? `${item.competition.parent.name} · `
+                : ""}
+              {item.competition.name}
+            </Text>
+            {item.state === "postponed" ? (
               <Badge variant="warning">Postponed once</Badge>
             ) : null}
           </div>
-          <Heading level={1}>{academyClass.data.titleEn}</Heading>
-          <Text className="mt-2 text-muted">
-            {academyClass.data.competition.parent
-              ? `${academyClass.data.competition.parent.name} · `
-              : ""}
-            {academyClass.data.competition.name}
-          </Text>
-          {academyClass.data.state === "postponed" ? (
-            <Text className="mt-2 text-sm text-warning-foreground">
-              This cohort has a replacement schedule. Signed-in students can
-              review their penalty-free withdrawal deadline with their
-              enrollment.
+          <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+            <div className="min-w-0 space-y-3">
+              <Heading level={1} className="break-words leading-tight">
+                {item.titleEn}
+              </Heading>
+              <Text className="flex items-center gap-2 text-sm text-muted">
+                <IconCalendarEvent
+                  className="size-4 shrink-0"
+                  aria-hidden="true"
+                />
+                {item.sessions.length} session
+                {item.sessions.length === 1 ? "" : "s"} · All times in WIB
+              </Text>
+            </div>
+            <div className="shrink-0 space-y-1 border-t border-border pt-4 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-6">
+              <Text className="text-xl font-semibold">
+                <CogitoMarks
+                  value={
+                    item.kind === "cohort"
+                      ? (item.cohortFullRateMarks ?? 0)
+                      : (item.masterclassRateMarks ?? 0)
+                  }
+                />
+              </Text>
+              <Text className="text-xs text-muted">
+                {item.kind === "cohort"
+                  ? "per session · full cohort plan"
+                  : "per student"}
+              </Text>
+            </div>
+          </div>
+          {item.state === "postponed" ? (
+            <Text className="rounded-lg border border-warning-border bg-warning/10 p-3 text-sm">
+              This cohort has a new schedule. Check your enrollment for the
+              deadline to withdraw without a fee.
             </Text>
           ) : null}
-        </div>
-        <div className="text-lg font-semibold">
-          <CogitoMarks
-            value={
-              academyClass.data.kind === "cohort"
-                ? (academyClass.data.cohortFullRateMarks ?? 0)
-                : (academyClass.data.masterclassRateMarks ?? 0)
-            }
-          />
-          <span className="ml-1 text-sm font-normal text-muted">
-            {academyClass.data.kind === "cohort"
-              ? "per cohort session"
-              : "per student"}
-          </span>
-        </div>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>About this class</CardTitle>
-          <CardDescription>Class overview and learning plan</CardDescription>
-        </CardHeader>
-        <CardBody>
-          <Text className="whitespace-pre-wrap">
-            {academyClass.data.descriptionEn}
-          </Text>
         </CardBody>
       </Card>
 
-      <section aria-labelledby="class-sessions-heading">
-        <div className="mb-4 flex items-center gap-2">
-          <IconCalendarEvent
-            className="size-5 text-primary"
-            aria-hidden="true"
-          />
-          <Heading level={2} id="class-sessions-heading">
-            {academyClass.data.kind === "cohort"
-              ? "Curriculum and schedule"
-              : "Session details"}
-          </Heading>
+      <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)]">
+        <div className="min-w-0 space-y-8">
+          <section aria-labelledby="class-about-title" className="space-y-3">
+            <Heading level={2} size="sm" id="class-about-title">
+              About this class
+            </Heading>
+            <Text className="max-w-prose whitespace-pre-wrap leading-relaxed text-muted">
+              {item.descriptionEn}
+            </Text>
+          </section>
+          <section
+            aria-labelledby="class-sessions-heading"
+            className="space-y-4"
+          >
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <Heading level={2} size="sm" id="class-sessions-heading">
+                {item.kind === "cohort"
+                  ? "Curriculum and schedule"
+                  : "Session details"}
+              </Heading>
+              <Text className="text-xs text-muted">WIB · UTC+7</Text>
+            </div>
+            <ol className="space-y-3">
+              {item.sessions.map((session) => (
+                <li key={session.id}>
+                  <Card>
+                    <CardBody className="flex items-start gap-4">
+                      <span
+                        className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent font-semibold tabular-nums"
+                        aria-label={`Session ${session.sequenceNumber}`}
+                      >
+                        {session.sequenceNumber}
+                      </span>
+                      <div className="min-w-0 flex-1 space-y-3">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <Heading
+                            level={3}
+                            size="sm"
+                            className="break-words text-base leading-snug"
+                          >
+                            {session.titleEn}
+                          </Heading>
+                          <Badge variant="secondary-outline">
+                            {session.mode === "online" ? "Online" : "In person"}
+                          </Badge>
+                        </div>
+                        <div className="space-y-1 text-sm text-muted">
+                          <Text>{formatDate(session.startAt)}</Text>
+                          <Text className="flex items-center gap-2">
+                            <IconClock
+                              className="size-4 shrink-0"
+                              aria-hidden="true"
+                            />
+                            {formatTime(session.startAt)}–
+                            {formatTime(session.endAt)} WIB
+                          </Text>
+                        </div>
+                        {session.curriculumEn ? (
+                          <Text className="whitespace-pre-wrap text-sm leading-relaxed">
+                            {session.curriculumEn}
+                          </Text>
+                        ) : null}
+                        <Text className="flex items-start gap-2 text-sm text-muted">
+                          <IconUser
+                            className="mt-0.5 size-4 shrink-0"
+                            aria-hidden="true"
+                          />
+                          <span>
+                            {session.tutor?.name ?? "Tutor to be announced"}
+                          </span>
+                        </Text>
+                        {session.mode === "online" ? (
+                          <Text className="text-xs text-muted">
+                            Meeting details are available to enrolled students.
+                          </Text>
+                        ) : null}
+                      </div>
+                    </CardBody>
+                  </Card>
+                </li>
+              ))}
+            </ol>
+          </section>
         </div>
-        <ol className="space-y-3">
-          {academyClass.data.sessions.map((session) => (
-            <li key={session.id}>
-              <Card>
-                <CardHeader>
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <CardTitle>
-                        {academyClass.data.kind === "cohort"
-                          ? `Session ${session.sequenceNumber}: ${session.titleEn}`
-                          : session.titleEn}
-                      </CardTitle>
-                      <CardDescription>
-                        {formatSessionDate(session.startAt)} ·{" "}
-                        {session.mode === "online" ? "Online" : "In person"}
-                      </CardDescription>
-                    </div>
-                    <Badge
-                      variant={session.mode === "online" ? "info" : "success"}
-                    >
-                      {session.mode === "online" ? "Online" : "In person"}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardBody className="space-y-3">
-                  {session.curriculumEn ? (
-                    <Text className="whitespace-pre-wrap">
-                      {session.curriculumEn}
-                    </Text>
-                  ) : null}
-                  <Text className="text-sm text-muted">
-                    Tutor: {session.tutor?.name ?? "To be announced"}
-                  </Text>
-                  {session.mode === "online" ? (
-                    <Text className="text-sm text-muted">
-                      The meeting link will be available to enrolled students.
-                    </Text>
-                  ) : null}
-                </CardBody>
-              </Card>
-            </li>
-          ))}
-        </ol>
-      </section>
-
-      {enrollmentKind ? (
-        <ClassEnrollmentPanel
-          classId={academyClass.data.id}
-          kind={enrollmentKind}
-          rates={{
-            cohortFullRateMarks: academyClass.data.cohortFullRateMarks,
-            cohortHalfRateMarks: academyClass.data.cohortHalfRateMarks,
-            cohortSingleRateMarks: academyClass.data.cohortSingleRateMarks,
-            masterclassRateMarks: academyClass.data.masterclassRateMarks,
-          }}
-          sessions={academyClass.data.sessions.map((session) => ({
-            id: session.id,
-            sequenceNumber: session.sequenceNumber,
-            titleEn: session.titleEn,
-            startAt: session.startAt,
-          }))}
-        />
-      ) : null}
+        {enrollmentKind ? (
+          <aside aria-label="Class enrollment" className="min-w-0">
+            <ClassEnrollmentPanel
+              classId={item.id}
+              kind={enrollmentKind}
+              rates={{
+                cohortFullRateMarks: item.cohortFullRateMarks,
+                cohortHalfRateMarks: item.cohortHalfRateMarks,
+                cohortSingleRateMarks: item.cohortSingleRateMarks,
+                masterclassRateMarks: item.masterclassRateMarks,
+              }}
+              sessions={item.sessions.map((session) => ({
+                id: session.id,
+                sequenceNumber: session.sequenceNumber,
+                titleEn: session.titleEn,
+                startAt: session.startAt,
+              }))}
+            />
+          </aside>
+        ) : null}
+      </div>
     </Stack>
   );
 }

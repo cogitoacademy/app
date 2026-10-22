@@ -383,8 +383,7 @@ export function ClassEnrollmentPanel({
         <CardHeader>
           <CardTitle>Your class enrollment</CardTitle>
           <CardDescription>
-            Upcoming sessions, seats, and Marks are checked again by the server
-            when you reserve.
+            Choose your plan and review the cost before reserving a seat.
           </CardDescription>
         </CardHeader>
         <CardBody className="space-y-4">
@@ -425,7 +424,7 @@ export function ClassEnrollmentPanel({
                         </Badge>
                       </div>
                       <CardDescription>
-                        Snapshot total:{" "}
+                        Enrollment total:{" "}
                         <CogitoMarks value={enrollment.totalMarks} /> ·{" "}
                         {enrollment.sessionCount} session
                         {enrollment.sessionCount === 1 ? "" : "s"}
@@ -433,12 +432,12 @@ export function ClassEnrollmentPanel({
                     </CardHeader>
                     <CardBody className="space-y-3">
                       <Text>
-                        First installment:{" "}
+                        First payment:{" "}
                         <CogitoMarks value={enrollment.firstInstallmentMarks} />
                         {second ? (
                           <>
                             {" "}
-                            · Second:{" "}
+                            · Second payment:{" "}
                             <CogitoMarks
                               value={enrollment.secondInstallmentMarks}
                             />
@@ -464,9 +463,9 @@ export function ClassEnrollmentPanel({
                               (allocation) => allocation.state !== "released",
                             ).length
                           }{" "}
-                          reserved session seats · funded per-session Marks stay
-                          held for later reports; unpaid half sessions remain
-                          reserved until their payment deadline.
+                          reserved session seats. Paid Marks are held until each
+                          session is completed. Unpaid seats are reserved until
+                          the payment deadline.
                         </Text>
                       ) : null}
                     </CardBody>
@@ -570,7 +569,7 @@ export function ClassEnrollmentPanel({
             <div className="space-y-4 border-t border-border pt-4">
               <div className="flex flex-wrap items-end gap-4">
                 {allowedPlans.length > 1 ? (
-                  <Field className="min-w-56">
+                  <Field className="min-w-0 w-full sm:w-auto sm:min-w-48">
                     <FieldLabel htmlFor={`class-plan-${classId}`}>
                       Plan
                     </FieldLabel>
@@ -602,7 +601,7 @@ export function ClassEnrollmentPanel({
                   </Text>
                 )}
                 {selectedPlan === "single" ? (
-                  <Field className="min-w-64 flex-1">
+                  <Field className="w-full min-w-0 flex-1">
                     <FieldLabel htmlFor={`class-session-${classId}`}>
                       Upcoming session
                     </FieldLabel>
@@ -657,10 +656,9 @@ export function ClassEnrollmentPanel({
               {quoteReady ? (
                 <Card>
                   <CardHeader>
-                    <CardTitle>Current Marks summary</CardTitle>
+                    <CardTitle>Your payment summary</CardTitle>
                     <CardDescription>
-                      Preview from the published class rates. The server saves
-                      the exact rate snapshot when you reserve.
+                      Review the cost below before reserving your seat.
                     </CardDescription>
                   </CardHeader>
                   <CardBody className="space-y-2">
@@ -723,8 +721,8 @@ export function ClassEnrollmentPanel({
               <CardHeader>
                 <CardTitle>Top up the quoted shortfall</CardTitle>
                 <CardDescription>
-                  Immutable quote for {topUpContext.quote.requestedMarks} Marks
-                  linked to installment {topUpContext.ordinal}.
+                  Add {topUpContext.quote.requestedMarks} Marks for payment{" "}
+                  {topUpContext.ordinal}.
                 </CardDescription>
               </CardHeader>
               <CardBody className="space-y-3">

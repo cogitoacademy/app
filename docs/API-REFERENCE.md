@@ -1,5 +1,14 @@
 # Cogito API Reference
 
+## Classes presentation (22 October 2026)
+
+The UI reuses `classes/list`, `classes/get`, `classes/getMyEnrollments`,
+`classes/listSessionReports` and existing admin class procedures. Catalog search
+and class-type filtering run on the loaded catalog; no new endpoint or request
+shape is added. Studio tabs and Manage class only group existing controls.
+Student-only catalog/detail access and current private-report authorization remain.
+
+
 ## Ongoing experience UI (22 October 2026)
 
 The explicit ongoing checkbox continues to send `experiences[].endYear: null`

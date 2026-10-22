@@ -1,5 +1,16 @@
 # Release v3 - SDD execution and acceptance plan
 
+## Classes presentation checkpoint (22 October 2026)
+
+Implemented the searchable single-card student catalog, curriculum/enrollment
+layout, published-first admin studio with retained draft tabs and grouped class
+management, and accessible mobile report selection for student/tutor/admin.
+Eleven synthetic Chromium cases pass at 320/390/768/1440px, including dark mode
+and page overflow/focus checks. Existing role/API/financial rules remain unchanged.
+Real publish/enrollment/cancellation helper navigation is updated; broad write-flow
+UAT remains separate from these synthetic UI checks.
+
+
 ## Owner priority and checkpoint workflow (22 October 2026)
 
 The owner prioritizes all remaining core V3 work. Feature showcase/video and

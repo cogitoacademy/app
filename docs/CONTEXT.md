@@ -1,5 +1,20 @@
 # Cogito App — Codebase Context
 
+## Classes UI workspace (22 October 2026)
+
+Student `/classes` is a single searchable catalog with Cohort/Masterclass tabs,
+one card per class, next-session dates in WIB, tutor names and explicit price units.
+Cards use separate title/action links; there is no disclosure nested inside a link.
+Class details place curriculum beside enrollment on wide screens and stack on
+mobile. The app header identifies Class details and Class studio correctly.
+Admin `/admin-classes` starts with published/postponed classes. Drafts & editor
+keeps the editor mounted across tab changes; publishing returns to the published
+list. Manage class expands existing cancellation/minimum/schedule controls.
+Student/tutor/admin report lists are bounded and scroll locally. Mobile session
+selection focuses and scrolls to the selected report. Existing route role guards,
+RPCs, quote math, settlement and audit rules are unchanged.
+
+
 ## V3 execution priorities (22 October 2026)
 
 Owner direction: finish core V3 work through feature branches and GitHub PRs into

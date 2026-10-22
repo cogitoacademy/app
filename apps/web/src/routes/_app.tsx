@@ -30,6 +30,7 @@ const routeTitles: Record<string, string> = {
   "/admin-achievements": "Achievement Moderation",
   "/admin-operations": "Operations",
   "/admin-economy": "Economy Settings",
+  "/admin-classes": "Class studio",
   "/admin-competitions": "Competition Catalog",
   "/faq": "FAQ",
   "/admin-faq": "Manage FAQs",
@@ -72,11 +73,13 @@ function RouteComponent() {
   const isTutorProfile = pathname === "/profile" && role === "tutor";
   const title = isTutorProfile
     ? "Tutor Profile"
-    : pathname.startsWith("/bookings/")
-      ? "Booking Details"
-      : pathname.startsWith("/tutors/")
-        ? "Book a Session"
-        : (routeTitles[pathname] ?? "Dashboard");
+    : pathname.startsWith("/classes/")
+      ? "Class details"
+      : pathname.startsWith("/bookings/")
+        ? "Booking Details"
+        : pathname.startsWith("/tutors/")
+          ? "Book a Session"
+          : (routeTitles[pathname] ?? "Dashboard");
 
   return (
     <Layout

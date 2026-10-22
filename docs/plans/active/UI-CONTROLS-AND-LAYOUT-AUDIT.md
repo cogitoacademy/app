@@ -1,5 +1,20 @@
 # UI controls and Card/Table audit (22 October 2026)
 
+## Classes UI follow-up (22 October 2026)
+
+- Completed: one-card catalog, local search/type tabs, explicit WIB dates and
+  price units, separate navigation links, curriculum/enrollment detail layout.
+- Completed: published-first admin studio tabs, retained draft editor mounting,
+  expandable lifecycle controls, wider editor and wrapping confirmation actions.
+- Completed: bounded report session list, mobile focus/scroll to selected report,
+  and correct Class studio/Class details app header labels.
+- Verified: 11 synthetic Chromium cases at 320/390/768/1440px and mobile report
+  flows for all three roles; dark-mode student coverage at 768px. No horizontal
+  page overflow or page errors in those cases. Existing role guards and payment
+  math remain. Full DB-backed publish/enrollment/cancellation journeys were not
+  rerun; their UI locators were updated for the intentional navigation changes.
+
+
 Scope: all web TSX source and the shared Selia controls; repair browser-native
 date/time/number widgets and Card/Table composition without changing API contracts.
 

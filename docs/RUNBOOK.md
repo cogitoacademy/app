@@ -1,5 +1,28 @@
 # Cogito Runbook
 
+## Classes UI acceptance (22 October 2026)
+
+Run the synthetic, database-free UI suite from `packages/e2e`:
+
+```powershell
+bun run test --config=playwright.classes-layout.config.ts
+```
+
+It starts only web 3300 with synthetic session/RPC responses; no API, seed or
+provider runs. The test Vite config allows linked package/font assets and uses a
+separate cache. Eleven Chromium cases pass: catalog/filter/enrollment and admin
+draft/management at 320/390/768/1440px, plus student/tutor/admin mobile reports.
+The 768px student case uses dark mode. Geometry assertions check page overflow;
+mobile report selection checks focus and visibility. Real enrollment, publish and
+cancellation E2E helpers now open the new tabs/accordion; their full DB-backed
+journeys were not rerun for this presentation-only change.
+
+Manual check: browse/search classes, open details, review enrollment; in Class
+studio switch Drafts & editor, change a draft, switch tabs and return without
+losing edits. Open Manage class to review the existing audited lifecycle controls.
+In reports, select a session on mobile and verify its report comes into view.
+
+
 ## Ongoing experience smoke check (22 October 2026)
 
 In tutor profile Experiences, verify Start year and End year align. Checking
