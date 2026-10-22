@@ -2,6 +2,10 @@
 
 ## AUTH-02 and referral source contract (22 October 2026)
 
+Deployment prerequisite: unapplied additive migration
+`0071_referral_registration_rewards`. Parent web/server typechecks pass;
+database and authenticated browser acceptance remain pending.
+
 Email signup `POST /api/auth/sign-up/email` accepts the existing OTP fields plus
 optional `referralCode`. A valid code saves the immutable friend/KOL choice and
 welcome credit inside the account/proof transaction; an omitted/empty code saves

@@ -24,7 +24,7 @@ export async function refreshSessionUser(
     id: string;
     role?: string | null;
     emailVerified: boolean;
-    referralChoicePending?: boolean;
+    referralChoicePending?: boolean | null;
   },
 ): Promise<void> {
   const currentUser = await conn.query.user.findFirst({

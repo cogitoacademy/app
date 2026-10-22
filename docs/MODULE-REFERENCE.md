@@ -35,8 +35,10 @@ active signup settings plus current-semester earned/remaining Marks and end
 date. Admin APIs create audited settings revisions and KOL campaigns. KOL signup
 terms are immutable snapshots, but first-purchase commission, transfers,
 partial/overpayment accounting, CSV, corrections, and reversal handling remain
-unimplemented. The source schema has no migration in this branch; parent
-integration must add one after 0070.
+unimplemented. Parent-generated additive migration
+`0071_referral_registration_rewards` follows 0070 and is unapplied. Wallet
+creation accepts the caller's transaction, including its upsert, so referral
+credits do not escape the signup or completion transaction.
 
 ## Classes UI composition (22 October 2026)
 

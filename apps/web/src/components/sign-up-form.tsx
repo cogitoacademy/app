@@ -21,6 +21,7 @@ import { IconEye, IconEyeOff } from "@tabler/icons-react";
 import { useForm } from "@tanstack/react-form";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { z } from "zod";
 
 import type { CogitoUser } from "@cogito-app/auth";
 
@@ -216,7 +217,9 @@ export default function SignUpForm({
       }
     },
     validators: {
-      onSubmit: signUpSchema,
+      onSubmit: signUpSchema.extend({
+        referralCode: z.string().trim().max(32),
+      }),
     },
   });
 

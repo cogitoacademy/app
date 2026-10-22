@@ -1,5 +1,14 @@
 # Release v3 - SDD execution and acceptance plan
 
+## Referral parent checkpoint (22 October 2026)
+
+AUTH-02/friend source is implemented in its feature branch. Parent-generated
+additive 0071 follows 0070 and remains unapplied; snapshot lineage and the six
+new tables plus one user column are verified. Focused units pass 46 / 101;
+web and server typechecks pass after parent fixes. Source review, database
+reward/concurrency acceptance, Google/browser journeys, and KOL commission and
+transfer implementation remain open. This is not an integration/release gate.
+
 ## Classes presentation checkpoint (22 October 2026)
 
 Implemented the searchable single-card student catalog, curriculum/enrollment

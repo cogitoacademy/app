@@ -4,12 +4,18 @@
 
 The feature source branch contains Google pending-choice resume, email signup
 attribution, friend welcome/completion credits, student referral display, and
-KOL signup campaign validation/snapshots. It has not generated or applied a
-migration and has not run database, browser, provider, or full compiler checks.
-The parent must add the next additive migration after `0070` for
-`user.referral_choice_pending` and the six referral tables before integrating or
-starting the application against a database. Do not reset or seed a database for
-the unit checks below.
+KOL signup campaign validation/snapshots. Parent generated
+`0071_referral_registration_rewards` after 0070 without a database connection.
+Snapshot comparison verifies its predecessor ID, six new tables, and only
+`user.referral_choice_pending` added to prior tables. No migration is applied;
+database/browser/provider acceptance remains open. Do not start this schema
+against an unmigrated database or reset/seed a database for unit checks.
+
+Parent reran the focused suite below: 46 tests / 101 expectations pass. Web
+`bun run check-types` and server `bun run check-types` both pass after repairing
+the sidebar icon import, Marks props, referral form schema, session nullability,
+and wallet upsert transaction type. These are source/compiler checks, not
+financial or OAuth integration acceptance.
 
 Focused database-free regression commands:
 

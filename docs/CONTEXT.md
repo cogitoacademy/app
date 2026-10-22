@@ -27,11 +27,12 @@ attribution expiry. KOL first-purchase commission decisions, transfers,
 partial/overpayment accounting, CSV, corrections, and reversal handling remain
 the next slice; campaign creation does not imply a commission or payout.
 
-Schema changes are source-only here: `user.referral_choice_pending` and the six
-referral tables are present, but no migration was generated or applied. The
-parent must add a new additive migration after 0070 and coordinate its normal
-application. This worktree did not run database, browser, or full typecheck
-validation; focused unit commands and their exact outcomes are in RUNBOOK.
+Parent follow-up generated additive `0071_referral_registration_rewards` after
+0070: six new tables and `user.referral_choice_pending`, with the existing
+snapshot tables otherwise unchanged. It is not applied. Parent web and server
+typechecks pass after correcting UI/form and transaction parameter types;
+the focused unit suite passes 46 tests / 101 expectations. Database, browser,
+and provider acceptance remain open; review is in progress.
 
 ## Classes UI workspace (22 October 2026)
 

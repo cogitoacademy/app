@@ -35,6 +35,7 @@ import {
   IconCoins,
   IconAdjustments,
   IconHome,
+  IconUsers,
   IconHelp,
   IconLibrary,
   IconLogout,

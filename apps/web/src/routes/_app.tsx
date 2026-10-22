@@ -50,9 +50,8 @@ export const Route = createFileRoute("/_app")({
       query: { disableCookieCache: true },
     });
     if (!session.data) {
-      redirect({
+      throw redirect({
         to: "/login",
-        throw: true,
       });
     }
     const sessionUser = session.data.user as CogitoUser;

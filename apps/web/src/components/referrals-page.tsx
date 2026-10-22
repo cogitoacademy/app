@@ -108,13 +108,13 @@ export function ReferralsPage() {
           <div>
             <Text className="text-muted">Earned</Text>
             <Text className="mt-1 text-lg font-semibold">
-              <CogitoMarks amount={data.semester.earnedMarks} />
+              <CogitoMarks value={data.semester.earnedMarks} />
             </Text>
           </div>
           <div>
             <Text className="text-muted">Remaining cap</Text>
             <Text className="mt-1 text-lg font-semibold">
-              <CogitoMarks amount={data.semester.remainingMarks} />
+              <CogitoMarks value={data.semester.remainingMarks} />
             </Text>
           </div>
           <div>
