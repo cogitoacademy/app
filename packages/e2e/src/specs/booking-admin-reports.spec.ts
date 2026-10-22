@@ -172,7 +172,7 @@ function chooseSessionStart(
       end: new Date(booking.scheduledEndAt).getTime(),
     }));
 
-  for (const slot of profile.availabilitySlots.toSorted(
+  for (const slot of [...profile.availabilitySlots].sort(
     (a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime(),
   )) {
     if (slot.modality !== "online" && slot.modality !== "both") continue;

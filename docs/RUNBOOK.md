@@ -1,24 +1,23 @@
 # Cogito Runbook
 
-## On-demand report DB checkpoint (22 October 2026)
+## On-demand report acceptance (22 October 2026)
 
-The feature is implemented in `f/v3-admin-session-reports`, synced with the UI
-and percentage-tax integration checkpoints. The guarded non-reset PostgreSQL
-suite now passes 11 tests / 106 assertions against exact loopback
-6769/cogito-test. The fixture reuses the signup-created wallet and adds holds
-for shared users rather than overwriting earlier fixtures. Cleanup deletes owned
-fee facts before owned bookings, then owned users. Pure feedback/service checks
-pass 31 tests / 112 assertions. Test migration 0070 was read back at journal id
-71 with hash eacfa97b013f23fa2e74be6d6d8e410b2b9c0f354b1d9ae6bb121370f40fc0f4.
-No development migration, reset, seed or live provider ran. Earlier notes saying
-the guarded DB cases are unrun are superseded by this checkpoint. The isolated
-Chromium journey and development rollout remain pending; low C: free space
-blocked a responsible browser-suite launch. Keep the feature PR in draft until
-its browser/rollout acceptance is resolved. The report PDF is separate work. Full workspace typechecking now passes with
-bounded serial execution (`GOMAXPROCS=2 GOMEMLIMIT=512MiB bun run check-types
---concurrency=1 --env-mode=loose`); the lint baseline also passes. The class report
-feedback adapter retains the API version, and the admin session lookup explicitly
-allows no session for non-series bookings.
+PR #305 is verified against current V3, including the sidebar/profile repairs.
+The guarded PostgreSQL suite passes 11 tests / 106 assertions; feedback/service
+units pass 31 / 112. The real-RPC Chromium journey passes (1 test, 52.3s): initial
+admin report, version-2 correction, immutable history and no second settlement.
+Fixtures accept text authentication IDs, verify the run-owned student and exact
+synthetic booking, choose an unoccupied tutor slot, and preserve unrelated holds.
+
+Migration 0070 is applied through the normal runner to test 6769/cogito-test
+(journal 71) and development 6767/cogito-app (journal 91). SQL SHA-256:
+`eacfa97b013f23fa2e74be6d6d8e410b2b9c0f354b1d9ae6bb121370f40fc0f4`.
+A local pre-migration dump is retained under ignored
+`tmp/v3-dev/checkpoint/cogito-pre-0070-20261022.dump`. Development booking (34),
+ledger (89), and feedback (2) counts are unchanged; history starts empty. No dev
+reset/seed, production migration, or live provider action ran. Test history is
+retained under run-scoped identities. PDF and broader legacy reminders remain open.
+This acceptance supersedes older source-only/unapplied/pending-browser notes below.
 
 ## Ongoing experience smoke check (22 October 2026)
 
@@ -159,7 +158,7 @@ $env:T05_ENROLLMENT_TEST_REDIS_PORT = "6381"
 $env:T05_ENROLLMENT_TEST_SERVER_PORT = "3201"
 $env:T05_ENROLLMENT_TEST_WEB_PORT = "3200"
 $e2eWorktreePath = Join-Path (Get-Location) "packages/e2e"
-bun --cwd $e2eWorktreePath run test src/specs/booking-admin-reports.spec.ts --config=playwright.class-enrollment.config.ts --workers=1
+bun --cwd $e2eWorktreePath run test src/specs/booking-admin-reports.spec.ts --config=playwright.booking-admin-reports.config.ts --workers=1
 ```
 
 These commands are for the parent validation window only. Do not add reset flags.

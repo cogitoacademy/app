@@ -1,5 +1,15 @@
 # Cogito Module Reference
 
+## On-demand report acceptance (22 October 2026)
+
+PR #305 admin report submission/correction is verified with 11 guarded DB tests
+(106 assertions), 31 feedback/service tests (112 assertions), and one real-RPC
+Chromium journey (52.3s). The browser verifies assigned-tutor authorship, versioned
+history, consumption of only the owned booking hold, and no repeat settlement
+on correction. Migration 0070 is applied to local test/dev; production is separate.
+The endpoint and service contracts below are unchanged by these fixture repairs.
+
+
 ## Ongoing tutor experience control (22 October 2026)
 
 `TutorExperiencesEditor` maps the ongoing checkbox to the existing nullable
