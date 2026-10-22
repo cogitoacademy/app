@@ -1,5 +1,26 @@
 # Release v3 - SDD execution and acceptance plan
 
+## Owner priority and checkpoint workflow (22 October 2026)
+
+The owner prioritizes all remaining core V3 work. Feature showcase/video and
+Sanity Knowledge Bank/Competition Calendar migration are tertiary; do not spend
+the next core implementation cycles on them. This changes execution order, not
+client scope or release acceptance: any release deferral still needs explicit
+client agreement under Q14.
+
+Use one short-lived feature branch and one GitHub PR into `f/release-v3` per
+independently reviewable feature. Commit meaningful changes with focused checks
+and affected docs; publish a PR checkpoint before moving to the next feature.
+This repository permits squash merge only, giving one integration commit per PR.
+Never combine unrelated local edits or client PDF build artifacts into a feature
+checkpoint. Keep `main` unchanged until final release acceptance.
+
+Core order: finish on-demand report verification/integration, report PDF and
+remaining legacy reminders; then AUTH-02/referrals/KOL and remaining pricing,
+analytics/provider/financial acceptance, core content, end-to-end UAT and release
+readiness. Apply approved policy gates to dependent behavior; do not invent
+ordinary-reschedule or analytics policy.
+
 ## UI repair checkpoint (22 October 2026)
 
 Follow-up authenticated route checks are complete for the routes/states listed
