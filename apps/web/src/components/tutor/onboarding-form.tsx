@@ -61,7 +61,6 @@ import {
   IconBuildingBank,
   IconPhoto,
   IconSchool,
-  IconChalkboardTeacher,
   IconChevronUp,
   IconUser,
 } from "@tabler/icons-react";
@@ -1002,14 +1001,6 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
     label: profile.onboardingStatus.replaceAll("_", " "),
     variant: "secondary" as const,
   };
-  const statusIconVariant =
-    statusBadge.variant === "success"
-      ? "success-subtle"
-      : statusBadge.variant === "danger"
-        ? "danger-subtle"
-        : statusBadge.variant === "warning"
-          ? "warning-subtle"
-          : "info-subtle";
   const statusMessage = isDraft
     ? profile.onboardingStatus === "changes_requested"
       ? "Review the feedback below, update the requested fields, then submit your profile again."
@@ -1020,10 +1011,10 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
         ? "Your profile has been approved and is waiting for publication by an admin."
         : profile.onboardingStatus === "published"
           ? profile.profileEditStatus === "pending_review"
-            ? "Your profile is live. You can keep updating it while the latest changes are waiting for admin review."
+            ? "Your profile is live. Your latest edits are awaiting review."
             : profile.profileEditStatus === "changes_requested"
               ? "Your profile is live, but the admin requested revisions to your proposed changes."
-              : "Your tutor profile is live. You can update it anytime. Honorarium changes apply to future bookings; other important changes are reviewed before going live."
+              : null
           : profile.onboardingStatus === "suspended"
             ? "Your tutor profile has been suspended. Please contact admin for details."
             : "Your profile status will appear here as it moves through review.";
@@ -1057,46 +1048,27 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
 
   return (
     <div className="mx-auto flex w-full flex-col gap-6 max-w-4xl">
-      <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div>
+      <header className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <Heading level={1} size="md">
             {isDraft
               ? "Build a profile students can trust"
               : "Keep your profile ready for students"}
           </Heading>
-          <Text className="text-muted">
-            Give students a clear picture of your specializations, teaching
-            format, and availability.
-          </Text>
-        </div>
-        <div className="flex flex-wrap gap-2 md:justify-end">
           <Badge variant={statusBadge.variant} size="md">
             {statusBadge.label}
           </Badge>
-          {profile.profileEditStatus === "pending_review" ? (
-            <Badge variant="warning" size="md">
-              Changes under review
-            </Badge>
-          ) : null}
         </div>
+        <Text className="text-muted">
+          Give students a clear picture of your specializations, teaching
+          format, and availability.
+        </Text>
+        {statusMessage ? (
+          <Text role="status" className="text-sm text-muted">
+            {statusMessage}
+          </Text>
+        ) : null}
       </header>
-
-      <Card>
-        <CardBody className="flex items-start gap-3">
-          <IconBox variant={statusIconVariant} size="lg">
-            <IconChalkboardTeacher aria-hidden="true" />
-          </IconBox>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <Heading size="sm">Profile status</Heading>
-              <Badge variant={statusBadge.variant} size="sm" pill>
-                {statusBadge.label}
-              </Badge>
-            </div>
-            <Text className="mt-1 text-muted">{statusMessage}</Text>
-          </div>
-        </CardBody>
-      </Card>
 
       {hasReviewFeedback ? (
         <Card className="ring-warning-border bg-warning/5" role="status">
@@ -1951,12 +1923,12 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
 
                 <div className="border-t border-card-separator pt-5">
                   <Text className="font-medium">Tax identity for payouts</Text>
-                  <FieldDescription className="mt-1 block max-w-2xl">
+                  <Text className="mt-1 max-w-2xl text-sm text-muted">
                     Complete your legal name and 16-digit NIK before a new
                     payout is prepared. These details are private to you and
                     payout admins. Tax rates are configurable by Cogito; ask
                     your tax adviser about your circumstances.
-                  </FieldDescription>
+                  </Text>
                 </div>
 
                 <TutorFormField
@@ -2074,8 +2046,10 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
               <IconBox variant="info-subtle">
                 <IconSchool aria-hidden="true" />
               </IconBox>
-              <CardTitle>
-                Education, Achievements &amp; Experiences
+              <CardTitle className="leading-snug">
+                <span className="min-w-0 flex-1">
+                  Education, Achievements &amp; Experiences
+                </span>
                 <CardInfoPreview>
                   <InfoPreview
                     title="Education, Achievements & Experiences"

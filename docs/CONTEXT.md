@@ -8,6 +8,36 @@ squash merges. Feature showcase/video and Sanity Knowledge Bank/Calendar migrati
 are tertiary. Their scope/release gates remain until an approved client deferral;
 this priority change does not authorize production release or changing `main`.
 
+
+
+## Explicit ongoing experience (22 October 2026)
+
+Tutor experience dates now use an explicit "I currently work in this role"
+checkbox instead of blank-end-year helper text. Checked means `endYear: null`
+and disables the end-year control without removing it; unchecking starts at the
+current year or start year, whichever is later. Date fields align at the top.
+Existing null end years render checked. No storage or API change is required.
+The Education, Achievements & Experiences header gives its text a shrinkable
+span so the info button stays beside wrapped text, including at mobile widths.
+
+## Compact tutor profile status (22 October 2026)
+
+The tutor profile shows one status badge beside its heading. The duplicate
+Profile status card and pending-edit badge are removed. Published profiles with
+no review action show no notice; draft, review, revision and suspension guidance
+appears as compact text in the header. Admin feedback remains in its existing
+card. Public tutor details currently use a catalog drawer, so no standalone
+public-profile link is added. Synthetic browser coverage checks lifecycle
+states, feedback retention and mobile overflow without writing dev data.
+
+## Tutor profile render repair (22 October 2026)
+
+The tutor `/profile` tax-section introduction used `FieldDescription` outside
+its required Base UI `Field` context, throwing during render and showing the
+route error page. It now uses Selia `Text`. Synthetic authenticated Chromium
+coverage reproduces the failure before the change and passes afterward,
+including visible legal-name fields and no browser errors. No dev data changed.
+
 ## V3 publication lint fixes (22 October 2026)
 
 FAQ link selection is render state; its URL input receives focus only after the

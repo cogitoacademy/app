@@ -1,5 +1,37 @@
 # Cogito Runbook
 
+## Ongoing experience smoke check (22 October 2026)
+
+In tutor profile Experiences, verify Start year and End year align. Checking
+"I currently work in this role" clears and disables End year while leaving the
+control in place. Uncheck to enable it with the current/start-year default.
+Existing ongoing entries start checked. The focused synthetic browser test
+checks toggling, retained geometry, existing null values and mobile rendering;
+it performs no database writes. No environment or migration changes apply.
+At desktop and mobile widths, also verify the Education, Achievements &
+Experiences info button stays beside the title when the text wraps; the
+focused synthetic browser check asserts their relative geometry.
+
+## Compact tutor status acceptance (22 October 2026)
+
+Check `/profile` at desktop and mobile widths: one badge appears beside the
+heading, with no Profile status card. Published/no-pending-edit profiles show
+no notice. Pending edits explain that the profile is live while edits await
+review; requested revisions preserve admin feedback. Draft, pending review,
+approved/unpublished and suspended profiles keep their next-step guidance.
+`tutor-profile-render.spec.ts` covers these states with synthetic session/RPC
+responses and no database writes. No environment changes are required.
+
+## Tutor profile render check (22 October 2026)
+
+`tutor-profile-render.spec.ts` mocks session/RPC responses and performs no DB
+writes. It checks `/profile` renders tax guidance and legal-name inputs without
+browser errors. The focused local Chromium run against web 3000 passed after
+replacing the standalone tax introduction's `FieldDescription` with `Text`.
+For manual acceptance, sign in as a tutor and reload `/profile`; verify the tax
+section renders. Saving profile changes and real-account acceptance were not
+exercised by this synthetic rendering check.
+
 ## Local development restarted (22 October 2026)
 
 Docker Desktop and the existing development Postgres/Redis containers are running.

@@ -1,5 +1,28 @@
 # Cogito Module Reference
 
+## Ongoing tutor experience control (22 October 2026)
+
+`TutorExperiencesEditor` maps the ongoing checkbox to the existing nullable
+`endYear`. Checking clears and disables the end-year input; unchecking uses
+`max(currentYear, startYear)`. The input stays mounted and the date row aligns
+at the top. Existing period validation and Present display are unchanged.
+The combined education/achievements/experience CardTitle uses a shrinkable
+text span to retain its info button alongside multiline text.
+
+## Tutor profile status presentation (22 October 2026)
+
+`OnboardingForm` renders one lifecycle badge beside the heading and conditional
+header guidance. An ordinary published profile has no status notice; published
+pending edits explain that the live profile stays visible during review.
+Revision feedback and non-published state guidance remain available. No review
+transition, event key, validation or persistence rule changes.
+
+## Tutor profile section copy (22 October 2026)
+
+The onboarding form uses Selia `Text` for the tax section introduction.
+`FieldDescription` requires an enclosing `Field` and is reserved for individual
+field descriptions. Tax validation and payout business rules are unchanged.
+
 ## Shared UI control contracts (22 October 2026)
 
 The named Card container query lives on CardHeader, not the Card root. Root

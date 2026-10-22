@@ -1,5 +1,24 @@
 # Cogito API Reference
 
+## Ongoing experience UI (22 October 2026)
+
+The explicit ongoing checkbox continues to send `experiences[].endYear: null`
+through tutor profile updates. Completed experiences retain an integer end
+year. No new field or endpoint is introduced. The adjacent section-title/info
+alignment repair is also presentation-only.
+
+## Compact tutor profile status (22 October 2026)
+
+The profile header uses the existing `onboardingStatus`, `profileEditStatus`
+and review notes from `/rpc/tutor/getMyProfile`. No endpoint, input or response
+contract changes accompany removal of the duplicate status card.
+
+## Tutor profile render repair (22 October 2026)
+
+The tutor tax-section text repair changes no endpoint, input, or output.
+`/rpc/tutor/getMyProfile` retains its existing contract; the failure was a UI
+field-context exception after profile loading.
+
 ## UI control migration note (22 October 2026)
 
 Admin tax default/override fields are entered as percentages in the UI. The
