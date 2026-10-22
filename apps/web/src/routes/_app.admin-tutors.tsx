@@ -318,7 +318,7 @@ function RouteComponent() {
                 className="rounded-lg"
               />
             ) : (
-              <TableContainer className="w-[calc(100%+3rem)]! min-w-0">
+              <TableContainer className="min-w-0">
                 <Table className="min-w-[36rem]">
                   <TableHeader>
                     <TableRow>
@@ -511,7 +511,7 @@ function RouteComponent() {
               className="rounded-lg"
             />
           ) : (
-            <TableContainer className="w-[calc(100%+3rem)]!">
+            <TableContainer>
               <Table>
                 <TableHeader>
                   <TableRow>

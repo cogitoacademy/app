@@ -1,5 +1,9 @@
 "use client";
 
+import { CrossBrowserDateTimeInput } from "@/components/booking/minute-time-input";
+
+import { NumberField as SeliaNumberField } from "@cogito-app/ui/components/selia/number-field";
+
 import { useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -191,16 +195,19 @@ function NumberField({
   return (
     <Field>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
-      <Input
+      <SeliaNumberField
         id={id}
-        type="number"
+        allowOutOfRange
+        format={{ useGrouping: false }}
         min={min}
         max={max}
         step={1}
         required={required}
         readOnly={readOnly}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
+        value={value === "" ? null : Number(value)}
+        onValueChange={(nextValue) =>
+          onChange(nextValue === null ? "" : String(nextValue))
+        }
       />
       {description ? <FieldDescription>{description}</FieldDescription> : null}
     </Field>
@@ -227,14 +234,23 @@ function TextField({
   return (
     <Field>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
-      <Input
-        id={id}
-        type={type}
-        maxLength={maxLength}
-        required={required}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
+      {type === "datetime-local" ? (
+        <CrossBrowserDateTimeInput
+          id={id}
+          value={value}
+          onChange={onChange}
+          required={required}
+        />
+      ) : (
+        <Input
+          id={id}
+          type={type}
+          maxLength={maxLength}
+          required={required}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      )}
     </Field>
   );
 }
@@ -604,7 +620,7 @@ export function AcademyClassPage() {
         </Text>
       </Stack>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(17rem,0.8fr)_minmax(0,1.2fr)]">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(17rem,0.8fr)_minmax(0,1.2fr)]">
         <Card>
           <CardHeader>
             <CardTitle>Draft classes</CardTitle>
@@ -838,7 +854,7 @@ export function AcademyClassPage() {
                 </div>
                 {form.kind === "cohort" ? (
                   <>
-                    <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="grid gap-4">
                       <TextField
                         id="class-minimum-check-at"
                         label="Minimum-enrollment check date"
@@ -849,7 +865,7 @@ export function AcademyClassPage() {
                         }
                         required
                       />
-                      <div className="grid gap-4 sm:grid-cols-3">
+                      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-4">
                         <NumberField
                           id="class-full-rate"
                           label="Full plan · Marks/session"

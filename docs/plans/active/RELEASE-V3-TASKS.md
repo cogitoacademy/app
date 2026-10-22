@@ -1,5 +1,24 @@
 # Release v3 - SDD execution and acceptance plan
 
+## UI repair checkpoint (22 October 2026)
+
+Admin tax defaults/custom tutor rates now use percentage inputs and plain copy,
+with a rupiah deduction example. API basis-point storage is unchanged. Conversion
+regression and authenticated browser edit checks passed without saving rates.
+
+Follow-up authenticated route checks are complete for the routes/states listed
+in the UI audit plan. The user-reported Academy counter clipping is repaired:
+prices now use an independent auto-fit grid and pass rendered text-fit checks at
+390/1024/1440px. DB-backed publish, payout and tutor workflow acceptance remain
+open; the local runtime is available.
+
+Shared Selia controls and Card/Table repairs are implemented; see
+[UI controls and layout audit](UI-CONTROLS-AND-LAYOUT-AUDIT.md). Source audit,
+UI/web/E2E typechecks and focused component/browser checks passed. The Academy
+publish test now uses the custom calendar. The DB-backed publish rerun remains
+pending; authenticated route smoke coverage is recorded above. This checkpoint does
+not close those release gates or the separate report worker's integration work.
+
 ## T06 parent integration and local verification (2026-10-21)
 
 T06 is integrated into local `f/release-v3` through `cda99280`; `main` is

@@ -114,10 +114,17 @@ export function FaqRichTextEditor({
       orderedList: currentEditor?.isActive("orderedList") ?? false,
     }),
   });
-  const selectionRef = useRef<SelectionSnapshot | null>(null);
+  const [linkSelection, setLinkSelection] = useState<SelectionSnapshot | null>(
+    null,
+  );
+  const linkInputRef = useRef<HTMLElement | null>(null);
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkHref, setLinkHref] = useState("");
   const [linkError, setLinkError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (linkOpen) linkInputRef.current?.focus();
+  }, [linkOpen]);
 
   useEffect(() => {
     if (!editor) return;
@@ -143,11 +150,11 @@ export function FaqRichTextEditor({
       setLinkError("Select the text you want to link first.");
       return;
     }
-    selectionRef.current = {
+    setLinkSelection({
       from: selection.from,
       to: selection.to,
       linkActive,
-    };
+    });
     setLinkHref(editor.getAttributes("link").href ?? "");
     setLinkError(null);
     setLinkOpen(true);
@@ -156,13 +163,13 @@ export function FaqRichTextEditor({
   function closeLinkEditor() {
     setLinkOpen(false);
     setLinkError(null);
-    selectionRef.current = null;
+    setLinkSelection(null);
     editor?.commands.focus();
   }
 
   function applyLink() {
     if (!editor) return;
-    const selection = selectionRef.current;
+    const selection = linkSelection;
     const href = normalizeFaqHref(linkHref);
     if (!href) {
       setLinkError("Enter a valid web address, email link, or page anchor.");
@@ -182,7 +189,7 @@ export function FaqRichTextEditor({
 
   function removeLink() {
     if (!editor) return;
-    const selection = selectionRef.current;
+    const selection = linkSelection;
     if (!selection) return;
     const chain = editor.chain().focus();
     if (selection.from !== selection.to) {
@@ -291,7 +298,7 @@ export function FaqRichTextEditor({
               </label>
               <Input
                 id={`${id}-link-href`}
-                autoFocus
+                ref={linkInputRef}
                 value={linkHref}
                 placeholder="https://example.com"
                 aria-invalid={Boolean(linkError) || undefined}
@@ -317,7 +324,7 @@ export function FaqRichTextEditor({
             <Button type="button" size="sm" onClick={applyLink}>
               Apply link
             </Button>
-            {selectionRef.current?.linkActive ? (
+            {linkSelection?.linkActive ? (
               <Button
                 type="button"
                 variant="plain"

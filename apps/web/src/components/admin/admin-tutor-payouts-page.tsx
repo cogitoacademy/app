@@ -1,5 +1,11 @@
 "use client";
 
+import { percentToBasisPoints } from "./tax-rate-input";
+
+import { CrossBrowserDateTimeInput } from "@/components/booking/minute-time-input";
+
+import { NumberField as SeliaNumberField } from "@cogito-app/ui/components/selia/number-field";
+
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
@@ -570,8 +576,8 @@ export function AdminTutorPayoutsPage() {
           <div>
             <CardTitle>Default tax rates</CardTitle>
             <Text className="mt-1 text-sm text-muted">
-              Basis points are hundredths of a percent. These configurable
-              product defaults are not legal validation or tax advice.
+              Choose the percentage deducted from tutor fees. Changes apply to
+              new payout calculations.
             </Text>
           </div>
         </CardHeader>
@@ -585,19 +591,25 @@ export function AdminTutorPayoutsPage() {
               ] as const
             ).map(([key, label]) => (
               <Field key={key}>
-                <FieldLabel htmlFor={`tax-rate-${key}`}>
-                  {label} (bps)
-                </FieldLabel>
-                <Input
+                <FieldLabel htmlFor={`tax-rate-${key}`}>{label} (%)</FieldLabel>
+                <SeliaNumberField
                   id={`tax-rate-${key}`}
-                  type="number"
+                  allowOutOfRange
+                  format={{ useGrouping: false, maximumFractionDigits: 2 }}
                   min={0}
-                  max={10000}
-                  step={1}
-                  inputMode="numeric"
-                  value={taxRateDraftValues[key]}
-                  onChange={(event) => {
-                    const value = event.target.value;
+                  max={100}
+                  step={0.01}
+                  smallStep={0.01}
+                  value={
+                    taxRateDraftValues[key] === ""
+                      ? null
+                      : Number(taxRateDraftValues[key]) / 100
+                  }
+                  onValueChange={(nextValue) => {
+                    const value =
+                      nextValue === null
+                        ? ""
+                        : String(percentToBasisPoints(nextValue));
                     setTaxRateDraft((current) => ({
                       ...(taxRateDraftDirty ? current : taxRateDraftValues),
                       [key]: value,
@@ -607,8 +619,8 @@ export function AdminTutorPayoutsPage() {
                 />
                 <FieldDescription>
                   {taxRateDraftValues[key] === ""
-                    ? "Enter a whole number from 0 to 10000."
-                    : `${(Number(taxRateDraftValues[key]) / 100).toFixed(2)}%`}
+                    ? "Enter a percentage from 0% to 100%."
+                    : `Tax on ${formatIdr(400_000)} in tutor fees: ${formatIdr((400_000 * Number(taxRateDraftValues[key])) / 10_000)}.`}
                 </FieldDescription>
               </Field>
             ))}
@@ -783,21 +795,21 @@ export function AdminTutorPayoutsPage() {
             </Text>
           </div>
         </CardHeader>
-        <CardBody aria-busy={reportQuery.isFetching} className="p-0!">
+        <CardBody aria-busy={reportQuery.isFetching}>
           {reportQuery.isError ? (
-            <div className="p-6">
+            <div>
               <Text className="text-sm text-danger">
                 The payout report could not be loaded. Refresh and try again.
               </Text>
             </div>
           ) : reportQuery.isPending ? (
-            <div className="p-6">
+            <div>
               <Text className="text-sm text-muted">
                 Loading payout records…
               </Text>
             </div>
           ) : visibleRows.length === 0 ? (
-            <div className="p-6">
+            <div>
               <EmptyState
                 icon={<IconInbox />}
                 title="No payout records"
@@ -1290,15 +1302,19 @@ export function AdminTutorPayoutsPage() {
                         <FieldLabel htmlFor="payout-actual-amount">
                           Actual amount (IDR)
                         </FieldLabel>
-                        <Input
+                        <SeliaNumberField
                           id="payout-actual-amount"
-                          type="number"
+                          allowOutOfRange
+                          format={{ useGrouping: false }}
                           min={0}
                           step={1}
-                          inputMode="numeric"
-                          value={actualAmount}
-                          onChange={(event) =>
-                            setActualAmount(event.target.value)
+                          value={
+                            actualAmount === "" ? null : Number(actualAmount)
+                          }
+                          onValueChange={(nextValue) =>
+                            setActualAmount(
+                              nextValue === null ? "" : String(nextValue),
+                            )
                           }
                         />
                       </Field>
@@ -1306,11 +1322,10 @@ export function AdminTutorPayoutsPage() {
                         <FieldLabel htmlFor="payout-actual-paid-at">
                           Actual paid date and time (Asia/Jakarta)
                         </FieldLabel>
-                        <Input
+                        <CrossBrowserDateTimeInput
                           id="payout-actual-paid-at"
-                          type="datetime-local"
                           value={paidAt}
-                          onChange={(event) => setPaidAt(event.target.value)}
+                          onChange={(value) => setPaidAt(value)}
                         />
                       </Field>
                       <Field>
@@ -1428,7 +1443,7 @@ export function AdminTutorPayoutsPage() {
 
                 {selectedRow.status !== "void" ? (
                   <section className="space-y-3 rounded-lg border border-item-border p-4">
-                    <Text className="font-semibold">Tutor rate override</Text>
+                    <Text className="font-semibold">Custom tutor tax rate</Text>
                     <Text className="text-sm text-muted">
                       Leave blank to clear the override and use the current
                       configured default. This affects future previews only.
@@ -1436,17 +1451,30 @@ export function AdminTutorPayoutsPage() {
                     <div className="flex flex-wrap items-end gap-3">
                       <Field className="min-w-48 flex-1">
                         <FieldLabel htmlFor="tutor-rate-override">
-                          Override (basis points)
+                          Tax rate (%)
                         </FieldLabel>
-                        <Input
+                        <SeliaNumberField
                           id="tutor-rate-override"
-                          type="number"
+                          allowOutOfRange
+                          format={{
+                            useGrouping: false,
+                            maximumFractionDigits: 2,
+                          }}
                           min={0}
-                          max={10000}
-                          step={1}
-                          value={overrideRateBps}
-                          onChange={(event) =>
-                            setOverrideRateBps(event.target.value)
+                          max={100}
+                          step={0.01}
+                          smallStep={0.01}
+                          value={
+                            overrideRateBps === ""
+                              ? null
+                              : Number(overrideRateBps) / 100
+                          }
+                          onValueChange={(nextValue) =>
+                            setOverrideRateBps(
+                              nextValue === null
+                                ? ""
+                                : String(percentToBasisPoints(nextValue)),
+                            )
                           }
                         />
                       </Field>

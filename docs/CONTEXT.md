@@ -30,6 +30,31 @@ current application hard-delete path was found, and this documents the existing
 schema boundary rather than adding a release gate. No historical actor is
 invented and no legacy row is backfilled.
 
+## V3 publication lint fixes (22 October 2026)
+
+FAQ link selection is render state; its URL input receives focus only after the
+user opens the link editor. FAQ URL validation still rejects control characters
+and backslashes, using explicit character checks. Public classes use the existing
+30-second visibility-aware clock so upcoming sessions update without impure
+render-time clock reads. Workspace typecheck and the lint baseline pass; focused
+FAQ regressions are recorded in the PR. No API or storage contract changed.
+
+## UI controls and Card/Table repair (22 October 2026)
+
+Payout tax default and custom tutor fields now use percentages and a rupiah
+deduction example. API rates remain integer basis points; no stored rate changed.
+
+Web numeric fields use the shared Selia NumberField with styled steppers. Academy,
+lifecycle and payout date/time fields reuse CrossBrowserDateTimeInput. Card/Table
+width, spacing and narrow-card header actions are handled in shared components;
+per-page table-width overrides have been removed. The calendar month selector
+registers its visible labels before opening. Source audit and component browser
+checks are recorded in [the UI audit plan](plans/active/UI-CONTROLS-AND-LAYOUT-AUDIT.md).
+Authenticated admin/student route smoke checks now pass for the states listed
+in the audit plan. Academy rate controls use an independent auto-fit grid to
+prevent numeric text clipping; DB-backed write-flow acceptance remains pending. Backend contracts, migrations and provider configuration are
+unchanged by this repair.
+
 ## T07 pending-report reminder integration checkpoint (2026-10-22)
 
 The class-report reminder worker is integrated on local `f/release-v3` at

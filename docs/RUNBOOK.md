@@ -1,5 +1,56 @@
 # Cogito Runbook
 
+## Local development restarted (22 October 2026)
+
+Docker Desktop and the existing development Postgres/Redis containers are running.
+Web `http://localhost:3000/login` returns 200; API `http://localhost:3001/health`
+returns 200 with database, Redis, scheduler and DLQ checks all `ok`.
+The API runs `bun --smol --env-file=apps/server/.env tmp/v3-dev/start-local-safe.ts`
+from the repository root, using retained `6767/cogito-app` data, stub payments,
+stub email and disabled Google Calendar. No migration, reset or seed was run.
+Runtime logs are in `tmp/v3-dev/ui-dev-api.out.log` and `ui-dev-api.err.log`.
+The earlier offline blocker is resolved; authenticated UI route acceptance is
+still pending and is separate from this startup health check.
+
+## UI control and table verification (22 October 2026)
+
+Tax form follow-up: defaults and custom tutor rates use percentages, not bps.
+Verify default 250 displays as 2.5, 300 as 3; typing 2.55 should show Rp10,200
+tax on Rp400,000. Save payloads retain 255 basis points. Empty override restores
+the default. Browser typing/stepping and the conversion regression passed without
+saving a configuration; the temporary audit account was removed afterward.
+
+Authenticated follow-up completed the admin route smoke checks at 390/1440px and
+the student route smoke checks at 390px (balance also at 1440px). Academy's
+user-reported rate clipping was reproduced with 0px available numeric text width,
+then repaired and checked at 390/1024/1440px. Check all three 20/22/25 rate values,
+not only the overall page scroll width. Temporary audit accounts were removed.
+See the UI audit plan for the exact route/state coverage and remaining write flows.
+
+Run package checks directly to avoid unrelated workspace builds:
+
+```powershell
+bun run --cwd packages/ui check-types
+bun run --cwd apps/web check-types
+bun run --cwd packages/e2e check-types
+bun --smol test apps/web/src/lib/calendar-ui.test.tsx apps/web/src/components/booking/minute-time-input.test.ts apps/web/src/components/admin/academy-class-page-utils.test.ts
+```
+
+Verify Academy schedules/minimum checks, lifecycle replacement times, payout
+amount/time/tax fields, V3 economy cells, competition order and custom Marks.
+Check empty, min/max, read-only and disabled states. On narrow Cards, header
+actions should wrap beneath the title. Wide tables must scroll inside the Card;
+filters and pagination must not overlap rows. Confirm October displays as October
+before opening the calendar month dropdown. Use 320/390/768/1440px widths.
+
+This audit passed the three package typechecks and 7 focused tests / 13 assertions.
+A temporary browser fixture passed control and layout smoke checks; it was removed
+after verification. Authenticated routes/DB-backed Academy publish were not run:
+API 3001 and DB 6767 were not listening during the initial pass. The authenticated
+follow-up above supersedes that offline blocker. Do not treat component smoke evidence as
+full route acceptance. No migration, reset, seed or external provider call is
+needed for these UI changes. Full coverage is in the UI audit plan.
+
 ## Local runtime checkpoint (22 October)
 
 The integrated reminder source and combined regression are on local

@@ -570,7 +570,7 @@ function BookingQueue({
               </>
             ) : (
               <>
-                <TableContainer className="w-[calc(100%+3rem)]! min-w-0 max-w-none">
+                <TableContainer className="min-w-0 max-w-none">
                   <Table className="min-w-[76rem] text-sm">
                     <TableHeader>
                       <TableRow>
@@ -2353,7 +2353,7 @@ function RoomCatalog({
           </>
         ) : (
           <>
-            <TableContainer className="w-[calc(100%+3rem)]! min-w-0">
+            <TableContainer className="min-w-0">
               <Table className="min-w-[40rem]">
                 <TableHeader>
                   <TableRow>
@@ -2794,7 +2794,7 @@ function PendingRoomApprovals({
             size="compact"
           />
         ) : (
-          <TableContainer className="w-[calc(100%+3rem)]!">
+          <TableContainer>
             <Table>
               <TableHeader>
                 <TableRow>

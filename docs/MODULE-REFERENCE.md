@@ -1,5 +1,32 @@
 # Cogito Module Reference
 
+## Shared UI control contracts (22 October 2026)
+
+Payout tax controls display and accept percentages (0..100, two decimal places).
+`percentToBasisPoints` rounds the percentage times 100 before it enters the
+existing integer draft/API fields, avoiding floating-point fractions such as
+2.55 * 100. Empty default rates remain invalid; empty tutor override clears the
+override. Default-rate fields show an example tax deduction on Rp400,000.
+
+Academy draft rates occupy their own row and use auto-fit columns with a 10rem
+minimum. They must not be nested as three columns inside half the editor width:
+that leaves no drawable numeric text space between the stepper buttons.
+
+Selia NumberField composes its own decrement/input/increment group when no custom
+children are supplied. Numeric drafts map an empty control to null, then retain
+the caller's original empty-string/number submission convention. Min/max/step,
+required, disabled and read-only props remain on the number root; accessible
+input-only attributes belong in inputProps.
+
+CrossBrowserDateTimeInput composes DatePicker and MinuteTimeInput, preserving a
+local YYYY-MM-DDTHH:mm string and the existing caller's timezone conversion. The
+calendar trigger uses the component ID; the time input uses ID-time. Required or
+partial date/time values and times before the same-day minimum fail form
+validation. Choosing a date without a time initializes midnight; clearing the
+date clears the combined value. CardBody owns direct-child table width/spacing
+and no longer negatively offsets arbitrary Stack content. Header actions wrap
+below the title based on Card width. See the UI audit plan for coverage limits.
+
 ## T06 parent integration and local verification (2026-10-21)
 
 T06 is integrated into local `f/release-v3` through `cda99280`; `main` is

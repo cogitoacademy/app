@@ -1,5 +1,18 @@
 # Cogito API Reference
 
+## UI control migration note (22 October 2026)
+
+Admin tax default/override fields are entered as percentages in the UI. The
+client converts 2.55% to integer 255 for the existing `*RateBps`/`rateBps` fields;
+the API still validates integer basis points in 0..10000. Empty tutor override
+still sends null to restore the configured default. No endpoint changed.
+
+The Selia numeric/date-time control repair adds no endpoint or wire-format change.
+Numeric inputs still pass through each caller's existing conversion and schema
+validation. CrossBrowserDateTimeInput returns a local YYYY-MM-DDTHH:mm string;
+Academy, lifecycle and payout callers retain their existing conversion before
+sending the API timestamp. The UI control does not infer or change timezones.
+
 ## T06 parent integration and local verification (2026-10-21)
 
 T06 is integrated into local `f/release-v3` through `cda99280`; `main` is

@@ -1,5 +1,7 @@
 "use client";
 
+import { CrossBrowserDateTimeInput } from "@/components/booking/minute-time-input";
+
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
@@ -313,14 +315,13 @@ export function ClassAdminLifecyclePanel({
                         <FieldLabel htmlFor={`replacement-${session.id}`}>
                           Replacement start · session {session.sequenceNumber}
                         </FieldLabel>
-                        <Input
+                        <CrossBrowserDateTimeInput
                           id={`replacement-${session.id}`}
-                          type="datetime-local"
                           value={replacementStarts[session.id] ?? ""}
-                          onChange={(event) => {
+                          onChange={(value) => {
                             setReplacementStarts((current) => ({
                               ...current,
-                              [session.id]: event.target.value,
+                              [session.id]: value,
                             }));
                             setDecisionReview(null);
                           }}
