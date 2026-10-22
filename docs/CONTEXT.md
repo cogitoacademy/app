@@ -56,10 +56,12 @@ tests pass 9 tests / 31 expectations; rate-limit routing passes 18 / 67. The
 combined focused run passes 27 tests / 98 expectations. A seven-page sample was
 rendered and visually checked, including a three-field 600-character single-page
 case and long legacy continuation. No database, browser, migration, reset, seed,
-full compiler or provider check ran in this source slice. The focused Bun bundle emitted one
-3.16 MB JavaScript entry with the 1,008,096-byte font embedded and no separate
-font asset. Guarded database, authenticated browser, full typecheck, server
-tsdown/Docker bundle and deployment acceptance remain with the parent.
+full server build or provider check ran in this source slice. Focused Bun and
+tsdown PDF-module bundles each emitted one JavaScript entry with the complete
+1,008,096-character font embedded and no separate font asset; the tsdown output
+was 3.28 MB (tsdown 0.22.14, Rolldown 1.2.3). Guarded database, authenticated
+browser, full typecheck, server tsdown/Docker build and deployment acceptance
+remain with the parent.
 
 ## REQ-REPORT-02/03 on-demand booking report review-fix continuation (2026-10-22)
 

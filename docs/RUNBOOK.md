@@ -70,8 +70,16 @@ legacy text across continuation pages. These are local source-slice results;
 the focused `bun build packages/api/src/modules/report-export/report-export.pdf.ts
 --target=bun --outdir tmp/pdfs/bundle-check` check emitted one 3.16 MB JavaScript
 entry containing the 1,008,096-byte font and no separate JSON/font asset. This
-does not replace the parent-owned server tsdown/Docker check. The parent also
-owns guarded database/entitlement coverage, authenticated student/admin browser
+does not replace the focused `tsdown` PDF-module bundle check below, which
+emitted one 3.28 MB JavaScript entry with the complete 1,008,096-character font
+embedded (tsdown 0.22.14, Rolldown 1.2.3):
+
+```powershell
+bunx tsdown packages/api/src/modules/report-export/report-export.pdf.ts --no-config --out-dir tmp/pdfs/tsdown-font-check --format esm --no-minify
+```
+
+The full server tsdown/Docker build remains parent-owned. The parent also owns
+guarded database/entitlement coverage, authenticated student/admin browser
 flows, and full web/API/server typechecks. No database, browser, migration,
 reset, seed or provider call was run for the PDF slice.
 
