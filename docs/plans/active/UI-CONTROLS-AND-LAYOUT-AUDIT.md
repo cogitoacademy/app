@@ -35,6 +35,13 @@ date/time/number widgets and Card/Table composition without changing API contrac
 
 ## Verification
 
+- Tax copy/usability follow-up: default and custom tutor tax fields use percent
+  labels and 0..100 inputs with two decimal places, retaining integer API units.
+  Default fields include a sample deduction from Rp400,000. Authenticated browser
+  check: 250/300 appeared as 2.5/3; keyboard entry of 2.55 produced Rp10,200,
+  and increment from 2.5 produced 2.51/Rp10,040. Configuration was not saved.
+  Conversion regression passed 1 test / 7 assertions; web typecheck/lint passed.
+
 - UI, web and E2E TypeScript checks passed.
 - Focused regressions: 7 tests / 13 assertions passed (calendar label, invalid
   date, quarter-hour helpers, class list merge).

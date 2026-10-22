@@ -14,6 +14,12 @@ still pending and is separate from this startup health check.
 
 ## UI control and table verification (22 October 2026)
 
+Tax form follow-up: defaults and custom tutor rates use percentages, not bps.
+Verify default 250 displays as 2.5, 300 as 3; typing 2.55 should show Rp10,200
+tax on Rp400,000. Save payloads retain 255 basis points. Empty override restores
+the default. Browser typing/stepping and the conversion regression passed without
+saving a configuration; the temporary audit account was removed afterward.
+
 Authenticated follow-up completed the admin route smoke checks at 390/1440px and
 the student route smoke checks at 390px (balance also at 1440px). Academy's
 user-reported rate clipping was reproduced with 0px available numeric text width,

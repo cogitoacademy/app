@@ -2,6 +2,12 @@
 
 ## Shared UI control contracts (22 October 2026)
 
+Payout tax controls display and accept percentages (0..100, two decimal places).
+`percentToBasisPoints` rounds the percentage times 100 before it enters the
+existing integer draft/API fields, avoiding floating-point fractions such as
+2.55 * 100. Empty default rates remain invalid; empty tutor override clears the
+override. Default-rate fields show an example tax deduction on Rp400,000.
+
 Academy draft rates occupy their own row and use auto-fit columns with a 10rem
 minimum. They must not be nested as three columns inside half the editor width:
 that leaves no drawable numeric text space between the stepper buttons.
