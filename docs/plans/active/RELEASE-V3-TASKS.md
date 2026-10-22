@@ -23,6 +23,10 @@ ordinary-reschedule or analytics policy.
 
 ## UI repair checkpoint (22 October 2026)
 
+Admin tax defaults/custom tutor rates now use percentage inputs and plain copy,
+with a rupiah deduction example. API basis-point storage is unchanged. Conversion
+regression and authenticated browser edit checks passed without saving rates.
+
 Follow-up authenticated route checks are complete for the routes/states listed
 in the UI audit plan. The user-reported Academy counter clipping is repaired:
 prices now use an independent auto-fit grid and pass rendered text-fit checks at

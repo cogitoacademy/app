@@ -1,5 +1,7 @@
 "use client";
 
+import { percentToBasisPoints } from "./tax-rate-input";
+
 import { CrossBrowserDateTimeInput } from "@/components/booking/minute-time-input";
 
 import { NumberField as SeliaNumberField } from "@cogito-app/ui/components/selia/number-field";
@@ -574,8 +576,8 @@ export function AdminTutorPayoutsPage() {
           <div>
             <CardTitle>Default tax rates</CardTitle>
             <Text className="mt-1 text-sm text-muted">
-              Basis points are hundredths of a percent. These configurable
-              product defaults are not legal validation or tax advice.
+              Choose the percentage deducted from tutor fees. Changes apply to
+              new payout calculations.
             </Text>
           </div>
         </CardHeader>
@@ -589,23 +591,25 @@ export function AdminTutorPayoutsPage() {
               ] as const
             ).map(([key, label]) => (
               <Field key={key}>
-                <FieldLabel htmlFor={`tax-rate-${key}`}>
-                  {label} (bps)
-                </FieldLabel>
+                <FieldLabel htmlFor={`tax-rate-${key}`}>{label} (%)</FieldLabel>
                 <SeliaNumberField
                   id={`tax-rate-${key}`}
                   allowOutOfRange
-                  format={{ useGrouping: false }}
+                  format={{ useGrouping: false, maximumFractionDigits: 2 }}
                   min={0}
-                  max={10000}
-                  step={1}
+                  max={100}
+                  step={0.01}
+                  smallStep={0.01}
                   value={
                     taxRateDraftValues[key] === ""
                       ? null
-                      : Number(taxRateDraftValues[key])
+                      : Number(taxRateDraftValues[key]) / 100
                   }
                   onValueChange={(nextValue) => {
-                    const value = nextValue === null ? "" : String(nextValue);
+                    const value =
+                      nextValue === null
+                        ? ""
+                        : String(percentToBasisPoints(nextValue));
                     setTaxRateDraft((current) => ({
                       ...(taxRateDraftDirty ? current : taxRateDraftValues),
                       [key]: value,
@@ -615,8 +619,8 @@ export function AdminTutorPayoutsPage() {
                 />
                 <FieldDescription>
                   {taxRateDraftValues[key] === ""
-                    ? "Enter a whole number from 0 to 10000."
-                    : `${(Number(taxRateDraftValues[key]) / 100).toFixed(2)}%`}
+                    ? "Enter a percentage from 0% to 100%."
+                    : `Tax on ${formatIdr(400_000)} in tutor fees: ${formatIdr((400_000 * Number(taxRateDraftValues[key])) / 10_000)}.`}
                 </FieldDescription>
               </Field>
             ))}
@@ -1439,7 +1443,7 @@ export function AdminTutorPayoutsPage() {
 
                 {selectedRow.status !== "void" ? (
                   <section className="space-y-3 rounded-lg border border-item-border p-4">
-                    <Text className="font-semibold">Tutor rate override</Text>
+                    <Text className="font-semibold">Custom tutor tax rate</Text>
                     <Text className="text-sm text-muted">
                       Leave blank to clear the override and use the current
                       configured default. This affects future previews only.
@@ -1447,7 +1451,7 @@ export function AdminTutorPayoutsPage() {
                     <div className="flex flex-wrap items-end gap-3">
                       <Field className="min-w-48 flex-1">
                         <FieldLabel htmlFor="tutor-rate-override">
-                          Override (basis points)
+                          Tax rate (%)
                         </FieldLabel>
                         <SeliaNumberField
                           id="tutor-rate-override"
@@ -1457,16 +1461,19 @@ export function AdminTutorPayoutsPage() {
                             maximumFractionDigits: 2,
                           }}
                           min={0}
-                          max={10000}
-                          step={1}
+                          max={100}
+                          step={0.01}
+                          smallStep={0.01}
                           value={
                             overrideRateBps === ""
                               ? null
-                              : Number(overrideRateBps)
+                              : Number(overrideRateBps) / 100
                           }
                           onValueChange={(nextValue) =>
                             setOverrideRateBps(
-                              nextValue === null ? "" : String(nextValue),
+                              nextValue === null
+                                ? ""
+                                : String(percentToBasisPoints(nextValue)),
                             )
                           }
                         />
