@@ -8,6 +8,15 @@ squash merges. Feature showcase/video and Sanity Knowledge Bank/Calendar migrati
 are tertiary. Their scope/release gates remain until an approved client deferral;
 this priority change does not authorize production release or changing `main`.
 
+
+## Tutor profile render repair (22 October 2026)
+
+The tutor `/profile` tax-section introduction used `FieldDescription` outside
+its required Base UI `Field` context, throwing during render and showing the
+route error page. It now uses Selia `Text`. Synthetic authenticated Chromium
+coverage reproduces the failure before the change and passes afterward,
+including visible legal-name fields and no browser errors. No dev data changed.
+
 ## V3 publication lint fixes (22 October 2026)
 
 FAQ link selection is render state; its URL input receives focus only after the

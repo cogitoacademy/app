@@ -1,5 +1,11 @@
 # Cogito Module Reference
 
+## Tutor profile section copy (22 October 2026)
+
+The onboarding form uses Selia `Text` for the tax section introduction.
+`FieldDescription` requires an enclosing `Field` and is reserved for individual
+field descriptions. Tax validation and payout business rules are unchanged.
+
 ## Shared UI control contracts (22 October 2026)
 
 The named Card container query lives on CardHeader, not the Card root. Root

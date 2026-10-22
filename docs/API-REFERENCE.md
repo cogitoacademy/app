@@ -1,5 +1,11 @@
 # Cogito API Reference
 
+## Tutor profile render repair (22 October 2026)
+
+The tutor tax-section text repair changes no endpoint, input, or output.
+`/rpc/tutor/getMyProfile` retains its existing contract; the failure was a UI
+field-context exception after profile loading.
+
 ## UI control migration note (22 October 2026)
 
 Admin tax default/override fields are entered as percentages in the UI. The

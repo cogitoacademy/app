@@ -21,6 +21,14 @@ analytics/provider/financial acceptance, core content, end-to-end UAT and releas
 readiness. Apply approved policy gates to dependent behavior; do not invent
 ordinary-reschedule or analytics policy.
 
+## Tutor profile render checkpoint (22 October 2026)
+
+Completed the `/profile` tax-section render repair: standalone section guidance
+uses Selia `Text` instead of context-dependent `FieldDescription`. The focused
+synthetic authenticated Chromium regression fails before and passes after the
+fix. This checks rendering only; real-account saving and broader release
+acceptance remain pending.
+
 ## UI repair checkpoint (22 October 2026)
 
 Admin tax defaults/custom tutor rates now use percentage inputs and plain copy,

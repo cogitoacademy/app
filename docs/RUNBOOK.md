@@ -1,5 +1,15 @@
 # Cogito Runbook
 
+## Tutor profile render check (22 October 2026)
+
+`tutor-profile-render.spec.ts` mocks session/RPC responses and performs no DB
+writes. It checks `/profile` renders tax guidance and legal-name inputs without
+browser errors. The focused local Chromium run against web 3000 passed after
+replacing the standalone tax introduction's `FieldDescription` with `Text`.
+For manual acceptance, sign in as a tutor and reload `/profile`; verify the tax
+section renders. Saving profile changes and real-account acceptance were not
+exercised by this synthetic rendering check.
+
 ## Local development restarted (22 October 2026)
 
 Docker Desktop and the existing development Postgres/Redis containers are running.

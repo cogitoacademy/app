@@ -1951,12 +1951,12 @@ export function OnboardingForm({ accountUser, profile }: OnboardingFormProps) {
 
                 <div className="border-t border-card-separator pt-5">
                   <Text className="font-medium">Tax identity for payouts</Text>
-                  <FieldDescription className="mt-1 block max-w-2xl">
+                  <Text className="mt-1 max-w-2xl text-sm text-muted">
                     Complete your legal name and 16-digit NIK before a new
                     payout is prepared. These details are private to you and
                     payout admins. Tax rates are configurable by Cogito; ask
                     your tax adviser about your circumstances.
-                  </FieldDescription>
+                  </Text>
                 </div>
 
                 <TutorFormField
