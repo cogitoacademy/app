@@ -1,5 +1,15 @@
 # Cogito Module Reference
 
+## Report PDF pagination follow-up (22 October 2026)
+
+Metadata columns paginate wrapped lines above the footer and label continued
+values. The class adapter selects its session title as the report topic. Normal
+feedback bullets preserve their line breaks; dense current-format lists flow
+inline only when needed to fit, retaining bullet markers and the fixed font
+size. Legacy reports retain line breaks and labelled continuation pages. Parent
+PostgreSQL coverage validates exact-student ledger entitlement and funded/spent
+class allocation filters; it uses UUID-owned fixtures and no reset/seed.
+
 ## Classes UI composition (22 October 2026)
 
 The student catalog uses Selia Card/Field/Input/Button, with one card per class and

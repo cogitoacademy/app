@@ -500,8 +500,9 @@ export function ClassSessionReportsPage() {
                 </Field>
                 {debouncedStudentSearch.length >= 2 ? (
                   <div
-                    className="space-y-1 rounded-lg border border-border p-2"
+                    role="group"
                     aria-label="Student search results"
+                    className="space-y-1 rounded-lg border border-border p-2"
                   >
                     {exportStudentSearchQuery.isFetching ? (
                       <Text className="p-2 text-sm text-muted" role="status">

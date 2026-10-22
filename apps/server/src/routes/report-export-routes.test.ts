@@ -36,7 +36,11 @@ function makeApp(
   };
 }
 
-function post(app: Elysia, path: string, body: unknown = {}) {
+function post(
+  app: { handle(request: Request): Response | Promise<Response> },
+  path: string,
+  body: unknown = {},
+) {
   return app.handle(
     new Request(`http://localhost${path}`, {
       method: "POST",
@@ -119,7 +123,7 @@ describe("private report export routes", () => {
       null,
     );
     const summary = await post(student.app, "/reports/student/summary");
-    expect((await summary.json()).reportCount).toBe(0);
+    expect(await summary.json()).toMatchObject({ reportCount: 0 });
     expect(student.getSummary).toHaveBeenCalledWith("student-a");
     const pdf = await post(student.app, "/reports/student/pdf");
     expect(pdf.status).toBe(204);

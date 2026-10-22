@@ -1,5 +1,16 @@
 # Release v3 - SDD execution and acceptance plan
 
+## Report PDF parent checkpoint (22 October 2026)
+
+Placeholder-header PDF is implemented. Long metadata clipping and student-search
+group semantics are repaired; dense 600-character bullet lists fit one page,
+while legacy text retains continuation pages. Focused checks pass 29 / 104;
+guarded non-reset PostgreSQL eligibility passes 1 / 16, covering private and
+academy adapters. Web/server typechecks and full server tsdown build pass.
+Three synthetic Chromium download/role/empty-state journeys pass. Final
+branding/deployment and release UAT remain separate acceptance gates; broader
+legacy reminders remain open.
+
 ## Classes presentation checkpoint (22 October 2026)
 
 Implemented the searchable single-card student catalog, curriculum/enrollment

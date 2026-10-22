@@ -1,5 +1,21 @@
 # Cogito App — Codebase Context
 
+## Report PDF parent verification (22 October 2026)
+
+The parent repaired long metadata pagination and added a semantic student-search
+group. Academy topic metadata uses the session title, not its full curriculum.
+Dense current-format bullet lists can flow inline to retain one-page output;
+ordinary lists and legacy line breaks remain separate. Regressions cover three
+600-character fields, 300 short bullets per field, and 5,000-character metadata.
+Focused checks pass 29 tests / 104 assertions. A guarded non-reset PostgreSQL
+eligibility test passes 1 / 16 across private and academy adapters, exact-student
+charges, cancelled series parents, unfunded/released seats and date ordering.
+Web/server typechecks and a full server tsdown build pass. Three synthetic
+Chromium journeys pass for student/admin downloads, empty state and tutor UI
+denial. These browser routes are mocked; live-provider and final
+branding/deployment acceptance remain open. This supersedes older source-only
+DB/compiler notes below.
+
 ## Classes UI workspace (22 October 2026)
 
 Student `/classes` is a single searchable catalog with Cohort/Masterclass filters,

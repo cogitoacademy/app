@@ -79,6 +79,48 @@ function wrapText(text: string, font: PDFFont, size: number, width: number) {
     .flatMap((line) => (line ? wrapLine(line, font, size, width) : [""]));
 }
 
+function wrapCompactBullets(
+  bullets: string[],
+  font: PDFFont,
+  size: number,
+  width: number,
+) {
+  const words = bullets.flatMap((bullet) => {
+    const parts = bullet
+      .replace(/\r\n?/g, "\n")
+      .replace(/\t/g, "    ")
+      .split(/\s+/u)
+      .filter(Boolean);
+    return parts.length ? [`• ${parts[0]}`, ...parts.slice(1)] : ["•"];
+  });
+  const lines: string[] = [];
+  let line = "";
+
+  for (const word of words) {
+    const candidate = line ? `${line} ${word}` : word;
+    if (font.widthOfTextAtSize(candidate, size) <= width) {
+      line = candidate;
+      continue;
+    }
+    if (line) lines.push(line);
+    line = "";
+    let chunk = "";
+    for (const character of Array.from(word)) {
+      const next = chunk + character;
+      if (chunk && font.widthOfTextAtSize(next, size) > width) {
+        lines.push(chunk);
+        chunk = character;
+      } else {
+        chunk = next;
+      }
+    }
+    line = chunk;
+  }
+
+  if (line) lines.push(line);
+  return lines;
+}
+
 function addPage(
   pdf: PDFDocument,
   font: PDFFont,
@@ -167,6 +209,7 @@ function drawMetadata(
 ) {
   const gap = 22;
   const columnWidth = (CONTENT_WIDTH - gap) / 2;
+  const labelValueHeight = 17;
   for (let index = 0; index < entry.metadata.length; index += 2) {
     const left = entry.metadata[index]!;
     const right = entry.metadata[index + 1];
@@ -174,36 +217,60 @@ function drawMetadata(
     const rightLines = right
       ? wrapText(right.value, font, 8.5, columnWidth)
       : [];
-    const rows = Math.max(leftLines.length, rightLines.length, 1);
-    const rowHeight = 10 + rows * 10.5 + 7;
-    if (cursor.y - rowHeight < MIN_CONTENT_Y) cursor = onNewPage();
+    let leftOffset = 0;
+    let rightOffset = 0;
 
-    for (const [cell, x] of [
-      [left, SIDE_MARGIN],
-      [right, SIDE_MARGIN + columnWidth + gap],
-    ] as const) {
-      if (!cell) continue;
-      cursor.page.drawText(cell.label.toUpperCase(), {
-        x,
-        y: cursor.y,
-        size: 6.5,
-        font,
-        color: MUTED,
-      });
-      const lines = wrapText(cell.value, font, 8.5, columnWidth);
-      lines.forEach((line, lineIndex) => {
-        if (line) {
-          cursor.page.drawText(line, {
+    while (leftOffset < leftLines.length || rightOffset < rightLines.length) {
+      let lineCapacity = Math.floor(
+        (cursor.y - MIN_CONTENT_Y - labelValueHeight) / 10.5,
+      );
+      if (lineCapacity < 1) {
+        cursor = onNewPage();
+        lineCapacity = Math.floor(
+          (cursor.y - MIN_CONTENT_Y - labelValueHeight) / 10.5,
+        );
+      }
+
+      const rowLines = Math.min(
+        lineCapacity,
+        Math.max(
+          leftLines.length - leftOffset,
+          rightLines.length - rightOffset,
+        ),
+      );
+      for (const [cell, x, lines, offset] of [
+        [left, SIDE_MARGIN, leftLines, leftOffset],
+        [right, SIDE_MARGIN + columnWidth + gap, rightLines, rightOffset],
+      ] as const) {
+        if (!cell || offset >= lines.length) continue;
+        cursor.page.drawText(
+          `${cell.label.toUpperCase()}${offset ? " (CONTINUED)" : ""}`,
+          {
             x,
-            y: cursor.y - 12 - lineIndex * 10.5,
-            size: 8.5,
+            y: cursor.y,
+            size: 6.5,
             font,
-            color: INK,
-          });
+            color: MUTED,
+          },
+        );
+        for (let lineIndex = 0; lineIndex < rowLines; lineIndex += 1) {
+          const line = lines[offset + lineIndex];
+          if (line) {
+            cursor.page.drawText(line, {
+              x,
+              y: cursor.y - 12 - lineIndex * 10.5,
+              size: 8.5,
+              font,
+              color: INK,
+            });
+          }
         }
-      });
+      }
+
+      cursor.y -= labelValueHeight + rowLines * 10.5;
+      leftOffset += rowLines;
+      rightOffset += rowLines;
     }
-    cursor.y -= rowHeight;
   }
   return cursor;
 }
@@ -224,7 +291,20 @@ function drawFeedback(
   });
   cursor.y -= 20;
 
-  for (const section of entry.sections) {
+  const regularSections = entry.sections.map((section) =>
+    section.bullets.flatMap((bullet) =>
+      wrapText(`• ${bullet}`, font, BODY_SIZE, CONTENT_WIDTH - 18),
+    ),
+  );
+  const regularHeight = regularSections.reduce(
+    (height, lines) =>
+      height + 13 + lines.length * LINE_HEIGHT + 2 + SECTION_GAP,
+    0,
+  );
+  // Dense current-format lists flow inline; legacy reports retain line breaks.
+  const compact = !entry.isLegacy && regularHeight > cursor.y - MIN_CONTENT_Y;
+
+  for (const [sectionIndex, section] of entry.sections.entries()) {
     if (cursor.y - 18 < MIN_CONTENT_Y) cursor = onNewPage();
     cursor.page.drawText(section.label.toUpperCase(), {
       x: SIDE_MARGIN,
@@ -235,32 +315,21 @@ function drawFeedback(
     });
     cursor.y -= 13;
 
-    for (const bullet of section.bullets) {
-      const lines = wrapText(bullet, font, BODY_SIZE, CONTENT_WIDTH - 18);
-      for (const [lineIndex, line] of lines.entries()) {
-        if (cursor.y - LINE_HEIGHT < MIN_CONTENT_Y) cursor = onNewPage();
-        if (lineIndex === 0) {
-          cursor.page.drawText("•", {
-            x: SIDE_MARGIN + 1,
-            y: cursor.y,
-            size: BODY_SIZE,
-            font,
-            color: ORANGE,
-          });
-        }
-        if (line) {
-          cursor.page.drawText(line, {
-            x: SIDE_MARGIN + 14,
-            y: cursor.y,
-            size: BODY_SIZE,
-            font,
-            color: INK,
-          });
-        }
-        cursor.y -= LINE_HEIGHT;
-      }
-      cursor.y -= 2;
+    const lines = compact
+      ? wrapCompactBullets(section.bullets, font, BODY_SIZE, CONTENT_WIDTH - 18)
+      : regularSections[sectionIndex]!;
+    for (const line of lines) {
+      if (cursor.y - LINE_HEIGHT < MIN_CONTENT_Y) cursor = onNewPage();
+      cursor.page.drawText(line, {
+        x: SIDE_MARGIN + 14,
+        y: cursor.y,
+        size: BODY_SIZE,
+        font,
+        color: INK,
+      });
+      cursor.y -= LINE_HEIGHT;
     }
+    cursor.y -= 2;
     cursor.y -= SECTION_GAP;
   }
   return cursor;

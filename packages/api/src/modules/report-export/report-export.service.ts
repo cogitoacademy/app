@@ -27,6 +27,7 @@ import {
 import {
   createStudentReportPdf,
   type StudentReportPdfEntry,
+  type StudentReportPdfModel,
 } from "./report-export.pdf";
 import { reportDateWindow } from "./report-export.window";
 import { hasChargeableFeedbackEntitlement } from "../booking/booking.repo";
@@ -169,7 +170,6 @@ function classMetadata(row: {
   endAt: Date;
   sessionTitle: string;
   sequenceNumber: number;
-  topic: string | null;
 }) {
   return [
     { label: "Competition", value: text(row.competition, "Academy class") },
@@ -184,11 +184,11 @@ function classMetadata(row: {
       label: "Class type",
       value: row.classKind === "cohort" ? "Cohort" : "Masterclass",
     },
-    { label: "Topic", value: text(row.topic, row.sessionTitle) },
+    { label: "Topic", value: text(row.sessionTitle, "Academy session") },
     { label: "Cohort / class", value: text(row.classTitle, "Academy class") },
     {
       label: "Session",
-      value: `Session ${row.sequenceNumber}: ${text(row.sessionTitle, "Untitled session")}`,
+      value: `Session ${row.sequenceNumber}`,
     },
   ];
 }
@@ -202,8 +202,10 @@ function isLegacyReport(sections: ReturnType<typeof reportSections>) {
 export function createReportExportService(deps: {
   db: DbType;
   clock?: () => Date;
+  pdfRenderer?: (model: StudentReportPdfModel) => Promise<Uint8Array>;
 }) {
   const clock = deps.clock ?? (() => new Date());
+  const pdfRenderer = deps.pdfRenderer ?? createStudentReportPdf;
 
   async function loadStudentReports(studentId: string) {
     return deps.db.transaction(async (tx) => {
@@ -396,7 +398,6 @@ export function createReportExportService(deps: {
           tutorName: user.name,
           sessionTitle: academyClassSession.titleEn,
           sequenceNumber: academyClassSession.sequenceNumber,
-          topic: academyClassSession.curriculumEn,
           discussion: academyClassSessionReport.discussion,
           strengths: academyClassSessionReport.strengths,
           improvements: academyClassSessionReport.improvements,
@@ -481,7 +482,7 @@ export function createReportExportService(deps: {
   async function generatePdf(studentId: string): Promise<Uint8Array | null> {
     const data = await loadStudentReports(studentId);
     if (!data || data.reports.length === 0) return null;
-    return createStudentReportPdf(data);
+    return pdfRenderer(data);
   }
 
   return { getSummary, generatePdf };

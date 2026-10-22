@@ -1,5 +1,13 @@
 # Cogito API Reference
 
+## Report PDF metadata follow-up (22 October 2026)
+
+The private report summary/download contract is unchanged. Academy `Topic` in
+the PDF uses the scheduled session title and `Session` its sequence number;
+curriculum text is not exported as metadata. Eligibility has parent PostgreSQL
+coverage (1 test / 16 assertions); HTTP authorization/header checks remain
+covered separately. Placeholder branding remains provisional.
+
 ## Classes presentation (22 October 2026)
 
 The UI reuses `classes/list`, `classes/get`, `classes/getMyEnrollments`,

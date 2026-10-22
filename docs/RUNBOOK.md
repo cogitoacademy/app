@@ -1,5 +1,37 @@
 # Cogito Runbook
 
+## Report PDF parent checks (22 October 2026)
+
+Focused route/access/window/layout/rate-limit checks pass 29 tests / 104
+assertions. Web and server typechecks pass; a full server `bun run build`
+(tsdown) passes with the embedded font. The layout regression rerun after
+preserving ordinary/legacy line breaks passes 4 tests / 8 assertions. Rendered
+normal, dense-bullet and long-metadata samples were visually inspected.
+
+The non-reset test command below passed 1 test / 16 assertions after starting
+the existing isolated PostgreSQL container. Its runtime preflight requires
+`NODE_ENV=test`, exact loopback `6769/cogito-test`, no reset flags and a matching
+database readback. Fixtures are run-owned and removed individually; no reset,
+seed, migration or production/provider call occurred.
+
+```powershell
+bun --smol --env-file=C:/.Projects/cogito-app/tmp/v3-dev/.env.signup-parent test --timeout 30000 packages/api/src/tests/integration/report-export.test.ts
+```
+
+Synthetic Chromium download checks pass 3 journeys (11.7s): student self,
+admin student selection, empty state and tutor UI denial. Auth and API responses
+are mocked, so these complement the PostgreSQL and HTTP authorization tests.
+Run from `packages/e2e`:
+
+```powershell
+bun run test --config=playwright.classes-layout.config.ts --grep 'private report|explicit empty'
+```
+
+The cold first run timed out on initial Vite load; its retry used the warmed
+cache and bounded 60-second navigation budget. A filename expectation was fixed
+to match the UI's dated download name. Final brand approval, deployed/runtime
+and client acceptance remain open.
+
 ## Classes UI acceptance (22 October 2026)
 
 Run the synthetic, database-free UI suite from `packages/e2e`:
