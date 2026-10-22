@@ -13,7 +13,8 @@ The previous charge is reused, with one fee/reward and immutable audit history;
 tutors cannot convert a terminal solo no-show and penalty alone earns nothing.
 
 Migration 0071 is applied only to guarded loopback 6769/cogito-test, without a
-reset/seed. Real deadlock/cap/replay and role tests plus retry units pass 4 / 18;
+reset/seed. Real deadlock/cap/replay, saved-term/no-code and role tests plus retry
+units pass 5 / 26;
 the complete on-demand admin report suite passes 12 / 118 including the solo
 no-show reward and entitlement regression. Dev/production migration, OAuth
 browser acceptance and the separate KOL commission workflow remain open.

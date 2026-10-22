@@ -34,6 +34,7 @@ if (
 
 const ownedUsers: string[] = [];
 let settingsId = "";
+const extraSettingsIds: string[] = [];
 const completedAt = new Date("2100-01-15T00:00:00Z");
 const walletService = createWalletService(createWalletRepo(), db);
 const referral = createReferralService({
@@ -45,15 +46,13 @@ const referral = createReferralService({
 
 async function student() {
   const id = crypto.randomUUID();
-  await db
-    .insert(user)
-    .values({
-      id,
-      name: "Referral concurrency fixture",
-      email: `referral-${id}@cogito.test`,
-      role: "student",
-      emailVerified: true,
-    });
+  await db.insert(user).values({
+    id,
+    name: "Referral concurrency fixture",
+    email: `referral-${id}@cogito.test`,
+    role: "student",
+    emailVerified: true,
+  });
   ownedUsers.push(id);
   return id;
 }
@@ -115,7 +114,9 @@ afterAll(async () => {
   if (settingsId)
     await db
       .delete(referralSettingsRevision)
-      .where(eq(referralSettingsRevision.id, settingsId));
+      .where(
+        inArray(referralSettingsRevision.id, [settingsId, ...extraSettingsIds]),
+      );
   const wallets = await db
     .select({ id: wallet.id })
     .from(wallet)
@@ -131,6 +132,57 @@ afterAll(async () => {
 });
 
 describe("referral completion concurrency and current roles", () => {
+  test("saved signup terms survive settings changes and no code grants no welcome", async () => {
+    const referrer = await student();
+    const oldSignup = await attribution(referrer);
+    expect((await walletService.getByUserId(db, oldSignup))?.totalBalance).toBe(
+      15,
+    );
+    const [latest] = await db
+      .select({
+        version: sql<number>`max(${referralSettingsRevision.version})::int`,
+      })
+      .from(referralSettingsRevision);
+    const [changed] = await db
+      .insert(referralSettingsRevision)
+      .values({
+        version: latest!.version + 1,
+        welcomeMarks: 20,
+        friendRewardMarks: 20,
+        semesterCapMarks: 20,
+        effectiveAt: completedAt,
+        changedBy: ownedUsers[0]!,
+        reason: "Run-owned saved terms regression",
+      })
+      .returning({ id: referralSettingsRevision.id });
+    extraSettingsIds.push(changed!.id);
+    const newSignup = await attribution(referrer);
+    expect((await walletService.getByUserId(db, newSignup))?.totalBalance).toBe(
+      20,
+    );
+    const oldReward = await settlementTransaction(db, (tx) =>
+      referral.recordEligibleFirstCompletion(tx, completion(oldSignup)),
+    );
+    expect(oldReward?.rewardMarksSnapshot).toBe(15);
+    expect(oldReward?.creditedMarks).toBe(15);
+    const newChoice = await db
+      .select()
+      .from(referralChoice)
+      .where(eq(referralChoice.userId, newSignup));
+    expect(newChoice[0]?.friendRewardMarksSnapshot).toBe(20);
+    const noCode = await student();
+    const none = await db.transaction((tx) =>
+      referral.applyEmailSignupChoice(tx, { userId: noCode }),
+    );
+    expect(none?.kind).toBe("none");
+    expect(none?.welcomeMarksSnapshot).toBe(0);
+    expect(await walletService.getByUserId(db, noCode)).toBeNull();
+    // Remove this test's revision so later cap tests use their 15-Mark terms.
+    await db
+      .delete(referralSettingsRevision)
+      .where(eq(referralSettingsRevision.id, changed!.id));
+  });
+
   test("does not issue a new reward after either participant stops being a student", async () => {
     const referrer = await student();
     const referred = await attribution(referrer);
@@ -161,13 +213,11 @@ describe("referral completion concurrency and current roles", () => {
     const a = await attribution(referrer);
     const b = await attribution(referrer);
     const referrerWallet = await walletService.getOrCreate(referrer);
-    await db
-      .insert(referralSemesterUsage)
-      .values({
-        referrerUserId: referrer,
-        semesterKey: "2100-H1",
-        creditedMarks: 0,
-      });
+    await db.insert(referralSemesterUsage).values({
+      referrerUserId: referrer,
+      semesterKey: "2100-H1",
+      creditedMarks: 0,
+    });
     let walletLocked!: () => void;
     let usageLocked!: () => void;
     const hasWallet = new Promise<void>((resolve) => {

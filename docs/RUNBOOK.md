@@ -13,7 +13,8 @@ bun --smol --env-file=C:/.Projects/cogito-app/tmp/v3-dev/.env.signup-parent test
 bun --smol --env-file=C:/.Projects/cogito-app/tmp/v3-dev/.env.signup-parent test --timeout 30000 packages/api/src/tests/integration/booking-admin-reports.test.ts
 ```
 
-The first command passes 4 tests / 18 assertions: a forced real wallet/usage
+The first command passes 5 tests / 26 assertions: saved signup terms survive a
+15-to-20 Mark revision and no code grants no welcome; a forced real wallet/usage
 deadlock is retried, both completions stay within the cap, exhausted zero-credit
 decisions do not replay in another semester, and promoted participants receive
 no new reward. Retry-unit coverage bounds repeated deadlocks and rejects retries

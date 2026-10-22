@@ -5,7 +5,8 @@
 Deadlock-safe report transaction retry, locked current-role validation and
 audited solo student-no-show delivery are implemented. Migration 0071 is applied
 only to test 6769/cogito-test. PostgreSQL deadlock/cap/role/replay plus helper
-checks pass 4 / 18; complete admin booking-report regressions pass 12 / 118,
+checks plus saved-term/no-code regressions pass 5 / 26; complete admin
+booking-report regressions pass 12 / 118,
 including no second charge and one fee/reward for confirmed solo delivery.
 Guarded class enrollment/lifecycle/report regressions pass 44 / 354; web and
 server typechecks pass after the fixes.
