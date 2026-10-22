@@ -32,6 +32,22 @@ cache and bounded 60-second navigation budget. A filename expectation was fixed
 to match the UI's dated download name. Final brand approval, deployed/runtime
 and client acceptance remain open.
 
+## E2E strict-mode environment (22 October 2026)
+
+`bun run test:e2e` runs Playwright through Turbo's strict environment filtering.
+`packages/e2e/turbo.json` allowlists the E2E runtime variables for that package;
+keep `WEB_URL` and `WEB_PORT` together. CI's generated `apps/server/.env.test`
+contains `WEB_PORT=3200` but omits `WEB_URL`, so dotenv cannot restore the URL
+if Turbo has filtered it from the parent environment. The resolver must keep
+rejecting non-loopback URLs and URL/port mismatches. `playwright test --list`
+loads the configuration and discovers tests without starting servers or
+running global setup. With the CI loopback environment set, check the same
+Turbo task from the repository root without starting a database or browser:
+
+```powershell
+.\node_modules\.bin\turbo.exe run test --filter=@cogito-app/e2e --env-mode=strict -- --list
+```
+
 ## Report PDF and admin picker rereview (22 October 2026)
 
 The admin report picker passes `role: "student"` to the search RPC, which

@@ -95,6 +95,15 @@ was 3.28 MB (tsdown 0.22.14, Rolldown 1.2.3). Guarded database, authenticated
 browser, full typecheck, server tsdown/Docker build and deployment acceptance
 remain with the parent.
 
+### E2E CI environment forwarding (22 October)
+
+The root E2E command runs through Turbo's strict environment mode. The
+`@cogito-app/e2e` task now explicitly allows the variables used by Playwright
+and its test servers, including `WEB_URL` and `WEB_PORT`. CI writes the port to
+`apps/server/.env.test` but does not write the URL; dotenv loads after Turbo's
+filtering, so both values must be preserved as ambient task environment. The
+loopback URL and matching-port checks remain unchanged.
+
 ## REQ-REPORT-02/03 on-demand booking report review-fix continuation (2026-10-22)
 
 The on-demand solo/group/series admin report source milestone is applied to

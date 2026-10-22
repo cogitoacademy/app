@@ -625,26 +625,33 @@ work or change quotation/dates merely because the dependency order changed.
 ## T07 private report PDF CI follow-up (22 October 2026)
 
 PR #310 (`f/v3-private-report-pdf` -> `f/release-v3`) is ready for review.
-Manual workflow run [#39782309325](https://github.com/cogitoacademy/app/actions/runs/39782309325)
-on `f9ce4ac` passed Build, Type Check and Lint; Test + Coverage and E2E failed.
-The ~71% coverage reading came from a run with 82 failed tests and 3 errors,
-mostly because the workflow used `localhost:5432`, rejected by the shared DB
-guard; it is a failed-test measurement, not proof of a prior 100% baseline or of
-a coverage regression. The workflow now maps the main disposable Postgres
-container to `6769:5432` and a
-separate payout container to `6770:5432`. Test + Coverage migrates both
-databases separately, runs `booking-payout-g16.test.ts` only with exact
-`cogito-test-payout:6770`, and keeps reset overrides absent for the three
-fixture-owned report suites. Reset consent is limited to commands targeting
-the matching per-run disposable database. Their LCOV reports are merged before
-the unchanged 100% coverage gate. A focused merger test checks
+Manual run [#39782309325](https://github.com/cogitoacademy/app/actions/runs/39782309325)
+on `f9ce4ac` had Build, Type Check and Lint pass; Test + Coverage and E2E failed.
+Its ~71% coverage reading included 82 failed tests and 3 errors, mostly because
+the workflow used `localhost:5432`, rejected by the shared DB guard. It was not
+evidence of a 100% baseline or a coverage regression. The workflow now maps the
+main disposable Postgres container to `6769:5432` and a separate payout
+container to `6770:5432`. Coverage migrates both databases separately, runs
+`booking-payout-g16.test.ts` only on exact `cogito-test-payout:6770`, and keeps
+reset overrides absent for the fixture-owned report suites. Reset consent is
+limited to matching per-run disposable databases. Their LCOV reports are merged
+before the unchanged 100% coverage gate. The merger test checks
 line/function/branch unions and rejects missing, empty, or recordless profiles.
-E2E also maps Redis to `6381:6379` and sets
-the full T05 target tuple so global setup selects a fresh run-scoped student.
-No guards, threshold or coverage exclusions changed. The separate unit-fix
-commit `43a3c5cc` corrects two stale report assertions. After pushing these commits, dispatch the CI workflow once manually;
-the PR base does not automatically start it. No local database, seed, reset or browser run is part
-of this config fix.
+E2E also maps Redis to `6381:6379` and sets the full T05 target tuple for its
+run-scoped student.
+
+Run [#39791177764](https://github.com/cogitoacademy/app/actions/runs/39791177764)
+on `a78528e` completed with Build, Type Check and Lint passing. The coverage
+test command, merger test and separate server unit tests passed, but the
+unchanged gate failed at 29.3% API lines, 29.8% overall lines and 30.4% overall
+functions against 100%. E2E failed before test discovery: strict Turbo filtering
+removed ambient `WEB_URL`, while `.env.test` loaded `WEB_PORT=3200`; the resolver
+correctly rejected the default-URL/port mismatch. `packages/e2e/turbo.json` now
+allowlists the E2E task's runtime environment without loosening the resolver.
+The 100% thresholds and LCOV implementation remain unchanged. After pushing,
+dispatch the workflow once manually because the PR base does not start it.
+No local database, seed, reset, migration, provider or browser test is part of
+this config fix.
 
 ## T07 on-demand booking report continuation (2026-10-22)
 
