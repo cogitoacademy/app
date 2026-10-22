@@ -95,6 +95,8 @@ import type { PublicContentHandler } from "./modules/public-content";
 import type { FaqHandler } from "./modules/faq/faq.handler";
 import type { ContactService } from "./modules/contact/contact.service";
 import type { ContactHandler } from "./modules/contact/contact.handler";
+import { createReportExportModule } from "./modules/report-export";
+import type { ReportExportService } from "./modules/report-export";
 
 export interface ServiceRegistry {
   audit: AuditPort;
@@ -125,6 +127,7 @@ export interface ServiceRegistry {
   faq: FaqService;
   meeting: MeetingModule;
   contact: ContactService;
+  reportExport: ReportExportService;
 }
 
 export interface HandlerRegistry {
@@ -437,6 +440,7 @@ function createServices() {
     notification: notification.service,
     appBaseUrl: env.CORS_ORIGIN,
   });
+  const reportExport = createReportExportModule({ db });
 
   const adminBooking = createAdminBookingModule({
     db,
@@ -500,6 +504,7 @@ function createServices() {
     faq: faq.service,
     meeting,
     contact: contact.service,
+    reportExport: reportExport.service,
   };
 
   const handlers: HandlerRegistry = {

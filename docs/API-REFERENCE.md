@@ -17,6 +17,43 @@ history, consumption of only the owned booking hold, and no repeat settlement
 on correction. Migration 0070 is applied to local test/dev; production is separate.
 The endpoint and service contracts below are unchanged by these fixture repairs.
 
+## Private student report export (22 October 2026)
+
+These are authenticated Elysia HTTP routes, not oRPC procedures. Both accept a
+direct JSON body (`{ "studentId"?: string }`), not the oRPC `json` envelope. A
+student may omit `studentId` and exports only their own reports; a supplied ID
+must match the signed-in student. Admins must select a student ID. Tutors and
+other roles are denied. Student IDs stay in the POST body, not the URL; summary
+returns count/date metadata only, never the student name or report text. Both
+routes are limited to 10 requests per minute and return
+`Cache-Control: private, no-store`.
+
+### `POST /reports/student/summary`
+
+- **Auth:** Signed-in student (self only) or admin (selected student required).
+- **Input:** `{ studentId? }`.
+- **Output:** `{ reportCount, periodStart, generatedAt, timezone: "Asia/Jakarta" }`;
+  date values are ISO timestamps.
+- **Rules:** Counts eligible reports in the read-only repeatable-read snapshot.
+  Eligibility is based on the scheduled WIB date from the same calendar day
+  three months before generation through the generation instant, inclusive. An
+  unknown/non-student target returns 404; missing admin selection returns 400;
+  unauthorized roles/targets return 403.
+
+### `POST /reports/student/pdf`
+
+- **Auth/Input:** Same as the summary route.
+- **Output:** `application/pdf` attachment with generic filename
+  `student-session-reports.pdf`; returns 204 when there are no eligible reports.
+- **Rules:** Newest scheduled report first with report ID as a stable tie-break.
+  Private solo/group reports require the exact student's chargeable feedback
+  entitlement, including Q06 no-show ledger cases; a delivered series child
+  remains eligible after parent cancellation. Cohort/masterclass reports require
+  the selected student's funded, charged session allocation. The PDF carries
+  the live student name, session/tutor/class metadata, all three feedback
+  sections, WIB generation date and page numbering. The bundled font and
+  placeholder Cogito header need no runtime remote assets.
+
 
 ## Ongoing experience UI (22 October 2026)
 

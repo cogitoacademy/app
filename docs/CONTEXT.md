@@ -30,8 +30,36 @@ A local pre-migration dump is retained under ignored
 `tmp/v3-dev/checkpoint/cogito-pre-0070-20261022.dump`. Development booking (34),
 ledger (89), and feedback (2) counts are unchanged; history starts empty. No dev
 reset/seed, production migration, or live provider action ran. Test history is
-retained under run-scoped identities. PDF and broader legacy reminders remain open.
+retained under run-scoped identities. The private PDF source implementation is
+now authored in this isolated continuation; focused/unit/privacy checks and a
+rendered sample pass. Database/browser/deployment acceptance and broader legacy
+reminder coverage remain open.
 This acceptance supersedes older source-only/unapplied/pending-browser notes below.
+
+## T07 private student report PDF source implementation (2026-10-22)
+
+The isolated report-export module adds student self-download and an admin flow
+that requires selecting a student. Tutors cannot export arbitrary student data.
+It reads completed private solo/group reports, completed series children even
+after parent cancellation, and delivered cohort/masterclass reports with the
+selected student's funded and charged allocation. Exact private-booking ledger
+entitlement follows Q06; legacy feedback is decoded using report history. Data
+is read in one read-only repeatable-read snapshot, filtered from the same WIB
+calendar day three months ago through the captured generation instant, and
+sorted newest scheduled first with report-ID tie breaking.
+
+The Selia report workspace shows the student's live name, report count, and an
+explicit empty state. PDFs use a bundled DejaVu Sans font and a placeholder
+Cogito header, include live tutor/session metadata, preserve long legacy text on
+continuation pages, and have WIB generation date/page numbering. Focused export
+tests pass 9 tests / 31 expectations; rate-limit routing passes 18 / 67. The
+combined focused run passes 27 tests / 98 expectations. A seven-page sample was
+rendered and visually checked, including a three-field 600-character single-page
+case and long legacy continuation. No database, browser, migration, reset, seed,
+full compiler or provider check ran in this source slice. The focused Bun bundle emitted one
+3.16 MB JavaScript entry with the 1,008,096-byte font embedded and no separate
+font asset. Guarded database, authenticated browser, full typecheck, server
+tsdown/Docker bundle and deployment acceptance remain with the parent.
 
 ## REQ-REPORT-02/03 on-demand booking report review-fix continuation (2026-10-22)
 
@@ -681,8 +709,10 @@ submitted/corrected history event, and `legacy_snapshot` events, are decoded
 exactly once on read. New versioned text is never unescaped; legacy content is
 not backfilled or truncated and may exceed the current 600-codepoint input cap.
 Class report settlement is implemented in the T07 backend. The role-based report
-workspace is documented below; PDF and broader legacy reminder coverage remain
-pending. On-demand booking reports are in the isolated source continuation above.
+workspace is documented below; private PDF source implementation and its focused
+render checks are recorded in the current checkpoint above. Guarded database,
+browser and deployment-bundle acceptance plus broader legacy reminder coverage
+remain pending. On-demand booking reports are in the isolated source continuation above.
 Focused report + booking regression: 295 tests pass; web typecheck passes.
 
 ## V3 class session reports and payout identity (2026-10-21)
@@ -709,7 +739,9 @@ wallet, allocation, ledger, fee, report and session facts across reminder writes
 Whole-class cancellation leaves a retained past scheduled session eligible until
 its report is submitted; cancelled/completed sessions and completed classes stop.
 The legacy solo/group/series reminder policy is unchanged and broader coverage is
-still pending. PDF remains open. Tutor, admin, and student browser acceptance
+still pending. PDF source, focused tests and rendered sample are recorded in the
+current checkpoint above; parent DB/browser/deployment acceptance remains open.
+Tutor, admin, and student browser acceptance
 passes against real RPCs, as do web and E2E no-emit typechecks from the earlier
 report implementation checkpoint. This reminder verification used no browser,
 live email or external provider and required no migration.
@@ -2184,7 +2216,7 @@ file are the permanent record; plan-file archives are not maintained.
 
 | Plan                                                  | Status                                                                                                                                                                                                                                                                                                                                                                        |
 | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `docs/plans/active/RELEASE-V3-PRD.md` + SPEC/TASKS    | `RELEASE-V3-TASKS.md` is the current status authority. T03 tax/payout, T05 enrollment, the integrated T06 core lifecycle, and T07 class report settlement/reminders have focused evidence; the T07 reminder worker is integrated at 1f9b6dd7 and parent-verified (44 PostgreSQL tests / 354 expectations; pure reminders 7 / 25); no development seed or migration ran in that checkpoint. T07 on-demand booking admin reports/corrections are verified in PR #305: 42 tests / 218 assertions plus one real-RPC Chromium journey. Migration 0070 is applied to guarded test and local dev; production rollout is separate. PDF and broader legacy solo/group/series reminder coverage remain open. T04, T08, T10, T11 and overall release acceptance remain in progress; T09/T12 and OPS01 are open. |
+| `docs/plans/active/RELEASE-V3-PRD.md` + SPEC/TASKS    | `RELEASE-V3-TASKS.md` is the current status authority. T03 tax/payout, T05 enrollment, the integrated T06 core lifecycle, and T07 class report settlement/reminders have focused evidence; the T07 reminder worker is integrated at 1f9b6dd7 and parent-verified (44 PostgreSQL tests / 354 expectations; pure reminders 7 / 25); no development seed or migration ran in that checkpoint. T07 on-demand booking admin reports/corrections are verified in PR #305: 42 tests / 218 assertions plus one real-RPC Chromium journey. Migration 0070 is applied to guarded test and local dev; production rollout is separate. Private PDF source, combined export and rate-limit checks: 27 tests / 98 expectations and a rendered seven-page sample are recorded in the current isolated checkpoint; DB/browser/deployment acceptance and broader legacy solo/group/series reminder coverage remain open. T04, T08, T10, T11 and overall release acceptance remain in progress; T09/T12 and OPS01 are open. |
 | `docs/plans/active/DEFERRED-OPS-TASKS.md`             | Active — code gaps done, §3/§4 operator-console items pending                                                                                                                                                                                                                                                                                                                 |
 | `docs/plans/active/DEPLOYMENT-PLAN.md`                | Active — applied 2026-08-31; remaining scope tracked in the plan                                                                                                                                                                                                                                                                                                              |
 | `docs/plans/active/PAYMENT-INTEGRITY-FLAP.md`         | Active — payment-integrity alert stability                                                                                                                                                                                                                                                                                                                                    |
@@ -2650,7 +2682,7 @@ Student- and admin-facing numeric Marks amounts use the shared `CogitoMarks` com
 
 ### T07 integrated development checkpoint (21 October)
 
-Report workspace, class settlement, immutable revisions and class fee payout identity are integrated through `d508467b` on local `f/release-v3`. Development DB 6767 is migrated through 0067 (journal id 88; hash `0510e3bd5f1fd36860b8f289c81db5034b4ba40a2f1527736ea280ea77651037`), with API health and protected report route verified after restart. Isolated acceptance: report journey 1 pass, enrollment 2 passes on each of two runs, web/E2E typechecks passed; the saved DB suite passed 29 tests / 203 assertions. PDF export, on-demand admin correction and remaining T06 lifecycle rules are still open; main is unchanged.
+Report workspace, class settlement, immutable revisions and class fee payout identity are integrated through `d508467b` on local `f/release-v3`. Development DB 6767 is migrated through 0067 (journal id 88; hash `0510e3bd5f1fd36860b8f289c81db5034b4ba40a2f1527736ea280ea77651037`), with API health and protected report route verified after restart. Isolated acceptance: report journey 1 pass, enrollment 2 passes on each of two runs, web/E2E typechecks passed; the saved DB suite passed 29 tests / 203 assertions. At that checkpoint PDF export, on-demand admin correction and remaining T06 lifecycle rules were still open; main was unchanged.
 
 ### T07 pending-report reminder implementation (21 October)
 
@@ -2667,5 +2699,6 @@ submitted reports stop reminders. It does not touch report, delivery, wallet,
 allocation or tutor-fee state. Fake-clock unit tests pass 7 / 25; guarded non-reset
 PostgreSQL regressions pass 3 / 34 on exact loopback `6769/cogito-test`, using
 only owned UUID fixtures. No live email, browser or external provider was used.
-Legacy solo/group/series reminder coverage remains pending. PDF export and the
-dedicated on-demand admin correction workflow remain pending.
+Legacy solo/group/series reminder coverage remains pending. The PDF and dedicated
+on-demand admin correction work were pending at this reminder checkpoint; see
+the current source and acceptance status above.

@@ -982,7 +982,7 @@ async function listCompletionFeedbackHistoryByFeedback(
     .orderBy(asc(sessionCompletionFeedbackHistory.version));
 }
 
-async function hasChargeableFeedbackEntitlement(
+export async function hasChargeableFeedbackEntitlement(
   conn: DbOrTx,
   bookingId: string,
   userId: string,

@@ -39,8 +39,41 @@ A local pre-migration dump is retained under ignored
 `tmp/v3-dev/checkpoint/cogito-pre-0070-20261022.dump`. Development booking (34),
 ledger (89), and feedback (2) counts are unchanged; history starts empty. No dev
 reset/seed, production migration, or live provider action ran. Test history is
-retained under run-scoped identities. PDF and broader legacy reminders remain open.
+retained under run-scoped identities. PDF source and local evidence are recorded
+below; parent DB/browser/deployment acceptance and broader legacy reminders remain open.
 This acceptance supersedes older source-only/unapplied/pending-browser notes below.
+
+## Private report PDF source and local evidence (22 October 2026)
+
+The isolated source adds `/reports/student/summary` and `/reports/student/pdf`.
+Student requests resolve to the authenticated student; admins must choose a
+student from the existing search; tutors are denied. The summary is metadata
+only and the PDF response is private/no-store. The report query uses a read-only
+repeatable-read snapshot, Q06 private-booking entitlement, the charged funded
+class allocation, and WIB calendar-month boundaries. The header uses the
+authorized placeholder while branding assets are unavailable.
+
+Focused source checks run from the worktree root:
+
+```powershell
+bun test --timeout 30000 packages/api/src/tests/unit/report-export.access.test.ts packages/api/src/tests/unit/report-export.pdf.test.ts packages/api/src/tests/unit/report-export.window.test.ts apps/server/src/routes/report-export-routes.test.ts
+bun test --timeout 30000 apps/server/src/rpc-rate-limit.test.ts
+```
+
+The export suite passes 9 tests / 31 expectations, the rate-limit routing suite
+passes 18 / 67, and the combined focused run passes 27 / 98. A seven-page
+fictional-data PDF at `output/pdf/report-export-sample.pdf` was rendered with
+`pdftoppm` and inspected page-by-page. The sample covers solo, group, series,
+cohort and masterclass metadata, a one-page 3 × 600-character feedback report,
+and long Unicode/newline
+legacy text across continuation pages. These are local source-slice results;
+the focused `bun build packages/api/src/modules/report-export/report-export.pdf.ts
+--target=bun --outdir tmp/pdfs/bundle-check` check emitted one 3.16 MB JavaScript
+entry containing the 1,008,096-byte font and no separate JSON/font asset. This
+does not replace the parent-owned server tsdown/Docker check. The parent also
+owns guarded database/entitlement coverage, authenticated student/admin browser
+flows, and full web/API/server typechecks. No database, browser, migration,
+reset, seed or provider call was run for the PDF slice.
 
 ## Ongoing experience smoke check (22 October 2026)
 
