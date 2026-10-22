@@ -127,6 +127,7 @@ export default function SignUpForm({
       email: "",
       password: "",
       name: "",
+      referralCode: "",
     },
     canSubmitWhenInvalid: true,
     onSubmit: async ({ value }) => {
@@ -150,6 +151,7 @@ export default function SignUpForm({
             name: value.name.trim(),
             otp,
             signupAttemptId,
+            referralCode: value.referralCode.trim() || null,
           }),
         });
 
@@ -427,6 +429,33 @@ export default function SignUpForm({
                     {error}
                   </FieldError>
                 ))}
+              </Field>
+            )}
+          </form.Field>
+
+          <form.Field name="referralCode">
+            {(field) => (
+              <Field>
+                <FieldLabel htmlFor={field.name}>
+                  Referral code (optional)
+                </FieldLabel>
+                <Input
+                  id={field.name}
+                  name={field.name}
+                  placeholder="Enter one code"
+                  autoComplete="off"
+                  autoCapitalize="characters"
+                  maxLength={32}
+                  value={field.state.value}
+                  onBlur={field.handleBlur}
+                  onChange={(event) => {
+                    setOtpError("");
+                    field.handleChange(event.target.value);
+                  }}
+                />
+                <FieldDescription>
+                  A valid friend or KOL code may add a signup reward.
+                </FieldDescription>
               </Field>
             )}
           </form.Field>

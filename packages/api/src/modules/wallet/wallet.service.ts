@@ -97,7 +97,7 @@ export interface WalletPort {
   compensate(db: DbOrTx, params: CompensateParams): Promise<WalletSnapshot>;
   getById(db: DbOrTx, walletId: string): Promise<WalletSnapshot | null>;
   getByUserId(db: DbOrTx, userId: string): Promise<WalletSnapshot | null>;
-  getOrCreate(userId: string): Promise<WalletSnapshot>;
+  getOrCreate(userId: string, conn?: DbOrTx): Promise<WalletSnapshot>;
   sumCreditedMarks(db: DbOrTx, walletId: string): Promise<number>;
   listLedger(
     walletId: string,
@@ -166,17 +166,20 @@ export function createWalletService(
    * @returns the user's wallet snapshot with zeroed balances when newly created
    * @throws {WalletNotFoundError} if the wallet cannot be created or found after an upsert race
    */
-  async function getOrCreate(userId: string): Promise<WalletSnapshot> {
-    const existing = await repo.getByUserId(db, userId);
+  async function getOrCreate(
+    userId: string,
+    conn: DbOrTx = db,
+  ): Promise<WalletSnapshot> {
+    const existing = await repo.getByUserId(conn, userId);
     if (existing) return existing;
-    const created = await repo.upsert(db, {
+    const created = await repo.upsert(conn, {
       userId,
       totalBalance: 0,
       heldBalance: 0,
       availableBalance: 0,
     });
     if (created) return created;
-    const afterConflict = await repo.getByUserId(db, userId);
+    const afterConflict = await repo.getByUserId(conn, userId);
     if (!afterConflict) throw new WalletNotFoundError(userId);
     return afterConflict;
   }

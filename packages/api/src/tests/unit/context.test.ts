@@ -7,6 +7,7 @@ describe("refreshSessionUser (N4)", () => {
     const findFirst = mock(async () => ({
       role: "student",
       emailVerified: true,
+      referralChoicePending: false,
     }));
     const sessionUser = {
       id: "u1",
@@ -14,6 +15,7 @@ describe("refreshSessionUser (N4)", () => {
       name: "Student",
       role: "student",
       emailVerified: false,
+      referralChoicePending: true,
     };
 
     await refreshSessionUser(
@@ -23,10 +25,15 @@ describe("refreshSessionUser (N4)", () => {
 
     expect(findFirst).toHaveBeenCalledTimes(1);
     expect(findFirst.mock.calls[0]![0]).toMatchObject({
-      columns: { role: true, emailVerified: true },
+      columns: {
+        role: true,
+        emailVerified: true,
+        referralChoicePending: true,
+      },
     });
     expect(sessionUser.role).toBe("student");
     expect(sessionUser.emailVerified).toBe(true);
+    expect(sessionUser.referralChoicePending).toBe(false);
   });
 
   test("keeps the cookie values when the DB row is missing", async () => {
@@ -37,6 +44,7 @@ describe("refreshSessionUser (N4)", () => {
       name: "Student",
       role: "student",
       emailVerified: false,
+      referralChoicePending: true,
     };
 
     await refreshSessionUser(
@@ -46,12 +54,14 @@ describe("refreshSessionUser (N4)", () => {
 
     expect(sessionUser.emailVerified).toBe(false);
     expect(sessionUser.role).toBe("student");
+    expect(sessionUser.referralChoicePending).toBe(true);
   });
 
   test("overwrites a stale cached emailVerified with the DB value", async () => {
     const findFirst = mock(async () => ({
       role: "tutor",
       emailVerified: true,
+      referralChoicePending: false,
     }));
     const sessionUser = {
       id: "u1",
@@ -59,6 +69,7 @@ describe("refreshSessionUser (N4)", () => {
       name: "Student",
       role: "student",
       emailVerified: false,
+      referralChoicePending: true,
     };
 
     await refreshSessionUser(
@@ -85,6 +96,7 @@ describe("createContext (N4 wiring)", () => {
     const findFirst = mock(async () => ({
       role: "student",
       emailVerified: true,
+      referralChoicePending: false,
     }));
 
     const ctx = await createContext(
@@ -101,6 +113,7 @@ describe("createContext (N4 wiring)", () => {
     expect(getSession).toHaveBeenCalledTimes(1);
     expect(findFirst).toHaveBeenCalledTimes(1);
     expect(ctx.session!.user.emailVerified).toBe(true);
+    expect(ctx.session!.user.referralChoicePending).toBe(false);
     expect(ctx.services).toBeDefined();
     expect(ctx.headers.get("cookie")).toBe("better-auth.session_token=abc");
   });

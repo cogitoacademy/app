@@ -22,12 +22,37 @@ export const requireAuth = o.middleware(async ({ context, next }) => {
   });
 });
 
+export function assertReferralChoiceSaved(user: CogitoUser) {
+  if (user.role === USER_ROLE.STUDENT && user.referralChoicePending === true) {
+    throw new ORPCError("FORBIDDEN", {
+      message: "REFERRAL_CHOICE_REQUIRED",
+    });
+  }
+}
+
+export const requireReferralChoiceSaved = o.middleware(
+  async ({ context, next }) => {
+    if (!context.session?.user) {
+      throw new ORPCError("UNAUTHORIZED");
+    }
+    assertReferralChoiceSaved(context.session.user as CogitoUser);
+    return next({
+      context: {
+        session: context.session,
+        services: context.services,
+        headers: context.headers,
+      },
+    });
+  },
+);
+
 export const requireEmailVerified = o.middleware(async ({ context, next }) => {
   if (!context.session?.user) {
     throw new ORPCError("UNAUTHORIZED");
   }
 
   const user = context.session.user as CogitoUser;
+  assertReferralChoiceSaved(user);
   if (!user.emailVerified) {
     throw new ORPCError("FORBIDDEN", { message: "EMAIL_NOT_VERIFIED" });
   }
@@ -58,7 +83,9 @@ export const requireAdmin = o.middleware(async ({ context, next }) => {
   });
 });
 
-export const protectedProcedure = publicProcedure.use(requireAuth);
+export const protectedProcedure = publicProcedure
+  .use(requireAuth)
+  .use(requireReferralChoiceSaved);
 export const verifiedProcedure = protectedProcedure.use(requireEmailVerified);
 export const adminProcedure = publicProcedure.use(requireAdmin);
 
@@ -70,6 +97,7 @@ export const requireStudent = o.middleware(async ({ context, next }) => {
   if (user.role !== USER_ROLE.STUDENT) {
     throw new ORPCError("FORBIDDEN", { message: "Student access required" });
   }
+  assertReferralChoiceSaved(user);
   return next({
     context: {
       session: context.session,
@@ -95,6 +123,7 @@ export const requireVerifiedStudent = o.middleware(
     if (user.role !== USER_ROLE.STUDENT) {
       throw new ORPCError("FORBIDDEN", { message: "Student access required" });
     }
+    assertReferralChoiceSaved(user);
     if (user.emailVerified !== true) {
       throw new ORPCError("FORBIDDEN", {
         message: "Email verification required",

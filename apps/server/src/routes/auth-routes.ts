@@ -204,6 +204,7 @@ export function registerAuthRoutes(app: Elysia) {
           name: parsed.name,
           otp: parsed.otp,
           signupAttemptId: parsed.signupAttemptId,
+          referralCode: parsed.referralCode,
           headers: request.headers,
         });
         return result.ok

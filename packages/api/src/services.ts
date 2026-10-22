@@ -40,6 +40,7 @@ import type { FaqService } from "./modules/faq/faq.service";
 import { createSupportModule } from "./modules/support";
 import { createUploadModule } from "./modules/upload";
 import { createContactModule } from "./modules/contact";
+import { createReferralModule } from "./modules/referral";
 import { createStorage } from "./lib/storage";
 import type { MidtransMode } from "./modules/payment/midtrans-payment.provider";
 
@@ -95,6 +96,8 @@ import type { PublicContentHandler } from "./modules/public-content";
 import type { FaqHandler } from "./modules/faq/faq.handler";
 import type { ContactService } from "./modules/contact/contact.service";
 import type { ContactHandler } from "./modules/contact/contact.handler";
+import type { ReferralService } from "./modules/referral/referral.service";
+import type { ReferralHandler } from "./modules/referral/referral.handler";
 
 export interface ServiceRegistry {
   audit: AuditPort;
@@ -125,6 +128,7 @@ export interface ServiceRegistry {
   faq: FaqService;
   meeting: MeetingModule;
   contact: ContactService;
+  referral: ReferralService;
 }
 
 export interface HandlerRegistry {
@@ -154,6 +158,7 @@ export interface HandlerRegistry {
   publicContent: PublicContentHandler;
   faq: FaqHandler;
   contact: ContactHandler;
+  referral: ReferralHandler;
 }
 
 export interface GoogleMeetConfigInput {
@@ -316,6 +321,11 @@ function createServices() {
     db,
     knowledgeBankAccess: adminKnowledgeBank.service,
   });
+  const referral = createReferralModule({
+    db,
+    wallet: wallet.service,
+    audit: audit.service,
+  });
   const content = createContentModule({
     wallet: wallet.service,
     competitionPalette: competitionCatalog.service,
@@ -369,6 +379,7 @@ function createServices() {
     notification: notification.service,
     meeting,
     roomPort: room.service,
+    referralPort: referral.service,
   });
   bookingService = booking.service;
   const admin = createAdminModule({
@@ -436,6 +447,7 @@ function createServices() {
     payment: payment.service,
     notification: notification.service,
     appBaseUrl: env.CORS_ORIGIN,
+    referralPort: referral.service,
   });
 
   const adminBooking = createAdminBookingModule({
@@ -500,6 +512,7 @@ function createServices() {
     faq: faq.service,
     meeting,
     contact: contact.service,
+    referral: referral.service,
   };
 
   const handlers: HandlerRegistry = {
@@ -529,6 +542,7 @@ function createServices() {
     publicContent: publicContent.handler,
     faq: faq.handler,
     contact: contact.handler,
+    referral: referral.handler,
   };
 
   return { services, handlers, redis };

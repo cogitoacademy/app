@@ -1,5 +1,40 @@
 # Cogito Runbook
 
+## AUTH-02 and friend referral handoff (22 October 2026)
+
+The feature source branch contains Google pending-choice resume, email signup
+attribution, friend welcome/completion credits, student referral display, and
+KOL signup campaign validation/snapshots. It has not generated or applied a
+migration and has not run database, browser, provider, or full compiler checks.
+The parent must add the next additive migration after `0070` for
+`user.referral_choice_pending` and the six referral tables before integrating or
+starting the application against a database. Do not reset or seed a database for
+the unit checks below.
+
+Focused database-free regression commands:
+
+```powershell
+bun test --timeout 30000 apps/server/src/signup-body.test.ts packages/api/src/tests/unit/referral.policy.test.ts packages/api/src/tests/unit/procedures.test.ts packages/api/src/tests/unit/context.test.ts packages/auth/src/index.test.ts
+bun test --timeout 30000 --test-name-pattern Q06 packages/api/src/tests/unit/booking.service.test.ts
+```
+
+The first command passed 46 tests / 101 expectations; the Q06-filtered booking
+command passed 2 tests / 4 expectations. The run used process-scoped dummy auth,
+database and Redis settings pointing at loopback port 1; no DB or Redis
+connection was made. A broader combined run of the whole booking service file
+observed one unrelated failure at `booking.service.test.ts:9547`: an existing
+payout projection expectation wanted bank account `00456`, while the fixture
+returned null. The referral changes do not touch that payout path. The existing
+guarded signup integration suite resets its local test database in `beforeAll`;
+it was not run in this source slice and must wait for parent migration/application
+and the assigned guarded test window. Do not run it with the source-only referral
+schema.
+
+The later KOL slice must add qualifying first-IDR-top-up decisions, partial and
+overpayment transfer history, CSV, audited corrections, and reversal behavior.
+Referral choice/code/terms snapshots from this slice are the attribution seam;
+they do not authorize commission or transfer writes.
+
 ## Classes UI acceptance (22 October 2026)
 
 Run the synthetic, database-free UI suite from `packages/e2e`:

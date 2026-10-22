@@ -78,6 +78,7 @@ const studentNavGroups = [
         icon: IconTimelineEventText,
       },
       { to: "/achievements", label: "Achievements", icon: IconCertificate },
+      { to: "/referrals", label: "My referrals", icon: IconUsers },
     ],
   },
 ] as const;

@@ -1,5 +1,43 @@
 # Cogito Module Reference
 
+## Referral and signup module source milestone (22 October 2026)
+
+`packages/api/src/modules/referral` owns referral choices, settings history,
+student codes, KOL campaign validation/snapshots, and first friend reward
+decisions. `packages/auth/src/index.ts` invokes the email choice writer in the
+verified signup transaction. Its Better Auth user-create hook marks only a new
+Google-created student pending; `packages/api/src/procedures.ts` blocks student
+app APIs until the choice is saved. The authenticated `referral.saveGoogleChoice`
+procedure is the only pending-account resolution path.
+
+Schema: `referral_code` has one global code value and one friend code per
+student or campaign code per KOL campaign; `referral_choice` has one immutable
+choice per user and stores welcome/settings/KOL term snapshots;
+`referral_settings_revision` retains effective-time history;
+`referral_semester_usage` is unique by referrer and WIB half-year; and
+`friend_reward_decision` is unique by referred user and stores positive or zero
+credit decisions. `referral_campaign` stores KOL activation/expiry and terms.
+Signup welcome ledger keys use `referral.signup.<userId>` with the choice ID as
+source reference; friend rewards use `referral.friend.<studentId>` with the
+decision ID as source reference.
+
+Email/Google choice, welcome credit, and choice snapshot share one transaction.
+At completion, booking and class-report modules call the referral port in their
+existing settlement transaction. Only positive-charge deliveries qualify;
+Q06 prior no-show charges qualify after a delivered report, while a penalty-only
+no-show does not. The service locks the referred choice, then the referrer’s
+semester usage row, applies the completion-time cap, writes one decision even
+when zero, and credits a positive reward atomically. Cap exhaustion does not
+roll over or retry, and cap reductions do not reverse existing credits.
+
+Student `referral.getMine` lazily creates a stable friend code and returns the
+active signup settings plus current-semester earned/remaining Marks and end
+date. Admin APIs create audited settings revisions and KOL campaigns. KOL signup
+terms are immutable snapshots, but first-purchase commission, transfers,
+partial/overpayment accounting, CSV, corrections, and reversal handling remain
+unimplemented. The source schema has no migration in this branch; parent
+integration must add one after 0070.
+
 ## Classes UI composition (22 October 2026)
 
 The student catalog uses Selia Card/Field/Input/Button, with one card per class and

@@ -1,5 +1,38 @@
 # Cogito App — Codebase Context
 
+## AUTH-02 and friend referral source milestone (22 October 2026)
+
+This feature branch adds the Google new-student referral choice gate and the
+friend reward path. New Google-created students remain pending until they save
+one valid friend/KOL code or choose no code; the choice page resumes on later
+login and does not request another OTP. Existing-account OAuth reuse is not
+marked pending and cannot receive a new attribution. Email OTP signup passes an
+optional code through the existing account/proof transaction. A valid code
+snapshots signup settings; no code stores an immutable zero-welcome choice.
+
+Friend rewards are decided in the delivered report/settlement transaction for
+positive-charge solo, group, series-child, cohort, and masterclass completions.
+Q06 chargeable no-shows qualify only when the session is delivered and reported;
+a no-show penalty by itself does not. The first eligible decision is unique per
+referred student, including a permanent zero-credit result. A referrer-semester
+row lock enforces the active cap across different referred users. Settings are
+versioned by effective time; saved signup reward terms remain fixed, while the
+completion semester and cap use completion-time settings. The student page
+shows a generated friend code, current semester earned/remaining Marks, and the
+semester end date.
+
+Admin APIs can revise/audit friend settings and create/list KOL campaign codes.
+Signup validates campaign dates and snapshots KOL flat/percentage terms and the
+attribution expiry. KOL first-purchase commission decisions, transfers,
+partial/overpayment accounting, CSV, corrections, and reversal handling remain
+the next slice; campaign creation does not imply a commission or payout.
+
+Schema changes are source-only here: `user.referral_choice_pending` and the six
+referral tables are present, but no migration was generated or applied. The
+parent must add a new additive migration after 0070 and coordinate its normal
+application. This worktree did not run database, browser, or full typecheck
+validation; focused unit commands and their exact outcomes are in RUNBOOK.
+
 ## Classes UI workspace (22 October 2026)
 
 Student `/classes` is a single searchable catalog with Cohort/Masterclass filters,

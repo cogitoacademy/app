@@ -18,6 +18,7 @@ describe("signup request body", () => {
           name: "Student",
           otp: 123456,
           signupAttemptId: "attempt-id",
+          referralCode: "friend2026",
           ignored: "value",
         }),
       ),
@@ -26,6 +27,7 @@ describe("signup request body", () => {
       password: "Test1234!",
       name: "Student",
       signupAttemptId: "attempt-id",
+      referralCode: "friend2026",
     });
   });
 

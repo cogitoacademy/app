@@ -22,6 +22,7 @@ import {
 } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
 import type { WalletService } from "../wallet/wallet.service";
+import type { ReferralService } from "../referral/referral.service";
 import type { NotificationService } from "../notification/notification.service";
 import { completionFeedbackInput } from "../booking/booking.types";
 import { remainingAllocationMarks } from "./class-enrollment.funding";
@@ -78,6 +79,7 @@ export function createClassSessionReportService(deps: {
   db: DbType;
   wallet: Pick<WalletService, "deduct">;
   notification: Pick<NotificationService, "write">;
+  referralPort?: Pick<ReferralService, "recordEligibleFirstCompletion">;
   clock?: () => Date;
 }) {
   const currentTime = () => deps.clock?.() ?? new Date();
@@ -352,6 +354,20 @@ export function createClassSessionReportService(deps: {
             eq(academyClassSession.state, "scheduled"),
           ),
         );
+
+      if (!report && deps.referralPort) {
+        for (const { allocation, amount } of settlement) {
+          // eslint-disable-next-line no-await-in-loop
+          await deps.referralPort.recordEligibleFirstCompletion(tx, {
+            studentId: allocation.studentId,
+            completionType: classRecord.kind as "cohort" | "masterclass",
+            completionId: session.id,
+            completedAt: now,
+            chargedMarks: amount,
+          });
+        }
+      }
+
       const classSessions = await tx
         .select({ state: academyClassSession.state })
         .from(academyClassSession)

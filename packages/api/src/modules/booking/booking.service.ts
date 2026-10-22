@@ -119,6 +119,7 @@ import type {
   BookingNotificationPort,
   BookingMeetingPort,
   BookingRoomPort,
+  BookingReferralPort,
   TutorPayoutReportRow,
   TutorPayoutMutationResult,
   TutorPayoutPreview,
@@ -568,6 +569,7 @@ export function createBookingService(deps: {
   meeting: BookingMeetingPort;
   competitionPalette?: BookingCompetitionPalettePort;
   roomPort?: BookingRoomPort;
+  referralPort?: BookingReferralPort;
 }) {
   const {
     db,
@@ -579,6 +581,7 @@ export function createBookingService(deps: {
     meeting,
     competitionPalette,
     roomPort,
+    referralPort,
   } = deps;
 
   // ── Internal helpers (access, transitions, pricing) ──────────────────────
@@ -2509,12 +2512,36 @@ export function createBookingService(deps: {
       priceSnapshot: b.priceSnapshot,
     });
 
+    const referralCandidates: Array<{
+      studentId: string;
+      chargedMarks: number;
+    }> = [];
     if (b.type === BOOKING_TYPE.GROUP) {
       // After a group repricing the holds live on each remaining
       // participant's wallet (the proposer may have withdrawn and hold 0),
       // so deduct from each confirmed participant individually.
       const participants = await repo.findConfirmedParticipants(tx, bookingId);
+      const noShowAmounts = await repo.findLedgerEventAmounts(
+        tx,
+        bookingId,
+        participants.map((p) =>
+          seriesNoShowEventKey(bookingId, p.userId, "solo"),
+        ),
+      );
       for (const p of participants) {
+        const noShowAmount =
+          noShowAmounts.get(
+            seriesNoShowEventKey(bookingId, p.userId, "solo"),
+          ) ?? 0;
+        if (noShowAmount > 0) {
+          // A delivered group report makes this prior no-show chargeable under
+          // Q06. Do not charge the same participant a second time.
+          referralCandidates.push({
+            studentId: p.userId,
+            chargedMarks: noShowAmount,
+          });
+          continue;
+        }
         if (p.heldAmount <= 0) continue;
         // eslint-disable-next-line no-await-in-loop
         const w = await wallet.getByUserId(tx, p.userId);
@@ -2529,6 +2556,10 @@ export function createBookingService(deps: {
           actorType: ACTOR_TYPE.TUTOR,
           reason: "Session completed",
         });
+        referralCandidates.push({
+          studentId: p.userId,
+          chargedMarks: p.heldAmount,
+        });
       }
     } else {
       const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
@@ -2542,6 +2573,12 @@ export function createBookingService(deps: {
         actorType: ACTOR_TYPE.TUTOR,
         reason: "Session completed",
       });
+      if (b.holdAmount > 0) {
+        referralCandidates.push({
+          studentId: b.proposerId,
+          chargedMarks: b.holdAmount,
+        });
+      }
     }
 
     const updated = await transition(tx, bookingId, BOOKING_STATE.COMPLETED, {
@@ -2559,6 +2596,18 @@ export function createBookingService(deps: {
       feedback,
       audit: reportAudit,
     });
+
+    if (referralPort) {
+      for (const candidate of referralCandidates) {
+        // eslint-disable-next-line no-await-in-loop
+        await referralPort.recordEligibleFirstCompletion(tx, {
+          ...candidate,
+          completionType: b.type === BOOKING_TYPE.GROUP ? "group" : "solo",
+          completionId: bookingId,
+          completedAt: updated.completedAt ?? new Date(),
+        });
+      }
+    }
 
     feeRecord.earnedAt = updated.completedAt ?? new Date();
     await repo.insertTutorSessionFee(tx, feeRecord);
@@ -2638,6 +2687,10 @@ export function createBookingService(deps: {
 
     const isGroupSeries = b.targetGroupSize > 1;
     let deductedHoldAmount = 0;
+    const referralCandidates: Array<{
+      studentId: string;
+      chargedMarks: number;
+    }> = [];
     let residualHeld = 0;
     let proposerWallet: Awaited<ReturnType<BookingWalletPort["getByUserId"]>> =
       null;
@@ -2654,22 +2707,28 @@ export function createBookingService(deps: {
         undefined,
         { forUpdate: true },
       );
-      const noShowKeys = new Set(
-        await repo.findLedgerEventKeys(
-          tx,
-          bookingId,
-          participants.map((p) =>
-            seriesNoShowEventKey(bookingId, p.userId, session.id),
-          ),
+      const noShowAmounts = await repo.findLedgerEventAmounts(
+        tx,
+        bookingId,
+        participants.map((p) =>
+          seriesNoShowEventKey(bookingId, p.userId, session.id),
         ),
       );
       for (const p of participants) {
-        // This session's no-show ledger row proves the allocation was already
-        // charged. Attendance is booking-wide, so never infer other sessions.
-        if (
-          noShowKeys.has(seriesNoShowEventKey(bookingId, p.userId, session.id))
-        )
+        // A delivered child report makes this prior no-show chargeable under
+        // Q06. The keyed charge also keeps one child's attendance from being
+        // inferred for any other series session.
+        const noShowAmount =
+          noShowAmounts.get(
+            seriesNoShowEventKey(bookingId, p.userId, session.id),
+          ) ?? 0;
+        if (noShowAmount > 0) {
+          referralCandidates.push({
+            studentId: p.userId,
+            chargedMarks: noShowAmount,
+          });
           continue;
+        }
         if (p.heldAmount <= 0) continue;
         // eslint-disable-next-line no-await-in-loop
         const w = await wallet.getByUserId(tx, p.userId);
@@ -2688,6 +2747,10 @@ export function createBookingService(deps: {
           bookingId,
           actorType: ACTOR_TYPE.TUTOR,
           reason: "Group series session completed",
+        });
+        referralCandidates.push({
+          studentId: p.userId,
+          chargedMarks: deductAmount,
         });
         // eslint-disable-next-line no-await-in-loop
         await repo.updateParticipantState(tx, p.id, {
@@ -2709,10 +2772,16 @@ export function createBookingService(deps: {
         b.proposerId,
         session.id,
       );
-      const alreadyForfeited = (
-        await repo.findLedgerEventKeys(tx, bookingId, [noShowKey])
-      ).includes(noShowKey);
-      if (!alreadyForfeited) {
+      const noShowAmounts = await repo.findLedgerEventAmounts(tx, bookingId, [
+        noShowKey,
+      ]);
+      const noShowAmount = noShowAmounts.get(noShowKey) ?? 0;
+      if (noShowAmount > 0) {
+        referralCandidates.push({
+          studentId: b.proposerId,
+          chargedMarks: noShowAmount,
+        });
+      } else {
         // L1: after an admin cancelSeriesSession(..., release) the remaining
         // held amount may be below the per-session amount — never deduct more
         // than the participant actually holds.
@@ -2729,6 +2798,12 @@ export function createBookingService(deps: {
           actorType: ACTOR_TYPE.TUTOR,
           reason: "Series session completed",
         });
+        if (deductAmount > 0) {
+          referralCandidates.push({
+            studentId: b.proposerId,
+            chargedMarks: deductAmount,
+          });
+        }
 
         if (proposerParticipant) {
           residualHeld = Math.max(
@@ -2760,6 +2835,18 @@ export function createBookingService(deps: {
       feedback,
       audit: reportAudit,
     });
+
+    if (referralPort) {
+      for (const candidate of referralCandidates) {
+        // eslint-disable-next-line no-await-in-loop
+        await referralPort.recordEligibleFirstCompletion(tx, {
+          ...candidate,
+          completionType: "series_child",
+          completionId: session.id,
+          completedAt: sessionCompletedAt,
+        });
+      }
+    }
 
     await notification.writeBestEffort({
       db: tx,

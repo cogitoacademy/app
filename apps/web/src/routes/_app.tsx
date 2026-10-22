@@ -20,6 +20,7 @@ const routeTitles: Record<string, string> = {
   "/class-reports": "Session reports",
   "/tutor-bookings": "Bookings",
   "/achievements": "Achievements",
+  "/referrals": "My referrals",
   "/tutors": "Tutors",
   "/profile": "Profile",
   "/onboarding": "Tutor Profile",
@@ -53,6 +54,10 @@ export const Route = createFileRoute("/_app")({
         to: "/login",
         throw: true,
       });
+    }
+    const sessionUser = session.data.user as CogitoUser;
+    if (sessionUser.role === "student" && sessionUser.referralChoicePending) {
+      redirect({ to: "/referral-choice", throw: true });
     }
     return { session };
   },
