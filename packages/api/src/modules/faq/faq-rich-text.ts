@@ -7,7 +7,10 @@ import type {
 } from "@cogito-app/db/schema/faq";
 
 function isAllowedFaqHref(href: string) {
-  if (/[\u0000-\u001f\u007f\\]/.test(href)) return false;
+  for (const character of href) {
+    const code = character.charCodeAt(0);
+    if (code < 32 || code === 127 || character === "\\") return false;
+  }
   if (href.startsWith("/") && !href.startsWith("//")) return true;
   if (href.startsWith("#") && href.length > 1) return true;
 

@@ -1,5 +1,14 @@
 # Cogito App — Codebase Context
 
+## V3 publication lint fixes (22 October 2026)
+
+FAQ link selection is render state; its URL input receives focus only after the
+user opens the link editor. FAQ URL validation still rejects control characters
+and backslashes, using explicit character checks. Public classes use the existing
+30-second visibility-aware clock so upcoming sessions update without impure
+render-time clock reads. Workspace typecheck and the lint baseline pass; focused
+FAQ regressions are recorded in the PR. No API or storage contract changed.
+
 ## T07 pending-report reminder integration checkpoint (2026-10-22)
 
 The class-report reminder worker is integrated on local `f/release-v3` at
