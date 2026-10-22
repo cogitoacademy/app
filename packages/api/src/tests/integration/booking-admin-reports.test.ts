@@ -6,6 +6,10 @@ import {
   bookingParticipant,
   bookingSession,
   ledgerEntry,
+  friendRewardDecision,
+  referralChoice,
+  referralCode,
+  referralSemesterUsage,
   notification as notificationTable,
   sessionCompletionFeedback,
   sessionCompletionFeedbackHistory,
@@ -331,8 +335,93 @@ describe("on-demand booking report admin coverage (non-reset UUID fixtures)", ()
     }
     const userIds = [...ownedUserIds];
     if (userIds.length > 0) {
+      await db
+        .delete(friendRewardDecision)
+        .where(inArray(friendRewardDecision.referredUserId, userIds));
+      await db
+        .delete(referralChoice)
+        .where(inArray(referralChoice.userId, userIds));
+      await db
+        .delete(referralCode)
+        .where(inArray(referralCode.referrerUserId, userIds));
+      await db
+        .delete(referralSemesterUsage)
+        .where(inArray(referralSemesterUsage.referrerUserId, userIds));
       await db.delete(user).where(inArray(user.id, userIds));
     }
+  });
+
+  test("admin confirms delivered solo no-show using the existing charge exactly once", async () => {
+    const noShowStudent = await createBareStudent();
+    const fixture = await createScheduledBooking(
+      tutorId,
+      noShowStudent,
+      "solo",
+      [{ userId: noShowStudent, role: "proposer", heldAmount: 50 }],
+    );
+    const referrer = await createBareStudent();
+    const code = await services.referral.getMine(referrer);
+    await db.transaction((tx) =>
+      services.referral.applyEmailSignupChoice(tx, {
+        userId: noShowStudent,
+        code: code.code,
+      }),
+    );
+    await db
+      .update(bookingTable)
+      .set({ scheduledStartAt: new Date(Date.now() - 60 * 60_000) })
+      .where(eq(bookingTable.id, fixture.booking.id));
+    await services.booking.markParticipantNoShow(
+      fixture.booking.id,
+      tutorId,
+      noShowStudent,
+    );
+    const before = await financialSnapshot(fixture.booking.id);
+    expect(
+      before.ledger.filter((row) => row.entryType === "deduct"),
+    ).toHaveLength(1);
+    expect(before.fees).toHaveLength(0);
+    await expect(
+      tutorClient.tutorActions.completeSession({
+        bookingId: fixture.booking.id,
+        feedback: firstFeedback,
+      }),
+    ).rejects.toThrow();
+    const input = {
+      bookingId: fixture.booking.id,
+      feedback: firstFeedback,
+      deliveryConfirmed: true,
+      reason: "Confirmed tutor delivery despite student absence",
+      requestKey: crypto.randomUUID(),
+    };
+    const first = await adminClient.booking.submitAdminCompletionReport(input);
+    const replay = await adminClient.booking.submitAdminCompletionReport(input);
+    expect(replay.id).toBe(first.id);
+    const after = await financialSnapshot(fixture.booking.id);
+    expect(
+      after.ledger.filter((row) => row.entryType === "deduct"),
+    ).toHaveLength(1);
+    expect(after.fees).toHaveLength(1);
+    expect(after.history).toHaveLength(1);
+    expect(after.history[0]?.deliveryConfirmed).toBe(true);
+    const [saved] = await db
+      .select()
+      .from(bookingTable)
+      .where(eq(bookingTable.id, fixture.booking.id));
+    expect(saved?.currentState).toBe("completed");
+    expect(
+      await services.booking.listCompletionFeedback(
+        fixture.booking.id,
+        noShowStudent,
+        "student",
+      ),
+    ).toHaveLength(1);
+    const rewards = await db
+      .select()
+      .from(friendRewardDecision)
+      .where(eq(friendRewardDecision.referredUserId, noShowStudent));
+    expect(rewards).toHaveLength(1);
+    expect(rewards[0]?.creditedMarks).toBe(15);
   });
 
   test("solo, group, and series initial reports settle once under the assigned tutor", async () => {

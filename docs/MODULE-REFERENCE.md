@@ -1,5 +1,21 @@
 # Cogito Module Reference
 
+## Referral settlement review corrections (22 October 2026)
+
+`settlementTransaction` retries a fully rolled-back PostgreSQL `40P01` at most
+three times, including driver-wrapped causes; domain and uniqueness failures are
+not retried. Its callbacks contain database/outbox work only and cover all
+report completion adapters. Reward decisions acquire shared user-row locks and
+require both current roles to be student, coordinated with ordinary role updates.
+An existing saved decision still replays unchanged.
+
+For an ended solo no-show, only the admin report path can confirm delivery using
+the existing reason/receipt/three-field contract. It reads the exact student's
+prior marked-no-show or legacy expiry deduction key, records the audited
+no-show-to-completed transition, and creates one earned fee/reward. No second
+wallet deduction occurs. Student reads accept that same charge only after the
+booking is completed/reported; a penalty alone does not grant access or rewards.
+
 ## Referral and signup module source milestone (22 October 2026)
 
 `packages/api/src/modules/referral` owns referral choices, settings history,

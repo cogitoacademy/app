@@ -2,9 +2,16 @@
 
 ## AUTH-02 and referral source contract (22 October 2026)
 
-Deployment prerequisite: unapplied additive migration
-`0071_referral_registration_rewards`. Parent web/server typechecks pass;
-database and authenticated browser acceptance remain pending.
+Deployment prerequisite: additive migration `0071_referral_registration_rewards`
+is applied only to guarded loopback test 6769/cogito-test. Parent web/server
+typechecks and focused financial PostgreSQL regressions pass; development and
+production migration plus authenticated OAuth browser acceptance remain pending.
+
+The existing admin completion-report endpoint also accepts an ended solo
+student no-show when delivery is explicitly confirmed and an audit reason is
+provided. It requires an existing student-specific no-show charge, reuses it
+without another deduction, and keeps request-key replay/version correction
+semantics. Ordinary tutor completion does not gain this terminal-state permission.
 
 Email signup `POST /api/auth/sign-up/email` accepts the existing OTP fields plus
 optional `referralCode`. A valid code saves the immutable friend/KOL choice and

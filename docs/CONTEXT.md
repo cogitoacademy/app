@@ -1,5 +1,23 @@
 # Cogito App — Codebase Context
 
+## Referral review corrections (22 October 2026)
+
+Report settlement transactions now retry PostgreSQL deadlock rollbacks at most
+three times; callbacks contain database writes and durable notification outbox
+work, not provider I/O. The retry covers tutor/admin on-demand report submission
+and academy reports. Friend reward issuance rechecks both accounts' student
+roles under shared row locks before creating a new decision/credit; prior
+decisions remain replayable. Admin may confirm a delivered solo student no-show
+after session end using the existing report reason/delivery-confirmation flow.
+The previous charge is reused, with one fee/reward and immutable audit history;
+tutors cannot convert a terminal solo no-show and penalty alone earns nothing.
+
+Migration 0071 is applied only to guarded loopback 6769/cogito-test, without a
+reset/seed. Real deadlock/cap/replay and role tests plus retry units pass 4 / 18;
+the complete on-demand admin report suite passes 12 / 118 including the solo
+no-show reward and entitlement regression. Dev/production migration, OAuth
+browser acceptance and the separate KOL commission workflow remain open.
+
 ## AUTH-02 and friend referral source milestone (22 October 2026)
 
 This feature branch adds the Google new-student referral choice gate and the

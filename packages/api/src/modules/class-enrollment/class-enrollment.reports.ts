@@ -21,6 +21,7 @@ import {
   wallet as walletTable,
 } from "@cogito-app/db/schema";
 import type { DbType } from "../../lib/db";
+import { settlementTransaction } from "../../lib/settlement-transaction";
 import type { WalletService } from "../wallet/wallet.service";
 import type { ReferralService } from "../referral/referral.service";
 import type { NotificationService } from "../notification/notification.service";
@@ -108,7 +109,7 @@ export function createClassSessionReportService(deps: {
       );
 
     const normalizedFeedback = feedback.data;
-    return deps.db.transaction(async (tx) => {
+    return settlementTransaction(deps.db, async (tx) => {
       const [classRecord] = await tx
         .select()
         .from(academyClass)

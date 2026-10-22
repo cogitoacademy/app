@@ -1,5 +1,17 @@
 # Release v3 - SDD execution and acceptance plan
 
+## Referral review correction checkpoint (22 October 2026)
+
+Deadlock-safe report transaction retry, locked current-role validation and
+audited solo student-no-show delivery are implemented. Migration 0071 is applied
+only to test 6769/cogito-test. PostgreSQL deadlock/cap/role/replay plus helper
+checks pass 4 / 18; complete admin booking-report regressions pass 12 / 118,
+including no second charge and one fee/reward for confirmed solo delivery.
+Guarded class enrollment/lifecycle/report regressions pass 44 / 354; web and
+server typechecks pass after the fixes.
+Independent rereview, OAuth/browser journeys, development/deployment migration,
+and KOL commission/transfer implementation remain open. Main is unchanged.
+
 ## Referral parent checkpoint (22 October 2026)
 
 AUTH-02/friend source is implemented in its feature branch. Parent-generated

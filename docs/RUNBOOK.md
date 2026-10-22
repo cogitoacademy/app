@@ -1,5 +1,31 @@
 # Cogito Runbook
 
+## Referral parent PostgreSQL acceptance (22 October 2026)
+
+Migration 0071 was applied using the Drizzle PostgreSQL migration runner after
+checking NODE_ENV=test, exact loopback 6769/cogito-test, absent reset flags and
+current_database(). Six referral tables are present. No dev/production migration,
+reset, seed or provider call ran. The existing isolated test containers were
+started without recreating their volumes.
+
+```powershell
+bun --smol --env-file=C:/.Projects/cogito-app/tmp/v3-dev/.env.signup-parent test --timeout 30000 packages/api/src/tests/integration/referral-completion.test.ts packages/api/src/tests/unit/settlement-transaction.test.ts
+bun --smol --env-file=C:/.Projects/cogito-app/tmp/v3-dev/.env.signup-parent test --timeout 30000 packages/api/src/tests/integration/booking-admin-reports.test.ts
+```
+
+The first command passes 4 tests / 18 assertions: a forced real wallet/usage
+deadlock is retried, both completions stay within the cap, exhausted zero-credit
+decisions do not replay in another semester, and promoted participants receive
+no new reward. Retry-unit coverage bounds repeated deadlocks and rejects retries
+for uniqueness errors. The on-demand suite passes 12 / 118, including audited
+solo no-show delivery, one charge/fee/reward, report entitlement and receipt replay.
+Fixtures use run-owned identities and targeted cleanup. Test settings use a
+future effective date and are removed; ordinary current settings are preserved.
+The guarded class enrollment/lifecycle/report suite also passes 44 tests / 354
+assertions (14.32s) with controlled provider adapters. Web and server typechecks
+pass after the review corrections. No development database was migrated.
+Real Google/browser and full client release acceptance remain open.
+
 ## AUTH-02 and friend referral handoff (22 October 2026)
 
 The feature source branch contains Google pending-choice resume, email signup
@@ -7,8 +33,8 @@ attribution, friend welcome/completion credits, student referral display, and
 KOL signup campaign validation/snapshots. Parent generated
 `0071_referral_registration_rewards` after 0070 without a database connection.
 Snapshot comparison verifies its predecessor ID, six new tables, and only
-`user.referral_choice_pending` added to prior tables. No migration is applied;
-database/browser/provider acceptance remains open. Do not start this schema
+`user.referral_choice_pending` added to prior tables. It is now applied to the
+guarded test target as recorded above; dev/production remain unmigrated. Do not start this schema
 against an unmigrated database or reset/seed a database for unit checks.
 
 Parent reran the focused suite below: 46 tests / 101 expectations pass. Web

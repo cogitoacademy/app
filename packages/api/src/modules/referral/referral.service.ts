@@ -1,4 +1,4 @@
-import { and, desc, eq, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lte, sql } from "drizzle-orm";
 import {
   friendRewardDecision,
   ledgerEntry,
@@ -527,6 +527,20 @@ export function createReferralService(deps: {
       .where(eq(friendRewardDecision.referredUserId, input.studentId))
       .limit(1);
     if (existing) return existing;
+
+    // Share locks coordinate reward eligibility with ordinary user role updates.
+    const participants = await conn
+      .select({ id: user.id, role: user.role })
+      .from(user)
+      .where(inArray(user.id, [input.studentId, choice.referrerUserId]))
+      .orderBy(asc(user.id))
+      .for("share");
+    if (
+      participants.length !== 2 ||
+      participants.some((row) => row.role !== "student")
+    ) {
+      return null;
+    }
 
     const semester = getReferralSemester(input.completedAt);
     const config = await settingsAt(conn, input.completedAt);

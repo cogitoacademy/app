@@ -35,6 +35,7 @@ import {
 } from "../../shared/constants";
 import type { GroupSize, Modality } from "../pricing/pricing.service";
 import type { DbType } from "../../lib/db";
+import { settlementTransaction } from "../../lib/settlement-transaction";
 import type { DbOrTx, TxClient } from "../../lib/tx";
 import {
   BookingNotFoundError,
@@ -532,6 +533,7 @@ export function completionFeedbackEntitlementEventKeys(input: {
   return [
     `booking.${bookingId}.deduct`,
     `booking.${bookingId}.no_show.${userId}.solo`,
+    `booking.${bookingId}.no_show.${userId}`,
   ];
 }
 
@@ -636,13 +638,20 @@ export function createBookingService(deps: {
       actorId: string;
       actorType: "student" | "tutor" | "admin" | "system";
       metadata?: Record<string, unknown>;
+      confirmedSoloNoShowDelivery?: boolean;
     },
   ) {
     const b = await repo.findBookingById(conn, bookingId);
     if (!b) throw new BookingNotFoundError(bookingId);
     const fromState = b.currentState as BookingState;
 
-    if (!canTransition(fromState, toState)) {
+    const confirmedSoloNoShowDelivery =
+      params.confirmedSoloNoShowDelivery === true &&
+      params.actorType === ACTOR_TYPE.ADMIN &&
+      b.type === BOOKING_TYPE.SOLO &&
+      fromState === BOOKING_STATE.NO_SHOW &&
+      toState === BOOKING_STATE.COMPLETED;
+    if (!canTransition(fromState, toState) && !confirmedSoloNoShowDelivery) {
       throw new BookingStateTransitionError(fromState, "transition", toState);
     }
 
@@ -2131,7 +2140,7 @@ export function createBookingService(deps: {
         "A valid request key is required",
       );
     }
-    return db.transaction(async (tx) => {
+    return settlementTransaction(db, async (tx) => {
       if (requestKey) await lockCompletionReportRequest(tx, requestKey);
       let b = await repo.findBookingById(tx, bookingId);
       if (!b) throw new BookingNotFoundError(bookingId);
@@ -2261,7 +2270,7 @@ export function createBookingService(deps: {
       requestPayload,
     };
 
-    return db.transaction(async (tx) => {
+    return settlementTransaction(db, async (tx) => {
       await lockCompletionReportRequest(tx, input.requestKey);
       let b = await repo.findBookingById(tx, input.bookingId);
       if (!b) throw new BookingNotFoundError(input.bookingId);
@@ -2440,7 +2449,11 @@ export function createBookingService(deps: {
             "A report can only be submitted for a delivered or scheduled session",
           );
         }
-      } else if (b.currentState === BOOKING_STATE.SCHEDULED) {
+      } else if (
+        b.currentState === BOOKING_STATE.SCHEDULED ||
+        (b.type === BOOKING_TYPE.SOLO &&
+          b.currentState === BOOKING_STATE.NO_SHOW)
+      ) {
         await completeSingleSession(
           tx,
           b,
@@ -2481,7 +2494,15 @@ export function createBookingService(deps: {
     feedback: CompletionFeedback,
     reportAudit: CompletionReportAudit,
   ) {
-    if (b.currentState !== BOOKING_STATE.SCHEDULED) {
+    const confirmedSoloNoShowDelivery =
+      b.type === BOOKING_TYPE.SOLO &&
+      b.currentState === BOOKING_STATE.NO_SHOW &&
+      reportAudit.actorRole === ACTOR_TYPE.ADMIN &&
+      reportAudit.deliveryConfirmed === true;
+    if (
+      b.currentState !== BOOKING_STATE.SCHEDULED &&
+      !confirmedSoloNoShowDelivery
+    ) {
       throw new BookingStateTransitionError(
         b.currentState,
         "complete",
@@ -2561,6 +2582,27 @@ export function createBookingService(deps: {
           chargedMarks: p.heldAmount,
         });
       }
+    } else if (confirmedSoloNoShowDelivery) {
+      const priorChargeKeys = [
+        `booking.${bookingId}.no_show.${b.proposerId}.solo`,
+        `booking.${bookingId}.no_show.${b.proposerId}`,
+      ];
+      const priorCharges = await repo.findLedgerEventAmounts(
+        tx,
+        bookingId,
+        priorChargeKeys,
+      );
+      const chargedMarks = priorChargeKeys.reduce(
+        (sum, key) => sum + (priorCharges.get(key) ?? 0),
+        0,
+      );
+      if (chargedMarks <= 0) {
+        throw new BookingNotEditableError(
+          bookingId,
+          "A chargeable student no-show is required before confirming delivery",
+        );
+      }
+      referralCandidates.push({ studentId: b.proposerId, chargedMarks });
     } else {
       const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
       if (!proposerWallet) throw new BookingNotFoundError(b.proposerId);
@@ -2585,6 +2627,10 @@ export function createBookingService(deps: {
       actorId: reportAudit.actorId,
       actorType: reportAudit.actorRole,
       reason: reportAudit.reason ?? undefined,
+      confirmedSoloNoShowDelivery,
+      ...(confirmedSoloNoShowDelivery
+        ? { metadata: { deliveryConfirmed: true, reusedNoShowCharge: true } }
+        : {}),
     });
 
     await repo.updateBookingHoldAmount(tx, bookingId, 0);
