@@ -11,6 +11,11 @@ Real publish/enrollment/cancellation helper navigation is updated; broad write-f
 UAT remains separate from these synthetic UI checks.
 
 
+Final integrated verification: 11 Chromium cases pass in 19.5s after merging
+PR #305. Full workspace typechecking and lint baseline pass. Luna Max source
+review found missing tab-panel semantics in the catalog filters; these now use
+pressed-state filter buttons. No other concrete finding remained in that review.
+
 ## On-demand report acceptance (22 October 2026)
 
 PR #305 is verified against current V3, including the sidebar/profile repairs.
