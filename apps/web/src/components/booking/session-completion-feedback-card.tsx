@@ -59,7 +59,7 @@ export function SessionCompletionFeedbackCard({
           Session feedback
         </Text>
         <Text className="text-sm text-muted">
-          Feedback recorded by the tutor after the session.
+          Feedback recorded for the delivered session.
         </Text>
       </div>
 

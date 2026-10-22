@@ -394,7 +394,7 @@ export const sessionCompletionFeedbackHistory = pgTable(
     bookingId: text("booking_id")
       .notNull()
       .references(() => booking.id, { onDelete: "cascade" }),
-    // Keep the session ID as audit text so a later session deletion cannot erase its history.
+    // Text preserves the session ID, but report history follows feedback and booking cascades.
     sessionId: text("session_id"),
     version: integer("version").notNull(),
     status: text("status").notNull(),

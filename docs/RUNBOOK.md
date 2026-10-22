@@ -16,7 +16,53 @@ The additional post-reminder full web typecheck was deliberately stopped when
 C: free space reached approximately 136 MiB. It has no passing result; the
 previous T06 web typecheck does not verify the later notification UI changes.
 Keep subsequent work bounded and avoid installs/browser downloads while storage
-is constrained. On-demand report implementation remains in an isolated worker.
+is constrained. On-demand report source remains isolated; migration 0070 is unapplied and guarded DB/Chromium acceptance is pending.
+
+## On-demand booking report source verification (2026-10-22)
+
+The isolated source worktree has migration
+`0070_on_demand_report_admin_audit.sql` after 0069. Its SQL SHA-256 remains
+`EACFA97B013F23FA2E74BE6D6D8E410B2B9C0F354B1D9AE6BB121370F40FC0F4`; do not
+apply it until the parent has reviewed the SQL and confirmed the exact guarded
+test target. It is unapplied here. Pure feedback validation passed 12 tests / 33
+expectations, focused admin-service validation passed 4 / 21, and completeSession mock regressions passed 15 / 58 (exit 0 each). Cached
+oxfmt passed; cached oxlint exited 0 with warnings. The guarded Postgres cases
+and solo Chromium journey are authored but were not run; no database write,
+migration, browser, full typecheck, or provider call occurred in this slice.
+
+After parent review/application of 0070 to loopback `6769/cogito-test` through
+the normal migration runner with no reset flags, keep the current directory at
+the worktree root and run the guarded service suite there. The database helper
+requires `NODE_ENV=test`, that exact target, and no reset override variables:
+
+```powershell
+bun test packages/api/src/tests/integration/booking-admin-reports.test.ts
+```
+
+For the authored solo admin-browser journey, keep the shell at the worktree root
+and use the isolated T05 ports with one worker:
+
+```powershell
+$env:T07_ON_DEMAND_BOOKING_REPORTS_E2E = "1"
+$env:T05_ENROLLMENT_TEST_DB_PORT = "6769"
+$env:T05_ENROLLMENT_TEST_REDIS_PORT = "6381"
+$env:T05_ENROLLMENT_TEST_SERVER_PORT = "3201"
+$env:T05_ENROLLMENT_TEST_WEB_PORT = "3200"
+$e2eWorktreePath = Join-Path (Get-Location) "packages/e2e"
+bun --cwd $e2eWorktreePath run test src/specs/booking-admin-reports.spec.ts --config=playwright.class-enrollment.config.ts --workers=1
+```
+
+These commands are for the parent validation window only. Do not add reset flags.
+The source integration fixture deletes only its own UUID-owned bookings/users;
+the browser fixture advances and cleans up only its run-owned booking. The
+browser journey covers solo; the authored guarded Postgres suite covers solo,
+group, series, corrections, request-key races, and Q06 chargeable no-show reads.
+
+History follows existing FK retention: its feedback and booking references
+cascade; the current feedback's session reference also cascades. `history.session_id`
+is text, so it does not retain history after booking/current-feedback hard
+deletion. No current application hard-delete path was found; this records the
+existing schema behavior and does not add a new release gate.
 
 ## T06 parent integration and local verification (2026-10-21)
 

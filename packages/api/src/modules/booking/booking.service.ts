@@ -81,6 +81,7 @@ import { escapeHtml, sanitizeHtml } from "../../lib/sanitize";
 import { completionFeedbackInput } from "./booking.types";
 import { FEEDBACK_LENGTH_ERROR } from "./feedback-rules";
 import {
+  lockCompletionReportRequest,
   lockBookingReschedule,
   lockTutorForBooking,
   lockTutorForPayout,
@@ -409,7 +410,7 @@ type BookingRow = NonNullable<
   Awaited<ReturnType<BookingRepo["findBookingById"]>>
 >;
 
-function normalizeCompletionFeedback(
+export function normalizeCompletionFeedback(
   bookingId: string,
   feedback: CompletionFeedback | undefined,
 ): CompletionFeedback {
@@ -425,9 +426,47 @@ function normalizeCompletionFeedback(
     throw new BookingCompletionFeedbackRequiredError(bookingId);
   }
   return {
-    discussion: parsed.data.discussion.map(escapeHtml),
-    strengths: parsed.data.strengths.map(escapeHtml),
-    improvements: parsed.data.improvements.map(escapeHtml),
+    discussion: parsed.data.discussion,
+    strengths: parsed.data.strengths,
+    improvements: parsed.data.improvements,
+  };
+}
+
+export function decodeLegacyCompletionFeedbackText(value: string): string {
+  return value.replace(/&(amp|lt|gt|quot|#39);/g, (entity) => {
+    switch (entity) {
+      case "&amp;":
+        return "&";
+      case "&lt;":
+        return "<";
+      case "&gt;":
+        return ">";
+      case "&quot;":
+        return '"';
+      case "&#39;":
+        return "'";
+      default:
+        return entity;
+    }
+  });
+}
+
+export function restoreCompletionFeedbackForRead<T extends CompletionFeedback>(
+  feedback: T,
+  history: ReadonlyArray<{ status: string }>,
+): T {
+  if (
+    history.some(
+      ({ status }) => status === "submitted" || status === "corrected",
+    )
+  ) {
+    return feedback;
+  }
+  return {
+    ...feedback,
+    discussion: feedback.discussion.map(decodeLegacyCompletionFeedbackText),
+    strengths: feedback.strengths.map(decodeLegacyCompletionFeedbackText),
+    improvements: feedback.improvements.map(decodeLegacyCompletionFeedbackText),
   };
 }
 
@@ -2090,6 +2129,7 @@ export function createBookingService(deps: {
       );
     }
     return db.transaction(async (tx) => {
+      if (requestKey) await lockCompletionReportRequest(tx, requestKey);
       let b = await repo.findBookingById(tx, bookingId);
       if (!b) throw new BookingNotFoundError(bookingId);
       if (b.tutorId !== tutorId)
@@ -2219,6 +2259,7 @@ export function createBookingService(deps: {
     };
 
     return db.transaction(async (tx) => {
+      await lockCompletionReportRequest(tx, input.requestKey);
       let b = await repo.findBookingById(tx, input.bookingId);
       if (!b) throw new BookingNotFoundError(input.bookingId);
       await lockTutorForPayout(tx, b.tutorId);
@@ -2387,7 +2428,7 @@ export function createBookingService(deps: {
             sessionId: session.id,
             tutorId: b.tutorId,
             feedback,
-            reportAudit,
+            audit: reportAudit,
           });
         } else {
           throw new BookingNotEditableError(
@@ -2410,7 +2451,7 @@ export function createBookingService(deps: {
           sessionId: null,
           tutorId: b.tutorId,
           feedback,
-          reportAudit,
+          audit: reportAudit,
         });
       } else {
         throw new BookingNotEditableError(
@@ -2986,11 +3027,22 @@ export function createBookingService(deps: {
   ) {
     const b = await repo.findBookingById(db, bookingId);
     if (!b) throw new BookingNotFoundError(bookingId);
-    if (userRole === "admin" || b.tutorId === userId) {
-      return repo.listCompletionFeedbackByBooking(db, bookingId);
+    const isStaffReader = userRole === "admin" || b.tutorId === userId;
+    if (!isStaffReader) {
+      await assertBookingAccess(b, userId, db, bookingId);
     }
-    await assertBookingAccess(b, userId, db, bookingId);
     const reports = await repo.listCompletionFeedbackByBooking(db, bookingId);
+    const history = await repo.listCompletionFeedbackHistoryStatesByBooking(
+      db,
+      bookingId,
+    );
+    const feedbacks = reports.map((report) =>
+      restoreCompletionFeedbackForRead(
+        report,
+        history.filter((entry) => entry.feedbackId === report.id),
+      ),
+    );
+    if (isStaffReader) return feedbacks;
     const entitled = [];
     const bookingType =
       b.type === BOOKING_TYPE.SERIES
@@ -2998,7 +3050,7 @@ export function createBookingService(deps: {
         : b.type === BOOKING_TYPE.GROUP
           ? BOOKING_TYPE.GROUP
           : BOOKING_TYPE.SOLO;
-    for (const report of reports) {
+    for (const report of feedbacks) {
       let delivered = false;
       if (report.sessionId) {
         if (b.type !== BOOKING_TYPE.SERIES) continue;
@@ -3043,7 +3095,15 @@ export function createBookingService(deps: {
     }
     const b = await repo.findBookingById(db, bookingId);
     if (!b) throw new BookingNotFoundError(bookingId);
-    return repo.listCompletionFeedbackHistoryByBooking(db, bookingId);
+    const history = await repo.listCompletionFeedbackHistoryByBooking(
+      db,
+      bookingId,
+    );
+    return history.map((entry) =>
+      entry.status === "legacy_snapshot"
+        ? restoreCompletionFeedbackForRead(entry, [])
+        : entry,
+    );
   }
 
   /**

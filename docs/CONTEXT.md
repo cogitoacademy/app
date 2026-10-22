@@ -1,5 +1,35 @@
 # Cogito App — Codebase Context
 
+## REQ-REPORT-02/03 on-demand booking report review-fix continuation (2026-10-22)
+
+The on-demand solo/group/series admin report source milestone is applied to
+this isolated worktree as `9bc960ed`; the parent `f/release-v3` and `main` are
+untouched. The existing booking-detail admin action records a report for the
+assigned tutor after delivery confirmation and with an audit reason. Initial
+submission settles scheduled work once; adding a report to an already-completed
+legacy booking/session does not settle it again. Corrections require the current
+version and append report/audit history and a tutor notice without replaying
+financial effects.
+
+Review fixes store new feedback as canonical plaintext, use history status to
+decode exactly one HTML-escape layer only for known legacy rows/snapshots, and
+serialize a request UUID globally before booking/tutor locks in both tutor and
+admin paths. Same-key cross-booking conflicts resolve to the report conflict
+(409); Q06 read coverage includes chargeable group-series no-shows. Focused
+pure feedback tests pass 12 tests / 33 expectations and focused admin-service tests pass 4 / 21 and completeSession mock regressions pass 15 / 58 (exit 0). Cached format and lint pass; lint reports existing
+warnings. Authored 6769 database coverage and the solo Chromium journey remain
+unrun in this source worktree.
+
+Migration `0070_on_demand_report_admin_audit.sql` remains unapplied; its SQL
+SHA-256 is `EACFA97B013F23FA2E74BE6D6D8E410B2B9C0F354B1D9AE6BB121370F40FC0F4`.
+History is linked to both feedback and booking with `ON DELETE CASCADE`; current
+feedback is also linked to its session with cascade, while history's session ID
+is text only. Hard deletion of a booking or session/feedback can therefore
+remove history; the text session ID alone does not guarantee retention. No
+current application hard-delete path was found, and this documents the existing
+schema boundary rather than adding a release gate. No historical actor is
+invented and no legacy row is backfilled.
+
 ## T07 pending-report reminder integration checkpoint (2026-10-22)
 
 The class-report reminder worker is integrated on local `f/release-v3` at
@@ -12,7 +42,8 @@ The integration fixture asserts only its owned installment event keys, student
 and enrollment while preserving the global report scan. `SELECT current_database()`
 was verified before fixture writes. No development seed or migration ran; no
 live email, browser or external provider ran. PDF export, dedicated on-demand
-admin correction, and legacy solo/group/series reminder coverage remain pending.
+admin correction, and legacy solo/group/series reminder coverage were pending
+at this parent reminder checkpoint; the isolated source continuation is above.
 
 ## T06 parent integration and local verification (2026-10-21)
 
@@ -543,11 +574,14 @@ one LF between nonempty lines. Shared `booking/feedback-rules.ts` normalizes CRL
 strips UI bullet prefixes, trims line edges and removes empty lines. UI counters,
 submit gating, RPC schema and direct service validation use the same rules.
 The service rejects overlong input before settlement instead of silently slicing
-30 bullets/1000 characters; existing HTML escaping remains, without truncating
-the escaped result. Old stored reports/read APIs remain unchanged. Class report
-settlement is implemented in the T07 backend. The role-based report workspace
-is documented below; PDF, reminders, and the dedicated on-demand admin correction
-workflow remain pending.
+30 bullets/1000 characters. New report text is stored as canonical plaintext;
+React text output remains escaped by React. Known legacy escaped rows without a
+submitted/corrected history event, and `legacy_snapshot` events, are decoded
+exactly once on read. New versioned text is never unescaped; legacy content is
+not backfilled or truncated and may exceed the current 600-codepoint input cap.
+Class report settlement is implemented in the T07 backend. The role-based report
+workspace is documented below; PDF and broader legacy reminder coverage remain
+pending. On-demand booking reports are in the isolated source continuation above.
 Focused report + booking regression: 295 tests pass; web typecheck passes.
 
 ## V3 class session reports and payout identity (2026-10-21)
@@ -2042,7 +2076,7 @@ file are the permanent record; plan-file archives are not maintained.
 
 | Plan                                                  | Status                                                                                                                                                                                                                                                                                                                                                                        |
 | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `docs/plans/active/RELEASE-V3-PRD.md` + SPEC/TASKS    | `RELEASE-V3-TASKS.md` is the current status authority. T03 tax/payout, T05 enrollment, the integrated T06 core lifecycle, and T07 class report settlement/reminders have focused evidence; the T07 reminder worker is integrated at 1f9b6dd7 and parent-verified (44 PostgreSQL tests / 354 expectations; pure reminders 7 / 25); no development seed or migration ran in that checkpoint. T07 PDF, dedicated on-demand admin correction, and legacy solo/group/series reminder coverage remain open. T04, T08, T10, T11 and overall release acceptance remain in progress; T09/T12 and OPS01 are open. |
+| `docs/plans/active/RELEASE-V3-PRD.md` + SPEC/TASKS    | `RELEASE-V3-TASKS.md` is the current status authority. T03 tax/payout, T05 enrollment, the integrated T06 core lifecycle, and T07 class report settlement/reminders have focused evidence; the T07 reminder worker is integrated at 1f9b6dd7 and parent-verified (44 PostgreSQL tests / 354 expectations; pure reminders 7 / 25); no development seed or migration ran in that checkpoint. T07 on-demand booking admin reports and corrections are authored in isolated worktree 9bc960ed; 0070 remains unapplied and its DB/Chromium acceptance is pending. PDF and broader legacy solo/group/series reminder coverage remain open. T04, T08, T10, T11 and overall release acceptance remain in progress; T09/T12 and OPS01 are open. |
 | `docs/plans/active/DEFERRED-OPS-TASKS.md`             | Active — code gaps done, §3/§4 operator-console items pending                                                                                                                                                                                                                                                                                                                 |
 | `docs/plans/active/DEPLOYMENT-PLAN.md`                | Active — applied 2026-08-31; remaining scope tracked in the plan                                                                                                                                                                                                                                                                                                              |
 | `docs/plans/active/PAYMENT-INTEGRITY-FLAP.md`         | Active — payment-integrity alert stability                                                                                                                                                                                                                                                                                                                                    |

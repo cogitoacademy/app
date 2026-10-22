@@ -958,6 +958,19 @@ async function listCompletionFeedbackHistoryByBooking(
     );
 }
 
+async function listCompletionFeedbackHistoryStatesByBooking(
+  conn: DbOrTx,
+  bookingId: string,
+) {
+  return conn
+    .select({
+      feedbackId: sessionCompletionFeedbackHistory.feedbackId,
+      status: sessionCompletionFeedbackHistory.status,
+    })
+    .from(sessionCompletionFeedbackHistory)
+    .where(eq(sessionCompletionFeedbackHistory.bookingId, bookingId));
+}
+
 async function listCompletionFeedbackHistoryByFeedback(
   conn: DbOrTx,
   feedbackId: string,
@@ -1996,6 +2009,7 @@ export function createBookingRepo(db: DbType) {
     insertCompletionFeedbackHistory,
     findCompletionFeedbackHistoryByRequestKey,
     listCompletionFeedbackHistoryByBooking,
+    listCompletionFeedbackHistoryStatesByBooking,
     listCompletionFeedbackHistoryByFeedback,
     hasChargeableFeedbackEntitlement,
     listCompletionFeedbackByBooking,

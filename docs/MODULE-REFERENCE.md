@@ -291,6 +291,41 @@ amounts. They keep `bookingId` and price snapshot null for class fees. Active
 source uniqueness and fee-event identity still prevent double allocation, while
 the existing tax, transfer-fee, void, and reconciliation behavior is shared.
 
+## V3 on-demand booking session reports (2026-10-22)
+
+The booking module exposes an admin action on the existing booking-detail
+surface for solo, group, and series sessions. An initial report requires
+delivery confirmation and a trimmed audit reason; scheduled work follows the
+existing completion transaction and settlement locks, and an already-completed
+legacy booking/session without a report gets the report without replaying
+settlement. Corrections require the current report version, append immutable
+actor/time/status/reason snapshots, and notify the assigned tutor without
+replaying wallet deductions, tutor fees, referrals, or rewards.
+
+New feedback is canonical plaintext. Read paths decode one exact HTML-escape
+layer only when version history identifies a legacy row/snapshot; `submitted`
+and `corrected` text is never heuristically unescaped. This preserves literal
+entity text on repeated corrections and leaves legacy rows longer than 600 code
+points readable without truncation. React renders the strings as text.
+
+Admin and tutor completion acquire a PostgreSQL advisory lock for the request
+UUID before booking/tutor locks. The history table's unique request key therefore
+replays identical payloads and returns a 409 conflict when a key is reused for
+another booking or changed payload, including concurrent cross-tutor calls.
+Q06 reads require the completed delivered booking/session plus a matching
+chargeable per-student/per-session ledger event; a chargeable group-series
+no-show is visible, while unpaid and early-released participants are not.
+
+Migration `0070_on_demand_report_admin_audit.sql` is additive after 0069 and
+remains unapplied in this source worktree (SQL SHA-256
+`EACFA97B013F23FA2E74BE6D6D8E410B2B9C0F354B1D9AE6BB121370F40FC0F4`). History
+rows cascade with their feedback and booking; the current feedback's session
+reference also cascades. The history `session_id` is text, but does not by itself
+preserve the row after a booking or current feedback hard delete. No current
+application hard-delete path was found; this is the existing retention boundary,
+not a new release gate. Historical rows are not backfilled and unknown actors
+remain unknown.
+
 ## V3 class session report and settlement boundary (2026-10-21)
 
 `class-enrollment.reports.ts` owns `classes.submitSessionReport` and
@@ -319,7 +354,7 @@ pending-report reminder worker are implemented. The shared page shows settlement
 preview/readback to tutors/admins, keeps student settlement fields null,
 normalizes feedback bullets, and preserves unsaved edits on stale-version
 conflicts. It supports versioned admin edits with a required reason; the
-dedicated on-demand admin correction workflow and PDF remain pending.
+booking-detail on-demand report source is authored in an isolated worktree; migration 0070 and DB/Chromium acceptance plus PDF remain pending.
 
 `class-enrollment.report-reminders.ts` runs from the existing one-minute
 `class-enrollment-check` job. It selects at most 100 ended, scheduled sessions in
@@ -347,7 +382,7 @@ separate `reportRemindersQueued` and `reportRemindersFailed` counters. At parent
 integration `1f9b6dd7`, the full guarded class-enrollment PostgreSQL suite passed
 44 tests / 354 expectations (exit 0, 9.62s); the pure reminder suite passed
 7 tests / 25 expectations (exit 0, 0.15s). No development seed or migration ran.
-PDF export, dedicated on-demand admin correction, and broader legacy solo/group/
+PDF export and broader legacy solo/group/
 series reminder coverage remain pending.
 
 ## V3 class/session draft foundation (2026-10-19)
@@ -360,7 +395,7 @@ Server validation requires an active competition (including an active parent for
 
 `classes.list` and `classes.get` are public procedures backed by `listPublished` and `getPublished`. Both map through an explicit student DTO; detail treats drafts as not found. It includes only catalog fields and tutor display name, with no payout/tax fields, private tutor account data, room details, audit/version values, or roster.
 
-Drafts are not public and do not reserve rooms; conflict checks happen at publication. The admin editor uploads PNG/JPEG/WebP/GIF covers through the existing protected upload flow (max 5 MB) and saves the returned key on the draft; approved M01 cover/curriculum assets remain pending. Admin publish controls, notifications, and durable Meet retry are implemented and browser-verified. Student enrollment is implemented in the T05 module below; T06 cancellation and T07 report/expiry settlement and reminders are implemented. The role-based report workspace is documented above; PDF and the dedicated on-demand admin correction workflow remain open. Public list/detail projection is implemented as described above. This is not a V3 activation or release checkpoint.
+Drafts are not public and do not reserve rooms; conflict checks happen at publication. The admin editor uploads PNG/JPEG/WebP/GIF covers through the existing protected upload flow (max 5 MB) and saves the returned key on the draft; approved M01 cover/curriculum assets remain pending. Admin publish controls, notifications, and durable Meet retry are implemented and browser-verified. Student enrollment is implemented in the T05 module below; T06 cancellation and T07 report/expiry settlement and reminders are implemented. The role-based report workspace is documented above; PDF remains open; on-demand booking reports are documented above, with acceptance pending. Public list/detail projection is implemented as described above. This is not a V3 activation or release checkpoint.
 
 ## V3 class publication and meeting jobs (2026-10-20)
 
