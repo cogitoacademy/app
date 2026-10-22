@@ -1,6 +1,14 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@cogito-app/db";
-import { booking } from "@cogito-app/db/schema";
+import { booking, user } from "@cogito-app/db/schema";
+
+const BOOKING_UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const AUTH_USER_ID = /^[A-Za-z0-9_-]{16,128}$/;
+const RUN_SCOPED_STUDENT_EMAIL =
+  /^cogito\.e2e\.[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}@yopmail\.com$/i;
+const SYNTHETIC_REPORT_GOAL =
+  /^Synthetic on-demand admin report [0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function assertOnDemandReportTestTarget(env: NodeJS.ProcessEnv) {
   let url: URL;
@@ -33,18 +41,48 @@ export async function moveOnDemandBookingReportPast(
   bookingId: string,
   tutorId: string,
   studentId: string,
+  learningGoal: string,
 ) {
   assertOnDemandReportTestTarget(process.env);
   if (
-    ![bookingId, tutorId, studentId].every((id) =>
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-        id,
-      ),
-    )
+    !BOOKING_UUID.test(bookingId) ||
+    !AUTH_USER_ID.test(tutorId) ||
+    !AUTH_USER_ID.test(studentId) ||
+    !SYNTHETIC_REPORT_GOAL.test(learningGoal)
   ) {
     throw new Error(
-      "On-demand report fixture movement requires UUID identities.",
+      "On-demand report fixture movement requires a booking UUID, text auth IDs, and a synthetic test goal.",
     );
+  }
+
+  const studentEmail = process.env.E2E_STUDENT_EMAIL?.trim().toLowerCase();
+  if (!studentEmail || !RUN_SCOPED_STUDENT_EMAIL.test(studentEmail)) {
+    throw new Error(
+      "On-demand report fixture movement requires a run-scoped E2E student.",
+    );
+  }
+  const [runStudent] = await db
+    .select({ id: user.id })
+    .from(user)
+    .where(
+      and(
+        eq(user.id, studentId),
+        eq(user.email, studentEmail),
+        eq(user.role, "student"),
+      ),
+    )
+    .limit(1);
+  if (!runStudent) {
+    throw new Error("The supplied student is not the run-scoped E2E student.");
+  }
+
+  const [tutor] = await db
+    .select({ id: user.id })
+    .from(user)
+    .where(and(eq(user.id, tutorId), eq(user.role, "tutor")))
+    .limit(1);
+  if (!tutor) {
+    throw new Error("The supplied booking tutor is not a tutor account.");
   }
 
   const now = new Date();
@@ -61,6 +99,7 @@ export async function moveOnDemandBookingReportPast(
         eq(booking.id, bookingId),
         eq(booking.tutorId, tutorId),
         eq(booking.proposerId, studentId),
+        eq(booking.learningGoal, learningGoal),
         eq(booking.type, "solo"),
         inArray(booking.currentState, ["scheduled", "confirmed"]),
       ),
@@ -74,13 +113,13 @@ export async function moveOnDemandBookingReportPast(
 }
 
 if (import.meta.main) {
-  const [bookingId, tutorId, studentId] = process.argv.slice(2);
-  if (!bookingId || !tutorId || !studentId) {
+  const [bookingId, tutorId, studentId, learningGoal] = process.argv.slice(2);
+  if (!bookingId || !tutorId || !studentId || !learningGoal) {
     throw new Error(
-      "Usage: move-on-demand-booking-report-past.ts <bookingId> <tutorId> <studentId>",
+      "Usage: move-on-demand-booking-report-past.ts <bookingId> <tutorId> <studentId> <learningGoal>",
     );
   }
-  moveOnDemandBookingReportPast(bookingId, tutorId, studentId)
+  moveOnDemandBookingReportPast(bookingId, tutorId, studentId, learningGoal)
     .then(() =>
       console.log("Owned on-demand booking report fixture moved to the past."),
     )

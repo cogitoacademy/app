@@ -33,6 +33,13 @@ type WalletSnapshot = {
   availableBalance: number;
 };
 
+type BookingWindow = {
+  tutorId: string;
+  currentState: string;
+  scheduledStartAt: string;
+  scheduledEndAt: string;
+};
+
 function assertOnDemandReportE2eTarget() {
   let dbUrl: URL;
   let redisUrl: URL;
@@ -103,6 +110,7 @@ function moveBookingPast(
   bookingId: string,
   tutorId: string,
   studentId: string,
+  learningGoal: string,
 ) {
   const serverDir = path.resolve(process.cwd(), "../../apps/server");
   execFileSync(
@@ -113,26 +121,81 @@ function moveBookingPast(
       bookingId,
       tutorId,
       studentId,
+      learningGoal,
     ],
     { cwd: serverDir, env: process.env, stdio: "pipe" },
   );
 }
 
-function chooseSessionStart(profile: TutorProfile) {
+async function listAllBookings(context: APIRequestContext) {
+  const bookings: BookingWindow[] = [];
+  let cursor: string | undefined;
+  do {
+    // Cursor pagination is sequential because each response provides the next cursor.
+    // eslint-disable-next-line no-await-in-loop
+    const page = await rpc<{
+      items: BookingWindow[];
+      nextCursor: string | null;
+    }>(context, "booking/listMine", {
+      limit: 100,
+      view: "all",
+      ...(cursor ? { cursor } : {}),
+    });
+    bookings.push(...page.items);
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor);
+  return bookings;
+}
+
+function chooseSessionStart(
+  profile: TutorProfile,
+  tutorId: string,
+  bookings: BookingWindow[],
+) {
   const earliest = Date.now() + 60 * 60_000;
-  for (const slot of profile.availabilitySlots) {
+  const terminalStates = new Set([
+    "declined",
+    "cancelled",
+    "late_cancelled",
+    "no_show",
+    "expired",
+    "completed",
+  ]);
+  const occupied = bookings
+    .filter(
+      (booking) =>
+        booking.tutorId === tutorId &&
+        !terminalStates.has(booking.currentState),
+    )
+    .map((booking) => ({
+      start: new Date(booking.scheduledStartAt).getTime(),
+      end: new Date(booking.scheduledEndAt).getTime(),
+    }));
+
+  for (const slot of profile.availabilitySlots.toSorted(
+    (a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime(),
+  )) {
     if (slot.modality !== "online" && slot.modality !== "both") continue;
-    const startAt =
+    let startAt =
       Math.ceil(
         Math.max(earliest, new Date(slot.startDate).getTime()) / (30 * 60_000),
       ) *
       30 *
       60_000;
-    if (startAt + 90 * 60_000 <= new Date(slot.endDate).getTime()) {
-      return { slotId: slot.id, scheduledStartAt: new Date(startAt) };
+    const slotEnd = new Date(slot.endDate).getTime();
+    while (startAt + 90 * 60_000 <= slotEnd) {
+      const endAt = startAt + 90 * 60_000;
+      if (
+        !occupied.some(
+          (booking) => booking.start < endAt && booking.end > startAt,
+        )
+      ) {
+        return { slotId: slot.id, scheduledStartAt: new Date(startAt) };
+      }
+      startAt += 30 * 60_000;
     }
   }
-  throw new Error("The seeded tutor has no future 90-minute online slot.");
+  throw new Error("The seeded tutor has no free future 90-minute online slot.");
 }
 
 test("admin records and corrects an on-demand booking report through the RPC-backed detail screen", async ({
@@ -147,7 +210,7 @@ test("admin records and corrects an on-demand booking report through the RPC-bac
 
   try {
     const [students, tutorRows] = await Promise.all([
-      rpc<{ user: { id: string } }>(studentApi, "auth/me", {}),
+      rpc<{ user: { id: string } }>(studentApi, "auth/me", undefined),
       rpc<TutorListRow[]>(adminApi, "adminTutor/listTutorProfiles", {
         status: "published",
         limit: 100,
@@ -161,10 +224,14 @@ test("admin records and corrects an on-demand booking report through the RPC-bac
     );
     if (!tutor)
       throw new Error("The seeded on-demand report tutor is missing.");
-    const profile = await rpc<TutorProfile>(studentApi, "tutors/getProfile", {
-      tutorId: tutor.id,
-    });
-    const slot = chooseSessionStart(profile);
+    const [profile, existingBookings] = await Promise.all([
+      rpc<TutorProfile>(studentApi, "tutors/getProfile", {
+        tutorId: tutor.id,
+      }),
+      listAllBookings(adminApi),
+    ]);
+    const slot = chooseSessionStart(profile, tutor.userId, existingBookings);
+    const learningGoal = `Synthetic on-demand admin report ${randomUUID()}`;
     const subjectId = profile.subjects.find(
       (subject) => subject.isSelectable,
     )?.id;
@@ -177,19 +244,24 @@ test("admin records and corrects an on-demand booking report through the RPC-bac
         modality: "online",
         scheduledStartAt: slot.scheduledStartAt.toISOString(),
         subjectId,
-        learningGoal: `Synthetic on-demand admin report ${randomUUID()}`,
+        learningGoal,
         timezone: "Asia/Jakarta",
       },
     );
     await rpc(tutorApi, "tutorActions/acceptBooking", {
       bookingId: booking.id,
     });
-    moveBookingPast(booking.id, tutor.userId, students.user.id);
+    moveBookingPast(booking.id, tutor.userId, students.user.id, learningGoal);
 
     const walletBeforeReport = await rpc<WalletSnapshot>(
       studentApi,
       "wallet/get",
       {},
+    );
+    const bookingBeforeReport = await rpc<{ holdAmount: number }>(
+      studentApi,
+      "booking/get",
+      { bookingId: booking.id },
     );
     adminContext = await browser.newContext({
       baseURL: process.env.WEB_URL ?? "http://localhost:3200",
@@ -233,9 +305,11 @@ test("admin records and corrects an on-demand booking report through the RPC-bac
       "wallet/get",
       {},
     );
-    expect(walletAfterSubmit.heldBalance).toBe(0);
-    expect(walletAfterSubmit.totalBalance).toBeLessThan(
-      walletBeforeReport.totalBalance,
+    expect(walletAfterSubmit.heldBalance).toBe(
+      walletBeforeReport.heldBalance - bookingBeforeReport.holdAmount,
+    );
+    expect(walletAfterSubmit.totalBalance).toBe(
+      walletBeforeReport.totalBalance - bookingBeforeReport.holdAmount,
     );
 
     await page.getByRole("button", { name: "Correct report" }).click();
