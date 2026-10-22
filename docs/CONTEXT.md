@@ -1245,17 +1245,24 @@ white, including both the wordmark and academy label. This is frontend-only
 presentation behavior with no RPC, schema, persistence, or operational
 contract change.
 
-## Sidebar navigation order (2026-09-04)
+## Sidebar navigation groups (2026-10-22)
 
-The authenticated sidebar keeps its three semantic zones: role-specific primary
-navigation, shared resources, and the account menu in the footer. Student
-navigation follows the main journey (`Dashboard`, `Tutors`, `My Bookings`,
-`Balance`, `Achievements`); tutor navigation prioritizes work actions
-(`Dashboard`, `Bookings`, `Availability`, `Tutor Profile`); and admin navigation
-starts with the action queue (`Dashboard`, `Operations`, `Bookings`, `Tutors`,
-`Economy`, `Achievements`). Resource labels and the **Tutor Profile** wording
-remain unchanged. This is frontend-only presentation behavior with no RPC,
-schema, persistence, or operational contract change.
+`apps/web/src/components/dashboard/app-sidebar.tsx` groups admin links by task:
+
+- **Overview:** Dashboard, Operations.
+- **Teaching:** Bookings, Classes, Session reports, Tutors.
+- **Finance:** Tutor payouts, Economy.
+- **Content & reviews:** Competitions, Achievements, Knowledge access, FAQ, Manage FAQs.
+
+Student links use **Overview** (Dashboard, Balance) and **Learning** (Tutors,
+Classes, My Bookings, Session reports, Achievements). Tutor links use
+**Overview** (Dashboard) and **Teaching** (Bookings, Session reports,
+Availability, Tutor Profile). Student and tutor FAQ links sit in **Resources**
+after Knowledge Bank, alongside How it works, Competition Calendar, and WhatsApp
+Support. Admin FAQ stays in Content & reviews. All roles retain the account footer. The groups reuse Selia
+SidebarGroup/SidebarGroupTitle and the existing link rendering, active states,
+and booking-action badge. This is frontend presentation only; routes, RPC
+contracts, services, event keys, persistence, and business rules are unchanged.
 
 ## Human-readable booking references (2026-09-04)
 

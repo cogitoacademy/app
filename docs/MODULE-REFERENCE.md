@@ -638,15 +638,24 @@ Cogito Academy logo so the full wordmark renders white. This is client-side
 presentation behavior and adds no service, repository, event-key, or business
 rule.
 
-## Sidebar navigation order (2026-09-04)
+## Sidebar navigation groups (2026-10-22)
 
-`apps/web/src/components/dashboard/app-sidebar.tsx` keeps the shared resource
-group and account footer while ordering primary links by role-specific workflow:
-students use `Dashboard`, `Tutors`, `My Bookings`, `Balance`, and `Achievements`;
-tutors use `Dashboard`, `Bookings`, `Availability`, and `Tutor Profile`; admins
-use `Dashboard`, `Operations`, `Bookings`, `Tutors`, `Economy`, and
-`Achievements`. This is frontend presentation only; services, repositories,
-event keys, and business rules are unchanged.
+`apps/web/src/components/dashboard/app-sidebar.tsx` groups admin links by task:
+
+- **Overview:** Dashboard, Operations.
+- **Teaching:** Bookings, Classes, Session reports, Tutors.
+- **Finance:** Tutor payouts, Economy.
+- **Content & reviews:** Competitions, Achievements, Knowledge access, FAQ, Manage FAQs.
+
+Student links use **Overview** (Dashboard, Balance) and **Learning** (Tutors,
+Classes, My Bookings, Session reports, Achievements). Tutor links use
+**Overview** (Dashboard) and **Teaching** (Bookings, Session reports,
+Availability, Tutor Profile). Student and tutor FAQ links sit in **Resources**
+after Knowledge Bank, alongside How it works, Competition Calendar, and WhatsApp
+Support. Admin FAQ stays in Content & reviews. All roles retain the account footer. The groups reuse Selia
+SidebarGroup/SidebarGroupTitle and the existing link rendering, active states,
+and booking-action badge. This is frontend presentation only; routes, RPC
+contracts, services, event keys, persistence, and business rules are unchanged.
 
 ## Production UI and E2E audit (2026-09-04)
 
