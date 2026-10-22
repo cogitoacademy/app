@@ -20,6 +20,7 @@ import { CogitoMarks } from "@/components/cogito-marks";
 import Loader from "@/components/loader";
 import { resolveProfileImageUrl } from "@/lib/profile-image-url";
 import { orpc } from "@/utils/orpc";
+import { useNow } from "@/hooks/use-now";
 
 function formatSessionDate(date: Date | string) {
   return new Intl.DateTimeFormat("en", {
@@ -30,6 +31,7 @@ function formatSessionDate(date: Date | string) {
 }
 
 export function ClassesPage() {
+  const now = useNow();
   const classes = useQuery(orpc.classes.list.queryOptions());
 
   if (classes.isPending) return <Loader />;
@@ -52,7 +54,6 @@ export function ClassesPage() {
   const cohorts = publishedClasses.filter(
     (academyClass) => academyClass.kind === "cohort",
   );
-  const now = Date.now();
   const upcoming = publishedClasses
     .flatMap((academyClass) =>
       academyClass.sessions

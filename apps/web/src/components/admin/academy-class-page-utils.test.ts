@@ -23,7 +23,9 @@ describe("academy class query results", () => {
       sessions: [{ id: "session-3" }],
     } as const;
 
-    const result = mergeAcademyClassQueryResults(
+    const result = mergeAcademyClassQueryResults<
+      typeof publishedSnapshot | typeof postponedSnapshot | typeof anotherClass
+    >(
       [publishedSnapshot, anotherClass],
       [postponedSnapshot],
     );
@@ -47,7 +49,9 @@ describe("academy class query results", () => {
       version: 5,
     } as const;
 
-    const result = mergeAcademyClassQueryResults(
+    const result = mergeAcademyClassQueryResults<
+      typeof publishedSnapshot | typeof postponedSnapshot
+    >(
       [publishedSnapshot],
       [postponedSnapshot],
     );
