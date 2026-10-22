@@ -718,7 +718,7 @@ export function KnowledgeBankAccessPage() {
                 </FieldDescription>
               </Field>
               <Field>
-                <FieldLabel htmlFor="knowledge-bank-access-expires-at-date">
+                <FieldLabel htmlFor="knowledge-bank-access-expires-at">
                   Access expires
                 </FieldLabel>
                 <CrossBrowserDateTimeInput

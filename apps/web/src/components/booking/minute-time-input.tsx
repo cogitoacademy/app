@@ -72,6 +72,7 @@ export function MinuteTimeInput({
   minTime,
   maxTime,
   showIcon = true,
+  required,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -81,6 +82,7 @@ export function MinuteTimeInput({
   minTime?: string;
   maxTime?: string;
   showIcon?: boolean;
+  required?: boolean;
 }) {
   const [focused, setFocused] = useState(false);
   const suggestions = useMemo(() => {
@@ -112,7 +114,16 @@ export function MinuteTimeInput({
         placeholder="HH:MM"
         value={value}
         disabled={disabled}
+        required={required}
+        pattern="([01][0-9]|2[0-3]):[0-5][0-9]"
         aria-invalid={invalid}
+        ref={(element) => {
+          if (element instanceof HTMLInputElement) {
+            element.setCustomValidity(
+              invalid ? "Enter a valid time within the allowed range." : "",
+            );
+          }
+        }}
         aria-autocomplete="list"
         aria-controls={id ? `${id}-suggestions` : undefined}
         className={showIcon ? "pl-9 font-mono" : "font-mono"}
@@ -232,12 +243,16 @@ export function CrossBrowserDateTimeInput({
   onChange,
   min,
   timeAriaLabel,
+  required,
+  disabled,
 }: {
   id: string;
   value: string;
   onChange: (value: string) => void;
   min?: string;
   timeAriaLabel?: string;
+  required?: boolean;
+  disabled?: boolean;
 }) {
   const [date = "", time = ""] = value.split("T");
   return (
@@ -246,16 +261,23 @@ export function CrossBrowserDateTimeInput({
       className="grid gap-2 sm:grid-cols-[1fr_9rem]"
     >
       <DatePicker
-        id={`${id}-date`}
+        id={id}
         value={date}
         minDate={min?.split("T")[0]}
+        disabled={disabled}
+        required={required || time.length > 0}
         placeholder="Pick a date"
-        onChange={(nextDate) => onChange(`${nextDate}T${time}`)}
+        onChange={(nextDate) =>
+          onChange(nextDate ? `${nextDate}T${time || "00:00"}` : "")
+        }
       />
       <MinuteTimeInput
         id={`${id}-time`}
-        ariaLabel={timeAriaLabel}
+        ariaLabel={timeAriaLabel ?? "Time (24-hour, HH:MM)"}
         value={time}
+        required={required || date.length > 0}
+        disabled={disabled}
+        minTime={date === min?.split("T")[0] ? min?.split("T")[1] : undefined}
         onChange={(nextTime) => onChange(`${date}T${nextTime}`)}
       />
     </div>

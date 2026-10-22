@@ -1,5 +1,8 @@
 "use client";
 
+import { NumberField as SeliaNumberField } from "@cogito-app/ui/components/selia/number-field";
+import { Field, FieldLabel } from "@cogito-app/ui/components/selia/field";
+
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@cogito-app/ui/components/selia/button";
@@ -13,7 +16,6 @@ import {
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
-import { Input } from "@cogito-app/ui/components/selia/input";
 import { IconBox } from "@cogito-app/ui/components/selia/icon-box";
 import {
   Drawer,
@@ -397,23 +399,21 @@ export function BalancePage() {
                 </Text>
               </div>
               <div className="flex flex-col gap-2 sm:min-w-72 sm:flex-row sm:items-end">
-                <label
-                  htmlFor="custom-marks-amount"
-                  className="flex min-w-0 flex-1 flex-col gap-1 text-sm font-medium"
-                >
-                  Marks
-                  <Input
+                <Field className="min-w-0 flex-1">
+                  <FieldLabel htmlFor="custom-marks-amount">Marks</FieldLabel>
+                  <SeliaNumberField
                     id="custom-marks-amount"
-                    type="number"
+                    allowOutOfRange
+                    format={{ useGrouping: false }}
                     min={1}
                     max={1_000_000}
                     step={1}
-                    value={customMarks}
-                    onChange={(event) =>
-                      setCustomMarks(Number(event.target.value))
+                    value={customMarks || null}
+                    onValueChange={(nextValue) =>
+                      setCustomMarks(nextValue ?? 0)
                     }
                   />
-                </label>
+                </Field>
                 <Button
                   variant="secondary"
                   disabled={

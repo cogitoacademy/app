@@ -25,10 +25,7 @@ describe("academy class query results", () => {
 
     const result = mergeAcademyClassQueryResults<
       typeof publishedSnapshot | typeof postponedSnapshot | typeof anotherClass
-    >(
-      [publishedSnapshot, anotherClass],
-      [postponedSnapshot],
-    );
+    >([publishedSnapshot, anotherClass], [postponedSnapshot]);
 
     expect(result).toHaveLength(2);
     expect(result.find((record) => record.id === "class-1")).toBe(
@@ -51,10 +48,7 @@ describe("academy class query results", () => {
 
     const result = mergeAcademyClassQueryResults<
       typeof publishedSnapshot | typeof postponedSnapshot
-    >(
-      [publishedSnapshot],
-      [postponedSnapshot],
-    );
+    >([publishedSnapshot], [postponedSnapshot]);
 
     expect(result).toEqual([publishedSnapshot]);
   });

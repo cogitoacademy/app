@@ -1,5 +1,13 @@
 # Cogito API Reference
 
+## UI control migration note (22 October 2026)
+
+The Selia numeric/date-time control repair adds no endpoint or wire-format change.
+Numeric inputs still pass through each caller's existing conversion and schema
+validation. CrossBrowserDateTimeInput returns a local YYYY-MM-DDTHH:mm string;
+Academy, lifecycle and payout callers retain their existing conversion before
+sending the API timestamp. The UI control does not infer or change timezones.
+
 ## T06 parent integration and local verification (2026-10-21)
 
 T06 is integrated into local `f/release-v3` through `cda99280`; `main` is
