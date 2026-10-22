@@ -266,6 +266,8 @@ jobs:
           key: ${{ runner.os }}-bun-install-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-install-
       - run: bun install --frozen-lockfile
+      - name: Test LCOV merger
+        run: bun test ./.github/scripts/merge-lcov.test.ts
       - name: Create env file for drizzle
         run: |
           echo "DATABASE_URL=${{ env.DATABASE_URL }}" > apps/server/.env

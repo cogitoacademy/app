@@ -27,7 +27,10 @@ function mergeBranch(
   hits: number | null,
 ) {
   const previous = map.get(key);
-  map.set(key, hits === null ? (previous ?? null) : Math.max(previous ?? 0, hits));
+  map.set(
+    key,
+    hits === null ? (previous ?? null) : Math.max(previous ?? 0, hits),
+  );
 }
 
 function mergeFile(records: RawRecord[], files: Map<string, Coverage>) {
@@ -54,7 +57,10 @@ function mergeFile(records: RawRecord[], files: Map<string, Coverage>) {
       const previous = file.functions.get(key);
       file.functions.set(key, {
         ...fn,
-        hits: Math.max(previous?.hits ?? 0, record.functionHits.get(fn.name) ?? 0),
+        hits: Math.max(
+          previous?.hits ?? 0,
+          record.functionHits.get(fn.name) ?? 0,
+        ),
       });
     }
     for (const [key, hits] of record.branches) {
@@ -168,10 +174,15 @@ async function main() {
   const files = new Map<string, Coverage>();
   for (const path of inputs) {
     const input = Bun.file(path);
-    if (!(await input.exists())) throw new Error(`Coverage file missing: ${path}`);
+    if (!(await input.exists()))
+      throw new Error(`Coverage file missing: ${path}`);
     const content = await input.text();
     if (!content.trim()) throw new Error(`Coverage file is empty: ${path}`);
-    mergeFile(parseLcov(content), files);
+    const records = parseLcov(content);
+    if (records.length === 0) {
+      throw new Error(`No LCOV records were found in: ${path}`);
+    }
+    mergeFile(records, files);
   }
   if (files.size === 0) throw new Error("No LCOV records were found.");
 

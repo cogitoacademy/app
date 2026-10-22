@@ -345,7 +345,9 @@ only to reset-based tests on that run's disposable 6769 service and to the
 dedicated payout test command on its separate disposable 6770 service. The
 three report fixture suites that assert reset overrides are absent run separately
 on 6769 with both variables unset; their LCOV output is merged with the other
-coverage runs before the existing gate. The payout schema is migrated through a
+coverage runs before the existing gate. The merge rejects missing, empty, or
+recordless LCOV profiles. `.github/scripts/merge-lcov.test.ts` covers the union
+and failure behavior. The payout schema is migrated through a
 separate `apps/server/.env.test-payout` file. No helper guard or coverage gate
 was changed. `test-setup.ts` has no database URL fallback; provide a target
 explicitly for DB-backed work. The retained 6769 run-scoped financial fixtures

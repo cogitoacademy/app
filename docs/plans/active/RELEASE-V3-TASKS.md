@@ -637,12 +637,13 @@ databases separately, runs `booking-payout-g16.test.ts` only with exact
 `cogito-test-payout:6770`, and keeps reset overrides absent for the three
 fixture-owned report suites. Reset consent is limited to commands targeting
 the matching per-run disposable database. Their LCOV reports are merged before
-the unchanged 100% coverage gate. E2E also maps Redis to `6381:6379` and sets
+the unchanged 100% coverage gate. A focused merger test checks
+line/function/branch unions and rejects missing, empty, or recordless profiles.
+E2E also maps Redis to `6381:6379` and sets
 the full T05 target tuple so global setup selects a fresh run-scoped student.
 No guards, threshold or coverage exclusions changed. The separate unit-fix
-commit `43a3c5cc` corrects two stale report assertions. Run one combined manual
-CI dispatch after pushing both commits; the PR base does not automatically
-dispatch this workflow. No local database, seed, reset or browser run is part
+commit `43a3c5cc` corrects two stale report assertions. After pushing these commits, dispatch the CI workflow once manually;
+the PR base does not automatically start it. No local database, seed, reset or browser run is part
 of this config fix.
 
 ## T07 on-demand booking report continuation (2026-10-22)
