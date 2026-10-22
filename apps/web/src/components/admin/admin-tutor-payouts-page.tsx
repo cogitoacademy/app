@@ -1,5 +1,9 @@
 "use client";
 
+import { CrossBrowserDateTimeInput } from "@/components/booking/minute-time-input";
+
+import { NumberField as SeliaNumberField } from "@cogito-app/ui/components/selia/number-field";
+
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
@@ -588,16 +592,20 @@ export function AdminTutorPayoutsPage() {
                 <FieldLabel htmlFor={`tax-rate-${key}`}>
                   {label} (bps)
                 </FieldLabel>
-                <Input
+                <SeliaNumberField
                   id={`tax-rate-${key}`}
-                  type="number"
+                  allowOutOfRange
+                  format={{ useGrouping: false }}
                   min={0}
                   max={10000}
                   step={1}
-                  inputMode="numeric"
-                  value={taxRateDraftValues[key]}
-                  onChange={(event) => {
-                    const value = event.target.value;
+                  value={
+                    taxRateDraftValues[key] === ""
+                      ? null
+                      : Number(taxRateDraftValues[key])
+                  }
+                  onValueChange={(nextValue) => {
+                    const value = nextValue === null ? "" : String(nextValue);
                     setTaxRateDraft((current) => ({
                       ...(taxRateDraftDirty ? current : taxRateDraftValues),
                       [key]: value,
@@ -783,21 +791,21 @@ export function AdminTutorPayoutsPage() {
             </Text>
           </div>
         </CardHeader>
-        <CardBody aria-busy={reportQuery.isFetching} className="p-0!">
+        <CardBody aria-busy={reportQuery.isFetching}>
           {reportQuery.isError ? (
-            <div className="p-6">
+            <div>
               <Text className="text-sm text-danger">
                 The payout report could not be loaded. Refresh and try again.
               </Text>
             </div>
           ) : reportQuery.isPending ? (
-            <div className="p-6">
+            <div>
               <Text className="text-sm text-muted">
                 Loading payout records…
               </Text>
             </div>
           ) : visibleRows.length === 0 ? (
-            <div className="p-6">
+            <div>
               <EmptyState
                 icon={<IconInbox />}
                 title="No payout records"
@@ -1290,15 +1298,19 @@ export function AdminTutorPayoutsPage() {
                         <FieldLabel htmlFor="payout-actual-amount">
                           Actual amount (IDR)
                         </FieldLabel>
-                        <Input
+                        <SeliaNumberField
                           id="payout-actual-amount"
-                          type="number"
+                          allowOutOfRange
+                          format={{ useGrouping: false }}
                           min={0}
                           step={1}
-                          inputMode="numeric"
-                          value={actualAmount}
-                          onChange={(event) =>
-                            setActualAmount(event.target.value)
+                          value={
+                            actualAmount === "" ? null : Number(actualAmount)
+                          }
+                          onValueChange={(nextValue) =>
+                            setActualAmount(
+                              nextValue === null ? "" : String(nextValue),
+                            )
                           }
                         />
                       </Field>
@@ -1306,11 +1318,10 @@ export function AdminTutorPayoutsPage() {
                         <FieldLabel htmlFor="payout-actual-paid-at">
                           Actual paid date and time (Asia/Jakarta)
                         </FieldLabel>
-                        <Input
+                        <CrossBrowserDateTimeInput
                           id="payout-actual-paid-at"
-                          type="datetime-local"
                           value={paidAt}
-                          onChange={(event) => setPaidAt(event.target.value)}
+                          onChange={(value) => setPaidAt(value)}
                         />
                       </Field>
                       <Field>
@@ -1438,15 +1449,25 @@ export function AdminTutorPayoutsPage() {
                         <FieldLabel htmlFor="tutor-rate-override">
                           Override (basis points)
                         </FieldLabel>
-                        <Input
+                        <SeliaNumberField
                           id="tutor-rate-override"
-                          type="number"
+                          allowOutOfRange
+                          format={{
+                            useGrouping: false,
+                            maximumFractionDigits: 2,
+                          }}
                           min={0}
                           max={10000}
                           step={1}
-                          value={overrideRateBps}
-                          onChange={(event) =>
-                            setOverrideRateBps(event.target.value)
+                          value={
+                            overrideRateBps === ""
+                              ? null
+                              : Number(overrideRateBps)
+                          }
+                          onValueChange={(nextValue) =>
+                            setOverrideRateBps(
+                              nextValue === null ? "" : String(nextValue),
+                            )
                           }
                         />
                       </Field>

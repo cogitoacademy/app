@@ -497,7 +497,7 @@ function ModerationTable({
           </CardTitle>
         </CardHeader>
         <CardBody aria-busy={mutationPending} className="min-w-0 max-w-full">
-          <TableContainer className="w-[calc(100%+3rem)]! min-w-0">
+          <TableContainer className="min-w-0">
             <Table
               aria-label="Achievement moderation submissions"
               className="min-w-[52rem] text-sm"

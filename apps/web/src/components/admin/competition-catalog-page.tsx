@@ -1,5 +1,7 @@
 "use client";
 
+import { NumberField as SeliaNumberField } from "@cogito-app/ui/components/selia/number-field";
+
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -987,14 +989,20 @@ export function CompetitionCatalogPage() {
                     <FieldLabel htmlFor="catalog-sort">
                       Display order
                     </FieldLabel>
-                    <Input
+                    <SeliaNumberField
                       id="catalog-sort"
-                      type="number"
+                      allowOutOfRange
+                      format={{ useGrouping: false }}
                       min={0}
                       step={1}
-                      value={draft.sortOrder}
-                      onChange={(event) =>
-                        updateDraft("sortOrder", event.target.value)
+                      value={
+                        draft.sortOrder === "" ? null : Number(draft.sortOrder)
+                      }
+                      onValueChange={(nextValue) =>
+                        updateDraft(
+                          "sortOrder",
+                          nextValue === null ? "" : String(nextValue),
+                        )
                       }
                     />
                   </Field>

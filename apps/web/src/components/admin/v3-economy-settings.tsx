@@ -1,5 +1,7 @@
 "use client";
 
+import { NumberField as SeliaNumberField } from "@cogito-app/ui/components/selia/number-field";
+
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@cogito-app/ui/components/selia/badge";
@@ -73,14 +75,15 @@ function AmountInput({
   onChange: (value: number) => void;
 }) {
   return (
-    <Input
-      aria-label={label}
-      type="number"
+    <SeliaNumberField
+      inputProps={{ "aria-label": label }}
+      allowOutOfRange
+      format={{ useGrouping: false }}
       min={0}
       step={1}
-      value={typeof value === "number" && Number.isFinite(value) ? value : ""}
+      value={Number.isFinite(value) ? value : null}
       disabled={disabled}
-      onChange={(event) => onChange(event.target.valueAsNumber)}
+      onValueChange={(nextValue) => onChange(nextValue ?? Number.NaN)}
     />
   );
 }

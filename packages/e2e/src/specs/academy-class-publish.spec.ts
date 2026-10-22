@@ -4,6 +4,7 @@ import {
   request,
   test,
   type APIRequestContext,
+  type Page,
 } from "@playwright/test";
 import {
   ADMIN_EMAIL,
@@ -11,6 +12,27 @@ import {
   STUDENT_EMAIL,
   STUDENT_PASSWORD,
 } from "../fixtures/test-accounts";
+
+async function fillDateTime(page: Page, id: string, date: Date) {
+  await page.locator(`#${id}`).click();
+  const calendar = page.getByRole("dialog").last();
+  await calendar.getByRole("combobox", { name: "Choose the Year" }).click();
+  await page
+    .getByRole("option", { name: String(date.getFullYear()), exact: true })
+    .click();
+  await calendar.getByRole("combobox", { name: "Choose the Month" }).click();
+  await page
+    .getByRole("option", {
+      name: date.toLocaleString("en-US", { month: "long" }),
+      exact: true,
+    })
+    .click();
+  await calendar
+    .locator("button[aria-label]")
+    .filter({ hasText: new RegExp(`^${date.getDate()}$`) })
+    .click();
+  await page.locator(`#${id}-time`).fill(toDateTimeLocal(date).split("T")[1]!);
+}
 
 type AdminClassSession = {
   id: string;
@@ -179,6 +201,33 @@ test("admin publishes both class modes; students see only the published DTO", as
       adminPage.getByRole("heading", { name: "Class studio" }),
     ).toBeVisible();
 
+    for (const width of [390, 1024, 1440]) {
+      // eslint-disable-next-line no-await-in-loop -- Measurements share one page and must follow each resize.
+      await adminPage.setViewportSize({ width, height: 1000 });
+      // eslint-disable-next-line no-await-in-loop -- Assert this viewport before resizing again.
+      await expect
+        .poll(async () =>
+          adminPage.evaluate(() => {
+            const context = document.createElement("canvas").getContext("2d")!;
+            return [
+              "class-full-rate",
+              "class-half-rate",
+              "class-single-rate",
+            ].filter((id) => {
+              const input = document.getElementById(id) as HTMLInputElement;
+              const style = getComputedStyle(input);
+              context.font = style.font;
+              const available =
+                input.clientWidth -
+                parseFloat(style.paddingLeft) -
+                parseFloat(style.paddingRight);
+              return available + 1 < context.measureText(input.value).width;
+            });
+          }),
+        )
+        .toEqual([]);
+    }
+
     // The browser rejects an incomplete draft before making a save request.
     await adminPage.getByRole("button", { name: "Save draft" }).click();
     await expect(adminPage.locator("#class-title-en")).toBeFocused();
@@ -194,9 +243,7 @@ test("admin publishes both class modes; students see only the published DTO", as
       "readonly",
       "",
     );
-    await adminPage
-      .getByLabel("Minimum-enrollment check date")
-      .fill(toDateTimeLocal(minimumCheckAt));
+    await fillDateTime(adminPage, "class-minimum-check-at", minimumCheckAt);
     await adminPage.locator("#class-minimum-enrollment").fill("2");
 
     await adminPage
@@ -207,10 +254,8 @@ test("admin publishes both class modes; students see only the published DTO", as
       .getByLabel("Curriculum description (English)")
       .nth(0)
       .fill("Automated test curriculum fixture.");
-    await adminPage
-      .locator("#session-0-start")
-      .fill(toDateTimeLocal(firstStart));
-    await adminPage.locator("#session-0-end").fill(toDateTimeLocal(firstEnd));
+    await fillDateTime(adminPage, "session-0-start", firstStart);
+    await fillDateTime(adminPage, "session-0-end", firstEnd);
     await adminPage.locator("#session-0-capacity").fill("4");
     await adminPage.locator("#session-0-tutor").click();
     await adminPage.getByRole("option").first().click();
@@ -224,10 +269,8 @@ test("admin publishes both class modes; students see only the published DTO", as
       .getByLabel("Curriculum description (English)")
       .nth(1)
       .fill("Automated test curriculum fixture.");
-    await adminPage
-      .locator("#session-1-start")
-      .fill(toDateTimeLocal(secondStart));
-    await adminPage.locator("#session-1-end").fill(toDateTimeLocal(secondEnd));
+    await fillDateTime(adminPage, "session-1-start", secondStart);
+    await fillDateTime(adminPage, "session-1-end", secondEnd);
     await adminPage.locator("#session-1-capacity").fill("4");
     await adminPage.locator("#session-1-mode").click();
     await adminPage.getByRole("option", { name: "In person" }).click();
