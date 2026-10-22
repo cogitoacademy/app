@@ -388,7 +388,7 @@ export function ClassAdminLifecyclePanel({
                         : {formatDate(session.startAt)}
                       </Text>
                     ))}
-                    <Stack direction="row" spacing="sm">
+                    <Stack direction="row" spacing="sm" className="flex-wrap">
                       <Button
                         variant={
                           decisionReview.quote.decision === "postpone"
@@ -499,7 +499,7 @@ export function ClassAdminLifecyclePanel({
                     Marks · {sessionReview.quote.releasedAllocationIds.length}{" "}
                     seat allocation(s) released.
                   </Text>
-                  <Stack direction="row" spacing="sm">
+                  <Stack direction="row" spacing="sm" className="flex-wrap">
                     <Button
                       variant="danger"
                       disabled={busy}

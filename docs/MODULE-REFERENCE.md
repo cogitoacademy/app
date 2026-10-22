@@ -1,5 +1,15 @@
 # Cogito Module Reference
 
+## Classes UI composition (22 October 2026)
+
+The student catalog uses Selia Card/Field/Input/Button, with one card per class and
+separate detail links. Details separate curriculum from enrollment. Admin class
+studio groups published/postponed management and the draft editor into tabs, with
+existing management panels inside a Selia Accordion. Draft panel mounting retains
+local editor/file-input state across tab changes. Publishing selects the list.
+The shared class-report workspace bounds its session list and moves mobile focus
+to the selected report. No service, event key, authorization or payment rule changes.
+
 ## On-demand report acceptance (22 October 2026)
 
 PR #305 admin report submission/correction is verified with 11 guarded DB tests

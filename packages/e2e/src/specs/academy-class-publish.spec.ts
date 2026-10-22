@@ -197,6 +197,7 @@ test("admin publishes both class modes; students see only the published DTO", as
     });
     const adminPage = await adminContext.newPage();
     await adminPage.goto("/admin-classes");
+    await adminPage.getByRole("tab", { name: "Drafts & editor" }).click();
     await expect(
       adminPage.getByRole("heading", { name: "Class studio" }),
     ).toBeVisible();

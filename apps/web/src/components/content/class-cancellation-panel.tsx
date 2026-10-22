@@ -174,7 +174,7 @@ export function ClassCancellationPanel({
               }).format(new Date(row.deadline))}
             </Text>
           ))}
-          <Stack direction="row" spacing="sm">
+          <Stack direction="row" spacing="sm" className="flex-wrap">
             <Button
               variant="danger"
               disabled={busy || !requestKey}

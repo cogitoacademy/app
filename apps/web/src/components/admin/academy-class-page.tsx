@@ -20,6 +20,7 @@ import { Button } from "@cogito-app/ui/components/selia/button";
 import {
   Card,
   CardBody,
+  CardDescription,
   CardHeader,
   CardTitle,
 } from "@cogito-app/ui/components/selia/card";
@@ -28,6 +29,19 @@ import {
   FieldDescription,
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
+import {
+  Tabs,
+  TabsList,
+  TabsItem,
+  TabsPanel,
+} from "@cogito-app/ui/components/selia/tabs";
+import {
+  Accordion,
+  AccordionItem,
+  AccordionHeader,
+  AccordionTrigger,
+  AccordionPanel,
+} from "@cogito-app/ui/components/selia/accordion";
 import { Heading } from "@cogito-app/ui/components/selia/heading";
 import { Input } from "@cogito-app/ui/components/selia/input";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
@@ -288,6 +302,7 @@ function TextareaField({
 export function AcademyClassPage() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<DraftForm>(() => emptyDraft());
+  const [workspace, setWorkspace] = useState("published");
   const [coverUploading, setCoverUploading] = useState(false);
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const [meetingRetryReasons, setMeetingRetryReasons] = useState<
@@ -345,6 +360,7 @@ export function AcademyClassPage() {
     orpc.admin.publishAcademyClass.mutationOptions({
       onSuccess: async (record) => {
         setForm(emptyDraft());
+        setWorkspace("published");
         await Promise.all([
           queryClient.invalidateQueries({
             queryKey: orpc.admin.listAcademyClasses.key({
@@ -611,754 +627,812 @@ export function AcademyClassPage() {
   }
 
   return (
-    <Stack direction="column" spacing="lg" className="pb-8">
+    <Stack direction="column" spacing="lg" className="w-full min-w-0 pb-8">
       <Stack direction="column" spacing="sm">
         <Heading level={1}>Class studio</Heading>
         <Text className="text-muted">
-          Create and manage drafts. Drafts are not public and do not reserve
-          rooms.
+          Manage published classes, or build a draft before sharing it with
+          students.
         </Text>
       </Stack>
 
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(17rem,0.8fr)_minmax(0,1.2fr)]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Draft classes</CardTitle>
-          </CardHeader>
-          <CardBody>
-            <Stack direction="column" spacing="sm">
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={coverUploading}
-                onClick={() => {
-                  setForm(emptyDraft());
-                  setCoverPreviewUrl(null);
-                }}
-              >
-                <IconPlus />
-                New class draft
-              </Button>
-              {classesQuery.isLoading ? (
-                <Text className="text-muted">Loading drafts…</Text>
-              ) : classesQuery.isError ? (
-                <Text className="text-danger-foreground">
-                  Draft classes could not be loaded. Refresh to try again.
-                </Text>
-              ) : classes.length === 0 ? (
-                <Text className="text-muted">No class drafts yet.</Text>
-              ) : (
-                classes.map((record) => (
-                  <div
-                    key={record.id}
-                    className="flex items-start justify-between gap-3 rounded-lg border border-card-border bg-card p-3"
-                  >
-                    <div className="min-w-0">
-                      <div className="mb-1 flex flex-wrap items-center gap-2">
-                        <Text className="font-medium">{record.titleEn}</Text>
-                        <Badge variant="secondary">{record.kind}</Badge>
-                      </div>
-                      <Text className="text-muted text-sm">
-                        {record.sessions.length} session
-                        {record.sessions.length === 1 ? "" : "s"} ·{" "}
-                        {record.competition.name}
-                      </Text>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="plain"
-                      size="sm"
-                      disabled={coverUploading}
-                      aria-label={`Edit ${record.titleEn}`}
-                      onClick={() => {
-                        setForm(draftFromRecord(record));
-                        setCoverPreviewUrl(null);
-                      }}
-                    >
-                      <IconEdit />
-                    </Button>
-                  </div>
-                ))
-              )}
-            </Stack>
-          </CardBody>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              {form.id ? "Edit class draft" : "New class draft"}
-            </CardTitle>
-          </CardHeader>
-          <CardBody>
-            <form onSubmit={submitDraft}>
-              <Stack direction="column" spacing="lg">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field>
-                    <FieldLabel htmlFor="class-kind">Class type</FieldLabel>
-                    <Select
-                      value={form.kind}
-                      onValueChange={(value) =>
-                        changeKind(String(value) as ClassKind)
-                      }
-                      items={[
-                        { value: "cohort", label: "Cohort" },
-                        { value: "masterclass", label: "Masterclass" },
-                      ]}
-                    >
-                      <SelectTrigger id="class-kind">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectPopup>
-                        <SelectList>
-                          <SelectItem value="cohort">Cohort</SelectItem>
-                          <SelectItem value="masterclass">
-                            Masterclass
-                          </SelectItem>
-                        </SelectList>
-                      </SelectPopup>
-                    </Select>
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="class-competition">
-                      Competition
-                    </FieldLabel>
-                    <Select
-                      value={form.competitionId}
-                      onValueChange={(value) =>
-                        updateForm("competitionId", String(value ?? ""))
-                      }
-                      items={competitions.map((competition) => ({
-                        value: competition.id,
-                        label: competition.name,
-                      }))}
-                    >
-                      <SelectTrigger id="class-competition">
-                        <SelectValue placeholder="Choose a competition" />
-                      </SelectTrigger>
-                      <SelectPopup>
-                        <SelectList>
-                          {competitions.map((competition) => (
-                            <SelectItem
-                              key={competition.id}
-                              value={competition.id}
-                            >
-                              {competition.parent
-                                ? `${competition.parent.name} · ${competition.name}`
-                                : competition.name}
-                            </SelectItem>
-                          ))}
-                        </SelectList>
-                      </SelectPopup>
-                    </Select>
-                  </Field>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <TextField
-                    id="class-title-en"
-                    label="Title (English)"
-                    value={form.titleEn}
-                    onChange={(value) => updateForm("titleEn", value)}
-                    required
-                    maxLength={200}
-                  />
-                  <TextField
-                    id="class-title-id"
-                    label="Title (Indonesian, optional)"
-                    value={form.titleId}
-                    onChange={(value) => updateForm("titleId", value)}
-                    maxLength={200}
-                  />
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <TextareaField
-                    id="class-description-en"
-                    label="Description (English)"
-                    value={form.descriptionEn}
-                    onChange={(value) => updateForm("descriptionEn", value)}
-                    required
-                    maxLength={5_000}
-                  />
-                  <TextareaField
-                    id="class-description-id"
-                    label="Description (Indonesian, optional)"
-                    value={form.descriptionId}
-                    onChange={(value) => updateForm("descriptionId", value)}
-                    maxLength={5_000}
-                  />
-                </div>
-                <Field>
-                  <FieldLabel htmlFor="class-cover">Cover image</FieldLabel>
-                  <Input
-                    id="class-cover"
-                    type="file"
-                    accept={COVER_IMAGE_TYPES.join(",")}
-                    disabled={coverUploading}
-                    onChange={(event) => void uploadCover(event)}
-                  />
-                  <FieldDescription>
-                    {coverUploading
-                      ? "Uploading cover image…"
-                      : "PNG, JPEG, WebP, or GIF up to 5 MB. Upload the approved class cover asset."}
-                  </FieldDescription>
-                  <Text className="text-muted text-sm">
-                    {form.coverKey
-                      ? "A cover image is attached to this draft. Save to keep it."
-                      : "No cover image is attached yet."}
+      <Tabs
+        value={workspace}
+        onValueChange={(value) => setWorkspace(String(value))}
+        className="gap-5"
+      >
+        <TabsList
+          aria-label="Class studio workspace"
+          className="w-full sm:w-fit"
+        >
+          <TabsItem value="published" className="whitespace-nowrap">
+            Published classes
+          </TabsItem>
+          <TabsItem value="drafts" className="whitespace-nowrap">
+            Drafts &amp; editor
+          </TabsItem>
+        </TabsList>
+        <TabsPanel value="published">
+          <Card>
+            <CardHeader>
+              <CardTitle>Published and postponed classes</CardTitle>
+              <CardDescription>
+                Review meeting setup and open a class to manage its schedule or
+                enrollment.
+              </CardDescription>
+            </CardHeader>
+            <CardBody>
+              <Stack direction="column" spacing="sm">
+                {publishedClassesQuery.isLoading ? (
+                  <Text className="text-muted">Loading published classes…</Text>
+                ) : postponedClassesQuery.isLoading ? (
+                  <Text className="text-muted">Loading postponed classes…</Text>
+                ) : publishedClassesQuery.isError ||
+                  postponedClassesQuery.isError ? (
+                  <Text className="text-danger-foreground">
+                    Published or postponed classes could not be loaded. Refresh
+                    to try again.
                   </Text>
-                  {coverPreviewUrl ? (
-                    <img
-                      src={coverPreviewUrl}
-                      alt=""
-                      className="mt-2 aspect-video max-h-48 w-full rounded-lg border border-card-border object-cover"
-                    />
-                  ) : null}
-                </Field>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <NumberField
-                    id="class-tutor-fee"
-                    label="Flat tutor fee per session (IDR)"
-                    value={form.tutorFeeIdr}
-                    onChange={(value) => updateForm("tutorFeeIdr", value)}
-                    readOnly
-                    min={1}
-                    max={2_000_000_000}
-                    description={
-                      form.kind === "cohort"
-                        ? "Default: Rp400,000 per session, for either delivery mode."
-                        : "Default: Rp300,000 for the single masterclass session."
-                    }
-                  />
-                  {form.kind === "cohort" ? (
-                    <NumberField
-                      id="class-minimum-enrollment"
-                      label="Minimum full/half-plan students"
-                      value={form.minimumEnrollment}
-                      onChange={(value) =>
-                        updateForm("minimumEnrollment", value)
-                      }
-                    />
-                  ) : (
-                    <NumberField
-                      id="class-masterclass-rate"
-                      label="Seat price (Marks)"
-                      value={form.masterclassRateMarks}
-                      onChange={(value) =>
-                        updateForm("masterclassRateMarks", value)
-                      }
-                      description="Default: 5 Marks for the single session."
-                    />
-                  )}
-                </div>
-                {form.kind === "cohort" ? (
-                  <>
-                    <div className="grid gap-4">
-                      <TextField
-                        id="class-minimum-check-at"
-                        label="Minimum-enrollment check date"
-                        type="datetime-local"
-                        value={form.minimumCheckAt}
-                        onChange={(value) =>
-                          updateForm("minimumCheckAt", value)
-                        }
-                        required
-                      />
-                      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-4">
-                        <NumberField
-                          id="class-full-rate"
-                          label="Full plan · Marks/session"
-                          value={form.fullRateMarks}
-                          onChange={(value) =>
-                            updateForm("fullRateMarks", value)
-                          }
-                          description="Default 20"
-                        />
-                        <NumberField
-                          id="class-half-rate"
-                          label="Half plan · Marks/session"
-                          value={form.halfRateMarks}
-                          onChange={(value) =>
-                            updateForm("halfRateMarks", value)
-                          }
-                          description="Default 22"
-                        />
-                        <NumberField
-                          id="class-single-rate"
-                          label="Single session · Marks"
-                          value={form.singleRateMarks}
-                          onChange={(value) =>
-                            updateForm("singleRateMarks", value)
-                          }
-                          description="Default 25"
-                        />
+                ) : publishedClasses.length === 0 ? (
+                  <Text className="text-muted">
+                    No classes have been published.
+                  </Text>
+                ) : (
+                  publishedClasses.map((record) => {
+                    const onlineSessions = record.sessions.filter(
+                      (session) => session.mode === "online",
+                    );
+                    const failedMeetings = onlineSessions.filter(
+                      (session) => session.meeting?.status === "failed",
+                    );
+                    const createdMeetings = onlineSessions.filter(
+                      (session) => session.meeting?.status === "created",
+                    );
+                    const pendingMeetings =
+                      onlineSessions.length -
+                      failedMeetings.length -
+                      createdMeetings.length;
+                    const retryReason = meetingRetryReasons[record.id] ?? "";
+                    return (
+                      <div
+                        key={record.id}
+                        data-testid={`published-class-${record.id}`}
+                        className="rounded-lg border border-card-border bg-card p-4"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Text className="font-medium">
+                                {record.titleEn}
+                              </Text>
+                              <Badge
+                                variant={
+                                  record.state === "postponed"
+                                    ? "warning"
+                                    : "success"
+                                }
+                              >
+                                {record.state === "postponed"
+                                  ? "Postponed"
+                                  : "Published"}
+                              </Badge>
+                              <Badge variant="secondary">{record.kind}</Badge>
+                            </div>
+                            <Text className="mt-1 text-sm text-muted">
+                              {record.sessions.length} session(s) ·{" "}
+                              {record.competition.name}
+                            </Text>
+                            <Text className="mt-2 text-sm text-muted">
+                              {onlineSessions.length === 0
+                                ? "In-person sessions use managed rooms; no Meet is created."
+                                : `${createdMeetings.length} Meet(s) ready${pendingMeetings > 0 ? ` · ${pendingMeetings} pending` : ""}${failedMeetings.length > 0 ? ` · ${failedMeetings.length} failed` : ""}.`}
+                            </Text>
+                          </div>
+                        </div>
+                        {failedMeetings.length > 0 ? (
+                          <div className="mt-4 flex flex-wrap items-end gap-3">
+                            <Field className="w-full min-w-0 flex-1 sm:min-w-64">
+                              <FieldLabel
+                                htmlFor={`meeting-retry-${record.id}`}
+                              >
+                                Retry reason
+                              </FieldLabel>
+                              <Input
+                                id={`meeting-retry-${record.id}`}
+                                maxLength={500}
+                                value={retryReason}
+                                onChange={(event) =>
+                                  setMeetingRetryReasons((current) => ({
+                                    ...current,
+                                    [record.id]: event.target.value,
+                                  }))
+                                }
+                              />
+                            </Field>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              disabled={
+                                retryClassMeetings.isPending ||
+                                retryReason.trim().length < 3
+                              }
+                              onClick={() =>
+                                retryClassMeetings.mutate({
+                                  id: record.id,
+                                  reason: retryReason,
+                                })
+                              }
+                            >
+                              Retry failed meeting setup
+                            </Button>
+                          </div>
+                        ) : pendingMeetings > 0 ? (
+                          <Text className="mt-3 text-sm text-muted">
+                            Meeting work is queued or running. Failed attempts
+                            are retried automatically.
+                          </Text>
+                        ) : null}
+                        <Accordion className="mt-4 border-t border-border">
+                          <AccordionItem value="manage">
+                            <AccordionHeader>
+                              <AccordionTrigger>Manage class</AccordionTrigger>
+                            </AccordionHeader>
+                            <AccordionPanel>
+                              <div className="space-y-4 pb-4">
+                                <ClassAdminCancellationPanel
+                                  classId={record.id}
+                                  expectedVersion={record.version}
+                                  onChanged={() =>
+                                    Promise.all([
+                                      queryClient.invalidateQueries({
+                                        queryKey:
+                                          orpc.admin.listAcademyClasses.key({
+                                            input: { state: "published" },
+                                          }),
+                                      }),
+                                      queryClient.invalidateQueries({
+                                        queryKey:
+                                          orpc.admin.listAcademyClasses.key({
+                                            input: { state: "postponed" },
+                                          }),
+                                      }),
+                                    ])
+                                  }
+                                />
+                                <ClassAdminLifecyclePanel
+                                  classRecord={record}
+                                  onChanged={() =>
+                                    Promise.all([
+                                      queryClient.invalidateQueries({
+                                        queryKey:
+                                          orpc.admin.listAcademyClasses.key({
+                                            input: { state: "published" },
+                                          }),
+                                      }),
+                                      queryClient.invalidateQueries({
+                                        queryKey:
+                                          orpc.admin.listAcademyClasses.key({
+                                            input: { state: "postponed" },
+                                          }),
+                                      }),
+                                    ])
+                                  }
+                                />
+                              </div>
+                            </AccordionPanel>
+                          </AccordionItem>
+                        </Accordion>
                       </div>
-                    </div>
-                    <Text className="text-muted text-sm">
-                      The minimum counts unique active full/half-plan students.
-                      Single-session buyers do not count.
+                    );
+                  })
+                )}
+              </Stack>
+            </CardBody>
+          </Card>
+        </TabsPanel>
+        <TabsPanel value="drafts" keepMounted>
+          <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
+            <Card>
+              <CardHeader>
+                <CardTitle>Draft classes</CardTitle>
+                <CardDescription>
+                  Only your team can see these drafts.
+                </CardDescription>
+              </CardHeader>
+              <CardBody>
+                <Stack direction="column" spacing="sm">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={coverUploading}
+                    onClick={() => {
+                      setForm(emptyDraft());
+                      setCoverPreviewUrl(null);
+                    }}
+                  >
+                    <IconPlus />
+                    New class draft
+                  </Button>
+                  {classesQuery.isLoading ? (
+                    <Text className="text-muted">Loading drafts…</Text>
+                  ) : classesQuery.isError ? (
+                    <Text className="text-danger-foreground">
+                      Draft classes could not be loaded. Refresh to try again.
                     </Text>
-                  </>
-                ) : null}
+                  ) : classes.length === 0 ? (
+                    <Text className="text-muted">No class drafts yet.</Text>
+                  ) : (
+                    classes.map((record) => (
+                      <div
+                        key={record.id}
+                        className="flex min-w-0 items-start justify-between gap-3 rounded-lg border border-item-border bg-item p-3"
+                      >
+                        <div className="min-w-0">
+                          <div className="mb-1 flex flex-wrap items-center gap-2">
+                            <Text className="font-medium">
+                              {record.titleEn}
+                            </Text>
+                            <Badge variant="secondary">{record.kind}</Badge>
+                          </div>
+                          <Text className="text-muted text-sm">
+                            {record.sessions.length} session
+                            {record.sessions.length === 1 ? "" : "s"} ·{" "}
+                            {record.competition.name}
+                          </Text>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="plain"
+                          size="sm"
+                          disabled={coverUploading}
+                          aria-label={`Edit ${record.titleEn}`}
+                          onClick={() => {
+                            setForm(draftFromRecord(record));
+                            setCoverPreviewUrl(null);
+                          }}
+                        >
+                          <IconEdit />
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </Stack>
+              </CardBody>
+            </Card>
 
-                <div className="space-y-3">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <Heading level={3}>Sessions</Heading>
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  {form.id ? "Edit class draft" : "New class draft"}
+                </CardTitle>
+              </CardHeader>
+              <CardBody>
+                <form onSubmit={submitDraft}>
+                  <Stack direction="column" spacing="lg">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field>
+                        <FieldLabel htmlFor="class-kind">Class type</FieldLabel>
+                        <Select
+                          value={form.kind}
+                          onValueChange={(value) =>
+                            changeKind(String(value) as ClassKind)
+                          }
+                          items={[
+                            { value: "cohort", label: "Cohort" },
+                            { value: "masterclass", label: "Masterclass" },
+                          ]}
+                        >
+                          <SelectTrigger id="class-kind">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectPopup>
+                            <SelectList>
+                              <SelectItem value="cohort">Cohort</SelectItem>
+                              <SelectItem value="masterclass">
+                                Masterclass
+                              </SelectItem>
+                            </SelectList>
+                          </SelectPopup>
+                        </Select>
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor="class-competition">
+                          Competition
+                        </FieldLabel>
+                        <Select
+                          value={form.competitionId}
+                          onValueChange={(value) =>
+                            updateForm("competitionId", String(value ?? ""))
+                          }
+                          items={competitions.map((competition) => ({
+                            value: competition.id,
+                            label: competition.name,
+                          }))}
+                        >
+                          <SelectTrigger id="class-competition">
+                            <SelectValue placeholder="Choose a competition" />
+                          </SelectTrigger>
+                          <SelectPopup>
+                            <SelectList>
+                              {competitions.map((competition) => (
+                                <SelectItem
+                                  key={competition.id}
+                                  value={competition.id}
+                                >
+                                  {competition.parent
+                                    ? `${competition.parent.name} · ${competition.name}`
+                                    : competition.name}
+                                </SelectItem>
+                              ))}
+                            </SelectList>
+                          </SelectPopup>
+                        </Select>
+                      </Field>
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <TextField
+                        id="class-title-en"
+                        label="Title (English)"
+                        value={form.titleEn}
+                        onChange={(value) => updateForm("titleEn", value)}
+                        required
+                        maxLength={200}
+                      />
+                      <TextField
+                        id="class-title-id"
+                        label="Title (Indonesian, optional)"
+                        value={form.titleId}
+                        onChange={(value) => updateForm("titleId", value)}
+                        maxLength={200}
+                      />
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <TextareaField
+                        id="class-description-en"
+                        label="Description (English)"
+                        value={form.descriptionEn}
+                        onChange={(value) => updateForm("descriptionEn", value)}
+                        required
+                        maxLength={5_000}
+                      />
+                      <TextareaField
+                        id="class-description-id"
+                        label="Description (Indonesian, optional)"
+                        value={form.descriptionId}
+                        onChange={(value) => updateForm("descriptionId", value)}
+                        maxLength={5_000}
+                      />
+                    </div>
+                    <Field>
+                      <FieldLabel htmlFor="class-cover">Cover image</FieldLabel>
+                      <Input
+                        id="class-cover"
+                        type="file"
+                        accept={COVER_IMAGE_TYPES.join(",")}
+                        disabled={coverUploading}
+                        onChange={(event) => void uploadCover(event)}
+                      />
+                      <FieldDescription>
+                        {coverUploading
+                          ? "Uploading cover image…"
+                          : "PNG, JPEG, WebP, or GIF up to 5 MB. Upload the approved class cover asset."}
+                      </FieldDescription>
                       <Text className="text-muted text-sm">
-                        Each session has its own tutor, capacity, delivery mode,
-                        and schedule.
+                        {form.coverKey
+                          ? "A cover image is attached to this draft. Save to keep it."
+                          : "No cover image is attached yet."}
                       </Text>
+                      {coverPreviewUrl ? (
+                        <img
+                          src={coverPreviewUrl}
+                          alt=""
+                          className="mt-2 aspect-video max-h-48 w-full rounded-lg border border-card-border object-cover"
+                        />
+                      ) : null}
+                    </Field>
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <NumberField
+                        id="class-tutor-fee"
+                        label="Flat tutor fee per session (IDR)"
+                        value={form.tutorFeeIdr}
+                        onChange={(value) => updateForm("tutorFeeIdr", value)}
+                        readOnly
+                        min={1}
+                        max={2_000_000_000}
+                        description={
+                          form.kind === "cohort"
+                            ? "Default: Rp400,000 per session, for either delivery mode."
+                            : "Default: Rp300,000 for the single masterclass session."
+                        }
+                      />
+                      {form.kind === "cohort" ? (
+                        <NumberField
+                          id="class-minimum-enrollment"
+                          label="Minimum full/half-plan students"
+                          value={form.minimumEnrollment}
+                          onChange={(value) =>
+                            updateForm("minimumEnrollment", value)
+                          }
+                        />
+                      ) : (
+                        <NumberField
+                          id="class-masterclass-rate"
+                          label="Seat price (Marks)"
+                          value={form.masterclassRateMarks}
+                          onChange={(value) =>
+                            updateForm("masterclassRateMarks", value)
+                          }
+                          description="Default: 5 Marks for the single session."
+                        />
+                      )}
                     </div>
                     {form.kind === "cohort" ? (
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() =>
-                          updateForm("sessions", [
-                            ...form.sessions,
-                            emptySession(),
-                          ])
-                        }
-                      >
-                        <IconCalendarPlus />
-                        Add session
-                      </Button>
+                      <>
+                        <div className="grid gap-4">
+                          <TextField
+                            id="class-minimum-check-at"
+                            label="Minimum-enrollment check date"
+                            type="datetime-local"
+                            value={form.minimumCheckAt}
+                            onChange={(value) =>
+                              updateForm("minimumCheckAt", value)
+                            }
+                            required
+                          />
+                          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-4">
+                            <NumberField
+                              id="class-full-rate"
+                              label="Full plan · Marks/session"
+                              value={form.fullRateMarks}
+                              onChange={(value) =>
+                                updateForm("fullRateMarks", value)
+                              }
+                              description="Default 20"
+                            />
+                            <NumberField
+                              id="class-half-rate"
+                              label="Half plan · Marks/session"
+                              value={form.halfRateMarks}
+                              onChange={(value) =>
+                                updateForm("halfRateMarks", value)
+                              }
+                              description="Default 22"
+                            />
+                            <NumberField
+                              id="class-single-rate"
+                              label="Single session · Marks"
+                              value={form.singleRateMarks}
+                              onChange={(value) =>
+                                updateForm("singleRateMarks", value)
+                              }
+                              description="Default 25"
+                            />
+                          </div>
+                        </div>
+                        <Text className="text-muted text-sm">
+                          The minimum counts unique active full/half-plan
+                          students. Single-session buyers do not count.
+                        </Text>
+                      </>
                     ) : null}
-                  </div>
-                  {form.sessions.map((session, index) => (
-                    <div
-                      key={session.id ?? `new-${index}`}
-                      className="space-y-4 rounded-lg border border-card-border bg-card p-4"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <Text className="font-medium">Session {index + 1}</Text>
-                        {form.kind === "cohort" && form.sessions.length > 1 ? (
+
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <Heading level={3}>Sessions</Heading>
+                          <Text className="text-muted text-sm">
+                            Each session has its own tutor, capacity, delivery
+                            mode, and schedule.
+                          </Text>
+                        </div>
+                        {form.kind === "cohort" ? (
                           <Button
                             type="button"
-                            variant="plain"
-                            size="sm"
-                            aria-label={`Remove session ${index + 1}`}
+                            variant="secondary"
                             onClick={() =>
-                              updateForm(
-                                "sessions",
-                                form.sessions.filter((_, i) => i !== index),
-                              )
+                              updateForm("sessions", [
+                                ...form.sessions,
+                                emptySession(),
+                              ])
                             }
                           >
-                            <IconTrash />
-                            Remove
+                            <IconCalendarPlus />
+                            Add session
                           </Button>
                         ) : null}
                       </div>
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <TextField
-                          id={`session-${index}-title-en`}
-                          label="Session title (English)"
-                          value={session.titleEn}
-                          onChange={(value) =>
-                            updateSession(index, { titleEn: value })
-                          }
-                          required
-                          maxLength={200}
-                        />
-                        <TextField
-                          id={`session-${index}-title-id`}
-                          label="Session title (Indonesian, optional)"
-                          value={session.titleId}
-                          onChange={(value) =>
-                            updateSession(index, { titleId: value })
-                          }
-                          maxLength={200}
-                        />
-                      </div>
-                      {form.kind === "cohort" ? (
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          <TextareaField
-                            id={`session-${index}-curriculum-en`}
-                            label="Curriculum description (English)"
-                            value={session.curriculumEn}
-                            onChange={(value) =>
-                              updateSession(index, { curriculumEn: value })
-                            }
-                            required
-                            maxLength={5_000}
-                          />
-                          <TextareaField
-                            id={`session-${index}-curriculum-id`}
-                            label="Curriculum description (Indonesian, optional)"
-                            value={session.curriculumId}
-                            onChange={(value) =>
-                              updateSession(index, { curriculumId: value })
-                            }
-                            maxLength={5_000}
-                          />
-                        </div>
-                      ) : null}
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <TextField
-                          id={`session-${index}-start`}
-                          label="Start"
-                          type="datetime-local"
-                          value={session.startAt}
-                          onChange={(value) =>
-                            updateSession(index, { startAt: value })
-                          }
-                          required
-                        />
-                        <TextField
-                          id={`session-${index}-end`}
-                          label="End"
-                          type="datetime-local"
-                          value={session.endAt}
-                          onChange={(value) =>
-                            updateSession(index, { endAt: value })
-                          }
-                          required
-                        />
-                      </div>
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <NumberField
-                          id={`session-${index}-capacity`}
-                          label="Session capacity"
-                          value={session.capacity}
-                          onChange={(value) =>
-                            updateSession(index, { capacity: value })
-                          }
-                        />
-                        <Field>
-                          <FieldLabel htmlFor={`session-${index}-mode`}>
-                            Delivery mode
-                          </FieldLabel>
-                          <Select
-                            value={session.mode}
-                            onValueChange={(value) =>
-                              updateSession(index, {
-                                mode: String(value) as SessionMode,
-                                roomId:
-                                  String(value) === "in_person"
-                                    ? session.roomId
-                                    : "",
-                              })
-                            }
-                            items={[
-                              { value: "online", label: "Online" },
-                              { value: "in_person", label: "In person" },
-                            ]}
-                          >
-                            <SelectTrigger id={`session-${index}-mode`}>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectPopup>
-                              <SelectList>
-                                <SelectItem value="online">Online</SelectItem>
-                                <SelectItem value="in_person">
-                                  In person
-                                </SelectItem>
-                              </SelectList>
-                            </SelectPopup>
-                          </Select>
-                        </Field>
-                      </div>
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <Field>
-                          <FieldLabel htmlFor={`session-${index}-tutor`}>
-                            Published tutor
-                          </FieldLabel>
-                          <Select
-                            value={session.tutorId}
-                            onValueChange={(value) =>
-                              updateSession(index, {
-                                tutorId: String(value ?? ""),
-                              })
-                            }
-                            items={tutors.map((tutor) => ({
-                              value: tutor.userId,
-                              label: tutor.user.name,
-                            }))}
-                          >
-                            <SelectTrigger id={`session-${index}-tutor`}>
-                              <SelectValue placeholder="Choose a tutor" />
-                            </SelectTrigger>
-                            <SelectPopup>
-                              <SelectList>
-                                {tutors.map((tutor) => (
-                                  <SelectItem
-                                    key={tutor.userId}
-                                    value={tutor.userId}
-                                  >
-                                    {tutor.user.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectList>
-                            </SelectPopup>
-                          </Select>
-                        </Field>
-                        {session.mode === "in_person" ? (
-                          <Field>
-                            <FieldLabel htmlFor={`session-${index}-room`}>
-                              <span className="inline-flex items-center gap-1">
-                                <IconMapPin className="size-4" />
-                                Managed room
-                              </span>
-                            </FieldLabel>
-                            <Select
-                              value={session.roomId}
-                              onValueChange={(value) =>
-                                updateSession(index, {
-                                  roomId: String(value ?? ""),
-                                })
+                      {form.sessions.map((session, index) => (
+                        <div
+                          key={session.id ?? `new-${index}`}
+                          className="space-y-4 rounded-lg border border-card-border bg-card p-4"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <Text className="font-medium">
+                              Session {index + 1}
+                            </Text>
+                            {form.kind === "cohort" &&
+                            form.sessions.length > 1 ? (
+                              <Button
+                                type="button"
+                                variant="plain"
+                                size="sm"
+                                aria-label={`Remove session ${index + 1}`}
+                                onClick={() =>
+                                  updateForm(
+                                    "sessions",
+                                    form.sessions.filter((_, i) => i !== index),
+                                  )
+                                }
+                              >
+                                <IconTrash />
+                                Remove
+                              </Button>
+                            ) : null}
+                          </div>
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <TextField
+                              id={`session-${index}-title-en`}
+                              label="Session title (English)"
+                              value={session.titleEn}
+                              onChange={(value) =>
+                                updateSession(index, { titleEn: value })
                               }
-                              items={rooms.map((room) => ({
-                                value: room.id,
-                                label: `${room.name} · ${room.location}`,
-                              }))}
-                            >
-                              <SelectTrigger id={`session-${index}-room`}>
-                                <SelectValue placeholder="Choose a room" />
-                              </SelectTrigger>
-                              <SelectPopup>
-                                <SelectList>
-                                  {rooms.map((room) => (
-                                    <SelectItem key={room.id} value={room.id}>
-                                      {room.name} · {room.location} · capacity{" "}
-                                      {room.capacity}
+                              required
+                              maxLength={200}
+                            />
+                            <TextField
+                              id={`session-${index}-title-id`}
+                              label="Session title (Indonesian, optional)"
+                              value={session.titleId}
+                              onChange={(value) =>
+                                updateSession(index, { titleId: value })
+                              }
+                              maxLength={200}
+                            />
+                          </div>
+                          {form.kind === "cohort" ? (
+                            <div className="grid gap-4 sm:grid-cols-2">
+                              <TextareaField
+                                id={`session-${index}-curriculum-en`}
+                                label="Curriculum description (English)"
+                                value={session.curriculumEn}
+                                onChange={(value) =>
+                                  updateSession(index, { curriculumEn: value })
+                                }
+                                required
+                                maxLength={5_000}
+                              />
+                              <TextareaField
+                                id={`session-${index}-curriculum-id`}
+                                label="Curriculum description (Indonesian, optional)"
+                                value={session.curriculumId}
+                                onChange={(value) =>
+                                  updateSession(index, { curriculumId: value })
+                                }
+                                maxLength={5_000}
+                              />
+                            </div>
+                          ) : null}
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <TextField
+                              id={`session-${index}-start`}
+                              label="Start"
+                              type="datetime-local"
+                              value={session.startAt}
+                              onChange={(value) =>
+                                updateSession(index, { startAt: value })
+                              }
+                              required
+                            />
+                            <TextField
+                              id={`session-${index}-end`}
+                              label="End"
+                              type="datetime-local"
+                              value={session.endAt}
+                              onChange={(value) =>
+                                updateSession(index, { endAt: value })
+                              }
+                              required
+                            />
+                          </div>
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <NumberField
+                              id={`session-${index}-capacity`}
+                              label="Session capacity"
+                              value={session.capacity}
+                              onChange={(value) =>
+                                updateSession(index, { capacity: value })
+                              }
+                            />
+                            <Field>
+                              <FieldLabel htmlFor={`session-${index}-mode`}>
+                                Delivery mode
+                              </FieldLabel>
+                              <Select
+                                value={session.mode}
+                                onValueChange={(value) =>
+                                  updateSession(index, {
+                                    mode: String(value) as SessionMode,
+                                    roomId:
+                                      String(value) === "in_person"
+                                        ? session.roomId
+                                        : "",
+                                  })
+                                }
+                                items={[
+                                  { value: "online", label: "Online" },
+                                  { value: "in_person", label: "In person" },
+                                ]}
+                              >
+                                <SelectTrigger id={`session-${index}-mode`}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectPopup>
+                                  <SelectList>
+                                    <SelectItem value="online">
+                                      Online
                                     </SelectItem>
-                                  ))}
-                                </SelectList>
-                              </SelectPopup>
-                            </Select>
-                          </Field>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <Field>
-                  <FieldLabel htmlFor="class-audit-reason">
-                    Reason for this change
-                  </FieldLabel>
-                  <Textarea
-                    id="class-audit-reason"
-                    required
-                    minLength={3}
-                    maxLength={500}
-                    value={form.reason}
-                    onChange={(event) =>
-                      updateForm("reason", event.target.value)
-                    }
-                    rows={2}
-                  />
-                  <FieldDescription>
-                    Saved with the admin actor and before/after snapshot.
-                  </FieldDescription>
-                </Field>
-
-                <div className="flex flex-wrap justify-end gap-3">
-                  {form.id ? (
-                    <Button
-                      type="submit"
-                      name="class-action"
-                      value="publish"
-                      disabled={
-                        saveDraft.isPending ||
-                        publishClass.isPending ||
-                        coverUploading
-                      }
-                    >
-                      {publishClass.isPending ? "Publishing…" : "Publish class"}
-                    </Button>
-                  ) : null}
-                  {form.id ? (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      disabled={
-                        coverUploading ||
-                        saveDraft.isPending ||
-                        publishClass.isPending
-                      }
-                      onClick={() => {
-                        setForm(emptyDraft());
-                        setCoverPreviewUrl(null);
-                      }}
-                    >
-                      Cancel edit
-                    </Button>
-                  ) : null}
-                  <Button
-                    type="submit"
-                    disabled={
-                      saveDraft.isPending ||
-                      publishClass.isPending ||
-                      coverUploading
-                    }
-                  >
-                    <IconDeviceFloppy />
-                    {saveDraft.isPending ? "Saving…" : "Save draft"}
-                  </Button>
-                </div>
-              </Stack>
-            </form>
-          </CardBody>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Published and postponed classes</CardTitle>
-        </CardHeader>
-        <CardBody>
-          <Stack direction="column" spacing="sm">
-            {publishedClassesQuery.isLoading ? (
-              <Text className="text-muted">Loading published classes…</Text>
-            ) : postponedClassesQuery.isLoading ? (
-              <Text className="text-muted">Loading postponed classes…</Text>
-            ) : publishedClassesQuery.isError ||
-              postponedClassesQuery.isError ? (
-              <Text className="text-danger-foreground">
-                Published or postponed classes could not be loaded. Refresh to
-                try again.
-              </Text>
-            ) : publishedClasses.length === 0 ? (
-              <Text className="text-muted">
-                No classes have been published.
-              </Text>
-            ) : (
-              publishedClasses.map((record) => {
-                const onlineSessions = record.sessions.filter(
-                  (session) => session.mode === "online",
-                );
-                const failedMeetings = onlineSessions.filter(
-                  (session) => session.meeting?.status === "failed",
-                );
-                const createdMeetings = onlineSessions.filter(
-                  (session) => session.meeting?.status === "created",
-                );
-                const pendingMeetings =
-                  onlineSessions.length -
-                  failedMeetings.length -
-                  createdMeetings.length;
-                const retryReason = meetingRetryReasons[record.id] ?? "";
-                return (
-                  <div
-                    key={record.id}
-                    data-testid={`published-class-${record.id}`}
-                    className="rounded-lg border border-card-border bg-card p-4"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Text className="font-medium">{record.titleEn}</Text>
-                          <Badge
-                            variant={
-                              record.state === "postponed"
-                                ? "warning"
-                                : "success"
-                            }
-                          >
-                            {record.state === "postponed"
-                              ? "Postponed"
-                              : "Published"}
-                          </Badge>
-                          <Badge variant="secondary">{record.kind}</Badge>
+                                    <SelectItem value="in_person">
+                                      In person
+                                    </SelectItem>
+                                  </SelectList>
+                                </SelectPopup>
+                              </Select>
+                            </Field>
+                          </div>
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <Field>
+                              <FieldLabel htmlFor={`session-${index}-tutor`}>
+                                Published tutor
+                              </FieldLabel>
+                              <Select
+                                value={session.tutorId}
+                                onValueChange={(value) =>
+                                  updateSession(index, {
+                                    tutorId: String(value ?? ""),
+                                  })
+                                }
+                                items={tutors.map((tutor) => ({
+                                  value: tutor.userId,
+                                  label: tutor.user.name,
+                                }))}
+                              >
+                                <SelectTrigger id={`session-${index}-tutor`}>
+                                  <SelectValue placeholder="Choose a tutor" />
+                                </SelectTrigger>
+                                <SelectPopup>
+                                  <SelectList>
+                                    {tutors.map((tutor) => (
+                                      <SelectItem
+                                        key={tutor.userId}
+                                        value={tutor.userId}
+                                      >
+                                        {tutor.user.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectList>
+                                </SelectPopup>
+                              </Select>
+                            </Field>
+                            {session.mode === "in_person" ? (
+                              <Field>
+                                <FieldLabel htmlFor={`session-${index}-room`}>
+                                  <span className="inline-flex items-center gap-1">
+                                    <IconMapPin className="size-4" />
+                                    Managed room
+                                  </span>
+                                </FieldLabel>
+                                <Select
+                                  value={session.roomId}
+                                  onValueChange={(value) =>
+                                    updateSession(index, {
+                                      roomId: String(value ?? ""),
+                                    })
+                                  }
+                                  items={rooms.map((room) => ({
+                                    value: room.id,
+                                    label: `${room.name} · ${room.location}`,
+                                  }))}
+                                >
+                                  <SelectTrigger id={`session-${index}-room`}>
+                                    <SelectValue placeholder="Choose a room" />
+                                  </SelectTrigger>
+                                  <SelectPopup>
+                                    <SelectList>
+                                      {rooms.map((room) => (
+                                        <SelectItem
+                                          key={room.id}
+                                          value={room.id}
+                                        >
+                                          {room.name} · {room.location} ·
+                                          capacity {room.capacity}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectList>
+                                  </SelectPopup>
+                                </Select>
+                              </Field>
+                            ) : null}
+                          </div>
                         </div>
-                        <Text className="mt-1 text-sm text-muted">
-                          {record.sessions.length} session(s) ·{" "}
-                          {record.competition.name}
-                        </Text>
-                        <Text className="mt-2 text-sm text-muted">
-                          {onlineSessions.length === 0
-                            ? "In-person sessions use managed rooms; no Meet is created."
-                            : `${createdMeetings.length} Meet(s) ready${pendingMeetings > 0 ? ` · ${pendingMeetings} pending` : ""}${failedMeetings.length > 0 ? ` · ${failedMeetings.length} failed` : ""}.`}
-                        </Text>
-                      </div>
+                      ))}
                     </div>
-                    {failedMeetings.length > 0 ? (
-                      <div className="mt-4 flex flex-wrap items-end gap-3">
-                        <Field className="min-w-64 flex-1">
-                          <FieldLabel htmlFor={`meeting-retry-${record.id}`}>
-                            Retry reason
-                          </FieldLabel>
-                          <Input
-                            id={`meeting-retry-${record.id}`}
-                            maxLength={500}
-                            value={retryReason}
-                            onChange={(event) =>
-                              setMeetingRetryReasons((current) => ({
-                                ...current,
-                                [record.id]: event.target.value,
-                              }))
-                            }
-                          />
-                        </Field>
+
+                    <Field>
+                      <FieldLabel htmlFor="class-audit-reason">
+                        Reason for this change
+                      </FieldLabel>
+                      <Textarea
+                        id="class-audit-reason"
+                        required
+                        minLength={3}
+                        maxLength={500}
+                        value={form.reason}
+                        onChange={(event) =>
+                          updateForm("reason", event.target.value)
+                        }
+                        rows={2}
+                      />
+                      <FieldDescription>
+                        Saved with the admin actor and before/after snapshot.
+                      </FieldDescription>
+                    </Field>
+
+                    <div className="flex flex-wrap justify-end gap-3">
+                      {form.id ? (
+                        <Button
+                          type="submit"
+                          name="class-action"
+                          value="publish"
+                          disabled={
+                            saveDraft.isPending ||
+                            publishClass.isPending ||
+                            coverUploading
+                          }
+                        >
+                          {publishClass.isPending
+                            ? "Publishing…"
+                            : "Publish class"}
+                        </Button>
+                      ) : null}
+                      {form.id ? (
                         <Button
                           type="button"
                           variant="secondary"
                           disabled={
-                            retryClassMeetings.isPending ||
-                            retryReason.trim().length < 3
+                            coverUploading ||
+                            saveDraft.isPending ||
+                            publishClass.isPending
                           }
-                          onClick={() =>
-                            retryClassMeetings.mutate({
-                              id: record.id,
-                              reason: retryReason,
-                            })
-                          }
+                          onClick={() => {
+                            setForm(emptyDraft());
+                            setCoverPreviewUrl(null);
+                          }}
                         >
-                          Retry failed meeting setup
+                          Cancel edit
                         </Button>
-                      </div>
-                    ) : pendingMeetings > 0 ? (
-                      <Text className="mt-3 text-sm text-muted">
-                        Meeting work is queued or running. Failed attempts are
-                        retried automatically.
-                      </Text>
-                    ) : null}
-                    <ClassAdminCancellationPanel
-                      classId={record.id}
-                      expectedVersion={record.version}
-                      onChanged={() =>
-                        Promise.all([
-                          queryClient.invalidateQueries({
-                            queryKey: orpc.admin.listAcademyClasses.key({
-                              input: { state: "published" },
-                            }),
-                          }),
-                          queryClient.invalidateQueries({
-                            queryKey: orpc.admin.listAcademyClasses.key({
-                              input: { state: "postponed" },
-                            }),
-                          }),
-                        ])
-                      }
-                    />
-                    <ClassAdminLifecyclePanel
-                      classRecord={record}
-                      onChanged={() =>
-                        Promise.all([
-                          queryClient.invalidateQueries({
-                            queryKey: orpc.admin.listAcademyClasses.key({
-                              input: { state: "published" },
-                            }),
-                          }),
-                          queryClient.invalidateQueries({
-                            queryKey: orpc.admin.listAcademyClasses.key({
-                              input: { state: "postponed" },
-                            }),
-                          }),
-                        ])
-                      }
-                    />
-                  </div>
-                );
-              })
-            )}
-          </Stack>
-        </CardBody>
-      </Card>
+                      ) : null}
+                      <Button
+                        type="submit"
+                        disabled={
+                          saveDraft.isPending ||
+                          publishClass.isPending ||
+                          coverUploading
+                        }
+                      >
+                        <IconDeviceFloppy />
+                        {saveDraft.isPending ? "Saving…" : "Save draft"}
+                      </Button>
+                    </div>
+                  </Stack>
+                </form>
+              </CardBody>
+            </Card>
+          </div>
+        </TabsPanel>
+      </Tabs>
     </Stack>
   );
 }

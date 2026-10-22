@@ -314,7 +314,7 @@ test("student enrolls in full, half, and single plans with stable checkout and i
     );
     expect(fullReplay.outcome).toBe("already_exists");
     await page.reload({ waitUntil: "commit" });
-    await expect(page.getByText("Snapshot total:")).toBeVisible();
+    await expect(page.getByText("Enrollment total:")).toBeVisible();
     expect(
       (
         await rpc<{ enrollments: Enrollment[] }>(
@@ -686,6 +686,9 @@ test("admin cancels a class with an exact future-hold return and retained studen
     await adminPage.goto("/admin-classes");
     const card = adminPage.getByTestId(`published-class-${adminClass.id}`);
     await card
+      .getByRole("button", { name: "Manage class", exact: true })
+      .click();
+    await card
       .getByLabel("Class cancellation reason")
       .fill("Class cancellation browser acceptance");
     await card
@@ -795,6 +798,9 @@ test("admin cancels one session, postpones once, and student confirms the exact 
     const adminPage = await adminContext.newPage();
     await adminPage.goto("/admin-classes");
     const card = adminPage.getByTestId(`published-class-${academyClass.id}`);
+    await card
+      .getByRole("button", { name: "Manage class", exact: true })
+      .click();
     await expect(card).toBeVisible();
     await expect(
       card.getByText("1 / 2 active full/half students"),
