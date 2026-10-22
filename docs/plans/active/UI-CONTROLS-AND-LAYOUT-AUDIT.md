@@ -2,7 +2,7 @@
 
 ## Classes UI follow-up (22 October 2026)
 
-- Completed: one-card catalog, local search/type tabs, explicit WIB dates and
+- Completed: one-card catalog, local search/type filters, explicit WIB dates and
   price units, separate navigation links, curriculum/enrollment detail layout.
 - Completed: published-first admin studio tabs, retained draft editor mounting,
   expandable lifecycle controls, wider editor and wrapping confirmation actions.

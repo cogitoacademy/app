@@ -2,7 +2,7 @@
 
 ## Classes UI workspace (22 October 2026)
 
-Student `/classes` is a single searchable catalog with Cohort/Masterclass tabs,
+Student `/classes` is a single searchable catalog with Cohort/Masterclass filters,
 one card per class, next-session dates in WIB, tutor names and explicit price units.
 Cards use separate title/action links; there is no disclosure nested inside a link.
 Class details place curriculum beside enrollment on wide screens and stack on

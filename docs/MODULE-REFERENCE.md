@@ -2,7 +2,7 @@
 
 ## Classes UI composition (22 October 2026)
 
-The student catalog uses Selia Card/Field/Input/Tabs, with one card per class and
+The student catalog uses Selia Card/Field/Input/Button, with one card per class and
 separate detail links. Details separate curriculum from enrollment. Admin class
 studio groups published/postponed management and the draft editor into tabs, with
 existing management panels inside a Selia Accordion. Draft panel mounting retains

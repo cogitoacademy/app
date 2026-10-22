@@ -11,13 +11,23 @@ export default defineConfig({
   retries: 0,
   reporter: "list",
   outputDir: "./test-results/classes-layout",
-  use: {baseURL:"http://localhost:3300",browserName:"chromium",trace:"retain-on-failure",screenshot:"only-on-failure"},
+  use: {
+    baseURL: "http://localhost:3300",
+    browserName: "chromium",
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure",
+  },
   webServer: {
-    command: "node --max-old-space-size=384 ./node_modules/vite/bin/vite.js dev --mode test --configLoader runner --config ../../packages/e2e/vite.classes-layout.config.ts",
-    cwd: path.resolve(import.meta.dirname,"../../apps/web"),
+    command:
+      "node --max-old-space-size=384 ./node_modules/vite/bin/vite.js dev --mode test --configLoader runner --config ../../packages/e2e/vite.classes-layout.config.ts",
+    cwd: path.resolve(import.meta.dirname, "../../apps/web"),
     url: "http://localhost:3300",
     reuseExistingServer: false,
     timeout: 120000,
-    env: {NODE_ENV:"test",WEB_PORT:"3300",VITE_SERVER_URL:"http://localhost:3001"},
+    env: {
+      NODE_ENV: "test",
+      WEB_PORT: "3300",
+      VITE_SERVER_URL: "http://localhost:3001",
+    },
   },
 });

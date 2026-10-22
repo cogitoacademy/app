@@ -174,9 +174,13 @@ for (const width of [320, 390, 768, 1440]) {
       path: test.info().outputPath(`classes-catalog-${width}.png`),
       fullPage: true,
     });
-    await page.getByRole("tab", { name: "Masterclasses", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Masterclasses", exact: true })
+      .click();
     await expect(page.getByTestId(`class-card-${classId}`)).toHaveCount(0);
-    await page.getByRole("tab", { name: "All classes", exact: true }).click();
+    await page
+      .getByRole("button", { name: "All classes", exact: true })
+      .click();
     await page.getByRole("textbox", { name: "Search classes" }).fill("algebra");
     await expect(
       page.getByRole("status").filter({ hasText: "1 class found" }),

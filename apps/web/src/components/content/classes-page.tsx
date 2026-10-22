@@ -24,7 +24,6 @@ import {
   InputGroup,
   InputGroupAddon,
 } from "@cogito-app/ui/components/selia/input-group";
-import { Tabs, TabsList, TabsItem } from "@cogito-app/ui/components/selia/tabs";
 import { Stack } from "@cogito-app/ui/components/selia/stack";
 import { Text } from "@cogito-app/ui/components/selia/text";
 import { EmptyStateCard } from "@/components/empty-state";
@@ -87,17 +86,27 @@ export function ClassesPage() {
       </div>
 
       <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <Tabs
-          value={kind}
-          onValueChange={(value) => setKind(String(value))}
-          className="min-w-0"
+        <div
+          role="group"
+          aria-label="Class type"
+          className="flex min-w-0 flex-wrap gap-2"
         >
-          <TabsList aria-label="Class type" className="w-full sm:w-fit">
-            <TabsItem value="all">All classes</TabsItem>
-            <TabsItem value="cohort">Cohorts</TabsItem>
-            <TabsItem value="masterclass">Masterclasses</TabsItem>
-          </TabsList>
-        </Tabs>
+          {[
+            { value: "all", label: "All classes" },
+            { value: "cohort", label: "Cohorts" },
+            { value: "masterclass", label: "Masterclasses" },
+          ].map((filter) => (
+            <Button
+              key={filter.value}
+              variant={kind === filter.value ? "secondary" : "plain"}
+              pill
+              aria-pressed={kind === filter.value}
+              onClick={() => setKind(filter.value)}
+            >
+              {filter.label}
+            </Button>
+          ))}
+        </div>
         <Field className="w-full sm:max-w-xs">
           <FieldLabel htmlFor="class-search" className="sr-only">
             Search classes
