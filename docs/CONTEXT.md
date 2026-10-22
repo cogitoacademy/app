@@ -46,12 +46,19 @@ attribution expiry. KOL first-purchase commission decisions, transfers,
 partial/overpayment accounting, CSV, corrections, and reversal handling remain
 the next slice; campaign creation does not imply a commission or payout.
 
-Parent follow-up generated additive `0071_referral_registration_rewards` after
-0070: six new tables and `user.referral_choice_pending`, with the existing
-snapshot tables otherwise unchanged. It is not applied. Parent web and server
-typechecks pass after correcting UI/form and transaction parameter types;
-the focused unit suite passes 46 tests / 101 expectations. Database, browser,
-and provider acceptance remain open; review is in progress.
+At this earlier source-only checkpoint, parent follow-up had generated additive
+`0071_referral_registration_rewards` after 0070: six new tables and
+`user.referral_choice_pending`, with the existing snapshot tables otherwise
+unchanged. The migration has since been applied only to guarded loopback
+6769/cogito-test; development 6767 and production remain unmigrated. Parent web
+and server typechecks pass after correcting UI/form and transaction parameter
+types; the focused unit suite passes 46 tests / 101 expectations.
+
+The read-only review against `356c352c..dfd8a2a0` closed its three original
+findings with no remaining spec/behavior findings. Its P2 documentation-status
+finding is corrected in this follow-up; the reviewer did not rerun tests.
+OAuth/browser UAT, development/production migration, and provider acceptance
+remain open.
 
 ## Classes UI workspace (22 October 2026)
 

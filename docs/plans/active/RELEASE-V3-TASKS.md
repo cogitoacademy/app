@@ -10,17 +10,23 @@ booking-report regressions pass 12 / 118,
 including no second charge and one fee/reward for confirmed solo delivery.
 Guarded class enrollment/lifecycle/report regressions pass 44 / 354; web and
 server typechecks pass after the fixes.
-Independent rereview, OAuth/browser journeys, development/deployment migration,
-and KOL commission/transfer implementation remain open. Main is unchanged.
+The read-only review against `356c352c..dfd8a2a0` closed its three original
+findings with no remaining spec/behavior findings. Its P2 migration-status
+documentation finding is corrected in this follow-up; the reviewer did not
+rerun tests. OAuth/browser journeys, development/deployment migration, and KOL
+commission/transfer implementation remain open. Main is unchanged.
 
-## Referral parent checkpoint (22 October 2026)
+## Referral parent checkpoint (historical source-only status, 22 October 2026)
 
 AUTH-02/friend source is implemented in its feature branch. Parent-generated
-additive 0071 follows 0070 and remains unapplied; snapshot lineage and the six
-new tables plus one user column are verified. Focused units pass 46 / 101;
-web and server typechecks pass after parent fixes. Source review, database
-reward/concurrency acceptance, Google/browser journeys, and KOL commission and
-transfer implementation remain open. This is not an integration/release gate.
+additive 0071 follows 0070; this checkpoint predates its guarded test-only
+application. It is now applied only to 6769/cogito-test (journal 72); development
+and production remain unmigrated. Snapshot lineage and the six new tables plus
+one user column are verified. Focused units pass 46 / 101; web and server
+typechecks pass after parent fixes. At this checkpoint, source review and
+database reward/concurrency acceptance were still open. Google/browser UAT and
+KOL commission and transfer implementation remain open. This is not an
+integration/release gate.
 
 ## Classes presentation checkpoint (22 October 2026)
 

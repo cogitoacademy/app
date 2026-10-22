@@ -52,9 +52,11 @@ date. Admin APIs create audited settings revisions and KOL campaigns. KOL signup
 terms are immutable snapshots, but first-purchase commission, transfers,
 partial/overpayment accounting, CSV, corrections, and reversal handling remain
 unimplemented. Parent-generated additive migration
-`0071_referral_registration_rewards` follows 0070 and is unapplied. Wallet
-creation accepts the caller's transaction, including its upsert, so referral
-credits do not escape the signup or completion transaction.
+`0071_referral_registration_rewards` follows 0070 and is applied only to
+guarded loopback test 6769/cogito-test (journal 72). Development 6767 and
+production remain unmigrated. Wallet creation accepts the caller's transaction,
+including its upsert, so referral credits do not escape the signup or completion
+transaction.
 
 ## Classes UI composition (22 October 2026)
 
