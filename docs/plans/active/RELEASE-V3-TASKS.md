@@ -21,6 +21,23 @@ analytics/provider/financial acceptance, core content, end-to-end UAT and releas
 readiness. Apply approved policy gates to dependent behavior; do not invent
 ordinary-reschedule or analytics policy.
 
+## Ongoing experience UX checkpoint (22 October 2026)
+
+Implemented an explicit ongoing-role checkbox and stable, top-aligned date
+controls in tutor Experiences. Existing `endYear: null` data is preserved;
+focused synthetic browser coverage checks initial state, toggling and layout.
+The section heading/info alignment is repaired and its desktop/mobile geometry
+check passes. Real-account persistence acceptance remains separate.
+
+## Compact tutor profile status checkpoint (22 October 2026)
+
+Implemented: remove the duplicate status card, place one lifecycle badge beside
+the heading and keep conditional review/action guidance plus admin feedback.
+Synthetic desktop/mobile render coverage checks the published, edit-review,
+revision, draft, initial-review, approved and suspended states. A standalone
+public-profile link is omitted because public details currently use a drawer.
+Profile saving and broader release acceptance remain separate.
+
 ## Tutor profile render checkpoint (22 October 2026)
 
 Completed the `/profile` tax-section render repair: standalone section guidance
