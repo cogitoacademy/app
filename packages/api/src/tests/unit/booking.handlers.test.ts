@@ -599,7 +599,7 @@ describe("tutorActionsHandler", () => {
   });
 
   describe("completeSession", () => {
-    test("calls booking.completeSession with bookingId, session user id, and optional sessionId", async () => {
+    test("forwards completion details and an omitted optional requestKey", async () => {
       const booking = makeBookingService();
       const handler = createTutorActionsHandler(booking as any);
       const context = makeContext("t1");
@@ -619,8 +619,32 @@ describe("tutorActionsHandler", () => {
         "t1",
         "s1",
         TEST_COMPLETION_FEEDBACK,
+        undefined,
       );
       expect(result).toEqual({ id: "b1", currentState: "completed" });
+    });
+
+    test("forwards an explicit requestKey to booking.completeSession", async () => {
+      const booking = makeBookingService();
+      const handler = createTutorActionsHandler(booking as any);
+      const requestKey = "2e10255e-6f8f-4be8-9db2-9b8331d89c3b";
+
+      await handler.completeSession({
+        context: makeContext("t1") as any,
+        input: {
+          bookingId: "b1",
+          feedback: TEST_COMPLETION_FEEDBACK,
+          requestKey,
+        } as any,
+      });
+
+      expect(booking.completeSession).toHaveBeenCalledWith(
+        "b1",
+        "t1",
+        undefined,
+        TEST_COMPLETION_FEEDBACK,
+        requestKey,
+      );
     });
   });
 

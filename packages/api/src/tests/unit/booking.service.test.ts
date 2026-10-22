@@ -9404,9 +9404,9 @@ describe("BookingService additional coverage paths", () => {
         tutorId: "tutor2",
         tutorName: "Budi Tutor",
         bankName: "BRI",
-        bankAccountNumber: "00456",
-        bankAccountHolderName: "Budi Tutor",
-        bankAccountOpeningCity: "Bandung",
+        bankAccountNumber: "00999",
+        bankAccountHolderName: "Budi Updated",
+        bankAccountOpeningCity: "Jakarta",
         bankAccountOwnership: "self",
         bankTransferDisclaimerAccepted: true,
       },
@@ -9417,17 +9417,30 @@ describe("BookingService additional coverage paths", () => {
         tutorId: "tutor2",
         tutorName: "Budi Tutor",
         bankName: "BRI",
-        bankAccountNumber: null,
-        bankAccountHolderName: null,
-        profileBankAccountNumber: "00456",
-        profileBankAccountHolderName: "Budi Tutor",
-        profileBankAccountOpeningCity: "Bandung",
-        profileBankAccountOwnership: "self",
+        bankAccountNumber: "00456",
+        bankAccountHolderName: "Budi Tutor",
+        bankAccountOpeningCity: "Bandung",
+        bankAccountOwnership: "self",
         grossHonorariumIdr: 300_000,
         transferFeeIdr: 2_500,
         netHonorariumIdr: 297_500,
         status: "paid",
         paidAt: new Date("2026-08-10T00:00:00Z"),
+      },
+      {
+        id: "paid-without-account-snapshot",
+        tutorId: "tutor2",
+        tutorName: "Budi Tutor",
+        bankName: "BRI",
+        bankAccountNumber: null,
+        bankAccountHolderName: null,
+        bankAccountOpeningCity: null,
+        bankAccountOwnership: null,
+        grossHonorariumIdr: 100_000,
+        transferFeeIdr: 2_500,
+        netHonorariumIdr: 97_500,
+        status: "paid",
+        paidAt: new Date("2026-08-11T00:00:00Z"),
       },
     ]);
     const { service } = createService({
@@ -9445,13 +9458,23 @@ describe("BookingService additional coverage paths", () => {
       dateFrom: new Date("2026-08-15T00:00:00Z"),
       dateTo: new Date("2026-08-31T23:59:59Z"),
     });
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(3);
     expect(rows).toContainEqual(
       expect.objectContaining({
         id: "paid-1",
         status: "paid",
         bankAccountNumber: "00456",
+        bankAccountHolderName: "Budi Tutor",
+        bankAccountOpeningCity: "Bandung",
         netHonorariumIdr: 297_500,
+      }),
+    );
+    expect(rows).toContainEqual(
+      expect.objectContaining({
+        id: "paid-without-account-snapshot",
+        bankAccountNumber: null,
+        bankAccountHolderName: null,
+        payoutAccountComplete: false,
       }),
     );
     expect(rows).toContainEqual(
