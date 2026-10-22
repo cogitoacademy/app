@@ -1,4 +1,5 @@
 import {
+  adminProcedure,
   protectedProcedure,
   studentProcedure,
   tutorProcedure,
@@ -22,6 +23,7 @@ import {
   withdrawInput,
   proposeRescheduleInput,
   completeSessionInput,
+  adminSubmitCompletionReportInput,
   listCompletionFeedbackInput,
   setMeetingLinkInput,
   markAttendanceInput,
@@ -158,10 +160,34 @@ export function createBookingRouter(handler: BookingHandler) {
         tags: ["Bookings"],
         summary: "List completion feedback",
         description:
-          "Student, tutor, or admin reads required completion feedback (discussion, strengths, improvements) for payout review",
+          "Assigned tutors and admins read authorized completion feedback; students see only delivered reports for seats with a matching chargeable ledger deduction.",
       })
       .input(listCompletionFeedbackInput)
       .handler(handler.listCompletionFeedback),
+
+    listCompletionFeedbackHistory: adminProcedure
+      .route({
+        method: "POST",
+        path: "/booking/admin/completion-feedback/history",
+        tags: ["Admin", "Bookings"],
+        summary: "List session report audit history",
+        description:
+          "Returns immutable report versions, actors, delivery confirmations, and admin reasons for a booking",
+      })
+      .input(listCompletionFeedbackInput)
+      .handler(handler.listCompletionFeedbackHistory),
+
+    submitAdminCompletionReport: adminProcedure
+      .route({
+        method: "POST",
+        path: "/booking/admin/completion-report/submit",
+        tags: ["Admin", "Bookings"],
+        summary: "Submit or correct a session report",
+        description:
+          "Submits or corrects a delivered on-demand session report on behalf of its assigned tutor",
+      })
+      .input(adminSubmitCompletionReportInput)
+      .handler(handler.submitAdminCompletionReport),
 
     createGroup: verifiedStudentProcedure
       .route({

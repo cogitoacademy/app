@@ -160,6 +160,24 @@ export const completeSessionInput = z.object({
   bookingId: z.string().max(100),
   sessionId: z.string().max(100).optional(),
   feedback: completionFeedbackInput,
+  requestKey: z.string().uuid().optional(),
+});
+
+export const adminSubmitCompletionReportInput = z.object({
+  bookingId: z.string().max(100),
+  sessionId: z.string().max(100).optional(),
+  feedback: completionFeedbackInput,
+  deliveryConfirmed: z.literal(true),
+  reason: z
+    .string()
+    .trim()
+    .min(1, "An audit reason is required")
+    .max(6000)
+    .refine((reason) => Array.from(reason).length <= 600, {
+      message: "The audit reason must be at most 600 characters",
+    }),
+  expectedVersion: z.number().int().positive().optional(),
+  requestKey: z.string().uuid(),
 });
 
 export const listCompletionFeedbackInput = z.object({

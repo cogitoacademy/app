@@ -33,6 +33,7 @@ import {
   BookingAcceptanceDeadlinePassedError,
   BookingCancellationDeadlinePassedError,
   BookingCompletionFeedbackRequiredError,
+  BookingCompletionReportConflictError,
   BookingTutorCapacityError,
   TutorPayoutPreviewStaleError,
   TutorPayoutTaxProfileIncompleteError,
@@ -139,7 +140,23 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     cancelSession: mock(async () => true),
     insertSessionNote: mock(async () => ({})),
     listSessionNotes: mock(async () => []),
-    insertCompletionFeedback: mock(async () => ({})),
+    insertCompletionFeedback: mock(async (_conn: any, values: any) => ({
+      id: "feedback1",
+      ...values,
+      version: 1,
+      createdAt: new Date(),
+    })),
+    insertCompletionFeedbackHistory: mock(async (_conn: any, values: any) => ({
+      id: "feedback-history1",
+      ...values,
+      createdAt: new Date(),
+    })),
+    findCompletionFeedbackHistoryByRequestKey: mock(async () => null),
+    listCompletionFeedbackHistoryByBooking: mock(async () => []),
+    listCompletionFeedbackHistoryStatesByBooking: mock(async () => []),
+    listCompletionFeedbackHistoryByFeedback: mock(async () => []),
+    updateCompletionFeedback: mock(async () => null),
+    hasChargeableFeedbackEntitlement: mock(async () => false),
     listCompletionFeedbackByBooking: mock(async () => []),
     findCompletionFeedback: mock(async () => null),
     ...overrides,
@@ -2639,6 +2656,135 @@ describe("BookingService", () => {
           "https://example.com/pending",
         ),
       ).rejects.toThrow(BookingNotEditableError);
+    });
+  });
+
+  describe("submitAdminCompletionReport", () => {
+    for (const bookingType of ["solo", "group", "series"] as const) {
+      test(`records a report for an already-completed ${bookingType} without settling again`, async () => {
+        const bookingId = `legacy-${bookingType}`;
+        const sessionId =
+          bookingType === "series" ? "series-session" : undefined;
+        const event = {
+          id: "saved-report-event",
+          bookingId,
+          feedbackId: "feedback1",
+          sessionId: sessionId ?? null,
+          version: 1,
+          status: "submitted",
+          actorId: "admin1",
+          actorRole: "admin",
+        };
+        let historyLookups = 0;
+        const feedback = {
+          discussion: ["A & B", "literal &amp;", '<topics> "quoted" \''],
+          strengths: ["Clear explanation"],
+          improvements: ["Practice one example"],
+        };
+        const { service, repo, wallet } = createService({
+          repo: {
+            findBookingById: mock(async () =>
+              makeBooking({
+                id: bookingId,
+                type: bookingType,
+                currentState: "completed",
+                scheduledEndAt: new Date(Date.now() - 60_000),
+              }),
+            ),
+            findSessionById: mock(async () =>
+              sessionId
+                ? {
+                    id: sessionId,
+                    seriesBookingId: bookingId,
+                    currentState: "completed",
+                    scheduledStartAt: new Date(Date.now() - 120_000),
+                    scheduledEndAt: new Date(Date.now() - 60_000),
+                  }
+                : null,
+            ),
+            findCompletionFeedbackHistoryByRequestKey: mock(async () => {
+              historyLookups += 1;
+              return historyLookups === 1 ? null : event;
+            }),
+          },
+        });
+
+        const result = await service.submitAdminCompletionReport({
+          bookingId,
+          adminId: "admin1",
+          ...(sessionId ? { sessionId } : {}),
+          feedback,
+          deliveryConfirmed: true,
+          reason: "Record the historical report",
+          requestKey: crypto.randomUUID(),
+        });
+
+        expect(result).toBe(event);
+        expect(repo.insertCompletionFeedback).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.objectContaining({
+            bookingId,
+            sessionId: sessionId ?? null,
+            authorId: "tutor1",
+            ...feedback,
+          }),
+        );
+        expect(repo.insertCompletionFeedbackHistory).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.objectContaining({
+            bookingId,
+            status: "submitted",
+            actorId: "admin1",
+            actorRole: "admin",
+            deliveryConfirmed: true,
+          }),
+        );
+        expect(repo.insertTutorSessionFee).not.toHaveBeenCalled();
+        expect(wallet.deduct).not.toHaveBeenCalled();
+      });
+    }
+
+    test("conflicts when the same request key belongs to another booking", async () => {
+      const bookingId = "booking-b";
+      const requestKey = "e79075cf-1e45-455d-8ef4-26f1cc8356a7";
+      const feedback = {
+        discussion: ["Delivered session"],
+        strengths: ["Clear"],
+        improvements: ["Practice"],
+      };
+      const { service, repo, wallet } = createService({
+        repo: {
+          findBookingById: mock(async () =>
+            makeBooking({ id: bookingId, currentState: "completed" }),
+          ),
+          findCompletionFeedbackHistoryByRequestKey: mock(async () => ({
+            bookingId: "booking-a",
+            sessionId: null,
+            requestPayload: {
+              feedback,
+              deliveryConfirmed: true,
+              reason: "Same reason",
+              expectedVersion: null,
+            },
+          })),
+        },
+      });
+
+      await expect(
+        service.submitAdminCompletionReport({
+          bookingId,
+          adminId: "admin1",
+          feedback,
+          deliveryConfirmed: true,
+          reason: "Same reason",
+          requestKey,
+        }),
+      ).rejects.toThrow(BookingCompletionReportConflictError);
+      expect(repo.findCompletionFeedback).not.toHaveBeenCalled();
+      expect(repo.insertCompletionFeedback).not.toHaveBeenCalled();
+      expect(repo.insertCompletionFeedbackHistory).not.toHaveBeenCalled();
+      expect(repo.insertTutorSessionFee).not.toHaveBeenCalled();
+      expect(wallet.deduct).not.toHaveBeenCalled();
     });
   });
 

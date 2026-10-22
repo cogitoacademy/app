@@ -188,7 +188,8 @@ async function globalSetup() {
 
   if (
     process.env.T06_CLASS_LIFECYCLE_E2E === "1" ||
-    process.env.T07_CLASS_REPORTS_E2E === "1"
+    process.env.T07_CLASS_REPORTS_E2E === "1" ||
+    process.env.T07_ON_DEMAND_BOOKING_REPORTS_E2E === "1"
   ) {
     await saveRoleStorageState(
       "admin",
@@ -198,7 +199,10 @@ async function globalSetup() {
       authDir,
     );
   }
-  if (process.env.T07_CLASS_REPORTS_E2E === "1") {
+  if (
+    process.env.T07_CLASS_REPORTS_E2E === "1" ||
+    process.env.T07_ON_DEMAND_BOOKING_REPORTS_E2E === "1"
+  ) {
     await saveRoleStorageState(
       "tutor",
       TUTOR_EMAIL,

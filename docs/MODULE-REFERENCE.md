@@ -10,6 +10,15 @@ local editor/file-input state across tab changes. Publishing selects the list.
 The shared class-report workspace bounds its session list and moves mobile focus
 to the selected report. No service, event key, authorization or payment rule changes.
 
+## On-demand report acceptance (22 October 2026)
+
+PR #305 admin report submission/correction is verified with 11 guarded DB tests
+(106 assertions), 31 feedback/service tests (112 assertions), and one real-RPC
+Chromium journey (52.3s). The browser verifies assigned-tutor authorship, versioned
+history, consumption of only the owned booking hold, and no repeat settlement
+on correction. Migration 0070 is applied to local test/dev; production is separate.
+The endpoint and service contracts below are unchanged by these fixture repairs.
+
 
 ## Ongoing tutor experience control (22 October 2026)
 
@@ -357,6 +366,41 @@ amounts. They keep `bookingId` and price snapshot null for class fees. Active
 source uniqueness and fee-event identity still prevent double allocation, while
 the existing tax, transfer-fee, void, and reconciliation behavior is shared.
 
+## V3 on-demand booking session reports (2026-10-22)
+
+The booking module exposes an admin action on the existing booking-detail
+surface for solo, group, and series sessions. An initial report requires
+delivery confirmation and a trimmed audit reason; scheduled work follows the
+existing completion transaction and settlement locks, and an already-completed
+legacy booking/session without a report gets the report without replaying
+settlement. Corrections require the current report version, append immutable
+actor/time/status/reason snapshots, and notify the assigned tutor without
+replaying wallet deductions, tutor fees, referrals, or rewards.
+
+New feedback is canonical plaintext. Read paths decode one exact HTML-escape
+layer only when version history identifies a legacy row/snapshot; `submitted`
+and `corrected` text is never heuristically unescaped. This preserves literal
+entity text on repeated corrections and leaves legacy rows longer than 600 code
+points readable without truncation. React renders the strings as text.
+
+Admin and tutor completion acquire a PostgreSQL advisory lock for the request
+UUID before booking/tutor locks. The history table's unique request key therefore
+replays identical payloads and returns a 409 conflict when a key is reused for
+another booking or changed payload, including concurrent cross-tutor calls.
+Q06 reads require the completed delivered booking/session plus a matching
+chargeable per-student/per-session ledger event; a chargeable group-series
+no-show is visible, while unpaid and early-released participants are not.
+
+Migration `0070_on_demand_report_admin_audit.sql` is additive after 0069 and
+remains unapplied in this source worktree (SQL SHA-256
+`EACFA97B013F23FA2E74BE6D6D8E410B2B9C0F354B1D9AE6BB121370F40FC0F4`). History
+rows cascade with their feedback and booking; the current feedback's session
+reference also cascades. The history `session_id` is text, but does not by itself
+preserve the row after a booking or current feedback hard delete. No current
+application hard-delete path was found; this is the existing retention boundary,
+not a new release gate. Historical rows are not backfilled and unknown actors
+remain unknown.
+
 ## V3 class session report and settlement boundary (2026-10-21)
 
 `class-enrollment.reports.ts` owns `classes.submitSessionReport` and
@@ -385,7 +429,7 @@ pending-report reminder worker are implemented. The shared page shows settlement
 preview/readback to tutors/admins, keeps student settlement fields null,
 normalizes feedback bullets, and preserves unsaved edits on stale-version
 conflicts. It supports versioned admin edits with a required reason; the
-dedicated on-demand admin correction workflow and PDF remain pending.
+booking-detail on-demand report source is authored in an isolated worktree; migration 0070 and DB/Chromium acceptance plus PDF remain pending.
 
 `class-enrollment.report-reminders.ts` runs from the existing one-minute
 `class-enrollment-check` job. It selects at most 100 ended, scheduled sessions in
@@ -413,7 +457,7 @@ separate `reportRemindersQueued` and `reportRemindersFailed` counters. At parent
 integration `1f9b6dd7`, the full guarded class-enrollment PostgreSQL suite passed
 44 tests / 354 expectations (exit 0, 9.62s); the pure reminder suite passed
 7 tests / 25 expectations (exit 0, 0.15s). No development seed or migration ran.
-PDF export, dedicated on-demand admin correction, and broader legacy solo/group/
+PDF export and broader legacy solo/group/
 series reminder coverage remain pending.
 
 ## V3 class/session draft foundation (2026-10-19)
@@ -426,7 +470,7 @@ Server validation requires an active competition (including an active parent for
 
 `classes.list` and `classes.get` are public procedures backed by `listPublished` and `getPublished`. Both map through an explicit student DTO; detail treats drafts as not found. It includes only catalog fields and tutor display name, with no payout/tax fields, private tutor account data, room details, audit/version values, or roster.
 
-Drafts are not public and do not reserve rooms; conflict checks happen at publication. The admin editor uploads PNG/JPEG/WebP/GIF covers through the existing protected upload flow (max 5 MB) and saves the returned key on the draft; approved M01 cover/curriculum assets remain pending. Admin publish controls, notifications, and durable Meet retry are implemented and browser-verified. Student enrollment is implemented in the T05 module below; T06 cancellation and T07 report/expiry settlement and reminders are implemented. The role-based report workspace is documented above; PDF and the dedicated on-demand admin correction workflow remain open. Public list/detail projection is implemented as described above. This is not a V3 activation or release checkpoint.
+Drafts are not public and do not reserve rooms; conflict checks happen at publication. The admin editor uploads PNG/JPEG/WebP/GIF covers through the existing protected upload flow (max 5 MB) and saves the returned key on the draft; approved M01 cover/curriculum assets remain pending. Admin publish controls, notifications, and durable Meet retry are implemented and browser-verified. Student enrollment is implemented in the T05 module below; T06 cancellation and T07 report/expiry settlement and reminders are implemented. The role-based report workspace is documented above; PDF remains open; on-demand booking reports are documented above, with acceptance pending. Public list/detail projection is implemented as described above. This is not a V3 activation or release checkpoint.
 
 ## V3 class publication and meeting jobs (2026-10-20)
 
@@ -1287,8 +1331,10 @@ The Participants fieldset owns the derived Solo/Group badge; summaries represent
 - `tutorAccept(bookingId, tutorId)` — Tutor accepts booking; attempts meeting creation for online bookings and schedules on success, while a provider failure leaves the booking `CONFIRMED` for scheduler retry; sets room approval for offline. **F6:** whenever meeting creation fails (provider throw or `status === "failed"`), `finalizeMeetingSchedule` bumps `deadlineAt` to `scheduledEndAt + 24h` so the 5-minute retry window is respected — the old tutor-review `now+12h` deadline can never expire the booking (release holds) or no-show the session while a meeting retry is pending. The proposer notification distinguishes `scheduled` from `confirmed`/meeting-setup attention, so a provider failure is not presented as a scheduled session. The booking-detail UI confirms the scheduled date/time, modality, and attendance before invoking this method; cancel/complete actions use the same in-app confirmation pattern.
 - `tutorDecline(bookingId, tutorId, reason)` — Requires a non-blank tutor reason, declines the request, and releases all holds
 - `tutorSetMeetingLink(bookingId, tutorId, url)` — Assigned tutor adds or replaces a manual URL for an online `CONFIRMED`/`SCHEDULED` booking when automatic meeting setup is unavailable; updates the active meeting row, notifies confirmed participants, and records `tutor_set_meeting_link`
-- `completeSession(bookingId, tutorId, sessionId?, feedback)` — Marks a session complete; deducts held marks (sessionId for series children). Requires `feedback { discussion[], strengths[], improvements[] }` (1–30 bullets each, 1–1000 chars, HTML-escaped); saves `session_completion_feedback` and appends one `tutor_session_fee` event in the same transaction. A prior series no-show ledger entry suppresses a second deduction for that participant/session without reducing future holds; only a submitted delivery report earns the fee. Concurrent series completion locks the booking and child session. A series parent completes and releases residual confirmed holds once every child is completed or cancelled. Fee identity is the booking for solo/group and the child session for series; the event pins the tutor, delivery times, price snapshot, and gross IDR honorarium. Missing/malformed V3 honorarium fails before wallet writes; explicit zero is valid. Throws `BOOKING_COMPLETION_FEEDBACK_REQUIRED` when missing/empty
-- `listCompletionFeedback(bookingId, userId, userRole?)` — Lists completion feedback for student/tutor/admin payout review (admin bypasses access check). A report is accepted only once per delivered booking/session; series no-show is rejected if a report already exists, preventing a no-show from bypassing completion/report fee gating.
+- `completeSession(bookingId, tutorId, sessionId?, feedback, requestKey?)` — Marks a session complete; deducts held marks (sessionId for series children). Requires nonempty `feedback { discussion[], strengths[], improvements[] }` with 600 normalized Unicode code points per field including separators; content is HTML-escaped. It saves version 1 in `session_completion_feedback`, appends immutable actor/status/text history, and appends one `tutor_session_fee` event in the same transaction. An optional UUID request key replays an identical submission. A prior series no-show ledger entry suppresses a second deduction for that participant/session without reducing future holds; only a submitted delivery report earns the fee. Concurrent tutor/admin initial submission shares the booking and payout locks. A series parent completes and releases residual confirmed holds once every child is completed or cancelled. Fee identity is the booking for solo/group and the child session for series; the event pins the assigned tutor, delivery times, price snapshot, and gross IDR honorarium. Missing/malformed V3 honorarium fails before wallet writes; explicit zero is valid. Throws `BOOKING_COMPLETION_FEEDBACK_REQUIRED` when missing/empty
+- `submitAdminCompletionReport({ bookingId, sessionId?, adminId, feedback, deliveryConfirmed, reason, expectedVersion?, requestKey })` — Admin-only report submission/correction for the assigned tutor. Requires delivery confirmation, a non-blank audit reason (max 600 Unicode code points), shared normalized report validation, and a UUID request key. Initial submission on an ended scheduled session uses normal completion settlement once; an already delivered session with no report is recorded without financial backfill. Corrections require the current version and append a new immutable snapshot with actual admin actor/time/status; only report text/version changes, never wallet, fee, referral, or reward facts. Identical key/payload returns its saved event; changed payload, stale version, or key reuse conflicts. Every admin submit/correction writes an in-app tutor notification in the transaction.
+- `listCompletionFeedback(bookingId, userId, userRole?)` — Assigned tutor/admin can read reports for their authorized booking. A student sees each report only when the corresponding booking/session is delivered and that participant has the exact chargeable `deduct` wallet-ledger event; chargeable no-shows qualify, while pending, withdrawn, unpaid, and unfunded seats do not. A completed series child stays readable after parent cancellation.
+- `listCompletionFeedbackHistory(bookingId, userId, userRole?)` — Admin-only history projection; excludes private idempotency request payloads and includes report snapshots, version/status, actor, delivery confirmation, audit reason, and creation time. Existing report IDs/content/creation times are preserved; unknown legacy actors remain null/legacy.
 - `cancelSession(userId, sessionId)` — Student cancels an individual series session only before that session starts; pre-H2 releases its hold, a pre-start post-H2 cancellation forfeits it, and at/after start the call throws `BOOKING_CANCELLATION_DEADLINE_PASSED`. The booking, child, and proposer hold are refreshed under locks; the conditional child transition prevents a completion that wins the race from being overwritten. Cancellation uses the same booking reschedule advisory lock as proposal changes.
 - `proposeReschedule(actorId, actorRole, bookingId, sessionId, start, reason)` — Shared service used by the student-proposer and tutor RPC routes; requires a non-blank reason and proposes a fixed 90-minute replacement for one session
 - `acceptReschedule(actorId, bookingId, proposalId?)` / `rejectReschedule(...)` — Records a required tutor/student vote against the active, unexpired proposal under a booking advisory lock; `proposalId` prevents stale UI actions from deciding a superseded proposal. Final acceptance additionally locks the tutor and rechecks booking overlap, target-series ownership/state, and sibling-session overlap before applying the schedule. Only unanimous acceptance applies the schedule, then the booking returns to its pre-proposal state; any rejection keeps the old schedule and also returns to that state. For booking-level offline proposals, the confirmed room assignment is synchronized with the new time on acceptance and restored to the original time on rejection/expiry. A missing or conflicting room returns the booking to `awaiting_admin_room_approval`, and the rollback path uses `roomPort.resyncRoomBookingToSchedule` so the room never stays blocked for the wrong window.
@@ -1317,6 +1363,7 @@ The Participants fieldset owns the derived Solo/Group badge; summaries represent
 - Late cancellation within H-2 threshold results in `late_cancelled` state
 - Series cancel cascades to all `bookingSession` rows
 - Wallet holds are released on cancel, decline, and expiry
+- Report visibility is scoped to chargeable delivered seats per Q06; admin correction history is append-only and corrections never replay settlement.
 - Overlap detection prevents double-booking tutor slots
 - Availability is stored as a free-time window; students may choose any minute-level start that keeps the server-fixed 90-minute session inside it. Terminal bookings do not keep the window blocked.
 - Rescheduling is per session, may iterate until accepted, expires after 24 hours, and requires the tutor plus every active student. The booking proposer may propose or counter in the eligible pre-terminal states, including `confirmed` and `scheduled`; student proposals remain subject to current/new H-2 checks. Proposal expiry reverts to the pre-proposal state without cancelling the booking, releasing its hold, or changing its original schedule. For offline booking-level proposals, room assignment timing is kept in sync on accept/reject/expiry, with a room-approval fallback on conflict. Only the tutor may propose outside the original availability window. Force-majeure exceptions are handled by support/admin operations with an auditable reason and an admin override decision rather than an automatic H-2 bypass.

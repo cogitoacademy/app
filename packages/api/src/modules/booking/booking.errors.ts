@@ -358,6 +358,13 @@ export class BookingCompletionFeedbackTooLongError extends DomainError {
   }
 }
 
+export class BookingCompletionReportConflictError extends DomainError {
+  readonly domain = "booking";
+  constructor(message = "The session report changed; reload before retrying") {
+    super("BOOKING_COMPLETION_REPORT_CONFLICT", message);
+  }
+}
+
 export class BookingCompletionFeedbackRequiredError extends DomainError {
   readonly domain = "booking";
   constructor(id: string) {
@@ -518,6 +525,8 @@ export function mapBookingError(
     return badRequest(err.message, err);
   if (err instanceof BookingCompletionFeedbackTooLongError)
     return badRequest(err.message, err);
+  if (err instanceof BookingCompletionReportConflictError)
+    return conflict(err.message, err);
   if (
     err instanceof TutorPayoutPreviewStaleError ||
     err instanceof TutorPayoutReconciliationRequiredError ||

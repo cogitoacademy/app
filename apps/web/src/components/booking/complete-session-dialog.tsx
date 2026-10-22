@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@cogito-app/ui/components/selia/button";
+import { Checkbox } from "@cogito-app/ui/components/selia/checkbox";
 import {
   Dialog,
   DialogBody,
@@ -16,6 +17,7 @@ import {
   FieldDescription,
   FieldLabel,
 } from "@cogito-app/ui/components/selia/field";
+import { Textarea } from "@cogito-app/ui/components/selia/textarea";
 import { SessionFeedbackBulletInput } from "./session-feedback-bullet-input";
 import {
   normalizeFeedbackBullets,
@@ -67,17 +69,38 @@ function FeedbackSection({
 export function CompleteSessionDialog({
   open,
   pending = false,
+  adminMode = false,
+  initialFeedback,
+  requestScope,
   onOpenChange,
   onConfirm,
 }: {
   open: boolean;
   pending?: boolean;
+  adminMode?: boolean;
+  initialFeedback?: CompletionFeedbackDraft;
+  requestScope?: string;
   onOpenChange: (open: boolean) => void;
-  onConfirm: (feedback: CompletionFeedbackDraft) => void;
+  onConfirm: (
+    feedback: CompletionFeedbackDraft,
+    admin: { deliveryConfirmed: boolean; reason: string; requestKey: string },
+  ) => void;
 }) {
-  const [discussion, setDiscussion] = useState<string[]>([""]);
-  const [strengths, setStrengths] = useState<string[]>([""]);
-  const [improvements, setImprovements] = useState<string[]>([""]);
+  const [discussion, setDiscussion] = useState<string[]>(
+    initialFeedback?.discussion ?? [""],
+  );
+  const [strengths, setStrengths] = useState<string[]>(
+    initialFeedback?.strengths ?? [""],
+  );
+  const [improvements, setImprovements] = useState<string[]>(
+    initialFeedback?.improvements ?? [""],
+  );
+  const [deliveryConfirmed, setDeliveryConfirmed] = useState(false);
+  const [reason, setReason] = useState("");
+  const [lastSubmission, setLastSubmission] = useState<{
+    payloadKey: string;
+    requestKey: string;
+  } | null>(null);
 
   const cleanDiscussion = normalizeFeedbackBullets(discussion);
   const cleanStrengths = normalizeFeedbackBullets(strengths);
@@ -88,12 +111,44 @@ export function CompleteSessionDialog({
     cleanImprovements.length > 0 &&
     [discussion, strengths, improvements].every(
       (items) => countFeedbackCharacters(items) <= MAX_FEEDBACK_CHARACTERS,
-    );
+    ) &&
+    (!adminMode ||
+      (deliveryConfirmed &&
+        reason.trim().length > 0 &&
+        Array.from(reason.trim()).length <= MAX_FEEDBACK_CHARACTERS));
 
   function reset() {
     setDiscussion([""]);
     setStrengths([""]);
     setImprovements([""]);
+    setDeliveryConfirmed(false);
+    setReason("");
+    setLastSubmission(null);
+  }
+
+  function confirm() {
+    const feedback = {
+      discussion: cleanDiscussion,
+      strengths: cleanStrengths,
+      improvements: cleanImprovements,
+    };
+    const normalizedReason = adminMode ? reason.trim() : "";
+    const payloadKey = JSON.stringify([
+      requestScope ?? "",
+      feedback,
+      adminMode && deliveryConfirmed,
+      normalizedReason,
+    ]);
+    const requestKey =
+      lastSubmission?.payloadKey === payloadKey
+        ? lastSubmission.requestKey
+        : crypto.randomUUID();
+    setLastSubmission({ payloadKey, requestKey });
+    onConfirm(feedback, {
+      deliveryConfirmed: adminMode ? deliveryConfirmed : true,
+      reason: normalizedReason,
+      requestKey,
+    });
   }
 
   return (
@@ -107,9 +162,17 @@ export function CompleteSessionDialog({
     >
       <DialogPopup className="sm:max-w-xl">
         <DialogHeader className="flex-col items-start gap-1.5 border-b! border-border!">
-          <DialogTitle>Complete session</DialogTitle>
+          <DialogTitle>
+            {adminMode
+              ? initialFeedback
+                ? "Correct session report"
+                : "Record session report"
+              : "Complete session"}
+          </DialogTitle>
           <DialogDescription className="text-sm md:text-base">
-            Add your feedback from today&apos;s session.
+            {adminMode
+              ? "Record the report for the assigned tutor. Confirm delivery and give an audit reason."
+              : "Add your feedback from today&apos;s session."}
           </DialogDescription>
         </DialogHeader>
 
@@ -145,6 +208,42 @@ export function CompleteSessionDialog({
               />
             </div>
           </section>
+          {adminMode ? (
+            <div className="space-y-4 border-t border-border pt-4">
+              <div className="flex items-start gap-3">
+                <Checkbox
+                  id="admin-report-delivered"
+                  checked={deliveryConfirmed}
+                  onCheckedChange={(checked) =>
+                    setDeliveryConfirmed(checked === true)
+                  }
+                  disabled={pending}
+                />
+                <label
+                  htmlFor="admin-report-delivered"
+                  className="text-sm leading-5 text-foreground"
+                >
+                  I confirm this session was delivered.
+                </label>
+              </div>
+              <Field>
+                <FieldLabel htmlFor="admin-report-reason">
+                  Audit reason
+                </FieldLabel>
+                <Textarea
+                  id="admin-report-reason"
+                  value={reason}
+                  onChange={(event) => setReason(event.target.value)}
+                  maxLength={1200}
+                  disabled={pending}
+                  aria-describedby="admin-report-reason-description"
+                />
+                <FieldDescription id="admin-report-reason-description">
+                  Required, up to 600 characters.
+                </FieldDescription>
+              </Field>
+            </div>
+          ) : null}
         </DialogBody>
 
         <DialogFooter className="flex-col-reverse items-stretch gap-2 sm:flex-row sm:items-center">
@@ -164,16 +263,14 @@ export function CompleteSessionDialog({
             type="button"
             disabled={!valid || pending}
             progress={pending}
-            onClick={() =>
-              onConfirm({
-                discussion: cleanDiscussion,
-                strengths: cleanStrengths,
-                improvements: cleanImprovements,
-              })
-            }
+            onClick={() => confirm()}
             className="w-full sm:w-auto"
           >
-            Complete session
+            {adminMode
+              ? initialFeedback
+                ? "Save correction"
+                : "Save report"
+              : "Complete session"}
           </Button>
         </DialogFooter>
       </DialogPopup>

@@ -197,8 +197,7 @@ export function ClassDetailPage() {
                               className="size-4 shrink-0"
                               aria-hidden="true"
                             />
-                            {formatTime(session.startAt)}–
-                            {formatTime(session.endAt)} WIB
+                            Starts {formatTime(session.startAt)} WIB
                           </Text>
                         </div>
                         {session.curriculumEn ? (
