@@ -1,5 +1,13 @@
 # Cogito App — Codebase Context
 
+## V3 execution priorities (22 October 2026)
+
+Owner direction: finish core V3 work through feature branches and GitHub PRs into
+`f/release-v3`, with focused validation and docs per feature. The repository uses
+squash merges. Feature showcase/video and Sanity Knowledge Bank/Calendar migration
+are tertiary. Their scope/release gates remain until an approved client deferral;
+this priority change does not authorize production release or changing `main`.
+
 ## V3 publication lint fixes (22 October 2026)
 
 FAQ link selection is render state; its URL input receives focus only after the
