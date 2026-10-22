@@ -2269,7 +2269,8 @@ export function createBookingService(deps: {
       if (!lockedBooking) throw new BookingNotFoundError(input.bookingId);
       b = lockedBooking;
 
-      let session: Awaited<ReturnType<BookingRepo["findSessionById"]>> = null;
+      let session: Awaited<ReturnType<BookingRepo["findSessionById"]>> | null =
+        null;
       if (b.type === BOOKING_TYPE.SERIES) {
         if (!input.sessionId) throw new BookingSessionRequiredError(b.id);
         session = await repo.findSessionById(tx, input.sessionId, {

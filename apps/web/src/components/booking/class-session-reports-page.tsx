@@ -495,6 +495,7 @@ export function ClassSessionReportsPage() {
                       feedbacks={[
                         {
                           id: selectedRow.report.id,
+                          version: selectedRow.report.version,
                           sessionId: selectedRow.sessionId,
                           discussion: selectedRow.report.discussion,
                           strengths: selectedRow.report.strengths,

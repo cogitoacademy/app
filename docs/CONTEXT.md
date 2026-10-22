@@ -14,7 +14,11 @@ No development migration, reset, seed or live provider ran. Earlier notes saying
 the guarded DB cases are unrun are superseded by this checkpoint. The isolated
 Chromium journey and development rollout remain pending; low C: free space
 blocked a responsible browser-suite launch. Keep the feature PR in draft until
-its browser/rollout acceptance is resolved. The report PDF is separate work.
+its browser/rollout acceptance is resolved. The report PDF is separate work. Full workspace typechecking now passes with
+bounded serial execution (`GOMAXPROCS=2 GOMEMLIMIT=512MiB bun run check-types
+--concurrency=1 --env-mode=loose`); the lint baseline also passes. The class report
+feedback adapter retains the API version, and the admin session lookup explicitly
+allows no session for non-series bookings.
 
 ## REQ-REPORT-02/03 on-demand booking report review-fix continuation (2026-10-22)
 
