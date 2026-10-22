@@ -5,8 +5,16 @@ import {
 } from "../../modules/booking/feedback-rules";
 import {
   completeSessionInput,
+  adminSubmitCompletionReportInput,
   listCompletionFeedbackInput,
 } from "../../modules/booking/booking.types";
+import {
+  completionFeedbackEntitlementEventKeys,
+  decodeLegacyCompletionFeedbackText,
+  normalizeCompletionFeedback,
+  restoreCompletionFeedbackForRead,
+} from "../../modules/booking/booking.service";
+import { escapeHtml } from "../../lib/sanitize";
 
 const input = (discussion: string[]) => ({
   bookingId: "b1",
@@ -56,6 +64,59 @@ describe("completion feedback input", () => {
       completeSessionInput.parse(input(bullets)).feedback.discussion,
     ).toHaveLength(31);
   });
+
+  test("stores feedback as canonical plaintext and keeps the 600-codepoint limit", () => {
+    const feedback = {
+      discussion: [
+        "A & B",
+        "A < B > C",
+        "\"quoted\" 'quoted'",
+        "literal &amp;",
+      ],
+      strengths: ["😀".repeat(600)],
+      improvements: ["Practice"],
+    };
+    expect(normalizeCompletionFeedback("b1", feedback)).toEqual(feedback);
+    expect(() =>
+      normalizeCompletionFeedback("b1", {
+        ...feedback,
+        strengths: ["😀".repeat(601)],
+      }),
+    ).toThrow("at most 600 characters");
+  });
+
+  test("decodes one layer only for known legacy escaped feedback", () => {
+    const legacy = `Legacy ${"text &amp; <tag> 'quoted' \"double\" ".repeat(45)}`;
+    const legacyStored = escapeHtml(legacy);
+    expect(decodeLegacyCompletionFeedbackText(legacyStored)).toBe(legacy);
+    expect(legacy.length).toBeGreaterThan(600);
+
+    const current = {
+      discussion: ["Literal &amp; entity", "&lt; is typed text"],
+      strengths: ['<plain> & "quotes" \''],
+      improvements: ["unchanged"],
+    };
+    expect(
+      restoreCompletionFeedbackForRead(current, [
+        { status: "submitted" },
+        { status: "corrected" },
+      ]),
+    ).toBe(current);
+    expect(
+      restoreCompletionFeedbackForRead(
+        {
+          discussion: [
+            escapeHtml("Literal &amp; entity"),
+            escapeHtml("&lt; is typed text"),
+          ],
+          strengths: [escapeHtml('<plain> & "quotes" \'')],
+          improvements: [escapeHtml("unchanged")],
+        },
+        [{ status: "legacy_snapshot" }],
+      ),
+    ).toEqual(current);
+  });
+
   test("rejects missing feedback", () => {
     const r = completeSessionInput.safeParse({ bookingId: "b1" });
     expect(r.success).toBe(false);
@@ -87,5 +148,108 @@ describe("completion feedback input", () => {
     expect(
       listCompletionFeedbackInput.safeParse({ bookingId: "b1" }).success,
     ).toBe(true);
+  });
+
+  test("admin submission shares the 600-codepoint field limit and audits delivery", () => {
+    const adminInput = {
+      bookingId: "booking-1",
+      feedback: {
+        discussion: ["😀".repeat(600)],
+        strengths: ["Clear explanation"],
+        improvements: ["Practise one more example"],
+      },
+      deliveryConfirmed: true,
+      reason: "Correct the saved report",
+      requestKey: "d943e1b2-88e6-47a5-9f39-275c0e9db17a",
+    };
+    expect(adminSubmitCompletionReportInput.safeParse(adminInput).success).toBe(
+      true,
+    );
+    expect(
+      adminSubmitCompletionReportInput.safeParse({
+        ...adminInput,
+        reason: "😀".repeat(600),
+      }).success,
+    ).toBe(true);
+    expect(
+      adminSubmitCompletionReportInput.safeParse({
+        ...adminInput,
+        feedback: {
+          ...adminInput.feedback,
+          discussion: ["😀".repeat(601)],
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      adminSubmitCompletionReportInput.safeParse({
+        ...adminInput,
+        reason: "  ",
+      }).success,
+    ).toBe(false);
+    expect(
+      adminSubmitCompletionReportInput.safeParse({
+        ...adminInput,
+        reason: "😀".repeat(601),
+      }).success,
+    ).toBe(false);
+    expect(
+      adminSubmitCompletionReportInput.safeParse({
+        ...adminInput,
+        deliveryConfirmed: false,
+      }).success,
+    ).toBe(false);
+    expect(
+      adminSubmitCompletionReportInput.safeParse({
+        ...adminInput,
+        requestKey: "not-a-uuid",
+      }).success,
+    ).toBe(false);
+  });
+
+  test("Q06 entitlement keys bind each report to its chargeable booking seat", () => {
+    expect(
+      completionFeedbackEntitlementEventKeys({
+        bookingId: "solo-1",
+        bookingType: "solo",
+        userId: "student-1",
+      }),
+    ).toEqual([
+      "booking.solo-1.deduct",
+      "booking.solo-1.no_show.student-1.solo",
+    ]);
+    expect(
+      completionFeedbackEntitlementEventKeys({
+        bookingId: "group-1",
+        bookingType: "group",
+        userId: "student-1",
+      }),
+    ).toEqual([
+      "booking.group-1.complete.student-1",
+      "booking.group-1.no_show.student-1.solo",
+    ]);
+    expect(
+      completionFeedbackEntitlementEventKeys({
+        bookingId: "series-1",
+        bookingType: "series",
+        seriesTargetGroupSize: 1,
+        sessionId: "session-1",
+        userId: "student-1",
+      }),
+    ).toEqual([
+      "booking.series-1.session.session-1.deduct",
+      "booking.series-1.no_show.student-1.session-1",
+    ]);
+    expect(
+      completionFeedbackEntitlementEventKeys({
+        bookingId: "group-series-1",
+        bookingType: "series",
+        seriesTargetGroupSize: 2,
+        sessionId: "session-1",
+        userId: "student-1",
+      }),
+    ).toEqual([
+      "booking.group-series-1.session.session-1.deduct.student-1",
+      "booking.group-series-1.no_show.student-1.session-1",
+    ]);
   });
 });

@@ -33,6 +33,19 @@ export async function lockTutorForPayout(
   );
 }
 
+/** Serializes report idempotency keys before booking or tutor business locks. */
+export async function lockCompletionReportRequest(
+  conn: DbOrTx,
+  requestKey: string,
+): Promise<void> {
+  // PostgreSQL UUID values compare case-insensitively; normalize the text key
+  // so uppercase and lowercase spellings serialize on the same advisory lock.
+  const lockKey = `booking-completion-report:${requestKey.toLowerCase()}`;
+  await conn.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 5))`,
+  );
+}
+
 /** Serializes payout previews and writes against tax-rate configuration edits. */
 export async function lockTutorTaxConfig(conn: DbOrTx): Promise<void> {
   await conn.execute(
