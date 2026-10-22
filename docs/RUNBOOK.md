@@ -32,6 +32,26 @@ cache and bounded 60-second navigation budget. A filename expectation was fixed
 to match the UI's dated download name. Final brand approval, deployed/runtime
 and client acceptance remain open.
 
+## Report PDF and admin picker rereview (22 October 2026)
+
+The admin report picker passes `role: "student"` to the search RPC, which
+filters before applying the result limit. Private PDF legacy layout follows the
+current report version's history actor; short legacy feedback keeps line breaks
+and can use labelled continuation pages.
+
+The focused unit run passes 81 tests / 208 assertions. Server and web typechecks
+pass with one checker each:
+
+```powershell
+bun test --timeout 30000 packages/api/src/tests/unit/admin.repo.test.ts packages/api/src/tests/unit/admin.service.test.ts packages/api/src/tests/unit/admin.handler.test.ts packages/api/src/tests/unit/admin.types.test.ts packages/api/src/tests/unit/report-export.access.test.ts packages/api/src/tests/unit/report-export.pdf.test.ts packages/api/src/tests/unit/report-export.service.test.ts packages/api/src/tests/unit/report-export.window.test.ts apps/server/src/routes/report-export-routes.test.ts
+bun run --filter=server check-types --checkers 1
+bun run --filter=web check-types --checkers 1
+```
+
+This continuation did not rerun the parent's PostgreSQL or Chromium checks and
+used no database, browser, migration, reset, seed, or provider. The saved PDF
+sample was left unchanged.
+
 ## Classes UI acceptance (22 October 2026)
 
 Run the synthetic, database-free UI suite from `packages/e2e`:

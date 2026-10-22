@@ -8,6 +8,10 @@ curriculum text is not exported as metadata. Eligibility has parent PostgreSQL
 coverage (1 test / 16 assertions); HTTP authorization/header checks remain
 covered separately. Placeholder branding remains provisional.
 
+The admin report selector passes `role: "student"` to `admin.searchUsers`,
+which applies the optional role filter before the result limit. Callers that omit
+`role` retain the general admin search behavior.
+
 ## Classes presentation (22 October 2026)
 
 The UI reuses `classes/list`, `classes/get`, `classes/getMyEnrollments`,
@@ -959,9 +963,9 @@ used to retrieve production OTPs.
 
 - **RPC path:** `/rpc/admin/users/search`
 - **Auth:** Admin
-- **Input:** `{ query, limit? }` (`query` is trimmed and must contain at least 2 characters; `limit` defaults to 10 and is capped at 20)
+- **Input:** `{ query, limit?, role? }` (`query` is trimmed and must contain at least 2 characters; `limit` defaults to 10 and is capped at 20; `role` may be `student`, `tutor`, or `admin`)
 - **Output:** `UserSearchResult[]` where each result is `{ id, name, email, image, role }`
-- **Description:** Case-insensitive partial lookup for admin support workflows. Matches `name`, `email`, or `id`; exact email/ID matches are ranked first. Wildcard characters are treated literally. The wallet lookup UI uses the selected result's `id` with `admin.getWallet` and `admin.listLedgerEntries`; the Knowledge Bank access form filters the same bounded result set to students and uses the selected email for a grant.
+- **Description:** Case-insensitive partial lookup for admin support workflows. Matches `name`, `email`, or `id`; exact email/ID matches are ranked first. Wildcard characters are treated literally. When supplied, `role` is filtered by the database before `limit`; without it, all roles remain eligible. The wallet lookup UI uses the selected result's `id` with `admin.getWallet` and `admin.listLedgerEntries`; the Knowledge Bank access form keeps its existing client-side student filter and uses the selected email for a grant.
 
 ### `admin.setRole`
 

@@ -16,6 +16,22 @@ denial. These browser routes are mocked; live-provider and final
 branding/deployment acceptance remain open. This supersedes older source-only
 DB/compiler notes below.
 
+## Report PDF and admin picker rereview (22 October 2026)
+
+The admin report picker now sends `role: "student"` to `admin.searchUsers`;
+the repository filters by role before sorting and limiting, while other admin
+searches retain their all-role behavior. Private PDF layout identifies legacy
+feedback from the history entry matching the persisted current report version
+and its `actorRole`; reports without that current history entry retain legacy
+layout. Feedback length no longer determines the layout, so short legacy lists
+keep their line breaks and can continue across labelled pages.
+
+Follow-up unit checks pass 81 tests / 208 assertions. Server and web
+`check-types --checkers 1` pass. The parent's PostgreSQL and synthetic Chromium
+evidence above was not rerun in this continuation; no database, browser,
+migration, reset, seed, or provider was used, and the saved PDF sample was left
+unchanged.
+
 ## Classes UI workspace (22 October 2026)
 
 Student `/classes` is a single searchable catalog with Cohort/Masterclass filters,

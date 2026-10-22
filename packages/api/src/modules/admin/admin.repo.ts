@@ -74,6 +74,7 @@ export async function searchUsers(
   conn: DbOrTx,
   query: string,
   limit: number,
+  role?: UserRole,
 ): Promise<AdminUserSearchRow[]> {
   const normalizedQuery = query.trim();
   const searchPattern = `%${escapeLikePattern(normalizedQuery)}%`;
@@ -94,10 +95,13 @@ export async function searchUsers(
     })
     .from(user)
     .where(
-      or(
-        ilike(user.name, searchPattern),
-        ilike(user.email, searchPattern),
-        ilike(user.id, searchPattern),
+      and(
+        or(
+          ilike(user.name, searchPattern),
+          ilike(user.email, searchPattern),
+          ilike(user.id, searchPattern),
+        ),
+        role ? eq(user.role, role) : undefined,
       ),
     )
     .orderBy(asc(exactMatchRank), asc(user.name), desc(user.createdAt))

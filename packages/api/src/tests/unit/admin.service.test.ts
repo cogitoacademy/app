@@ -400,10 +400,15 @@ describe("Admin Service", () => {
       await expect(service.searchUsers({ query: "  ada " })).resolves.toEqual([
         expect.objectContaining({ id: "u1" }),
       ]);
-      expect(searchUsers).toHaveBeenCalledWith(expect.anything(), "ada", 10);
+      expect(searchUsers).toHaveBeenCalledWith(
+        expect.anything(),
+        "ada",
+        10,
+        undefined,
+      );
     });
 
-    test("passes an explicit result limit", async () => {
+    test("passes an explicit result limit and role filter", async () => {
       const searchUsers = mock(async () => []);
       const service = createAdminService({
         adminRepo: { searchUsers } as any,
@@ -413,9 +418,14 @@ describe("Admin Service", () => {
         payout: {} as any,
       });
 
-      await service.searchUsers({ query: "ada", limit: 3 });
+      await service.searchUsers({ query: "ada", limit: 3, role: "student" });
 
-      expect(searchUsers).toHaveBeenCalledWith(expect.anything(), "ada", 3);
+      expect(searchUsers).toHaveBeenCalledWith(
+        expect.anything(),
+        "ada",
+        3,
+        "student",
+      );
     });
   });
 

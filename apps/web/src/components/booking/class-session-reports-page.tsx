@@ -149,17 +149,16 @@ export function ClassSessionReportsPage() {
 
   const exportStudentSearchQuery = useQuery({
     ...orpc.admin.searchUsers.queryOptions({
-      input: { query: debouncedStudentSearch || "--", limit: 10 },
+      input: {
+        query: debouncedStudentSearch || "--",
+        limit: 10,
+        role: "student",
+      },
     }),
     enabled: isAdmin && !exportStudent && debouncedStudentSearch.length >= 2,
   });
-  const exportStudentOptions = useMemo(
-    () =>
-      ((exportStudentSearchQuery.data ?? []) as ExportStudent[]).filter(
-        (candidate) => candidate.role === "student",
-      ),
-    [exportStudentSearchQuery.data],
-  );
+  const exportStudentOptions = (exportStudentSearchQuery.data ??
+    []) as ExportStudent[];
   const exportStudentId = isStudent
     ? currentUserId
     : isAdmin

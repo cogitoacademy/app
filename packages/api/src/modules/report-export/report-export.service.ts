@@ -29,6 +29,7 @@ import {
   type StudentReportPdfEntry,
   type StudentReportPdfModel,
 } from "./report-export.pdf";
+import { isLegacyFeedbackVersion } from "./report-export.legacy";
 import { reportDateWindow } from "./report-export.window";
 import { hasChargeableFeedbackEntitlement } from "../booking/booking.repo";
 import {
@@ -45,6 +46,7 @@ type BookingReportType = "solo" | "group" | "series";
 
 type PrivateReportRow = {
   id: string;
+  version: number;
   bookingId: string;
   bookingType: string;
   targetGroupSize: number;
@@ -193,11 +195,11 @@ function classMetadata(row: {
   ];
 }
 
-function isLegacyReport(sections: ReturnType<typeof reportSections>) {
-  return sections.some(
-    (section) => Array.from(section.bullets.join("\n")).length > 600,
-  );
-}
+type FeedbackHistoryMetadata = {
+  version: number;
+  status: string;
+  actorRole: string;
+};
 
 export function createReportExportService(deps: {
   db: DbType;
@@ -229,6 +231,7 @@ export function createReportExportService(deps: {
       const privateRows = (await tx
         .select({
           id: sessionCompletionFeedback.id,
+          version: sessionCompletionFeedback.version,
           bookingId: booking.id,
           bookingType: booking.type,
           targetGroupSize: booking.targetGroupSize,
@@ -333,6 +336,8 @@ export function createReportExportService(deps: {
             .select({
               feedbackId: sessionCompletionFeedbackHistory.feedbackId,
               status: sessionCompletionFeedbackHistory.status,
+              version: sessionCompletionFeedbackHistory.version,
+              actorRole: sessionCompletionFeedbackHistory.actorRole,
             })
             .from(sessionCompletionFeedbackHistory)
             .where(
@@ -342,10 +347,14 @@ export function createReportExportService(deps: {
               ),
             )
         : [];
-      const historyByFeedback = new Map<string, Array<{ status: string }>>();
+      const historyByFeedback = new Map<string, FeedbackHistoryMetadata[]>();
       for (const history of historyRows) {
         const rows = historyByFeedback.get(history.feedbackId) ?? [];
-        rows.push({ status: history.status });
+        rows.push({
+          status: history.status,
+          version: history.version,
+          actorRole: history.actorRole,
+        });
         historyByFeedback.set(history.feedbackId, rows);
       }
 
@@ -354,13 +363,14 @@ export function createReportExportService(deps: {
           const start = row.childStartAt ?? row.bookingStartAt;
           const end = row.childEndAt ?? row.bookingEndAt;
           const sessions = sessionsBySeries.get(row.bookingId);
+          const history = historyByFeedback.get(row.id) ?? [];
           const feedback = restoreCompletionFeedbackForRead(
             {
               discussion: row.discussion,
               strengths: row.strengths,
               improvements: row.improvements,
             },
-            historyByFeedback.get(row.id) ?? [],
+            history,
           );
           const sections = reportSections(
             feedback.discussion,
@@ -380,7 +390,7 @@ export function createReportExportService(deps: {
               sessions?.length,
             ),
             sections,
-            isLegacy: isLegacyReport(sections),
+            isLegacy: isLegacyFeedbackVersion(history, row.version),
           };
         },
       );
@@ -448,7 +458,7 @@ export function createReportExportService(deps: {
           scheduledStartAt: row.startAt,
           metadata: classMetadata(row),
           sections,
-          isLegacy: isLegacyReport(sections),
+          isLegacy: false,
         };
       });
 

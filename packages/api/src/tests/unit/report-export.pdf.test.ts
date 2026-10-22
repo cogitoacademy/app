@@ -112,6 +112,31 @@ describe("student report PDF layout", () => {
     expect(geometry.glyphCount).toBeGreaterThanOrEqual(1800);
   });
 
+  test("keeps short legacy line breaks while dense current feedback stays one page", async () => {
+    const bullets = Array.from({ length: 80 }, () => "word");
+    expect(bullets[0]!.length * bullets.length + bullets.length - 1).toBe(399);
+
+    const makeModel = (isLegacy: boolean) => ({
+      studentName: "Student Name",
+      generatedAt: new Date("2026-10-22T04:30:00.000Z"),
+      reports: [
+        makeEntry(
+          {
+            discussion: bullets,
+            strengths: bullets,
+            improvements: bullets,
+          },
+          isLegacy,
+        ),
+      ],
+    });
+    const legacyBytes = await createStudentReportPdf(makeModel(true));
+    const currentBytes = await createStudentReportPdf(makeModel(false));
+
+    expect(await pageCount(legacyBytes)).toBeGreaterThan(1);
+    expect(await pageCount(currentBytes)).toBe(1);
+  });
+
   test("paginates 5,000-character metadata without clipping or truncating it", async () => {
     const entry = makeEntry({
       discussion: ["A short discussion"],

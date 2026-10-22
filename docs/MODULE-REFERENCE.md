@@ -6,9 +6,13 @@ Metadata columns paginate wrapped lines above the footer and label continued
 values. The class adapter selects its session title as the report topic. Normal
 feedback bullets preserve their line breaks; dense current-format lists flow
 inline only when needed to fit, retaining bullet markers and the fixed font
-size. Legacy reports retain line breaks and labelled continuation pages. Parent
-PostgreSQL coverage validates exact-student ledger entitlement and funded/spent
-class allocation filters; it uses UUID-owned fixtures and no reset/seed.
+size. Private-booking legacy layout uses the current report version's history
+`actorRole`; pre-history rows without a current version entry remain legacy. That
+classification replaces the text-length cutoff, so short legacy fields also keep
+their line breaks and can continue on labelled pages. Academy class reports use
+the current layout. Parent PostgreSQL coverage validates exact-student ledger
+entitlement and funded/spent class allocation filters; it uses UUID-owned
+fixtures and no reset/seed.
 
 ## Classes UI composition (22 October 2026)
 
