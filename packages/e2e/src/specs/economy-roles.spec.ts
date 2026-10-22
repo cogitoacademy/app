@@ -54,6 +54,35 @@ async function startEconomyEditing(page: Page) {
   await expect(page.getByText("Editing", { exact: true })).toBeVisible();
 }
 
+test("admin economy sections keep their normal gap across viewports", async ({
+  page,
+}) => {
+  await login(page, ADMIN_EMAIL, ADMIN_PASSWORD);
+  for (const width of [390, 1440]) {
+    // eslint-disable-next-line no-await-in-loop -- Resize the shared page before each layout assertion.
+    await page.setViewportSize({ width, height: 1000 });
+    // eslint-disable-next-line no-await-in-loop -- Each viewport needs a loaded page.
+    await page.goto("/admin-economy");
+    // eslint-disable-next-line no-await-in-loop -- Wait for the V3 query before measuring.
+    await expect(
+      page.getByRole("heading", { name: "V3 rate card", exact: true }),
+    ).toBeVisible();
+    // eslint-disable-next-line no-await-in-loop -- Measure this viewport before resizing again.
+    const gap = await page
+      .getByRole("heading", { name: "V3 rate card", exact: true })
+      .evaluate((heading) => {
+        const section = heading.closest('[data-slot="card"]')!.parentElement!;
+        const grid = section.previousElementSibling!;
+        const cards = [...grid.children];
+        return (
+          section.getBoundingClientRect().top -
+          Math.max(...cards.map((card) => card.getBoundingClientRect().bottom))
+        );
+      });
+    expect(gap).toBeCloseTo(24, 0);
+  }
+});
+
 test("student sees closed-loop Marks pricing and cannot open admin economy", async ({
   page,
 }) => {

@@ -20,6 +20,52 @@ bounded serial execution (`GOMAXPROCS=2 GOMEMLIMIT=512MiB bun run check-types
 feedback adapter retains the API version, and the admin session lookup explicitly
 allows no session for non-series bookings.
 
+## Owner priority and checkpoint workflow (22 October 2026)
+
+The owner prioritizes all remaining core V3 work. Feature showcase/video and
+Sanity Knowledge Bank/Competition Calendar migration are tertiary; do not spend
+the next core implementation cycles on them. This changes execution order, not
+client scope or release acceptance: any release deferral still needs explicit
+client agreement under Q14.
+
+Use one short-lived feature branch and one GitHub PR into `f/release-v3` per
+independently reviewable feature. Commit meaningful changes with focused checks
+and affected docs; publish a PR checkpoint before moving to the next feature.
+This repository permits squash merge only, giving one integration commit per PR.
+Never combine unrelated local edits or client PDF build artifacts into a feature
+checkpoint. Keep `main` unchanged until final release acceptance.
+
+Core order: finish on-demand report verification/integration, report PDF and
+remaining legacy reminders; then AUTH-02/referrals/KOL and remaining pricing,
+analytics/provider/financial acceptance, core content, end-to-end UAT and release
+readiness. Apply approved policy gates to dependent behavior; do not invent
+ordinary-reschedule or analytics policy.
+
+## Ongoing experience UX checkpoint (22 October 2026)
+
+Implemented an explicit ongoing-role checkbox and stable, top-aligned date
+controls in tutor Experiences. Existing `endYear: null` data is preserved;
+focused synthetic browser coverage checks initial state, toggling and layout.
+The section heading/info alignment is repaired and its desktop/mobile geometry
+check passes. Real-account persistence acceptance remains separate.
+
+## Compact tutor profile status checkpoint (22 October 2026)
+
+Implemented: remove the duplicate status card, place one lifecycle badge beside
+the heading and keep conditional review/action guidance plus admin feedback.
+Synthetic desktop/mobile render coverage checks the published, edit-review,
+revision, draft, initial-review, approved and suspended states. A standalone
+public-profile link is omitted because public details currently use a drawer.
+Profile saving and broader release acceptance remain separate.
+
+## Tutor profile render checkpoint (22 October 2026)
+
+Completed the `/profile` tax-section render repair: standalone section guidance
+uses Selia `Text` instead of context-dependent `FieldDescription`. The focused
+synthetic authenticated Chromium regression fails before and passes after the
+fix. This checks rendering only; real-account saving and broader release
+acceptance remain pending.
+
 ## UI repair checkpoint (22 October 2026)
 
 Admin tax defaults/custom tutor rates now use percentage inputs and plain copy,

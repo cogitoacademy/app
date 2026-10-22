@@ -33,7 +33,31 @@ date/time/number widgets and Card/Table composition without changing API contrac
   time control. Existing helper regression fixtures use explicit union types so
   the web compiler can check both published and postponed snapshots.
 
+## Role-based sidebar grouping follow-up
+
+- Completed: split admin Navigation into Overview, Teaching, Finance, and
+  Content & reviews using existing Selia sidebar groups. Resources and the
+  account footer remain below.
+- Student follow-up: Overview groups Dashboard/Balance; Learning groups Tutors,
+  Classes, My Bookings, Session reports, and Achievements. Tutor follow-up:
+  Overview contains Dashboard; Teaching groups Bookings, Session reports,
+  Availability, and Tutor Profile. Both roles put FAQ in Resources.
+- All 13 admin destinations, link labels, icons, active-link styling, and the
+  booking-action badge remain available. No API or environment changes.
+- Verification: web TypeScript and focused sidebar lint passed. A source check
+  confirmed all 13 admin destinations occur exactly once. Student/tutor follow-up
+  web TypeScript and focused lint passed; a source assertion confirmed every
+  original student/tutor destination remains exactly once, including FAQ moved
+  to Resources. Booking badge rendering and role selection are retained. Authenticated visual checks remain unverified: the fresh browser
+  preview redirects to sign-in and has no admin session.
+
 ## Verification
+
+- Follow-up spacing regression: Card-root inline-size containment inflated grid
+  row heights in a column Stack. Moving the named container to CardHeader reduced
+  the measured economy section gap from 251.25px to the intended 24px while
+  preserving the icon-header action's column 3. Reloaded desktop page also reports
+  a 24px gap. The economy E2E spec now asserts the gap at mobile/desktop widths.
 
 - Tax copy/usability follow-up: default and custom tutor tax fields use percent
   labels and 0..100 inputs with two decimal places, retaining integer API units.

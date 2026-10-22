@@ -50,6 +50,45 @@ current application hard-delete path was found, and this documents the existing
 schema boundary rather than adding a release gate. No historical actor is
 invented and no legacy row is backfilled.
 
+
+## V3 execution priorities (22 October 2026)
+
+Owner direction: finish core V3 work through feature branches and GitHub PRs into
+`f/release-v3`, with focused validation and docs per feature. The repository uses
+squash merges. Feature showcase/video and Sanity Knowledge Bank/Calendar migration
+are tertiary. Their scope/release gates remain until an approved client deferral;
+this priority change does not authorize production release or changing `main`.
+
+
+
+## Explicit ongoing experience (22 October 2026)
+
+Tutor experience dates now use an explicit "I currently work in this role"
+checkbox instead of blank-end-year helper text. Checked means `endYear: null`
+and disables the end-year control without removing it; unchecking starts at the
+current year or start year, whichever is later. Date fields align at the top.
+Existing null end years render checked. No storage or API change is required.
+The Education, Achievements & Experiences header gives its text a shrinkable
+span so the info button stays beside wrapped text, including at mobile widths.
+
+## Compact tutor profile status (22 October 2026)
+
+The tutor profile shows one status badge beside its heading. The duplicate
+Profile status card and pending-edit badge are removed. Published profiles with
+no review action show no notice; draft, review, revision and suspension guidance
+appears as compact text in the header. Admin feedback remains in its existing
+card. Public tutor details currently use a catalog drawer, so no standalone
+public-profile link is added. Synthetic browser coverage checks lifecycle
+states, feedback retention and mobile overflow without writing dev data.
+
+## Tutor profile render repair (22 October 2026)
+
+The tutor `/profile` tax-section introduction used `FieldDescription` outside
+its required Base UI `Field` context, throwing during render and showing the
+route error page. It now uses Selia `Text`. Synthetic authenticated Chromium
+coverage reproduces the failure before the change and passes afterward,
+including visible legal-name fields and no browser errors. No dev data changed.
+
 ## V3 publication lint fixes (22 October 2026)
 
 FAQ link selection is render state; its URL input receives focus only after the
@@ -60,6 +99,10 @@ render-time clock reads. Workspace typecheck and the lint baseline pass; focused
 FAQ regressions are recorded in the PR. No API or storage contract changed.
 
 ## UI controls and Card/Table repair (22 October 2026)
+
+Card responsive containment is scoped to CardHeader. Applying inline-size
+containment to the whole Card inflated grid row heights and caused large blank
+gaps on the economy page; the measured section gap is restored to 24px.
 
 Payout tax default and custom tutor fields now use percentages and a rupiah
 deduction example. API rates remain integer basis points; no stored rate changed.
@@ -1287,17 +1330,24 @@ white, including both the wordmark and academy label. This is frontend-only
 presentation behavior with no RPC, schema, persistence, or operational
 contract change.
 
-## Sidebar navigation order (2026-09-04)
+## Sidebar navigation groups (2026-10-22)
 
-The authenticated sidebar keeps its three semantic zones: role-specific primary
-navigation, shared resources, and the account menu in the footer. Student
-navigation follows the main journey (`Dashboard`, `Tutors`, `My Bookings`,
-`Balance`, `Achievements`); tutor navigation prioritizes work actions
-(`Dashboard`, `Bookings`, `Availability`, `Tutor Profile`); and admin navigation
-starts with the action queue (`Dashboard`, `Operations`, `Bookings`, `Tutors`,
-`Economy`, `Achievements`). Resource labels and the **Tutor Profile** wording
-remain unchanged. This is frontend-only presentation behavior with no RPC,
-schema, persistence, or operational contract change.
+`apps/web/src/components/dashboard/app-sidebar.tsx` groups admin links by task:
+
+- **Overview:** Dashboard, Operations.
+- **Teaching:** Bookings, Classes, Session reports, Tutors.
+- **Finance:** Tutor payouts, Economy.
+- **Content & reviews:** Competitions, Achievements, Knowledge access, FAQ, Manage FAQs.
+
+Student links use **Overview** (Dashboard, Balance) and **Learning** (Tutors,
+Classes, My Bookings, Session reports, Achievements). Tutor links use
+**Overview** (Dashboard) and **Teaching** (Bookings, Session reports,
+Availability, Tutor Profile). Student and tutor FAQ links sit in **Resources**
+after Knowledge Bank, alongside How it works, Competition Calendar, and WhatsApp
+Support. Admin FAQ stays in Content & reviews. All roles retain the account footer. The groups reuse Selia
+SidebarGroup/SidebarGroupTitle and the existing link rendering, active states,
+and booking-action badge. This is frontend presentation only; routes, RPC
+contracts, services, event keys, persistence, and business rules are unchanged.
 
 ## Human-readable booking references (2026-09-04)
 

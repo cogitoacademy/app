@@ -20,6 +20,38 @@ bounded serial execution (`GOMAXPROCS=2 GOMEMLIMIT=512MiB bun run check-types
 feedback adapter retains the API version, and the admin session lookup explicitly
 allows no session for non-series bookings.
 
+## Ongoing experience smoke check (22 October 2026)
+
+In tutor profile Experiences, verify Start year and End year align. Checking
+"I currently work in this role" clears and disables End year while leaving the
+control in place. Uncheck to enable it with the current/start-year default.
+Existing ongoing entries start checked. The focused synthetic browser test
+checks toggling, retained geometry, existing null values and mobile rendering;
+it performs no database writes. No environment or migration changes apply.
+At desktop and mobile widths, also verify the Education, Achievements &
+Experiences info button stays beside the title when the text wraps; the
+focused synthetic browser check asserts their relative geometry.
+
+## Compact tutor status acceptance (22 October 2026)
+
+Check `/profile` at desktop and mobile widths: one badge appears beside the
+heading, with no Profile status card. Published/no-pending-edit profiles show
+no notice. Pending edits explain that the profile is live while edits await
+review; requested revisions preserve admin feedback. Draft, pending review,
+approved/unpublished and suspended profiles keep their next-step guidance.
+`tutor-profile-render.spec.ts` covers these states with synthetic session/RPC
+responses and no database writes. No environment changes are required.
+
+## Tutor profile render check (22 October 2026)
+
+`tutor-profile-render.spec.ts` mocks session/RPC responses and performs no DB
+writes. It checks `/profile` renders tax guidance and legal-name inputs without
+browser errors. The focused local Chromium run against web 3000 passed after
+replacing the standalone tax introduction's `FieldDescription` with `Text`.
+For manual acceptance, sign in as a tutor and reload `/profile`; verify the tax
+section renders. Saving profile changes and real-account acceptance were not
+exercised by this synthetic rendering check.
+
 ## Local development restarted (22 October 2026)
 
 Docker Desktop and the existing development Postgres/Redis containers are running.
@@ -33,6 +65,13 @@ The earlier offline blocker is resolved; authenticated UI route acceptance is
 still pending and is separate from this startup health check.
 
 ## UI control and table verification (22 October 2026)
+
+Spacing regression: on `/admin-economy`, measure from the lower of the take and
+preview Cards to the V3 rate card. It should be the normal 24px Stack gap, at
+both mobile and desktop widths, not the 128–250px blank region seen with Card-root
+inline-size containment. Confirm icon-header actions still use column 3 on wide
+headers and wrap below the title on narrow headers. The E2E economy spec includes
+this rendered-gap assertion.
 
 Tax form follow-up: defaults and custom tutor rates use percentages, not bps.
 Verify default 250 displays as 2.5, 300 as 3; typing 2.55 should show Rp10,200
@@ -1349,6 +1388,24 @@ access state refresh. Use the Active, Expired, and All filters, then remove the
 grant and verify the student is locked again. An expired grant must remain
 visible as **Expired** but must not bypass the 35-Mark gate; this behavior is
 read-time and does not depend on a scheduler.
+
+### Role-based sidebar grouping smoke check
+
+As an admin, confirm the sidebar shows Overview (Dashboard, Operations),
+Teaching (Bookings, Classes, Session reports, Tutors), Finance (Tutor payouts,
+Economy), Content & reviews (Competitions, Achievements, Knowledge access, FAQ,
+Manage FAQs), then Resources. Verify every link opens its existing route,
+selected links retain their active styling, and Bookings retains its action
+badge when there are actionable bookings. At desktop and mobile widths, scroll
+the sidebar to reach Resources and the account menu.
+
+As a student, confirm Overview contains Dashboard and Balance, followed by
+Learning with Tutors, Classes, My Bookings, Session reports, and Achievements.
+As a tutor, confirm Overview contains Dashboard, followed by Teaching with
+Bookings, Session reports, Availability, and Tutor Profile. Both roles show FAQ
+in Resources after Knowledge Bank, exactly once. Check the booking action badge,
+active-link styling, mobile sidebar scrolling, and account footer for both roles.
+No environment or service changes are required.
 
 ### Empty-state consistency smoke check
 

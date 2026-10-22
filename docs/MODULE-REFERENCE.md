@@ -1,6 +1,34 @@
 # Cogito Module Reference
 
+## Ongoing tutor experience control (22 October 2026)
+
+`TutorExperiencesEditor` maps the ongoing checkbox to the existing nullable
+`endYear`. Checking clears and disables the end-year input; unchecking uses
+`max(currentYear, startYear)`. The input stays mounted and the date row aligns
+at the top. Existing period validation and Present display are unchanged.
+The combined education/achievements/experience CardTitle uses a shrinkable
+text span to retain its info button alongside multiline text.
+
+## Tutor profile status presentation (22 October 2026)
+
+`OnboardingForm` renders one lifecycle badge beside the heading and conditional
+header guidance. An ordinary published profile has no status notice; published
+pending edits explain that the live profile stays visible during review.
+Revision feedback and non-published state guidance remain available. No review
+transition, event key, validation or persistence rule changes.
+
+## Tutor profile section copy (22 October 2026)
+
+The onboarding form uses Selia `Text` for the tax section introduction.
+`FieldDescription` requires an enclosing `Field` and is reserved for individual
+field descriptions. Tax validation and payout business rules are unchanged.
+
 ## Shared UI control contracts (22 October 2026)
+
+The named Card container query lives on CardHeader, not the Card root. Root
+inline-size containment inflated grid intrinsic row heights inside column Stacks,
+leaving empty vertical space below Cards; header containment keeps action wrapping
+without changing the whole Card's grid contribution.
 
 Payout tax controls display and accept percentages (0..100, two decimal places).
 `percentToBasisPoints` rounds the percentage times 100 before it enters the
@@ -668,15 +696,24 @@ Cogito Academy logo so the full wordmark renders white. This is client-side
 presentation behavior and adds no service, repository, event-key, or business
 rule.
 
-## Sidebar navigation order (2026-09-04)
+## Sidebar navigation groups (2026-10-22)
 
-`apps/web/src/components/dashboard/app-sidebar.tsx` keeps the shared resource
-group and account footer while ordering primary links by role-specific workflow:
-students use `Dashboard`, `Tutors`, `My Bookings`, `Balance`, and `Achievements`;
-tutors use `Dashboard`, `Bookings`, `Availability`, and `Tutor Profile`; admins
-use `Dashboard`, `Operations`, `Bookings`, `Tutors`, `Economy`, and
-`Achievements`. This is frontend presentation only; services, repositories,
-event keys, and business rules are unchanged.
+`apps/web/src/components/dashboard/app-sidebar.tsx` groups admin links by task:
+
+- **Overview:** Dashboard, Operations.
+- **Teaching:** Bookings, Classes, Session reports, Tutors.
+- **Finance:** Tutor payouts, Economy.
+- **Content & reviews:** Competitions, Achievements, Knowledge access, FAQ, Manage FAQs.
+
+Student links use **Overview** (Dashboard, Balance) and **Learning** (Tutors,
+Classes, My Bookings, Session reports, Achievements). Tutor links use
+**Overview** (Dashboard) and **Teaching** (Bookings, Session reports,
+Availability, Tutor Profile). Student and tutor FAQ links sit in **Resources**
+after Knowledge Bank, alongside How it works, Competition Calendar, and WhatsApp
+Support. Admin FAQ stays in Content & reviews. All roles retain the account footer. The groups reuse Selia
+SidebarGroup/SidebarGroupTitle and the existing link rendering, active states,
+and booking-action badge. This is frontend presentation only; routes, RPC
+contracts, services, event keys, persistence, and business rules are unchanged.
 
 ## Production UI and E2E audit (2026-09-04)
 
