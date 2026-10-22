@@ -339,14 +339,21 @@ restore or reseed has been verified.
 API integration helpers now reject reset on 6767 and 6768 unconditionally.
 The only resettable pairs are exact local `cogito-test:6769` and
 `cogito-test-payout:6770`, and each needs both `TEST_DATABASE_ALLOW_RESET=true`
-and `TEST_DATABASE_RESET_TARGET` exactly equal to `DATABASE_URL`. No current
-environment or example enables this opt-in. `test-setup.ts` has no database URL
-fallback; provide a target explicitly for DB-backed work. The retained 6769
-run-scoped financial fixtures were not reset in this task. The non-reset T05
-per-run E2E identity path remains unchanged. A source scan found 69 API test
-files calling the shared helper; their call sites are unchanged, but old
-6767/6768 env files now fail closed before the helper issues SQL. The pure
-guard suite passed 6 tests / 40 expectations; no DB-backed verification was run.
+and `TEST_DATABASE_RESET_TARGET` exactly equal to `DATABASE_URL`. Developer
+environments and examples remain opt-out. GitHub Actions grants reset consent
+only to reset-based tests on that run's disposable 6769 service and to the
+dedicated payout test command on its separate disposable 6770 service. The
+three report fixture suites that assert reset overrides are absent run separately
+on 6769 with both variables unset; their LCOV output is merged with the other
+coverage runs before the existing gate. The payout schema is migrated through a
+separate `apps/server/.env.test-payout` file. No helper guard or coverage gate
+was changed. `test-setup.ts` has no database URL fallback; provide a target
+explicitly for DB-backed work. The retained 6769 run-scoped financial fixtures
+were not reset in this task. The non-reset T05 per-run E2E identity path remains
+unchanged. A source scan found 69 API test files calling the shared helper;
+their call sites are unchanged, but old 6767/6768 env files now fail closed
+before the helper issues SQL. The pure guard suite passed 6 tests / 40
+expectations; no DB-backed verification was run.
 
 ## Earlier T06 worker checkpoint (superseded by parent verification above)
 
@@ -796,6 +803,18 @@ loopback HTTP origins, and `PORT` / `WEB_PORT` must match those URLs. Optional
 Validation runs before seed setup. Global setup uses its own guarded seed path;
 this does not authorize the API test helper's broad `resetDatabase()` call.
 That helper has the stricter 6769/6770 reset policy documented above and below.
+
+GitHub Actions keeps its E2E dependencies disposable per workflow run: Postgres
+maps host `6769` to container `5432`, and Redis maps host `6381` to container
+`6379`. The job sets
+`DATABASE_URL=postgresql://postgres:password@localhost:6769/cogito-test`, Redis,
+API and web targets `6381/3201/3200`, and matching `T05_ENROLLMENT_TEST_*` ports.
+The generated `apps/server/.env.test`, migration step, Playwright config and
+global setup resolve this same target. T05 setup creates a fresh UUID-scoped
+student and skips the legacy seed-student delete path; no `resetDatabase()`
+consent flags are set. Never run this CI seed path against a retained local
+6769/6770 fixture; its database is disposable for the workflow run. Keep the
+safety guard unchanged.
 
 Playwright starts its own API and web servers with `reuseExistingServer: false`;
 the default ports are 3101 and 3100. Keep both free, or configure different
