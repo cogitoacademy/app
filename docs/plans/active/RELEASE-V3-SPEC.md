@@ -1,5 +1,27 @@
 # Release v3 - technical specification
 
+## KOL settlement source contract (23 October 2026)
+
+The implemented procedure family is `adminReferral.getKolSettlement`,
+`recordKolTransfer`, `adjustKolCommission`, `exportKolMonthly` (API-REFERENCE has
+runtime paths/input details). One transfer belongs to one commission decision;
+there is no allocation algorithm. Entries append only, with global operation-key
+uniqueness and restrictive decision/actor FKs. Decision row lock serializes
+transfers/adjustments with provider correction, without acquiring payment locks.
+Entry and admin audit commit together; correction validates expected obligation.
+
+Signed obligation adjustments are explicit operator-entered amounts, never
+proration. Full reversal voids the effective obligation including adjustments;
+all cash and adjustment history survive. Unresolved time holds obligation at zero.
+Partial refund retains the PR312 manual flag and historical base. Provider base
+changes remain audited independently and may need further reasoned reconciliation.
+No automatic offsets, recovery, saved-choice edit or transfer rewrite is added.
+CSV uses a repeatable-read current snapshot, selecting WIB purchase/entry activity
+month and showing current lifetime balances plus that month's entry details.
+It is not a historical month-end balance; summary-only summation avoids duplicates.
+0073 is generated, unapplied; parent owns DB/browser acceptance.
+
+
 Date: 20 October 2026. Status: **engineering design draft; owner-approved product policies are recorded in PRD/DECISIONS, implementation status remains in TASKS**. Product requirements: [PRD](RELEASE-V3-PRD.md). Open commercial decisions: [DECISIONS](../../client/RELEASE-V3-DECISIONS.md). Proposed model/API names are not claims that endpoints/tables exist. Keep the current service/repository/handler/router composition and reuse existing wallet, audit, meeting, notification and provider ports.
 
 ## 1. Boundaries and ownership

@@ -1,0 +1,1 @@
+ALTER TABLE "kol_settlement_entry" ADD COLUMN "expected_obligation_idr" bigint;

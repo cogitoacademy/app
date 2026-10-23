@@ -1,3 +1,5 @@
+import { kolCsv } from "./kol-settlement.csv";
+import { calculateKolSettlement, kolMonthRange } from "./kol-settlement.policy";
 import {
   and,
   asc,
@@ -14,6 +16,7 @@ import {
 import {
   friendRewardDecision,
   kolCommissionDecision,
+  kolSettlementEntry,
   ledgerEntry,
   paymentRecord,
   referralCampaign,
@@ -39,6 +42,8 @@ import {
   normalizeReferralCode,
 } from "./referral.policy";
 import type {
+  recordKolTransferInput,
+  adjustKolCommissionInput,
   CreateKolCampaignInput,
   ListKolCommissionsInput,
   UpdateReferralSettingsInput,
@@ -77,6 +82,53 @@ async function settingsAt(conn: DbOrTx, at: Date) {
     )
     .limit(1);
   return row ?? DEFAULT_REFERRAL_SETTINGS;
+}
+
+function settlementTotals(
+  decision: typeof kolCommissionDecision.$inferSelect,
+  entries: (typeof kolSettlementEntry.$inferSelect)[],
+) {
+  const adjustment = entries
+    .filter((row) => row.kind === "adjustment")
+    .reduce((sum, row) => sum + row.amountIdr, 0);
+  const transferred = entries
+    .filter((row) => row.kind === "transfer")
+    .reduce((sum, row) => sum + row.amountIdr, 0);
+  // Reversal voids the qualifying obligation, while cash and adjustment history survive.
+  const voided =
+    decision.paymentStatusSnapshot === "REFUNDED" ||
+    decision.providerSuccessTimeState === "unresolved";
+  return {
+    decision,
+    entries,
+    ...calculateKolSettlement(
+      decision.commissionAmountIdr,
+      adjustment,
+      transferred,
+      voided,
+    ),
+    ...(decision.providerSuccessTimeState === "unresolved"
+      ? { status: "held" }
+      : {}),
+  };
+}
+
+async function settlementSnapshot(conn: DbOrTx, decisionId: string) {
+  const [decision] = await conn
+    .select()
+    .from(kolCommissionDecision)
+    .where(eq(kolCommissionDecision.id, decisionId));
+  if (!decision)
+    throw new ReferralError(
+      "KOL_SETTLEMENT_INVALID",
+      "Commission decision not found.",
+    );
+  const entries = await conn
+    .select()
+    .from(kolSettlementEntry)
+    .where(eq(kolSettlementEntry.decisionId, decisionId))
+    .orderBy(asc(kolSettlementEntry.createdAt), asc(kolSettlementEntry.id));
+  return settlementTotals(decision, entries);
 }
 
 export function createReferralService(deps: {
@@ -952,6 +1004,289 @@ export function createReferralService(deps: {
     return decision;
   }
 
+  async function getKolSettlement(input: { decisionId: string }) {
+    return db.transaction(async (tx) => {
+      await tx
+        .select({ id: kolCommissionDecision.id })
+        .from(kolCommissionDecision)
+        .where(eq(kolCommissionDecision.id, input.decisionId))
+        .for("update");
+      return settlementSnapshot(tx, input.decisionId);
+    });
+  }
+
+  async function writeKolSettlement(
+    actorId: string,
+    input:
+      | typeof recordKolTransferInput._output
+      | typeof adjustKolCommissionInput._output,
+    kind: "transfer" | "adjustment",
+  ) {
+    return db.transaction(async (tx) => {
+      // Provider reconciliation takes this same lock; settlement never acquires payment/wallet locks.
+      await tx
+        .select({ id: kolCommissionDecision.id })
+        .from(kolCommissionDecision)
+        .where(eq(kolCommissionDecision.id, input.decisionId))
+        .for("update");
+      const before = await settlementSnapshot(tx, input.decisionId);
+      const [prior] = await tx
+        .select()
+        .from(kolSettlementEntry)
+        .where(eq(kolSettlementEntry.operationId, input.operationId));
+      const paidAt = "paidAt" in input ? input.paidAt : null;
+      const reference = "reference" in input ? input.reference : null;
+      const reason = "reason" in input ? input.reason : null;
+      const expectedObligationIdr =
+        "expectedObligationIdr" in input ? input.expectedObligationIdr : null;
+      if (prior) {
+        if (
+          prior.decisionId !== input.decisionId ||
+          prior.createdBy !== actorId ||
+          prior.kind !== kind ||
+          prior.amountIdr !== input.amountIdr ||
+          prior.paidAt?.getTime() !== paidAt?.getTime() ||
+          prior.reference !== reference ||
+          prior.reason !== reason ||
+          prior.expectedObligationIdr !== expectedObligationIdr
+        )
+          throw new ReferralError(
+            "KOL_SETTLEMENT_CONFLICT",
+            "Operation ID already used with different values.",
+          );
+        return before;
+      }
+      if (kind === "adjustment") {
+        if (
+          !("expectedObligationIdr" in input) ||
+          before.obligationIdr !== input.expectedObligationIdr
+        )
+          throw new ReferralError(
+            "KOL_SETTLEMENT_CONFLICT",
+            "Commission changed. Review the current obligation.",
+          );
+        if (
+          before.decision.paymentStatusSnapshot === "REFUNDED" ||
+          before.decision.providerSuccessTimeState === "unresolved" ||
+          before.obligationIdr + input.amountIdr < 0
+        )
+          throw new ReferralError(
+            "KOL_SETTLEMENT_INVALID",
+            "Cannot adjust a void/unresolved commission or create a negative obligation.",
+          );
+      }
+      if (paidAt && paidAt > now())
+        throw new ReferralError(
+          "KOL_SETTLEMENT_INVALID",
+          "Payment date cannot be in the future.",
+        );
+      const inserted = await tx
+        .insert(kolSettlementEntry)
+        .values({
+          decisionId: input.decisionId,
+          operationId: input.operationId,
+          kind,
+          amountIdr: input.amountIdr,
+          expectedObligationIdr,
+          paidAt,
+          reference,
+          reason,
+          createdBy: actorId,
+        })
+        .onConflictDoNothing()
+        .returning();
+      if (!inserted.length)
+        throw new ReferralError(
+          "KOL_SETTLEMENT_CONFLICT",
+          "Operation ID already used. Reload before retrying.",
+        );
+      const after = await settlementSnapshot(tx, input.decisionId);
+      await audit.record({
+        db: tx,
+        actorId,
+        actorType: "admin",
+        action:
+          kind === "transfer"
+            ? "kol_external_transfer_recorded"
+            : "kol_commission_adjusted",
+        targetType: "kol_commission_decision",
+        targetId: input.decisionId,
+        beforeState: {
+          obligationIdr: before.obligationIdr,
+          transferredIdr: before.transferredIdr,
+          outstandingIdr: before.outstandingIdr,
+          overpaymentIdr: before.overpaymentIdr,
+        },
+        afterState: {
+          obligationIdr: after.obligationIdr,
+          transferredIdr: after.transferredIdr,
+          outstandingIdr: after.outstandingIdr,
+          overpaymentIdr: after.overpaymentIdr,
+        },
+        details: {
+          amountIdr: input.amountIdr,
+          entryId: inserted[0]!.id,
+          operationId: input.operationId,
+          reason,
+          paidAt,
+          reference,
+        },
+      });
+      return after;
+    });
+  }
+
+  const recordKolTransfer = (
+    actorId: string,
+    input: typeof recordKolTransferInput._output,
+  ) => writeKolSettlement(actorId, input, "transfer");
+  const adjustKolCommission = (
+    actorId: string,
+    input: typeof adjustKolCommissionInput._output,
+  ) => writeKolSettlement(actorId, input, "adjustment");
+
+  async function exportKolMonthly(input: { month: string }) {
+    const { from, to } = kolMonthRange(input.month);
+    // Current reconciliation, selected by purchase/transfer/adjustment activity in the WIB month.
+    return db.transaction(
+      async (tx) => {
+        const rows = await tx
+          .select({
+            id: kolCommissionDecision.id,
+            decision: kolCommissionDecision,
+            name: user.name,
+            email: user.email,
+            campaign: referralCampaign.name,
+            code: referralChoice.codeSnapshot,
+          })
+          .from(kolCommissionDecision)
+          .innerJoin(user, eq(user.id, kolCommissionDecision.referredUserId))
+          .innerJoin(
+            referralChoice,
+            eq(referralChoice.id, kolCommissionDecision.choiceId),
+          )
+          .innerJoin(
+            referralCampaign,
+            eq(referralCampaign.id, referralChoice.campaignId),
+          )
+          .where(
+            sql`(${kolCommissionDecision.providerSuccessAt} >= ${from.toISOString()}::timestamptz AND ${kolCommissionDecision.providerSuccessAt} < ${to.toISOString()}::timestamptz) OR (${kolCommissionDecision.providerSuccessAt} IS NULL AND ${kolCommissionDecision.createdAt} >= ${from.toISOString()}::timestamptz AND ${kolCommissionDecision.createdAt} < ${to.toISOString()}::timestamptz) OR EXISTS (SELECT 1 FROM ${kolSettlementEntry} WHERE ${kolSettlementEntry.decisionId} = ${kolCommissionDecision.id} AND coalesce(${kolSettlementEntry.paidAt}, ${kolSettlementEntry.createdAt}) >= ${from.toISOString()}::timestamptz AND coalesce(${kolSettlementEntry.paidAt}, ${kolSettlementEntry.createdAt}) < ${to.toISOString()}::timestamptz)`,
+          )
+          .orderBy(asc(kolCommissionDecision.id))
+          .limit(5001);
+        if (rows.length > 5000)
+          throw new ReferralError(
+            "KOL_SETTLEMENT_INVALID",
+            "Export exceeds 5000 decisions; contact support for a scoped export.",
+          );
+        const csvRows: unknown[][] = [
+          [
+            "Activity month (WIB)",
+            "Row type",
+            "Decision ID",
+            "Campaign",
+            "Code",
+            "Student",
+            "Email",
+            "Qualifying payment ID",
+            "Purchase IDR",
+            "Provider success UTC",
+            "Provider time state",
+            "Payment status",
+            "Refund reconciliation",
+            "Calculated IDR (current)",
+            "Adjustments IDR (lifetime)",
+            "Obligation IDR (current)",
+            "Transferred IDR (lifetime)",
+            "Outstanding IDR (current)",
+            "Overpayment IDR (current)",
+            "Entry ID",
+            "Entry amount IDR",
+            "Paid at UTC",
+            "Reference",
+            "Reason",
+            "Actor",
+            "Recorded at UTC",
+          ],
+        ];
+        const entries = rows.length
+          ? await tx
+              .select()
+              .from(kolSettlementEntry)
+              .where(
+                inArray(
+                  kolSettlementEntry.decisionId,
+                  rows.map((row) => row.id),
+                ),
+              )
+              .orderBy(
+                asc(kolSettlementEntry.createdAt),
+                asc(kolSettlementEntry.id),
+              )
+          : [];
+        const byDecision = new Map<
+          string,
+          (typeof kolSettlementEntry.$inferSelect)[]
+        >();
+        for (const entry of entries) {
+          const group = byDecision.get(entry.decisionId) ?? [];
+          group.push(entry);
+          byDecision.set(entry.decisionId, group);
+        }
+        for (const row of rows) {
+          const snapshot = settlementTotals(
+            row.decision,
+            byDecision.get(row.id) ?? [],
+          );
+          const d = snapshot.decision;
+          const prefix = [
+            input.month,
+            "summary",
+            row.id,
+            row.campaign,
+            row.code,
+            row.name,
+            row.email,
+            d.paymentId,
+            d.purchaseAmountIdrSnapshot,
+            d.providerSuccessAt,
+            d.providerSuccessTimeState,
+            d.paymentStatusSnapshot,
+            d.refundReconciliationState,
+            snapshot.calculatedIdr,
+            snapshot.adjustmentIdr,
+            snapshot.obligationIdr,
+            snapshot.transferredIdr,
+            snapshot.outstandingIdr,
+            snapshot.overpaymentIdr,
+          ];
+          csvRows.push([...prefix, "", "", "", "", "", "", ""]);
+          for (const entry of snapshot.entries) {
+            const activityAt = entry.paidAt ?? entry.createdAt;
+            if (activityAt < from || activityAt >= to) continue;
+            csvRows.push([
+              ...prefix.map((value, index) =>
+                index === 1 ? entry.kind : value,
+              ),
+              entry.id,
+              entry.amountIdr,
+              entry.paidAt,
+              entry.reference,
+              entry.reason,
+              entry.createdBy,
+              entry.createdAt,
+            ]);
+          }
+        }
+        return {
+          filename: `kol-reconciliation-${input.month}.csv`,
+          csv: kolCsv(csvRows),
+        };
+      },
+      { isolationLevel: "repeatable read" },
+    );
+  }
+
   async function listKolCommissions(input: ListKolCommissionsInput) {
     const cursor = input.cursor
       ? decodeKolCommissionCursor(input.cursor)
@@ -1164,6 +1499,10 @@ export function createReferralService(deps: {
     listKolCampaigns,
     recordSuccessfulKolTopUp,
     listKolCommissions,
+    exportKolMonthly,
+    getKolSettlement,
+    recordKolTransfer,
+    adjustKolCommission,
     recordEligibleFirstCompletion,
   };
 }

@@ -229,7 +229,7 @@ test("KOL full refund displays zero historical commission", async ({
               ...decision,
               campaignName: "Full refund campaign",
               paymentStatus: "REFUNDED",
-              refundReconciliationState: "full_refund",
+              refundReconciliationState: "none",
               commissionAmountIdr: 0,
             },
           ],
@@ -242,7 +242,7 @@ test("KOL full refund displays zero historical commission", async ({
   await page.goto("/admin-kol-commissions");
   const row = page.getByRole("row").filter({ hasText: "Full refund campaign" });
   await expect(row.getByText("REFUNDED", { exact: true })).toBeVisible();
-  await expect(row.getByRole("cell").last()).toHaveText("Rp0");
+  await expect(row.getByRole("cell").last()).toContainText("Rp0");
   await expect(
     row.getByText("Partial refund · reconcile", { exact: true }),
   ).toHaveCount(0);

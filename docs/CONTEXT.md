@@ -1,5 +1,52 @@
 # Cogito App — Codebase Context
 
+## KOL settlement browser acceptance (24 October 2026)
+
+Seven synthetic Chromium settlement cases pass (19.8s): admin opening,
+partial/history/overpayment display, transfer payload and WIB date, identical
+retry payload, adjustment reason/precondition, blocked adjustments, monthly
+CSV download bytes/name and non-admin redirect. Run from packages/e2e:
+`bunx playwright test --config playwright.kol-settlement-synthetic.config.ts`.
+RPC responses are mocked; the separate 21 PostgreSQL cases verify persistence,
+replay/concurrency, rollback, refunds and generated CSV. Five policy/CSV units
+also pass (combined 26 / 227). Full server build and normal four-workspace
+pre-push typechecks/lint pass. The bounded source rereview found no remaining
+findings after the numeric CSV, replay-precondition and timestamp-binding fixes.
+
+## KOL settlement parent verification (24 October 2026)
+
+Review fixes retain numeric negative adjustments in CSV, persist and compare
+adjustment replay preconditions, and bind WIB month boundaries as explicit ISO
+timestamptz values. Migration 0074 adds only expected_obligation_idr; applied
+0073 remains unchanged. Both migrations are applied only to guarded test
+6769/cogito-test (journal 75), without reset/seed. Current acceptance passes
+26 tests / 227 assertions across 21 PostgreSQL cases (including prior PR312
+ordering/refund regressions) and five settlement policy/CSV units. Concurrent
+transfer/replay, stale corrections, audit rollback, refund retention and the
+monthly CSV path and exact half-open WIB purchase boundaries pass. The combined auth/referral/KOL synthetic Chromium suite passes 10/10 after updating the commission-cell locator for settlement controls. Dev/production migration and browser settlement
+acceptance remain pending at this checkpoint.
+
+## KOL settlement source checkpoint (23 October 2026)
+
+REQ-KOL-02/03 and AC-K03 source now extend the existing admin commission page
+with actual external transfer recording, append-only signed obligation adjustments,
+history/readback and monthly reconciliation CSV. Transfers bind to one decision;
+there is no cross-campaign allocation, automatic recovery, future offset, bank
+execution or worker. Rp35,000 minus Rp10,000 leaves Rp25,000 outstanding; another
+Rp30,000 leaves Rp5,000 overpayment. Adjustments require reason and expected current
+obligation, preserve choice/transfer rows, and audit actor/time/before/after.
+Provider ordering and partial-refund semantics from PR312 remain unchanged.
+Full reversal makes effective obligation zero, including prior adjustments, while
+all history survives; unresolved time holds obligation at zero. Partial refunds
+remain flagged for explicit manual reconciliation; no proration policy is added.
+
+Additive 0073 SQL/snapshot/journal are generated and reviewed, **unapplied**.
+DB-free focused units and web typecheck are the validation scope; guarded parent
+PostgreSQL/concurrency, admin browser and migration/deployment acceptance remain
+open. Earlier settlement-deferred checkpoints below describe their historical
+source slices, superseded here for implementation only. T09 remains in progress.
+
+
 ## Synthetic referral/KOL browser checkpoint (23 October 2026)
 
 The DB-free `v3-referral-kol.spec.ts` suite passes **10 Chromium tests** using

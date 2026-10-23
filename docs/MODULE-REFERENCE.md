@@ -1,5 +1,42 @@
 # Cogito Module Reference
 
+KOL settlement entries persist expected_obligation_idr for adjustment replay matching (additive migration 0074). Monthly CSV SQL binds explicit ISO timestamptz bounds, and the encoder preserves validated numeric adjustments.
+
+## KOL external settlement source (23 October 2026)
+
+`referral.service` adds `getKolSettlement`, `recordKolTransfer`,
+`adjustKolCommission`, `exportKolMonthly`; `kol-settlement.policy` owns integer
+balance calculation and WIB month bounds. `kol_settlement_entry` stores one
+append-only transfer or signed obligation adjustment, decision FK (restrict),
+global unique operation ID, amount, actual paidAt/reference or required reason,
+actor FK and server time. The API offers no update/delete. Corrections append
+obligation entries; they never rewrite a recorded transfer or saved choice.
+An incorrectly recorded transfer cannot be silently replaced by this interface.
+
+All settlement mutations lock the decision row (also locked by PR312 provider
+reconciliation) before reading totals/writing entry/audit in one transaction.
+They acquire no payment/wallet lock. A unique operation index backs retries;
+concurrent different-decision key collisions conflict. Adjustments check expected
+obligation and cannot create a negative obligation at entry time. Provider-driven
+later changes preserve all entries and can require further manual reconciliation.
+No amount is reallocated to a later commission or campaign.
+
+Active obligation = saved calculated commission + signed adjustments. Full refund
+voids the entire effective obligation (including adjustments); unresolved provider
+time holds it at zero. Historical adjustment totals remain visible. Balance =
+effective obligation - actual transfers; positive is outstanding, negative is
+overpayment, never an automatic offset/recovery. Partial refund retains PR312's
+historical base and manual flag; operators enter only an explicitly approved
+adjustment, never inferred proration. Audits `kol_external_transfer_recorded` and
+`kol_commission_adjusted` include before/after balances and operation/entry/reason.
+The existing provider invalidation/correction audit remains the base-change record.
+
+CSV is current reconciliation selected by monthly activity, with summary and entry
+rows, not a tax or month-end closing report. Read-only repeatable-read protects
+its multi-query snapshot. Additive 0073 remains unapplied; parent DB acceptance
+is required. Earlier decision-only deferred scope is superseded by this source.
+
+
 ## Referral/KOL browser contract coverage
 
 `packages/e2e/src/specs/v3-referral-kol.spec.ts` covers referral-choice route

@@ -52,3 +52,32 @@ export type UpdateReferralSettingsInput =
   typeof updateReferralSettingsInput._output;
 export type CreateKolCampaignInput = typeof createKolCampaignInput._output;
 export type ListKolCommissionsInput = typeof listKolCommissionsInput._output;
+
+const settlementBase = {
+  decisionId: z.string().uuid(),
+  operationId: z.string().uuid(),
+};
+export const recordKolTransferInput = z.object({
+  ...settlementBase,
+  amountIdr: z.number().int().min(1).max(1_000_000_000),
+  paidAt: z.coerce.date(),
+  reference: z.string().trim().min(1).max(600),
+});
+export const adjustKolCommissionInput = z.object({
+  ...settlementBase,
+  amountIdr: z
+    .number()
+    .int()
+    .min(-1_000_000_000)
+    .max(1_000_000_000)
+    .refine((value) => value !== 0),
+  expectedObligationIdr: z.number().int().safe(),
+  reason: z.string().trim().min(3).max(600),
+});
+export const getKolSettlementInput = z.object({
+  decisionId: z.string().uuid(),
+});
+
+export const exportKolMonthlyInput = z.object({
+  month: z.string().regex(/^20\d{2}-(0[1-9]|1[0-2])$/),
+});

@@ -319,3 +319,36 @@ export const kolCommissionDecision = pgTable(
     ),
   ],
 );
+
+export const kolSettlementEntry = pgTable(
+  "kol_settlement_entry",
+  {
+    id: uuidPrimaryKey,
+    decisionId: text("decision_id")
+      .notNull()
+      .references(() => kolCommissionDecision.id, { onDelete: "restrict" }),
+    operationId: text("operation_id").notNull(),
+    kind: text("kind").$type<"transfer" | "adjustment">().notNull(),
+    amountIdr: bigint("amount_idr", { mode: "number" }).notNull(),
+    expectedObligationIdr: bigint("expected_obligation_idr", {
+      mode: "number",
+    }),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    reference: text("reference"),
+    reason: text("reason"),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("kol_settlement_operation_uniq").on(table.operationId),
+    index("kol_settlement_decision_idx").on(table.decisionId),
+    check(
+      "kol_settlement_entry_valid",
+      sql`(${table.kind} = 'transfer' AND ${table.amountIdr} > 0 AND ${table.paidAt} IS NOT NULL AND ${table.reference} IS NOT NULL AND length(trim(${table.reference})) > 0 AND ${table.reason} IS NULL) OR (${table.kind} = 'adjustment' AND ${table.amountIdr} <> 0 AND ${table.paidAt} IS NULL AND ${table.reference} IS NULL AND ${table.reason} IS NOT NULL AND length(trim(${table.reason})) >= 3)`,
+    ),
+  ],
+);
