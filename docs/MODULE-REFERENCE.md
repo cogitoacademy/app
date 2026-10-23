@@ -449,11 +449,14 @@ per-candidate retry table or migration is used. The follow-up unit test covers
 wraparound. Guarded PostgreSQL regressions now also exercise the production SQL
 finder and locked writer at microsecond boundaries: 101-row pagination
 progress, single and series-child day boundaries, exact-end eligibility, and
-same-millisecond reschedule rejection. They are authored but unrun; parent
-must preflight and run them only against loopback 6769/cogito-test. The current
-focused unit suite passes 10 tests / 44 expectations. Parent's serial workspace
-check passed at `b0b80bec`; this precision delta passed bun run check-types (4/4 tasks, 15.204s; 2 cached); the normal pre-push hook reruns it.
-DB/browser acceptance remains pending.
+same-millisecond reschedule rejection. Parent ran the guarded suite against the
+exact loopback target 127.0.0.1:6769/cogito-test; **3 tests / 32 expectations
+passed**, including concurrent duplicate jobs, outbox identity, cursor
+progress, and precision-boundary cases. No migration, reset, seed, or provider
+call ran. The focused unit suite passes 10 tests / 44 expectations. Normal
+pre-push lint and typecheck passed on head 90aa3210; typecheck completed 4/4
+tasks in 33.24s (2 cached). Browser acceptance and actual email delivery remain
+unverified.
 
 ## V3 class session report and settlement boundary (2026-10-21)
 
