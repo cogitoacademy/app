@@ -1,5 +1,26 @@
 # Cogito App — Codebase Context
 
+## Development sync checkpoint (23 October 2026)
+
+Root checkout is synchronized to integrated release source `31774397`. The
+normal dev environment targets `localhost:6767/cogito-app`, API 3001, web 3000
+and Redis 6379. After a custom-format backup under ignored
+`tmp/v3-dev/checkpoint/`, the standard Drizzle postgres-js migrator applied
+0071 and 0072. Journal row count advanced 72 -> 74; booking (34), ledger (90)
+and completion-feedback (2) counts stayed unchanged. No reset or seed ran.
+This supersedes earlier notes saying 0071/0072 were test-only or dev-unapplied;
+production remains unmigrated by this work.
+
+Web and API dev processes are running; web HTML, `/health` and auth session
+read return HTTP 200, and the login page renders. Midtrans retains existing
+sandbox (`test`) configuration. The process-level scheduler is disabled for
+manual preview to avoid automatically processing existing background jobs;
+`.env` is unchanged. Google Meet remains configured; its boot credential probe
+succeeded. Real authenticated feature journeys and actual reminder dispatch
+were not exercised during this sync. Runtime logs are under ignored
+`tmp/v3-dev/runtime/`. Existing accounts/data and client document artifacts
+are preserved. See the integrated checkpoint for feature and acceptance status.
+
 ## Integrated V3 progress checkpoint (23 October 2026)
 
 The remaining V3 source checkpoints are integrated through PR #310 (private
