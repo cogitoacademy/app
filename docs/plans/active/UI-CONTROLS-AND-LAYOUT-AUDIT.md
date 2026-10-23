@@ -14,8 +14,9 @@
   and non-student dashboard redirect. Reviewed captured 320px catalog/detail
   and 1440px detail screenshots. This used a temporary copy of
   `classes-layout.spec.ts` with the catalog button locator changed to the new
-  full-card link. The permanent E2E spec still needs that locator update before
-  running it unchanged; it is outside this seven-file follow-up scope.
+  full-card link. Integration now updates that permanent locator; all 14
+  cases in the checked-in suite pass against the combined UI and PDF export
+  source (36.6 seconds), including PDF downloads and responsive class/report flows.
 - Completed: published-first admin studio tabs, retained draft editor mounting,
   expandable lifecycle controls, wider editor and wrapping confirmation actions.
 - Completed: bounded report session list, mobile focus/scroll to selected report,

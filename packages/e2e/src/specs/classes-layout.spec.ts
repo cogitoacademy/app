@@ -277,7 +277,10 @@ for (const width of [320, 390, 768, 1440]) {
     ).toBeVisible();
     await assertFits(page);
     await page
-      .getByRole("button", { name: `View ${cohort.titleEn}`, exact: true })
+      .getByRole("link", {
+        name: `View details and enrollment for ${cohort.titleEn}`,
+        exact: true,
+      })
       .click();
     await expect(
       page.getByRole("heading", { name: "Curriculum and schedule" }),
