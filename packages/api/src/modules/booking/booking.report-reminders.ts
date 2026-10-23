@@ -3,10 +3,12 @@ import {
   asc,
   eq,
   exists,
+  gt,
   inArray,
   isNull,
   lte,
   not,
+  or,
   sql,
 } from "drizzle-orm";
 import {
@@ -37,6 +39,7 @@ export interface BookingReportReminderRepo {
     db: DbType,
     nowAt: Date,
     limit: number,
+    after?: LegacyBookingReportReminderCandidate,
   ): Promise<LegacyBookingReportReminderCandidate[]>;
   writeIfPending(
     db: DbType,
@@ -75,7 +78,7 @@ function reminderOrder(
 
 export function createBookingReportReminderRepo(): BookingReportReminderRepo {
   return {
-    async findDue(db, nowAt, limit) {
+    async findDue(db, nowAt, limit, after) {
       const candidateLimit = Math.max(
         0,
         Math.min(limit, BOOKING_REPORT_REMINDER_BATCH_SIZE),
@@ -87,6 +90,33 @@ export function createBookingReportReminderRepo(): BookingReportReminderRepo {
       const singleEventKey = sql`'booking:' || ${booking.id} || ':session:booking:missing-report:day:' || (${singlePeriod})::text`;
       const seriesPeriod = sql`floor(extract(epoch from (${nowAtIso}::timestamptz - ${bookingSession.scheduledEndAt})) / 86400)::bigint`;
       const seriesEventKey = sql`'booking:' || ${booking.id} || ':session:' || ${bookingSession.id} || ':missing-report:day:' || (${seriesPeriod})::text`;
+      const afterSingle = after
+        ? or(
+            gt(booking.scheduledEndAt, after.scheduledEndAt),
+            and(
+              eq(booking.scheduledEndAt, after.scheduledEndAt),
+              gt(booking.id, after.bookingId),
+            ),
+          )
+        : undefined;
+      const afterSeries = after
+        ? or(
+            gt(bookingSession.scheduledEndAt, after.scheduledEndAt),
+            and(
+              eq(bookingSession.scheduledEndAt, after.scheduledEndAt),
+              gt(booking.id, after.bookingId),
+            ),
+            ...(after.sessionId
+              ? [
+                  and(
+                    eq(bookingSession.scheduledEndAt, after.scheduledEndAt),
+                    eq(booking.id, after.bookingId),
+                    gt(bookingSession.id, after.sessionId),
+                  ),
+                ]
+              : []),
+          )
+        : undefined;
 
       const [singleRows, seriesRows] = await Promise.all([
         db
@@ -118,6 +148,7 @@ export function createBookingReportReminderRepo(): BookingReportReminderRepo {
                     ),
                 ),
               ),
+              ...(afterSingle ? [afterSingle] : []),
               not(
                 exists(
                   db
@@ -168,6 +199,7 @@ export function createBookingReportReminderRepo(): BookingReportReminderRepo {
                     ),
                 ),
               ),
+              ...(afterSeries ? [afterSeries] : []),
               not(
                 exists(
                   db
@@ -312,13 +344,26 @@ export function createBookingReportReminderProcessor(deps: {
   appBaseUrl: string;
   clock?: () => Date;
 }) {
+  // This in-process keyset cursor keeps persistent write failures from
+  // pinning every scheduler pass to the same oldest batch. It resets on restart.
+  let cursor: LegacyBookingReportReminderCandidate | undefined;
+
   async function processPendingReportReminders() {
     const nowAt = deps.clock?.() ?? new Date();
-    const candidates = await deps.repo.findDue(
+    let candidates = await deps.repo.findDue(
       deps.db,
       nowAt,
       BOOKING_REPORT_REMINDER_BATCH_SIZE,
+      cursor,
     );
+    if (candidates.length === 0 && cursor) {
+      cursor = undefined;
+      candidates = await deps.repo.findDue(
+        deps.db,
+        nowAt,
+        BOOKING_REPORT_REMINDER_BATCH_SIZE,
+      );
+    }
     const appBaseUrl = deps.appBaseUrl.replace(/\/+$/, "");
     let queued = 0;
     let skipped = 0;
@@ -327,6 +372,7 @@ export function createBookingReportReminderProcessor(deps: {
     // Keep lock-and-write transactions sequential within each bounded batch.
     // eslint-disable no-await-in-loop -- Process independently locked candidate rows in sequence.
     for (const candidate of candidates) {
+      cursor = candidate;
       const period = bookingReportReminderPeriod(
         candidate.scheduledEndAt,
         nowAt,

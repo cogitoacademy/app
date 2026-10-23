@@ -2699,7 +2699,17 @@ transaction. Whole-session cancel/completed/no-show states are excluded;
 participant-level group/series no-show does not by itself mean the remaining
 session was not delivered. The message explicitly asks tutors to report only if
 delivery occurred. It does not mutate completion, report, wallet, fee or
-settlement state and adds no migration. Focused unit tests pass 7 tests / 27
-expectations, and the normal serial typecheck
-runs through the repository's pre-push hook. Parent-owned DB/browser gaps remain;
-PDF remains open.
+settlement state and adds no migration. The initial focused suite passed 7 tests
+/ 27 expectations; the fairness follow-up expands it to 8 tests / 33
+expectations. The serial workspace typecheck runs through the repository's
+normal pre-push hook. Parent-owned DB/browser gaps remain; PDF remains open.
+
+The global bounded scan advances a process-local keyset cursor after each
+candidate, including failed outbox writes, and wraps to retry the oldest due
+items. Restart returns to the oldest item; event-key/outbox dedupe is durable,
+but the fairness cursor is not. A unit regression covers a failed 100-item
+batch progressing to later eligible bookings and wraparound retry. A guarded
+PostgreSQL test for actual report/state rechecks, duplicate scheduling and
+tutor-only email outbox identity is authored but unrun; parent DB acceptance is
+pending. The expanded focused unit suite passes 8 tests / 33 expectations.
+Serial workspace typechecking is enforced by the normal pre-push hook.

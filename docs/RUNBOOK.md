@@ -487,10 +487,24 @@ needs no schema migration or environment variable. The job result adds
 `bookingReportRemindersQueued` and `bookingReportRemindersFailed` counters; per-
 candidate failures log `booking_report_reminder_failed`.
 
-The focused pure suite passes 7 tests / 27 expectations. The serial typecheck is
-run through the repository's normal pre-push hook. No DB test, browser
-acceptance, migration, provider call, reset or seed ran here; those integration
-checks remain with the parent.
+The initial focused pure suite passed 7 tests / 27 expectations; the review
+follow-up expands it to 8 tests / 33 expectations. The serial workspace
+typecheck runs through the repository's normal pre-push hook. No DB test,
+browser acceptance, migration, provider call, reset or seed ran here; those
+integration checks remain with the parent.
+
+The worker rotates through a stable keyset cursor after each candidate, including
+failed writes, and wraps to retry older due items once it reaches the end. The
+cursor is process-local and resets to the oldest due item on restart; event-key
+dedupe and email outbox rows remain persistent. No retry state migration is
+required. `packages/api/src/tests/integration/booking.report-reminders.test.ts`
+adds guarded non-reset coverage for report/state rechecks, duplicate jobs and
+notification/outbox identity. It is authored but unrun here; run it only after
+preflighting `NODE_ENV=test` against loopback 6769 `/cogito-test` with reset
+overrides absent. The expanded focused unit suite passes 8 tests / 33
+expectations; the serial workspace typecheck runs through the normal pre-push
+hook. The guarded integration test is authored but unrun; parent DB acceptance
+remains pending.
 
 ## Prior local integration checkpoint (21 October)
 

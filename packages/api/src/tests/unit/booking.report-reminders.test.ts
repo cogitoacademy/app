@@ -72,7 +72,7 @@ function makeRepo(rows: FakeBooking[]) {
   const recordedKeys = new Set<string>();
   let afterFind: (() => void) | undefined;
   const repo: BookingReportReminderRepo = {
-    async findDue(_db, nowAt, limit) {
+    async findDue(_db, nowAt, limit, after) {
       const candidates: LegacyBookingReportReminderCandidate[] = [];
       for (const row of rows) {
         if (row.state !== "scheduled" || row.completed) continue;
@@ -132,6 +132,20 @@ function makeRepo(rows: FakeBooking[]) {
             left.bookingId.localeCompare(right.bookingId) ||
             (left.sessionId ?? "").localeCompare(right.sessionId ?? ""),
         )
+        .filter((candidate) => {
+          if (!after) return true;
+          return (
+            candidate.scheduledEndAt.getTime() >
+              after.scheduledEndAt.getTime() ||
+            (candidate.scheduledEndAt.getTime() ===
+              after.scheduledEndAt.getTime() &&
+              (candidate.bookingId.localeCompare(after.bookingId) > 0 ||
+                (candidate.bookingId === after.bookingId &&
+                  (candidate.sessionId ?? "").localeCompare(
+                    after.sessionId ?? "",
+                  ) > 0)))
+          );
+        })
         .slice(0, limit);
       afterFind?.();
       afterFind = undefined;
@@ -410,6 +424,56 @@ describe("legacy booking missing-report reminders", () => {
       failed: 0,
     });
     expect(writes).toBe(100);
+  });
+
+  test("rotates past a failed batch, reaches later sessions, then wraps for retries", async () => {
+    const nowAt = new Date("2026-10-21T03:00:00.000Z");
+    const bookings = Array.from({ length: 101 }, (_, index) =>
+      makeBooking(
+        `booking-${String(index).padStart(3, "0")}`,
+        "solo",
+        nowAt,
+        `tutor-${index}`,
+      ),
+    );
+    const fake = makeRepo(bookings);
+    const writes: NotificationWriteParams[] = [];
+    let failOldestBatch = true;
+    const processor = makeProcessor(
+      fake.repo,
+      {
+        async write(params) {
+          writes.push(params);
+          if (failOldestBatch && params.bookingId !== "booking-100") {
+            throw new Error("injected persistent outbox failure");
+          }
+        },
+      },
+      () => nowAt,
+    );
+
+    expect(await processor.processPendingReportReminders()).toMatchObject({
+      checked: 100,
+      queued: 0,
+      failed: 100,
+    });
+    expect(await processor.processPendingReportReminders()).toMatchObject({
+      checked: 1,
+      queued: 1,
+      failed: 0,
+    });
+    expect(writes.at(-1)?.bookingId).toBe("booking-100");
+
+    failOldestBatch = false;
+    expect(await processor.processPendingReportReminders()).toMatchObject({
+      checked: 100,
+      queued: 100,
+      failed: 0,
+    });
+    expect(new Set(writes.map(({ eventKey }) => eventKey)).size).toBe(101);
+    expect(
+      writes.filter(({ bookingId }) => bookingId === "booking-100"),
+    ).toHaveLength(1);
   });
 
   test("retries a failed outbox write on the next scheduler pass", async () => {

@@ -419,9 +419,24 @@ and rechecks tutor ownership, state, exact schedule, report absence and the
 current event key inside the same transaction as the in-app notification and
 existing email outbox row. Only the assigned tutor is notified. No report,
 delivery, settlement, wallet or fee state changes, and no migration is needed.
-The focused unit suite passes 7 tests / 27 expectations. The release typecheck
-runs through the repository's serial pre-push hook; DB and browser acceptance
-remain with parent integration.
+The initial focused unit suite passed 7 tests / 27 expectations; the review
+follow-up expands it to 8 tests / 33 expectations. The serial workspace
+typecheck runs through the repository's normal pre-push hook. DB and browser
+acceptance remain with parent integration.
+
+The bounded scan keeps an in-process keyset cursor in schedule-end, booking-ID,
+then child-session-ID order. It advances after each candidate even when its
+outbox write fails, then wraps to the oldest due item when there are no later
+candidates. A failed oldest batch therefore does not monopolize every scheduler
+pass. A process restart resets the cursor to the beginning; event keys and the
+transactional outbox remain durable, but retry fairness position is not. No
+per-candidate retry table or migration is used. The follow-up unit test covers
+100 persistent failures, progress to a later eligible booking, and retry after
+wraparound. A guarded PostgreSQL regression test is authored but awaits the
+parent's exact 6769/cogito-test target preflight and run. The expanded focused
+unit suite passes 8 tests / 33 expectations. The normal pre-push hook runs the
+serial workspace typecheck for the current branch; guarded DB acceptance
+remains pending parent integration.
 
 ## V3 class session report and settlement boundary (2026-10-21)
 
