@@ -186,7 +186,7 @@ async function main() {
   }
   if (files.size === 0) throw new Error("No LCOV records were found.");
 
-  await Bun.write("coverage/lcov.info", renderLcov(files));
+  await Bun.write("coverage/lcov.merged.info", renderLcov(files));
   console.log(`Merged LCOV coverage for ${files.size} source files.`);
 }
 

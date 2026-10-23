@@ -333,13 +333,13 @@ jobs:
       - name: "Server unit tests (separate process: webhook test uses mock.module)"
         run: bun test --timeout 30000 apps/server/src/
       - name: Post coverage comment + enforce gate
-        # Keep a failed test suite as the primary failure. The coverage command
-        # itself still runs the gate below when it was actually attempted.
-        if: ${{ always() && steps.coverage.outcome != 'skipped' }}
+        # A failed collection/merge may leave Bun's raw profile at the default
+        # path. Only report coverage from a fully merged profile.
+        if: ${{ always() && steps.coverage.outcome == 'success' }}
         run: bun .github/scripts/coverage-comment.ts
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          LCOV_FILE: ./coverage/lcov.info
+          LCOV_FILE: ./coverage/lcov.merged.info
           PR_NUMBER: ${{ github.event.pull_request.number }}
           COVERAGE_API_THRESHOLD: 100
           COVERAGE_OVERALL_THRESHOLD: 100

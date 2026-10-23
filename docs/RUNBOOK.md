@@ -2846,14 +2846,19 @@ bun scripts/run-test-suite.mjs e2e --grep "identity surfaces"
 The workflow runs this single coverage-instrumented suite and then runs the
 server suite in a separate process because its webhook test uses module
 mocking. The previous duplicate uninstrumented API pass is intentionally not
-run. Test + Coverage starts independently from lint and typecheck. The
-coverage comment script enforces 100% coverage for `packages/api` lines,
-overall lines, functions, and branches from `coverage/lcov.info`; a 0/0 branch
-total is treated as 100%. If this gate fails, inspect the missing function/line
-records in the generated lcov report and add a behavior-level test before
-pushing. A failed coverage test command is also propagated explicitly after
-the comment step. The generated PR comment uses blank lines between its status
-blockquote and tables; preserve these separators when editing the renderer.
+run. Test + Coverage starts independently from lint and typecheck. The coverage
+merger writes `coverage/lcov.merged.info`, leaving the Bun-generated raw
+`coverage/lcov.info` untouched. The coverage comment enforces 100% coverage for
+`packages/api` lines, overall lines, functions, and branches from the merged
+file; a 0/0 branch total is treated as 100%. It runs only after successful test
+and merge commands, so an incomplete raw profile cannot be reported as merged
+coverage. A failed coverage command is propagated explicitly by the following
+step. If the gate fails on a merged profile, inspect the missing function/line
+records and add a behavior-level test before pushing. The generated PR comment
+uses blank lines between its status blockquote and tables; preserve these
+separators when editing the renderer.
+The DB unit test's environment mock includes an auth secret because Bun can
+share module mocks with integration tests in the resettable process.
 The Bun command's own function/statement output is
 diagnostic; the lcov gate is authoritative.
 

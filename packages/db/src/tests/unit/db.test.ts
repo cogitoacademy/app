@@ -2,6 +2,7 @@ import { describe, test, expect, mock } from "bun:test";
 
 const mockEnv = {
   DATABASE_URL: "postgresql://test:test@localhost:5432/test",
+  BETTER_AUTH_SECRET: "test-only-secret-at-least-32-characters-long",
   NODE_ENV: "test",
   DB_SSL_ENABLED: false,
   DB_SSL_REJECT_UNAUTHORIZED: false,

@@ -31,6 +31,8 @@ async function runMerger(workspace: string, inputs: string[]) {
 
 test("merges line, function, and branch unions using maximum hits", async () => {
   await withWorkspace(async (workspace) => {
+    const rawProfilePath = join(workspace, "coverage/lcov.info");
+    await writeFile(rawProfilePath, "raw profile remains intact\n");
     const source = resolve(workspace, "src/file.ts");
     const first = join(workspace, "first.info");
     const second = join(workspace, "second.info");
@@ -78,8 +80,11 @@ test("merges line, function, and branch unions using maximum hits", async () => 
     expect(result.exitCode).toBe(0);
 
     const output = await readFile(
-      join(workspace, "coverage/lcov.info"),
+      join(workspace, "coverage/lcov.merged.info"),
       "utf8",
+    );
+    expect(await readFile(rawProfilePath, "utf8")).toBe(
+      "raw profile remains intact\n",
     );
     expect(output).toContain(
       "FN:10,alpha\nFNDA:3,alpha\nFN:20,beta\nFNDA:1,beta",
@@ -124,7 +129,7 @@ test("rejects missing, empty, and recordless profile inputs", async () => {
         item,
         result: await runMerger(workspace, item.inputs),
         outputExists: await Bun.file(
-          join(workspace, "coverage/lcov.info"),
+          join(workspace, "coverage/lcov.merged.info"),
         ).exists(),
       })),
     );

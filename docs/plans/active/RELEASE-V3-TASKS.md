@@ -641,15 +641,26 @@ E2E also maps Redis to `6381:6379` and sets the full T05 target tuple for its
 run-scoped student.
 
 Run [#39791177764](https://github.com/cogitoacademy/app/actions/runs/39791177764)
-on `a78528e` completed with Build, Type Check and Lint passing. The coverage
-test command, merger test and separate server unit tests passed, but the
-unchanged gate failed at 29.3% API lines, 29.8% overall lines and 30.4% overall
-functions against 100%. E2E failed before test discovery: strict Turbo filtering
-removed ambient `WEB_URL`, while `.env.test` loaded `WEB_PORT=3200`; the resolver
-correctly rejected the default-URL/port mismatch. `packages/e2e/turbo.json` now
-allowlists the E2E task's runtime environment without loosening the resolver.
-The 100% thresholds and LCOV implementation remain unchanged. After pushing,
-dispatch the workflow once manually because the PR base does not start it.
+on `a78528e` completed with Build, Type Check and Lint passing. The LCOV merger
+unit test passed, but the coverage collection step had 3,020 passes and 10
+signup-OTP failures. Each failed in `makeOtpDigest`: `createHmac` received an
+undefined key even though the job environment contained `BETTER_AUTH_SECRET`.
+The same process runs `packages/db/src/tests/unit/db.test.ts`; its documented
+shared `@cogito-app/env/server` mock omitted that field. The mock now has a
+test-only secret; the next CI run must confirm this fixes the OTP failures.
+The missing resettable profile made `merge-lcov.ts` stop before writing merged
+coverage. The old comment step then read `coverage/lcov.info` and printed 29.3%
+API lines, 29.8% overall lines and 30.4% overall functions; those numbers are
+not verified merged coverage. No coverage artifacts were uploaded, so the raw
+profiles and exact source of that fallback file remain unavailable. The 100%
+thresholds and test set are unchanged. The merger now writes
+`coverage/lcov.merged.info`, leaves raw profiles untouched, and the comment
+step runs only after successful collection and merge. E2E failed before test
+discovery: strict Turbo filtering removed ambient `WEB_URL`, while `.env.test`
+loaded `WEB_PORT=3200`; the resolver correctly rejected the default-URL/port
+mismatch. `packages/e2e/turbo.json` now allowlists the E2E task's runtime
+environment without loosening the resolver. After pushing, dispatch the
+workflow once manually because the PR base does not start it.
 No local database, seed, reset, migration, provider or browser test is part of
 this config fix.
 
