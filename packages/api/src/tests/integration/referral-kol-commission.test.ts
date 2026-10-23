@@ -1447,4 +1447,33 @@ describe("KOL settlement PostgreSQL acceptance (parent-owned)", () => {
     expect(ownRows[0]).toContain('"summary"');
     expect(ownRows[1]).toContain('"transfer"');
   });
+  test("monthly CSV uses half-open WIB purchase boundaries in PostgreSQL", async () => {
+    const cases = [
+      ["2100-01-31T16:59:59.999Z", false],
+      ["2100-01-31T17:00:00.000Z", true],
+      ["2100-02-28T16:59:59.999Z", true],
+      ["2100-02-28T17:00:00.000Z", false],
+    ] as const;
+    const decisions: Array<{ id: string; included: boolean }> = [];
+    for (const [timestamp, included] of cases) {
+      const signup = await createKolSignup({
+        name: "CSV boundary",
+        percentBps: 1000,
+      });
+      const payment = await createPayment({
+        userId: signup.userId,
+        amountIdr: 350000,
+        providerSuccessAt: new Date(timestamp),
+      });
+      await confirmPayment(payment, 350000);
+      const [decision] = await db
+        .select({ id: kolCommissionDecision.id })
+        .from(kolCommissionDecision)
+        .where(eq(kolCommissionDecision.referredUserId, signup.userId));
+      decisions.push({ id: decision!.id, included });
+    }
+    const { csv } = await referral.exportKolMonthly({ month: "2100-02" });
+    for (const { id, included } of decisions)
+      expect(csv.includes(id)).toBe(included);
+  });
 });

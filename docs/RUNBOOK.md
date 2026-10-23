@@ -7,10 +7,10 @@ adjustment replay preconditions, and bind WIB month boundaries as explicit ISO
 timestamptz values. Migration 0074 adds only expected_obligation_idr; applied
 0073 remains unchanged. Both migrations are applied only to guarded test
 6769/cogito-test (journal 75), without reset/seed. Current acceptance passes
-25 tests / 223 assertions across 20 PostgreSQL cases (including prior PR312
+26 tests / 227 assertions across 21 PostgreSQL cases (including prior PR312
 ordering/refund regressions) and five settlement policy/CSV units. Concurrent
 transfer/replay, stale corrections, audit rollback, refund retention and the
-monthly CSV path pass. Dev/production migration and browser settlement
+monthly CSV path and exact half-open WIB purchase boundaries pass. The combined auth/referral/KOL synthetic Chromium suite passes 10/10 after updating the commission-cell locator for settlement controls. Dev/production migration and browser settlement
 acceptance remain pending at this checkpoint.
 
 ## KOL settlement source handoff (23 October 2026)
