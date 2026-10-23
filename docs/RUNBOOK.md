@@ -49,6 +49,22 @@ use normal project hook checks for the source gate. Browser and DB proof remain
 parent-owned. Earlier transfer-deferred source notes below are historical.
 
 
+## DB-free referral/KOL browser regression
+
+From `packages/e2e`, run:
+
+```powershell
+bun run test --config=playwright.v3-referral-kol.config.ts
+bun run check-types
+```
+
+The isolated config starts only Vite on 3304, refuses an existing server, and
+uses its own cache/output directory. API origin 3305 is intercepted by synthetic
+session/RPC fixtures; no API process or global setup runs. Do not substitute the
+main Playwright config: its setup can seed retained DB state. Ten Chromium
+cases pass; these cover UI contracts only, not OAuth, DB or provider acceptance.
+Development ports 3000/3001 and the sidebar test port 3302 are untouched.
+
 ## Development sync checkpoint (23 October 2026)
 
 Root checkout is synchronized to integrated release source `31774397`. The
@@ -1873,6 +1889,19 @@ visible as **Expired** but must not bypass the 35-Mark gate; this behavior is
 read-time and does not depend on a scheduler.
 
 ### Role-based sidebar grouping smoke check
+
+Run isolated synthetic Chromium checks (mocked auth/RPC, no backend or DB):
+`cd packages/e2e; bun run test --config=playwright.sidebar.config.ts`.
+This starts its own frontend on port 3302, refuses an existing server, and uses
+an isolated Vite cache. The fixture follows `vite.classes-layout.config.ts`.
+For each role at desktop/mobile widths, all sections start expanded. Use Enter
+and Space on a section heading: only that section collapses, its links leave
+the tab order, and the chevron/expanded state changes. Reopen it and check the
+active link and booking badge. Collapse Resources and confirm the account menu
+remains available; reopen it and check support. On mobile, section toggles keep
+the sidebar open and following a link closes the overlay. No saved state is
+expected after a fresh mount.
+
 
 As an admin, confirm the sidebar shows Overview (Dashboard, Operations),
 Teaching (Bookings, Classes, Session reports, Tutors), Finance (Tutor payouts,

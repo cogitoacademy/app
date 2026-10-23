@@ -32,6 +32,15 @@ neutralized. More than 5000 selected decisions fails explicitly, never truncates
 Earlier transfer-deferred notes refer to the preceding decision-only checkpoint.
 
 
+## Referral/KOL synthetic browser contract evidence
+
+The DB-free browser suite submits `POST /rpc/referral/saveGoogleChoice` with
+`{"json":{"code":"FRIEND-CODE"}}` or `{"json":{"code":null}}` and mocks
+`/rpc/adminReferral/listKolCommissions` results in the `{"json":...,"meta":[]}`
+envelope. It checks initial `{limit:50}` and exact next-cursor forwarding.
+This is client wiring evidence, not endpoint authorization or persistence proof;
+no endpoint behavior changes in this test-only slice.
+
 ## AUTH-02 and referral source contract (22 October 2026)
 
 Deployment prerequisite: additive migration `0071_referral_registration_rewards`
@@ -2310,3 +2319,9 @@ Only exact bank name `BCA` is fee-free; all other bank names incur Rp2,500 once 
 Numeric Marks fields returned by wallet, booking, pricing, and analytics procedures remain numbers. The web client presents those values with the shared `CogitoMarks` symbol component; this is presentation-only and does not change RPC inputs or outputs.
 
 The 2026-09-08 Invite Tutor card height and Invitations pagination alignment corrections are presentation-only; tutor invitation RPC paths, envelopes, inputs, and outputs are unchanged.
+
+## Sidebar section presentation (2026-10-23)
+
+Role sidebar sections collapse independently in local mounted UI state. No RPC
+input/output, HTTP path, access rule, or persistence contract changes; the
+existing `booking/listMine` action-count query remains unchanged.

@@ -37,6 +37,14 @@ its multi-query snapshot. Additive 0073 remains unapplied; parent DB acceptance
 is required. Earlier decision-only deferred scope is superseded by this source.
 
 
+## Referral/KOL browser contract coverage
+
+`packages/e2e/src/specs/v3-referral-kol.spec.ts` covers referral-choice route
+states and save recovery, plus admin commission cursor navigation, historical
+partial-refund warnings, full-refund zero display and unresolved-success-time
+holds. Ten synthetic Chromium cases pass. It changes no financial rules and
+proves no real OAuth, DB ordering, persisted choice or provider behavior.
+
 ## Booking reminder cursor precision
 
 The process-local rotation key uses the session end time truncated to
@@ -982,17 +990,22 @@ rule.
 
 - **Overview:** Dashboard, Operations.
 - **Teaching:** Bookings, Classes, Session reports, Tutors.
-- **Finance:** Tutor payouts, Economy.
+- **Finance:** Tutor payouts, KOL commissions, Economy.
 - **Content & reviews:** Competitions, Achievements, Knowledge access, FAQ, Manage FAQs.
 
 Student links use **Overview** (Dashboard, Balance) and **Learning** (Tutors,
-Classes, My Bookings, Session reports, Achievements). Tutor links use
+Classes, My Bookings, Session reports, Achievements, My referrals). Tutor links use
 **Overview** (Dashboard) and **Teaching** (Bookings, Session reports,
 Availability, Tutor Profile). Student and tutor FAQ links sit in **Resources**
 after Knowledge Bank, alongside How it works, Competition Calendar, and WhatsApp
 Support. Admin FAQ stays in Content & reviews. All roles retain the account footer. The groups reuse Selia
-SidebarGroup/SidebarGroupTitle and the existing link rendering, active states,
-and booking-action badge. This is frontend presentation only; routes, RPC
+SidebarGroup with SidebarItemButton headings and independent default-expanded
+SidebarCollapsible/Trigger/Panel sections, including Resources. Native button
+triggers support Enter/Space, expose expanded state and a rotating chevron, and
+retain visible keyboard focus. Collapsed panels remove their links from the tab
+order. State lasts only for the mounted sidebar; no persistence is added.
+The existing link rendering, active states,
+and booking-action badge are preserved. This is frontend presentation only; routes, RPC
 contracts, services, event keys, persistence, and business rules are unchanged.
 
 ## Production UI and E2E audit (2026-09-04)
