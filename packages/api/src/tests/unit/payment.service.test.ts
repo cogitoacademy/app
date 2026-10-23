@@ -1936,6 +1936,56 @@ describe("PaymentService", () => {
       });
     });
 
+    test("persists verified provider time and records KOL commission in the payment transaction", async () => {
+      const providerSuccessAt = new Date("2026-10-23T05:00:00.000Z");
+      const tx = {};
+      const updatePaymentStatus = mock(async () => {});
+      const recordSuccessfulKolTopUp = mock(async () => {});
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => ({
+          id: "pay1",
+          status: PAYMENT_STATUS.PENDING,
+          provider: "midtrans",
+          providerReference: "midtrans:user1:pkg1",
+          userId: "user1",
+          walletId: "w1",
+          amountIdr: 350_000,
+          marks: 100,
+          providerSuccessAt: null,
+        })),
+        findPaymentByProviderEventId: mock(async () => null),
+        updatePaymentStatus,
+      });
+      const db = { transaction: mock(async (fn: any) => fn(tx)) };
+      const service = createPaymentService({
+        db: db as any,
+        wallet: makeWallet() as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "midtrans",
+        kolCommission: { recordSuccessfulKolTopUp } as any,
+      });
+
+      await service.confirmFromWebhook({
+        provider: "midtrans",
+        providerReference: "midtrans:user1:pkg1",
+        providerEventId: "evt_paid_with_fee",
+        status: PAYMENT_STATUS.PAID,
+        amountIdr: 354_440,
+        currency: "IDR",
+        providerSuccessAt,
+      });
+
+      expect(updatePaymentStatus).toHaveBeenCalledWith(
+        "pay1",
+        expect.objectContaining({ providerSuccessAt }),
+        tx,
+      );
+      expect(recordSuccessfulKolTopUp).toHaveBeenCalledWith(tx, {
+        paymentId: "pay1",
+      });
+    });
+
     test("FAILED status updates record without crediting wallet", async () => {
       const wallet = makeWallet();
       const repo = makeRepo({

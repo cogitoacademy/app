@@ -42,9 +42,23 @@ metadata. RPC request bodies use the `{"json": input}` envelope.
 - `POST /rpc/adminReferral/listKolCampaigns` — admin, no input; returns
   campaign dates, code, attribution window, and saved terms.
 
-The KOL endpoints validate and snapshot signup attribution only. First-top-up
-commission decisions, transfer records, CSV, corrections, and reversals are not
-implemented in this slice.
+`POST /rpc/adminReferral/listKolCommissions` — admin, no input; returns up to 100
+recent rows with campaign/code, referred student, payment reference/status,
+verified provider success time, base IDR purchase amount, saved flat/percentage
+terms, and calculated commission. The payment price excludes gateway/channel
+fees. Dates serialize as ISO timestamps. This is a read-only decision list, not
+a transfer report.
+
+The KOL first-purchase decision source slice uses the earliest verified provider
+success time. Midtrans success webhooks are rechecked with the authenticated
+status API because its webhook signature does not cover the time fields. A late
+earlier callback updates the current decision and appends an immutable
+before/after audit event; exact replay is idempotent and stable payment ID
+breaks equal-time ties. Refunds do not reset first-event eligibility.
+User decision recorded 23 October 2026. The generated 0072 migration is
+unapplied, and guarded database acceptance is pending. Transfer records,
+partial/overpayment accounting, CSV, settled-transfer corrections, and reversal
+adjustments remain deferred.
 
 ## Classes presentation (22 October 2026)
 

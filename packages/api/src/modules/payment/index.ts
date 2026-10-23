@@ -11,6 +11,7 @@ import type { AuditRecordParams } from "../audit/audit.service";
 import type {
   PaymentProvider,
   PaymentNotificationPort,
+  KolCommissionPort,
 } from "./payment.service";
 import { createPaymentService } from "./payment.service";
 import { createPaymentHandler } from "./payment.handler";
@@ -77,6 +78,7 @@ export function createPaymentModule(deps: {
   notification?: PaymentNotificationPort;
   audit?: PaymentAuditPort;
   refundRecord?: PaymentRefundRecordPort;
+  kolCommission?: KolCommissionPort;
   redis?: RedisClient;
 }) {
   const useMidtrans = deps.provider === "midtrans";
@@ -140,6 +142,7 @@ export function createPaymentModule(deps: {
     notification: deps.notification,
     audit: deps.audit,
     refundRecord: deps.refundRecord,
+    kolCommission: deps.kolCommission,
   });
   const handler = createPaymentHandler(service, deps.wallet, {
     providerMode,

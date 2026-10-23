@@ -57,6 +57,66 @@ function parseIdrAmount(value: unknown): number | undefined {
   return Number.isSafeInteger(amount) && amount > 0 ? amount : undefined;
 }
 
+function parseMidtransTimestamp(value: unknown): Date | undefined {
+  if (typeof value !== "string") return undefined;
+  // Midtrans notification timestamps are WIB without an offset; status API
+  // values may be ISO strings with an explicit offset.
+  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(
+    value,
+  )
+    ? `${value.replace(" ", "T")}+07:00`
+    : value;
+  if (
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(
+      normalized,
+    )
+  ) {
+    return undefined;
+  }
+  const parts = normalized.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(?:Z|[+-]\d{2}:\d{2})$/,
+  );
+  if (!parts) return undefined;
+  const wallTime = new Date(0);
+  wallTime.setUTCFullYear(
+    Number(parts[1]),
+    Number(parts[2]) - 1,
+    Number(parts[3]),
+  );
+  wallTime.setUTCHours(
+    Number(parts[4]),
+    Number(parts[5]),
+    Number(parts[6]),
+    Number((parts[7] ?? "").padEnd(3, "0").slice(0, 3) || 0),
+  );
+  if (
+    wallTime.getUTCFullYear() !== Number(parts[1]) ||
+    wallTime.getUTCMonth() !== Number(parts[2]) - 1 ||
+    wallTime.getUTCDate() !== Number(parts[3]) ||
+    wallTime.getUTCHours() !== Number(parts[4]) ||
+    wallTime.getUTCMinutes() !== Number(parts[5]) ||
+    wallTime.getUTCSeconds() !== Number(parts[6])
+  ) {
+    return undefined;
+  }
+  const parsed = new Date(normalized);
+  return Number.isFinite(parsed.getTime()) ? parsed : undefined;
+}
+
+function midtransSuccessTime(
+  status: PaymentStatus,
+  value: { transaction_time?: unknown; settlement_time?: unknown },
+) {
+  // Midtrans documents settlement_time as when the status became settlement.
+  // For accepted card capture, transaction_time is the provider timestamp
+  // available on capture responses; do not substitute local callback time.
+  return status === "SETTLED"
+    ? parseMidtransTimestamp(value.settlement_time)
+    : status === "PAID"
+      ? parseMidtransTimestamp(value.transaction_time)
+      : undefined;
+}
+
 async function throwProviderHttpError(
   response: Response,
   operation: string,
@@ -142,6 +202,8 @@ interface MidtransNotification {
   status_message?: string;
   merchant_id?: string;
   currency?: string;
+  transaction_time?: string;
+  settlement_time?: string;
 }
 
 /**
@@ -320,7 +382,14 @@ export function createMidtransPaymentProvider(opts: {
       gross_amount?: string;
       refund_amount?: string;
       currency?: string;
+      transaction_time?: string;
+      settlement_time?: string;
     };
+    if (json.order_id && json.order_id !== orderId) {
+      throw serviceUnavailable(
+        "Payment status error: provider returned a different order",
+      );
+    }
     const status = mapMidtransStatus(
       json.transaction_status ?? "",
       json.fraud_status,
@@ -330,6 +399,7 @@ export function createMidtransPaymentProvider(opts: {
       (await resolveProviderReference(remoteOrderId)) ?? remoteOrderId;
     const amountIdr = parseIdrAmount(json.gross_amount);
     const refundAmountIdr = parseIdrAmount(json.refund_amount);
+    const providerSuccessAt = midtransSuccessTime(status, json);
     return {
       providerReference,
       providerEventId: json.transaction_id ?? remoteOrderId,
@@ -342,6 +412,7 @@ export function createMidtransPaymentProvider(opts: {
       amountIdr,
       refundAmountIdr,
       currency: json.currency,
+      ...(providerSuccessAt ? { providerSuccessAt } : {}),
       refundKind:
         json.transaction_status === "partial_refund" ||
         (status === "REFUNDED" &&
@@ -386,6 +457,23 @@ export function createMidtransPaymentProvider(opts: {
       body.transaction_status ?? "",
       body.fraud_status,
     );
+    if (status === "PAID" || status === "SETTLED") {
+      // Midtrans's signature authenticates the order, status code, and gross
+      // amount, but not transaction_time/settlement_time. Use the authenticated
+      // status API response for both the successful state and its timestamp.
+      const providerStatus = await getPaymentRequestStatus(orderId);
+      if (
+        (providerStatus.status !== "PAID" &&
+          providerStatus.status !== "SETTLED") ||
+        !providerStatus.providerSuccessAt
+      ) {
+        throw serviceUnavailable(
+          "Payment status error: provider has not confirmed a timestamped success",
+        );
+      }
+      return providerStatus;
+    }
+
     const providerReference =
       (await resolveProviderReference(orderId)) ?? orderId;
     return {

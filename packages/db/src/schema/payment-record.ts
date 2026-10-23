@@ -41,6 +41,8 @@ export const paymentRecord = pgTable(
     providerEventId: text("provider_event_id"),
     // Provider-side request/order id used for authoritative status lookup.
     providerRequestId: text("provider_request_id"),
+    // Verified provider time of successful payment, distinct from webhook receipt time.
+    providerSuccessAt: timestamp("provider_success_at", { withTimezone: true }),
     // H4: the provider checkout URL, persisted so a PENDING re-purchase can
     // return the stored URL instead of re-calling the provider.
     checkoutUrl: text("checkout_url"),

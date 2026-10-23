@@ -1,4 +1,5 @@
 import type { DbType } from "../../lib/db";
+import type { DbOrTx } from "../../lib/tx";
 import { PAYMENT_STATUS, ACTOR_TYPE } from "../../shared/constants";
 import { NOTIFICATION_CATEGORY } from "../../shared/constants";
 import { NOTIFICATION_SEVERITY } from "../../shared/constants";
@@ -48,6 +49,7 @@ export interface WebhookPayload {
   refundAmountIdr?: number;
   currency?: string;
   refundKind?: "full" | "partial";
+  providerSuccessAt?: Date | null;
 }
 
 export interface PaymentProvider {
@@ -202,12 +204,20 @@ export interface ConfirmInput {
   refundAmountIdr?: number;
   currency?: string;
   refundKind?: "full" | "partial";
+  providerSuccessAt?: Date | null;
 }
 
 export type PaymentService = ReturnType<typeof createPaymentService>;
 
 export interface PaymentNotificationPort {
   writeBestEffort(params: NotificationWriteParams): Promise<void>;
+}
+
+export interface KolCommissionPort {
+  recordSuccessfulKolTopUp(
+    conn: DbOrTx,
+    input: { paymentId: string },
+  ): Promise<unknown>;
 }
 
 const ALLOWED_TRANSITIONS: Record<string, readonly string[]> = {
@@ -262,6 +272,7 @@ export function createPaymentService(deps: {
   notification?: PaymentNotificationPort;
   audit?: PaymentAuditPort;
   refundRecord?: PaymentRefundRecordPort;
+  kolCommission?: KolCommissionPort;
 }) {
   const {
     db,
@@ -273,6 +284,7 @@ export function createPaymentService(deps: {
     notification,
     audit,
     refundRecord,
+    kolCommission,
   } = deps;
 
   async function getTopUpCatalog() {
@@ -1005,17 +1017,24 @@ export function createPaymentService(deps: {
         input.status === PAYMENT_STATUS.PAID ||
         input.status === PAYMENT_STATUS.SETTLED
       ) {
-        await repo.updatePaymentStatus(
-          record.id,
-          {
-            status: input.status,
-            providerEventId: input.providerEventId,
-            receiptUrl: input.receiptUrl ?? null,
-          },
-          tx,
-        );
+        const providerSuccessAt =
+          record.providerSuccessAt ??
+          (input.providerSuccessAt instanceof Date &&
+          Number.isFinite(input.providerSuccessAt.getTime())
+            ? input.providerSuccessAt
+            : null);
+        const statusUpdate = {
+          status: input.status,
+          providerEventId: input.providerEventId,
+          receiptUrl: input.receiptUrl ?? null,
+          ...(providerSuccessAt ? { providerSuccessAt } : {}),
+        };
+        await repo.updatePaymentStatus(record.id, statusUpdate, tx);
 
         if (shouldCredit) {
+          await kolCommission?.recordSuccessfulKolTopUp(tx, {
+            paymentId: record.id,
+          });
           await wallet.credit(tx, {
             walletId: record.walletId,
             actorType: "student",

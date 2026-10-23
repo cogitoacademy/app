@@ -1,5 +1,28 @@
 # Cogito Runbook
 
+## KOL first commission source checkpoint (23 October 2026)
+
+The branch contains additive Drizzle migration
+`0072_kol_first_successful_topup_commission`; it has not been applied to any
+database. Do not use `db:push`, reset, seed, or migration commands as part of this
+source checkpoint. Apply it only through the normal reviewed deployment
+migration process after PR integration and the assigned DB acceptance window.
+The migration adds `payment_record.provider_success_at` and
+`kol_commission_decision`.
+
+Every successful Midtrans notification now triggers an authenticated status API
+lookup; only that response supplies the persisted success time because the
+webhook signature does not cover timestamps. Provider/API failure keeps the
+notification retryable. This adds one status request to each successful webhook.
+Focused unit proof passes: referral policy 8 tests / 22 expectations, Midtrans
+provider 39 / 67, and the targeted payment transaction test 1 / 2; `git diff
+--check` is clean. Web/server typechecks were not run. The guarded Postgres test
+is authored but pending the parent-provided exact test target. It requires exact
+test-only loopback 6769/cogito-test and refuses reset flags. No DB migration,
+reset, seed, external provider request, or real webhook ran in this worktree.
+Transfer settlement, partial/overpayment, CSV, and full reversal work remain
+deferred.
+
 ## Referral parent PostgreSQL acceptance (22 October 2026)
 
 Migration 0071 was applied using the Drizzle PostgreSQL migration runner after
@@ -63,10 +86,12 @@ it was not run in this source slice and must wait for parent migration/applicati
 and the assigned guarded test window. Do not run it with the source-only referral
 schema.
 
-The later KOL slice must add qualifying first-IDR-top-up decisions, partial and
-overpayment transfer history, CSV, audited corrections, and reversal behavior.
-Referral choice/code/terms snapshots from this slice are the attribution seam;
-they do not authorize commission or transfer writes.
+At the 22 October source milestone, KOL first-IDR-top-up decisions and transfer
+history were still outstanding. The 23 October source checkpoint above now
+records first-purchase commissions and audited late-earlier corrections. Transfer
+settlement, partial/overpayment history, CSV, settled-transfer correction, and
+reversal adjustment remain separate work. Referral choice/code/term snapshots
+remain the attribution source.
 
 ## Classes UI acceptance (22 October 2026)
 

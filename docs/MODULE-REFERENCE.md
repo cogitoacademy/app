@@ -46,17 +46,47 @@ semester usage row, applies the completion-time cap, writes one decision even
 when zero, and credits a positive reward atomically. Cap exhaustion does not
 roll over or retry, and cap reductions do not reverse existing credits.
 
-Student `referral.getMine` lazily creates a stable friend code and returns the
-active signup settings plus current-semester earned/remaining Marks and end
-date. Admin APIs create audited settings revisions and KOL campaigns. KOL signup
-terms are immutable snapshots, but first-purchase commission, transfers,
-partial/overpayment accounting, CSV, corrections, and reversal handling remain
-unimplemented. Parent-generated additive migration
+At that 22 October source milestone, student `referral.getMine` lazily created a
+stable friend code and returned active signup settings plus current-semester
+earned/remaining Marks and the end date. Admin APIs create audited settings
+revisions and KOL campaigns. KOL signup terms are immutable snapshots.
+First-purchase commission, transfer, partial/overpayment, CSV, correction, and
+reversal scope is tracked in the later 23 October checkpoint below.
+Parent-generated additive migration
 `0071_referral_registration_rewards` follows 0070 and is applied only to
 guarded loopback test 6769/cogito-test (journal 72). Development 6767 and
 production remain unmigrated. Wallet creation accepts the caller's transaction,
 including its upsert, so referral credits do not escape the signup or completion
 transaction.
+
+## KOL first commission decision source slice (23 October 2026)
+
+`payment_record.provider_success_at` stores the verified provider timestamp on
+the first accepted successful transition. Since Midtrans's webhook signature
+does not cover its time fields, a successful notification is rechecked through
+the authenticated status API; settlement uses `settlement_time`, and accepted
+card capture uses provider `transaction_time`. No webhook-body or local receive
+time is substituted. `payment.confirmFromWebhook` persists payment status and
+provider time, records the KOL decision, and credits the purchased Marks in the
+same transaction.
+
+`kol_commission_decision` is unique by referred student and payment. It stores
+the selected payment, provider success time, server-saved `payment_record.amount_idr`
+(excluding channel fees), signup-snapshot flat/percentage terms, and calculated
+whole-rupiah commission, including zero. Strict expiry is `providerSuccessAt <
+kolAttributionExpiresAt`. The referral-choice row lock serializes callbacks for
+one student. Earliest timestamp wins; ties use ascending stable payment ID. A
+late earlier callback updates the current unpaid decision and writes immutable
+audit action `kol_commission_earlier_purchase_correction` with old/new purchase
+and amount snapshots. Exact replay or a later success adds no correction. A
+refunded payment remains the saved first decision; reversal does not reset it.
+
+Admin read endpoint `adminReferral.listKolCommissions` is admin-protected and
+returns up to 100 recent decisions with current payment status. The Selia page
+does not record transfers. Settled-transfer edits, transfer/partial/overpayment
+history, CSV, and reversal adjustment remain deferred. Migration
+`0072_kol_first_successful_topup_commission` is unapplied; guarded DB acceptance
+is authored but pending.
 
 ## Classes UI composition (22 October 2026)
 

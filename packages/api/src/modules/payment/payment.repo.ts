@@ -266,6 +266,7 @@ export async function updatePaymentStatus(
     providerRequestId?: string;
     checkoutUrl?: string | null;
     receiptUrl?: string | null;
+    providerSuccessAt?: Date | null;
     failureReason?: string | null;
   },
 ) {
@@ -410,6 +411,7 @@ export function createPaymentRepo(db: DbType) {
         providerRequestId?: string;
         checkoutUrl?: string | null;
         receiptUrl?: string | null;
+        providerSuccessAt?: Date | null;
         failureReason?: string | null;
         providerIntentState?: string | null;
       },

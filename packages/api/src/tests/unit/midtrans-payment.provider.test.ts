@@ -1,5 +1,5 @@
 import { createHash } from "crypto";
-import { expect, test, describe, mock, afterEach } from "bun:test";
+import { expect, test, describe, mock, afterEach, beforeEach } from "bun:test";
 import { createMidtransPaymentProvider } from "../../modules/payment/midtrans-payment.provider";
 
 const opts = {
@@ -9,6 +9,14 @@ const opts = {
 };
 
 const originalFetch = globalThis.fetch;
+let statusApiState: Record<string, unknown>;
+
+beforeEach(() => {
+  statusApiState = {};
+  globalThis.fetch = mock(() =>
+    Promise.resolve(Response.json({ ...statusApiState })),
+  ) as never;
+});
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
@@ -31,6 +39,7 @@ function notificationBody(
 ) {
   const base = {
     transaction_time: "2026-09-03 10:00:00",
+    settlement_time: "2026-09-03 10:05:00",
     transaction_status: "settlement",
     transaction_id: "57d5293c-e65f-4a29-95e4-5959c3fa335b",
     status_message: "midtrans payment notification",
@@ -43,6 +52,18 @@ function notificationBody(
     currency: "IDR",
   };
   const body = { ...base, ...overrides };
+  statusApiState = {
+    transaction_status: body.transaction_status,
+    transaction_id: body.transaction_id,
+    order_id: body.order_id,
+    fraud_status: body.fraud_status,
+    status_message: body.status_message,
+    gross_amount: body.gross_amount,
+    refund_amount: body.refund_amount,
+    currency: body.currency,
+    transaction_time: body.transaction_time,
+    settlement_time: body.settlement_time,
+  };
   body.signature_key = signatureFor(
     String(body.order_id),
     String(body.status_code),
@@ -333,6 +354,64 @@ describe("MidtransPaymentProvider verifyWebhook (signature_key)", () => {
     expect(payload.status).toBe("SETTLED");
   });
 
+  test("uses authenticated status API settlement_time instead of webhook time", async () => {
+    const body = JSON.stringify(
+      notificationBody({
+        transaction_time: "2026-09-03 08:00:00",
+        settlement_time: "2026-09-03 08:05:00",
+      }),
+    );
+    statusApiState.transaction_time = "2026-09-03T10:00:00+07:00";
+    statusApiState.settlement_time = "2026-09-03T10:05:00+07:00";
+    const payload = await provider.verifyWebhook(body, "");
+    expect(payload.providerSuccessAt).toEqual(
+      new Date("2026-09-03T10:05:00+07:00"),
+    );
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  test("uses provider transaction_time for accepted capture", async () => {
+    const body = JSON.stringify(
+      notificationBody({
+        transaction_status: "capture",
+        payment_type: "credit_card",
+        transaction_time: "2026-09-03 08:00:00",
+      }),
+    );
+    statusApiState.transaction_time = "2026-09-03T10:00:00+07:00";
+    const payload = await provider.verifyWebhook(body, "");
+    expect(payload.providerSuccessAt).toEqual(
+      new Date("2026-09-03T10:00:00+07:00"),
+    );
+  });
+
+  test("rejects a successful webhook when authenticated settlement time is missing", async () => {
+    const body = JSON.stringify(
+      notificationBody({ settlement_time: undefined }),
+    );
+    statusApiState.settlement_time = undefined;
+    await expect(provider.verifyWebhook(body, "")).rejects.toThrow(
+      "provider has not confirmed a timestamped success",
+    );
+  });
+
+  test("rejects an impossible provider calendar date", async () => {
+    const body = JSON.stringify(notificationBody());
+    statusApiState.settlement_time = "2026-02-31T10:05:00+07:00";
+    await expect(provider.verifyWebhook(body, "")).rejects.toThrow(
+      "provider has not confirmed a timestamped success",
+    );
+  });
+
+  test("does not confirm a success notification while authenticated status is pending", async () => {
+    const body = JSON.stringify(notificationBody());
+    statusApiState.transaction_status = "pending";
+    statusApiState.settlement_time = undefined;
+    await expect(provider.verifyWebhook(body, "")).rejects.toThrow(
+      "provider has not confirmed a timestamped success",
+    );
+  });
+
   test("rejects an invalid signature", async () => {
     const body = JSON.stringify(
       notificationBody({}, "SB-Mid-server-wrong-key"),
@@ -493,6 +572,8 @@ describe("MidtransPaymentProvider getPaymentRequestStatus", () => {
           transaction_id: "txn-1",
           order_id: "550e8400-e29b-41d4-a716-446655440000",
           fraud_status: "accept",
+          transaction_time: "2026-09-03T10:00:00+07:00",
+          settlement_time: "2026-09-03T10:05:00+07:00",
         }),
       );
     }) as never;
@@ -507,6 +588,7 @@ describe("MidtransPaymentProvider getPaymentRequestStatus", () => {
       status: "SETTLED",
       failureReason: null,
       receiptUrl: null,
+      providerSuccessAt: new Date("2026-09-03T10:05:00+07:00"),
     });
     expect(calls).toHaveLength(1);
     expect(calls[0]!.url).toBe(

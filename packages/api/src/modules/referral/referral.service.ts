@@ -1,7 +1,9 @@
 import { and, asc, desc, eq, inArray, lte, sql } from "drizzle-orm";
 import {
   friendRewardDecision,
+  kolCommissionDecision,
   ledgerEntry,
+  paymentRecord,
   referralCampaign,
   referralChoice,
   referralCode,
@@ -16,10 +18,13 @@ import type { WalletPort } from "../wallet/wallet.service";
 import { ReferralError } from "./referral.errors";
 import {
   calculateFriendReward,
+  calculateKolCommission,
   DEFAULT_REFERRAL_SETTINGS,
   generateFriendReferralCode,
   getReferralSemester,
   isKolCampaignActive,
+  isKolPurchaseEligible,
+  isEarlierKolPurchase,
   normalizeReferralCode,
 } from "./referral.policy";
 import type {
@@ -507,6 +512,200 @@ export function createReferralService(deps: {
       .orderBy(desc(referralCampaign.createdAt));
   }
 
+  async function recordSuccessfulKolTopUp(
+    conn: DbOrTx,
+    input: { paymentId: string },
+  ) {
+    const [payment] = await conn
+      .select({
+        id: paymentRecord.id,
+        userId: paymentRecord.userId,
+        amountIdr: paymentRecord.amountIdr,
+        status: paymentRecord.status,
+        providerSuccessAt: paymentRecord.providerSuccessAt,
+      })
+      .from(paymentRecord)
+      .where(eq(paymentRecord.id, input.paymentId))
+      .limit(1);
+    if (
+      !payment ||
+      (payment.status !== "PAID" && payment.status !== "SETTLED")
+    ) {
+      return null;
+    }
+
+    // Serialize successful payments for this attribution before choosing the
+    // earliest provider success. The unique decision index is the backstop.
+    const [choice] = await conn
+      .select()
+      .from(referralChoice)
+      .where(eq(referralChoice.userId, payment.userId))
+      .for("update");
+    if (
+      !choice ||
+      choice.kind !== "kol" ||
+      !choice.campaignId ||
+      !choice.kolAttributionExpiresAt
+    ) {
+      return null;
+    }
+
+    const [account] = await conn
+      .select({ id: user.id, role: user.role })
+      .from(user)
+      .where(eq(user.id, payment.userId))
+      .for("share");
+    if (!account || account.role !== "student") return null;
+
+    if (
+      !(payment.providerSuccessAt instanceof Date) ||
+      !Number.isFinite(payment.providerSuccessAt.getTime())
+    ) {
+      throw new Error(
+        "KOL commission requires a verified provider success time.",
+      );
+    }
+    if (
+      !isKolPurchaseEligible(
+        payment.providerSuccessAt,
+        choice.kolAttributionExpiresAt,
+      )
+    ) {
+      return null;
+    }
+
+    const [existing] = await conn
+      .select()
+      .from(kolCommissionDecision)
+      .where(eq(kolCommissionDecision.referredUserId, payment.userId))
+      .for("update");
+    if (
+      existing &&
+      !isEarlierKolPurchase(
+        { paymentId: payment.id, providerSuccessAt: payment.providerSuccessAt },
+        {
+          paymentId: existing.paymentId,
+          providerSuccessAt: existing.providerSuccessAt,
+        },
+      )
+    ) {
+      return existing;
+    }
+
+    const commissionAmountIdr = calculateKolCommission({
+      purchaseAmountIdr: payment.amountIdr,
+      flatAmountIdr: choice.kolFlatAmountIdrSnapshot ?? 0,
+      percentBps: choice.kolPercentBpsSnapshot ?? 0,
+    });
+    const purchaseSnapshot = {
+      paymentId: payment.id,
+      providerSuccessAt: payment.providerSuccessAt,
+      purchaseAmountIdr: payment.amountIdr,
+      commissionAmountIdr,
+    };
+
+    if (existing) {
+      const [corrected] = await conn
+        .update(kolCommissionDecision)
+        .set({
+          paymentId: payment.id,
+          providerSuccessAt: payment.providerSuccessAt,
+          purchaseAmountIdrSnapshot: payment.amountIdr,
+          commissionAmountIdr,
+          updatedAt: now(),
+        })
+        .where(eq(kolCommissionDecision.id, existing.id))
+        .returning();
+      if (!corrected)
+        throw new Error("KOL commission correction was not saved.");
+      await audit.record({
+        db: conn,
+        actorId: null,
+        actorType: "system",
+        action: "kol_commission_earlier_purchase_correction",
+        targetId: existing.id,
+        targetType: "kol_commission_decision",
+        beforeState: {
+          paymentId: existing.paymentId,
+          providerSuccessAt: existing.providerSuccessAt,
+          purchaseAmountIdr: existing.purchaseAmountIdrSnapshot,
+          commissionAmountIdr: existing.commissionAmountIdr,
+        },
+        afterState: purchaseSnapshot,
+        details: { reason: "late earlier provider success callback" },
+      });
+      return corrected;
+    }
+
+    const [decision] = await conn
+      .insert(kolCommissionDecision)
+      .values({
+        referredUserId: payment.userId,
+        choiceId: choice.id,
+        paymentId: payment.id,
+        providerSuccessAt: payment.providerSuccessAt,
+        purchaseAmountIdrSnapshot: payment.amountIdr,
+        flatAmountIdrSnapshot: choice.kolFlatAmountIdrSnapshot ?? 0,
+        percentBpsSnapshot: choice.kolPercentBpsSnapshot ?? 0,
+        commissionAmountIdr,
+      })
+      .returning();
+    if (!decision) throw new Error("KOL commission decision was not saved.");
+    await audit.record({
+      db: conn,
+      actorId: null,
+      actorType: "system",
+      action: "kol_commission_first_purchase_recorded",
+      targetId: decision.id,
+      targetType: "kol_commission_decision",
+      afterState: purchaseSnapshot,
+      details: { choiceId: choice.id },
+    });
+    return decision;
+  }
+
+  async function listKolCommissions() {
+    return db
+      .select({
+        id: kolCommissionDecision.id,
+        referredUserId: kolCommissionDecision.referredUserId,
+        referredUserName: user.name,
+        referredUserEmail: user.email,
+        campaignName: referralCampaign.name,
+        code: referralCode.code,
+        paymentId: paymentRecord.id,
+        paymentReference: paymentRecord.providerReference,
+        paymentStatus: paymentRecord.status,
+        providerSuccessAt: kolCommissionDecision.providerSuccessAt,
+        purchaseAmountIdr: kolCommissionDecision.purchaseAmountIdrSnapshot,
+        flatAmountIdr: kolCommissionDecision.flatAmountIdrSnapshot,
+        percentBps: kolCommissionDecision.percentBpsSnapshot,
+        commissionAmountIdr: kolCommissionDecision.commissionAmountIdr,
+        createdAt: kolCommissionDecision.createdAt,
+        updatedAt: kolCommissionDecision.updatedAt,
+      })
+      .from(kolCommissionDecision)
+      .innerJoin(user, eq(user.id, kolCommissionDecision.referredUserId))
+      .innerJoin(
+        referralChoice,
+        eq(referralChoice.id, kolCommissionDecision.choiceId),
+      )
+      .innerJoin(
+        referralCampaign,
+        eq(referralCampaign.id, referralChoice.campaignId),
+      )
+      .innerJoin(
+        paymentRecord,
+        eq(paymentRecord.id, kolCommissionDecision.paymentId),
+      )
+      .innerJoin(referralCode, eq(referralCode.id, referralChoice.codeId))
+      .orderBy(
+        desc(kolCommissionDecision.providerSuccessAt),
+        asc(kolCommissionDecision.paymentId),
+      )
+      .limit(100);
+  }
+
   async function recordEligibleFirstCompletion(
     conn: DbOrTx,
     input: EligibleReferralCompletion,
@@ -635,6 +834,8 @@ export function createReferralService(deps: {
     updateSettings,
     createKolCampaign,
     listKolCampaigns,
+    recordSuccessfulKolTopUp,
+    listKolCommissions,
     recordEligibleFirstCompletion,
   };
 }

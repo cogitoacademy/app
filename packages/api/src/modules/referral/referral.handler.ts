@@ -57,6 +57,8 @@ export function createReferralHandler(service: ReferralService) {
     }) => run(() => service.createKolCampaign(context.session!.user.id, input)),
 
     listKolCampaigns: () => run(() => service.listKolCampaigns()),
+
+    listKolCommissions: () => run(() => service.listKolCommissions()),
   };
 }
 

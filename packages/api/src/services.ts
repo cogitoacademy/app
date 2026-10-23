@@ -438,6 +438,7 @@ function createServices() {
     notification: notification.service,
     audit: audit.service,
     refundRecord: refund.repo,
+    kolCommission: referral.service,
     redis,
   });
 

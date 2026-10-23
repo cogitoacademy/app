@@ -196,6 +196,19 @@ Defaults: cohort full 20/session, half 22/session, single 25/session; flat tutor
 | REQ-KOL-02 | One qualifying first purchase creates one commission even when webhook deliveries or status updates repeat. Admin records actual amount, payment date, and reference for external transfers, with calculated, transferred, and outstanding amounts; partial transfers remain partial and excess stays visible as overpayment. No automatic recovery or offset. Monthly CSV lists attributed users, qualifying purchases, and the calculated, transferred, and outstanding amounts with enough detail for reconciliation. | S01 §5 |
 | REQ-KOL-03 | Admin correction needs reason/before-after and cannot rewrite a settled transfer or the student's saved registration choice. Genuine payment invalidation voids the qualifying commission; paid transfer history is retained with adjustment/overpayment for finance. A reversal does not automatically make a later top-up a new first event. Friend reward is not reversed. No new customer cash-refund feature. | S01 §5; Q12 resolved 20 Oct |
 
+**KOL ordering decision (user, 23 October 2026):** “first” means the
+qualifying payment with the earliest verified provider success timestamp. A
+late callback for an earlier success corrects the current commission decision
+and appends an immutable audit event with the old and new payment, purchase
+amount, provider time, and commission. Equal timestamps use ascending stable
+payment ID as the deterministic tie-breaker. Persist provider time with the
+payment; for Midtrans, take it from authenticated status lookup because its
+webhook signature does not cover timestamp fields. Never substitute webhook
+receive/commit time. This decision slice has no settled KOL transfer to rewrite.
+Transfer settlement, CSV, and reversal
+adjustment remain separate acceptance work; a reversal never resets first-event
+eligibility.
+
 ## 9. Website, content migration and landing
 
 | Requirement | Acceptance criteria | Source / decision |

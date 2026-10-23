@@ -505,6 +505,13 @@
       "when": 1792655844640,
       "tag": "0071_referral_registration_rewards",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1792727633256,
+      "tag": "0072_kol_first_successful_topup_commission",
+      "breakpoints": true
     }
   ]
 }

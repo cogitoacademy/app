@@ -207,6 +207,7 @@ export function paymentsWebhook(app: Elysia) {
             refundAmountIdr: payload.refundAmountIdr,
             currency: payload.currency,
             refundKind: payload.refundKind,
+            providerSuccessAt: payload.providerSuccessAt,
           });
 
           // T1: round-trip the traceId on the idempotency record so a replay
@@ -311,6 +312,7 @@ export function paymentsWebhook(app: Elysia) {
       providerReference: ref,
       providerEventId: eventId,
       status: "PAID",
+      providerSuccessAt: new Date(),
     });
 
     set.status = 200;

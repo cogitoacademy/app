@@ -28,6 +28,7 @@ const routeTitles: Record<string, string> = {
   "/notifications": "Notifications",
   "/admin-tutors": "Manage Tutors",
   "/admin-tutor-payouts": "Tutor Payouts",
+  "/admin-kol-commissions": "KOL commissions",
   "/admin-achievements": "Achievement Moderation",
   "/admin-operations": "Operations",
   "/admin-economy": "Economy Settings",

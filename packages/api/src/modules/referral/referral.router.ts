@@ -77,6 +77,16 @@ export function createReferralRouter(handler: ReferralHandler) {
         })
         .input(z.void())
         .handler(handler.listKolCampaigns),
+
+      listKolCommissions: adminProcedure
+        .route({
+          method: "POST",
+          path: "/admin/referral/kol-commissions/list",
+          tags: ["Admin", "Referral"],
+          summary: "List first-purchase KOL commission decisions",
+        })
+        .input(z.void())
+        .handler(handler.listKolCommissions),
     },
   };
 }

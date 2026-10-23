@@ -40,11 +40,12 @@ completion semester and cap use completion-time settings. The student page
 shows a generated friend code, current semester earned/remaining Marks, and the
 semester end date.
 
-Admin APIs can revise/audit friend settings and create/list KOL campaign codes.
-Signup validates campaign dates and snapshots KOL flat/percentage terms and the
-attribution expiry. KOL first-purchase commission decisions, transfers,
-partial/overpayment accounting, CSV, corrections, and reversal handling remain
-the next slice; campaign creation does not imply a commission or payout.
+At this 22 October source milestone, admin APIs could revise/audit friend
+settings and create/list KOL campaign codes. Signup validated campaign dates and
+snapshotted KOL flat/percentage terms and attribution expiry. First-purchase
+commission decisions, transfers, partial/overpayment accounting, CSV, corrections,
+and reversal handling were still outstanding; campaign creation did not imply a
+commission or payout.
 
 At this earlier source-only checkpoint, parent follow-up had generated additive
 `0071_referral_registration_rewards` after 0070: six new tables and
@@ -59,6 +60,29 @@ findings with no remaining spec/behavior findings. Its P2 documentation-status
 finding is corrected in this follow-up; the reviewer did not rerun tests.
 OAuth/browser UAT, development/production migration, and provider acceptance
 remain open.
+
+## KOL first commission decision source slice (23 October 2026)
+
+This branch now persists the verified provider success timestamp on each payment
+and records one KOL first-purchase decision per referred student from the
+signup-saved flat/percentage terms and the payment-record IDR price. The saved
+price excludes provider/channel fees. Eligibility is strictly before the saved
+attribution expiry. Callbacks serialize on the saved referral choice; a late
+earlier success replaces the current decision and appends an immutable audit
+event with before/after payment, timestamp, base amount, and commission. Equal
+timestamps are ordered by ascending payment ID. A zero commission still records
+the decision. The admin page reads the latest 100 decisions and shows payment
+status, including refunds, without transfer controls.
+
+The user's 23 October ordering decision is earliest provider success time, not
+first callback commit time. Successful Midtrans webhook timestamps come from
+the authenticated status API because the webhook signature does not cover the
+time fields. This feature adds only the unpaid commission
+decision and its late-callback correction history. Settled transfers are never
+rewritten; transfers, partial/overpayment handling, CSV, and reversal adjustment
+remain separate work. Migration 0072 is unapplied, and the guarded database proof
+is authored but pending the parent test window. No database migration, reset,
+seed, provider call, or browser payment ran in this slice.
 
 ## Classes UI workspace (22 October 2026)
 
