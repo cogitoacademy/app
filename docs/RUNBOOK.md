@@ -16,7 +16,9 @@ webhook signature does not cover timestamps. Provider/API failure keeps the
 notification retryable. This adds one status request to each successful webhook.
 Focused unit proof passes: referral policy 8 tests / 22 expectations, Midtrans
 provider 39 / 67, and the targeted payment transaction test 1 / 2; `git diff
---check` is clean. Web/server typechecks were not run. The guarded Postgres test
+--check` is clean. Parent verification passes all four workspace typecheck tasks
+uncached in 5.755 seconds using `turbo run check-types --concurrency=1 --force --
+--checkers 1` with the repo-pinned compiler. The guarded Postgres test
 is authored but pending the parent-provided exact test target. It requires exact
 test-only loopback 6769/cogito-test and refuses reset flags. No DB migration,
 reset, seed, external provider request, or real webhook ran in this worktree.

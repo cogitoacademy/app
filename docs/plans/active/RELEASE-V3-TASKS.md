@@ -13,8 +13,9 @@ The admin page is read-only. Migration 0072 is generated but unapplied; the
 guarded PostgreSQL scenarios are authored but were not run, so DB acceptance is
 pending the parent-provided exact test target. Focused units pass: referral policy
 8 tests / 22 expectations, Midtrans provider 39 / 67, and the targeted payment
-transaction test 1 / 2. `git diff --check` is clean. Web/server typechecks and
-database integration were not run in this source slice. Transfer settlement,
+transaction test 1 / 2. `git diff --check` is clean. Parent verification passes
+all four workspace typecheck tasks uncached in 5.755 seconds with one checker
+and serial execution. Database integration remains unrun. Transfer settlement,
 partial/overpayment, CSV, settled-transfer correction, and full reversal behavior
 remain deferred.
 The user selected earliest provider success time on 23 October 2026.
