@@ -11,14 +11,34 @@ Midtrans success time comes from authenticated status lookup because its webhook
 signature does not cover timestamp fields.
 The admin page is read-only. Migration 0072 is generated but unapplied; the
 guarded PostgreSQL scenarios are authored but were not run, so DB acceptance is
-pending the parent-provided exact test target. Focused units pass: referral policy
-8 tests / 22 expectations, Midtrans provider 39 / 67, and the targeted payment
-transaction test 1 / 2. `git diff --check` is clean. Parent verification passes
-all four workspace typecheck tasks uncached in 5.755 seconds with one checker
-and serial execution. Database integration remains unrun. Transfer settlement,
-partial/overpayment, CSV, settled-transfer correction, and full reversal behavior
-remain deferred.
+pending the parent-provided exact test target. The initial pre-review checkpoint
+had focused tests and four workspace typecheck tasks pass, but those checks predate
+the refund/time corrections below and are not evidence for the current diff.
 The user selected earliest provider success time on 23 October 2026.
+
+### Provider-time and refund-order correction (23 October 2026)
+
+Authenticated Midtrans status confirms payment state. The notification docs
+define `transaction_time` as transaction initiation; the status API exposes no
+documented card `capture_time`. Thus `transaction_time` is not used as proof of
+capture success. A verified card capture still credits Marks, but its KOL
+decision is held at zero as unresolved, blocking later purchases from taking
+first place. Non-card settlement time comes from authenticated
+`settlement_time`. A confirmed full refund arriving before local success stores
+REFUNDED without crediting Marks and reserves the first KOL event at zero
+commission. If original success time is unavailable, the decision remains
+unresolved until an authoritative provider time permits audited re-evaluation.
+A late earlier callback re-evaluates by provider time and payment ID and audits
+old/new state. No settled transfer is rewritten.
+
+Current focused unit proof passes: Midtrans provider 45 tests / 84
+expectations, payment service 78 / 208, and referral policy 8 / 22;
+`git diff --check` is clean. The current pinned serial typecheck passes all four
+workspace tasks uncached with `--checkers 1` (8.156s), and the normal Lefthook
+pre-push hook passes lint and typecheck. PostgreSQL acceptance is authored but
+unrun; migration 0072 remains unapplied. Transfer
+settlement, partial/overpayment, CSV, settled-transfer correction, and full
+reversal behavior remain deferred.
 
 ## Referral review correction checkpoint (22 October 2026)
 
@@ -730,7 +750,7 @@ These are tests to implement, **not tests already passed**. Maintain IDs in test
 | AC-F01    | Two referred completions with cap remaining10                                                                                    | Total credit at most10; unique first decision per referred user, including zero; no rollover or retry                                                                                                                                                                                                                                            | REQ-FRIEND-01..03             |
 | AC-F02    | Signup15 then setting20 then completion across Jun30/Jul1                                                                        | Saved15, cap/time at completion semester; job delay does not select wrong semester/config                                                                                                                                                                                                                                                        | REQ-FRIEND-02/03              |
 | AC-K01    | Saved10%/90d then15%/30d,350000 purchase day45, provider fee present                                                             | 35000 per accepted Q11 base; no change to original terms; no repeated purchase commission                                                                                                                                                                                                                                                        | REQ-KOL-01/02                 |
-| AC-K02    | B then earlier A versus A then B; equal-time tie; expiry instant; replay; refunded first purchase                                                                                             | Callback orders converge to earliest provider time; late correction records immutable old/new audit once; exact expiry is excluded; ties use payment ID; replay adds no correction; refund keeps the saved first decision and later purchases do not reset it. Settled-transfer and reversal adjustments remain deferred. | REQ-KOL-01..03                |
+| AC-K02    | B then earlier A versus A then B; equal-time tie; expiry instant; replay; refund before delayed success; unresolved refund time                                                                 | Callback orders converge to earliest provider time; late correction records immutable old/new audit once; exact expiry is excluded; ties use payment ID; replay adds no correction; refund keeps the saved first decision at zero, does not credit Marks, and an unresolved time blocks later purchases until audited resolution. Settled-transfer and reversal adjustments remain deferred. | REQ-KOL-01..03                |
 | AC-K03    | Commission35000, transfer10000 then30000, correction                                                                             | Outstanding25000 then overpayment5000; explicit partial/overpaid, audit, no automatic offset                                                                                                                                                                                                                                                     | REQ-KOL-02/03                 |
 | AC-W01    | FAQ inactive+landing=true; change order; malicious answer; EN only/ID only                                                       | Inactive hidden both; same order; safe paragraphs/lists; EN required, ID fallback, app English                                                                                                                                                                                                                                                   | REQ-FAQ-01/LANG-01..02        |
 | AC-W02    | Public tutor before/after tax schema, empty list, API outage                                                                     | Published-only, no bank/tax/internal fields, no legacy fallback; empty and failure distinct                                                                                                                                                                                                                                                      | REQ-CONTENT-02/ACCESS-01      |

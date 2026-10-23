@@ -3,14 +3,16 @@ CREATE TABLE "kol_commission_decision" (
 	"referred_user_id" text NOT NULL,
 	"choice_id" text NOT NULL,
 	"payment_id" text NOT NULL,
-	"provider_success_at" timestamp with time zone NOT NULL,
+	"provider_success_at" timestamp with time zone,
+	"provider_success_time_state" text DEFAULT 'verified' NOT NULL,
 	"purchase_amount_idr_snapshot" integer NOT NULL,
 	"flat_amount_idr_snapshot" integer NOT NULL,
 	"percent_bps_snapshot" integer NOT NULL,
 	"commission_amount_idr" bigint NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "kol_commission_amounts_nonnegative" CHECK ("kol_commission_decision"."purchase_amount_idr_snapshot" > 0 AND "kol_commission_decision"."flat_amount_idr_snapshot" >= 0 AND "kol_commission_decision"."percent_bps_snapshot" BETWEEN 0 AND 10000 AND "kol_commission_decision"."commission_amount_idr" >= 0)
+	CONSTRAINT "kol_commission_amounts_nonnegative" CHECK ("kol_commission_decision"."purchase_amount_idr_snapshot" > 0 AND "kol_commission_decision"."flat_amount_idr_snapshot" >= 0 AND "kol_commission_decision"."percent_bps_snapshot" BETWEEN 0 AND 10000 AND "kol_commission_decision"."commission_amount_idr" >= 0),
+	CONSTRAINT "kol_commission_success_time_state_check" CHECK ("kol_commission_decision"."provider_success_time_state" IN ('verified', 'unresolved') AND (("kol_commission_decision"."provider_success_time_state" = 'verified' AND "kol_commission_decision"."provider_success_at" IS NOT NULL) OR ("kol_commission_decision"."provider_success_time_state" = 'unresolved' AND "kol_commission_decision"."provider_success_at" IS NULL AND "kol_commission_decision"."commission_amount_idr" = 0)))
 );
 --> statement-breakpoint
 ALTER TABLE "payment_record" ADD COLUMN "provider_success_at" timestamp with time zone;--> statement-breakpoint

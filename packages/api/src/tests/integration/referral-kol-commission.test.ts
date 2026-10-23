@@ -104,7 +104,7 @@ async function createKolSignup(input: {
 async function createPayment(input: {
   userId: string;
   amountIdr: number;
-  providerSuccessAt: Date;
+  providerSuccessAt?: Date;
 }) {
   const userWallet = await walletService.getOrCreate(input.userId);
   const id = crypto.randomUUID();
@@ -120,7 +120,12 @@ async function createPayment(input: {
     status: "PENDING",
   });
   ownedPaymentIds.push(id);
-  return { id, providerReference, providerSuccessAt: input.providerSuccessAt };
+  return {
+    id,
+    providerReference,
+    amountIdr: input.amountIdr,
+    providerSuccessAt: input.providerSuccessAt,
+  };
 }
 
 async function confirmPayment(
@@ -135,6 +140,41 @@ async function confirmPayment(
     amountIdr,
     currency: "IDR",
     providerSuccessAt: payment.providerSuccessAt,
+  });
+}
+
+async function refundPayment(
+  payment: Awaited<ReturnType<typeof createPayment>>,
+  providerSuccessAt?: Date,
+) {
+  return payments.confirmFromWebhook({
+    provider: "stub",
+    providerReference: payment.providerReference,
+    providerEventId: `refund:${payment.id}`,
+    status: "REFUNDED",
+    amountIdr: payment.amountIdr,
+    currency: "IDR",
+    ...(providerSuccessAt
+      ? { providerSuccessAt, providerSuccessTimeStatus: "verified" as const }
+      : { providerSuccessTimeStatus: "unavailable" as const }),
+  });
+}
+
+/** A delayed success event is reconciled against the provider's current refund state. */
+async function confirmDelayedSuccessAfterRefund(
+  payment: Awaited<ReturnType<typeof createPayment>>,
+  providerSuccessAt?: Date,
+) {
+  return payments.confirmFromWebhook({
+    provider: "stub",
+    providerReference: payment.providerReference,
+    providerEventId: `event:${payment.id}`,
+    status: "REFUNDED",
+    amountIdr: payment.amountIdr,
+    currency: "IDR",
+    ...(providerSuccessAt
+      ? { providerSuccessAt, providerSuccessTimeStatus: "verified" as const }
+      : { providerSuccessTimeStatus: "unavailable" as const }),
   });
 }
 
@@ -292,6 +332,12 @@ describe("first eligible KOL purchase commission", () => {
           ),
         ),
     ).toHaveLength(1);
+
+    const [userWallet] = await db
+      .select({ totalBalance: wallet.totalBalance })
+      .from(wallet)
+      .where(eq(wallet.userId, signup.userId));
+    expect(userWallet?.totalBalance).toBe(2);
   });
 
   test("A then B converges to the same earliest purchase; a refund never resets eligibility", async () => {
@@ -312,10 +358,7 @@ describe("first eligible KOL purchase commission", () => {
     });
     await confirmPayment(later, 504_440);
 
-    await db
-      .update(paymentRecord)
-      .set({ status: "REFUNDED" })
-      .where(eq(paymentRecord.id, earlier.id));
+    await refundPayment(earlier, day(45));
     const another = await createPayment({
       userId: signup.userId,
       amountIdr: 800_000,
@@ -331,7 +374,7 @@ describe("first eligible KOL purchase commission", () => {
     expect(decisions[0]).toMatchObject({
       paymentId: earlier.id,
       purchaseAmountIdrSnapshot: 350_000,
-      commissionAmountIdr: 35_000,
+      commissionAmountIdr: 0,
     });
     expect(
       await db
@@ -344,6 +387,440 @@ describe("first eligible KOL purchase commission", () => {
           ),
         ),
     ).toHaveLength(0);
+    expect(
+      await db
+        .select()
+        .from(auditLog)
+        .where(
+          and(
+            eq(auditLog.targetId, decisions[0]!.id),
+            eq(auditLog.action, "kol_commission_refund_invalidation"),
+          ),
+        ),
+    ).toHaveLength(1);
+    const [userWallet] = await db
+      .select({ totalBalance: wallet.totalBalance })
+      .from(wallet)
+      .where(eq(wallet.userId, signup.userId));
+    expect(userWallet?.totalBalance).toBe(2);
+    const moneyEvents = await db
+      .select({ eventKey: ledgerEntry.eventKey })
+      .from(ledgerEntry)
+      .where(
+        inArray(ledgerEntry.eventKey, [
+          `purchase.${earlier.id}`,
+          `refund.${earlier.id}.reverse`,
+          `purchase.${later.id}`,
+          `purchase.${another.id}`,
+        ]),
+      );
+    expect(moneyEvents.map((event) => event.eventKey).sort()).toEqual(
+      [
+        `purchase.${earlier.id}`,
+        `refund.${earlier.id}.reverse`,
+        `purchase.${later.id}`,
+        `purchase.${another.id}`,
+      ].sort(),
+    );
+  });
+
+  test("a late earlier refunded purchase corrects B's commission once", async () => {
+    const signup = await createKolSignup({
+      name: "Refund callback before success",
+      percentBps: 1_000,
+    });
+    const earlierRefunded = await createPayment({
+      userId: signup.userId,
+      amountIdr: 350_000,
+    });
+    const later = await createPayment({
+      userId: signup.userId,
+      amountIdr: 500_000,
+      providerSuccessAt: day(50),
+    });
+
+    // B arrives first; A's current provider status is already REFUNDED when
+    // its delayed success callback reaches us.
+    await confirmPayment(later, 504_440);
+    await refundPayment(earlierRefunded, day(45));
+    await confirmDelayedSuccessAfterRefund(earlierRefunded, day(45));
+    await confirmDelayedSuccessAfterRefund(earlierRefunded, day(45));
+    await confirmPayment(later, 504_440);
+
+    const [decision] = await db
+      .select()
+      .from(kolCommissionDecision)
+      .where(eq(kolCommissionDecision.referredUserId, signup.userId));
+    expect(decision).toMatchObject({
+      paymentId: earlierRefunded.id,
+      providerSuccessAt: day(45),
+      providerSuccessTimeState: "verified",
+      purchaseAmountIdrSnapshot: 350_000,
+      commissionAmountIdr: 0,
+    });
+
+    const [refundedRow] = await db
+      .select({ status: paymentRecord.status })
+      .from(paymentRecord)
+      .where(eq(paymentRecord.id, earlierRefunded.id));
+    expect(refundedRow?.status).toBe("REFUNDED");
+    const [userWallet] = await db
+      .select({ totalBalance: wallet.totalBalance })
+      .from(wallet)
+      .where(eq(wallet.userId, signup.userId));
+    expect(userWallet?.totalBalance).toBe(1);
+
+    const firstRefundAudit = await db
+      .select()
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.targetId, decision!.id),
+          eq(
+            auditLog.action,
+              "kol_commission_earlier_refunded_purchase_correction",
+          ),
+        ),
+      );
+    expect(firstRefundAudit).toHaveLength(1);
+    expect(firstRefundAudit[0]?.beforeState).toMatchObject({
+      paymentId: later.id,
+      purchaseAmountIdr: 500_000,
+      commissionAmountIdr: 50_000,
+    });
+    expect(firstRefundAudit[0]?.afterState).toMatchObject({
+      paymentId: earlierRefunded.id,
+      purchaseAmountIdr: 350_000,
+      commissionAmountIdr: 0,
+    });
+  });
+
+  test("refund A then success B keeps A's zero commission reservation and credits B once", async () => {
+    const signup = await createKolSignup({
+      name: "Refund A before paid B",
+      percentBps: 1_000,
+    });
+    const earlierRefunded = await createPayment({
+      userId: signup.userId,
+      amountIdr: 350_000,
+    });
+    const later = await createPayment({
+      userId: signup.userId,
+      amountIdr: 500_000,
+      providerSuccessAt: day(50),
+    });
+
+    await refundPayment(earlierRefunded, day(45));
+    await confirmDelayedSuccessAfterRefund(earlierRefunded, day(45));
+    await confirmDelayedSuccessAfterRefund(earlierRefunded, day(45));
+    await confirmPayment(later, 504_440);
+    await confirmPayment(later, 504_440);
+
+    const [decision] = await db
+      .select()
+      .from(kolCommissionDecision)
+      .where(eq(kolCommissionDecision.referredUserId, signup.userId));
+    expect(decision).toMatchObject({
+      paymentId: earlierRefunded.id,
+      providerSuccessAt: day(45),
+      providerSuccessTimeState: "verified",
+      commissionAmountIdr: 0,
+    });
+    expect(
+      await db
+        .select()
+        .from(auditLog)
+        .where(
+          and(
+            eq(auditLog.targetId, decision!.id),
+            eq(
+              auditLog.action,
+              "kol_commission_first_refunded_purchase_reserved",
+            ),
+          ),
+        ),
+    ).toHaveLength(1);
+    const [userWallet] = await db
+      .select({ totalBalance: wallet.totalBalance })
+      .from(wallet)
+      .where(eq(wallet.userId, signup.userId));
+    expect(userWallet?.totalBalance).toBe(1);
+    const moneyEvents = await db
+      .select({ eventKey: ledgerEntry.eventKey })
+      .from(ledgerEntry)
+      .where(
+        inArray(ledgerEntry.eventKey, [
+          `purchase.${earlierRefunded.id}`,
+          `refund.${earlierRefunded.id}.reverse`,
+          `purchase.${later.id}`,
+        ]),
+      );
+    expect(moneyEvents.map((event) => event.eventKey)).toEqual([
+      `purchase.${later.id}`,
+    ]);
+    expect(
+      await db
+        .select()
+        .from(auditLog)
+        .where(
+          and(
+            eq(auditLog.targetId, decision!.id),
+            eq(
+              auditLog.action,
+              "kol_commission_earlier_refunded_purchase_correction",
+            ),
+          ),
+        ),
+    ).toHaveLength(0);
+  });
+
+  test("refund with unavailable provider time holds the KOL decision at zero", async () => {
+    const signup = await createKolSignup({
+      name: "Refund with unknown success time",
+      percentBps: 1_000,
+    });
+    const earlierRefunded = await createPayment({
+      userId: signup.userId,
+      amountIdr: 350_000,
+    });
+    await refundPayment(earlierRefunded);
+    const later = await createPayment({
+      userId: signup.userId,
+      amountIdr: 500_000,
+      providerSuccessAt: day(50),
+    });
+    await confirmPayment(later, 504_440);
+
+    const [decision] = await db
+      .select()
+      .from(kolCommissionDecision)
+      .where(eq(kolCommissionDecision.referredUserId, signup.userId));
+    expect(decision).toMatchObject({
+      paymentId: earlierRefunded.id,
+      providerSuccessAt: null,
+      providerSuccessTimeState: "unresolved",
+      commissionAmountIdr: 0,
+    });
+    expect(
+      await db
+        .select()
+        .from(auditLog)
+        .where(
+          and(
+            eq(auditLog.targetId, decision!.id),
+            eq(auditLog.action, "kol_commission_provider_time_unresolved"),
+          ),
+        ),
+    ).toHaveLength(1);
+
+    const [userWallet] = await db
+      .select({ totalBalance: wallet.totalBalance })
+      .from(wallet)
+      .where(eq(wallet.userId, signup.userId));
+    expect(userWallet?.totalBalance).toBe(1);
+    const moneyEvents = await db
+      .select({ eventKey: ledgerEntry.eventKey })
+      .from(ledgerEntry)
+      .where(
+        inArray(ledgerEntry.eventKey, [
+          `purchase.${earlierRefunded.id}`,
+          `refund.${earlierRefunded.id}.reverse`,
+          `purchase.${later.id}`,
+        ]),
+      );
+    expect(moneyEvents.map((event) => event.eventKey)).toEqual([
+      `purchase.${later.id}`,
+    ]);
+  });
+
+  test("a late success with unavailable time clears a provisional later commission", async () => {
+    const signup = await createKolSignup({
+      name: "Late unknown card time",
+      percentBps: 1_000,
+    });
+    const later = await createPayment({
+      userId: signup.userId,
+      amountIdr: 500_000,
+      providerSuccessAt: day(50),
+    });
+    const earlierCard = await createPayment({
+      userId: signup.userId,
+      amountIdr: 350_000,
+    });
+
+    await confirmPayment(later, 504_440);
+    await confirmPayment(earlierCard, 354_440);
+    await confirmPayment(earlierCard, 354_440);
+    await confirmPayment(later, 504_440);
+
+    const [decision] = await db
+      .select()
+      .from(kolCommissionDecision)
+      .where(eq(kolCommissionDecision.referredUserId, signup.userId));
+    expect(decision).toMatchObject({
+      paymentId: earlierCard.id,
+      providerSuccessAt: null,
+      providerSuccessTimeState: "unresolved",
+      purchaseAmountIdrSnapshot: 350_000,
+      commissionAmountIdr: 0,
+    });
+    const holdAudits = await db
+      .select()
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.targetId, decision!.id),
+          eq(auditLog.action, "kol_commission_provider_time_unresolved"),
+        ),
+      );
+    expect(holdAudits).toHaveLength(1);
+    expect(holdAudits[0]?.beforeState).toMatchObject({
+      paymentId: later.id,
+      purchaseAmountIdr: 500_000,
+      commissionAmountIdr: 50_000,
+    });
+    expect(holdAudits[0]?.afterState).toMatchObject({
+      paymentId: earlierCard.id,
+      paymentStatus: "SETTLED",
+      providerSuccessTimeState: "unresolved",
+      commissionAmountIdr: 0,
+    });
+    const [userWallet] = await db
+      .select({ totalBalance: wallet.totalBalance })
+      .from(wallet)
+      .where(eq(wallet.userId, signup.userId));
+    expect(userWallet?.totalBalance).toBe(2);
+  });
+
+  test("holds a success with unknown provider time and resolves it without a second Marks credit", async () => {
+    const signup = await createKolSignup({
+      name: "Unresolved success time",
+      percentBps: 1_000,
+    });
+    const earliest = await createPayment({
+      userId: signup.userId,
+      amountIdr: 350_000,
+    });
+    await confirmPayment(earliest, 354_440);
+
+    const later = await createPayment({
+      userId: signup.userId,
+      amountIdr: 500_000,
+      providerSuccessAt: day(50),
+    });
+    await confirmPayment(later, 504_440);
+
+    const [held] = await db
+      .select()
+      .from(kolCommissionDecision)
+      .where(eq(kolCommissionDecision.referredUserId, signup.userId));
+    expect(held).toMatchObject({
+      paymentId: earliest.id,
+      providerSuccessAt: null,
+      providerSuccessTimeState: "unresolved",
+      commissionAmountIdr: 0,
+    });
+
+    // A later authenticated provider source can supply a precise timestamp.
+    // The same settled-payment replay resolves the decision, not the wallet.
+    earliest.providerSuccessAt = day(45);
+    await confirmPayment(earliest, 354_440);
+    const [resolved] = await db
+      .select()
+      .from(kolCommissionDecision)
+      .where(eq(kolCommissionDecision.referredUserId, signup.userId));
+    expect(resolved).toMatchObject({
+      paymentId: earliest.id,
+      providerSuccessAt: day(45),
+      providerSuccessTimeState: "verified",
+      commissionAmountIdr: 35_000,
+    });
+    const resolutionAudit = await db
+      .select()
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.targetId, resolved!.id),
+          eq(auditLog.action, "kol_commission_provider_time_resolved"),
+        ),
+      );
+    expect(resolutionAudit).toHaveLength(1);
+    expect(resolutionAudit[0]?.beforeState).toMatchObject({
+      paymentId: earliest.id,
+      providerSuccessTimeState: "unresolved",
+      commissionAmountIdr: 0,
+    });
+    expect(resolutionAudit[0]?.afterState).toMatchObject({
+      paymentId: earliest.id,
+      providerSuccessTimeState: "verified",
+      commissionAmountIdr: 35_000,
+    });
+
+    await confirmPayment(earliest, 354_440);
+    expect(
+      await db
+        .select()
+        .from(auditLog)
+        .where(
+          and(
+            eq(auditLog.targetId, resolved!.id),
+            eq(auditLog.action, "kol_commission_provider_time_resolved"),
+          ),
+        ),
+    ).toHaveLength(1);
+    const [userWallet] = await db
+      .select({ totalBalance: wallet.totalBalance })
+      .from(wallet)
+      .where(eq(wallet.userId, signup.userId));
+    expect(userWallet?.totalBalance).toBe(2);
+  });
+
+  test("resolving an unknown success at exact expiry preserves zero commission", async () => {
+    const signup = await createKolSignup({
+      name: "Unresolved at expiry",
+      percentBps: 1_000,
+    });
+    const [choice] = await db
+      .select()
+      .from(referralChoice)
+      .where(eq(referralChoice.userId, signup.userId));
+    const payment = await createPayment({
+      userId: signup.userId,
+      amountIdr: 350_000,
+    });
+    await confirmPayment(payment, 354_440);
+    payment.providerSuccessAt = choice!.kolAttributionExpiresAt!;
+    await confirmPayment(payment, 354_440);
+
+    const [decision] = await db
+      .select()
+      .from(kolCommissionDecision)
+      .where(eq(kolCommissionDecision.referredUserId, signup.userId));
+    expect(decision).toMatchObject({
+      paymentId: payment.id,
+      providerSuccessAt: choice!.kolAttributionExpiresAt,
+      providerSuccessTimeState: "verified",
+      commissionAmountIdr: 0,
+    });
+    const resolutionAudit = await db
+      .select()
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.targetId, decision!.id),
+          eq(auditLog.action, "kol_commission_provider_time_resolved"),
+        ),
+      );
+    expect(resolutionAudit).toHaveLength(1);
+    expect(resolutionAudit[0]?.afterState).toMatchObject({
+      paymentId: payment.id,
+      commissionAmountIdr: 0,
+    });
+    const [userWallet] = await db
+      .select({ totalBalance: wallet.totalBalance })
+      .from(wallet)
+      .where(eq(wallet.userId, signup.userId));
+    expect(userWallet?.totalBalance).toBe(1);
   });
 
   test("persists a zero commission and excludes purchases at the saved expiry", async () => {

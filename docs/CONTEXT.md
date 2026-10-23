@@ -75,14 +75,25 @@ the decision. The admin page reads the latest 100 decisions and shows payment
 status, including refunds, without transfer controls.
 
 The user's 23 October ordering decision is earliest provider success time, not
-first callback commit time. Successful Midtrans webhook timestamps come from
-the authenticated status API because the webhook signature does not cover the
-time fields. This feature adds only the unpaid commission
-decision and its late-callback correction history. Settled transfers are never
-rewritten; transfers, partial/overpayment handling, CSV, and reversal adjustment
-remain separate work. Migration 0072 is unapplied, and the guarded database proof
-is authored but pending the parent test window. No database migration, reset,
-seed, provider call, or browser payment ran in this slice.
+first callback commit time. Midtrans webhooks are rechecked against the
+authenticated status API because the signature does not cover time fields.
+Midtrans confirms card `capture` as successful, but documents `transaction_time`
+as transaction initiation and exposes no `capture_time` in the status response.
+The card payment still credits Marks, while its KOL decision is held at zero as
+unresolved; later purchases cannot take first place without an exact verified
+provider time. Non-card settlement uses `settlement_time`. A full refund keeps
+its purchase as the first-event reservation and voids commission to zero. No
+Marks are credited when a refund is confirmed before local success. A refund
+without the original success time is likewise unresolved. A later authoritative
+exact provider time, if available, can resolve a hold with audit; this slice adds
+no manual time-entry control. Confirmed Midtrans status must also return IDR
+gross and currency, which the payment service checks against the saved purchase
+amount and allowed channel-fee tolerance.
+Settled transfers are never rewritten; transfers, partial/overpayment handling,
+CSV, and reversal adjustment remain separate work. Migration 0072 is unapplied,
+and guarded database proof is authored but pending the parent test window. No
+database migration, reset, seed, provider call, or browser payment ran in this
+slice.
 
 ## Classes UI workspace (22 October 2026)
 

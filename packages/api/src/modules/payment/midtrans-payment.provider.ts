@@ -105,16 +105,24 @@ function parseMidtransTimestamp(value: unknown): Date | undefined {
 
 function midtransSuccessTime(
   status: PaymentStatus,
-  value: { transaction_time?: unknown; settlement_time?: unknown },
+  value: {
+    payment_type?: unknown;
+    transaction_time?: unknown;
+    settlement_time?: unknown;
+  },
 ) {
-  // Midtrans documents settlement_time as when the status became settlement.
-  // For accepted card capture, transaction_time is the provider timestamp
-  // available on capture responses; do not substitute local callback time.
-  return status === "SETTLED"
-    ? parseMidtransTimestamp(value.settlement_time)
-    : status === "PAID"
-      ? parseMidtransTimestamp(value.transaction_time)
-      : undefined;
+  // Midtrans defines transaction_time as when the transaction was initiated,
+  // not when a card capture succeeded. Its status API exposes no capture_time,
+  // so card capture and later card settlement/refund cannot prove the original
+  // success instant. Non-card settlement_time is the successful transition.
+  if (
+    (status === "SETTLED" || status === "REFUNDED") &&
+    typeof value.payment_type === "string" &&
+    value.payment_type !== "credit_card"
+  ) {
+    return parseMidtransTimestamp(value.settlement_time);
+  }
+  return undefined;
 }
 
 async function throwProviderHttpError(
@@ -377,6 +385,7 @@ export function createMidtransPaymentProvider(opts: {
       transaction_status?: string;
       transaction_id?: string;
       order_id?: string;
+      payment_type?: string;
       fraud_status?: string;
       status_message?: string;
       gross_amount?: string;
@@ -398,6 +407,14 @@ export function createMidtransPaymentProvider(opts: {
     const providerReference =
       (await resolveProviderReference(remoteOrderId)) ?? remoteOrderId;
     const amountIdr = parseIdrAmount(json.gross_amount);
+    if (
+      (status === "PAID" || status === "SETTLED" || status === "REFUNDED") &&
+      (amountIdr === undefined || json.currency !== "IDR")
+    ) {
+      throw serviceUnavailable(
+        "Payment status error: provider response is missing a valid IDR amount or currency",
+      );
+    }
     const refundAmountIdr = parseIdrAmount(json.refund_amount);
     const providerSuccessAt = midtransSuccessTime(status, json);
     return {
@@ -421,6 +438,15 @@ export function createMidtransPaymentProvider(opts: {
           refundAmountIdr < amountIdr)
           ? "partial"
           : undefined,
+      ...(status === "PAID" ||
+      status === "SETTLED" ||
+      status === "REFUNDED"
+        ? {
+            providerSuccessTimeStatus: providerSuccessAt
+              ? ("verified" as const)
+              : ("unavailable" as const),
+          }
+        : {}),
     };
   }
 
@@ -459,16 +485,35 @@ export function createMidtransPaymentProvider(opts: {
     );
     if (status === "PAID" || status === "SETTLED") {
       // Midtrans's signature authenticates the order, status code, and gross
-      // amount, but not transaction_time/settlement_time. Use the authenticated
-      // status API response for both the successful state and its timestamp.
+      // amount, but not time fields. Use the authenticated status API for the
+      // payment state and only use timestamps whose documented meaning matches
+      // provider success time.
       const providerStatus = await getPaymentRequestStatus(orderId);
+      if (providerStatus.status === "REFUNDED") {
+        // A delayed success notification can arrive after a refund. The
+        // authenticated current status wins; it still reserves the original
+        // success event, but never credits Marks again.
+        return providerStatus;
+      }
       if (
-        (providerStatus.status !== "PAID" &&
-          providerStatus.status !== "SETTLED") ||
-        !providerStatus.providerSuccessAt
+        providerStatus.status !== "PAID" &&
+        providerStatus.status !== "SETTLED"
       ) {
         throw serviceUnavailable(
-          "Payment status error: provider has not confirmed a timestamped success",
+          "Payment status error: provider has not confirmed a successful payment",
+        );
+      }
+      return providerStatus;
+    }
+
+    if (status === "REFUNDED") {
+      // The notification timestamp is not covered by Midtrans's signature.
+      // Read the authenticated status to verify both a full refund and any
+      // recoverable original success time before reserving KOL eligibility.
+      const providerStatus = await getPaymentRequestStatus(orderId);
+      if (providerStatus.status !== "REFUNDED") {
+        throw serviceUnavailable(
+          "Payment status error: provider has not confirmed a refund",
         );
       }
       return providerStatus;

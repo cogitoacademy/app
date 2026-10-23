@@ -44,17 +44,29 @@ metadata. RPC request bodies use the `{"json": input}` envelope.
 
 `POST /rpc/adminReferral/listKolCommissions` — admin, no input; returns up to 100
 recent rows with campaign/code, referred student, payment reference/status,
-verified provider success time, base IDR purchase amount, saved flat/percentage
-terms, and calculated commission. The payment price excludes gateway/channel
-fees. Dates serialize as ISO timestamps. This is a read-only decision list, not
-a transfer report.
+provider success time and `providerSuccessTimeState` (`verified` or
+`unresolved`), base IDR purchase amount, saved flat/percentage terms, and
+calculated commission. An unresolved row has no provider time and a zero
+commission; the admin view says later purchases are held pending ordering
+evidence. The payment price excludes gateway/channel fees. Dates serialize as
+ISO timestamps. This is a read-only decision list, not a transfer report.
 
 The KOL first-purchase decision source slice uses the earliest verified provider
 success time. Midtrans success webhooks are rechecked with the authenticated
 status API because its webhook signature does not cover the time fields. A late
 earlier callback updates the current decision and appends an immutable
 before/after audit event; exact replay is idempotent and stable payment ID
-breaks equal-time ties. Refunds do not reset first-event eligibility.
+breaks equal-time ties. Midtrans confirms card `capture` as successful, but its
+status API documents `transaction_time` as transaction initiation and exposes no
+`capture_time`. The payment still credits Marks, but its KOL decision is held at
+zero as unresolved. Non-card settlement uses authenticated `settlement_time`.
+A full refund keeps its purchase reserved as the first event and voids
+commission to zero, even when it arrives before the local paid callback; no
+Marks are credited in that case. A refund without exact original success time
+is likewise unresolved; later purchases remain held until an authenticated exact
+time resolves it with audit. Confirmed Midtrans status must include an IDR gross
+amount/currency and is checked against the saved purchase amount using the
+existing channel-fee tolerance. This slice has no manual time-entry control.
 User decision recorded 23 October 2026. The generated 0072 migration is
 unapplied, and guarded database acceptance is pending. Transfer records,
 partial/overpayment accounting, CSV, settled-transfer corrections, and reversal
@@ -1685,13 +1697,13 @@ The create/edit/correction form is presented as a bottom drawer on mobile and a 
 - **Input:** Raw body; Midtrans verifies body `signature_key`, stub verifies `x-webhook-signature`; timestamp validation is skipped for Midtrans because its body signature is the authenticity check.
 - **Output:** `{ ok: true }`
 - **Errors:** 401 signature failure, 408 stale timestamp (> 5 min when applicable), 403 IP not allowlisted, 500 processing failure
-- **Description:** Provider webhook; verifies signature, validates any applicable timestamp, then atomically claims the lifecycle idempotency key (released on transient processing failure), calls `payment.confirmFromWebhook`, and updates payment status (`PENDING → PAID/SETTLED/FAILED/EXPIRED`; `PAID/SETTLED → REFUNDED`). Lifecycle keys include provider, verified event/reference id, and normalized status, so different lifecycle states process while retries of one state dedupe. Every repeat purchase uses a separate payment row and provider reference, so late events from an earlier attempt cannot change the newer attempt's state or suppress its wallet credit. A REFUNDED webhook reads the wallet through the transaction (`wallet.getByUserId(tx, ...)`, N4) and reverses credited Marks from the **total balance** (`held + available`): held Marks are released (`refund.{id}.release`) then the full payment Marks are reversed via `compensate_deduct` (`refund.{id}.reverse`) when total ≥ marks; if Marks were already spent (`totalBalance < marks`, H4), the payment is still marked REFUNDED and a `refund_webhook_reconciliation` audit + `refund_record` row are written for admin (no reversal, no throw, no 500/retry loop — P2.7/H4, M1/N4 wave-6b)
+- **Description:** Provider webhook; verifies signature, validates any applicable timestamp, then atomically claims the lifecycle idempotency key (released on transient processing failure), calls `payment.confirmFromWebhook`, and updates payment status (`PENDING/FAILED/EXPIRED → PAID/SETTLED/REFUNDED`; `PAID/SETTLED → REFUNDED`). Lifecycle keys include provider, verified event/reference id, and normalized status, so different lifecycle states process while retries of one state dedupe. Every repeat purchase uses a separate payment row and provider reference, so late events from an earlier attempt cannot change the newer attempt's state or suppress its wallet credit. A refund received before local success marks the payment REFUNDED without crediting Marks and records/updates the KOL first-event decision in the same transaction; the refunded purchase keeps first-event eligibility with zero commission. If provider success time is unavailable, the admin decision is held at zero and later purchases cannot take first place. For refunds after credit, it reads the wallet through the transaction (`wallet.getByUserId(tx, ...)`, N4) and reverses credited Marks from the **total balance** (`held + available`): held Marks are released (`refund.{id}.release`) then the full payment Marks are reversed via `compensate_deduct` (`refund.{id}.reverse`) when total ≥ marks; if Marks were already spent (`totalBalance < marks`, H4), the payment is still marked REFUNDED and a `refund_webhook_reconciliation` audit + `refund_record` row are written for admin (no reversal, no throw, no 500/retry loop — P2.7/H4, M1/N4 wave-6b)
 
 ### Midtrans (Snap) webhook (`POST /webhooks/payments/midtrans`)
 
 - **Signature:** the `signature_key` is **inside the JSON body** — `SHA512(order_id + status_code + gross_amount + signatureKey)` where `signatureKey` is `MIDTRANS_WEBHOOK_SIGNATURE_KEY` or, when unset, the Server Key. There is no signature header; the route passes an empty header value and the provider verifies the body. As defense-in-depth, a signed notification whose `merchant_id` does not match `MIDTRANS_MERCHANT_ID` is rejected (401).
 - **Payload fields:** `order_id` (our payment UUID), `transaction_id`, `transaction_status`, `status_code`, `gross_amount`, `fraud_status`, `status_message`, `payment_type`, `merchant_id`.
-- **Status mapping:** `capture`→PAID (with `fraud_status=accept`; `challenge`→PENDING, `deny`→FAILED), `settlement`→SETTLED, `pending`/`authorize`→PENDING, `deny`/`cancel`/`failure`→FAILED, `expire`→EXPIRED, `refund`/`partial_refund`→REFUNDED.
+- **Status mapping:** `capture`→PAID (with `fraud_status=accept`; `challenge`→PENDING, `deny`→FAILED), `settlement`→SETTLED, `pending`/`authorize`→PENDING, `deny`/`cancel`/`failure`→FAILED, `expire`→EXPIRED, `refund`/`partial_refund`→REFUNDED. Successful notifications are rechecked using the authenticated status API. Non-card settlement uses `settlement_time`; card `transaction_time` is transaction initiation, not a documented capture time, and the status API exposes no `capture_time`. Therefore the card payment still credits Marks but its KOL decision is held at zero as unresolved. No signed-webhook timestamp or local callback time is used. A refund without recoverable original success time is likewise retained as an unresolved zero-commission first-event reservation.
 - **Reference resolution:** `order_id` is the payment UUID (Snap `order_id` max 50 chars, `[A-Za-z0-9._~-]` — the provider reference contains colons and can exceed 50 chars). The provider resolves the UUID back to the stored `providerReference` via a DB lookup; when unresolvable it falls back to the `order_id` and the service's DB reference fallback.
 - **Idempotency:** the same lifecycle key derivation applies — `midtrans:{transaction_id ?? order_id}:{status}` — so a `settlement` retry dedupes while a later `refund` for the same payment still processes.
 

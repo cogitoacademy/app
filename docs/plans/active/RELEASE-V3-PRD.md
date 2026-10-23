@@ -202,12 +202,21 @@ late callback for an earlier success corrects the current commission decision
 and appends an immutable audit event with the old and new payment, purchase
 amount, provider time, and commission. Equal timestamps use ascending stable
 payment ID as the deterministic tie-breaker. Persist provider time with the
-payment; for Midtrans, take it from authenticated status lookup because its
-webhook signature does not cover timestamp fields. Never substitute webhook
-receive/commit time. This decision slice has no settled KOL transfer to rewrite.
-Transfer settlement, CSV, and reversal
-adjustment remain separate acceptance work; a reversal never resets first-event
-eligibility.
+payment; for Midtrans, use authenticated status lookup because its webhook
+signature does not cover timestamp fields. Its notification docs define
+`transaction_time` as transaction initiation; the status API exposes no
+`capture_time`. Therefore a verified card `capture` still credits Marks while
+the KOL decision is held at zero as unresolved, preventing later purchases from
+taking first place until exact provider time is available. Non-card settlement
+uses authenticated `settlement_time`. Never substitute webhook receive/commit
+time. A full refund keeps that purchase reserved as the first event and voids
+the commission to zero, including when the refund arrives before the delayed
+success callback; refunded payments never credit Marks. If the original success
+time is unavailable, persist an unresolved zero-commission hold and prevent
+later purchases from taking first place until verified time resolves the
+ordering with audit. This decision slice has no settled KOL transfer to rewrite.
+Transfer settlement, CSV, and reversal adjustment remain separate acceptance
+work; a reversal never resets first-event eligibility.
 
 ## 9. Website, content migration and landing
 

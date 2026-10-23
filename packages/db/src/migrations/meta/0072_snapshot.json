@@ -5763,7 +5763,14 @@
           "name": "provider_success_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
+        },
+        "provider_success_time_state": {
+          "name": "provider_success_time_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'verified'"
         },
         "purchase_amount_idr_snapshot": {
           "name": "purchase_amount_idr_snapshot",
@@ -5887,6 +5894,10 @@
         "kol_commission_amounts_nonnegative": {
           "name": "kol_commission_amounts_nonnegative",
           "value": "\"kol_commission_decision\".\"purchase_amount_idr_snapshot\" > 0 AND \"kol_commission_decision\".\"flat_amount_idr_snapshot\" >= 0 AND \"kol_commission_decision\".\"percent_bps_snapshot\" BETWEEN 0 AND 10000 AND \"kol_commission_decision\".\"commission_amount_idr\" >= 0"
+        },
+        "kol_commission_success_time_state_check": {
+          "name": "kol_commission_success_time_state_check",
+          "value": "\"kol_commission_decision\".\"provider_success_time_state\" IN ('verified', 'unresolved') AND ((\"kol_commission_decision\".\"provider_success_time_state\" = 'verified' AND \"kol_commission_decision\".\"provider_success_at\" IS NOT NULL) OR (\"kol_commission_decision\".\"provider_success_time_state\" = 'unresolved' AND \"kol_commission_decision\".\"provider_success_at\" IS NULL AND \"kol_commission_decision\".\"commission_amount_idr\" = 0))"
         }
       },
       "isRLSEnabled": false

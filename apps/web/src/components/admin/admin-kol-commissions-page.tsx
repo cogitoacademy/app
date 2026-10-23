@@ -62,7 +62,9 @@ export function AdminKolCommissionsPage() {
           <Text>
             Transfers, partial payments, overpayments, CSV exports, and reversal
             adjustments are handled in a later finance slice. A refunded payment
-            stays visible and does not reset first-purchase eligibility.
+            retains first-purchase eligibility and its commission is set to zero.
+            If Midtrans cannot return its original success time, the commission
+            stays on hold until that ordering evidence is resolved.
           </Text>
         </CardBody>
       </Card>
@@ -114,7 +116,21 @@ export function AdminKolCommissionsPage() {
                           {row.paymentReference ?? row.paymentId}
                         </Text>
                       </TableCell>
-                      <TableCell>{formatDate(row.providerSuccessAt)}</TableCell>
+                      <TableCell>
+                        {row.providerSuccessTimeState === "unresolved" ? (
+                          <div>
+                            <Badge variant="warning">Time unresolved</Badge>
+                            <Text className="text-muted">
+                              Commission held; provider has not supplied an
+                              authoritative success time.
+                            </Text>
+                          </div>
+                        ) : row.providerSuccessAt ? (
+                          formatDate(row.providerSuccessAt)
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
                       <TableCell>
                         <div>{formatIdr(row.purchaseAmountIdr)}</div>
                         <Text className="text-muted">

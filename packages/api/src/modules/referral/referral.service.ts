@@ -1,4 +1,15 @@
-import { and, asc, desc, eq, inArray, lte, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  lt,
+  sql,
+} from "drizzle-orm";
 import {
   friendRewardDecision,
   kolCommissionDecision,
@@ -24,7 +35,6 @@ import {
   getReferralSemester,
   isKolCampaignActive,
   isKolPurchaseEligible,
-  isEarlierKolPurchase,
   normalizeReferralCode,
 } from "./referral.policy";
 import type {
@@ -514,7 +524,10 @@ export function createReferralService(deps: {
 
   async function recordSuccessfulKolTopUp(
     conn: DbOrTx,
-    input: { paymentId: string },
+    input: {
+      paymentId: string;
+      providerSuccessTimeStatus?: "verified" | "unavailable";
+    },
   ) {
     const [payment] = await conn
       .select({
@@ -529,7 +542,9 @@ export function createReferralService(deps: {
       .limit(1);
     if (
       !payment ||
-      (payment.status !== "PAID" && payment.status !== "SETTLED")
+      (payment.status !== "PAID" &&
+        payment.status !== "SETTLED" &&
+        payment.status !== "REFUNDED")
     ) {
       return null;
     }
@@ -557,21 +572,15 @@ export function createReferralService(deps: {
       .for("share");
     if (!account || account.role !== "student") return null;
 
-    if (
-      !(payment.providerSuccessAt instanceof Date) ||
-      !Number.isFinite(payment.providerSuccessAt.getTime())
-    ) {
+    const providerSuccessAt =
+      payment.providerSuccessAt instanceof Date &&
+      Number.isFinite(payment.providerSuccessAt.getTime())
+        ? payment.providerSuccessAt
+        : null;
+    if (!providerSuccessAt && input.providerSuccessTimeStatus !== "unavailable") {
       throw new Error(
-        "KOL commission requires a verified provider success time.",
+        "An unresolved KOL purchase must be explicitly marked as missing provider time.",
       );
-    }
-    if (
-      !isKolPurchaseEligible(
-        payment.providerSuccessAt,
-        choice.kolAttributionExpiresAt,
-      )
-    ) {
-      return null;
     }
 
     const [existing] = await conn
@@ -579,38 +588,192 @@ export function createReferralService(deps: {
       .from(kolCommissionDecision)
       .where(eq(kolCommissionDecision.referredUserId, payment.userId))
       .for("update");
-    if (
-      existing &&
-      !isEarlierKolPurchase(
-        { paymentId: payment.id, providerSuccessAt: payment.providerSuccessAt },
-        {
-          paymentId: existing.paymentId,
-          providerSuccessAt: existing.providerSuccessAt,
-        },
+
+    const [unresolvedPayment] = await conn
+      .select({
+        id: paymentRecord.id,
+        amountIdr: paymentRecord.amountIdr,
+        status: paymentRecord.status,
+      })
+      .from(paymentRecord)
+      .where(
+        and(
+          eq(paymentRecord.userId, payment.userId),
+          inArray(paymentRecord.status, ["PAID", "SETTLED", "REFUNDED"]),
+          isNull(paymentRecord.providerSuccessAt),
+        ),
       )
-    ) {
-      return existing;
+      .orderBy(asc(paymentRecord.id))
+      .limit(1);
+
+    const termsSnapshot = {
+      flatAmountIdrSnapshot: choice.kolFlatAmountIdrSnapshot ?? 0,
+      percentBpsSnapshot: choice.kolPercentBpsSnapshot ?? 0,
+    };
+
+    if (unresolvedPayment) {
+      if (
+        existing?.providerSuccessTimeState === "unresolved" &&
+        existing.paymentId === unresolvedPayment.id
+      ) {
+        return existing;
+      }
+      const afterState = {
+        paymentId: unresolvedPayment.id,
+        providerSuccessAt: null,
+        providerSuccessTimeState: "unresolved" as const,
+        purchaseAmountIdr: unresolvedPayment.amountIdr,
+        paymentStatus: unresolvedPayment.status,
+        commissionAmountIdr: 0,
+      };
+      if (existing) {
+        const [held] = await conn
+          .update(kolCommissionDecision)
+          .set({
+            paymentId: unresolvedPayment.id,
+            providerSuccessAt: null,
+            providerSuccessTimeState: "unresolved",
+            purchaseAmountIdrSnapshot: unresolvedPayment.amountIdr,
+            ...termsSnapshot,
+            commissionAmountIdr: 0,
+            updatedAt: now(),
+          })
+          .where(eq(kolCommissionDecision.id, existing.id))
+          .returning();
+        if (!held) throw new Error("KOL commission hold was not saved.");
+        await audit.record({
+          db: conn,
+          actorId: null,
+          actorType: "system",
+          action: "kol_commission_provider_time_unresolved",
+          targetId: existing.id,
+          targetType: "kol_commission_decision",
+          beforeState: {
+            paymentId: existing.paymentId,
+            providerSuccessAt: existing.providerSuccessAt,
+            providerSuccessTimeState: existing.providerSuccessTimeState,
+            purchaseAmountIdr: existing.purchaseAmountIdrSnapshot,
+            commissionAmountIdr: existing.commissionAmountIdr,
+          },
+          afterState,
+          details: {
+            reason:
+              "Provider confirms a successful or refunded purchase but exposes no authoritative success time; commission is held pending ordering evidence.",
+          },
+        });
+        return held;
+      }
+      const [held] = await conn
+        .insert(kolCommissionDecision)
+        .values({
+          referredUserId: payment.userId,
+          choiceId: choice.id,
+          paymentId: unresolvedPayment.id,
+          providerSuccessAt: null,
+          providerSuccessTimeState: "unresolved",
+          purchaseAmountIdrSnapshot: unresolvedPayment.amountIdr,
+          ...termsSnapshot,
+          commissionAmountIdr: 0,
+        })
+        .returning();
+      if (!held) throw new Error("KOL commission hold was not saved.");
+      await audit.record({
+        db: conn,
+        actorId: null,
+        actorType: "system",
+        action: "kol_commission_provider_time_unresolved",
+        targetId: held.id,
+        targetType: "kol_commission_decision",
+        afterState,
+        details: {
+          choiceId: choice.id,
+          reason:
+            "Provider confirms a successful or refunded purchase but exposes no authoritative success time; commission is held pending ordering evidence.",
+        },
+      });
+      return held;
     }
 
-    const commissionAmountIdr = calculateKolCommission({
-      purchaseAmountIdr: payment.amountIdr,
-      flatAmountIdr: choice.kolFlatAmountIdrSnapshot ?? 0,
-      percentBps: choice.kolPercentBpsSnapshot ?? 0,
-    });
+    const [earliestEligible] = await conn
+      .select({
+        id: paymentRecord.id,
+        amountIdr: paymentRecord.amountIdr,
+        status: paymentRecord.status,
+        providerSuccessAt: paymentRecord.providerSuccessAt,
+      })
+      .from(paymentRecord)
+      .where(
+        and(
+          eq(paymentRecord.userId, payment.userId),
+          inArray(paymentRecord.status, ["PAID", "SETTLED", "REFUNDED"]),
+          isNotNull(paymentRecord.providerSuccessAt),
+          lt(paymentRecord.providerSuccessAt, choice.kolAttributionExpiresAt),
+        ),
+      )
+      .orderBy(asc(paymentRecord.providerSuccessAt), asc(paymentRecord.id))
+      .limit(1);
+
+    let winner = earliestEligible;
+    if (!winner && existing?.providerSuccessTimeState === "unresolved") {
+      const [resolvedReservation] = await conn
+        .select({
+          id: paymentRecord.id,
+          amountIdr: paymentRecord.amountIdr,
+          status: paymentRecord.status,
+          providerSuccessAt: paymentRecord.providerSuccessAt,
+        })
+        .from(paymentRecord)
+        .where(eq(paymentRecord.id, existing.paymentId))
+        .limit(1);
+      winner = resolvedReservation;
+    }
+    if (!winner || !(winner.providerSuccessAt instanceof Date)) {
+      return existing ?? null;
+    }
+
+    const isEligible = isKolPurchaseEligible(
+      winner.providerSuccessAt,
+      choice.kolAttributionExpiresAt,
+    );
+    if (!isEligible && !existing) {
+      return null;
+    }
+
+    const commissionAmountIdr =
+      winner.status === "REFUNDED" || !isEligible
+        ? 0
+        : calculateKolCommission({
+            purchaseAmountIdr: winner.amountIdr,
+            flatAmountIdr: termsSnapshot.flatAmountIdrSnapshot,
+            percentBps: termsSnapshot.percentBpsSnapshot,
+          });
     const purchaseSnapshot = {
-      paymentId: payment.id,
-      providerSuccessAt: payment.providerSuccessAt,
-      purchaseAmountIdr: payment.amountIdr,
+      paymentId: winner.id,
+      paymentStatus: winner.status,
+      providerSuccessAt: winner.providerSuccessAt,
+      providerSuccessTimeState: "verified" as const,
+      purchaseAmountIdr: winner.amountIdr,
       commissionAmountIdr,
     };
 
     if (existing) {
+      const changed =
+        existing.paymentId !== winner.id ||
+        existing.providerSuccessAt?.getTime() !==
+          winner.providerSuccessAt.getTime() ||
+        existing.providerSuccessTimeState !== "verified" ||
+        existing.purchaseAmountIdrSnapshot !== winner.amountIdr ||
+        existing.commissionAmountIdr !== commissionAmountIdr;
+      if (!changed) return existing;
+
       const [corrected] = await conn
         .update(kolCommissionDecision)
         .set({
-          paymentId: payment.id,
-          providerSuccessAt: payment.providerSuccessAt,
-          purchaseAmountIdrSnapshot: payment.amountIdr,
+          paymentId: winner.id,
+          providerSuccessAt: winner.providerSuccessAt,
+          providerSuccessTimeState: "verified",
+          purchaseAmountIdrSnapshot: winner.amountIdr,
+          ...termsSnapshot,
           commissionAmountIdr,
           updatedAt: now(),
         })
@@ -618,21 +781,41 @@ export function createReferralService(deps: {
         .returning();
       if (!corrected)
         throw new Error("KOL commission correction was not saved.");
+      let action: string = "kol_commission_earlier_purchase_correction";
+      if (existing.providerSuccessTimeState === "unresolved") {
+        action = "kol_commission_provider_time_resolved";
+      } else if (winner.status === "REFUNDED") {
+        action =
+          existing.paymentId === winner.id
+            ? "kol_commission_refund_invalidation"
+            : "kol_commission_earlier_refunded_purchase_correction";
+      }
+      const reason =
+        action === "kol_commission_refund_invalidation"
+          ? "Refund invalidated the commission while preserving the first-purchase reservation."
+          : action === "kol_commission_earlier_refunded_purchase_correction"
+            ? "A late earlier verified purchase was found refunded; the first-event decision moved to it with zero commission."
+            : action === "kol_commission_provider_time_resolved" && !isEligible
+              ? "A verified provider success time resolved the hold, but the payment was at or after attribution expiry and receives zero commission."
+            : action === "kol_commission_provider_time_resolved"
+              ? "A verified provider success time resolved the previous hold and all known purchase times were re-evaluated."
+              : "Late earlier provider success callback; candidate ordering re-evaluated by provider time and payment ID.";
       await audit.record({
         db: conn,
         actorId: null,
         actorType: "system",
-        action: "kol_commission_earlier_purchase_correction",
+        action,
         targetId: existing.id,
         targetType: "kol_commission_decision",
         beforeState: {
           paymentId: existing.paymentId,
           providerSuccessAt: existing.providerSuccessAt,
+          providerSuccessTimeState: existing.providerSuccessTimeState,
           purchaseAmountIdr: existing.purchaseAmountIdrSnapshot,
           commissionAmountIdr: existing.commissionAmountIdr,
         },
         afterState: purchaseSnapshot,
-        details: { reason: "late earlier provider success callback" },
+        details: { reason },
       });
       return corrected;
     }
@@ -642,11 +825,11 @@ export function createReferralService(deps: {
       .values({
         referredUserId: payment.userId,
         choiceId: choice.id,
-        paymentId: payment.id,
-        providerSuccessAt: payment.providerSuccessAt,
-        purchaseAmountIdrSnapshot: payment.amountIdr,
-        flatAmountIdrSnapshot: choice.kolFlatAmountIdrSnapshot ?? 0,
-        percentBpsSnapshot: choice.kolPercentBpsSnapshot ?? 0,
+        paymentId: winner.id,
+        providerSuccessAt: winner.providerSuccessAt,
+        providerSuccessTimeState: "verified",
+        purchaseAmountIdrSnapshot: winner.amountIdr,
+        ...termsSnapshot,
         commissionAmountIdr,
       })
       .returning();
@@ -655,11 +838,19 @@ export function createReferralService(deps: {
       db: conn,
       actorId: null,
       actorType: "system",
-      action: "kol_commission_first_purchase_recorded",
+      action:
+        winner.status === "REFUNDED"
+          ? "kol_commission_first_refunded_purchase_reserved"
+          : "kol_commission_first_purchase_recorded",
       targetId: decision.id,
       targetType: "kol_commission_decision",
       afterState: purchaseSnapshot,
-      details: { choiceId: choice.id },
+      details: {
+        choiceId: choice.id,
+        ...(winner.status === "REFUNDED"
+          ? { reason: "First eligible purchase was already refunded." }
+          : {}),
+      },
     });
     return decision;
   }
@@ -677,6 +868,8 @@ export function createReferralService(deps: {
         paymentReference: paymentRecord.providerReference,
         paymentStatus: paymentRecord.status,
         providerSuccessAt: kolCommissionDecision.providerSuccessAt,
+        providerSuccessTimeState:
+          kolCommissionDecision.providerSuccessTimeState,
         purchaseAmountIdr: kolCommissionDecision.purchaseAmountIdrSnapshot,
         flatAmountIdr: kolCommissionDecision.flatAmountIdrSnapshot,
         percentBps: kolCommissionDecision.percentBpsSnapshot,

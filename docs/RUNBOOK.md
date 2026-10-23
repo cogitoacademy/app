@@ -7,21 +7,34 @@ The branch contains additive Drizzle migration
 database. Do not use `db:push`, reset, seed, or migration commands as part of this
 source checkpoint. Apply it only through the normal reviewed deployment
 migration process after PR integration and the assigned DB acceptance window.
-The migration adds `payment_record.provider_success_at` and
-`kol_commission_decision`.
+The migration adds `payment_record.provider_success_at`, the KOL decision table,
+and its verified/unresolved provider-time state.
 
 Every successful Midtrans notification now triggers an authenticated status API
-lookup; only that response supplies the persisted success time because the
-webhook signature does not cover timestamps. Provider/API failure keeps the
-notification retryable. This adds one status request to each successful webhook.
-Focused unit proof passes: referral policy 8 tests / 22 expectations, Midtrans
-provider 39 / 67, and the targeted payment transaction test 1 / 2; `git diff
---check` is clean. Parent verification passes all four workspace typecheck tasks
-uncached in 5.755 seconds using `turbo run check-types --concurrency=1 --force --
---checkers 1` with the repo-pinned compiler. The guarded Postgres test
-is authored but pending the parent-provided exact test target. It requires exact
-test-only loopback 6769/cogito-test and refuses reset flags. No DB migration,
-reset, seed, external provider request, or real webhook ran in this worktree.
+lookup; the webhook signature does not cover timestamps. The notification docs
+define `transaction_time` as transaction initiation, and the status API exposes
+no `capture_time`. A card `capture` is still treated as a successful payment and
+credits Marks, but its KOL decision is held at zero as unresolved because the
+exact capture success time cannot be proven. Non-card settlement uses
+authenticated `settlement_time`. Provider/API failure keeps the notification
+retryable. Never substitute webhook or local receipt time.
+
+An authenticated REFUNDED status received before local success reserves the
+first KOL event without a Marks credit. If its original success time is not
+available, the decision stays unresolved at zero and later purchases remain
+held until the provider supplies an authoritative exact time. A later exact
+time re-evaluates ordering with an audit correction. Do not rewrite any settled
+external transfer; transfer settlement, CSV, and full reversal workflows remain
+deferred.
+
+Current focused unit proof passes: Midtrans provider 45 tests / 84
+expectations, payment service 78 / 208, and referral policy 8 / 22;
+`git diff --check` is clean. The pinned serial typecheck passes all four
+workspace tasks uncached with `--checkers 1` (8.156s). The normal Lefthook
+pre-push hook passes lint and typecheck. The guarded PostgreSQL test is authored
+but not run; it requires the exact test-only loopback
+6769/cogito-test and refuses reset flags. No DB migration, reset, seed, external
+provider request, or real webhook ran in this worktree.
 Transfer settlement, partial/overpayment, CSV, and full reversal work remain
 deferred.
 

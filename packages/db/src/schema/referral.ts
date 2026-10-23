@@ -253,7 +253,11 @@ export const kolCommissionDecision = pgTable(
       .references(() => paymentRecord.id, { onDelete: "restrict" }),
     providerSuccessAt: timestamp("provider_success_at", {
       withTimezone: true,
-    }).notNull(),
+    }),
+    providerSuccessTimeState: text("provider_success_time_state")
+      .$type<"verified" | "unresolved">()
+      .notNull()
+      .default("verified"),
     purchaseAmountIdrSnapshot: integer(
       "purchase_amount_idr_snapshot",
     ).notNull(),
@@ -274,6 +278,10 @@ export const kolCommissionDecision = pgTable(
     check(
       "kol_commission_amounts_nonnegative",
       sql`${table.purchaseAmountIdrSnapshot} > 0 AND ${table.flatAmountIdrSnapshot} >= 0 AND ${table.percentBpsSnapshot} BETWEEN 0 AND 10000 AND ${table.commissionAmountIdr} >= 0`,
+    ),
+    check(
+      "kol_commission_success_time_state_check",
+      sql`${table.providerSuccessTimeState} IN ('verified', 'unresolved') AND ((${table.providerSuccessTimeState} = 'verified' AND ${table.providerSuccessAt} IS NOT NULL) OR (${table.providerSuccessTimeState} = 'unresolved' AND ${table.providerSuccessAt} IS NULL AND ${table.commissionAmountIdr} = 0))`,
     ),
     uniqueIndex("kol_commission_decision_referred_user_uniq").on(
       table.referredUserId,

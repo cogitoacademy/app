@@ -64,11 +64,15 @@ transaction.
 `payment_record.provider_success_at` stores the verified provider timestamp on
 the first accepted successful transition. Since Midtrans's webhook signature
 does not cover its time fields, a successful notification is rechecked through
-the authenticated status API; settlement uses `settlement_time`, and accepted
-card capture uses provider `transaction_time`. No webhook-body or local receive
-time is substituted. `payment.confirmFromWebhook` persists payment status and
-provider time, records the KOL decision, and credits the purchased Marks in the
-same transaction.
+the authenticated status API. Non-card settlement uses `settlement_time`. The
+status API documents card `transaction_time` as initiation and exposes no
+`capture_time`, so card status is accepted and Marks are credited while its KOL
+decision is held at zero as unresolved. No webhook-body or local receive time is
+substituted. `payment.confirmFromWebhook` persists payment status and any
+verified provider time, records the KOL decision, and credits the purchased Marks
+in the same transaction. Confirmed status must include an IDR gross amount and
+currency; the service binds it to the saved purchase price using the existing
+channel-fee tolerance.
 
 `kol_commission_decision` is unique by referred student and payment. It stores
 the selected payment, provider success time, server-saved `payment_record.amount_idr`
@@ -78,13 +82,29 @@ kolAttributionExpiresAt`. The referral-choice row lock serializes callbacks for
 one student. Earliest timestamp wins; ties use ascending stable payment ID. A
 late earlier callback updates the current unpaid decision and writes immutable
 audit action `kol_commission_earlier_purchase_correction` with old/new purchase
-and amount snapshots. Exact replay or a later success adds no correction. A
-refunded payment remains the saved first decision; reversal does not reset it.
+and amount snapshots. A late earlier refunded purchase uses
+`kol_commission_earlier_refunded_purchase_correction`; refunding the current
+winner uses `kol_commission_refund_invalidation`. If a successful payment has
+no authoritative time, `kol_commission_provider_time_unresolved` moves the
+current decision to a zero hold, even if a later-timestamped purchase had been
+provisionally selected. Corrections include
+the prior decision and corrected purchase state, with provider time, amount, and
+commission. Exact replay or a later success adds no correction. A full
+refund keeps its purchase reserved as first and voids commission to zero. A
+refund arriving before local success moves the payment to REFUNDED without
+crediting Marks. When Midtrans does not provide an exact success time for a card
+capture or refund, the decision has null time, zero commission, and
+`providerSuccessTimeState: unresolved`; later purchase callbacks cannot take
+first place until the provider supplies an authenticated exact time and an
+audited re-evaluation resolves the hold. This slice has no manual time-entry
+control. A
+refund/reversal never resets first-event eligibility.
 
 Admin read endpoint `adminReferral.listKolCommissions` is admin-protected and
-returns up to 100 recent decisions with current payment status. The Selia page
-does not record transfers. Settled-transfer edits, transfer/partial/overpayment
-history, CSV, and reversal adjustment remain deferred. Migration
+returns up to 100 recent decisions with current payment status and provider-time
+state. The Selia page does not record transfers. Settled-transfer edits,
+transfer/partial/overpayment history, CSV, and reversal adjustment remain
+deferred. Migration
 `0072_kol_first_successful_topup_commission` is unapplied; guarded DB acceptance
 is authored but pending.
 
@@ -1637,14 +1657,14 @@ chat directory.
 - `payment.service.ts` — `createIntent`, `confirmFromWebhook`, `getPurchase`; exposes `provider`
 - `payment.handler.ts` — `getConfig`, `createPurchase`, Test Mode `simulatePurchase`, `getPurchase`; config `providerMode` (test/live) + `simulationEnabled`
 - `payment.router.ts` — `createPurchase` and `simulatePurchase` use `verifiedStudentProcedure` (student role + verified email; `getConfig` and `getPurchase` stay protected)
-- `midtrans-payment.provider.ts` — Midtrans Snap integration (`POST /snap/v1/transactions` → `redirect_url`; webhook `signature_key` = `SHA512(order_id + status_code + gross_amount + key)` verified in the body; status mapping `capture`→PAID / `settlement`→SETTLED / `pending`→PENDING / `deny|cancel|failure`→FAILED / `expire`→EXPIRED / `refund|partial_refund`→REFUNDED; `order_id` = payment UUID resolved back to the stored provider reference; circuit breaker + retry; `refund()` port)
+- `midtrans-payment.provider.ts` — Midtrans Snap integration (`POST /snap/v1/transactions` → `redirect_url`; webhook `signature_key` = `SHA512(order_id + status_code + gross_amount + key)` verified in the body; status mapping `capture`→PAID / `settlement`→SETTLED / `pending`→PENDING / `deny|cancel|failure`→FAILED / `expire`→EXPIRED / `refund|partial_refund`→REFUNDED; non-card settlement timestamps come from authenticated `settlement_time`; card `transaction_time` is initiation and no `capture_time` is exposed, so card KOL ordering is unresolved while verified payments still credit; refunds without exact success time are also unresolved; `order_id` = payment UUID resolved back to the stored provider reference; circuit breaker + retry; `refund()` port)
 - `stub-payment.provider.ts` — Development stub
 - Webhook route lives in `apps/server/src/webhooks/payments.ts` (`POST /webhooks/payments/:provider`)
 
 **Service Methods:**
 
 - `createIntent(userId, walletId, packageCode)` — Creates a purchase intent; reconciles the latest PENDING intent against providers that support status lookup before deciding whether to reuse its persisted `checkoutUrl` (H4, migration 0026). Remote terminal status produces a fresh payment row and unique provider reference; provider lookup failure conservatively reuses the PENDING intent to avoid duplicate charges. Earlier attempts remain history; returns `{ paymentId, providerReference, checkoutUrl }`.
-- `confirmFromWebhook({ provider, providerReference, providerEventId, status, ... })` — Enforces the `ALLOWED_TRANSITIONS` state machine (PENDING → PAID/SETTLED/FAILED/EXPIRED; PAID → SETTLED/REFUNDED), credits the wallet on first PAID/SETTLED, idempotent via provider event ID + DB UNIQUE; writes `payment.{id}.credited` notification (B6, #46). Each repeat purchase has its own provider reference and row, so webhooks are resolved to the matching attempt and cannot mutate a different attempt or suppress its wallet credit. Legacy rows that were reset in an older deployment may still use the stale provider-event marker protection for a late FAILED/EXPIRED event. On REFUNDED it reads the wallet through the transaction (`getByUserId`, N4) and reverses the credited Marks from the **total balance** (`held + available`): held Marks are released (`refund.{id}.release`) then the full payment Marks are reversed via `compensate_deduct` (`refund.{id}.reverse`); when the total is below the payment marks (spent all, H4) it marks the payment REFUNDED, writes a `refund_webhook_reconciliation` audit + `refund_record` row for admin, and skips the reversal + refund notification (P2.7/H4, M1/N4 wave-6b)
+- `confirmFromWebhook({ provider, providerReference, providerEventId, status, ... })` — Enforces the `ALLOWED_TRANSITIONS` state machine (PENDING/FAILED/EXPIRED → PAID/SETTLED/REFUNDED; PAID → SETTLED/REFUNDED), credits the wallet on first PAID/SETTLED, idempotent via provider event ID + DB UNIQUE; writes `payment.{id}.credited` notification (B6, #46). Each repeat purchase has its own provider reference and row, so webhooks are resolved to the matching attempt and cannot mutate a different attempt or suppress its wallet credit. Legacy rows that were reset in an older deployment may still use the stale provider-event marker protection for a late FAILED/EXPIRED event. A REFUNDED payment received before local success is stored without a Marks credit and calls the KOL decision port in the same transaction to reserve the first event at zero commission; if success time is unavailable, the decision remains unresolved and blocks later purchases until an authoritative exact provider time becomes available. A verified card capture still credits Marks even while its KOL decision is unresolved. For refunds after credit, it reads the wallet through the transaction (`getByUserId`, N4) and reverses the credited Marks from the **total balance** (`held + available`): held Marks are released (`refund.{id}.release`) then the full payment Marks are reversed via `compensate_deduct` (`refund.{id}.reverse`); when the total is below the payment marks (spent all, H4) it marks the payment REFUNDED, writes a `refund_webhook_reconciliation` audit + `refund_record` row for admin, and skips the reversal + refund notification (P2.7/H4, M1/N4 wave-6b)
 - `getPurchase(paymentId, userId)` — Returns the payment record if owned by the user
 
 **Dependencies:** `PaymentRepo`, `PaymentWalletPort`, `PaymentProvider`, `NotificationPort`, `AuditPort`, `RefundRecordPort`

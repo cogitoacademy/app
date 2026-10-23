@@ -46,12 +46,15 @@ export async function findPackageByCode(conn: DbOrTx, code: string) {
 export async function findPaymentByProviderReference(
   conn: DbOrTx,
   providerReference: string,
+  lock = false,
 ) {
-  const [record] = await conn
+  const query = conn
     .select({ ...getTableColumns(paymentRecord) })
     .from(paymentRecord)
-    .where(eq(paymentRecord.providerReference, providerReference))
-    .limit(1);
+    .where(eq(paymentRecord.providerReference, providerReference));
+  const [record] = lock
+    ? await query.for("update").limit(1)
+    : await query.limit(1);
   return record ?? null;
 }
 
@@ -303,6 +306,7 @@ export async function updatePaymentStatusIfInCreditState(
     status: string;
     providerEventId?: string;
     failureReason?: string | null;
+    providerSuccessAt?: Date | null;
   },
 ) {
   const [updated] = await conn
@@ -326,8 +330,16 @@ export function createPaymentRepo(db: DbType) {
     findPackageByCode(code: string, conn?: DbOrTx) {
       return findPackageByCode(conn ?? db, code);
     },
-    findPaymentByProviderReference(providerReference: string, conn?: DbOrTx) {
-      return findPaymentByProviderReference(conn ?? db, providerReference);
+    findPaymentByProviderReference(
+      providerReference: string,
+      conn?: DbOrTx,
+      lock = false,
+    ) {
+      return findPaymentByProviderReference(
+        conn ?? db,
+        providerReference,
+        lock,
+      );
     },
     findLatestPaymentByUserAndPackage(
       userId: string,
@@ -436,6 +448,7 @@ export function createPaymentRepo(db: DbType) {
         status: string;
         providerEventId?: string;
         failureReason?: string | null;
+        providerSuccessAt?: Date | null;
       },
       conn?: DbOrTx,
     ) {
