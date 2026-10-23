@@ -774,8 +774,7 @@ payout profiles before merging. LCOV merge produced 270 source records; the
 E2E passed 3/3. The follow-up removes only the partition-local threshold with a
 temporary Bun config and keeps the merged gate at 100%. The focused LCOV suite passes 11 tests / 145 expectations under available
 Bun 1.4.0-canary.1; changed TypeScript formatting passes, and focused lint
-exits successfully with existing `no-await-in-loop` warnings. Serial pre-push
-and a new full CI run remain pending.
+exits successfully with existing `no-await-in-loop` warnings. Normal pre-push passed on `90863a22` (serial typecheck 4/4 tasks, 25.04 seconds). Full hosted CI [run 39939287307](https://github.com/cogitoacademy/app/actions/runs/39939287307) is in progress on this code commit.
 
 ## T07 on-demand booking report continuation (2026-10-22)
 
