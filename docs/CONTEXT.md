@@ -108,10 +108,20 @@ checker after the default four-checker invocation ran out of memory. See the
 ## Classes UI workspace (22 October 2026)
 
 Student `/classes` is a single searchable catalog with Cohort/Masterclass filters,
-one card per class, next-session dates in WIB, tutor names and explicit price units.
-Cards use separate title/action links; there is no disclosure nested inside a link.
-Class details place curriculum beside enrollment on wide screens and stack on
-mobile. The app header identifies Class details and Class studio correctly.
+one compact, keyboard-accessible link card per class, next-session dates in WIB,
+tutor names and explicit price units. Class details place curriculum beside
+enrollment on wide screens and stack on mobile, with enrollment before the
+curriculum on small screens. Catalog guidance
+explains the two class formats; class details and student reports link back to
+the catalog. Enrollment reuses the database-backed `_app` route session
+instead of independently reading a cookie-cached session. Signed-in students who
+need email verification see a verification action with a return to the class;
+non-student accounts see the student-account requirement, not a sign-in prompt.
+The current student-only routes still redirect signed-out visitors to login and
+non-students to dashboard before the panel mounts. Synthetic auth/layout checks
+passed on 23 October; the permanent catalog E2E locator still targets the old
+button and must be updated to the full-card link (see the UI audit plan).
+The app header identifies Class details and Class studio correctly.
 Admin `/admin-classes` starts with published/postponed classes. Drafts & editor
 keeps the editor mounted across tab changes; publishing returns to the published
 list. Manage class expands existing cancellation/minimum/schedule controls.
