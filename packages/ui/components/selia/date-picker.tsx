@@ -34,6 +34,10 @@ export function DatePicker({
 
   const parsedDate = value ? parseISO(value) : undefined;
   const date = parsedDate && isValid(parsedDate) ? parsedDate : undefined;
+  // DayPicker otherwise caps its year dropdown at the current year.
+  const endMonth = maxDate
+    ? parseISO(maxDate)
+    : new Date(new Date().getFullYear() + 100, 11, 31);
   const disabledDates = [
     ...(minDate ? [{ before: parseISO(minDate) }] : []),
     ...(maxDate ? [{ after: parseISO(maxDate) }] : []),
@@ -109,7 +113,7 @@ export function DatePicker({
               onSelect={handleSelect}
               disabled={disabledDates}
               startMonth={minDate ? parseISO(minDate) : undefined}
-              endMonth={maxDate ? parseISO(maxDate) : undefined}
+              endMonth={endMonth}
             />
           </Popover.Popup>
         </Popover.Positioner>

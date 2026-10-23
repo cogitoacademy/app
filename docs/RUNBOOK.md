@@ -1,5 +1,73 @@
 # Cogito Runbook
 
+## Report PDF parent checks (22 October 2026)
+
+Focused route/access/window/layout/rate-limit checks pass 29 tests / 104
+assertions. Web and server typechecks pass; a full server `bun run build`
+(tsdown) passes with the embedded font. The layout regression rerun after
+preserving ordinary/legacy line breaks passes 4 tests / 8 assertions. Rendered
+normal, dense-bullet and long-metadata samples were visually inspected.
+
+The non-reset test command below passed 1 test / 16 assertions after starting
+the existing isolated PostgreSQL container. Its runtime preflight requires
+`NODE_ENV=test`, exact loopback `6769/cogito-test`, no reset flags and a matching
+database readback. Fixtures are run-owned and removed individually; no reset,
+seed, migration or production/provider call occurred.
+
+```powershell
+bun --smol --env-file=C:/.Projects/cogito-app/tmp/v3-dev/.env.signup-parent test --timeout 30000 packages/api/src/tests/integration/report-export.test.ts
+```
+
+Synthetic Chromium download checks pass 3 journeys (11.7s): student self,
+admin student selection, empty state and tutor UI denial. Auth and API responses
+are mocked, so these complement the PostgreSQL and HTTP authorization tests.
+Run from `packages/e2e`:
+
+```powershell
+bun run test --config=playwright.classes-layout.config.ts --grep 'private report|explicit empty'
+```
+
+The cold first run timed out on initial Vite load; its retry used the warmed
+cache and bounded 60-second navigation budget. A filename expectation was fixed
+to match the UI's dated download name. Final brand approval, deployed/runtime
+and client acceptance remain open.
+
+## E2E strict-mode environment (22 October 2026)
+
+`bun run test:e2e` runs Playwright through Turbo's strict environment filtering.
+`packages/e2e/turbo.json` allowlists the E2E runtime variables for that package;
+keep `WEB_URL` and `WEB_PORT` together. CI's generated `apps/server/.env.test`
+contains `WEB_PORT=3200` but omits `WEB_URL`, so dotenv cannot restore the URL
+if Turbo has filtered it from the parent environment. The resolver must keep
+rejecting non-loopback URLs and URL/port mismatches. `playwright test --list`
+loads the configuration and discovers tests without starting servers or
+running global setup. With the CI loopback environment set, check the same
+Turbo task from the repository root without starting a database or browser:
+
+```powershell
+.\node_modules\.bin\turbo.exe run test --filter=@cogito-app/e2e --env-mode=strict -- --list
+```
+
+## Report PDF and admin picker rereview (22 October 2026)
+
+The admin report picker passes `role: "student"` to the search RPC, which
+filters before applying the result limit. Private PDF legacy layout follows the
+current report version's history actor; short legacy feedback keeps line breaks
+and can use labelled continuation pages.
+
+The focused unit run passes 81 tests / 208 assertions. Server and web typechecks
+pass with one checker each:
+
+```powershell
+bun test --timeout 30000 packages/api/src/tests/unit/admin.repo.test.ts packages/api/src/tests/unit/admin.service.test.ts packages/api/src/tests/unit/admin.handler.test.ts packages/api/src/tests/unit/admin.types.test.ts packages/api/src/tests/unit/report-export.access.test.ts packages/api/src/tests/unit/report-export.pdf.test.ts packages/api/src/tests/unit/report-export.service.test.ts packages/api/src/tests/unit/report-export.window.test.ts apps/server/src/routes/report-export-routes.test.ts
+bun run --filter=server check-types --checkers 1
+bun run --filter=web check-types --checkers 1
+```
+
+This continuation did not rerun the parent's PostgreSQL or Chromium checks and
+used no database, browser, migration, reset, seed, or provider. The saved PDF
+sample was left unchanged.
+
 ## Windows workspace typecheck memory
 
 Run the workspace check with `bun run check-types`. Package scripts limit
@@ -48,8 +116,49 @@ A local pre-migration dump is retained under ignored
 `tmp/v3-dev/checkpoint/cogito-pre-0070-20261022.dump`. Development booking (34),
 ledger (89), and feedback (2) counts are unchanged; history starts empty. No dev
 reset/seed, production migration, or live provider action ran. Test history is
-retained under run-scoped identities. PDF and broader legacy reminders remain open.
+retained under run-scoped identities. PDF source and local evidence are recorded
+below; parent DB/browser/deployment acceptance and broader legacy reminders remain open.
 This acceptance supersedes older source-only/unapplied/pending-browser notes below.
+
+## Private report PDF source and local evidence (22 October 2026)
+
+The isolated source adds `/reports/student/summary` and `/reports/student/pdf`.
+Student requests resolve to the authenticated student; admins must choose a
+student from the existing search; tutors are denied. The summary is metadata
+only and the PDF response is private/no-store. The report query uses a read-only
+repeatable-read snapshot, Q06 private-booking entitlement, the charged funded
+class allocation, and WIB calendar-month boundaries. The header uses the
+authorized placeholder while branding assets are unavailable.
+
+Focused source checks run from the worktree root:
+
+```powershell
+bun test --timeout 30000 packages/api/src/tests/unit/report-export.access.test.ts packages/api/src/tests/unit/report-export.pdf.test.ts packages/api/src/tests/unit/report-export.window.test.ts apps/server/src/routes/report-export-routes.test.ts
+bun test --timeout 30000 apps/server/src/rpc-rate-limit.test.ts
+```
+
+The export suite passes 9 tests / 31 expectations, the rate-limit routing suite
+passes 18 / 67, and the combined focused run passes 27 / 98. A seven-page
+fictional-data PDF at `output/pdf/report-export-sample.pdf` was rendered with
+`pdftoppm` and inspected page-by-page. The sample covers solo, group, series,
+cohort and masterclass metadata, a one-page 3 × 600-character feedback report,
+and long Unicode/newline
+legacy text across continuation pages. These are local source-slice results;
+the focused `bun build packages/api/src/modules/report-export/report-export.pdf.ts
+--target=bun --outdir tmp/pdfs/bundle-check` check emitted one 3.16 MB JavaScript
+entry containing the 1,008,096-byte font and no separate JSON/font asset. This
+does not replace the focused `tsdown` PDF-module bundle check below, which
+emitted one 3.28 MB JavaScript entry with the complete 1,008,096-character font
+embedded (tsdown 0.22.14, Rolldown 1.2.3):
+
+```powershell
+bunx tsdown packages/api/src/modules/report-export/report-export.pdf.ts --no-config --out-dir tmp/pdfs/tsdown-font-check --format esm --no-minify
+```
+
+The full server tsdown/Docker build remains parent-owned. The parent also owns
+guarded database/entitlement coverage, authenticated student/admin browser
+flows, and full web/API/server typechecks. No database, browser, migration,
+reset, seed or provider call was run for the PDF slice.
 
 ## Ongoing experience smoke check (22 October 2026)
 
@@ -255,14 +364,32 @@ restore or reseed has been verified.
 API integration helpers now reject reset on 6767 and 6768 unconditionally.
 The only resettable pairs are exact local `cogito-test:6769` and
 `cogito-test-payout:6770`, and each needs both `TEST_DATABASE_ALLOW_RESET=true`
-and `TEST_DATABASE_RESET_TARGET` exactly equal to `DATABASE_URL`. No current
-environment or example enables this opt-in. `test-setup.ts` has no database URL
-fallback; provide a target explicitly for DB-backed work. The retained 6769
-run-scoped financial fixtures were not reset in this task. The non-reset T05
-per-run E2E identity path remains unchanged. A source scan found 69 API test
-files calling the shared helper; their call sites are unchanged, but old
-6767/6768 env files now fail closed before the helper issues SQL. The pure
-guard suite passed 6 tests / 40 expectations; no DB-backed verification was run.
+and `TEST_DATABASE_RESET_TARGET` exactly equal to `DATABASE_URL`. Developer
+environments and examples remain opt-out. GitHub Actions grants reset consent
+only to reset-based tests on that run's disposable 6769 service and to the
+dedicated payout test command on its separate disposable 6770 service. The
+three report fixture suites that assert reset overrides are absent run separately
+on 6769 with both variables unset. Bun writes its LCOV report to the configured
+`coverage/lcov.info`; CI clears that file before each coverage partition and
+snapshots its fresh, non-empty output under `coverage/api-*` before the next
+process runs. The workflow uses this configured output because CI did not
+produce the requested custom `--coverage-dir` paths. Those three raw profiles
+are merged before the existing gate. The merge rejects missing, empty, or
+recordless LCOV profiles. For Bun profiles that include `FNF`/`FNH` but omit
+function identities, the merger preserves maximum summary counts and the exact
+named-function union, then writes a sidecar identifying sources whose function
+identity is incomplete. The PR comment labels these counts as lower bounds and
+the 100% gate fails if unidentified functions remain uncovered; configured
+thresholds are unchanged. `.github/scripts/merge-lcov.test.ts` covers overlapping
+summary-only profiles, mixed named/summary profiles, raw-profile preservation,
+and invalid or incomplete details. The payout schema is migrated through a
+separate `apps/server/.env.test-payout` file. `test-setup.ts` has no database URL fallback; provide a target
+explicitly for DB-backed work. The retained 6769 run-scoped financial fixtures
+were not reset in this task. The non-reset T05 per-run E2E identity path remains
+unchanged. A source scan found 69 API test files calling the shared helper;
+their call sites are unchanged, but old 6767/6768 env files now fail closed
+before the helper issues SQL. The pure guard suite passed 6 tests / 40
+expectations; no DB-backed verification was run.
 
 ## Earlier T06 worker checkpoint (superseded by parent verification above)
 
@@ -582,7 +709,7 @@ this exact guarded test database; no customer pricing pointer or external
 provider is called. Vite uses `apps/web/node_modules/.vite-t05-enrollment` for
 the T05 browser server to avoid contending with the existing app's Vite cache.
 
-The Playwright global setup requires `NODE_ENV=test`, `T05_ENROLLMENT_TEST_DB_PORT=6769`, loopback PostgreSQL port 6769 and exact `/cogito-test`. It skips cleanup on 6767 and 6768. Each 6769 run gets a fresh seeded student email and the familiar Andre display name; existing enrollment, cancellation, ledger, quote and payment history is left unchanged. This avoids rewriting financial history and gives the new run an independent wallet. The test seed blanks Resend credentials. The disposable T05 database accumulates one run-scoped account and its fixtures per run; volume cleanup remains a separately assigned lifecycle task. The separate payout target at 6770 keeps the legacy-only reset for the exact Andre seed identity.
+The Playwright global setup requires `NODE_ENV=test`, `T05_ENROLLMENT_TEST_DB_PORT=6769`, loopback PostgreSQL port 6769 and exact `/cogito-test`. It skips cleanup on 6767 and 6768. Each 6769 run gets fresh seeded student identities, including the familiar Andre display name; existing enrollment, cancellation, ledger, quote and payment history is left unchanged. This avoids rewriting financial history and gives the run independent wallets. The T05 booking/lifecycle student starts with 326 Marks: booking-flow reserves 126 Marks before class-enrollment coverage, which retains its established 200-Mark funding assertions. Global setup also creates a second run-scoped student with 200 Marks for the parallel multi-plan class journey, keeping its 149-Mark spend separate from the booking and lifecycle tests; its 80/44/25 pricing and insufficient-funds assertions remain active. With the T07 class-report opt-in, setup creates a third isolated 200-Mark report student and storage state so parallel enrollment journeys cannot consume report funding. Other seed targets keep the 200-Mark default. The test seed blanks Resend credentials. The disposable T05 database accumulates run-scoped accounts and their fixtures per run; volume cleanup remains a separately assigned lifecycle task. The separate payout target at 6770 keeps the legacy-only reset for the exact Andre seed identity.
 
 Pure guard and identity regression commands: `bun --smol test --timeout 30000 apps/server/src/seed/reset-seed-student.guard.test.ts packages/e2e/src/fixtures/test-accounts.test.ts`. The 6769 integration guard is authored in `apps/server/src/seed/reset-seed-student.integration.test.ts`; run it only during the assigned database window. The current authoring slice did not run reset, database integration, migration, browser E2E or full typecheck.
 
@@ -712,6 +839,31 @@ loopback HTTP origins, and `PORT` / `WEB_PORT` must match those URLs. Optional
 Validation runs before seed setup. Global setup uses its own guarded seed path;
 this does not authorize the API test helper's broad `resetDatabase()` call.
 That helper has the stricter 6769/6770 reset policy documented above and below.
+
+GitHub Actions keeps its E2E dependencies disposable per workflow run: Postgres
+maps `6769` to `cogito-test` and `6770` to `cogito-test-payout`; Redis maps
+`6381` and `6382` to separate services. The regular browser partition uses
+`6769/6381`, API and web ports `3201/3200`, and the full
+`T05_ENROLLMENT_TEST_*` tuple. Its generated `.env.test`, migration step,
+Playwright config and global setup resolve that same target. T05 setup creates
+a fresh UUID-scoped student and skips the legacy seed-student delete path. The
+workflow opts in to the T06/T07 role states and keeps report fixture reset
+overrides absent. It runs the three tutor payout specs separately against
+`6770/cogito-test-payout` and Redis `6382`, with T05 variables unset.
+`E2E_AUTH_RATE_LIMIT_RESET=true` is explicit consent for the helper to clear
+only auth limiter keys on those exact disposable loopback pairs before seeded
+sign-ins; it does not change the product limit. No `resetDatabase()` consent
+flags are set. Never run this CI seed path against a retained local
+6769/6770 fixture; its databases and Redis services are disposable for the
+workflow run. Do not set this flag for the retained 6767/6768 development
+targets.
+
+Nested Bun seed, cleanup and fixture-update helpers resolve `ENV_FILE` from the
+E2E package directory and pass its absolute path to Bun. Their working
+directory is `apps/server`; passing the original relative path could select
+the regular `.env.test` during the isolated payout run instead of
+`.env.test-payout`. Keep the explicit target guards in place for both
+6769/6381 and 6770/6382.
 
 Playwright starts its own API and web servers with `reuseExistingServer: false`;
 the default ports are 3101 and 3100. Keep both free, or configure different
@@ -2699,19 +2851,76 @@ redis-cli ZCARD "cogito-jobs:delayed" # Delayed jobs
 
 ## Test and Coverage
 
-The API test tree includes reset-based integration callers. Do not run this
-coverage command against the old 6767/6768 targets or the retained 6769/6770
-fixtures. Reset-based suites now require an explicitly selected dedicated
-target, the independent reset flag and the exact target URL described above;
-the guard rejects 6767/6768 even when those values are set. The command remains
-the CI coverage invocation, not authorization to reset a local database.
+The CI coverage collection has three separate Bun processes. The former
+combined API coverage command is unsupported as a CI-equivalent: it mixes
+resettable tests, reset-free report fixtures, and payout tests, and it does not
+produce the three raw profiles that CI merges. Run the commands below from the
+repository root only against explicitly prepared disposable databases. Keep the
+reset guards limited to the resettable API and payout commands; the report
+fixture command must run without either reset variable.
 
-Run the CI-equivalent coverage suite from the repository root only after a
-fresh disposable test target has been explicitly prepared:
+For the resettable and report-fixture partitions, provide the same test
+environment shape as CI: `NODE_ENV=test`, `DATABASE_URL` exactly targeting
+`localhost:6769/cogito-test`, Redis at `localhost:6379`, and the test auth,
+CORS, payment-webhook, and Sanity settings. Migrate that disposable database
+before running tests. CI also creates `apps/server/.env` for Drizzle, with
+`PAYMENT_PROVIDER=stub`. Never target the old 6767/6768 databases or the
+retained local 6769/6770 fixtures.
+
+The resettable API/env/auth/DB/OpenAPI partition requires both reset values to
+match `DATABASE_URL` exactly:
+
+Each partition is only a partial coverage profile, so CI uses a temporary copy
+of the root Bun config without its per-file `coverageThreshold`; the merged
+LCOV gate below applies the 100% requirements after all profiles are combined.
+Create that config before running the coverage partitions and pass it to each
+Bun process:
 
 ```bash
-bun test --coverage --coverage-reporter=lcov --timeout 30000 packages/api/src/tests/ packages/env/src/ packages/auth/src/ packages/db/src/ apps/server/src/openapi.test.ts
+coverage_config="$(mktemp .coverage-collection-bunfig.XXXXXX.toml)"
+trap 'rm -f "$coverage_config"' EXIT
+sed '/^coverageThreshold[[:space:]]*=/d' bunfig.toml > "$coverage_config"
 ```
+
+```bash
+TEST_DATABASE_ALLOW_RESET=true \
+TEST_DATABASE_RESET_TARGET="$DATABASE_URL" \
+bun --config="$coverage_config" test --coverage --coverage-reporter=lcov --timeout 30000 \
+  --path-ignore-patterns '**/booking-admin-reports.test.ts' \
+  --path-ignore-patterns '**/class-enrollment.test.ts' \
+  --path-ignore-patterns '**/report-export.test.ts' \
+  --path-ignore-patterns '**/booking-payout-g16.test.ts' \
+  packages/api/src/tests/ packages/env/src/ packages/auth/src/ \
+  packages/db/src/ apps/server/src/openapi.test.ts
+```
+
+The reset-free report fixture partition uses the 6769 `DATABASE_URL`, with
+`TEST_DATABASE_ALLOW_RESET` and `TEST_DATABASE_RESET_TARGET` unset:
+
+```bash
+bun --config="$coverage_config" test --coverage --coverage-reporter=lcov --timeout 30000 \
+  packages/api/src/tests/integration/booking-admin-reports.test.ts \
+  packages/api/src/tests/integration/class-enrollment.test.ts \
+  packages/api/src/tests/integration/report-export.test.ts
+```
+
+The payout partition uses a separately migrated `cogito-test-payout` at
+`localhost:6770`, normally via `apps/server/.env.test-payout`. Set
+`PAYOUT_DATABASE_URL` to that exact URL; the test command must point
+`DATABASE_URL` and both reset values at it:
+
+```bash
+DATABASE_URL="$PAYOUT_DATABASE_URL" \
+TEST_DATABASE_ALLOW_RESET=true \
+TEST_DATABASE_RESET_TARGET="$PAYOUT_DATABASE_URL" \
+bun --config="$coverage_config" test --coverage --coverage-reporter=lcov --timeout 30000 \
+  packages/api/src/tests/integration/booking-payout-g16.test.ts
+```
+
+CI clears `coverage/lcov.info` before each process, snapshots each fresh profile
+to its `coverage/api-*` path, then merges those three profiles before applying
+the coverage gate. Running the three commands manually without the workflow's
+profile capture/merge steps does not reproduce the complete CI gate.
 
 For the contact-sharing regression path, run the database-preparing wrapper
 with the focused integration test, then the Playwright privacy spec against the
@@ -2722,19 +2931,51 @@ bun scripts/run-test-suite.mjs api packages/api/src/tests/integration/contact-sh
 bun scripts/run-test-suite.mjs e2e --grep "identity surfaces"
 ```
 
-The workflow runs this single coverage-instrumented suite and then runs the
-server suite in a separate process because its webhook test uses module
-mocking. The previous duplicate uninstrumented API pass is intentionally not
-run. Test + Coverage starts independently from lint and typecheck. The
-coverage comment script enforces 100% coverage for `packages/api` lines,
-overall lines, functions, and branches from `coverage/lcov.info`; a 0/0 branch
-total is treated as 100%. If this gate fails, inspect the missing function/line
-records in the generated lcov report and add a behavior-level test before
-pushing. A failed coverage test command is also propagated explicitly after
-the comment step. The generated PR comment uses blank lines between its status
-blockquote and tables; preserve these separators when editing the renderer.
+The workflow runs resettable API/env/auth/DB/OpenAPI tests, reset-free report
+fixture suites, and payout integration tests against their exact database. It
+then runs the server suite in a separate process because its webhook test uses
+module mocking. The previous duplicate uninstrumented API pass is
+intentionally not run. Test + Coverage starts independently from lint and
+typecheck. After every process, the workflow copies the fresh configured
+`coverage/lcov.info` to its partition path (`coverage/api-resettable/`,
+`coverage/api-fixtures/`, or `coverage/api-payout/`) and requires that profile
+to be non-empty. It clears the default profile before the next process so no
+partition can reuse stale coverage. The merger unions all three raw profiles
+into `coverage/lcov.merged.info` and leaves the final Bun-generated
+`coverage/lcov.info` untouched. Named functions retain their exact union. If a
+Bun profile supplies `FNF`/`FNH` without function identities, the merger uses
+the maximum profile counts and known named counts as lower bounds, and writes
+`coverage/lcov.function-identity.json` to record incomplete identities. The
+coverage comment labels these counts as lower bounds and blocks the gate when
+unidentified functions remain uncovered. It enforces the unchanged 100% for
+`packages/api` lines, overall lines, functions, and branches; a 0/0 branch total
+is treated as 100%. It runs only after successful test and merge commands, so
+an incomplete raw profile cannot be reported as merged coverage. A failed
+coverage command is propagated explicitly by the following step. If the gate
+fails on a merged profile, inspect the missing function/line records and add a
+behavior-level test before pushing. CI uploads the three raw partitions, merged
+LCOV profile, and function-identity manifest as the
+`api-coverage-profiles-<run-id>` artifact when collection, merging, or the gate
+fails. Use those profiles to identify uncovered source lines and functions
+before changing tests or thresholds. The generated PR comment
+uses blank lines between its status blockquote and tables; preserve these
+separators when editing the renderer.
+The DB unit test's environment mock includes an auth secret because Bun can
+share module mocks with integration tests in the resettable process. Its tests
+restore the mocked environment after each case so a development-mode SSL test
+cannot affect the following auth integration cases.
 The Bun command's own function/statement output is
 diagnostic; the lcov gate is authoritative.
+
+PR310 CI run [#39913840116](https://github.com/cogitoacademy/app/actions/runs/39913840116)
+passed its server and coverage test partitions but failed the LCOV merge because
+Bun 1.3.14 omitted function identities while keeping the `FNF`/`FNH` summaries;
+it did not reach the 100% threshold step. E2E had 48 regular passes and 3
+failures, while the separate payout partition passed all 3 tests. Current
+focused proof is 6 LCOV merger tests / 55 expectations and 2 E2E identity tests
+/ 4 expectations. The serial hook and one hosted rerun on the updated branch
+remain pending. Do not use local database or browser acceptance as a substitute
+for the isolated hosted jobs.
 
 The CI lint job uses the pinned oxlint 1.80.0 and oxfmt 0.65.0 toolchain. It
 emits **documented-intentional warnings**: `no-await-in-loop` = sequential

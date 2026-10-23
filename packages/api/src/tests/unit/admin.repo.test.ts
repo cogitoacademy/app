@@ -1,4 +1,5 @@
 import { describe, test, expect, mock } from "bun:test";
+import { PgDialect } from "drizzle-orm/pg-core";
 import {
   listUsers,
   countUsers,
@@ -144,6 +145,19 @@ describe("searchUsers", () => {
     expect(chain.from).toHaveBeenCalledTimes(1);
     expect(chain.where).toHaveBeenCalledTimes(1);
     expect(chain.orderBy).toHaveBeenCalledTimes(1);
+    expect(chain.limit).toHaveBeenCalledWith(10);
+  });
+
+  test("filters by role in the query before limiting results", async () => {
+    const { select, chain } = makeSelectConn([]);
+    const conn: any = { select };
+
+    await searchUsers(conn, "ada", 10, "student");
+
+    const where = chain.where.mock.calls[0]![0];
+    const query = new PgDialect().sqlToQuery(where);
+    expect(query.sql).toContain('"role" = $');
+    expect(query.params).toContain("student");
     expect(chain.limit).toHaveBeenCalledWith(10);
   });
 });

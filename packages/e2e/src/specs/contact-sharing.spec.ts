@@ -8,8 +8,10 @@ import {
   TUTOR_EMAIL,
   TUTOR_NAME,
 } from "../fixtures/test-accounts";
+import { resetE2eAuthRateLimit } from "../fixtures/auth-rate-limit";
 
 async function login(page: Page) {
+  resetE2eAuthRateLimit();
   await page.goto("/login");
   await page.getByLabel("Email").fill(STUDENT_EMAIL);
   await page.locator("input#password").fill(STUDENT_PASSWORD);

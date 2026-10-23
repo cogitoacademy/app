@@ -25,6 +25,7 @@ const LIMITERS: Record<string, { windowMs: number; maxRequests: number }> = {
   upload: { windowMs: 60_000, maxRequests: 30 },
   // Content proxy: the Sanity file route streams real bytes (bandwidth) — 30/min.
   content: { windowMs: 60_000, maxRequests: 30 },
+  reportExport: { windowMs: 60_000, maxRequests: 10 },
 };
 
 const limiters = new Map(

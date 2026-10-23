@@ -1,5 +1,19 @@
 # Cogito Module Reference
 
+## Report PDF pagination follow-up (22 October 2026)
+
+Metadata columns paginate wrapped lines above the footer and label continued
+values. The class adapter selects its session title as the report topic. Normal
+feedback bullets preserve their line breaks; dense current-format lists flow
+inline only when needed to fit, retaining bullet markers and the fixed font
+size. Private-booking legacy layout uses the current report version's history
+`actorRole`; pre-history rows without a current version entry remain legacy. That
+classification replaces the text-length cutoff, so short legacy fields also keep
+their line breaks and can continue on labelled pages. Academy class reports use
+the current layout. Parent PostgreSQL coverage validates exact-student ledger
+entitlement and funded/spent class allocation filters; it uses UUID-owned
+fixtures and no reset/seed.
+
 ## Classes UI composition (22 October 2026)
 
 The student catalog uses Selia Card/Field/Input/Button, with one card per class and
@@ -68,12 +82,14 @@ input-only attributes belong in inputProps.
 
 CrossBrowserDateTimeInput composes DatePicker and MinuteTimeInput, preserving a
 local YYYY-MM-DDTHH:mm string and the existing caller's timezone conversion. The
-calendar trigger uses the component ID; the time input uses ID-time. Required or
-partial date/time values and times before the same-day minimum fail form
-validation. Choosing a date without a time initializes midnight; clearing the
-date clears the combined value. CardBody owns direct-child table width/spacing
-and no longer negatively offsets arbitrary Stack content. Header actions wrap
-below the title based on Card width. See the UI audit plan for coverage limits.
+calendar trigger uses the component ID; the time input uses ID-time. Without an
+explicit maximum date, the calendar year list extends 100 years beyond the
+current year so future class schedules remain selectable. Required or partial
+date/time values and times before the same-day minimum fail form validation.
+Choosing a date without a time initializes midnight; clearing the date clears
+the combined value. CardBody owns direct-child table width/spacing and no longer
+negatively offsets arbitrary Stack content. Header actions wrap below the title
+based on Card width. See the UI audit plan for coverage limits.
 
 ## T06 parent integration and local verification (2026-10-21)
 
@@ -429,7 +445,10 @@ pending-report reminder worker are implemented. The shared page shows settlement
 preview/readback to tutors/admins, keeps student settlement fields null,
 normalizes feedback bullets, and preserves unsaved edits on stale-version
 conflicts. It supports versioned admin edits with a required reason; the
-booking-detail on-demand report source is authored in an isolated worktree; migration 0070 and DB/Chromium acceptance plus PDF remain pending.
+On-demand booking reports/corrections and migration 0070 are verified in PR #305,
+including guarded DB and Chromium acceptance. Private student PDF source and
+focused checks are documented in the Report Export Module below; guarded export
+DB/browser and server tsdown/Docker acceptance remain open.
 
 `class-enrollment.report-reminders.ts` runs from the existing one-minute
 `class-enrollment-check` job. It selects at most 100 ended, scheduled sessions in
@@ -457,8 +476,8 @@ separate `reportRemindersQueued` and `reportRemindersFailed` counters. At parent
 integration `1f9b6dd7`, the full guarded class-enrollment PostgreSQL suite passed
 44 tests / 354 expectations (exit 0, 9.62s); the pure reminder suite passed
 7 tests / 25 expectations (exit 0, 0.15s). No development seed or migration ran.
-PDF export and broader legacy solo/group/
-series reminder coverage remain pending.
+At that parent checkpoint PDF export and broader legacy solo/group/series reminder
+coverage were pending; see the current Report Export Module status below.
 
 ## V3 class/session draft foundation (2026-10-19)
 
@@ -470,7 +489,7 @@ Server validation requires an active competition (including an active parent for
 
 `classes.list` and `classes.get` are public procedures backed by `listPublished` and `getPublished`. Both map through an explicit student DTO; detail treats drafts as not found. It includes only catalog fields and tutor display name, with no payout/tax fields, private tutor account data, room details, audit/version values, or roster.
 
-Drafts are not public and do not reserve rooms; conflict checks happen at publication. The admin editor uploads PNG/JPEG/WebP/GIF covers through the existing protected upload flow (max 5 MB) and saves the returned key on the draft; approved M01 cover/curriculum assets remain pending. Admin publish controls, notifications, and durable Meet retry are implemented and browser-verified. Student enrollment is implemented in the T05 module below; T06 cancellation and T07 report/expiry settlement and reminders are implemented. The role-based report workspace is documented above; PDF remains open; on-demand booking reports are documented above, with acceptance pending. Public list/detail projection is implemented as described above. This is not a V3 activation or release checkpoint.
+Drafts are not public and do not reserve rooms; conflict checks happen at publication. The admin editor uploads PNG/JPEG/WebP/GIF covers through the existing protected upload flow (max 5 MB) and saves the returned key on the draft; approved M01 cover/curriculum assets remain pending. Admin publish controls, notifications, and durable Meet retry are implemented and browser-verified. Student enrollment is implemented in the T05 module below; T06 cancellation and T07 report/expiry settlement and reminders are implemented. The role-based report workspace is documented above; the private PDF source is documented below with guarded DB/browser/server-bundle acceptance still open. On-demand booking report acceptance is recorded in PR #305. Public list/detail projection is implemented as described above. This is not a V3 activation or release checkpoint.
 
 ## V3 class publication and meeting jobs (2026-10-20)
 
@@ -1376,6 +1395,48 @@ The Participants fieldset owns the derived Solo/Group badge; summaries represent
 - Group deadline repricing (B3): `expireBookings` reprices partial groups (confirmed ≥ 2 but < target) to `AWAITING_RECONFIRMATION` with a fresh 12h deadline instead of expiring (#46)
 - Group-series creation (B8) and per-session post-H2 forfeit (B9) landed in #46
 - Follow-ups (reconfirmation-deadline reprice, per-participant no-show, admin per-session cancel, per-session reschedule) are **implemented** — U3/U5–U7 closed by REVIEW-FIXES-3 P3.8/P5 (see `docs/plans/active/PRD-GAPS-PHASE3.md`, all U-items closed); group-series full-series withdrawal block (U4) **implemented** in REVIEW-FIXES-2 PR F (`BOOKING_SERIES_NO_OPT_OUT`)
+
+---
+
+## Report Export Module
+
+**Purpose:** Build private student report PDFs from the booking and academy
+session report sources without adding report data to a public DTO.
+
+**Files:**
+
+- `report-export.access.ts` — student-self/admin-selected authorization policy;
+  tutors and other roles are denied
+- `report-export.window.ts` — WIB calendar-month start and inclusive generation
+  cutoff calculation
+- `report-export.service.ts` — repeatable-read report lookup, exact private
+  booking/class entitlement, live student/tutor/class metadata and stable order
+- `report-export.pdf.ts` — paginated PDF layout using a bundled DejaVu Sans font
+  from `font.json`; no runtime font or logo fetch
+- `index.ts` — `createReportExportModule({ db })`
+- `apps/server/src/routes/report-export-routes.ts` — authenticated summary and
+  PDF HTTP handlers, private cache headers and generic attachment name
+
+**Service Methods:**
+
+- `getSummary(studentId)` — returns eligible report count, the WIB period start,
+  generation instant and timezone without student-identifying report details
+- `generatePdf(studentId)` — returns a PDF or `null` when the student has no
+  eligible reports
+
+**Eligibility and ordering:** The read-only repeatable-read transaction captures
+its generation cutoff after the student read establishes its snapshot. Completed
+solo/group booking reports require the selected student's exact chargeable
+feedback entitlement through the Q06 ledger helper; completed series children
+remain eligible after parent cancellation. Cohort/masterclass reports require a
+completed session and that student's funded allocation with a positive funded
+and spent amount. Both use the scheduled start in WIB from the same calendar day
+three months before generation through the inclusive cutoff. Rows sort by
+scheduled start descending, then report ID ascending. Known escaped legacy
+booking feedback is decoded from its history status once; legacy text is never
+truncated. Every report has live student name, competition, mode, tutor, date,
+time, type, topic, cohort/class and session metadata plus discussion, strengths
+and improvement bullets. Long content flows to numbered continuation pages.
 
 ---
 

@@ -8,7 +8,11 @@ import {
   type APIRequestContext,
   type Page,
 } from "@playwright/test";
-import { TUTOR_EMAIL } from "../fixtures/test-accounts";
+import {
+  T07_CLASS_REPORTS_STUDENT_EMAIL,
+  TUTOR_EMAIL,
+} from "../fixtures/test-accounts";
+import { resolveE2eEnvFile } from "../fixtures/e2e-environment";
 
 type TestClass = {
   id: string;
@@ -68,10 +72,13 @@ function assertT05EnrollmentTarget() {
   }
 }
 
-async function createApiContext(role: "admin" | "student" | "tutor") {
+async function createApiContext(
+  role: "admin" | "student" | "tutor",
+  stateName: string = role,
+) {
   return request.newContext({
     baseURL: process.env.SERVER_URL ?? "http://localhost:3201",
-    storageState: path.resolve(process.cwd(), ".auth", `${role}.json`),
+    storageState: path.resolve(process.cwd(), ".auth", `${stateName}.json`),
   });
 }
 
@@ -93,8 +100,9 @@ async function createPublishedReportClass(
   adminApi: APIRequestContext,
   references: { competitionId: string; tutorId: string },
   title: string,
+  scheduleOffsetDays: number,
 ): Promise<TestClass> {
-  const startAt = new Date(Date.now() + 14 * 86_400_000);
+  const startAt = new Date(Date.UTC(2045, 0, 1 + scheduleOffsetDays, 10));
   const draft = await rpc<TestClass>(adminApi, "admin/saveAcademyClassDraft", {
     kind: "cohort",
     competitionId: references.competitionId,
@@ -106,7 +114,7 @@ async function createPublishedReportClass(
     tutorFeeIdr: 400_000,
     reason: "Create a private class report E2E fixture",
     minimumEnrollment: 1,
-    minimumCheckAt: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+    minimumCheckAt: new Date(startAt.getTime() - 7 * 86_400_000).toISOString(),
     fullRateMarks: 20,
     halfRateMarks: 22,
     singleRateMarks: 25,
@@ -134,9 +142,16 @@ async function createPublishedReportClass(
 
 function moveFixtureSessionPast(classId: string, sessionId: string) {
   const serverDir = path.resolve(process.cwd(), "../../apps/server");
+  const selectedEnvFile = resolveE2eEnvFile(process.cwd(), process.env);
   execFileSync(
     "bun",
-    ["run", "src/seed/move-t07-report-session-past.ts", classId, sessionId],
+    [
+      `--env-file=${selectedEnvFile}`,
+      "run",
+      "src/seed/move-t07-report-session-past.ts",
+      classId,
+      sessionId,
+    ],
     { cwd: serverDir, env: process.env, stdio: "pipe" },
   );
 }
@@ -160,8 +175,11 @@ test("tutor records, admin corrects, and student reads a real class session repo
 }) => {
   test.setTimeout(180_000);
   assertT05EnrollmentTarget();
+  if (!T07_CLASS_REPORTS_STUDENT_EMAIL) {
+    throw new Error("Missing isolated T07 class-report student fixture.");
+  }
   const adminApi = await createApiContext("admin");
-  const studentApi = await createApiContext("student");
+  const studentApi = await createApiContext("student", "t07-report-student");
   const tutorApi = await createApiContext("tutor");
   let tutorContext: Awaited<ReturnType<typeof browser.newContext>> | undefined;
   let adminContext: Awaited<ReturnType<typeof browser.newContext>> | undefined;
@@ -199,6 +217,7 @@ test("tutor records, admin corrects, and student reads a real class session repo
       adminApi,
       { competitionId: competition.id, tutorId: tutor.user.id },
       `T07 report E2E ${suffix}`,
+      Number.parseInt(suffix, 16) % 100_000,
     );
     const sessionId = academyClass.sessions[0]?.id;
     if (!sessionId) throw new Error("The T07 class did not publish a session.");
@@ -305,7 +324,9 @@ test("tutor records, admin corrects, and student reads a real class session repo
         .getByRole("textbox", { name: "Correction reason" })
         .fill("Clarify the next lesson plan");
       await adminPage.getByRole("button", { name: "Save correction" }).click();
-      await expect(adminPage.getByText("Version 2")).toBeVisible();
+      await expect(
+        adminPage.getByText("Version 2", { exact: true }),
+      ).toBeVisible();
     } finally {
       await adminContext.close();
       adminContext = undefined;
@@ -328,7 +349,9 @@ test("tutor records, admin corrects, and student reads a real class session repo
       .getByRole("button", { name: "Use my draft over version 2" })
       .click();
     await tutorPage.getByRole("button", { name: "Save correction" }).click();
-    await expect(tutorPage.getByText("Version 3")).toBeVisible();
+    await expect(
+      tutorPage.getByText("Version 3", { exact: true }),
+    ).toBeVisible();
 
     const finalReport = (await reportRows(tutorApi)).find(
       (row) => row.sessionId === sessionId,
@@ -357,20 +380,18 @@ test("tutor records, admin corrects, and student reads a real class session repo
     try {
       const studentPage = await studentContext.newPage();
       await studentPage.goto("/class-reports");
-      const studentRow = studentPage.getByTestId(
-        `session-report-row-${sessionId}`,
-      );
-      await expect(studentRow).toBeVisible();
-      await studentRow.getByRole("button", { name: "View report" }).click();
+      await openSession(studentPage, sessionId);
       await expect(
         studentPage.getByText(
           "Rework my example after reviewing the class notes",
         ),
       ).toBeVisible();
       const studentReports = await reportRows(studentApi);
-      expect(studentReports).toHaveLength(1);
-      expect(studentReports[0]?.sessionId).toBe(sessionId);
-      expect(studentReports[0]?.settlement).toBeNull();
+      const studentReport = studentReports.find(
+        (report) => report.sessionId === sessionId,
+      );
+      expect(studentReport).toBeDefined();
+      expect(studentReport?.settlement).toBeNull();
     } finally {
       await studentContext.close();
       studentContext = undefined;

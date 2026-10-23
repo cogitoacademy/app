@@ -12,7 +12,8 @@ export type RateLimitKind =
   | "support"
   | "achievement"
   | "upload"
-  | "content";
+  | "content"
+  | "reportExport";
 
 // NOTE: better-auth registers its endpoints WITHOUT trailing slashes
 // (`/api/auth/request-password-reset`, `/api/auth/reset-password`,
@@ -114,6 +115,7 @@ export function matchRateLimitPath(path: string): RateLimitKind | null {
   if (urlPath === "/rpc/upload/createUploadUrl") return "upload";
   // The Knowledge Bank file proxy streams real bytes (bandwidth) — 30/min.
   if (urlPath.startsWith("/content/knowledge-bank/")) return "content";
+  if (urlPath.startsWith("/reports/student/")) return "reportExport";
 
   return null;
 }
