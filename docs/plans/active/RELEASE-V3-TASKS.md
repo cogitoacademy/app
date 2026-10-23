@@ -1,5 +1,18 @@
 # Release v3 - SDD execution and acceptance plan
 
+## KOL settlement browser acceptance (24 October 2026)
+
+Seven synthetic Chromium settlement cases pass (19.8s): admin opening,
+partial/history/overpayment display, transfer payload and WIB date, identical
+retry payload, adjustment reason/precondition, blocked adjustments, monthly
+CSV download bytes/name and non-admin redirect. Run from packages/e2e:
+`bunx playwright test --config playwright.kol-settlement-synthetic.config.ts`.
+RPC responses are mocked; the separate 21 PostgreSQL cases verify persistence,
+replay/concurrency, rollback, refunds and generated CSV. Five policy/CSV units
+also pass (combined 26 / 227). Full server build and normal four-workspace
+pre-push typechecks/lint pass. The bounded source rereview found no remaining
+findings after the numeric CSV, replay-precondition and timestamp-binding fixes.
+
 ## KOL settlement parent verification (24 October 2026)
 
 Review fixes retain numeric negative adjustments in CSV, persist and compare
