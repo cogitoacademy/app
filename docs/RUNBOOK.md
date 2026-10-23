@@ -507,11 +507,12 @@ Elapsed periods and exact schedule fingerprints use the full stored PostgreSQL
 timestamp precision; millisecond normalization is limited to keyset
 pagination. The initial focused pure suite passed 7 tests / 27 expectations and
 its fairness follow-up passed 8 / 33; the current suite passes 10 tests / 44
-expectations, including a pg-proxy period regression. Parent verified four
-uncached workspace checks at `b0b80bec`; this precision delta awaits the
-parent release of the serial workspace check slot after CI.
-No DB test, browser acceptance, migration, provider
-call, reset or seed ran in this worktree.
+expectations, including a pg-proxy period regression. Normal pre-push lint and
+serial typecheck passed on the current reminder head; typecheck was 4/4 tasks
+in 14.961s (2 cached). Parent's guarded non-reset PostgreSQL suite then passed
+3 tests / 32 expectations at 127.0.0.1:6769/cogito-test against the
+production finder and locked writer. No migration, reset, seed, or provider
+call ran. Browser acceptance and actual email delivery remain unverified.
 
 The worker rotates through a stable keyset cursor after each candidate, including
 failed writes, and wraps to retry older due items once it reaches the end. The
@@ -522,12 +523,15 @@ adds guarded non-reset coverage for report/state rechecks, duplicate jobs and
 notification/outbox identity. Later regressions exercise the production SQL
 finder and locked writer at microsecond boundaries, including 101-row cursor
 progress, single and series-child day boundaries, due-at-end, and same-
-millisecond reschedule rejection. They are authored but unrun; parent must
-preflight them only against loopback `6769/cogito-test` with reset overrides
-absent. The current focused
+millisecond reschedule rejection. Parent ran the guarded tests only against
+loopback 127.0.0.1:6769/cogito-test with reset overrides absent; all 3 tests /
+32 expectations passed. The test-only epoch formatter now matches PostgreSQL's
+six-digit fractional precision, and year-0100 fixtures avoid Bun's year-0001
+date parsing quirk. The current focused
 unit suite passes 10 tests / 44 expectations. Parent's serial workspace check
-passed at `b0b80bec`; this precision delta passed bun run check-types (4/4 tasks, 15.204s; 2 cached); the normal pre-push hook reruns it.
-DB/browser acceptance remains pending parent integration.
+passed at `b0b80bec`; the current normal pre-push typecheck passed 4/4 tasks in
+14.961s (2 cached). Guarded DB acceptance is complete; browser acceptance and
+actual email delivery remain pending.
 
 ## Prior local integration checkpoint (21 October)
 

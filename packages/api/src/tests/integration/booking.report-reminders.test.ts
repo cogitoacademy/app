@@ -23,7 +23,7 @@ import {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const fixtureEndAt = new Date("1900-01-01T01:00:00.000Z");
-const epochSeconds = (date: Date) => String(date.getTime() / 1000);
+const epochSeconds = (date: Date) => (date.getTime() / 1000).toFixed(6);
 const datePeriodForTest = (endAt: Date, nowAt: Date) => {
   const elapsed = nowAt.getTime() - endAt.getTime();
   return Number.isFinite(elapsed) && elapsed >= 0
@@ -532,32 +532,32 @@ describe("legacy booking report reminders PostgreSQL invariants", () => {
     const cases = [
       {
         name: "just-before-24-hours",
-        startAt: "0001-01-01T02:00:00.000000Z",
-        endAt: "0001-01-01T03:00:00.000001Z",
+        startAt: "0100-01-01T02:00:00.000000Z",
+        endAt: "0100-01-01T03:00:00.000001Z",
         period: 0,
       },
       {
         name: "just-after-24-hours",
-        startAt: "0001-01-01T01:59:59.999999Z",
-        endAt: "0001-01-01T02:59:59.999999Z",
+        startAt: "0100-01-01T01:59:59.999999Z",
+        endAt: "0100-01-01T02:59:59.999999Z",
         period: 1,
       },
       {
         name: "exact-due-end",
-        startAt: "0001-01-02T02:00:00.000000Z",
-        endAt: "0001-01-02T03:00:00.000000Z",
+        startAt: "0100-01-02T02:00:00.000000Z",
+        endAt: "0100-01-02T03:00:00.000000Z",
         period: 0,
       },
       {
         name: "microsecond-reschedule",
-        startAt: "0001-01-01T02:00:00.000000Z",
-        endAt: "0001-01-01T03:00:00.000500Z",
+        startAt: "0100-01-01T02:00:00.000000Z",
+        endAt: "0100-01-01T03:00:00.000500Z",
         period: 0,
       },
       {
         name: "series-child-boundary",
-        startAt: "0001-01-01T02:00:00.000000Z",
-        endAt: "0001-01-01T03:00:00.000001Z",
+        startAt: "0100-01-01T02:00:00.000000Z",
+        endAt: "0100-01-01T03:00:00.000001Z",
         period: 0,
       },
     ] as const;
@@ -591,7 +591,7 @@ describe("legacy booking report reminders PostgreSQL invariants", () => {
         .where(eq(bookingTable.id, fixture.id));
     }
 
-    const nowAt = new Date("0001-01-02T03:00:00.000Z");
+    const nowAt = new Date("0100-01-02T03:00:00.000Z");
     const fixtureIds = new Set(fixtures.map(({ id }) => id));
     const found = await repo.findDue(db, nowAt, 100);
     const candidates = new Map(
@@ -656,11 +656,11 @@ describe("legacy booking report reminders PostgreSQL invariants", () => {
     await db
       .update(bookingTable)
       .set({
-        scheduledEndAt: sql<Date>`'0001-01-01T03:00:00.000999Z'::timestamptz`,
+        scheduledEndAt: sql<Date>`'0100-01-01T03:00:00.000999Z'::timestamptz`,
       })
       .where(eq(bookingTable.id, rescheduled.bookingId));
     expect(rescheduled.scheduledEndAt.toISOString()).toBe(
-      "0001-01-01T03:00:00.000Z",
+      "0100-01-01T03:00:00.000Z",
     );
     expect(await writeCandidate(rescheduled)).toEqual({
       queued: false,
