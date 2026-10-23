@@ -35,6 +35,7 @@ export function KolSettlementPanel({
   const query = useQuery(
     orpc.adminReferral.getKolSettlement.queryOptions({ input: { decisionId } }),
   );
+  const [formVersion, setFormVersion] = useState(0);
   const [command, setCommand] = useState<Command | null>(null);
   const mutation = useMutation({
     mutationFn: async (value: Command) =>
@@ -43,6 +44,7 @@ export function KolSettlementPanel({
         : client.adminReferral.adjustKolCommission(value.input),
     onSuccess: async () => {
       setCommand(null);
+      setFormVersion((version) => version + 1);
       await query.refetch();
     },
     retry: false,
@@ -168,6 +170,7 @@ export function KolSettlementPanel({
           </div>
         ) : null}
         <form
+          key={`transfer-${formVersion}`}
           className="space-y-3"
           onSubmit={(event) => {
             event.preventDefault();
@@ -204,6 +207,7 @@ export function KolSettlementPanel({
           </Button>
         </form>
         <form
+          key={`adjustment-${formVersion}`}
           className="space-y-3"
           onSubmit={(event) => {
             event.preventDefault();

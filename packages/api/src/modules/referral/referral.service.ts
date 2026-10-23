@@ -107,6 +107,9 @@ function settlementTotals(
       transferred,
       voided,
     ),
+    ...(decision.providerSuccessTimeState === "unresolved"
+      ? { status: "held" }
+      : {}),
   };
 }
 
