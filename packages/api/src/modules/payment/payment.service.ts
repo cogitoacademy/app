@@ -49,6 +49,7 @@ export interface WebhookPayload {
   refundAmountIdr?: number;
   currency?: string;
   refundKind?: "full" | "partial";
+  providerRefundIdentity?: string | null;
   providerSuccessAt?: Date | null;
   providerSuccessTimeStatus?: "verified" | "unavailable";
 }
@@ -205,6 +206,7 @@ export interface ConfirmInput {
   refundAmountIdr?: number;
   currency?: string;
   refundKind?: "full" | "partial";
+  providerRefundIdentity?: string | null;
   providerSuccessAt?: Date | null;
   providerSuccessTimeStatus?: "verified" | "unavailable";
 }
@@ -260,6 +262,23 @@ const RECONCILE_ATTEMPT_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
  */
 const MAX_CHANNEL_FEE_FLAT_IDR = 10_000;
 const MAX_CHANNEL_FEE_RATE = 0.03;
+
+function earliestVerifiedProviderTime(
+  current: Date | null | undefined,
+  incoming: Date | null | undefined,
+) {
+  const currentTime =
+    current instanceof Date && Number.isFinite(current.getTime())
+      ? current
+      : null;
+  const incomingTime =
+    incoming instanceof Date && Number.isFinite(incoming.getTime())
+      ? incoming
+      : null;
+  if (!currentTime) return incomingTime;
+  if (!incomingTime) return currentTime;
+  return incomingTime < currentTime ? incomingTime : currentTime;
+}
 
 /**
  * Creates the payment service for purchase intents, webhook confirmation, and purchase lookups.
@@ -893,22 +912,18 @@ export function createPaymentService(deps: {
           recordPaymentIntegrity("midtrans", "provider_mismatch");
         throw new PaymentWebhookMismatchError("Payment provider mismatch");
       }
-      // Refund status must also bind to the original charge, while FAILED /
-      // EXPIRED and partial-refund events do not authorize money movement and
-      // retain their separate reconciliation path. Provider gross includes
-      // channel fees, so charge/refund checks allow the same capped tolerance;
-      // wallet credit always uses stored package Marks.
+      // Full and partial refund statuses must bind to the original charge.
+      // A partial refund can be the first successful status we observe, so its
+      // branch below credits saved Marks once without prorating or reversing
+      // them. Provider gross includes channel fees, so charge/refund checks
+      // allow the same capped tolerance; wallet credit uses saved package Marks.
       const creditsMoney =
         input.status === PAYMENT_STATUS.PAID ||
         input.status === PAYMENT_STATUS.SETTLED;
       const validatesProviderAmount =
-        creditsMoney ||
-        (input.status === PAYMENT_STATUS.REFUNDED &&
-          input.refundKind !== "partial");
+        creditsMoney || input.status === PAYMENT_STATUS.REFUNDED;
       const requiresBoundRefundStatus =
-        providerName === "midtrans" &&
-        input.status === PAYMENT_STATUS.REFUNDED &&
-        input.refundKind !== "partial";
+        providerName === "midtrans" && input.status === PAYMENT_STATUS.REFUNDED;
       if (
         requiresBoundRefundStatus &&
         (input.amountIdr === undefined || input.currency === undefined)
@@ -947,37 +962,15 @@ export function createPaymentService(deps: {
         }
       }
 
-      if (input.refundKind === "partial") {
-        if (providerName === "midtrans")
-          recordPaymentIntegrity("midtrans", "partial_refund");
-        if (audit) {
-          await audit.record({
-            db: tx,
-            actorId: null,
-            actorType: ACTOR_TYPE.SYSTEM,
-            action: "partial_refund_reconciliation",
-            targetId: record.id,
-            targetType: "payment_record",
-            details: {
-              paymentId: record.id,
-              providerEventId: input.providerEventId,
-              amountIdr: input.amountIdr,
-              refundAmountIdr: input.refundAmountIdr,
-            },
-          });
-        }
-        if (refundRecord) {
-          await refundRecord.insertRefundRecord(tx, {
-            paymentId: record.id,
-            walletId: record.walletId,
-            amountIdr: input.refundAmountIdr ?? 0,
-            marks: 0,
-            reason:
-              "Provider partial refund: manual Marks reconciliation required",
-            providerEventId: input.providerEventId,
-          });
-        }
-        return { status: record.status };
+      if (
+        input.status === PAYMENT_STATUS.REFUNDED &&
+        input.refundAmountIdr !== undefined &&
+        (!Number.isSafeInteger(input.refundAmountIdr) ||
+          input.refundAmountIdr < 0 ||
+          (input.amountIdr !== undefined &&
+            input.refundAmountIdr > input.amountIdr))
+      ) {
+        throw new PaymentWebhookMismatchError("Payment refund amount mismatch");
       }
       if (input.providerEventId) {
         const existing = await repo.findPaymentByProviderEventId(
@@ -989,27 +982,181 @@ export function createPaymentService(deps: {
         }
       }
 
-      const providerSuccessAt =
-        record.providerSuccessAt ??
-        (input.providerSuccessAt instanceof Date &&
+      const incomingSuccessAt =
+        input.providerSuccessAt instanceof Date &&
         Number.isFinite(input.providerSuccessAt.getTime())
           ? input.providerSuccessAt
-          : null);
+          : null;
+      const providerSuccessAt = earliestVerifiedProviderTime(
+        record.providerSuccessAt,
+        incomingSuccessAt,
+      );
+      const providerSuccessTimeChanged =
+        providerSuccessAt?.getTime() !== record.providerSuccessAt?.getTime();
       const providerSuccessTimeStatus = providerSuccessAt
         ? "verified"
         : (input.providerSuccessTimeStatus ?? "unavailable");
+      const incomingRefundKind =
+        input.status === PAYMENT_STATUS.REFUNDED
+          ? (input.refundKind ?? "full")
+          : input.refundKind;
+      const alreadyFullyRefunded =
+        record.status === PAYMENT_STATUS.REFUNDED ||
+        record.providerRefundKind === "full";
+      const incomingRefundIdentity =
+        typeof input.providerRefundIdentity === "string" &&
+        /^[a-f0-9]{64}$/.test(input.providerRefundIdentity)
+          ? input.providerRefundIdentity
+          : null;
+      const providerRefundAmountIdr =
+        input.refundAmountIdr === undefined
+          ? (record.providerRefundAmountIdr ?? null)
+          : Math.max(
+              record.providerRefundAmountIdr ?? 0,
+              input.refundAmountIdr,
+            );
+      const providerRefundIdentity = alreadyFullyRefunded
+        ? incomingRefundKind === "full" && incomingRefundIdentity
+          ? incomingRefundIdentity
+          : (record.providerRefundIdentity ?? null)
+        : (incomingRefundIdentity ?? record.providerRefundIdentity ?? null);
+
+      if (
+        input.status === PAYMENT_STATUS.REFUNDED &&
+        incomingRefundKind === "partial" &&
+        !alreadyFullyRefunded
+      ) {
+        if (providerName === "midtrans")
+          recordPaymentIntegrity("midtrans", "partial_refund");
+        // Midtrans can report partial_refund before the success notification is
+        // delivered. The status lifecycle only reaches partial_refund from a
+        // successful settlement, so record the original purchase and credit
+        // its Marks once while retaining the partial-refund reconciliation.
+        const creditsSuccessfulPartialPurchase =
+          record.status !== PAYMENT_STATUS.PAID &&
+          record.status !== PAYMENT_STATUS.SETTLED;
+        const statusAfterPartialRefund = creditsSuccessfulPartialPurchase
+          ? PAYMENT_STATUS.SETTLED
+          : record.status;
+        const providerEventIdChanged =
+          typeof input.providerEventId === "string" &&
+          input.providerEventId.length > 0 &&
+          record.providerEventId !== input.providerEventId;
+        const refundFactsChanged =
+          record.providerRefundKind !== "partial" ||
+          record.providerRefundAmountIdr !== providerRefundAmountIdr ||
+          record.providerRefundIdentity !== providerRefundIdentity;
+        const changed =
+          refundFactsChanged ||
+          providerEventIdChanged ||
+          providerSuccessTimeChanged ||
+          statusAfterPartialRefund !== record.status;
+        if (changed) {
+          await repo.updatePaymentStatus(
+            record.id,
+            {
+              status: statusAfterPartialRefund,
+              providerEventId: input.providerEventId,
+              providerSuccessAt,
+              providerRefundKind: "partial",
+              providerRefundAmountIdr,
+              providerRefundIdentity,
+            },
+            tx,
+          );
+        }
+        if (changed && audit) {
+          await audit.record({
+            db: tx,
+            actorId: null,
+            actorType: ACTOR_TYPE.SYSTEM,
+            action: "partial_refund_reconciliation",
+            targetId: record.id,
+            targetType: "payment_record",
+            beforeState: {
+              persistedPaymentStatus: record.status,
+              providerSuccessAt: record.providerSuccessAt ?? null,
+              refundKind: record.providerRefundKind ?? null,
+              refundAmountIdr: record.providerRefundAmountIdr ?? null,
+              providerRefundIdentity: record.providerRefundIdentity ?? null,
+            },
+            afterState: {
+              persistedPaymentStatus: statusAfterPartialRefund,
+              providerSuccessAt,
+              refundKind: "partial",
+              refundAmountIdr: providerRefundAmountIdr,
+              providerRefundIdentity,
+              reconciliationRequired: true,
+            },
+            details: {
+              paymentId: record.id,
+              providerEventId: input.providerEventId,
+              amountIdr: input.amountIdr,
+            },
+          });
+        }
+        // Preserve the existing manual-reconciliation record for a new
+        // authenticated partial-refund fact. Its event ID insert is idempotent;
+        // the later full refund is processed through the payment status path.
+        if (refundFactsChanged && input.providerEventId && refundRecord) {
+          await refundRecord.insertRefundRecord(tx, {
+            paymentId: record.id,
+            walletId: record.walletId,
+            amountIdr: input.refundAmountIdr ?? providerRefundAmountIdr ?? 0,
+            marks: 0,
+            reason:
+              "Provider partial refund: manual Marks reconciliation required",
+            providerEventId: input.providerEventId,
+          });
+        }
+        await kolCommission?.recordSuccessfulKolTopUp(tx, {
+          paymentId: record.id,
+          providerSuccessTimeStatus,
+        });
+        if (creditsSuccessfulPartialPurchase) {
+          await wallet.credit(tx, {
+            walletId: record.walletId,
+            actorType: "student",
+            amount: record.marks,
+            eventKey: `purchase.${record.id}`,
+            sourceReference: record.id,
+            reason: record.purchaseLabel ?? `Purchase: ${record.marks} Marks`,
+          });
+          if (notification) {
+            await notification.writeBestEffort({
+              db: tx,
+              userId: record.userId,
+              category: NOTIFICATION_CATEGORY.PAYMENT,
+              severity: NOTIFICATION_SEVERITY.ACTION,
+              title: "Payment received",
+              body: `Your payment of ${record.amountIdr} IDR was received and ${record.marks} Marks were added to your balance. A partial refund needs manual reconciliation.`,
+              eventKey: `payment.${record.id}.credited`,
+              emailRequired: true,
+            });
+          }
+        }
+        return { status: statusAfterPartialRefund };
+      }
 
       if (record.status === PAYMENT_STATUS.REFUNDED) {
         if (input.status !== PAYMENT_STATUS.REFUNDED) {
           return { status: PAYMENT_STATUS.REFUNDED };
         }
-        if (!record.providerSuccessAt && providerSuccessAt) {
+        if (
+          providerSuccessTimeChanged ||
+          record.providerRefundKind !== "full" ||
+          record.providerRefundAmountIdr !== providerRefundAmountIdr ||
+          record.providerRefundIdentity !== providerRefundIdentity
+        ) {
           await repo.updatePaymentStatus(
             record.id,
             {
               status: PAYMENT_STATUS.REFUNDED,
               providerEventId: input.providerEventId,
               providerSuccessAt,
+              providerRefundKind: "full",
+              providerRefundAmountIdr,
+              providerRefundIdentity,
             },
             tx,
           );
@@ -1032,13 +1179,20 @@ export function createPaymentService(deps: {
           (input.status === PAYMENT_STATUS.PAID ||
             input.status === PAYMENT_STATUS.SETTLED))
       ) {
-        if (!record.providerSuccessAt && providerSuccessAt) {
+        if (providerSuccessTimeChanged) {
           await repo.updatePaymentStatus(
             record.id,
             {
               status: record.status,
               providerEventId: input.providerEventId,
               providerSuccessAt,
+              ...(record.providerRefundKind
+                ? {
+                    providerRefundKind: record.providerRefundKind,
+                    providerRefundAmountIdr,
+                    providerRefundIdentity,
+                  }
+                : {}),
             },
             tx,
           );
@@ -1066,7 +1220,10 @@ export function createPaymentService(deps: {
             status: PAYMENT_STATUS.REFUNDED,
             providerEventId: input.providerEventId,
             failureReason: input.failureReason ?? null,
-            ...(providerSuccessAt ? { providerSuccessAt } : {}),
+            providerSuccessAt,
+            providerRefundKind: "full",
+            providerRefundAmountIdr,
+            providerRefundIdentity,
           },
           tx,
         );
@@ -1171,7 +1328,10 @@ export function createPaymentService(deps: {
               status: input.status,
               providerEventId: input.providerEventId,
               failureReason: input.failureReason ?? null,
-              ...(providerSuccessAt ? { providerSuccessAt } : {}),
+              providerSuccessAt,
+              providerRefundKind: "full",
+              providerRefundAmountIdr,
+              providerRefundIdentity,
             },
             tx,
           );
@@ -1221,10 +1381,11 @@ export function createPaymentService(deps: {
                 await refundRecord.insertRefundRecord(tx, {
                   paymentId: record.id,
                   walletId: record.walletId,
-                  amountIdr: record.amountIdr,
+                  amountIdr: input.refundAmountIdr ?? record.amountIdr,
                   marks: record.marks,
                   reason:
                     "REFUNDED webhook: marks already spent; manual reconciliation required",
+                  providerEventId: input.providerEventId,
                 });
               }
             } else {

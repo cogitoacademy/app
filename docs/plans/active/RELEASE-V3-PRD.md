@@ -218,6 +218,16 @@ ordering with audit. This decision slice has no settled KOL transfer to rewrite.
 Transfer settlement, CSV, and reversal adjustment remain separate acceptance
 work; a reversal never resets first-event eligibility.
 
+**Partial-refund decision (user, 23 October 2026):** preserve the original
+first-purchase reservation and historical calculated commission, and mark that
+decision for manual reconciliation. Partial-refund handling does not prorate
+commission or move wallet Marks; a later trusted successful-purchase event
+still uses the existing one-time credit path. The local payment status remains
+its actual saved state while authenticated provider refund state is stored
+separately. Any later full refund uses the existing full-refund path once; it
+does not rewrite an external transfer. Transfer settlement, cash-refund
+accounting, and partial/overpayment adjustment remain separate finance work.
+
 ## 9. Website, content migration and landing
 
 | Requirement | Acceptance criteria | Source / decision |

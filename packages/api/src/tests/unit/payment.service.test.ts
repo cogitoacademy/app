@@ -1860,6 +1860,301 @@ describe("PaymentService", () => {
       });
     });
 
+    test("partial-refund replay without an event ID does not repeat reconciliation audit", async () => {
+      const tx = {};
+      const record: any = {
+        id: "pay1",
+        userId: "user1",
+        walletId: "w1",
+        status: PAYMENT_STATUS.PAID,
+        provider: "midtrans",
+        amountIdr: 50000,
+        marks: 100,
+        providerReference: "midtrans:user1:pkg1",
+        providerEventId: null,
+        providerRefundAmountIdr: null,
+        providerRefundIdentity: null,
+      };
+      const updatePaymentStatus = mock(async (_id: string, data: any) => {
+        for (const [key, value] of Object.entries(data)) {
+          if (value !== undefined) record[key] = value;
+        }
+      });
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => record),
+        updatePaymentStatus,
+      });
+      const wallet = makeWallet();
+      const audit = { record: mock(async () => {}) };
+      const service = createPaymentService({
+        db: { transaction: mock(async (fn: any) => fn(tx)) } as any,
+        wallet: wallet as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "midtrans",
+        audit: audit as any,
+      });
+      const partial = {
+        provider: "midtrans",
+        providerReference: record.providerReference,
+        status: PAYMENT_STATUS.REFUNDED as PaymentStatus,
+        amountIdr: 50000,
+        refundAmountIdr: 20000,
+        currency: "IDR",
+        refundKind: "partial" as const,
+        providerRefundIdentity: "c".repeat(64),
+      };
+
+      await service.confirmFromWebhook(partial);
+      await service.confirmFromWebhook(partial);
+
+      expect(updatePaymentStatus).toHaveBeenCalledTimes(1);
+      expect(audit.record).toHaveBeenCalledTimes(1);
+      expect(wallet.credit).not.toHaveBeenCalled();
+      expect(wallet.compensate).not.toHaveBeenCalled();
+    });
+
+    test("partial then full refund with one transaction ID reverses wallet once", async () => {
+      const tx = {};
+      const record: any = {
+        id: "pay1",
+        userId: "user1",
+        walletId: "w1",
+        status: PAYMENT_STATUS.PAID,
+        provider: "midtrans",
+        amountIdr: 50000,
+        marks: 100,
+        providerReference: "midtrans:user1:pkg1",
+      };
+      const updateIfInCreditState = mock(async (_id: string, data: any) => {
+        if (
+          record.status !== PAYMENT_STATUS.PAID &&
+          record.status !== PAYMENT_STATUS.SETTLED
+        ) {
+          return null;
+        }
+        Object.assign(record, data);
+        return record;
+      });
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => record),
+        findPaymentByProviderEventId: mock(async (eventId: string) =>
+          record.providerEventId === eventId ? record : null,
+        ),
+        updatePaymentStatus: mock(async (_id: string, data: any) => {
+          Object.assign(record, data);
+        }),
+        updatePaymentStatusIfInCreditState: updateIfInCreditState,
+      });
+      const wallet = makeWallet();
+      const audit = { record: mock(async () => {}) };
+      const refundRecord = { insertRefundRecord: mock(async () => {}) };
+      const kolCommission = {
+        recordSuccessfulKolTopUp: mock(async () => null),
+      };
+      const service = createPaymentService({
+        db: { transaction: mock(async (fn: any) => fn(tx)) } as any,
+        wallet: wallet as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "midtrans",
+        audit: audit as any,
+        refundRecord: refundRecord as any,
+        kolCommission: kolCommission as any,
+      });
+
+      const shared = {
+        provider: "midtrans",
+        providerReference: record.providerReference,
+        providerEventId: "txn_1",
+        status: PAYMENT_STATUS.REFUNDED as PaymentStatus,
+        amountIdr: 50000,
+        currency: "IDR",
+      };
+      await expect(
+        service.confirmFromWebhook({
+          ...shared,
+          refundKind: "partial",
+          refundAmountIdr: 20000,
+          providerRefundIdentity: "a".repeat(64),
+        }),
+      ).resolves.toEqual({ status: PAYMENT_STATUS.PAID });
+      expect(record.providerRefundKind).toBe("partial");
+      expect(wallet.compensate).not.toHaveBeenCalled();
+
+      await expect(
+        service.confirmFromWebhook({
+          ...shared,
+          refundKind: "full",
+          refundAmountIdr: 50000,
+          providerRefundIdentity: "b".repeat(64),
+        }),
+      ).resolves.toEqual({ status: PAYMENT_STATUS.REFUNDED });
+      await expect(
+        service.confirmFromWebhook({
+          ...shared,
+          refundKind: "full",
+          refundAmountIdr: 50000,
+          providerRefundIdentity: "b".repeat(64),
+        }),
+      ).resolves.toEqual({ status: PAYMENT_STATUS.REFUNDED });
+
+      expect(record.providerRefundKind).toBe("full");
+      expect(updateIfInCreditState).toHaveBeenCalledTimes(1);
+      expect(wallet.compensate).toHaveBeenCalledTimes(1);
+      expect(wallet.credit).not.toHaveBeenCalled();
+      expect(refundRecord.insertRefundRecord).toHaveBeenCalledTimes(1);
+      expect(kolCommission.recordSuccessfulKolTopUp).toHaveBeenCalledTimes(3);
+    });
+
+    test("partial-refund status credits a pending purchase without waiting for PAID", async () => {
+      const tx = {};
+      const record: any = {
+        id: "pay1",
+        userId: "user1",
+        walletId: "w1",
+        status: PAYMENT_STATUS.PENDING,
+        provider: "midtrans",
+        amountIdr: 50000,
+        marks: 100,
+        providerReference: "midtrans:user1:pkg1",
+      };
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => record),
+        findPaymentByProviderEventId: mock(async (eventId: string) =>
+          record.providerEventId === eventId ? record : null,
+        ),
+        updatePaymentStatus: mock(async (_id: string, data: any) => {
+          Object.assign(record, data);
+        }),
+      });
+      const wallet = makeWallet();
+      const kolCommission = {
+        recordSuccessfulKolTopUp: mock(async () => null),
+      };
+      const service = createPaymentService({
+        db: { transaction: mock(async (fn: any) => fn(tx)) } as any,
+        wallet: wallet as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "midtrans",
+        kolCommission: kolCommission as any,
+      });
+      const shared = {
+        provider: "midtrans",
+        providerReference: record.providerReference,
+        providerEventId: "txn_1",
+        amountIdr: 50000,
+        currency: "IDR",
+        providerSuccessTimeStatus: "unavailable" as const,
+      };
+
+      await expect(
+        service.confirmFromWebhook({
+          ...shared,
+          status: PAYMENT_STATUS.REFUNDED as PaymentStatus,
+          refundAmountIdr: 20000,
+          refundKind: "partial",
+          providerRefundIdentity: "d".repeat(64),
+        }),
+      ).resolves.toEqual({ status: PAYMENT_STATUS.SETTLED });
+      expect(wallet.credit).toHaveBeenCalledTimes(1);
+      expect(wallet.credit).toHaveBeenCalledWith(tx, {
+        walletId: "w1",
+        actorType: "student",
+        amount: 100,
+        eventKey: "purchase.pay1",
+        sourceReference: "pay1",
+        reason: "Purchase: 100 Marks",
+      });
+      expect(record.status).toBe(PAYMENT_STATUS.SETTLED);
+      expect(record.providerRefundKind).toBe("partial");
+
+      await service.confirmFromWebhook({
+        ...shared,
+        status: PAYMENT_STATUS.REFUNDED as PaymentStatus,
+        refundAmountIdr: 20000,
+        refundKind: "partial",
+        providerRefundIdentity: "d".repeat(64),
+      });
+      await service.confirmFromWebhook({
+        ...shared,
+        status: PAYMENT_STATUS.REFUNDED as PaymentStatus,
+        refundAmountIdr: 30000,
+        refundKind: "partial",
+        providerRefundIdentity: "e".repeat(64),
+      });
+
+      expect(record.status).toBe(PAYMENT_STATUS.SETTLED);
+      expect(record.providerRefundKind).toBe("partial");
+      expect(record.providerRefundAmountIdr).toBe(30000);
+      expect(wallet.credit).toHaveBeenCalledTimes(1);
+      expect(wallet.compensate).not.toHaveBeenCalled();
+    });
+
+    test("a later authenticated success time re-evaluates KOL without replaying credit", async () => {
+      const tx = {};
+      const record: any = {
+        id: "pay1",
+        userId: "user1",
+        walletId: "w1",
+        status: PAYMENT_STATUS.PENDING,
+        provider: "midtrans",
+        amountIdr: 50000,
+        marks: 100,
+        providerReference: "midtrans:user1:pkg1",
+      };
+      const repo = makeRepo({
+        findPaymentByProviderReference: mock(async () => record),
+        findPaymentByProviderEventId: mock(async (eventId: string) =>
+          record.providerEventId === eventId ? record : null,
+        ),
+        updatePaymentStatus: mock(async (_id: string, data: any) => {
+          Object.assign(record, data);
+        }),
+      });
+      const wallet = makeWallet();
+      const kolCommission = {
+        recordSuccessfulKolTopUp: mock(async () => null),
+      };
+      const service = createPaymentService({
+        db: { transaction: mock(async (fn: any) => fn(tx)) } as any,
+        wallet: wallet as any,
+        repo,
+        provider: makeProvider() as any,
+        providerName: "midtrans",
+        kolCommission: kolCommission as any,
+      });
+
+      const shared = {
+        provider: "midtrans",
+        providerReference: record.providerReference,
+        providerEventId: "txn_1",
+        status: PAYMENT_STATUS.PAID as PaymentStatus,
+        amountIdr: 50000,
+        currency: "IDR",
+      };
+      await service.confirmFromWebhook({
+        ...shared,
+        providerSuccessTimeStatus: "unavailable",
+      });
+      await service.confirmFromWebhook({
+        ...shared,
+        providerSuccessAt: new Date("2026-10-23T01:00:00.000Z"),
+        providerSuccessTimeStatus: "verified",
+      });
+
+      expect(record.providerSuccessAt).toEqual(
+        new Date("2026-10-23T01:00:00.000Z"),
+      );
+      expect(wallet.credit).toHaveBeenCalledTimes(1);
+      expect(kolCommission.recordSuccessfulKolTopUp).toHaveBeenCalledTimes(2);
+      expect(kolCommission.recordSuccessfulKolTopUp).toHaveBeenLastCalledWith(
+        tx,
+        expect.objectContaining({ providerSuccessTimeStatus: "verified" }),
+      );
+    });
+
     test("returns existing status for already-PAID record", async () => {
       const repo = makeRepo({
         findPaymentByProviderReference: mock(async () => ({
@@ -2245,7 +2540,7 @@ describe("PaymentService", () => {
       expect(updatePaymentStatus).toHaveBeenCalledTimes(0);
     });
 
-    test("REFUNDED status returns early without updating", async () => {
+    test("already-REFUNDED status persists provider refund facts without credit", async () => {
       const wallet = makeWallet();
       const updatePaymentStatus = mock(async () => {});
       const repo = makeRepo({
@@ -2280,7 +2575,16 @@ describe("PaymentService", () => {
 
       expect(result.status).toBe(PAYMENT_STATUS.REFUNDED);
       expect(wallet.credit).toHaveBeenCalledTimes(0);
-      expect(updatePaymentStatus).toHaveBeenCalledTimes(0);
+      expect(updatePaymentStatus).toHaveBeenCalledTimes(1);
+      expect(updatePaymentStatus).toHaveBeenCalledWith(
+        "pay1",
+        expect.objectContaining({
+          status: PAYMENT_STATUS.REFUNDED,
+          providerEventId: "evt_refunded",
+          providerRefundKind: "full",
+        }),
+        expect.anything(),
+      );
     });
 
     test("providerEventId deduplication returns existing status when event matches different payment", async () => {
@@ -2702,6 +3006,7 @@ describe("PaymentService", () => {
         marks: 100,
         reason:
           "REFUNDED webhook: marks already spent; manual reconciliation required",
+        providerEventId: "evt_refunded_spent",
       });
     });
 

@@ -42,7 +42,13 @@ export const createKolCampaignInput = z
     path: ["flatAmountIdr"],
   });
 
+export const listKolCommissionsInput = z.object({
+  limit: z.number().int().min(1).max(100).default(50),
+  cursor: z.string().min(1).max(512).optional(),
+});
+
 export type SaveGoogleChoiceInput = typeof saveGoogleChoiceInput._output;
 export type UpdateReferralSettingsInput =
   typeof updateReferralSettingsInput._output;
 export type CreateKolCampaignInput = typeof createKolCampaignInput._output;
+export type ListKolCommissionsInput = typeof listKolCommissionsInput._output;

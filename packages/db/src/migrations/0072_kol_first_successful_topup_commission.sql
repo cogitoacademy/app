@@ -5,6 +5,10 @@ CREATE TABLE "kol_commission_decision" (
 	"payment_id" text NOT NULL,
 	"provider_success_at" timestamp with time zone,
 	"provider_success_time_state" text DEFAULT 'verified' NOT NULL,
+	"payment_status_snapshot" text NOT NULL,
+	"refund_reconciliation_state" text DEFAULT 'none' NOT NULL,
+	"provider_refund_amount_idr_snapshot" integer,
+	"provider_refund_identity_snapshot" text,
 	"purchase_amount_idr_snapshot" integer NOT NULL,
 	"flat_amount_idr_snapshot" integer NOT NULL,
 	"percent_bps_snapshot" integer NOT NULL,
@@ -12,13 +16,24 @@ CREATE TABLE "kol_commission_decision" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "kol_commission_amounts_nonnegative" CHECK ("kol_commission_decision"."purchase_amount_idr_snapshot" > 0 AND "kol_commission_decision"."flat_amount_idr_snapshot" >= 0 AND "kol_commission_decision"."percent_bps_snapshot" BETWEEN 0 AND 10000 AND "kol_commission_decision"."commission_amount_idr" >= 0),
-	CONSTRAINT "kol_commission_success_time_state_check" CHECK ("kol_commission_decision"."provider_success_time_state" IN ('verified', 'unresolved') AND (("kol_commission_decision"."provider_success_time_state" = 'verified' AND "kol_commission_decision"."provider_success_at" IS NOT NULL) OR ("kol_commission_decision"."provider_success_time_state" = 'unresolved' AND "kol_commission_decision"."provider_success_at" IS NULL AND "kol_commission_decision"."commission_amount_idr" = 0)))
+	CONSTRAINT "kol_commission_success_time_state_check" CHECK ("kol_commission_decision"."provider_success_time_state" IN ('verified', 'unresolved') AND (("kol_commission_decision"."provider_success_time_state" = 'verified' AND "kol_commission_decision"."provider_success_at" IS NOT NULL) OR ("kol_commission_decision"."provider_success_time_state" = 'unresolved' AND "kol_commission_decision"."provider_success_at" IS NULL AND "kol_commission_decision"."commission_amount_idr" = 0))),
+	CONSTRAINT "kol_commission_payment_status_check" CHECK ("kol_commission_decision"."payment_status_snapshot" IN ('PENDING','PAID','SETTLED','FAILED','EXPIRED','REFUNDED')),
+	CONSTRAINT "kol_commission_refund_reconciliation_state_check" CHECK ("kol_commission_decision"."refund_reconciliation_state" IN ('none','partial_refund')),
+	CONSTRAINT "kol_commission_refund_amount_check" CHECK ("kol_commission_decision"."provider_refund_amount_idr_snapshot" IS NULL OR "kol_commission_decision"."provider_refund_amount_idr_snapshot" >= 0),
+	CONSTRAINT "kol_commission_refund_identity_check" CHECK ("kol_commission_decision"."provider_refund_identity_snapshot" IS NULL OR "kol_commission_decision"."provider_refund_identity_snapshot" ~ '^[a-f0-9]{64}$')
 );
---> statement-breakpoint
 ALTER TABLE "payment_record" ADD COLUMN "provider_success_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "payment_record" ADD COLUMN "provider_refund_kind" text;--> statement-breakpoint
+ALTER TABLE "payment_record" ADD COLUMN "provider_refund_amount_idr" integer;--> statement-breakpoint
+ALTER TABLE "payment_record" ADD COLUMN "provider_refund_identity" text;--> statement-breakpoint
+ALTER TABLE "payment_record" ADD CONSTRAINT "payment_provider_refund_kind_check" CHECK ("payment_record"."provider_refund_kind" IS NULL OR "payment_record"."provider_refund_kind" IN ('partial','full'));--> statement-breakpoint
+ALTER TABLE "payment_record" ADD CONSTRAINT "payment_provider_refund_amount_check" CHECK ("payment_record"."provider_refund_amount_idr" IS NULL OR "payment_record"."provider_refund_amount_idr" >= 0);--> statement-breakpoint
+ALTER TABLE "payment_record" ADD CONSTRAINT "payment_provider_refund_identity_check" CHECK ("payment_record"."provider_refund_identity" IS NULL OR "payment_record"."provider_refund_identity" ~ '^[a-f0-9]{64}$');--> statement-breakpoint
 ALTER TABLE "kol_commission_decision" ADD CONSTRAINT "kol_commission_decision_referred_user_id_user_id_fk" FOREIGN KEY ("referred_user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "kol_commission_decision" ADD CONSTRAINT "kol_commission_decision_choice_id_referral_choice_id_fk" FOREIGN KEY ("choice_id") REFERENCES "public"."referral_choice"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "kol_commission_decision" ADD CONSTRAINT "kol_commission_decision_payment_id_payment_record_id_fk" FOREIGN KEY ("payment_id") REFERENCES "public"."payment_record"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "kol_commission_decision_referred_user_uniq" ON "kol_commission_decision" USING btree ("referred_user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "kol_commission_decision_payment_uniq" ON "kol_commission_decision" USING btree ("payment_id");--> statement-breakpoint
 CREATE INDEX "kol_commission_decision_success_idx" ON "kol_commission_decision" USING btree ("provider_success_at");
+--> statement-breakpoint
+CREATE INDEX "kol_commission_decision_created_idx" ON "kol_commission_decision" USING btree ("created_at" DESC,"id" DESC);

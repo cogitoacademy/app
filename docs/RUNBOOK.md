@@ -1,5 +1,20 @@
 # Cogito Runbook
 
+## KOL PostgreSQL integration checkpoint (23 October 2026)
+
+Migration 0072 is applied only to `127.0.0.1:6769/cogito-test` (Drizzle
+journal 73); development and production remain unmigrated. The standard
+Drizzle postgres-js migrator ran after exact target/readback checks, without
+reset or seed. PostgreSQL acceptance passes 15 tests / 180 assertions for
+concurrent callback ordering, immutable correction audits, partial/full refund
+credit and reversal replay, cumulative refund snapshots, and microsecond admin
+pagination. Two fixture defects found on the first run were repaired: inject
+the production refund repo and use unqualified SET target columns.
+The DB-free focused suite passes 140 / 355. Server and web typechecks pass;
+browser reconciliation display and broader release UAT remain separate gates.
+This checkpoint supersedes the earlier source-only/unapplied KOL notes below.
+
+
 ## KOL first commission source checkpoint (23 October 2026)
 
 The branch contains additive Drizzle migration
@@ -7,8 +22,9 @@ The branch contains additive Drizzle migration
 database. Do not use `db:push`, reset, seed, or migration commands as part of this
 source checkpoint. Apply it only through the normal reviewed deployment
 migration process after PR integration and the assigned DB acceptance window.
-The migration adds `payment_record.provider_success_at`, the KOL decision table,
-and its verified/unresolved provider-time state.
+The migration adds `payment_record.provider_success_at` and authenticated refund
+facts, the KOL decision table, provider-time and refund-reconciliation snapshots,
+payment/refund integrity checks, and an index for the admin cursor order.
 
 Every successful Midtrans notification now triggers an authenticated status API
 lookup; the webhook signature does not cover timestamps. The notification docs
@@ -24,18 +40,47 @@ first KOL event without a Marks credit. If its original success time is not
 available, the decision stays unresolved at zero and later purchases remain
 held until the provider supplies an authoritative exact time. A later exact
 time re-evaluates ordering with an audit correction. Do not rewrite any settled
-external transfer; transfer settlement, CSV, and full reversal workflows remain
-deferred.
+external transfer; transfer settlement, CSV, and settled-transfer reversal
+adjustments remain deferred. The existing one-time wallet Marks reversal for a
+full refund remains in this slice.
 
-Current focused unit proof passes: Midtrans provider 45 tests / 84
-expectations, payment service 78 / 208, and referral policy 8 / 22;
-`git diff --check` is clean. The pinned serial typecheck passes all four
-workspace tasks uncached with `--checkers 1` (8.156s). The normal Lefthook
-pre-push hook passes lint and typecheck. The guarded PostgreSQL test is authored
-but not run; it requires the exact test-only loopback
-6769/cogito-test and refuses reset flags. No DB migration, reset, seed, external
-provider request, or real webhook ran in this worktree.
-Transfer settlement, partial/overpayment, CSV, and full reversal work remain
+Midtrans `refund` and `partial_refund` both normalize to provider status
+`REFUNDED`; the authenticated status API's `transaction_status` distinguishes
+full `refund` from `partial_refund`. Check
+`payment_record.provider_refund_kind` and the KOL admin row's
+`refundReconciliationState` to distinguish an authenticated partial refund. If
+partial-refund status is the first local success evidence, the payment advances
+to `SETTLED` and saved package Marks are credited once. It also writes
+`partial_refund_reconciliation` audit evidence and keeps the KOL decision flagged
+for manual reconciliation. The partial cash refund does not prorate or reverse
+Marks. The status API returns cumulative `refund_amount`; successive snapshots
+update one `refund_record` by transaction event ID with a monotonic maximum, so
+an older response cannot reduce the reported total. See [Midtrans refund
+details](https://docs.midtrans.com/docs/get-status-api-requests#refund-details).
+A calculated commission remains historical; this slice defines no prorated
+amount or automatic cash refund.
+If a later full refund arrives for the same Midtrans transaction ID, it advances
+the payment to REFUNDED and uses the existing one-time wallet reversal. The
+partial-refund manual-reconciliation record remains idempotent by provider
+event ID. The later full-refund transition and wallet reversal use the payment
+state and wallet event key, so they still run once for the shared transaction.
+
+The admin endpoint `adminReferral.listKolCommissions` takes `limit` (1..100,
+default 50) and an optional keyset cursor. Page order is decision creation time
+descending then decision ID descending. Invalid cursor payloads are rejected;
+the admin route remains protected by `adminProcedure`.
+
+Current review-fix focused proof passes 140 tests / 355 expectations across
+the Midtrans provider, payment service, webhook idempotency, and cursor codec
+unit files; `git diff --check` is clean. Provider network calls are mocked and
+the PostgreSQL integration scenarios are not part of this run. The serial
+four-workspace typecheck and normal Lefthook pre-push hook have not been rerun
+for this review-fix delta; the earlier checkpoint results do not validate the
+current diff. Guarded PostgreSQL acceptance is authored but remains pending the
+parent-provided exact test target. Migration 0072 remains unapplied. No database
+migration, reset, seed, or real provider webhook ran in this worktree.
+Transfer settlement, partial-refund proration/accounting, overpayment, CSV,
+settled-transfer corrections, and reversal adjustment workflows remain
 deferred.
 
 ## Referral parent PostgreSQL acceptance (22 October 2026)

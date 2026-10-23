@@ -270,6 +270,9 @@ export async function updatePaymentStatus(
     checkoutUrl?: string | null;
     receiptUrl?: string | null;
     providerSuccessAt?: Date | null;
+    providerRefundKind?: "partial" | "full" | null;
+    providerRefundAmountIdr?: number | null;
+    providerRefundIdentity?: string | null;
     failureReason?: string | null;
   },
 ) {
@@ -307,6 +310,9 @@ export async function updatePaymentStatusIfInCreditState(
     providerEventId?: string;
     failureReason?: string | null;
     providerSuccessAt?: Date | null;
+    providerRefundKind?: "partial" | "full" | null;
+    providerRefundAmountIdr?: number | null;
+    providerRefundIdentity?: string | null;
   },
 ) {
   const [updated] = await conn
@@ -424,6 +430,9 @@ export function createPaymentRepo(db: DbType) {
         checkoutUrl?: string | null;
         receiptUrl?: string | null;
         providerSuccessAt?: Date | null;
+        providerRefundKind?: "partial" | "full" | null;
+        providerRefundAmountIdr?: number | null;
+        providerRefundIdentity?: string | null;
         failureReason?: string | null;
         providerIntentState?: string | null;
       },
@@ -449,6 +458,9 @@ export function createPaymentRepo(db: DbType) {
         providerEventId?: string;
         failureReason?: string | null;
         providerSuccessAt?: Date | null;
+        providerRefundKind?: "partial" | "full" | null;
+        providerRefundAmountIdr?: number | null;
+        providerRefundIdentity?: string | null;
       },
       conn?: DbOrTx,
     ) {

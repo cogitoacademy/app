@@ -18,12 +18,16 @@ import {
   TableRow,
 } from "@cogito-app/ui/components/selia/table";
 import { Text } from "@cogito-app/ui/components/selia/text";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { client, orpc } from "@/utils/orpc";
+import { TablePagination } from "@/components/table-pagination";
 
-type CommissionRow = Awaited<
+const PAGE_SIZE = 50;
+type CommissionPage = Awaited<
   ReturnType<typeof client.adminReferral.listKolCommissions>
->[number];
+>;
+type CommissionRow = CommissionPage["items"][number];
 
 function formatIdr(value: number) {
   return `Rp${value.toLocaleString("id-ID")}`;
@@ -44,11 +48,32 @@ function paymentStatusVariant(status: string) {
 }
 
 export function AdminKolCommissionsPage() {
-  const query = useQuery(orpc.adminReferral.listKolCommissions.queryOptions());
-  const rows = query.data ?? [];
+  const [page, setPage] = useState(0);
+  const [pageCursors, setPageCursors] = useState<Array<string | undefined>>([
+    undefined,
+  ]);
+  const cursor = pageCursors[page];
+  const query = useQuery({
+    ...orpc.adminReferral.listKolCommissions.queryOptions({
+      input: { limit: PAGE_SIZE, ...(cursor ? { cursor } : {}) },
+    }),
+    placeholderData: keepPreviousData,
+  });
+  const rows = query.data?.items ?? [];
+
+  function nextPage() {
+    const nextCursor = query.data?.nextCursor;
+    if (!nextCursor) return;
+    setPageCursors((current) => {
+      const next = current.slice(0, page + 1);
+      next.push(nextCursor);
+      return next;
+    });
+    setPage((current) => current + 1);
+  }
 
   return (
-    <div className="space-y-6">
+    <div id="admin-kol-commissions" className="space-y-6">
       <header className="space-y-2">
         <Heading level={1}>KOL commission decisions</Heading>
         <Text className="text-muted">
@@ -60,11 +85,14 @@ export function AdminKolCommissionsPage() {
       <Card>
         <CardBody>
           <Text>
-            Transfers, partial payments, overpayments, CSV exports, and reversal
-            adjustments are handled in a later finance slice. A refunded payment
-            retains first-purchase eligibility and its commission is set to
-            zero. If Midtrans cannot return its original success time, the
-            commission stays on hold until that ordering evidence is resolved.
+            Transfers, partial-payment amounts, overpayments, CSV exports, and
+            settled-transfer reversal adjustments are handled in a later finance
+            slice. A partial refund keeps its historical calculated commission
+            visible but marks it for manual reconciliation; it is not presented
+            as a final valid amount. A full refund retains the first-purchase
+            reservation and sets commission to zero. If Midtrans cannot return
+            its original success time, the commission stays on hold until that
+            ordering evidence is resolved.
           </Text>
         </CardBody>
       </Card>
@@ -115,6 +143,19 @@ export function AdminKolCommissionsPage() {
                         <Text className="text-muted">
                           {row.paymentReference ?? row.paymentId}
                         </Text>
+                        {row.refundReconciliationState === "partial_refund" ? (
+                          <div className="mt-1">
+                            <Badge variant="warning">
+                              Partial refund · reconcile
+                            </Badge>
+                            <Text className="text-muted">
+                              Provider refund amount:{" "}
+                              {row.providerRefundAmountIdr == null
+                                ? "unavailable"
+                                : formatIdr(row.providerRefundAmountIdr)}
+                            </Text>
+                          </div>
+                        ) : null}
                       </TableCell>
                       <TableCell>
                         {row.providerSuccessTimeState === "unresolved" ? (
@@ -140,6 +181,12 @@ export function AdminKolCommissionsPage() {
                       </TableCell>
                       <TableCell className="font-medium">
                         {formatIdr(row.commissionAmountIdr)}
+                        {row.refundReconciliationState === "partial_refund" ? (
+                          <Text className="text-warning-foreground">
+                            Historical calculation; manual reconciliation
+                            required.
+                          </Text>
+                        ) : null}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -147,6 +194,21 @@ export function AdminKolCommissionsPage() {
               </Table>
             </TableContainer>
           )}
+          {!query.isPending &&
+          !query.isError &&
+          (rows.length > 0 || page > 0) ? (
+            <TablePagination
+              targetId="admin-kol-commissions"
+              label="commission decisions"
+              pageSize={PAGE_SIZE}
+              page={page}
+              itemCount={rows.length}
+              hasNext={Boolean(query.data?.nextCursor)}
+              isFetching={query.isFetching}
+              onPrevious={() => setPage((current) => Math.max(0, current - 1))}
+              onNext={nextPage}
+            />
+          ) : null}
         </CardBody>
       </Card>
     </div>

@@ -10,6 +10,7 @@ import {
   referralChoice,
   referralCode,
   referralSettingsRevision,
+  refundRecord,
   user,
   wallet,
 } from "@cogito-app/db/schema";
@@ -19,6 +20,7 @@ import { createPaymentRepo } from "../../modules/payment/payment.repo";
 import { createStubPaymentProvider } from "../../modules/payment/stub-payment.provider";
 import { createPaymentService } from "../../modules/payment/payment.service";
 import { createReferralService } from "../../modules/referral/referral.service";
+import { createRefundRepo } from "../../modules/refund/refund.repo";
 import { createWalletService } from "../../modules/wallet/wallet.service";
 import { createWalletRepo } from "../../modules/wallet/wallet.repo";
 
@@ -63,6 +65,7 @@ const payments = createPaymentService({
   providerName: "stub",
   audit,
   kolCommission: referral,
+  refundRecord: createRefundRepo(),
 });
 
 async function student(role: "student" | "admin" = "student") {
@@ -98,7 +101,7 @@ async function createKolSignup(input: {
   await db.transaction((tx) =>
     referral.applyEmailSignupChoice(tx, { userId, code: campaign.code }),
   );
-  return { userId, campaignId: campaign.id };
+  return { userId, campaignId: campaign.id, code: campaign.code };
 }
 
 async function createPayment(input: {
@@ -572,6 +575,324 @@ describe("first eligible KOL purchase commission", () => {
           ),
         ),
     ).toHaveLength(0);
+  });
+
+  test("partial-refund status credits A once and advances cumulative reconciliation", async () => {
+    const signup = await createKolSignup({
+      name: "Partial refund before success",
+      percentBps: 1_000,
+    });
+    const earlier = await createPayment({
+      userId: signup.userId,
+      amountIdr: 350_000,
+    });
+    const eventId = `event:${earlier.id}`;
+    const partial = {
+      provider: "stub",
+      providerReference: earlier.providerReference,
+      providerEventId: eventId,
+      status: "REFUNDED" as const,
+      amountIdr: 354_440,
+      refundAmountIdr: 20_000,
+      currency: "IDR",
+      refundKind: "partial" as const,
+      providerRefundIdentity: "a".repeat(64),
+      providerSuccessAt: day(45),
+      providerSuccessTimeStatus: "verified" as const,
+    };
+    await payments.confirmFromWebhook(partial);
+    const cumulativeUpdate = {
+      ...partial,
+      refundAmountIdr: 30_000,
+      providerRefundIdentity: "b".repeat(64),
+    };
+    await payments.confirmFromWebhook(cumulativeUpdate);
+    await payments.confirmFromWebhook(cumulativeUpdate);
+    await payments.confirmFromWebhook({
+      ...partial,
+      refundAmountIdr: 25_000,
+      providerRefundIdentity: "c".repeat(64),
+    });
+
+    const [partialDecision] = await db
+      .select()
+      .from(kolCommissionDecision)
+      .where(eq(kolCommissionDecision.referredUserId, signup.userId));
+    expect(partialDecision).toMatchObject({
+      paymentId: earlier.id,
+      paymentStatusSnapshot: "SETTLED",
+      providerSuccessTimeState: "verified",
+      refundReconciliationState: "partial_refund",
+      providerRefundAmountIdrSnapshot: 30_000,
+      commissionAmountIdr: 35_000,
+    });
+    const [settledPartial] = await db
+      .select()
+      .from(paymentRecord)
+      .where(eq(paymentRecord.id, earlier.id));
+    expect(settledPartial).toMatchObject({
+      status: "SETTLED",
+      providerRefundKind: "partial",
+      providerSuccessAt: day(45),
+      providerRefundAmountIdr: 30_000,
+    });
+    const [walletAfterPartial] = await db
+      .select({ totalBalance: wallet.totalBalance })
+      .from(wallet)
+      .where(eq(wallet.userId, signup.userId));
+    expect(walletAfterPartial?.totalBalance).toBe(1);
+    const [refundRow] = await db
+      .select()
+      .from(refundRecord)
+      .where(eq(refundRecord.providerEventId, eventId));
+    expect(refundRow).toMatchObject({
+      paymentId: earlier.id,
+      amountIdr: 30_000,
+      marks: 0,
+    });
+    expect(
+      await db
+        .select()
+        .from(refundRecord)
+        .where(eq(refundRecord.paymentId, earlier.id)),
+    ).toHaveLength(1);
+
+    const later = await createPayment({
+      userId: signup.userId,
+      amountIdr: 500_000,
+      providerSuccessAt: day(50),
+    });
+    await confirmPayment(later, 504_440);
+
+    const [userWallet] = await db
+      .select({ totalBalance: wallet.totalBalance })
+      .from(wallet)
+      .where(eq(wallet.userId, signup.userId));
+    expect(userWallet?.totalBalance).toBe(2);
+    const [decision] = await db
+      .select()
+      .from(kolCommissionDecision)
+      .where(eq(kolCommissionDecision.referredUserId, signup.userId));
+    expect(decision).toMatchObject({
+      paymentId: earlier.id,
+      commissionAmountIdr: 35_000,
+      refundReconciliationState: "partial_refund",
+    });
+    const partialAudits = await db
+      .select()
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.targetId, earlier.id),
+          eq(auditLog.action, "partial_refund_reconciliation"),
+        ),
+      );
+    expect(partialAudits).toHaveLength(3);
+  });
+
+  test("partial refund after payment keeps the calculated amount visibly in reconciliation", async () => {
+    const signup = await createKolSignup({
+      name: "Partial refund after success",
+      percentBps: 1_000,
+    });
+    const payment = await createPayment({
+      userId: signup.userId,
+      amountIdr: 350_000,
+      providerSuccessAt: day(45),
+    });
+    await confirmPayment(payment, 354_440);
+    const partial = {
+      provider: "stub",
+      providerReference: payment.providerReference,
+      providerEventId: `event:${payment.id}`,
+      status: "REFUNDED" as const,
+      amountIdr: 354_440,
+      refundAmountIdr: 20_000,
+      currency: "IDR",
+      refundKind: "partial" as const,
+      providerRefundIdentity: "b".repeat(64),
+      providerSuccessAt: day(45),
+      providerSuccessTimeStatus: "verified" as const,
+    };
+    await payments.confirmFromWebhook(partial);
+    await payments.confirmFromWebhook(partial);
+
+    const [decision] = await db
+      .select()
+      .from(kolCommissionDecision)
+      .where(eq(kolCommissionDecision.referredUserId, signup.userId));
+    expect(decision).toMatchObject({
+      paymentId: payment.id,
+      paymentStatusSnapshot: "SETTLED",
+      refundReconciliationState: "partial_refund",
+      commissionAmountIdr: 35_000,
+    });
+    const [paymentRow] = await db
+      .select()
+      .from(paymentRecord)
+      .where(eq(paymentRecord.id, payment.id));
+    expect(paymentRow?.status).toBe("SETTLED");
+    expect(
+      await db
+        .select()
+        .from(auditLog)
+        .where(
+          and(
+            eq(auditLog.targetId, payment.id),
+            eq(auditLog.action, "partial_refund_reconciliation"),
+          ),
+        ),
+    ).toHaveLength(1);
+  });
+
+  test("full refund audits an unresolved PAID to REFUNDED snapshot exactly once", async () => {
+    const signup = await createKolSignup({
+      name: "Refund unresolved decision audit",
+      percentBps: 1_000,
+    });
+    const payment = await createPayment({
+      userId: signup.userId,
+      amountIdr: 350_000,
+    });
+    await payments.confirmFromWebhook({
+      provider: "stub",
+      providerReference: payment.providerReference,
+      providerEventId: `event:${payment.id}`,
+      status: "PAID",
+      amountIdr: 354_440,
+      currency: "IDR",
+    });
+    const [unresolved] = await db
+      .select()
+      .from(kolCommissionDecision)
+      .where(eq(kolCommissionDecision.referredUserId, signup.userId));
+    expect(unresolved).toMatchObject({
+      paymentId: payment.id,
+      providerSuccessTimeState: "unresolved",
+      paymentStatusSnapshot: "PAID",
+      commissionAmountIdr: 0,
+    });
+
+    await refundPayment(payment);
+    await refundPayment(payment);
+    const [refunded] = await db
+      .select()
+      .from(kolCommissionDecision)
+      .where(eq(kolCommissionDecision.referredUserId, signup.userId));
+    expect(refunded).toMatchObject({
+      paymentId: payment.id,
+      providerSuccessTimeState: "unresolved",
+      paymentStatusSnapshot: "REFUNDED",
+      commissionAmountIdr: 0,
+    });
+    const transitions = await db
+      .select()
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.targetId, refunded!.id),
+          eq(auditLog.action, "kol_commission_refund_invalidation"),
+        ),
+      );
+    expect(transitions).toHaveLength(1);
+  });
+
+  test("admin commission cursor pages reach verified rows after more than 100 unresolved rows", async () => {
+    const signup = await createKolSignup({
+      name: "Paginated decisions",
+      percentBps: 1_000,
+    });
+    const ownedDecisionUsers: string[] = [];
+    for (let index = 0; index < 103; index += 1) {
+      const userId = await student();
+      ownedDecisionUsers.push(userId);
+      await db.transaction((tx) =>
+        referral.applyEmailSignupChoice(tx, {
+          userId,
+          code: signup.code,
+        }),
+      );
+      const payment = await createPayment({
+        userId,
+        amountIdr: 350_000,
+        ...(index >= 101
+          ? { providerSuccessAt: day(index === 101 ? 45 : 50) }
+          : {}),
+      });
+      if (index < 101) {
+        await refundPayment(payment);
+      } else {
+        await confirmPayment(payment, 354_440);
+      }
+    }
+
+    const seen: Array<{ referredUserId: string; createdAt: Date; id: string }> =
+      [];
+    let cursor: string | undefined;
+    const seenUsers = new Set<string>();
+    do {
+      const page = await referral.listKolCommissions({
+        limit: 50,
+        ...(cursor ? { cursor } : {}),
+      });
+      seen.push(...page.items);
+      for (const row of page.items) {
+        if (ownedDecisionUsers.includes(row.referredUserId)) {
+          seenUsers.add(row.referredUserId);
+        }
+      }
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor && seenUsers.size < ownedDecisionUsers.length);
+
+    const owned = seen.filter((row) =>
+      ownedDecisionUsers.includes(row.referredUserId),
+    );
+    expect(owned).toHaveLength(103);
+    expect(new Set(owned.map((row) => row.id)).size).toBe(103);
+    expect(
+      owned.filter((row) => row.providerSuccessTimeState === "unresolved"),
+    ).toHaveLength(101);
+    expect(
+      owned.filter((row) => row.providerSuccessTimeState === "verified"),
+    ).toHaveLength(2);
+    for (let index = 1; index < seen.length; index += 1) {
+      const prior = seen[index - 1]!;
+      const current = seen[index]!;
+      expect(prior.createdAt.getTime()).toBeGreaterThanOrEqual(
+        current.createdAt.getTime(),
+      );
+    }
+
+    const [newest, nextNewest] = await db
+      .select({ id: kolCommissionDecision.id })
+      .from(kolCommissionDecision)
+      .where(
+        inArray(kolCommissionDecision.referredUserId, [
+          ownedDecisionUsers[0]!,
+          ownedDecisionUsers[1]!,
+        ]),
+      );
+    await db.execute(sql`
+      UPDATE ${kolCommissionDecision}
+      SET "created_at" = '2500-01-01T00:00:00.123456Z'::timestamptz
+      WHERE ${kolCommissionDecision.id} = ${newest!.id}
+    `);
+    await db.execute(sql`
+      UPDATE ${kolCommissionDecision}
+      SET "created_at" = '2500-01-01T00:00:00.123400Z'::timestamptz
+      WHERE ${kolCommissionDecision.id} = ${nextNewest!.id}
+    `);
+    const microsecondPage = await referral.listKolCommissions({ limit: 1 });
+    expect(microsecondPage.items[0]?.id).toBe(newest!.id);
+    const nextMicrosecondPage = await referral.listKolCommissions({
+      limit: 1,
+      cursor: microsecondPage.nextCursor!,
+    });
+    expect(nextMicrosecondPage.items[0]?.id).toBe(nextNewest!.id);
+
+    await expect(
+      referral.listKolCommissions({ limit: 50, cursor: "invalid" }),
+    ).rejects.toMatchObject({ code: "REFERRAL_INVALID_CURSOR" });
   });
 
   test("refund with unavailable provider time holds the KOL decision at zero", async () => {

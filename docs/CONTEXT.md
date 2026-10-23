@@ -1,5 +1,20 @@
 # Cogito App — Codebase Context
 
+## KOL PostgreSQL integration checkpoint (23 October 2026)
+
+Migration 0072 is applied only to `127.0.0.1:6769/cogito-test` (Drizzle
+journal 73); development and production remain unmigrated. The standard
+Drizzle postgres-js migrator ran after exact target/readback checks, without
+reset or seed. PostgreSQL acceptance passes 15 tests / 180 assertions for
+concurrent callback ordering, immutable correction audits, partial/full refund
+credit and reversal replay, cumulative refund snapshots, and microsecond admin
+pagination. Two fixture defects found on the first run were repaired: inject
+the production refund repo and use unqualified SET target columns.
+The DB-free focused suite passes 140 / 355. Server and web typechecks pass;
+browser reconciliation display and broader release UAT remain separate gates.
+This checkpoint supersedes the earlier source-only/unapplied KOL notes below.
+
+
 ## Referral review corrections (22 October 2026)
 
 Report settlement transactions now retry PostgreSQL deadlock rollbacks at most
@@ -71,8 +86,15 @@ attribution expiry. Callbacks serialize on the saved referral choice; a late
 earlier success replaces the current decision and appends an immutable audit
 event with before/after payment, timestamp, base amount, and commission. Equal
 timestamps are ordered by ascending payment ID. A zero commission still records
-the decision. The admin page reads the latest 100 decisions and shows payment
-status, including refunds, without transfer controls.
+the decision. The admin endpoint returns both current/local payment status and
+the decision's saved status snapshot. The page uses bounded keyset pages ordered
+by immutable decision creation time and ID, shows current status, and flags
+partial refunds for manual reconciliation. An authenticated partial-refund
+status is successful purchase evidence: it promotes a not-yet-successful local
+payment to SETTLED and credits saved Marks once. Its cumulative cash-refund
+amount is kept for manual reconciliation; there is no partial proration or Marks
+reversal. Any calculated commission remains historical and visibly flagged for
+reconciliation.
 
 The user's 23 October ordering decision is earliest provider success time, not
 first callback commit time. Midtrans webhooks are rechecked against the
@@ -89,9 +111,12 @@ exact provider time, if available, can resolve a hold with audit; this slice add
 no manual time-entry control. Confirmed Midtrans status must also return IDR
 gross and currency, which the payment service checks against the saved purchase
 amount and allowed channel-fee tolerance.
-Settled transfers are never rewritten; transfers, partial/overpayment handling,
-CSV, and reversal adjustment remain separate work. Migration 0072 is unapplied,
-and guarded database proof is authored but pending the parent test window. No
+Settled transfers are never rewritten. A later full refund can advance a
+partial-refund state for the same provider transaction and invoke the existing
+wallet reversal once. Partial-refund proration/accounting, overpayment handling,
+external transfer records, CSV, and settled-transfer reversal adjustments
+remain separate work. Migration 0072 is unapplied, and guarded database proof
+is authored but pending the parent test window. No
 database migration, reset, seed, provider call, or browser payment ran in this
 slice.
 

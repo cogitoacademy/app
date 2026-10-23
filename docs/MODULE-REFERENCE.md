@@ -97,16 +97,50 @@ capture or refund, the decision has null time, zero commission, and
 `providerSuccessTimeState: unresolved`; later purchase callbacks cannot take
 first place until the provider supplies an authenticated exact time and an
 audited re-evaluation resolves the hold. This slice has no manual time-entry
-control. A
-refund/reversal never resets first-event eligibility.
+control. A refund/reversal never resets first-event eligibility.
+
+Midtrans `refund` and `partial_refund` both map to the application-level
+`REFUNDED` provider status, but the service preserves the distinction from the
+authenticated status response. A partial refund stores bounded provider refund
+facts on `payment_record` and records a transactional
+`partial_refund_reconciliation` audit. If this is the first local success
+evidence, the purchase advances to `SETTLED` and saved package Marks are credited
+once; the partial cash refund does not prorate or reverse Marks. Successive
+status snapshots update one provider-transaction reconciliation row with the
+largest authenticated cumulative refund amount, including when an older snapshot
+arrives later. If it is the first-purchase candidate,
+the KOL decision retains its historical calculated amount and sets
+`refundReconciliationState: partial_refund`; the admin page labels it for
+manual reconciliation. This slice does not prorate the commission or automate
+cash refund/accounting. A later full refund with the same Midtrans transaction
+ID uses distinct decision evidence, transitions the payment to REFUNDED, and
+uses existing wallet transaction idempotency so the full reversal happens once.
+The first-event reservation remains attached to that purchase.
+
+Webhook claim keys hash bounded decision-bearing evidence: normalized status,
+refund kind, authenticated cumulative amount/refund-history fingerprint, and a
+verified provider-success timestamp. Exact replays retain the same key; an
+authenticated partial-to-full update or newly available success time is
+re-evaluated without repeating wallet effects. Raw webhook refund-history
+fields are not used because Midtrans's notification signature does not bind
+them.
+
+Every KOL decision snapshots local payment status and refund reconciliation
+state. A zero/unresolved decision whose payment later becomes REFUNDED receives
+one immutable `kol_commission_refund_invalidation` transition audit; exact
+replay does not create another. `adminReferral.listKolCommissions` returns
+bounded keyset pages ordered by immutable decision creation time and ID, so
+unresolved timestamps cannot hide verified rows.
 
 Admin read endpoint `adminReferral.listKolCommissions` is admin-protected and
-returns up to 100 recent decisions with current payment status and provider-time
-state. The Selia page does not record transfers. Settled-transfer edits,
-transfer/partial/overpayment history, CSV, and reversal adjustment remain
-deferred. Migration
-`0072_kol_first_successful_topup_commission` is unapplied; guarded DB acceptance
-is authored but pending.
+returns bounded pages with current and decision-snapshot payment status,
+provider-time state, and any partial-refund reconciliation flag. The Selia page
+does not record transfers. Settled-transfer edits, partial-refund proration and
+accounting, overpayment handling, transfer history, CSV, and settled-transfer
+reversal adjustment remain deferred. Migration
+`0072_kol_first_successful_topup_commission` is applied only to test 6769/
+cogito-test; guarded PostgreSQL acceptance passes 15 / 180. Dev and production
+migration and browser acceptance remain pending.
 
 ## Classes UI composition (22 October 2026)
 

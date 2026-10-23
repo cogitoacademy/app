@@ -8,6 +8,7 @@ import {
 import type { ReferralHandler } from "./referral.handler";
 import {
   createKolCampaignInput,
+  listKolCommissionsInput,
   saveGoogleChoiceInput,
   updateReferralSettingsInput,
 } from "./referral.types";
@@ -85,7 +86,7 @@ export function createReferralRouter(handler: ReferralHandler) {
           tags: ["Admin", "Referral"],
           summary: "List first-purchase KOL commission decisions",
         })
-        .input(z.void())
+        .input(listKolCommissionsInput)
         .handler(handler.listKolCommissions),
     },
   };

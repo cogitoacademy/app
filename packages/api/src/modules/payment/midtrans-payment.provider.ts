@@ -103,6 +103,40 @@ function parseMidtransTimestamp(value: unknown): Date | undefined {
   return Number.isFinite(parsed.getTime()) ? parsed : undefined;
 }
 
+function midtransRefundIdentity(value: unknown): string | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const evidence = value.slice(-100).flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const refund = entry as Record<string, unknown>;
+    const identity =
+      (typeof refund.refund_chargeback_id === "number" &&
+      Number.isSafeInteger(refund.refund_chargeback_id)
+        ? String(refund.refund_chargeback_id)
+        : undefined) ??
+      (typeof refund.refund_key === "string" && refund.refund_key.length <= 128
+        ? refund.refund_key
+        : undefined);
+    if (!identity) return [];
+    return [
+      {
+        identity,
+        amountIdr: parseIdrAmount(refund.refund_amount) ?? null,
+        createdAt:
+          parseMidtransTimestamp(refund.created_at)?.toISOString() ?? null,
+      },
+    ];
+  });
+  if (evidence.length === 0) return undefined;
+  const latest = evidence
+    .toSorted(
+      (a, b) =>
+        (a.createdAt ?? "").localeCompare(b.createdAt ?? "") ||
+        a.identity.localeCompare(b.identity),
+    )
+    .slice(-100);
+  return createHash("sha256").update(JSON.stringify(latest)).digest("hex");
+}
+
 function midtransSuccessTime(
   status: PaymentStatus,
   value: {
@@ -393,6 +427,7 @@ export function createMidtransPaymentProvider(opts: {
       currency?: string;
       transaction_time?: string;
       settlement_time?: string;
+      refunds?: unknown;
     };
     if (json.order_id && json.order_id !== orderId) {
       throw serviceUnavailable(
@@ -417,6 +452,13 @@ export function createMidtransPaymentProvider(opts: {
     }
     const refundAmountIdr = parseIdrAmount(json.refund_amount);
     const providerSuccessAt = midtransSuccessTime(status, json);
+    const providerRefundIdentity = midtransRefundIdentity(json.refunds);
+    const refundKind =
+      status === "REFUNDED"
+        ? json.transaction_status === "partial_refund"
+          ? "partial"
+          : "full"
+        : undefined;
     return {
       providerReference,
       providerEventId: json.transaction_id ?? remoteOrderId,
@@ -429,15 +471,9 @@ export function createMidtransPaymentProvider(opts: {
       amountIdr,
       refundAmountIdr,
       currency: json.currency,
+      ...(providerRefundIdentity ? { providerRefundIdentity } : {}),
       ...(providerSuccessAt ? { providerSuccessAt } : {}),
-      refundKind:
-        json.transaction_status === "partial_refund" ||
-        (status === "REFUNDED" &&
-          amountIdr !== undefined &&
-          refundAmountIdr !== undefined &&
-          refundAmountIdr < amountIdr)
-          ? "partial"
-          : undefined,
+      refundKind,
       ...(status === "PAID" || status === "SETTLED" || status === "REFUNDED"
         ? {
             providerSuccessTimeStatus: providerSuccessAt

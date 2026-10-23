@@ -64,6 +64,7 @@ function notificationBody(
     currency: body.currency,
     transaction_time: body.transaction_time,
     settlement_time: body.settlement_time,
+    refunds: body.refunds,
   };
   body.signature_key = signatureFor(
     String(body.order_id),
@@ -577,13 +578,59 @@ describe("MidtransPaymentProvider verifyWebhook (signature_key)", () => {
   });
 
   test("maps refund and partial_refund to REFUNDED", async () => {
-    for (const status of ["refund", "partial_refund"]) {
+    for (const [status, refundKind] of [
+      ["refund", "full"],
+      ["partial_refund", "partial"],
+    ] as const) {
       const body = JSON.stringify(
-        notificationBody({ transaction_status: status }),
+        notificationBody({
+          transaction_status: status,
+          refund_amount: status === "refund" ? "430000.00" : "20000.00",
+        }),
       );
       const payload = await provider.verifyWebhook(body, "");
-      expect(payload.status).toBe("REFUNDED");
+      expect(payload).toMatchObject({
+        status: "REFUNDED",
+        refundKind,
+      });
     }
+  });
+
+  test("ignores unsigned webhook refund details and returns status-API evidence", async () => {
+    const body = notificationBody({
+      transaction_status: "refund",
+      refund_amount: "50000.00",
+      refunds: [
+        {
+          refund_chargeback_id: 111,
+          refund_amount: "50000.00",
+          created_at: "2026-10-23T10:00:00+07:00",
+        },
+      ],
+    });
+    statusApiState.refunds = [
+      {
+        refund_chargeback_id: 222,
+        refund_amount: "50000.00",
+        created_at: "2026-10-23T10:05:00+07:00",
+      },
+    ];
+
+    const payload = await provider.verifyWebhook(JSON.stringify(body), "");
+    expect(payload.refundKind).toBe("full");
+    expect(payload.providerRefundIdentity).toMatch(/^[a-f0-9]{64}$/);
+    const webhookOnlyIdentity = createHash("sha256")
+      .update(
+        JSON.stringify([
+          {
+            identity: "111",
+            amountIdr: 50_000,
+            createdAt: "2026-10-23T03:00:00.000Z",
+          },
+        ]),
+      )
+      .digest("hex");
+    expect(payload.providerRefundIdentity).not.toBe(webhookOnlyIdentity);
   });
 
   test("rejects an unknown status", async () => {
@@ -659,6 +706,63 @@ describe("MidtransPaymentProvider getPaymentRequestStatus", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]!.url).toBe(
       "https://api.sandbox.midtrans.com/v2/550e8400-e29b-41d4-a716-446655440000/status",
+    );
+  });
+
+  test("uses authenticated refund history to distinguish partial from full on the same transaction", async () => {
+    let response: Record<string, unknown> = {
+      transaction_status: "partial_refund",
+      transaction_id: "txn-refund-same",
+      order_id: "pay-refund-same",
+      gross_amount: "50000.00",
+      refund_amount: "20000.00",
+      currency: "IDR",
+      refunds: [
+        {
+          refund_chargeback_id: 11,
+          refund_amount: "20000.00",
+          created_at: "2026-10-23 10:00:00",
+        },
+      ],
+    };
+    globalThis.fetch = mock(() =>
+      Promise.resolve(Response.json(response)),
+    ) as never;
+
+    const partial = await provider.getPaymentRequestStatus!("pay-refund-same");
+    expect(partial).toMatchObject({
+      providerEventId: "txn-refund-same",
+      status: "REFUNDED",
+      refundKind: "partial",
+      refundAmountIdr: 20_000,
+      currency: "IDR",
+    });
+    expect(partial.providerRefundIdentity).toMatch(/^[a-f0-9]{64}$/);
+
+    response = {
+      ...response,
+      transaction_status: "refund",
+      refund_amount: "50000.00",
+      refunds: [
+        ...((response.refunds as Array<Record<string, unknown>>) ?? []),
+        {
+          refund_chargeback_id: 12,
+          refund_amount: "30000.00",
+          created_at: "2026-10-23 10:05:00",
+        },
+      ],
+    };
+    const full = await provider.getPaymentRequestStatus!("pay-refund-same");
+    expect(full).toMatchObject({
+      providerEventId: "txn-refund-same",
+      status: "REFUNDED",
+      refundKind: "full",
+      refundAmountIdr: 50_000,
+      currency: "IDR",
+    });
+    expect(full.providerRefundIdentity).toMatch(/^[a-f0-9]{64}$/);
+    expect(full.providerRefundIdentity).not.toBe(
+      partial.providerRefundIdentity,
     );
   });
 

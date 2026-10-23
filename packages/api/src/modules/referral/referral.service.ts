@@ -8,6 +8,7 @@ import {
   isNull,
   lte,
   lt,
+  or,
   sql,
 } from "drizzle-orm";
 import {
@@ -39,8 +40,13 @@ import {
 } from "./referral.policy";
 import type {
   CreateKolCampaignInput,
+  ListKolCommissionsInput,
   UpdateReferralSettingsInput,
 } from "./referral.types";
+import {
+  decodeKolCommissionCursor,
+  encodeKolCommissionCursor,
+} from "./referral.pagination";
 
 const INVALID_CODE_MESSAGE =
   "That referral code is invalid or is no longer active.";
@@ -536,6 +542,9 @@ export function createReferralService(deps: {
         amountIdr: paymentRecord.amountIdr,
         status: paymentRecord.status,
         providerSuccessAt: paymentRecord.providerSuccessAt,
+        providerRefundKind: paymentRecord.providerRefundKind,
+        providerRefundAmountIdr: paymentRecord.providerRefundAmountIdr,
+        providerRefundIdentity: paymentRecord.providerRefundIdentity,
       })
       .from(paymentRecord)
       .where(eq(paymentRecord.id, input.paymentId))
@@ -544,7 +553,8 @@ export function createReferralService(deps: {
       !payment ||
       (payment.status !== "PAID" &&
         payment.status !== "SETTLED" &&
-        payment.status !== "REFUNDED")
+        payment.status !== "REFUNDED" &&
+        payment.providerRefundKind !== "partial")
     ) {
       return null;
     }
@@ -597,12 +607,18 @@ export function createReferralService(deps: {
         id: paymentRecord.id,
         amountIdr: paymentRecord.amountIdr,
         status: paymentRecord.status,
+        providerRefundKind: paymentRecord.providerRefundKind,
+        providerRefundAmountIdr: paymentRecord.providerRefundAmountIdr,
+        providerRefundIdentity: paymentRecord.providerRefundIdentity,
       })
       .from(paymentRecord)
       .where(
         and(
           eq(paymentRecord.userId, payment.userId),
-          inArray(paymentRecord.status, ["PAID", "SETTLED", "REFUNDED"]),
+          or(
+            inArray(paymentRecord.status, ["PAID", "SETTLED", "REFUNDED"]),
+            eq(paymentRecord.providerRefundKind, "partial"),
+          ),
           isNull(paymentRecord.providerSuccessAt),
         ),
       )
@@ -615,27 +631,48 @@ export function createReferralService(deps: {
     };
 
     if (unresolvedPayment) {
-      if (
-        existing?.providerSuccessTimeState === "unresolved" &&
-        existing.paymentId === unresolvedPayment.id
-      ) {
-        return existing;
-      }
       const afterState = {
         paymentId: unresolvedPayment.id,
         providerSuccessAt: null,
         providerSuccessTimeState: "unresolved" as const,
         purchaseAmountIdr: unresolvedPayment.amountIdr,
         paymentStatus: unresolvedPayment.status,
+        refundReconciliationState:
+          unresolvedPayment.providerRefundKind === "partial"
+            ? ("partial_refund" as const)
+            : ("none" as const),
+        providerRefundAmountIdr:
+          unresolvedPayment.providerRefundAmountIdr ?? null,
+        providerRefundIdentity:
+          unresolvedPayment.providerRefundIdentity ?? null,
         commissionAmountIdr: 0,
       };
+      const refundReconciliationState = afterState.refundReconciliationState;
       if (existing) {
+        const changed =
+          existing.paymentId !== unresolvedPayment.id ||
+          existing.providerSuccessTimeState !== "unresolved" ||
+          existing.purchaseAmountIdrSnapshot !== unresolvedPayment.amountIdr ||
+          existing.paymentStatusSnapshot !== unresolvedPayment.status ||
+          existing.refundReconciliationState !== refundReconciliationState ||
+          existing.providerRefundAmountIdrSnapshot !==
+            afterState.providerRefundAmountIdr ||
+          existing.providerRefundIdentitySnapshot !==
+            afterState.providerRefundIdentity ||
+          existing.commissionAmountIdr !== 0;
+        if (!changed) return existing;
         const [held] = await conn
           .update(kolCommissionDecision)
           .set({
             paymentId: unresolvedPayment.id,
             providerSuccessAt: null,
             providerSuccessTimeState: "unresolved",
+            paymentStatusSnapshot: unresolvedPayment.status,
+            refundReconciliationState,
+            providerRefundAmountIdrSnapshot:
+              unresolvedPayment.providerRefundAmountIdr ?? null,
+            providerRefundIdentitySnapshot:
+              unresolvedPayment.providerRefundIdentity ?? null,
             purchaseAmountIdrSnapshot: unresolvedPayment.amountIdr,
             ...termsSnapshot,
             commissionAmountIdr: 0,
@@ -644,11 +681,24 @@ export function createReferralService(deps: {
           .where(eq(kolCommissionDecision.id, existing.id))
           .returning();
         if (!held) throw new Error("KOL commission hold was not saved.");
+        const action =
+          existing.paymentStatusSnapshot !== "REFUNDED" &&
+          unresolvedPayment.status === "REFUNDED"
+            ? "kol_commission_refund_invalidation"
+            : refundReconciliationState === "partial_refund"
+              ? "kol_commission_partial_refund_reconciliation"
+              : "kol_commission_provider_time_unresolved";
+        const reason =
+          action === "kol_commission_refund_invalidation"
+            ? "A full refund changed the reserved first purchase; its zero commission and first-event reservation were audited."
+            : action === "kol_commission_partial_refund_reconciliation"
+              ? "A partial refund requires manual reconciliation; the historical commission remains zero while provider time is unresolved."
+              : "Provider confirms a successful or refunded purchase but exposes no authoritative success time; commission is held pending ordering evidence.";
         await audit.record({
           db: conn,
           actorId: null,
           actorType: "system",
-          action: "kol_commission_provider_time_unresolved",
+          action,
           targetId: existing.id,
           targetType: "kol_commission_decision",
           beforeState: {
@@ -656,13 +706,14 @@ export function createReferralService(deps: {
             providerSuccessAt: existing.providerSuccessAt,
             providerSuccessTimeState: existing.providerSuccessTimeState,
             purchaseAmountIdr: existing.purchaseAmountIdrSnapshot,
+            paymentStatus: existing.paymentStatusSnapshot,
+            refundReconciliationState: existing.refundReconciliationState,
+            providerRefundAmountIdr: existing.providerRefundAmountIdrSnapshot,
+            providerRefundIdentity: existing.providerRefundIdentitySnapshot,
             commissionAmountIdr: existing.commissionAmountIdr,
           },
           afterState,
-          details: {
-            reason:
-              "Provider confirms a successful or refunded purchase but exposes no authoritative success time; commission is held pending ordering evidence.",
-          },
+          details: { reason },
         });
         return held;
       }
@@ -674,6 +725,12 @@ export function createReferralService(deps: {
           paymentId: unresolvedPayment.id,
           providerSuccessAt: null,
           providerSuccessTimeState: "unresolved",
+          paymentStatusSnapshot: unresolvedPayment.status,
+          refundReconciliationState,
+          providerRefundAmountIdrSnapshot:
+            unresolvedPayment.providerRefundAmountIdr ?? null,
+          providerRefundIdentitySnapshot:
+            unresolvedPayment.providerRefundIdentity ?? null,
           purchaseAmountIdrSnapshot: unresolvedPayment.amountIdr,
           ...termsSnapshot,
           commissionAmountIdr: 0,
@@ -702,13 +759,19 @@ export function createReferralService(deps: {
         id: paymentRecord.id,
         amountIdr: paymentRecord.amountIdr,
         status: paymentRecord.status,
+        providerRefundKind: paymentRecord.providerRefundKind,
+        providerRefundAmountIdr: paymentRecord.providerRefundAmountIdr,
+        providerRefundIdentity: paymentRecord.providerRefundIdentity,
         providerSuccessAt: paymentRecord.providerSuccessAt,
       })
       .from(paymentRecord)
       .where(
         and(
           eq(paymentRecord.userId, payment.userId),
-          inArray(paymentRecord.status, ["PAID", "SETTLED", "REFUNDED"]),
+          or(
+            inArray(paymentRecord.status, ["PAID", "SETTLED", "REFUNDED"]),
+            eq(paymentRecord.providerRefundKind, "partial"),
+          ),
           isNotNull(paymentRecord.providerSuccessAt),
           lt(paymentRecord.providerSuccessAt, choice.kolAttributionExpiresAt),
         ),
@@ -723,6 +786,9 @@ export function createReferralService(deps: {
           id: paymentRecord.id,
           amountIdr: paymentRecord.amountIdr,
           status: paymentRecord.status,
+          providerRefundKind: paymentRecord.providerRefundKind,
+          providerRefundAmountIdr: paymentRecord.providerRefundAmountIdr,
+          providerRefundIdentity: paymentRecord.providerRefundIdentity,
           providerSuccessAt: paymentRecord.providerSuccessAt,
         })
         .from(paymentRecord)
@@ -750,12 +816,17 @@ export function createReferralService(deps: {
             flatAmountIdr: termsSnapshot.flatAmountIdrSnapshot,
             percentBps: termsSnapshot.percentBpsSnapshot,
           });
+    const refundReconciliationState =
+      winner.providerRefundKind === "partial" ? "partial_refund" : "none";
     const purchaseSnapshot = {
       paymentId: winner.id,
       paymentStatus: winner.status,
       providerSuccessAt: winner.providerSuccessAt,
       providerSuccessTimeState: "verified" as const,
       purchaseAmountIdr: winner.amountIdr,
+      refundReconciliationState,
+      providerRefundAmountIdr: winner.providerRefundAmountIdr ?? null,
+      providerRefundIdentity: winner.providerRefundIdentity ?? null,
       commissionAmountIdr,
     };
 
@@ -765,6 +836,12 @@ export function createReferralService(deps: {
         existing.providerSuccessAt?.getTime() !==
           winner.providerSuccessAt.getTime() ||
         existing.providerSuccessTimeState !== "verified" ||
+        existing.paymentStatusSnapshot !== winner.status ||
+        existing.refundReconciliationState !== refundReconciliationState ||
+        existing.providerRefundAmountIdrSnapshot !==
+          (winner.providerRefundAmountIdr ?? null) ||
+        existing.providerRefundIdentitySnapshot !==
+          (winner.providerRefundIdentity ?? null) ||
         existing.purchaseAmountIdrSnapshot !== winner.amountIdr ||
         existing.commissionAmountIdr !== commissionAmountIdr;
       if (!changed) return existing;
@@ -775,6 +852,11 @@ export function createReferralService(deps: {
           paymentId: winner.id,
           providerSuccessAt: winner.providerSuccessAt,
           providerSuccessTimeState: "verified",
+          paymentStatusSnapshot: winner.status,
+          refundReconciliationState,
+          providerRefundAmountIdrSnapshot:
+            winner.providerRefundAmountIdr ?? null,
+          providerRefundIdentitySnapshot: winner.providerRefundIdentity ?? null,
           purchaseAmountIdrSnapshot: winner.amountIdr,
           ...termsSnapshot,
           commissionAmountIdr,
@@ -787,6 +869,8 @@ export function createReferralService(deps: {
       let action: string = "kol_commission_earlier_purchase_correction";
       if (existing.providerSuccessTimeState === "unresolved") {
         action = "kol_commission_provider_time_resolved";
+      } else if (refundReconciliationState === "partial_refund") {
+        action = "kol_commission_partial_refund_reconciliation";
       } else if (winner.status === "REFUNDED") {
         action =
           existing.paymentId === winner.id
@@ -814,6 +898,10 @@ export function createReferralService(deps: {
           paymentId: existing.paymentId,
           providerSuccessAt: existing.providerSuccessAt,
           providerSuccessTimeState: existing.providerSuccessTimeState,
+          paymentStatus: existing.paymentStatusSnapshot,
+          refundReconciliationState: existing.refundReconciliationState,
+          providerRefundAmountIdr: existing.providerRefundAmountIdrSnapshot,
+          providerRefundIdentity: existing.providerRefundIdentitySnapshot,
           purchaseAmountIdr: existing.purchaseAmountIdrSnapshot,
           commissionAmountIdr: existing.commissionAmountIdr,
         },
@@ -831,6 +919,10 @@ export function createReferralService(deps: {
         paymentId: winner.id,
         providerSuccessAt: winner.providerSuccessAt,
         providerSuccessTimeState: "verified",
+        paymentStatusSnapshot: winner.status,
+        refundReconciliationState,
+        providerRefundAmountIdrSnapshot: winner.providerRefundAmountIdr ?? null,
+        providerRefundIdentitySnapshot: winner.providerRefundIdentity ?? null,
         purchaseAmountIdrSnapshot: winner.amountIdr,
         ...termsSnapshot,
         commissionAmountIdr,
@@ -842,9 +934,11 @@ export function createReferralService(deps: {
       actorId: null,
       actorType: "system",
       action:
-        winner.status === "REFUNDED"
-          ? "kol_commission_first_refunded_purchase_reserved"
-          : "kol_commission_first_purchase_recorded",
+        refundReconciliationState === "partial_refund"
+          ? "kol_commission_partial_refund_reconciliation"
+          : winner.status === "REFUNDED"
+            ? "kol_commission_first_refunded_purchase_reserved"
+            : "kol_commission_first_purchase_recorded",
       targetId: decision.id,
       targetType: "kol_commission_decision",
       afterState: purchaseSnapshot,
@@ -858,8 +952,11 @@ export function createReferralService(deps: {
     return decision;
   }
 
-  async function listKolCommissions() {
-    return db
+  async function listKolCommissions(input: ListKolCommissionsInput) {
+    const cursor = input.cursor
+      ? decodeKolCommissionCursor(input.cursor)
+      : undefined;
+    const rows = await db
       .select({
         id: kolCommissionDecision.id,
         referredUserId: kolCommissionDecision.referredUserId,
@@ -870,6 +967,11 @@ export function createReferralService(deps: {
         paymentId: paymentRecord.id,
         paymentReference: paymentRecord.providerReference,
         paymentStatus: paymentRecord.status,
+        paymentStatusSnapshot: kolCommissionDecision.paymentStatusSnapshot,
+        refundReconciliationState:
+          kolCommissionDecision.refundReconciliationState,
+        providerRefundAmountIdr:
+          kolCommissionDecision.providerRefundAmountIdrSnapshot,
         providerSuccessAt: kolCommissionDecision.providerSuccessAt,
         providerSuccessTimeState:
           kolCommissionDecision.providerSuccessTimeState,
@@ -878,6 +980,11 @@ export function createReferralService(deps: {
         percentBps: kolCommissionDecision.percentBpsSnapshot,
         commissionAmountIdr: kolCommissionDecision.commissionAmountIdr,
         createdAt: kolCommissionDecision.createdAt,
+        cursorCreatedAt: sql<string>`to_char(
+          ${kolCommissionDecision.createdAt} AT TIME ZONE 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+        )`,
+        cursorId: kolCommissionDecision.id,
         updatedAt: kolCommissionDecision.updatedAt,
       })
       .from(kolCommissionDecision)
@@ -895,11 +1002,36 @@ export function createReferralService(deps: {
         eq(paymentRecord.id, kolCommissionDecision.paymentId),
       )
       .innerJoin(referralCode, eq(referralCode.id, referralChoice.codeId))
-      .orderBy(
-        desc(kolCommissionDecision.providerSuccessAt),
-        asc(kolCommissionDecision.paymentId),
+      .where(
+        cursor
+          ? or(
+              sql`${kolCommissionDecision.createdAt} < ${cursor.createdAt}::timestamptz`,
+              and(
+                sql`${kolCommissionDecision.createdAt} = ${cursor.createdAt}::timestamptz`,
+                lt(kolCommissionDecision.id, cursor.id),
+              ),
+            )
+          : undefined,
       )
-      .limit(100);
+      .orderBy(
+        desc(kolCommissionDecision.createdAt),
+        desc(kolCommissionDecision.id),
+      )
+      .limit(input.limit + 1);
+    const hasNext = rows.length > input.limit;
+    const items = rows.slice(0, input.limit);
+    const last = items.at(-1);
+    const nextCursor =
+      hasNext && last
+        ? encodeKolCommissionCursor(last.cursorCreatedAt, last.cursorId)
+        : null;
+    return {
+      items: items.map(
+        ({ cursorCreatedAt: _cursorCreatedAt, cursorId: _cursorId, ...item }) =>
+          item,
+      ),
+      nextCursor,
+    };
   }
 
   async function recordEligibleFirstCompletion(

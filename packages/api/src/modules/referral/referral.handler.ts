@@ -58,7 +58,11 @@ export function createReferralHandler(service: ReferralService) {
 
     listKolCampaigns: () => run(() => service.listKolCampaigns()),
 
-    listKolCommissions: () => run(() => service.listKolCommissions()),
+    listKolCommissions: ({
+      input,
+    }: {
+      input: Parameters<ReferralService["listKolCommissions"]>[0];
+    }) => run(() => service.listKolCommissions(input)),
   };
 }
 
