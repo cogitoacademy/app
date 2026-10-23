@@ -1,5 +1,62 @@
 # Cogito Module Reference
 
+## Referral settlement review corrections (22 October 2026)
+
+`settlementTransaction` retries a fully rolled-back PostgreSQL `40P01` at most
+three times, including driver-wrapped causes; domain and uniqueness failures are
+not retried. Its callbacks contain database/outbox work only and cover all
+report completion adapters. Reward decisions acquire shared user-row locks and
+require both current roles to be student, coordinated with ordinary role updates.
+An existing saved decision still replays unchanged.
+
+For an ended solo no-show, only the admin report path can confirm delivery using
+the existing reason/receipt/three-field contract. It reads the exact student's
+prior marked-no-show or legacy expiry deduction key, records the audited
+no-show-to-completed transition, and creates one earned fee/reward. No second
+wallet deduction occurs. Student reads accept that same charge only after the
+booking is completed/reported; a penalty alone does not grant access or rewards.
+
+## Referral and signup module source milestone (22 October 2026)
+
+`packages/api/src/modules/referral` owns referral choices, settings history,
+student codes, KOL campaign validation/snapshots, and first friend reward
+decisions. `packages/auth/src/index.ts` invokes the email choice writer in the
+verified signup transaction. Its Better Auth user-create hook marks only a new
+Google-created student pending; `packages/api/src/procedures.ts` blocks student
+app APIs until the choice is saved. The authenticated `referral.saveGoogleChoice`
+procedure is the only pending-account resolution path.
+
+Schema: `referral_code` has one global code value and one friend code per
+student or campaign code per KOL campaign; `referral_choice` has one immutable
+choice per user and stores welcome/settings/KOL term snapshots;
+`referral_settings_revision` retains effective-time history;
+`referral_semester_usage` is unique by referrer and WIB half-year; and
+`friend_reward_decision` is unique by referred user and stores positive or zero
+credit decisions. `referral_campaign` stores KOL activation/expiry and terms.
+Signup welcome ledger keys use `referral.signup.<userId>` with the choice ID as
+source reference; friend rewards use `referral.friend.<studentId>` with the
+decision ID as source reference.
+
+Email/Google choice, welcome credit, and choice snapshot share one transaction.
+At completion, booking and class-report modules call the referral port in their
+existing settlement transaction. Only positive-charge deliveries qualify;
+Q06 prior no-show charges qualify after a delivered report, while a penalty-only
+no-show does not. The service locks the referred choice, then the referrer’s
+semester usage row, applies the completion-time cap, writes one decision even
+when zero, and credits a positive reward atomically. Cap exhaustion does not
+roll over or retry, and cap reductions do not reverse existing credits.
+
+Student `referral.getMine` lazily creates a stable friend code and returns the
+active signup settings plus current-semester earned/remaining Marks and end
+date. Admin APIs create audited settings revisions and KOL campaigns. KOL signup
+terms are immutable snapshots, but first-purchase commission, transfers,
+partial/overpayment accounting, CSV, corrections, and reversal handling remain
+unimplemented. Parent-generated additive migration
+`0071_referral_registration_rewards` follows 0070 and is applied only to
+guarded loopback test 6769/cogito-test (journal 72). Development 6767 and
+production remain unmigrated. Wallet creation accepts the caller's transaction,
+including its upsert, so referral credits do not escape the signup or completion
+transaction.
 ## Report PDF pagination follow-up (22 October 2026)
 
 Metadata columns paginate wrapped lines above the footer and label continued

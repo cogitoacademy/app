@@ -1,5 +1,72 @@
 # Cogito Runbook
 
+## Referral parent PostgreSQL acceptance (22 October 2026)
+
+Migration 0071 was applied using the Drizzle PostgreSQL migration runner after
+checking NODE_ENV=test, exact loopback 6769/cogito-test, absent reset flags and
+current_database(). Six referral tables are present. No dev/production migration,
+reset, seed or provider call ran. The existing isolated test containers were
+started without recreating their volumes.
+
+```powershell
+bun --smol --env-file=C:/.Projects/cogito-app/tmp/v3-dev/.env.signup-parent test --timeout 30000 packages/api/src/tests/integration/referral-completion.test.ts packages/api/src/tests/unit/settlement-transaction.test.ts
+bun --smol --env-file=C:/.Projects/cogito-app/tmp/v3-dev/.env.signup-parent test --timeout 30000 packages/api/src/tests/integration/booking-admin-reports.test.ts
+```
+
+The first command passes 5 tests / 26 assertions: saved signup terms survive a
+15-to-20 Mark revision and no code grants no welcome; a forced real wallet/usage
+deadlock is retried, both completions stay within the cap, exhausted zero-credit
+decisions do not replay in another semester, and promoted participants receive
+no new reward. Retry-unit coverage bounds repeated deadlocks and rejects retries
+for uniqueness errors. The on-demand suite passes 12 / 118, including audited
+solo no-show delivery, one charge/fee/reward, report entitlement and receipt replay.
+Fixtures use run-owned identities and targeted cleanup. Test settings use a
+future effective date and are removed; ordinary current settings are preserved.
+The guarded class enrollment/lifecycle/report suite also passes 44 tests / 354
+assertions (14.32s) with controlled provider adapters. Web and server typechecks
+pass after the review corrections. No development database was migrated.
+Real Google/browser and full client release acceptance remain open.
+
+## AUTH-02 and friend referral handoff (22 October 2026)
+
+The feature source branch contains Google pending-choice resume, email signup
+attribution, friend welcome/completion credits, student referral display, and
+KOL signup campaign validation/snapshots. Parent generated
+`0071_referral_registration_rewards` after 0070 without a database connection.
+Snapshot comparison verifies its predecessor ID, six new tables, and only
+`user.referral_choice_pending` added to prior tables. It is now applied to the
+guarded test target as recorded above; dev/production remain unmigrated. Do not start this schema
+against an unmigrated database or reset/seed a database for unit checks.
+
+Parent reran the focused suite below: 46 tests / 101 expectations pass. Web
+`bun run check-types` and server `bun run check-types` both pass after repairing
+the sidebar icon import, Marks props, referral form schema, session nullability,
+and wallet upsert transaction type. These are source/compiler checks, not
+financial or OAuth integration acceptance.
+
+Focused database-free regression commands:
+
+```powershell
+bun test --timeout 30000 apps/server/src/signup-body.test.ts packages/api/src/tests/unit/referral.policy.test.ts packages/api/src/tests/unit/procedures.test.ts packages/api/src/tests/unit/context.test.ts packages/auth/src/index.test.ts
+bun test --timeout 30000 --test-name-pattern Q06 packages/api/src/tests/unit/booking.service.test.ts
+```
+
+The first command passed 46 tests / 101 expectations; the Q06-filtered booking
+command passed 2 tests / 4 expectations. The run used process-scoped dummy auth,
+database and Redis settings pointing at loopback port 1; no DB or Redis
+connection was made. A broader combined run of the whole booking service file
+observed one unrelated failure at `booking.service.test.ts:9547`: an existing
+payout projection expectation wanted bank account `00456`, while the fixture
+returned null. The referral changes do not touch that payout path. The existing
+guarded signup integration suite resets its local test database in `beforeAll`;
+it was not run in this source slice and must wait for parent migration/application
+and the assigned guarded test window. Do not run it with the source-only referral
+schema.
+
+The later KOL slice must add qualifying first-IDR-top-up decisions, partial and
+overpayment transfer history, CSV, audited corrections, and reversal behavior.
+Referral choice/code/terms snapshots from this slice are the attribution seam;
+they do not authorize commission or transfer writes.
 ## Report PDF parent checks (22 October 2026)
 
 Focused route/access/window/layout/rate-limit checks pass 29 tests / 104

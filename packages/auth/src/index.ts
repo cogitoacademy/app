@@ -31,6 +31,7 @@ export type CogitoUser = {
   emailVerified: boolean;
   image: string | null;
   role: string;
+  referralChoicePending: boolean;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -56,10 +57,20 @@ export type SignupWelcomeEmailSender = (params: {
   user: CogitoUser;
 }) => Promise<void>;
 
+type SignupReferralTransaction = Parameters<
+  Parameters<typeof db.transaction>[0]
+>[0];
+
+export type SignupReferralChoiceWriter = (
+  conn: SignupReferralTransaction,
+  input: { userId: string; code?: string | null },
+) => Promise<unknown>;
+
 let resetPasswordEmailSender: ResetPasswordEmailSender | null = null;
 let verificationEmailSender: VerificationEmailSender | null = null;
 let preAccountSignupEmailSender: PreAccountSignupEmailSender | null = null;
 let signupWelcomeEmailSender: SignupWelcomeEmailSender | null = null;
+let signupReferralChoiceWriter: SignupReferralChoiceWriter | null = null;
 
 /**
  * Wires the email port used by Better Auth's reset-password flow.
@@ -93,6 +104,13 @@ export function setSignupWelcomeEmailSender(
   sender: SignupWelcomeEmailSender | null,
 ) {
   signupWelcomeEmailSender = sender;
+}
+
+/** Wires referral snapshots and the welcome Marks credit into verified signup. */
+export function setSignupReferralChoiceWriter(
+  writer: SignupReferralChoiceWriter | null,
+) {
+  signupReferralChoiceWriter = writer;
 }
 
 // R1: the shared Redis client for Better Auth secondary storage. Set once
@@ -203,6 +221,12 @@ function buildAuth(options?: InternalAuthOptions) {
           type: "string",
           required: false,
           defaultValue: "student",
+          input: false,
+        },
+        referralChoicePending: {
+          type: "boolean",
+          required: false,
+          defaultValue: false,
           input: false,
         },
       },
@@ -332,7 +356,7 @@ function buildAuth(options?: InternalAuthOptions) {
         create: {
           // Set these fields before insert so a signup transaction does not
           // need a second connection to update the new row.
-          before: async (user) => {
+          before: async (user, ctx) => {
             const data = { ...user };
             if (
               options?.verifiedSignupEmail &&
@@ -345,6 +369,12 @@ function buildAuth(options?: InternalAuthOptions) {
               isConfiguredAdminEmail(user.email, env.ADMIN_EMAILS)
             ) {
               data.role = "admin";
+            }
+            if (ctx?.path === "/callback/:id" && data.role === "student") {
+              // Google is the only configured social provider. Only new OAuth
+              // student creation reaches this hook; reused accounts and
+              // configured administrators stay clear.
+              data.referralChoicePending = true;
             }
             return { data };
           },
@@ -651,6 +681,7 @@ export async function completePreAccountSignup(input: {
   name: string;
   otp: string;
   signupAttemptId: string;
+  referralCode?: string | null;
   headers: Headers;
 }): Promise<
   { ok: true; response: Response } | (SignupFailure & { response?: Response })
@@ -665,6 +696,13 @@ export async function completePreAccountSignup(input: {
   }
   if (!/^\d{6}$/.test(input.otp)) {
     return { ok: false, status: 400, error: "Enter the six-digit code." };
+  }
+  if (!signupReferralChoiceWriter) {
+    return {
+      ok: false,
+      status: 503,
+      error: "Signup is temporarily unavailable. Please try again.",
+    };
   }
 
   let createdUser: CogitoUser | null = null;
@@ -757,6 +795,11 @@ export async function completePreAccountSignup(input: {
         throw new FailedBetterAuthSignup(response);
       }
 
+      await signupReferralChoiceWriter!(
+        tx as unknown as SignupReferralTransaction,
+        { userId: body.user.id, code: input.referralCode },
+      );
+
       await tx.delete(verificationRow).where(eq(verificationRow.id, proof.id));
       const now = new Date();
       await tx.insert(verificationRow).values({
@@ -819,6 +862,24 @@ export async function completePreAccountSignup(input: {
         status: error.response.status,
         error: await betterAuthErrorMessage(error.response),
         response: error.response,
+      };
+    }
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      typeof error.code === "string" &&
+      (error.code.startsWith("REFERRAL_") ||
+        error.code === "INVALID_REFERRAL_CODE" ||
+        error.code === "SELF_REFERRAL")
+    ) {
+      return {
+        ok: false,
+        status: error.code === "REFERRAL_STUDENT_ONLY" ? 403 : 400,
+        error:
+          "message" in error && typeof error.message === "string"
+            ? error.message
+            : "Referral choice could not be saved.",
       };
     }
     console.error(

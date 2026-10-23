@@ -100,6 +100,7 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     findParticipant: mock(async () => null),
     findConfirmedParticipants: mock(async () => []),
     findLedgerEventKeys: mock(async () => []),
+    findLedgerEventAmounts: mock(async () => new Map()),
     findPendingInvitees: mock(async () => []),
     findUserEmails: mock(async () => []),
     findUsersByIds: mock(async () => []),
@@ -377,6 +378,7 @@ function createService(
     meeting?: Record<string, unknown>;
     pricing?: Record<string, unknown>;
     roomPort?: Record<string, unknown>;
+    referralPort?: Record<string, unknown>;
   } = {},
 ) {
   const db = makeDb();
@@ -393,6 +395,9 @@ function createService(
   const roomPort = overrides.roomPort
     ? { ...makeRoomPort(), ...overrides.roomPort }
     : makeRoomPort();
+  const referralPort = overrides.referralPort ?? {
+    recordEligibleFirstCompletion: mock(async () => null),
+  };
   const service = createBookingService({
     db,
     repo,
@@ -402,6 +407,7 @@ function createService(
     notification,
     meeting,
     roomPort,
+    referralPort,
   } as any);
   return {
     service,
@@ -413,6 +419,7 @@ function createService(
     notification,
     meeting,
     roomPort,
+    referralPort,
   };
 }
 
@@ -2962,6 +2969,79 @@ describe("BookingService", () => {
       expect(result.originalMarks).toBe(150);
       expect(wallet.release).not.toHaveBeenCalled();
       expect(notification.writeBestEffort.mock.calls.length).toBe(2);
+    });
+
+    test("Q06: delivered series child qualifies a prior chargeable no-show once", async () => {
+      const booking = makeBooking({
+        type: "series",
+        targetGroupSize: 3,
+        currentState: "scheduled",
+        holdAmount: 100,
+        originalMarks: 150,
+      });
+      const session = {
+        id: "s1",
+        seriesBookingId: "b1",
+        scheduledStartAt: new Date(Date.now() - 3600_000),
+        scheduledEndAt: new Date(Date.now() + 3600_000),
+        currentState: "scheduled",
+        holdAmount: 50,
+        priceSnapshot: null,
+      };
+      const referralPort = {
+        recordEligibleFirstCompletion: mock(async () => null),
+      };
+      const { service, wallet, repo } = createService({
+        referralPort,
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 2 }))
+            .mockImplementationOnce(async () => booking)
+            .mockImplementationOnce(async () => booking),
+          findSessionById: mock(async () => session),
+          listSessionsBySeriesId: mock(async () => [
+            session,
+            { ...session, id: "s2" },
+          ]),
+          findConfirmedParticipants: mock(async () => [
+            { id: "p1", userId: "absent-student", heldAmount: 100 },
+          ]),
+          findLedgerEventAmounts: mock(
+            async () => new Map([["booking.b1.no_show.absent-student.s1", 50]]),
+          ),
+          findParticipant: mock(async () => ({
+            id: "p1",
+            userId: "student1",
+            heldAmount: 100,
+          })),
+          updateParticipantState: mock(async () => {}),
+          updateBookingHoldAmount: mock(async () => {}),
+          completeSession: mock(async () => {}),
+        },
+      });
+
+      await service.completeSession(
+        "b1",
+        "tutor1",
+        "s1",
+        TEST_COMPLETION_FEEDBACK,
+      );
+
+      expect(wallet.deduct).not.toHaveBeenCalled();
+      expect(referralPort.recordEligibleFirstCompletion).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          studentId: "absent-student",
+          chargedMarks: 50,
+          completionType: "series_child",
+          completionId: "s1",
+          completedAt: expect.any(Date),
+        }),
+      );
+      expect(repo.completeSession).toHaveBeenCalledWith(
+        expect.anything(),
+        "s1",
+        expect.any(Date),
+      );
     });
 
     test("L1: series completion deducts at most the remaining held amount after an admin partial cancel", async () => {
@@ -8728,6 +8808,24 @@ describe("BookingService additional coverage paths", () => {
     await expect(service.cancelSession("student1", "s1")).rejects.toThrow(
       BookingStateTransitionError,
     );
+  });
+
+  test("Q06: a no-show penalty alone does not create a friend reward", async () => {
+    const { service, referralPort } = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          makeBooking({
+            currentState: "scheduled",
+            scheduledStartAt: new Date(Date.now() - 60 * 60 * 1000),
+          }),
+        ),
+        findParticipant: mock(async () => makeParticipant()),
+      },
+    });
+
+    await service.markParticipantNoShow("b1", "tutor1", "student1");
+
+    expect(referralPort.recordEligibleFirstCompletion).not.toHaveBeenCalled();
   });
 
   test("rejects no-show marking after a series session report exists", async () => {

@@ -1,5 +1,50 @@
 # Cogito API Reference
 
+## AUTH-02 and referral source contract (22 October 2026)
+
+Deployment prerequisite: additive migration `0071_referral_registration_rewards`
+is applied only to guarded loopback test 6769/cogito-test. Parent web/server
+typechecks and focused financial PostgreSQL regressions pass; development and
+production migration plus authenticated OAuth browser acceptance remain pending.
+
+The existing admin completion-report endpoint also accepts an ended solo
+student no-show when delivery is explicitly confirmed and an audit reason is
+provided. It requires an existing student-specific no-show charge, reuses it
+without another deduction, and keeps request-key replay/version correction
+semantics. Ordinary tutor completion does not gain this terminal-state permission.
+
+Email signup `POST /api/auth/sign-up/email` accepts the existing OTP fields plus
+optional `referralCode`. A valid code saves the immutable friend/KOL choice and
+welcome credit inside the account/proof transaction; an omitted/empty code saves
+`kind: "none"` and gives no welcome credit. Invalid referral input rolls the
+whole signup transaction back and leaves the proof available for a valid retry.
+
+Runtime RPC paths below use procedure-key casing, not `.route({ path })`
+metadata. RPC request bodies use the `{"json": input}` envelope.
+
+- `POST /rpc/referral/saveGoogleChoice` — authenticated pending Google student;
+  input `{ code: string | null }`. Saves the single choice, welcome credit, and
+  clears the pending flag atomically. A saved choice is idempotent; accounts
+  that are not pending cannot add attribution. No OTP is sent by this flow.
+- `POST /rpc/referral/getMine` — verified student, no input. Returns
+  `{ code, settings: { welcomeMarks, friendRewardMarks }, semester: { key,
+  startsAt, endsAt, earnedMarks, capMarks, remainingMarks } }`. Dates serialize
+  as ISO timestamps; semester boundaries are Jan–Jun and Jul–Dec in WIB.
+- `POST /rpc/adminReferral/getSettings` — admin, no input; returns the active
+  versioned welcome/reward/cap settings.
+- `POST /rpc/adminReferral/updateSettings` — admin; input
+  `{ expectedVersion, welcomeMarks, friendRewardMarks, semesterCapMarks,
+  reason }`; creates an audited settings revision.
+- `POST /rpc/adminReferral/createKolCampaign` — admin; input
+  `{ name, code, activationAt?, expiresAt, attributionWindowDays,
+  flatAmountIdr, percentBps }`. Expiry must follow activation, codes are
+  globally unique, and at least one commission term is positive.
+- `POST /rpc/adminReferral/listKolCampaigns` — admin, no input; returns
+  campaign dates, code, attribution window, and saved terms.
+
+The KOL endpoints validate and snapshot signup attribution only. First-top-up
+commission decisions, transfer records, CSV, corrections, and reversals are not
+implemented in this slice.
 ## Report PDF metadata follow-up (22 October 2026)
 
 The private report summary/download contract is unchanged. Academy `Topic` in

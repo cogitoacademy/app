@@ -8,6 +8,7 @@ import {
   auth,
   setAuthEmailSender,
   setPreAccountSignupEmailSender,
+  setSignupReferralChoiceWriter,
   setSignupWelcomeEmailSender,
   setVerificationEmailSender,
   resolveGoogleSocialProviders,
@@ -20,6 +21,7 @@ const user = {
   emailVerified: false,
   image: null,
   role: "student",
+  referralChoicePending: false,
   createdAt: new Date("2026-01-01T00:00:00.000Z"),
   updatedAt: new Date("2026-01-01T00:00:00.000Z"),
 };
@@ -34,6 +36,7 @@ afterEach(() => {
   setVerificationEmailSender(null as any);
   setPreAccountSignupEmailSender(null);
   setSignupWelcomeEmailSender(null);
+  setSignupReferralChoiceWriter(null);
 });
 
 describe("auth email hooks", () => {
@@ -41,12 +44,13 @@ describe("auth email hooks", () => {
     const originalNodeEnv = env.NODE_ENV;
     try {
       (env as { NODE_ENV: string }).NODE_ENV = "production";
-      const result = await beforeUserCreate({
-        ...user,
-        email: DEFAULT_PRODUCTION_ADMIN_EMAIL,
-      });
+      const result = await beforeUserCreate(
+        { ...user, email: DEFAULT_PRODUCTION_ADMIN_EMAIL },
+        { path: "/callback/:id" },
+      );
       expect(result.data.role).toBe("admin");
       expect(result.data.emailVerified).toBe(false);
+      expect(result.data.referralChoicePending).toBeFalsy();
     } finally {
       (env as { NODE_ENV: string }).NODE_ENV = originalNodeEnv;
     }
@@ -55,6 +59,24 @@ describe("auth email hooks", () => {
   test("ordinary signup keeps the default student role", async () => {
     const result = await beforeUserCreate(user);
     expect(result.data.role).toBe("student");
+    expect(result.data.referralChoicePending).toBeFalsy();
+  });
+
+  test("new Google students are marked pending, but reused or email users are not", async () => {
+    const googleStudent = await beforeUserCreate(user, {
+      path: "/callback/:id",
+    });
+    const emailStudent = await beforeUserCreate(user, {
+      path: "/sign-up/email",
+    });
+    const googleAdmin = await beforeUserCreate(
+      { ...user, role: "admin" },
+      { path: "/callback/:id" },
+    );
+
+    expect(googleStudent.data.referralChoicePending).toBe(true);
+    expect(emailStudent.data.referralChoicePending).toBe(false);
+    expect(googleAdmin.data.referralChoicePending).toBe(false);
   });
 
   test("reset-password hook is a no-op when no sender is configured", async () => {
@@ -102,13 +124,11 @@ describe("auth email hooks", () => {
     setVerificationEmailSender(async (params) => {
       calls.push(params);
     });
-    await sendVerificationOTP(
-      {
-        email: user.email,
-        otp: "123456",
-        type: "email-verification",
-      },
-    );
+    await sendVerificationOTP({
+      email: user.email,
+      otp: "123456",
+      type: "email-verification",
+    });
     expect(calls).toEqual([
       {
         email: user.email,

@@ -32,6 +32,7 @@ import { createContentRouter } from "./modules/content/content.router";
 import { createContactRouter } from "./modules/contact/contact.router";
 import { createPublicContentRouter } from "./modules/public-content/public-content.router";
 import { createFaqRouter } from "./modules/faq";
+import { createReferralRouter } from "./modules/referral/referral.router";
 import { handlers } from "./services";
 
 const authRouter = createAuthRouter(handlers.auth);
@@ -64,6 +65,7 @@ const uploadRouter = createUploadRouter(handlers.upload);
 const contentRouter = createContentRouter(handlers.content);
 const contactRouter = createContactRouter(handlers.contact);
 const faqRouter = createFaqRouter(handlers.faq);
+const referralRouter = createReferralRouter(handlers.referral);
 const publicContentRouter = {
   ...createPublicContentRouter(handlers.publicContent),
   ...faqRouter.publicContent,
@@ -82,6 +84,7 @@ export const appRouter = {
       return "OK";
     }),
   auth: authRouter,
+  ...referralRouter,
   admin: adminRouter,
   classes: {
     ...createAcademyClassPublicRouter(handlers.academyClass),

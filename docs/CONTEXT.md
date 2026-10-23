@@ -1,5 +1,64 @@
 # Cogito App — Codebase Context
 
+## Referral review corrections (22 October 2026)
+
+Report settlement transactions now retry PostgreSQL deadlock rollbacks at most
+three times; callbacks contain database writes and durable notification outbox
+work, not provider I/O. The retry covers tutor/admin on-demand report submission
+and academy reports. Friend reward issuance rechecks both accounts' student
+roles under shared row locks before creating a new decision/credit; prior
+decisions remain replayable. Admin may confirm a delivered solo student no-show
+after session end using the existing report reason/delivery-confirmation flow.
+The previous charge is reused, with one fee/reward and immutable audit history;
+tutors cannot convert a terminal solo no-show and penalty alone earns nothing.
+
+Migration 0071 is applied only to guarded loopback 6769/cogito-test, without a
+reset/seed. Real deadlock/cap/replay, saved-term/no-code and role tests plus retry
+units pass 5 / 26;
+the complete on-demand admin report suite passes 12 / 118 including the solo
+no-show reward and entitlement regression. Dev/production migration, OAuth
+browser acceptance and the separate KOL commission workflow remain open.
+
+## AUTH-02 and friend referral source milestone (22 October 2026)
+
+This feature branch adds the Google new-student referral choice gate and the
+friend reward path. New Google-created students remain pending until they save
+one valid friend/KOL code or choose no code; the choice page resumes on later
+login and does not request another OTP. Existing-account OAuth reuse is not
+marked pending and cannot receive a new attribution. Email OTP signup passes an
+optional code through the existing account/proof transaction. A valid code
+snapshots signup settings; no code stores an immutable zero-welcome choice.
+
+Friend rewards are decided in the delivered report/settlement transaction for
+positive-charge solo, group, series-child, cohort, and masterclass completions.
+Q06 chargeable no-shows qualify only when the session is delivered and reported;
+a no-show penalty by itself does not. The first eligible decision is unique per
+referred student, including a permanent zero-credit result. A referrer-semester
+row lock enforces the active cap across different referred users. Settings are
+versioned by effective time; saved signup reward terms remain fixed, while the
+completion semester and cap use completion-time settings. The student page
+shows a generated friend code, current semester earned/remaining Marks, and the
+semester end date.
+
+Admin APIs can revise/audit friend settings and create/list KOL campaign codes.
+Signup validates campaign dates and snapshots KOL flat/percentage terms and the
+attribution expiry. KOL first-purchase commission decisions, transfers,
+partial/overpayment accounting, CSV, corrections, and reversal handling remain
+the next slice; campaign creation does not imply a commission or payout.
+
+At this earlier source-only checkpoint, parent follow-up had generated additive
+`0071_referral_registration_rewards` after 0070: six new tables and
+`user.referral_choice_pending`, with the existing snapshot tables otherwise
+unchanged. The migration has since been applied only to guarded loopback
+6769/cogito-test; development 6767 and production remain unmigrated. Parent web
+and server typechecks pass after correcting UI/form and transaction parameter
+types; the focused unit suite passes 46 tests / 101 expectations.
+
+The read-only review against `356c352c..dfd8a2a0` closed its three original
+findings with no remaining spec/behavior findings. Its P2 documentation-status
+finding is corrected in this follow-up; the reviewer did not rerun tests.
+OAuth/browser UAT, development/production migration, and provider acceptance
+remain open.
 ## Report PDF parent verification (22 October 2026)
 
 The parent repaired long metadata pagination and added a semantic student-search

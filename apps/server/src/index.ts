@@ -6,6 +6,7 @@ import {
   setAuthEmailSender,
   setAuthSecondaryStorageRedis,
   setPreAccountSignupEmailSender,
+  setSignupReferralChoiceWriter,
   setSignupWelcomeEmailSender,
   setVerificationEmailSender,
 } from "@cogito-app/auth";
@@ -84,6 +85,10 @@ const app = createServer();
 const port = env.PORT;
 
 const { services } = await import("@cogito-app/api/services");
+
+// Signup choices, welcome credits, and OTP proof consumption share one DB
+// transaction. Keep the referral business rules in the API service.
+setSignupReferralChoiceWriter(services.referral.applyEmailSignupChoice);
 
 // R1: Redis-backed Better Auth sessions (DB-backed). Reads come from Redis
 // with database fallback; revokes clear both stores. The adapter degrades

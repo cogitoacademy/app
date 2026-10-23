@@ -35,6 +35,7 @@ import {
 } from "../../shared/constants";
 import type { GroupSize, Modality } from "../pricing/pricing.service";
 import type { DbType } from "../../lib/db";
+import { settlementTransaction } from "../../lib/settlement-transaction";
 import type { DbOrTx, TxClient } from "../../lib/tx";
 import {
   BookingNotFoundError,
@@ -119,6 +120,7 @@ import type {
   BookingNotificationPort,
   BookingMeetingPort,
   BookingRoomPort,
+  BookingReferralPort,
   TutorPayoutReportRow,
   TutorPayoutMutationResult,
   TutorPayoutPreview,
@@ -531,6 +533,7 @@ export function completionFeedbackEntitlementEventKeys(input: {
   return [
     `booking.${bookingId}.deduct`,
     `booking.${bookingId}.no_show.${userId}.solo`,
+    `booking.${bookingId}.no_show.${userId}`,
   ];
 }
 
@@ -568,6 +571,7 @@ export function createBookingService(deps: {
   meeting: BookingMeetingPort;
   competitionPalette?: BookingCompetitionPalettePort;
   roomPort?: BookingRoomPort;
+  referralPort?: BookingReferralPort;
 }) {
   const {
     db,
@@ -579,6 +583,7 @@ export function createBookingService(deps: {
     meeting,
     competitionPalette,
     roomPort,
+    referralPort,
   } = deps;
 
   // ── Internal helpers (access, transitions, pricing) ──────────────────────
@@ -633,13 +638,20 @@ export function createBookingService(deps: {
       actorId: string;
       actorType: "student" | "tutor" | "admin" | "system";
       metadata?: Record<string, unknown>;
+      confirmedSoloNoShowDelivery?: boolean;
     },
   ) {
     const b = await repo.findBookingById(conn, bookingId);
     if (!b) throw new BookingNotFoundError(bookingId);
     const fromState = b.currentState as BookingState;
 
-    if (!canTransition(fromState, toState)) {
+    const confirmedSoloNoShowDelivery =
+      params.confirmedSoloNoShowDelivery === true &&
+      params.actorType === ACTOR_TYPE.ADMIN &&
+      b.type === BOOKING_TYPE.SOLO &&
+      fromState === BOOKING_STATE.NO_SHOW &&
+      toState === BOOKING_STATE.COMPLETED;
+    if (!canTransition(fromState, toState) && !confirmedSoloNoShowDelivery) {
       throw new BookingStateTransitionError(fromState, "transition", toState);
     }
 
@@ -2128,7 +2140,7 @@ export function createBookingService(deps: {
         "A valid request key is required",
       );
     }
-    return db.transaction(async (tx) => {
+    return settlementTransaction(db, async (tx) => {
       if (requestKey) await lockCompletionReportRequest(tx, requestKey);
       let b = await repo.findBookingById(tx, bookingId);
       if (!b) throw new BookingNotFoundError(bookingId);
@@ -2258,7 +2270,7 @@ export function createBookingService(deps: {
       requestPayload,
     };
 
-    return db.transaction(async (tx) => {
+    return settlementTransaction(db, async (tx) => {
       await lockCompletionReportRequest(tx, input.requestKey);
       let b = await repo.findBookingById(tx, input.bookingId);
       if (!b) throw new BookingNotFoundError(input.bookingId);
@@ -2437,7 +2449,11 @@ export function createBookingService(deps: {
             "A report can only be submitted for a delivered or scheduled session",
           );
         }
-      } else if (b.currentState === BOOKING_STATE.SCHEDULED) {
+      } else if (
+        b.currentState === BOOKING_STATE.SCHEDULED ||
+        (b.type === BOOKING_TYPE.SOLO &&
+          b.currentState === BOOKING_STATE.NO_SHOW)
+      ) {
         await completeSingleSession(
           tx,
           b,
@@ -2478,7 +2494,15 @@ export function createBookingService(deps: {
     feedback: CompletionFeedback,
     reportAudit: CompletionReportAudit,
   ) {
-    if (b.currentState !== BOOKING_STATE.SCHEDULED) {
+    const confirmedSoloNoShowDelivery =
+      b.type === BOOKING_TYPE.SOLO &&
+      b.currentState === BOOKING_STATE.NO_SHOW &&
+      reportAudit.actorRole === ACTOR_TYPE.ADMIN &&
+      reportAudit.deliveryConfirmed === true;
+    if (
+      b.currentState !== BOOKING_STATE.SCHEDULED &&
+      !confirmedSoloNoShowDelivery
+    ) {
       throw new BookingStateTransitionError(
         b.currentState,
         "complete",
@@ -2509,12 +2533,36 @@ export function createBookingService(deps: {
       priceSnapshot: b.priceSnapshot,
     });
 
+    const referralCandidates: Array<{
+      studentId: string;
+      chargedMarks: number;
+    }> = [];
     if (b.type === BOOKING_TYPE.GROUP) {
       // After a group repricing the holds live on each remaining
       // participant's wallet (the proposer may have withdrawn and hold 0),
       // so deduct from each confirmed participant individually.
       const participants = await repo.findConfirmedParticipants(tx, bookingId);
+      const noShowAmounts = await repo.findLedgerEventAmounts(
+        tx,
+        bookingId,
+        participants.map((p) =>
+          seriesNoShowEventKey(bookingId, p.userId, "solo"),
+        ),
+      );
       for (const p of participants) {
+        const noShowAmount =
+          noShowAmounts.get(
+            seriesNoShowEventKey(bookingId, p.userId, "solo"),
+          ) ?? 0;
+        if (noShowAmount > 0) {
+          // A delivered group report makes this prior no-show chargeable under
+          // Q06. Do not charge the same participant a second time.
+          referralCandidates.push({
+            studentId: p.userId,
+            chargedMarks: noShowAmount,
+          });
+          continue;
+        }
         if (p.heldAmount <= 0) continue;
         // eslint-disable-next-line no-await-in-loop
         const w = await wallet.getByUserId(tx, p.userId);
@@ -2529,7 +2577,32 @@ export function createBookingService(deps: {
           actorType: ACTOR_TYPE.TUTOR,
           reason: "Session completed",
         });
+        referralCandidates.push({
+          studentId: p.userId,
+          chargedMarks: p.heldAmount,
+        });
       }
+    } else if (confirmedSoloNoShowDelivery) {
+      const priorChargeKeys = [
+        `booking.${bookingId}.no_show.${b.proposerId}.solo`,
+        `booking.${bookingId}.no_show.${b.proposerId}`,
+      ];
+      const priorCharges = await repo.findLedgerEventAmounts(
+        tx,
+        bookingId,
+        priorChargeKeys,
+      );
+      const chargedMarks = priorChargeKeys.reduce(
+        (sum, key) => sum + (priorCharges.get(key) ?? 0),
+        0,
+      );
+      if (chargedMarks <= 0) {
+        throw new BookingNotEditableError(
+          bookingId,
+          "A chargeable student no-show is required before confirming delivery",
+        );
+      }
+      referralCandidates.push({ studentId: b.proposerId, chargedMarks });
     } else {
       const proposerWallet = await wallet.getByUserId(tx, b.proposerId);
       if (!proposerWallet) throw new BookingNotFoundError(b.proposerId);
@@ -2542,12 +2615,22 @@ export function createBookingService(deps: {
         actorType: ACTOR_TYPE.TUTOR,
         reason: "Session completed",
       });
+      if (b.holdAmount > 0) {
+        referralCandidates.push({
+          studentId: b.proposerId,
+          chargedMarks: b.holdAmount,
+        });
+      }
     }
 
     const updated = await transition(tx, bookingId, BOOKING_STATE.COMPLETED, {
       actorId: reportAudit.actorId,
       actorType: reportAudit.actorRole,
       reason: reportAudit.reason ?? undefined,
+      confirmedSoloNoShowDelivery,
+      ...(confirmedSoloNoShowDelivery
+        ? { metadata: { deliveryConfirmed: true, reusedNoShowCharge: true } }
+        : {}),
     });
 
     await repo.updateBookingHoldAmount(tx, bookingId, 0);
@@ -2559,6 +2642,18 @@ export function createBookingService(deps: {
       feedback,
       audit: reportAudit,
     });
+
+    if (referralPort) {
+      for (const candidate of referralCandidates) {
+        // eslint-disable-next-line no-await-in-loop
+        await referralPort.recordEligibleFirstCompletion(tx, {
+          ...candidate,
+          completionType: b.type === BOOKING_TYPE.GROUP ? "group" : "solo",
+          completionId: bookingId,
+          completedAt: updated.completedAt ?? new Date(),
+        });
+      }
+    }
 
     feeRecord.earnedAt = updated.completedAt ?? new Date();
     await repo.insertTutorSessionFee(tx, feeRecord);
@@ -2638,6 +2733,10 @@ export function createBookingService(deps: {
 
     const isGroupSeries = b.targetGroupSize > 1;
     let deductedHoldAmount = 0;
+    const referralCandidates: Array<{
+      studentId: string;
+      chargedMarks: number;
+    }> = [];
     let residualHeld = 0;
     let proposerWallet: Awaited<ReturnType<BookingWalletPort["getByUserId"]>> =
       null;
@@ -2654,22 +2753,28 @@ export function createBookingService(deps: {
         undefined,
         { forUpdate: true },
       );
-      const noShowKeys = new Set(
-        await repo.findLedgerEventKeys(
-          tx,
-          bookingId,
-          participants.map((p) =>
-            seriesNoShowEventKey(bookingId, p.userId, session.id),
-          ),
+      const noShowAmounts = await repo.findLedgerEventAmounts(
+        tx,
+        bookingId,
+        participants.map((p) =>
+          seriesNoShowEventKey(bookingId, p.userId, session.id),
         ),
       );
       for (const p of participants) {
-        // This session's no-show ledger row proves the allocation was already
-        // charged. Attendance is booking-wide, so never infer other sessions.
-        if (
-          noShowKeys.has(seriesNoShowEventKey(bookingId, p.userId, session.id))
-        )
+        // A delivered child report makes this prior no-show chargeable under
+        // Q06. The keyed charge also keeps one child's attendance from being
+        // inferred for any other series session.
+        const noShowAmount =
+          noShowAmounts.get(
+            seriesNoShowEventKey(bookingId, p.userId, session.id),
+          ) ?? 0;
+        if (noShowAmount > 0) {
+          referralCandidates.push({
+            studentId: p.userId,
+            chargedMarks: noShowAmount,
+          });
           continue;
+        }
         if (p.heldAmount <= 0) continue;
         // eslint-disable-next-line no-await-in-loop
         const w = await wallet.getByUserId(tx, p.userId);
@@ -2688,6 +2793,10 @@ export function createBookingService(deps: {
           bookingId,
           actorType: ACTOR_TYPE.TUTOR,
           reason: "Group series session completed",
+        });
+        referralCandidates.push({
+          studentId: p.userId,
+          chargedMarks: deductAmount,
         });
         // eslint-disable-next-line no-await-in-loop
         await repo.updateParticipantState(tx, p.id, {
@@ -2709,10 +2818,16 @@ export function createBookingService(deps: {
         b.proposerId,
         session.id,
       );
-      const alreadyForfeited = (
-        await repo.findLedgerEventKeys(tx, bookingId, [noShowKey])
-      ).includes(noShowKey);
-      if (!alreadyForfeited) {
+      const noShowAmounts = await repo.findLedgerEventAmounts(tx, bookingId, [
+        noShowKey,
+      ]);
+      const noShowAmount = noShowAmounts.get(noShowKey) ?? 0;
+      if (noShowAmount > 0) {
+        referralCandidates.push({
+          studentId: b.proposerId,
+          chargedMarks: noShowAmount,
+        });
+      } else {
         // L1: after an admin cancelSeriesSession(..., release) the remaining
         // held amount may be below the per-session amount — never deduct more
         // than the participant actually holds.
@@ -2729,6 +2844,12 @@ export function createBookingService(deps: {
           actorType: ACTOR_TYPE.TUTOR,
           reason: "Series session completed",
         });
+        if (deductAmount > 0) {
+          referralCandidates.push({
+            studentId: b.proposerId,
+            chargedMarks: deductAmount,
+          });
+        }
 
         if (proposerParticipant) {
           residualHeld = Math.max(
@@ -2760,6 +2881,18 @@ export function createBookingService(deps: {
       feedback,
       audit: reportAudit,
     });
+
+    if (referralPort) {
+      for (const candidate of referralCandidates) {
+        // eslint-disable-next-line no-await-in-loop
+        await referralPort.recordEligibleFirstCompletion(tx, {
+          ...candidate,
+          completionType: "series_child",
+          completionId: session.id,
+          completedAt: sessionCompletedAt,
+        });
+      }
+    }
 
     await notification.writeBestEffort({
       db: tx,
