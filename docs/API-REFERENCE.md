@@ -2278,3 +2278,9 @@ Only exact bank name `BCA` is fee-free; all other bank names incur Rp2,500 once 
 Numeric Marks fields returned by wallet, booking, pricing, and analytics procedures remain numbers. The web client presents those values with the shared `CogitoMarks` symbol component; this is presentation-only and does not change RPC inputs or outputs.
 
 The 2026-09-08 Invite Tutor card height and Invitations pagination alignment corrections are presentation-only; tutor invitation RPC paths, envelopes, inputs, and outputs are unchanged.
+
+## Sidebar section presentation (2026-10-23)
+
+Role sidebar sections collapse independently in local mounted UI state. No RPC
+input/output, HTTP path, access rule, or persistence contract changes; the
+existing `booking/listMine` action-count query remains unchanged.
