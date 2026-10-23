@@ -378,6 +378,7 @@ jobs:
       - name: "Server unit tests (separate process: webhook test uses mock.module)"
         run: bun test --timeout 30000 apps/server/src/
       - name: Post coverage comment + enforce gate
+        id: coverage_gate
         # A failed collection/merge may leave Bun's raw profile at the default
         # path. Only report coverage from a fully merged profile.
         if: ${{ always() && steps.coverage.outcome == 'success' }}
@@ -394,6 +395,18 @@ jobs:
       - name: Fail if coverage test command failed
         if: ${{ always() && steps.coverage.outcome == 'failure' }}
         run: exit 1
+      - name: Upload coverage profiles for gate diagnosis
+        if: ${{ always() && (steps.coverage.outcome == 'failure' || steps.coverage_gate.outcome == 'failure') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-coverage-profiles-${{ github.run_id }}
+          path: |
+            coverage/api-resettable/lcov.info
+            coverage/api-fixtures/lcov.info
+            coverage/api-payout/lcov.info
+            coverage/lcov.merged.info
+            coverage/lcov.function-identity.json
+          if-no-files-found: warn
 
   e2e:
     name: E2E Browser Workflow

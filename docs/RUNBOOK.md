@@ -2953,7 +2953,11 @@ is treated as 100%. It runs only after successful test and merge commands, so
 an incomplete raw profile cannot be reported as merged coverage. A failed
 coverage command is propagated explicitly by the following step. If the gate
 fails on a merged profile, inspect the missing function/line records and add a
-behavior-level test before pushing. The generated PR comment
+behavior-level test before pushing. CI uploads the three raw partitions, merged
+LCOV profile, and function-identity manifest as the
+`api-coverage-profiles-<run-id>` artifact when collection, merging, or the gate
+fails. Use those profiles to identify uncovered source lines and functions
+before changing tests or thresholds. The generated PR comment
 uses blank lines between its status blockquote and tables; preserve these
 separators when editing the renderer.
 The DB unit test's environment mock includes an auth secret because Bun can

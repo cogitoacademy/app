@@ -234,7 +234,9 @@ test("admins can create and edit rich, alphabetized FAQs", async ({ page }) => {
     );
 
     await questionEditor.fill(englishQuestion);
-    await answerEditor.fill("");
+    await answerEditor.press("Control+A");
+    await answerEditor.press("Backspace");
+    await expect(answerEditor).toHaveText("");
     await adminPage
       .getByRole("button", { name: "Save FAQ", exact: true })
       .click();

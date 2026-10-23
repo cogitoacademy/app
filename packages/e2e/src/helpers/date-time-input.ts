@@ -27,7 +27,7 @@ export async function fillDateTimeInput(page: Page, id: string, date: Date) {
     .click();
 
   await page.locator(`[data-day="${dateValue}"]`).getByRole("button").click();
-  const timeInput = page.locator(`#${id}-time`);
+  const timeInput = page.locator(`input#${id}-time`);
   await timeInput.fill(timeValue);
   await expect(timeInput).toHaveValue(timeValue);
   await expect(page.locator(`#${id}`)).not.toContainText("Pick a date");

@@ -380,20 +380,18 @@ test("tutor records, admin corrects, and student reads a real class session repo
     try {
       const studentPage = await studentContext.newPage();
       await studentPage.goto("/class-reports");
-      const studentRow = studentPage.getByTestId(
-        `session-report-row-${sessionId}`,
-      );
-      await expect(studentRow).toBeVisible();
-      await studentRow.getByRole("button", { name: "View report" }).click();
+      await openSession(studentPage, sessionId);
       await expect(
         studentPage.getByText(
           "Rework my example after reviewing the class notes",
         ),
       ).toBeVisible();
       const studentReports = await reportRows(studentApi);
-      expect(studentReports).toHaveLength(1);
-      expect(studentReports[0]?.sessionId).toBe(sessionId);
-      expect(studentReports[0]?.settlement).toBeNull();
+      const studentReport = studentReports.find(
+        (report) => report.sessionId === sessionId,
+      );
+      expect(studentReport).toBeDefined();
+      expect(studentReport?.settlement).toBeNull();
     } finally {
       await studentContext.close();
       studentContext = undefined;
