@@ -1,5 +1,37 @@
 # Cogito App — Codebase Context
 
+## Integrated V3 progress checkpoint (23 October 2026)
+
+The remaining V3 source checkpoints are integrated through PR #310 (private
+student PDF and test infrastructure), #309 (AUTH-02 and friend rewards), #312
+(KOL first-top-up decisions/refund evidence), #314 (compact class UI and auth
+states), and this #313 reminder integration. Normal pre-push lint and all four
+workspace typecheck tasks pass on the combined source. Guarded non-reset
+PostgreSQL regressions pass 34 tests / 365 assertions across admin reports,
+friend rewards, KOL decisions, PDF eligibility and legacy reminder precision.
+Focused payment/provider/webhook/referral/reminder/retry units pass 160 / 428.
+Private PDF access/layout/window/service/HTTP checks pass 13 / 44. The full
+server tsdown build passes after restoring missing lockfile-pinned native
+Rolldown artifacts with a frozen dependency reinstall.
+The checked-in synthetic UI/PDF suite passes 14 Chromium cases at responsive
+sizes; its catalog locator now uses the full-card link.
+
+All local V3 branch/worktree progress was inventoried against release: older
+T06/T07, class publication, payout/tax, sidebar/profile and UI-controls commits
+are patch-equivalent or superseded by the release implementation. Preserve the
+old dirty drafts; do not merge their stale schema, source or generated snapshots.
+The September keyboard-booking branch is unique but outside V3 and incomplete
+(interactive-control/modal key handling and planned detail/help flows); it stays
+separate. Client quotation sources, fonts and rendered PDF artifacts are retained
+locally and excluded from application commits.
+
+Only test 6769/cogito-test has migration 0072 (journal 73); no database reset,
+seed, development/production migration or live provider action ran. Remaining
+release gates include real OAuth/enrollment/publish journeys, KOL admin browser
+acceptance, actual email/provider delivery, final PDF branding, deployment and
+client UAT. The ad hoc API-project typecheck includes the test tree and still
+has test typing errors; the supported four-workspace production check passes.
+
 ## KOL PostgreSQL integration checkpoint (23 October 2026)
 
 Migration 0072 is applied only to `127.0.0.1:6769/cogito-test` (Drizzle
