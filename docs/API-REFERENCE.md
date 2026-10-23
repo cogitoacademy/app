@@ -1,5 +1,14 @@
 # Cogito API Reference
 
+## Referral/KOL synthetic browser contract evidence
+
+The DB-free browser suite submits `POST /rpc/referral/saveGoogleChoice` with
+`{"json":{"code":"FRIEND-CODE"}}` or `{"json":{"code":null}}` and mocks
+`/rpc/adminReferral/listKolCommissions` results in the `{"json":...,"meta":[]}`
+envelope. It checks initial `{limit:50}` and exact next-cursor forwarding.
+This is client wiring evidence, not endpoint authorization or persistence proof;
+no endpoint behavior changes in this test-only slice.
+
 ## AUTH-02 and referral source contract (22 October 2026)
 
 Deployment prerequisite: additive migration `0071_referral_registration_rewards`
