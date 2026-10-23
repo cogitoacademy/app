@@ -354,3 +354,124 @@ for (const role of ["student", "tutor", "admin"] as const) {
     });
   });
 }
+
+for (const role of ["student", "tutor", "admin"] as const) {
+  for (const width of [390, 1440]) {
+    test(`sidebar sections toggle independently for ${role} at ${width}px`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 1000 });
+      const errors = await mockClasses(page, role);
+      await page.route("**/rpc/booking/listMine**", (route) =>
+        route.fulfill({
+          json: { json: { items: [{}, {}, {}], nextCursor: null }, meta: [] },
+        }),
+      );
+      await page.goto("/class-reports");
+      if (width < 1280)
+        await page
+          .getByRole("button", { name: "Open sidebar", exact: true })
+          .click();
+      const sidebar = page.locator("#app-sidebar");
+      await expect
+        .poll(() =>
+          sidebar.evaluate((element) =>
+            Math.round(element.getBoundingClientRect().x),
+          ),
+        )
+        .toBe(0);
+      const labels =
+        role === "admin"
+          ? [
+              "Overview",
+              "Teaching",
+              "Finance",
+              "Content & reviews",
+              "Resources",
+            ]
+          : [
+              "Overview",
+              role === "student" ? "Learning" : "Teaching",
+              "Resources",
+            ];
+      await Promise.all(
+        labels.map((label) =>
+          expect(
+            sidebar.getByRole("button", { name: label, exact: true }),
+          ).toHaveAttribute("aria-expanded", "true"),
+        ),
+      );
+      await page.screenshot({
+        path: test.info().outputPath("sidebar-expanded.png"),
+      });
+      const overview = sidebar.getByRole("button", {
+        name: "Overview",
+        exact: true,
+      });
+      const workflow = sidebar.getByRole("button", {
+        name: labels[1],
+        exact: true,
+      });
+      await overview.focus();
+      await page.keyboard.press("Enter");
+      await expect(overview).toHaveAttribute("aria-expanded", "false");
+      await expect(
+        sidebar.getByRole("link", { name: "Dashboard", exact: true }),
+      ).toHaveCount(0);
+      await page.screenshot({
+        path: test.info().outputPath("sidebar-collapsed-focus.png"),
+      });
+      await page.keyboard.press("Tab");
+      await expect(workflow).toBeFocused();
+      await page.keyboard.press("Space");
+      await expect(workflow).toHaveAttribute("aria-expanded", "false");
+      await expect(
+        sidebar.getByRole("link", { name: "Session reports", exact: true }),
+      ).toHaveCount(0);
+      await expect(overview).toHaveAttribute("aria-expanded", "false");
+      await page.keyboard.press("Space");
+      await expect(workflow).toHaveAttribute("aria-expanded", "true");
+      await expect(
+        sidebar.getByRole("link", { name: "Session reports", exact: true }),
+      ).toHaveAttribute("data-active", "true");
+      await expect(
+        sidebar.getByRole("link", { name: /3 needs action/ }),
+      ).toBeVisible();
+      const resources = sidebar.getByRole("button", {
+        name: "Resources",
+        exact: true,
+      });
+      await resources.click();
+      await expect(
+        sidebar.getByRole("button", { name: "WhatsApp Support", exact: true }),
+      ).toHaveCount(0);
+      await expect(
+        sidebar.getByRole("button", { name: /Class UI/ }),
+      ).toBeVisible();
+      await resources.click();
+      await sidebar
+        .getByRole("button", { name: "WhatsApp Support", exact: true })
+        .click();
+      await expect(page.getByRole("dialog")).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(
+        page.getByRole("dialog", { includeHidden: true }),
+      ).toHaveCount(0);
+      await overview.click();
+      await expect(overview).toHaveAttribute("aria-expanded", "true");
+      if (role !== "admin")
+        await expect(
+          sidebar.getByRole("link", { name: "Tutor payouts", exact: true }),
+        ).toHaveCount(0);
+      await sidebar
+        .getByRole("link", { name: "How it works", exact: true })
+        .click();
+      await expect(page).toHaveURL(/\/guide$/);
+      if (width < 1280)
+        await expect(
+          page.getByRole("button", { name: "Open sidebar", exact: true }),
+        ).toBeVisible();
+      expect(errors).toEqual([]);
+    });
+  }
+}

@@ -152,3 +152,16 @@ workflows have not been rerun in this UI audit. Route checks cover the existing
 development data and empty states, not every data/permission/error combination.
 The earlier report worker's DB/merge work remains separate. Web/API/DB/Redis are
 left running; email/payments remain stubbed and Calendar disabled.
+
+## Sidebar section controls (23 October 2026)
+
+- Implemented independent default-expanded Selia collapsibles for every role
+  section and Resources, retaining route/access rules and the account footer.
+- Synthetic verification uses `playwright.sidebar.config.ts` on isolated port
+  3302 with mocked auth/RPC, covering keyboard, tab order, active links, booking
+  badges, support, and mobile navigation. All six Chromium cases passed (28.5s).
+  Reviewed expanded mobile and collapsed desktop keyboard-focus screenshots.
+- Web and e2e typechecks passed with `--checkers 1` after limiting Go memory
+  (`GOMEMLIMIT=1GiB`, `GOMAXPROCS=2`); the initial web attempt exhausted Windows
+  virtual memory. Focused lint and diff checks passed.
+- No DB, provider, persistence, or API behavior changes.

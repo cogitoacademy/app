@@ -14,6 +14,17 @@ real Google OAuth, persisted referral choices, DB authorization/pagination,
 provider reconciliation and client UAT remain separate acceptance gates.
 No DB/provider/seed/reset/migration or development 3000/3001 session was used.
 
+## Core acceptance refresh (23 October 2026)
+
+The reset-free `class-enrollment.test.ts` suite passes 44 PostgreSQL tests /
+354 assertions against exact loopback 6769/cogito-test on integrated release
+source `fe3a6ea4`. It covers enrollment funding/expiry, class lifecycle/report
+settlement and reminder invariants using run-owned fixtures and targeted
+cleanup. No reset, migration, provider action or dev database write ran.
+This refresh does not claim a real browser journey or production acceptance.
+AUTH-02 source is already integrated through PR #309; its remaining gate is
+real Google/new-account choice/save/resume acceptance, not parent integration.
+
 ## Development sync checkpoint (23 October 2026)
 
 Root checkout is synchronized to integrated release source `31774397`. The
@@ -1634,17 +1645,22 @@ contract change.
 
 - **Overview:** Dashboard, Operations.
 - **Teaching:** Bookings, Classes, Session reports, Tutors.
-- **Finance:** Tutor payouts, Economy.
+- **Finance:** Tutor payouts, KOL commissions, Economy.
 - **Content & reviews:** Competitions, Achievements, Knowledge access, FAQ, Manage FAQs.
 
 Student links use **Overview** (Dashboard, Balance) and **Learning** (Tutors,
-Classes, My Bookings, Session reports, Achievements). Tutor links use
+Classes, My Bookings, Session reports, Achievements, My referrals). Tutor links use
 **Overview** (Dashboard) and **Teaching** (Bookings, Session reports,
 Availability, Tutor Profile). Student and tutor FAQ links sit in **Resources**
 after Knowledge Bank, alongside How it works, Competition Calendar, and WhatsApp
 Support. Admin FAQ stays in Content & reviews. All roles retain the account footer. The groups reuse Selia
-SidebarGroup/SidebarGroupTitle and the existing link rendering, active states,
-and booking-action badge. This is frontend presentation only; routes, RPC
+SidebarGroup with SidebarItemButton headings and independent default-expanded
+SidebarCollapsible/Trigger/Panel sections, including Resources. Native button
+triggers support Enter/Space, expose expanded state and a rotating chevron, and
+retain visible keyboard focus. Collapsed panels remove their links from the tab
+order. State lasts only for the mounted sidebar; no persistence is added.
+The existing link rendering, active states,
+and booking-action badge are preserved. This is frontend presentation only; routes, RPC
 contracts, services, event keys, persistence, and business rules are unchanged.
 
 ## Human-readable booking references (2026-09-04)
