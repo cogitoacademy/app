@@ -1,5 +1,12 @@
 # Release v3 - SDD execution and acceptance plan
 
+## Booking reminder verification checkpoint (23 October 2026)
+
+Parent verification at `c328d6ad` passes 7 reminder unit tests / 27 assertions
+and all four workspace typecheck tasks uncached in 8.002 seconds. The local
+dependency-integrity blocker is resolved; database concurrency and actual email
+delivery remain acceptance gates. No database migration or reset was performed.
+
 ## Classes presentation checkpoint (22 October 2026)
 
 Implemented the searchable single-card student catalog, curriculum/enrollment

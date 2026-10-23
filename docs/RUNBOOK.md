@@ -1,5 +1,15 @@
 # Cogito Runbook
 
+## Booking reminder parent verification (23 October 2026)
+
+At source commit `c328d6ad`, the parent reran the reminder unit suite: 7 tests
+and 27 assertions pass. All four workspace typecheck tasks pass uncached in
+8.002 seconds with serial execution and the repo-pinned single checker.
+The earlier broad type errors were caused by an incomplete local Zod 4.4.3
+package; restoring its missing declarations resolved the errors without source
+changes. PostgreSQL concurrency, actual email delivery, and browser acceptance
+remain unverified. No database, Redis, provider, reset, seed, or migration ran.
+
 ## Windows workspace typecheck memory
 
 Run the workspace check with `bun run check-types`. Package scripts limit
