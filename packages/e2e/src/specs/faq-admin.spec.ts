@@ -16,6 +16,7 @@ import {
   TUTOR_EMAIL,
   TUTOR_PASSWORD,
 } from "../fixtures/test-accounts";
+import { resetE2eAuthRateLimit } from "../fixtures/auth-rate-limit";
 type FaqRichTextRun = {
   text: string;
   bold?: boolean;
@@ -89,6 +90,7 @@ async function createAdminApiContext() {
 }
 
 async function createApiContext(email: string, password: string) {
+  resetE2eAuthRateLimit();
   const context = await request.newContext({
     baseURL: process.env.SERVER_URL ?? "http://localhost:3101",
   });

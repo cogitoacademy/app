@@ -8,6 +8,7 @@ import {
 } from "@playwright/test";
 
 import { ADMIN_EMAIL, ADMIN_PASSWORD } from "../fixtures/test-accounts";
+import { resetE2eAuthRateLimit } from "../fixtures/auth-rate-limit";
 
 type CatalogEntry = {
   id: string;
@@ -22,6 +23,7 @@ type CatalogEntry = {
 
 async function loginAsAdmin(page: Page) {
   await page.context().clearCookies();
+  resetE2eAuthRateLimit();
   await page.goto("/login");
   await page.locator("input#email").fill(ADMIN_EMAIL);
   await page.locator("input#password").fill(ADMIN_PASSWORD);
@@ -30,6 +32,7 @@ async function loginAsAdmin(page: Page) {
 }
 
 async function createAdminApiContext() {
+  resetE2eAuthRateLimit();
   const serverUrl = process.env.SERVER_URL ?? "http://localhost:3101";
   const context = await request.newContext({ baseURL: serverUrl });
   try {

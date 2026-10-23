@@ -823,16 +823,22 @@ this does not authorize the API test helper's broad `resetDatabase()` call.
 That helper has the stricter 6769/6770 reset policy documented above and below.
 
 GitHub Actions keeps its E2E dependencies disposable per workflow run: Postgres
-maps host `6769` to container `5432`, and Redis maps host `6381` to container
-`6379`. The job sets
-`DATABASE_URL=postgresql://postgres:password@localhost:6769/cogito-test`, Redis,
-API and web targets `6381/3201/3200`, and matching `T05_ENROLLMENT_TEST_*` ports.
-The generated `apps/server/.env.test`, migration step, Playwright config and
-global setup resolve this same target. T05 setup creates a fresh UUID-scoped
-student and skips the legacy seed-student delete path; no `resetDatabase()`
-consent flags are set. Never run this CI seed path against a retained local
-6769/6770 fixture; its database is disposable for the workflow run. Keep the
-safety guard unchanged.
+maps `6769` to `cogito-test` and `6770` to `cogito-test-payout`; Redis maps
+`6381` and `6382` to separate services. The regular browser partition uses
+`6769/6381`, API and web ports `3201/3200`, and the full
+`T05_ENROLLMENT_TEST_*` tuple. Its generated `.env.test`, migration step,
+Playwright config and global setup resolve that same target. T05 setup creates
+a fresh UUID-scoped student and skips the legacy seed-student delete path. The
+workflow opts in to the T06/T07 role states and keeps report fixture reset
+overrides absent. It runs the three tutor payout specs separately against
+`6770/cogito-test-payout` and Redis `6382`, with T05 variables unset.
+`E2E_AUTH_RATE_LIMIT_RESET=true` is explicit consent for the helper to clear
+only auth limiter keys on those exact disposable loopback pairs before seeded
+sign-ins; it does not change the product limit. No `resetDatabase()` consent
+flags are set. Never run this CI seed path against a retained local
+6769/6770 fixture; its databases and Redis services are disposable for the
+workflow run. Do not set this flag for the retained 6767/6768 development
+targets.
 
 Playwright starts its own API and web servers with `reuseExistingServer: false`;
 the default ports are 3101 and 3100. Keep both free, or configure different
@@ -2843,11 +2849,13 @@ bun scripts/run-test-suite.mjs api packages/api/src/tests/integration/contact-sh
 bun scripts/run-test-suite.mjs e2e --grep "identity surfaces"
 ```
 
-The workflow runs this single coverage-instrumented suite and then runs the
-server suite in a separate process because its webhook test uses module
-mocking. The previous duplicate uninstrumented API pass is intentionally not
-run. Test + Coverage starts independently from lint and typecheck. The coverage
-merger writes `coverage/lcov.merged.info`, leaving the Bun-generated raw
+The workflow runs resettable API/env/auth/DB/OpenAPI tests, reset-free report
+fixture suites, and payout integration tests against their exact database. It
+then runs the server suite in a separate process because its webhook test uses
+module mocking. The previous duplicate uninstrumented API pass is
+intentionally not run. Test + Coverage starts independently from lint and
+typecheck. The coverage merger unions all three profiles into
+`coverage/lcov.merged.info`, leaving the Bun-generated raw
 `coverage/lcov.info` untouched. The coverage comment enforces 100% coverage for
 `packages/api` lines, overall lines, functions, and branches from the merged
 file; a 0/0 branch total is treated as 100%. It runs only after successful test
@@ -2858,7 +2866,9 @@ records and add a behavior-level test before pushing. The generated PR comment
 uses blank lines between its status blockquote and tables; preserve these
 separators when editing the renderer.
 The DB unit test's environment mock includes an auth secret because Bun can
-share module mocks with integration tests in the resettable process.
+share module mocks with integration tests in the resettable process. Its tests
+restore the mocked environment after each case so a development-mode SSL test
+cannot affect the following auth integration cases.
 The Bun command's own function/statement output is
 diagnostic; the lcov gate is authoritative.
 

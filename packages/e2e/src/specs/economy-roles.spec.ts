@@ -9,6 +9,7 @@ import {
   TUTOR_EMAIL,
   TUTOR_PASSWORD,
 } from "../fixtures/test-accounts";
+import { resetE2eAuthRateLimit } from "../fixtures/auth-rate-limit";
 
 async function login(page: Page, email: string, password: string) {
   if (email === STUDENT_EMAIL) {
@@ -17,6 +18,7 @@ async function login(page: Page, email: string, password: string) {
   } else {
     await page.context().clearCookies();
   }
+  resetE2eAuthRateLimit();
   await page.goto("/login");
   const pathsAfterLoginPage: string[] = [];
   page.on("framenavigated", (frame) => {

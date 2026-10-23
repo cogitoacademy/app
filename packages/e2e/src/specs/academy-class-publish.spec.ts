@@ -12,6 +12,7 @@ import {
   STUDENT_EMAIL,
   STUDENT_PASSWORD,
 } from "../fixtures/test-accounts";
+import { resetE2eAuthRateLimit } from "../fixtures/auth-rate-limit";
 
 async function fillDateTime(page: Page, id: string, date: Date) {
   await page.locator(`#${id}`).click();
@@ -100,6 +101,7 @@ function toDateTimeLocal(date: Date) {
 }
 
 async function createApiContext(email: string, password: string) {
+  resetE2eAuthRateLimit();
   const context = await request.newContext({
     baseURL: process.env.SERVER_URL ?? "http://localhost:3101",
   });

@@ -664,6 +664,38 @@ workflow once manually because the PR base does not start it.
 No local database, seed, reset, migration, provider or browser test is part of
 this config fix.
 
+## T07 private report CI continuation (23 October 2026)
+
+Run [#39893686432](https://github.com/cogitoacademy/app/actions/runs/39893686432)
+on `d87ffd386130313749868f51cd56ebf3bd1b0220` completed with Build, Lint,
+Type Check and Detect passing. The coverage step had 3,029 passes and one
+failure: the stale-mail resend test received `null` instead of its replacement
+OTP capture. The missing resettable profile made the merger fail closed, so no
+coverage comment was posted; the earlier fallback percentages remain
+unverified and are not coverage-debt evidence. The stale OTP capture is
+guarded by `NODE_ENV=test`. The DB unit file shares a mocked server env module
+with integration tests and changes it to `development` for an SSL-redaction
+case without restoring it. The DB unit test now restores the initial mock
+after each case and asserts that cleanup; the next resettable run must confirm
+this caused the null OTP.
+
+The same run's E2E job had 43 passes and 11 failures. Two report journeys
+rejected the absent T07 opt-ins, the three payout journeys rejected the
+6769/cogito-test target, and sign-in-heavy cases hit the 10-per-minute auth
+limiter. The pending CI update enables the T06/T07 role-state flags, runs all
+three payout tests against disposable `6770/cogito-test-payout` and Redis
+6382, and explicitly resets only auth limiter keys before seeded sign-ins on
+those exact loopback pairs. It does not alter the production rate limit or set
+database-reset overrides for report fixtures. The 54-test Playwright inventory
+is split into 51 regular and 3 payout tests; both partitions still run, and
+the E2E report artifact includes both result directories.
+
+The new E2E reset consent is `E2E_AUTH_RATE_LIMIT_RESET=true`; without it the
+helper is a no-op, and with it only exact loopback 6769/6381 or 6770/6382 pairs
+are accepted. No local database, Redis, seed, reset, migration, browser or
+provider operation was performed. The next manually dispatched run is pending
+after the scoped changes are pushed.
+
 ## T07 on-demand booking report continuation (2026-10-22)
 
 **Status:** The source milestone is in isolated worktree `t3/admin-report-review-fixes`

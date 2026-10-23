@@ -10,6 +10,7 @@ import {
   TUTOR_NAME,
   TUTOR_PASSWORD,
 } from "../fixtures/test-accounts";
+import { resetE2eAuthRateLimit } from "../fixtures/auth-rate-limit";
 
 async function login(page: Page, email = SEED_EMAIL, password = SEED_PASSWORD) {
   if (email === SEED_EMAIL) {
@@ -18,6 +19,7 @@ async function login(page: Page, email = SEED_EMAIL, password = SEED_PASSWORD) {
   } else {
     await page.context().clearCookies();
   }
+  resetE2eAuthRateLimit();
   await page.goto("/login");
   const pathsAfterLoginPage: string[] = [];
   page.on("framenavigated", (frame) => {

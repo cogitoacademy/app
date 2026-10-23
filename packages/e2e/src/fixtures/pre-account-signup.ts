@@ -1,24 +1,12 @@
-import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import path from "node:path";
 import { request } from "@playwright/test";
 
+import { resetE2eAuthRateLimit } from "./auth-rate-limit";
 import { resolveE2eEnvironment } from "./e2e-environment";
 
 export async function createPreAccountSignupFixture() {
   const environment = resolveE2eEnvironment(process.env);
-  function resetAuthRateLimit() {
-    execFileSync("bun", ["run", "src/seed/reset-e2e-signup-rate-limit.ts"], {
-      cwd: path.resolve(process.cwd(), "../../apps/server"),
-      env: {
-        ...process.env,
-        NODE_ENV: "test",
-        DATABASE_URL: environment.databaseUrl,
-      },
-      stdio: "pipe",
-      timeout: 10_000,
-    });
-  }
+  const resetAuthRateLimit = resetE2eAuthRateLimit;
   resetAuthRateLimit();
   const api = await request.newContext({
     baseURL: environment.serverUrl,

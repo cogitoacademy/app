@@ -13,6 +13,7 @@ import {
   STUDENT_EMAIL,
   STUDENT_PASSWORD,
 } from "../fixtures/test-accounts";
+import { resetE2eAuthRateLimit } from "../fixtures/auth-rate-limit";
 
 type AdminClass = {
   id: string;
@@ -86,6 +87,7 @@ function assertT05EnrollmentTarget() {
 }
 
 async function createApiContext(email: string, password: string) {
+  resetE2eAuthRateLimit();
   const context = await request.newContext({
     baseURL: process.env.SERVER_URL ?? "http://localhost:3201",
   });
