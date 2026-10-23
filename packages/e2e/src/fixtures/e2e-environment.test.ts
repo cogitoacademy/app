@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { resolveE2eEnvironment } from "./e2e-environment";
+import path from "node:path";
+import { resolveE2eEnvironment, resolveE2eEnvFile } from "./e2e-environment";
 
 const validDatabaseUrl =
   "postgresql://postgres:password@localhost:6767/cogito-test";
@@ -24,6 +25,15 @@ function validEnvironment(
 }
 
 describe("E2E environment safety", () => {
+  test("resolves selected relative env files before child processes change cwd", () => {
+    const e2ePackageDir = path.resolve(import.meta.dir, "../..");
+    const selectedEnvFile = "../../apps/server/.env.test-payout";
+
+    expect(
+      resolveE2eEnvFile(e2ePackageDir, { ENV_FILE: selectedEnvFile }),
+    ).toBe(path.resolve(e2ePackageDir, selectedEnvFile));
+  });
+
   test("accepts localhost, IPv4 loopback, and IPv6 loopback PostgreSQL URLs", () => {
     for (const host of ["localhost", "127.0.0.1", "[::1]"]) {
       const environment = resolveE2eEnvironment(

@@ -89,7 +89,16 @@ async function mockClasses(page: Page, role: "student" | "tutor" | "admin") {
       route.request().postDataJSON() ?? (encoded ? JSON.parse(encoded) : {});
     const input = body?.json ?? {};
     let data: unknown = [];
-    if (procedure === "classes/list") data = [cohort, masterclass];
+    if (procedure === "admin/searchUsers")
+      data = [
+        {
+          id: "export-student",
+          name: "Export Student",
+          email: "export@example.test",
+          role: "student",
+        },
+      ];
+    else if (procedure === "classes/list") data = [cohort, masterclass];
     else if (procedure === "classes/get") data = cohort;
     else if (procedure === "classes/getMyEnrollments")
       data = {
@@ -147,6 +156,16 @@ async function mockClasses(page: Page, role: "student" | "tutor" | "admin") {
     else if (procedure === "booking/list") data = { items: [], total: 0 };
     return route.fulfill({ json: { json: data, meta: [] } });
   });
+  await page.route("**/reports/student/summary", (route) =>
+    route.fulfill({
+      json: {
+        reportCount: 1,
+        periodStart: past,
+        generatedAt: past,
+        timezone: "Asia/Jakarta",
+      },
+    }),
+  );
   return errors;
 }
 async function assertFits(page: Page) {
@@ -160,6 +179,77 @@ async function assertFits(page: Page) {
 }
 
 test.use({ storageState: { cookies: [], origins: [] } });
+for (const role of ["student", "admin"] as const) {
+  test(`${role} downloads a private report for the correct student`, async ({
+    page,
+  }) => {
+    test.setTimeout(60000);
+    const errors = await mockClasses(page, role);
+    let requested: unknown;
+    await page.route("**/reports/student/pdf", (route) => {
+      requested = route.request().postDataJSON();
+      return route.fulfill({
+        contentType: "application/pdf",
+        body: "%PDF-1.7\nsynthetic download fixture",
+      });
+    });
+    await page.goto("/class-reports", { waitUntil: "domcontentloaded" });
+    if (role === "admin") {
+      await expect(
+        page.getByRole("button", { name: "Download PDF", exact: true }),
+      ).toHaveCount(0);
+      await page.getByLabel("Choose a student").fill("Export");
+      await page
+        .getByRole("group", { name: "Student search results" })
+        .getByRole("button", { name: /Export Student/ })
+        .click();
+    }
+    const downloading = page.waitForEvent("download");
+    await page
+      .getByRole("button", { name: "Download PDF", exact: true })
+      .click();
+    expect((await downloading).suggestedFilename()).toMatch(
+      /^student-session-reports-\d{4}-\d{2}-\d{2}\.pdf$/,
+    );
+    expect(requested).toEqual(
+      role === "admin" ? { studentId: "export-student" } : {},
+    );
+    expect(errors).toEqual([]);
+  });
+}
+test("student sees an explicit empty report state and tutors have no export controls", async ({
+  page,
+}) => {
+  const errors = await mockClasses(page, "student");
+  await page.route("**/reports/student/summary", (route) =>
+    route.fulfill({
+      json: {
+        reportCount: 0,
+        periodStart: past,
+        generatedAt: past,
+        timezone: "Asia/Jakarta",
+      },
+    }),
+  );
+  await page.goto("/class-reports");
+  await expect(
+    page.getByText("No eligible reports in the last three calendar months", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Download PDF", exact: true }),
+  ).toHaveCount(0);
+  expect(errors).toEqual([]);
+  await mockClasses(page, "tutor");
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "Session reports", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Download student report PDF", { exact: true }),
+  ).toHaveCount(0);
+});
 for (const width of [320, 390, 768, 1440]) {
   test(`catalog and enrollment remain usable at ${width}px`, async ({
     page,

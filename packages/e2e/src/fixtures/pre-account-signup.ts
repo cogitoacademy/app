@@ -3,22 +3,12 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { request } from "@playwright/test";
 
-import { resolveE2eEnvironment } from "./e2e-environment";
+import { resetE2eAuthRateLimit } from "./auth-rate-limit";
+import { resolveE2eEnvironment, resolveE2eEnvFile } from "./e2e-environment";
 
 export async function createPreAccountSignupFixture() {
   const environment = resolveE2eEnvironment(process.env);
-  function resetAuthRateLimit() {
-    execFileSync("bun", ["run", "src/seed/reset-e2e-signup-rate-limit.ts"], {
-      cwd: path.resolve(process.cwd(), "../../apps/server"),
-      env: {
-        ...process.env,
-        NODE_ENV: "test",
-        DATABASE_URL: environment.databaseUrl,
-      },
-      stdio: "pipe",
-      timeout: 10_000,
-    });
-  }
+  const resetAuthRateLimit = resetE2eAuthRateLimit;
   resetAuthRateLimit();
   const api = await request.newContext({
     baseURL: environment.serverUrl,
@@ -51,9 +41,15 @@ export async function createPreAccountSignupFixture() {
     },
     cleanup() {
       const serverDir = path.resolve(process.cwd(), "../../apps/server");
+      const selectedEnvFile = resolveE2eEnvFile(process.cwd(), process.env);
       const output = execFileSync(
         "bun",
-        ["run", "src/seed/cleanup-e2e-signup.ts", email],
+        [
+          `--env-file=${selectedEnvFile}`,
+          "run",
+          "src/seed/cleanup-e2e-signup.ts",
+          email,
+        ],
         {
           cwd: serverDir,
           env: {

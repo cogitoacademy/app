@@ -8,6 +8,7 @@ import {
   type APIRequestContext,
 } from "@playwright/test";
 import { TUTOR_EMAIL } from "../fixtures/test-accounts";
+import { resolveE2eEnvFile } from "../fixtures/e2e-environment";
 
 type TutorListRow = {
   id: string;
@@ -113,9 +114,11 @@ function moveBookingPast(
   learningGoal: string,
 ) {
   const serverDir = path.resolve(process.cwd(), "../../apps/server");
+  const selectedEnvFile = resolveE2eEnvFile(process.cwd(), process.env);
   execFileSync(
     "bun",
     [
+      `--env-file=${selectedEnvFile}`,
       "run",
       "src/seed/move-on-demand-booking-report-past.ts",
       bookingId,

@@ -16,6 +16,8 @@ import {
   TUTOR_EMAIL,
   TUTOR_PASSWORD,
 } from "../fixtures/test-accounts";
+import { resolveE2eEnvFile } from "../fixtures/e2e-environment";
+import { resetE2eAuthRateLimit } from "../fixtures/auth-rate-limit";
 type FaqRichTextRun = {
   text: string;
   bold?: boolean;
@@ -89,6 +91,7 @@ async function createAdminApiContext() {
 }
 
 async function createApiContext(email: string, password: string) {
+  resetE2eAuthRateLimit();
   const context = await request.newContext({
     baseURL: process.env.SERVER_URL ?? "http://localhost:3101",
   });
@@ -231,7 +234,9 @@ test("admins can create and edit rich, alphabetized FAQs", async ({ page }) => {
     );
 
     await questionEditor.fill(englishQuestion);
-    await answerEditor.fill("");
+    await answerEditor.press("Control+A");
+    await answerEditor.press("Backspace");
+    await expect(answerEditor).toHaveText("");
     await adminPage
       .getByRole("button", { name: "Save FAQ", exact: true })
       .click();
@@ -472,10 +477,11 @@ test("admins can create and edit rich, alphabetized FAQs", async ({ page }) => {
       if (fixtureIds.length > 0) {
         assertDedicatedTestDatabase();
         const serverDir = path.resolve(process.cwd(), "../../apps/server");
+        const selectedEnvFile = resolveE2eEnvFile(process.cwd(), process.env);
         const cleanupOutput = execFileSync(
           "bun",
           [
-            "--env-file=.env.test",
+            `--env-file=${selectedEnvFile}`,
             "run",
             "src/seed/cleanup-e2e-faq.ts",
             ...fixtureIds,

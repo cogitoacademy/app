@@ -75,6 +75,51 @@ findings with no remaining spec/behavior findings. Its P2 documentation-status
 finding is corrected in this follow-up; the reviewer did not rerun tests.
 OAuth/browser UAT, development/production migration, and provider acceptance
 remain open.
+## Report PDF parent verification (22 October 2026)
+
+The parent repaired long metadata pagination and added a semantic student-search
+group. Academy topic metadata uses the session title, not its full curriculum.
+Dense current-format bullet lists can flow inline to retain one-page output;
+ordinary lists and legacy line breaks remain separate. Regressions cover three
+600-character fields, 300 short bullets per field, and 5,000-character metadata.
+Focused checks pass 29 tests / 104 assertions. A guarded non-reset PostgreSQL
+eligibility test passes 1 / 16 across private and academy adapters, exact-student
+charges, cancelled series parents, unfunded/released seats and date ordering.
+Web/server typechecks and a full server tsdown build pass. Three synthetic
+Chromium journeys pass for student/admin downloads, empty state and tutor UI
+denial. These browser routes are mocked; live-provider and final
+branding/deployment acceptance remain open. This supersedes older source-only
+DB/compiler notes below.
+
+## Report PDF and admin picker rereview (22 October 2026)
+
+The admin report picker now sends `role: "student"` to `admin.searchUsers`;
+the repository filters by role before sorting and limiting, while other admin
+searches retain their all-role behavior. Private PDF layout identifies legacy
+feedback from the history entry matching the persisted current report version
+and its `actorRole`; reports without that current history entry retain legacy
+layout. Feedback length no longer determines the layout, so short legacy lists
+keep their line breaks and can continue across labelled pages.
+
+Follow-up unit checks pass 81 tests / 208 assertions. Server and web
+`check-types --checkers 1` pass. The parent's PostgreSQL and synthetic Chromium
+evidence above was not rerun in this continuation; no database, browser,
+migration, reset, seed, or provider was used, and the saved PDF sample was left
+unchanged.
+
+## Windows TypeScript-Go memory guard (22 October 2026)
+
+The earlier Windows workspace check failed with `VirtualAlloc` errno 1455.
+Every package check script that runs `tsgo` now passes `--checkers 1`; the root
+`check-types` script serializes Turbo tasks with `--concurrency=1`, and
+Lefthook runs pre-push typecheck and lint-baseline commands sequentially. This
+reduces concurrent compiler pressure while keeping TypeScript-Go;
+`NODE_OPTIONS` does not control its Go checker parallelism.
+
+In this worktree, `bun run check-types` passed with 4/4 uncached tasks in
+12.832 seconds. The parent also measured the web check at 6.51 seconds with one
+checker after the default four-checker invocation ran out of memory. See the
+[typecheck memory plan](plans/active/WINDOWS-TYPECHECK-MEMORY.md).
 
 ## KOL first commission decision source slice (23 October 2026)
 
@@ -150,8 +195,47 @@ A local pre-migration dump is retained under ignored
 `tmp/v3-dev/checkpoint/cogito-pre-0070-20261022.dump`. Development booking (34),
 ledger (89), and feedback (2) counts are unchanged; history starts empty. No dev
 reset/seed, production migration, or live provider action ran. Test history is
-retained under run-scoped identities. PDF and broader legacy reminders remain open.
+retained under run-scoped identities. The private PDF source implementation is
+now authored in this isolated continuation; focused/unit/privacy checks and a
+rendered sample pass. Database/browser/deployment acceptance and broader legacy
+reminder coverage remain open.
 This acceptance supersedes older source-only/unapplied/pending-browser notes below.
+
+## T07 private student report PDF source implementation (2026-10-22)
+
+The isolated report-export module adds student self-download and an admin flow
+that requires selecting a student. Tutors cannot export arbitrary student data.
+It reads completed private solo/group reports, completed series children even
+after parent cancellation, and delivered cohort/masterclass reports with the
+selected student's funded and charged allocation. Exact private-booking ledger
+entitlement follows Q06; legacy feedback is decoded using report history. Data
+is read in one read-only repeatable-read snapshot, filtered from the same WIB
+calendar day three months ago through the captured generation instant, and
+sorted newest scheduled first with report-ID tie breaking.
+
+The Selia report workspace shows the student's live name, report count, and an
+explicit empty state. PDFs use a bundled DejaVu Sans font and a placeholder
+Cogito header, include live tutor/session metadata, preserve long legacy text on
+continuation pages, and have WIB generation date/page numbering. Focused export
+tests pass 9 tests / 31 expectations; rate-limit routing passes 18 / 67. The
+combined focused run passes 27 tests / 98 expectations. A seven-page sample was
+rendered and visually checked, including a three-field 600-character single-page
+case and long legacy continuation. No database, browser, migration, reset, seed,
+full server build or provider check ran in this source slice. Focused Bun and
+tsdown PDF-module bundles each emitted one JavaScript entry with the complete
+1,008,096-character font embedded and no separate font asset; the tsdown output
+was 3.28 MB (tsdown 0.22.14, Rolldown 1.2.3). Guarded database, authenticated
+browser, full typecheck, server tsdown/Docker build and deployment acceptance
+remain with the parent.
+
+### E2E CI environment forwarding (22 October)
+
+The root E2E command runs through Turbo's strict environment mode. The
+`@cogito-app/e2e` task now explicitly allows the variables used by Playwright
+and its test servers, including `WEB_URL` and `WEB_PORT`. CI writes the port to
+`apps/server/.env.test` but does not write the URL; dotenv loads after Turbo's
+filtering, so both values must be preserved as ambient task environment. The
+loopback URL and matching-port checks remain unchanged.
 
 ## REQ-REPORT-02/03 on-demand booking report review-fix continuation (2026-10-22)
 
@@ -244,7 +328,8 @@ Web numeric fields use the shared Selia NumberField with styled steppers. Academ
 lifecycle and payout date/time fields reuse CrossBrowserDateTimeInput. Card/Table
 width, spacing and narrow-card header actions are handled in shared components;
 per-page table-width overrides have been removed. The calendar month selector
-registers its visible labels before opening. Source audit and component browser
+registers its visible labels before opening, and date pickers expose the next
+100 years by default for future schedules. Source audit and component browser
 checks are recorded in [the UI audit plan](plans/active/UI-CONTROLS-AND-LAYOUT-AUDIT.md).
 Authenticated admin/student route smoke checks now pass for the states listed
 in the audit plan. Academy rate controls use an independent auto-fit grid to
@@ -454,7 +539,7 @@ API/web typechecks remain blocked by duplicate linked Drizzle declarations; see
 
 ## T05 repeat-run fixture identity (2026-10-21)
 
-On exact loopback `cogito-test:6769`, Playwright global setup creates a run-scoped student email (`cogito.e2e.<uuid>@yopmail.com`), seeds the usual password and Andre display name, and passes that identity to each E2E worker. The T05 reset command returns without querying or changing the shared seed student. Existing enrollment, cancellation, ledger, quote and payment history remains untouched; the new student starts with an independent seed wallet. The disposable database accumulates one run-scoped account and its fixtures per run; volume cleanup remains a separately assigned lifecycle task. This T05 identity flow remains separate from the API `resetDatabase()` helper. The API helper always rejects reset on 6767/6768; its only allowed reset targets are exact 6769/6770 database pairs with both explicit consent variables. This removes FK cleanup assumptions and lets later T07 report/payout rows remain attached to their original enrollments.
+On exact loopback `cogito-test:6769`, Playwright global setup creates a run-scoped student email (`cogito.e2e.<uuid>@yopmail.com`), seeds the usual password and Andre display name, and passes that identity to each E2E worker. The T05 reset command returns without querying or changing the shared seed student. Existing enrollment, cancellation, ledger, quote and payment history remains untouched; the new student starts with an independent seed wallet. The T05-only starting balance is 326 Marks so the earlier booking-flow journey can hold 126 Marks while the class-enrollment journey retains its established 200-Mark funding; other seed targets retain the 200-Mark default. A second run-scoped student starts with 200 Marks for the parallel multi-plan class journey, keeping its 149-Mark spend separate from the booking and lifecycle cases. The disposable database accumulates two run-scoped accounts and their fixtures per run; volume cleanup remains a separately assigned lifecycle task. This T05 identity flow remains separate from the API `resetDatabase()` helper. The API helper always rejects reset on 6767/6768; its only allowed reset targets are exact 6769/6770 database pairs with both explicit consent variables. This removes FK cleanup assumptions and lets later T07 report/payout rows remain attached to their original enrollments.
 
 Pure guard and identity tests pass. A transactionally isolated regression for the exact 6769 target is authored but was not run because the T07 worker owns the serialized database window. It checks that repeated T05 reset calls preserve cancellation spending and stub-payment rows, then rolls back its synthetic class fixture. No reset, migration, browser E2E or full typecheck was performed for this slice.
 
@@ -801,8 +886,10 @@ submitted/corrected history event, and `legacy_snapshot` events, are decoded
 exactly once on read. New versioned text is never unescaped; legacy content is
 not backfilled or truncated and may exceed the current 600-codepoint input cap.
 Class report settlement is implemented in the T07 backend. The role-based report
-workspace is documented below; PDF and broader legacy reminder coverage remain
-pending. On-demand booking reports are in the isolated source continuation above.
+workspace is documented below; private PDF source implementation and its focused
+render checks are recorded in the current checkpoint above. Guarded database,
+browser and deployment-bundle acceptance plus broader legacy reminder coverage
+remain pending. On-demand booking reports are in the isolated source continuation above.
 Focused report + booking regression: 295 tests pass; web typecheck passes.
 
 ## V3 class session reports and payout identity (2026-10-21)
@@ -829,7 +916,9 @@ wallet, allocation, ledger, fee, report and session facts across reminder writes
 Whole-class cancellation leaves a retained past scheduled session eligible until
 its report is submitted; cancelled/completed sessions and completed classes stop.
 The legacy solo/group/series reminder policy is unchanged and broader coverage is
-still pending. PDF remains open. Tutor, admin, and student browser acceptance
+still pending. PDF source, focused tests and rendered sample are recorded in the
+current checkpoint above; parent DB/browser/deployment acceptance remains open.
+Tutor, admin, and student browser acceptance
 passes against real RPCs, as do web and E2E no-emit typechecks from the earlier
 report implementation checkpoint. This reminder verification used no browser,
 live email or external provider and required no migration.
@@ -2264,8 +2353,8 @@ Internal-only modules with no RPC procedures: `audit`, `economy`, `email`, `meet
 
 ## CI/CD
 
-- **CI test and coverage performance (2026-09-02):** `.github/workflows/ci.yml` restores the shared Bun install cache before `bun install`, and typecheck/build restore separate Turbo caches. Pull requests use full git history plus Turbo `--affected` for typecheck and build; manual dispatches still run the full graph. The web `check-types` task runs `tsgo --noEmit`, leaving the production Vite build to the Build job. Test + Coverage starts independently of lint/typecheck, runs one lcov-producing coverage suite, then the server suite in a separate process because its webhook test uses `mock.module`; the previous duplicate uninstrumented API pass is removed. A failed coverage test command is explicitly propagated after the coverage comment/gate step.
-- **GitHub Actions** (`.github/workflows/ci.yml`): 5 jobs (lint, typecheck, build, test+coverage, and the isolated E2E Browser Workflow). The lint job auto-applies `oxlint --fix` + `oxfmt --write` and commits the fixes back to the PR branch before verifying, so formatting nits don't require a manual push cycle. Tests run `packages/api/src/tests/`, the env/auth/db package tests, and `apps/server/src/openapi.test.ts` in the coverage process; the remaining `apps/server/src/` tests stay in a **separate process** because the webhook idempotency TTL test uses `mock.module` for `@cogito-app/api`. The E2E package participates in the root typecheck gate and the E2E job provisions PostgreSQL 16 and Redis 7, writes an isolated `.env.test`, migrates, installs Chromium, starts the web server in Vite `test` mode, runs the full seeded workflow, and uploads the Playwright HTML report plus failure screenshots/traces on failure or success. Test hooks have a 30-second budget to absorb slow CI database setup while still catching hangs. Coverage gate: `packages/api` lines, overall lines, overall functions, and overall branches must each be 100% (enforced by `.github/scripts/coverage-comment.ts`; a 0/0 branch total is treated as 100%). The PR comment separates the status blockquote and coverage tables with blank lines required by GitHub Markdown.
+- **CI test and coverage performance (2026-09-02):** `.github/workflows/ci.yml` restores the shared Bun install cache before `bun install`, and typecheck/build restore separate Turbo caches. Pull requests use full git history plus Turbo `--affected` for typecheck and build; manual dispatches still run the full graph. The web `check-types` task runs `tsgo --noEmit`, leaving the production Vite build to the Build job. Test + Coverage starts independently of lint/typecheck, captures and merges the three coverage partitions, then runs the server suite in a separate process because its webhook test uses `mock.module`; the previous duplicate uninstrumented API pass is removed. A failed coverage test command is explicitly propagated after the coverage comment/gate step.
+- **GitHub Actions** (`.github/workflows/ci.yml`): 5 jobs (lint, typecheck, build, test+coverage, and the isolated E2E Browser Workflow). The lint job auto-applies `oxlint --fix` + `oxfmt --write` and commits the fixes back to the PR branch before verifying, so formatting nits don't require a manual push cycle. Tests run `packages/api/src/tests/`, the env/auth/db package tests, and `apps/server/src/openapi.test.ts` in the coverage process; the remaining `apps/server/src/` tests stay in a **separate process** because the webhook idempotency TTL test uses `mock.module` for `@cogito-app/api`. The E2E package participates in the root typecheck gate and the E2E job provisions PostgreSQL 16 and Redis 7, writes an isolated `.env.test`, migrates, installs Chromium, starts the web server in Vite `test` mode, runs the full seeded workflow, and uploads the Playwright HTML report plus failure screenshots/traces on failure or success. Test hooks have a 30-second budget to absorb slow CI database setup while still catching hangs. Coverage gate: `packages/api` lines, overall lines, overall functions, and overall branches must each be 100% (enforced by `.github/scripts/coverage-comment.ts`; a 0/0 branch total is treated as 100%). The PR comment separates the status blockquote and coverage tables with blank lines required by GitHub Markdown. Test + Coverage uses disposable PostgreSQL services at runner ports 6769 (`cogito-test`) and 6770 (`cogito-test-payout`); the payout schema is migrated separately and `booking-payout-g16.test.ts` runs only against the latter with its reset consent scoped to that command. Reset-free report fixture suites run on 6769 without reset overrides. Bun writes each run's LCOV output to the configured `coverage/lcov.info`; the workflow clears that file before each of the resettable, fixture, and payout partitions, then snapshots the fresh non-empty profile under `coverage/api-*` before the next Bun process replaces it. The three raw profiles are merged to `coverage/lcov.merged.info` before the unchanged coverage gate; the comment step only reads this merged output after the test/merge step succeeds. The DB unit test mock includes a test-only auth secret because Bun can share module mocks with integrations in the resettable process; it restores its shared server env mock after each case so the SSL-redaction setup cannot leak NODE_ENV=development into resettable auth integrations. `.github/scripts/merge-lcov.test.ts` verifies line/function/branch unions, raw profile preservation, and rejects missing, empty, or recordless profiles. The E2E job maps disposable PostgreSQL targets 6769/cogito-test and 6770/cogito-test-payout, with separate Redis services on 6381 and 6382. Regular browser tests use strict Turbo env forwarding, the full T05 target tuple, and T06/T07 role-state opt-ins; the three payout specs run separately against 6770/6382 with T05 variables unset. E2E_AUTH_RATE_LIMIT_RESET is explicit workflow consent for a target-guarded helper that clears only disposable auth limiter keys before seeded sign-ins; the production rate limit is unchanged. Report fixture reset overrides remain absent, and T05 keeps its fresh per-run student identity.
 - **CD**: The production workflow and `scripts/migrate-and-deploy.sh` are restored to their last known successful state at `bb1ccb9a` after a VPS-side immutable-image pull exhausted disk and crashed the self-hosted runner. GitHub Actions builds and pushes server/web images on a hosted runner; the VPS job resolves the private database, runs pg_dump → private R2 snapshot → `bun run db:migrate`, posts the configured Coolify webhook, and verifies `/health.version`. The VPS deploy job does not pull application images directly. Infra apply and production CD share the `production-deploy` concurrency group, preventing env restarts from racing image rollout.
 - **Lefthook** pre-commit: oxlint + oxfmt. Pre-push: typecheck.
 - **Labeler** (`.github/workflows/labeler.yml`): labels PRs `server`/`web`/`infrastructure`/`docs` by changed paths (`.github/labeler.yml`); needs `pull-requests: write` permission.
@@ -2275,6 +2364,16 @@ Internal-only modules with no RPC procedures: `audit`, `economy`, `email`, `meet
 - **Deployment platform**: Coolify for the API (self-hosted PaaS on the VPS) and Cloudflare Pages for the frontend
 - **Scheduler boot**: The BullMQ worker + 7 repeatable jobs (`expire-bookings` 5m, `release-expired-holds` 10m, `check-tutor-lateness` 5m, `send-notification-email` 60s, `escalate-support-tickets` 15m, `retry-failed-meetings` 5m, `reconcile-payments` 15m — wired in `apps/server/src/scheduler.ts`) only start when the server runs with `SCHEDULER_ENABLED=true` **and** `REDIS_URL` set (via `initScheduler()`, wired in server bootstrap). Without both, the scheduler logs `scheduler_skip` and the booking-expiry/hold-release/email/SLA/payment-reconciliation jobs never run. **Fail-loud boot:** when `SCHEDULER_ENABLED=true` but Redis is unreachable, `initScheduler()` pings the shared Redis (`checkSchedulerHealth`) and **throws — the boot aborts** instead of silently running without the expiry/hold-release/email/payment-reconciliation jobs. `send-notification-email` consumes the email outbox (`notification.dispatchQueuedEmails`): notification writes queue dispatch rows (`status='queued'`) inside the DB transaction and the scheduler sends them, so no email I/O happens inside open transactions. `GET /health` surfaces a `checks.scheduler` entry (`ok`/`error`/`degraded` from the same Redis ping), so a dead scheduler trips the readiness check.
   1d8dd3b (feat(infra): add OVH Terraform and Coolify bootstrap)
+
+PR310 LCOV merge behavior (23 October 2026): Bun may emit `FNF`/`FNH` without function identities. The merger preserves the exact named union and uses the maximum profile summary and known named counts as conservative lower bounds, writes a function-identity sidecar, and labels incomplete counts in the PR report. It fails the unchanged 100% gate when unidentified functions remain uncovered; incomplete identities are not described as a fully measured function union.
+
+PR310 CI follow-up (23 October 2026): Run [#39896841727](https://github.com/cogitoacademy/app/actions/runs/39896841727) passed Build, Lint and Type Check. Test + Coverage stopped on two server guard unit assertions that expected obsolete denial text; the coverage threshold step was skipped, so this run does not establish a coverage failure. The regular E2E partition had eight failures: outdated empty-state copy, a seeded wallet with an earlier 126-Mark booking hold, stale pre-V3 pricing assertions, and report fixtures with overlapping fixed schedule times. The payout partition failed during setup because nested Bun children loaded the regular env file instead of the selected payout file. Scoped fixes preserve strict guards and production limits, give the exact 6769 T05 booking/lifecycle student 326 Marks for its 126-Mark booking hold, and create a second run-scoped 200-Mark student for the parallel multi-plan class journey. They also assert current student Marks pricing and the read-only tutor honorarium table, use retry-stable class session dates, and pass the resolved absolute E2E env file into child Bun commands. Both browser partitions, all tests and the 100% coverage thresholds remain enabled. Focused pure guard/environment checks pass 15 tests / 50 expectations under available Bun 1.4.0-canary.1, and Playwright test discovery lists 54 tests across 14 files without starting a browser; pre-commit lint/format hooks pass with existing lint warnings; the serial pre-push check, push and one manual CI dispatch remain. No local database, Redis, seed, migration or provider operation is part of this follow-up.
+
+Run [#39909560681](https://github.com/cogitoacademy/app/actions/runs/39909560681) on `6ef0b948` passed Build, Lint and Type Check. The two server reset-guard assertions are now resolved; server tests finished with 152 passed, one skipped, and zero failures. All three coverage partitions also passed (3,031 resettable tests, 56 fixture tests, and 11 payout tests), but the merger stopped because `coverage/api-resettable/lcov.info` was absent. Bun 1.3.14 printed the full resettable coverage table but did not create the requested custom `--coverage-dir` path; a focused run under available Bun 1.4.0-canary.1 reproduced the configured default output at `coverage/lcov.info`. The workflow now removes that default profile before each partition, requires a fresh non-empty LCOV file, and copies it into the partition path before the next process. The merger remains fail-closed and all 100% thresholds remain unchanged. E2E completed with payout successful and the regular partition at 45 passed, 5 failed, and 1 flaky. Three class enrollment/report failures came from sharing the run-scoped student wallet: the multi-plan journey spends 149 Marks while the other class journeys need 80, 22, and 25 after the seeded 126-Mark booking hold. The multi-plan case now uses a second run-scoped 200-Mark student in its dedicated authenticated browser context; the T05 326-Mark balance and the 80/44/25 and insufficient-funds assertions remain unchanged. The class-publish journey exceeded Playwright's default 30-second test timeout, so that one multi-step test now has 90 seconds with its assertions intact. The uppercase auth `NOT_FOUND` log corresponds to the deliberate case-variant route rejection in `pre-account-signup.spec.ts`. The flaky FAQ validation passed on retry. This run does not establish a coverage-threshold failure.
+
+Run [#39913840116](https://github.com/cogitoacademy/app/actions/runs/39913840116) passed Build, Lint, Type Check and all server/coverage test partitions (152 server tests passed, one skipped; the three coverage partitions had zero failures), but the merger stopped because Bun 1.3.14 emitted `FNF`/`FNH` summaries without `FN`/`FNDA` identities for some sources. The 100% threshold step did not run. E2E had 48 regular passes and 3 regular failures; all 3 payout tests passed. The failed regular cases were the class-publish helper using calendar-dialog selectors for native `datetime-local` inputs, an ambiguous replacement-start accessible name, and class-report assertions matching a timestamp plus badge while the report enrollment reused a wallet depleted by parallel class journeys. The helper now fills and checks the native value, the enrollment test selects the textbox role, and T07 uses its own run-scoped 200-Mark report student. The 326-Mark booking/lifecycle wallet, the multi-plan 200-Mark wallet, and the 80/44/25 and insufficient-funds checks remain intact. Focused LCOV merger tests pass 6 tests / 55 expectations; E2E identity fixture tests pass 2 / 4. At that checkpoint the edits were still unpushed; the later 8945d6b update and current CI follow-up are recorded below.
+
+PR310 follow-up on `90863a22`, based on `8945d6b` (23 October 2026): The partition runner uses a temporary Bun config without the per-file 80% threshold; the merged gate retains 100%. Class schedule E2E uses Selia calendar and minute-time controls, keeps generated dates inside the calendar future range, and matches report-version text exactly. The focused LCOV suite passes 11 tests / 145 expectations under Bun 1.4.0-canary.1; touched TypeScript formatting passes and focused lint exits 0 with existing `no-await-in-loop` warnings. Normal pre-push passed on `90863a22` (serial typecheck 4/4 tasks, 25.04 seconds). Full hosted CI [run 39939287307](https://github.com/cogitoacademy/app/actions/runs/39939287307) is in progress on this code commit. No local database or browser acceptance ran.
 
 ## Plans
 
@@ -2304,7 +2403,7 @@ file are the permanent record; plan-file archives are not maintained.
 
 | Plan                                                  | Status                                                                                                                                                                                                                                                                                                                                                                        |
 | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `docs/plans/active/RELEASE-V3-PRD.md` + SPEC/TASKS    | `RELEASE-V3-TASKS.md` is the current status authority. T03 tax/payout, T05 enrollment, the integrated T06 core lifecycle, and T07 class report settlement/reminders have focused evidence; the T07 reminder worker is integrated at 1f9b6dd7 and parent-verified (44 PostgreSQL tests / 354 expectations; pure reminders 7 / 25); no development seed or migration ran in that checkpoint. T07 on-demand booking admin reports/corrections are verified in PR #305: 42 tests / 218 assertions plus one real-RPC Chromium journey. Migration 0070 is applied to guarded test and local dev; production rollout is separate. PDF and broader legacy solo/group/series reminder coverage remain open. T04, T08, T10, T11 and overall release acceptance remain in progress; T09/T12 and OPS01 are open. |
+| `docs/plans/active/RELEASE-V3-PRD.md` + SPEC/TASKS    | `RELEASE-V3-TASKS.md` is the current status authority. T03 tax/payout, T05 enrollment, the integrated T06 core lifecycle, and T07 class report settlement/reminders have focused evidence; the T07 reminder worker is integrated at 1f9b6dd7 and parent-verified (44 PostgreSQL tests / 354 expectations; pure reminders 7 / 25); no development seed or migration ran in that checkpoint. T07 on-demand booking admin reports/corrections are verified in PR #305: 42 tests / 218 assertions plus one real-RPC Chromium journey. Migration 0070 is applied to guarded test and local dev; production rollout is separate. Private PDF source, combined export and rate-limit checks: 27 tests / 98 expectations and a rendered seven-page sample are recorded in the current isolated checkpoint; DB/browser/deployment acceptance and broader legacy solo/group/series reminder coverage remain open. T04, T08, T10, T11 and overall release acceptance remain in progress; T09/T12 and OPS01 are open. |
 | `docs/plans/active/DEFERRED-OPS-TASKS.md`             | Active — code gaps done, §3/§4 operator-console items pending                                                                                                                                                                                                                                                                                                                 |
 | `docs/plans/active/DEPLOYMENT-PLAN.md`                | Active — applied 2026-08-31; remaining scope tracked in the plan                                                                                                                                                                                                                                                                                                              |
 | `docs/plans/active/PAYMENT-INTEGRITY-FLAP.md`         | Active — payment-integrity alert stability                                                                                                                                                                                                                                                                                                                                    |
@@ -2770,7 +2869,7 @@ Student- and admin-facing numeric Marks amounts use the shared `CogitoMarks` com
 
 ### T07 integrated development checkpoint (21 October)
 
-Report workspace, class settlement, immutable revisions and class fee payout identity are integrated through `d508467b` on local `f/release-v3`. Development DB 6767 is migrated through 0067 (journal id 88; hash `0510e3bd5f1fd36860b8f289c81db5034b4ba40a2f1527736ea280ea77651037`), with API health and protected report route verified after restart. Isolated acceptance: report journey 1 pass, enrollment 2 passes on each of two runs, web/E2E typechecks passed; the saved DB suite passed 29 tests / 203 assertions. PDF export, on-demand admin correction and remaining T06 lifecycle rules are still open; main is unchanged.
+Report workspace, class settlement, immutable revisions and class fee payout identity are integrated through `d508467b` on local `f/release-v3`. Development DB 6767 is migrated through 0067 (journal id 88; hash `0510e3bd5f1fd36860b8f289c81db5034b4ba40a2f1527736ea280ea77651037`), with API health and protected report route verified after restart. Isolated acceptance: report journey 1 pass, enrollment 2 passes on each of two runs, web/E2E typechecks passed; the saved DB suite passed 29 tests / 203 assertions. At that checkpoint PDF export, on-demand admin correction and remaining T06 lifecycle rules were still open; main was unchanged.
 
 ### T07 pending-report reminder implementation (21 October)
 
@@ -2787,5 +2886,6 @@ submitted reports stop reminders. It does not touch report, delivery, wallet,
 allocation or tutor-fee state. Fake-clock unit tests pass 7 / 25; guarded non-reset
 PostgreSQL regressions pass 3 / 34 on exact loopback `6769/cogito-test`, using
 only owned UUID fixtures. No live email, browser or external provider was used.
-Legacy solo/group/series reminder coverage remains pending. PDF export and the
-dedicated on-demand admin correction workflow remain pending.
+Legacy solo/group/series reminder coverage remains pending. The PDF and dedicated
+on-demand admin correction work were pending at this reminder checkpoint; see
+the current source and acceptance status above.

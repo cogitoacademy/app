@@ -146,7 +146,7 @@ describe("AdminHandler", () => {
     });
   });
 
-  test("delegates admin user search to the service", async () => {
+  test("delegates the admin user search role filter to the service", async () => {
     const searchUsers = mock(async () => [
       {
         id: "u1",
@@ -160,7 +160,7 @@ describe("AdminHandler", () => {
     const context = {
       session: { user: { id: "admin1" } },
     } as any;
-    const input = { query: "ada", limit: 10 };
+    const input = { query: "ada", limit: 10, role: "student" as const };
 
     await expect(handler.searchUsers({ context, input })).resolves.toEqual([
       expect.objectContaining({ id: "u1" }),

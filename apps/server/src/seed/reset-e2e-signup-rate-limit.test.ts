@@ -15,6 +15,7 @@ test.each([
         env: {
           ...process.env,
           NODE_ENV: "test",
+          E2E_AUTH_RATE_LIMIT_RESET: "true",
           DATABASE_URL: `postgresql://test:test@127.0.0.1:6769/${database}`,
           REDIS_URL: `redis://127.0.0.1:${redisPort}`,
         },
@@ -24,7 +25,10 @@ test.each([
     );
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain(
-      "Signup rate-limit reset requires the paired local test DB/Redis target",
+      "Auth rate-limit reset requires explicit consent and the exact disposable loopback DB/Redis pair.",
+    );
+    expect(result.stderr).not.toMatch(
+      /ECONNREFUSED|ECONNRESET|connection refused/i,
     );
   },
 );

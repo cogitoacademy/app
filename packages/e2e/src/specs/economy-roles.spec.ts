@@ -9,6 +9,7 @@ import {
   TUTOR_EMAIL,
   TUTOR_PASSWORD,
 } from "../fixtures/test-accounts";
+import { resetE2eAuthRateLimit } from "../fixtures/auth-rate-limit";
 
 async function login(page: Page, email: string, password: string) {
   if (email === STUDENT_EMAIL) {
@@ -17,6 +18,7 @@ async function login(page: Page, email: string, password: string) {
   } else {
     await page.context().clearCookies();
   }
+  resetE2eAuthRateLimit();
   await page.goto("/login");
   const pathsAfterLoginPage: string[] = [];
   page.on("framenavigated", (frame) => {
@@ -92,9 +94,25 @@ test("student sees closed-loop Marks pricing and cannot open admin economy", asy
   await expect(
     page.getByRole("heading", { name: "Book a Session", exact: true }).last(),
   ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Diego by Cogito", exact: true })
+    .click();
   await expect(
-    page.getByRole("button", { name: /From \d+ Marks/ }).first(),
+    page.getByRole("heading", { name: "Pricing", exact: true }),
   ).toBeVisible();
+  await expect(
+    page
+      .getByRole("table")
+      .first()
+      .getByRole("columnheader", { name: "Online", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole("table")
+      .first()
+      .getByRole("columnheader", { name: "Offline", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByLabel(/\d+ Marks/).first()).toBeVisible();
 
   await page.goto("/admin-economy");
   await page.waitForURL("/dashboard");
@@ -120,15 +138,30 @@ test("tutor sees IDR honorarium setup without the old Marks cash-out copy", asyn
       exact: true,
     }),
   ).toBeVisible();
-  await expect(page.getByText("Base honorarium")).toBeVisible();
-  await expectNumberFieldValue(
-    page.locator("#tutor-base-rate-online"),
-    175_000,
+  await expect(
+    page.getByText("Honorarium rates", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("columnheader", { name: "Online honorarium" }).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("columnheader", { name: "Offline honorarium" }).first(),
+  ).toBeVisible();
+  const firstHonorariumRow = page
+    .getByRole("table")
+    .first()
+    .getByRole("row")
+    .nth(1);
+  await expect(firstHonorariumRow.getByRole("cell").nth(0)).toHaveText(
+    "1 student",
   );
-  await expectNumberFieldValue(
-    page.locator("#tutor-base-rate-offline"),
-    225_000,
+  await expect(firstHonorariumRow.getByRole("cell").nth(1)).toHaveText(
+    /^Rp[\d.]+$/,
   );
+  await expect(firstHonorariumRow.getByRole("cell").nth(2)).toHaveText(
+    /^Rp[\d.]+$/,
+  );
+  await expect(page.locator("#tutor-base-rate-online")).toHaveCount(0);
   await expect(page.getByText(/7,000|cash[- ]out/i)).toHaveCount(0);
 
   await page.goto("/onboarding");

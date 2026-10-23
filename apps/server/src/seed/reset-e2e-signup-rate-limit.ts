@@ -4,22 +4,31 @@ const database = new URL(process.env.DATABASE_URL ?? "");
 const redisTarget = new URL(process.env.REDIS_URL ?? "");
 const loopback = new Set(["localhost", "127.0.0.1", "::1"]);
 const redisPorts = new Map([
-  ["6767", "6379"],
-  ["6768", "6380"],
   ["6769", "6381"],
+  ["6770", "6382"],
+]);
+const databaseNames = new Map([
+  ["6769", "/cogito-test"],
+  ["6770", "/cogito-test-payout"],
 ]);
 if (
+  process.env.E2E_AUTH_RATE_LIMIT_RESET !== "true" ||
   process.env.NODE_ENV !== "test" ||
   !["postgres:", "postgresql:"].includes(database.protocol) ||
   !loopback.has(database.hostname.replace(/^\[|\]$/g, "")) ||
-  database.pathname !== "/cogito-test" ||
+  database.pathname !== databaseNames.get(database.port) ||
+  database.search !== "" ||
+  database.hash !== "" ||
   redisTarget.protocol !== "redis:" ||
   !loopback.has(redisTarget.hostname.replace(/^\[|\]$/g, "")) ||
+  redisTarget.pathname !== "" ||
+  redisTarget.search !== "" ||
+  redisTarget.hash !== "" ||
   !redisPorts.has(database.port) ||
   redisPorts.get(database.port) !== redisTarget.port
 ) {
   throw new Error(
-    "Signup rate-limit reset requires the paired local test DB/Redis target.",
+    "Auth rate-limit reset requires explicit consent and the exact disposable loopback DB/Redis pair.",
   );
 }
 
