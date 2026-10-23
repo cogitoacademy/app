@@ -691,7 +691,7 @@ this exact guarded test database; no customer pricing pointer or external
 provider is called. Vite uses `apps/web/node_modules/.vite-t05-enrollment` for
 the T05 browser server to avoid contending with the existing app's Vite cache.
 
-The Playwright global setup requires `NODE_ENV=test`, `T05_ENROLLMENT_TEST_DB_PORT=6769`, loopback PostgreSQL port 6769 and exact `/cogito-test`. It skips cleanup on 6767 and 6768. Each 6769 run gets a fresh seeded student email and the familiar Andre display name; existing enrollment, cancellation, ledger, quote and payment history is left unchanged. This avoids rewriting financial history and gives the new run an independent wallet. The test seed blanks Resend credentials. The disposable T05 database accumulates one run-scoped account and its fixtures per run; volume cleanup remains a separately assigned lifecycle task. The separate payout target at 6770 keeps the legacy-only reset for the exact Andre seed identity.
+The Playwright global setup requires `NODE_ENV=test`, `T05_ENROLLMENT_TEST_DB_PORT=6769`, loopback PostgreSQL port 6769 and exact `/cogito-test`. It skips cleanup on 6767 and 6768. Each 6769 run gets a fresh seeded student email and the familiar Andre display name; existing enrollment, cancellation, ledger, quote and payment history is left unchanged. This avoids rewriting financial history and gives the new run an independent wallet. Its T05-only starting balance is 326 Marks: booking-flow reserves 126 Marks before class-enrollment coverage, which retains its established 200-Mark funding assertions. Other seed targets keep the 200-Mark default. The test seed blanks Resend credentials. The disposable T05 database accumulates one run-scoped account and its fixtures per run; volume cleanup remains a separately assigned lifecycle task. The separate payout target at 6770 keeps the legacy-only reset for the exact Andre seed identity.
 
 Pure guard and identity regression commands: `bun --smol test --timeout 30000 apps/server/src/seed/reset-seed-student.guard.test.ts packages/e2e/src/fixtures/test-accounts.test.ts`. The 6769 integration guard is authored in `apps/server/src/seed/reset-seed-student.integration.test.ts`; run it only during the assigned database window. The current authoring slice did not run reset, database integration, migration, browser E2E or full typecheck.
 
@@ -839,6 +839,13 @@ flags are set. Never run this CI seed path against a retained local
 6769/6770 fixture; its databases and Redis services are disposable for the
 workflow run. Do not set this flag for the retained 6767/6768 development
 targets.
+
+Nested Bun seed, cleanup and fixture-update helpers resolve `ENV_FILE` from the
+E2E package directory and pass its absolute path to Bun. Their working
+directory is `apps/server`; passing the original relative path could select
+the regular `.env.test` during the isolated payout run instead of
+`.env.test-payout`. Keep the explicit target guards in place for both
+6769/6381 and 6770/6382.
 
 Playwright starts its own API and web servers with `reuseExistingServer: false`;
 the default ports are 3101 and 3100. Keep both free, or configure different

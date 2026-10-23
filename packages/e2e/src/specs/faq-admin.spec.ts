@@ -16,6 +16,7 @@ import {
   TUTOR_EMAIL,
   TUTOR_PASSWORD,
 } from "../fixtures/test-accounts";
+import { resolveE2eEnvFile } from "../fixtures/e2e-environment";
 import { resetE2eAuthRateLimit } from "../fixtures/auth-rate-limit";
 type FaqRichTextRun = {
   text: string;
@@ -474,10 +475,11 @@ test("admins can create and edit rich, alphabetized FAQs", async ({ page }) => {
       if (fixtureIds.length > 0) {
         assertDedicatedTestDatabase();
         const serverDir = path.resolve(process.cwd(), "../../apps/server");
+        const selectedEnvFile = resolveE2eEnvFile(process.cwd(), process.env);
         const cleanupOutput = execFileSync(
           "bun",
           [
-            "--env-file=.env.test",
+            `--env-file=${selectedEnvFile}`,
             "run",
             "src/seed/cleanup-e2e-faq.ts",
             ...fixtureIds,

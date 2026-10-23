@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import path from "node:path";
+import { resolveE2eEnvFile } from "./e2e-environment";
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 const AUTH_RATE_LIMIT_TARGETS = new Map([
@@ -50,10 +51,19 @@ export function resetE2eAuthRateLimit() {
     );
   }
 
-  execFileSync("bun", ["run", "src/seed/reset-e2e-signup-rate-limit.ts"], {
-    cwd: path.resolve(process.cwd(), "../../apps/server"),
-    env: process.env,
-    stdio: "pipe",
-    timeout: 10_000,
-  });
+  const selectedEnvFile = resolveE2eEnvFile(process.cwd(), process.env);
+  execFileSync(
+    "bun",
+    [
+      `--env-file=${selectedEnvFile}`,
+      "run",
+      "src/seed/reset-e2e-signup-rate-limit.ts",
+    ],
+    {
+      cwd: path.resolve(process.cwd(), "../../apps/server"),
+      env: process.env,
+      stdio: "pipe",
+      timeout: 10_000,
+    },
+  );
 }

@@ -696,6 +696,31 @@ are accepted. No local database, Redis, seed, reset, migration, browser or
 provider operation was performed. The next manually dispatched run is pending
 after the scoped changes are pushed.
 
+### PR310 CI remediation (23 October 2026)
+
+Run [#39896841727](https://github.com/cogitoacademy/app/actions/runs/39896841727)
+passed Build, Lint and Type Check. Test + Coverage stopped on two server guard
+unit assertions that expected obsolete denial text; the coverage threshold step
+was skipped, so this run does not establish a coverage failure. The regular E2E
+partition had eight failures: outdated empty-state copy, a seeded wallet with an
+earlier 126-Mark booking hold, stale pre-V3 pricing assertions, and report
+fixtures with overlapping fixed schedule times. The payout partition failed
+during setup because nested Bun children loaded the regular env file instead of
+the selected payout file.
+
+The scoped fixes preserve both strict limiter guards and the production auth
+limit, fund only the exact 6769 T05 run-scoped student for the established
+booking/enrollment assertions, assert current student Marks pricing and the
+read-only tutor honorarium table, use retry-stable class session dates, and pass
+the resolved absolute E2E env file into child Bun commands. Both browser
+partitions, all tests, and the 100% coverage thresholds remain enabled. Focused
+local pure guard/environment checks pass 15 tests / 50 expectations under
+available Bun 1.4.0-canary.1. Playwright test discovery lists all 54 tests in
+14 files without starting a browser. Pre-commit lint/format hooks pass with
+existing warnings. The serial pre-push check, push and one manual CI dispatch
+remain; no local database, Redis, seed, migration or provider action is part of
+this remediation.
+
 ## T07 on-demand booking report continuation (2026-10-22)
 
 **Status:** The source milestone is in isolated worktree `t3/admin-report-review-fixes`

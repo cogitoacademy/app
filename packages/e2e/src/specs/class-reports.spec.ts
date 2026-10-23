@@ -9,6 +9,7 @@ import {
   type Page,
 } from "@playwright/test";
 import { TUTOR_EMAIL } from "../fixtures/test-accounts";
+import { resolveE2eEnvFile } from "../fixtures/e2e-environment";
 
 type TestClass = {
   id: string;
@@ -93,8 +94,9 @@ async function createPublishedReportClass(
   adminApi: APIRequestContext,
   references: { competitionId: string; tutorId: string },
   title: string,
+  scheduleOffsetDays: number,
 ): Promise<TestClass> {
-  const startAt = new Date(Date.now() + 14 * 86_400_000);
+  const startAt = new Date(Date.UTC(2045, 0, 1 + scheduleOffsetDays, 10));
   const draft = await rpc<TestClass>(adminApi, "admin/saveAcademyClassDraft", {
     kind: "cohort",
     competitionId: references.competitionId,
@@ -106,7 +108,7 @@ async function createPublishedReportClass(
     tutorFeeIdr: 400_000,
     reason: "Create a private class report E2E fixture",
     minimumEnrollment: 1,
-    minimumCheckAt: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+    minimumCheckAt: new Date(startAt.getTime() - 7 * 86_400_000).toISOString(),
     fullRateMarks: 20,
     halfRateMarks: 22,
     singleRateMarks: 25,
@@ -134,9 +136,16 @@ async function createPublishedReportClass(
 
 function moveFixtureSessionPast(classId: string, sessionId: string) {
   const serverDir = path.resolve(process.cwd(), "../../apps/server");
+  const selectedEnvFile = resolveE2eEnvFile(process.cwd(), process.env);
   execFileSync(
     "bun",
-    ["run", "src/seed/move-t07-report-session-past.ts", classId, sessionId],
+    [
+      `--env-file=${selectedEnvFile}`,
+      "run",
+      "src/seed/move-t07-report-session-past.ts",
+      classId,
+      sessionId,
+    ],
     { cwd: serverDir, env: process.env, stdio: "pipe" },
   );
 }
@@ -199,6 +208,7 @@ test("tutor records, admin corrects, and student reads a real class session repo
       adminApi,
       { competitionId: competition.id, tutorId: tutor.user.id },
       `T07 report E2E ${suffix}`,
+      Number.parseInt(suffix, 16) % 100_000,
     );
     const sessionId = academyClass.sessions[0]?.id;
     if (!sessionId) throw new Error("The T07 class did not publish a session.");

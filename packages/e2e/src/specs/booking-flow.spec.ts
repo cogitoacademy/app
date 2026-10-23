@@ -194,7 +194,11 @@ async function expectAcceptedBooking(page: Page) {
 test("student can log in and see starting balance", async ({ page }) => {
   await login(page);
   await page.goto("/balance");
-  await expect(page.getByText("200").first()).toBeVisible();
+  const startingMarks =
+    process.env.T05_ENROLLMENT_TEST_DB_PORT === "6769" ? 326 : 200;
+  await expect(
+    page.getByText(String(startingMarks), { exact: true }).first(),
+  ).toBeVisible();
   await expect(
     page.getByText("Available balance", { exact: true }),
   ).toBeVisible();

@@ -143,24 +143,32 @@ async function globalSetup() {
     SEED_STUDENT_PASSWORD: process.env.SEED_STUDENT_PASSWORD ?? "Student123!",
   };
 
-  execFileSync("bun", ["run", "src/seed/reset-seed-student.ts"], {
-    cwd: serverDir,
-    env: testSeedEnv,
-    stdio: "inherit",
-  });
+  execFileSync(
+    "bun",
+    [`--env-file=${envFile}`, "run", "src/seed/reset-seed-student.ts"],
+    {
+      cwd: serverDir,
+      env: testSeedEnv,
+      stdio: "inherit",
+    },
+  );
   console.log("Seeding database for E2E tests...");
-  execFileSync("bun", ["run", "src/seed/seed.ts"], {
+  execFileSync("bun", [`--env-file=${envFile}`, "run", "src/seed/seed.ts"], {
     cwd: serverDir,
     env: testSeedEnv,
     stdio: "inherit",
   });
 
   if (process.env.T05_ENROLLMENT_TEST_DB_PORT === "6769") {
-    execFileSync("bun", ["run", "src/seed/enable-t05-top-up-fixture.ts"], {
-      cwd: serverDir,
-      env: testSeedEnv,
-      stdio: "inherit",
-    });
+    execFileSync(
+      "bun",
+      [`--env-file=${envFile}`, "run", "src/seed/enable-t05-top-up-fixture.ts"],
+      {
+        cwd: serverDir,
+        env: testSeedEnv,
+        stdio: "inherit",
+      },
+    );
   }
 
   // Reuse one authenticated student session across specs. The server's auth

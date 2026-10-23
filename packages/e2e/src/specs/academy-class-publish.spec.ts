@@ -190,7 +190,7 @@ test("admin publishes both class modes; students see only the published DTO", as
     );
     await page.reload();
     await expect(
-      page.getByRole("heading", { name: "No cohorts published yet" }),
+      page.getByRole("heading", { name: "New classes are on the way" }),
     ).toBeVisible();
     await page.unroute("**/rpc/classes/list");
 

@@ -4,7 +4,7 @@ import path from "node:path";
 import { request } from "@playwright/test";
 
 import { resetE2eAuthRateLimit } from "./auth-rate-limit";
-import { resolveE2eEnvironment } from "./e2e-environment";
+import { resolveE2eEnvironment, resolveE2eEnvFile } from "./e2e-environment";
 
 export async function createPreAccountSignupFixture() {
   const environment = resolveE2eEnvironment(process.env);
@@ -41,9 +41,15 @@ export async function createPreAccountSignupFixture() {
     },
     cleanup() {
       const serverDir = path.resolve(process.cwd(), "../../apps/server");
+      const selectedEnvFile = resolveE2eEnvFile(process.cwd(), process.env);
       const output = execFileSync(
         "bun",
-        ["run", "src/seed/cleanup-e2e-signup.ts", email],
+        [
+          `--env-file=${selectedEnvFile}`,
+          "run",
+          "src/seed/cleanup-e2e-signup.ts",
+          email,
+        ],
         {
           cwd: serverDir,
           env: {
