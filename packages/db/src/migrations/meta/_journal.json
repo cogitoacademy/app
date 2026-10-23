@@ -498,6 +498,13 @@
       "when": 1792603490318,
       "tag": "0070_on_demand_report_admin_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1792655844640,
+      "tag": "0071_referral_registration_rewards",
+      "breakpoints": true
     }
   ]
 }

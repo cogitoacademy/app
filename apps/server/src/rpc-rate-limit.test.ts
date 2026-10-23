@@ -64,6 +64,11 @@ describe("matchRateLimitPath maps real slash-key RPC URLs", () => {
     expect(matchRateLimitPath("/content/competitions")).toBeNull();
   });
 
+  test("student report export endpoints share the reportExport bucket", () => {
+    expect(matchRateLimitPath("/reports/student/summary")).toBe("reportExport");
+    expect(matchRateLimitPath("/reports/student/pdf")).toBe("reportExport");
+  });
+
   test("email-otp / forget-password / change-email paths are auth-limited (M3)", () => {
     expect(matchAuthPath("/api/auth/email-otp/verify-email")).toBe(true);
     expect(matchAuthPath("/api/auth/email-otp/send-otp")).toBe(true);

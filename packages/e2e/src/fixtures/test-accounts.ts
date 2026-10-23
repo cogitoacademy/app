@@ -4,6 +4,10 @@ export { DEFAULT_STUDENT_EMAIL };
 export const STUDENT_EMAIL = resolveStudentEmail({
   E2E_STUDENT_EMAIL: process.env.E2E_STUDENT_EMAIL,
 });
+export const T05_CLASS_ENROLLMENT_STUDENT_EMAIL =
+  process.env.T05_CLASS_ENROLLMENT_STUDENT_EMAIL;
+export const T07_CLASS_REPORTS_STUDENT_EMAIL =
+  process.env.T07_CLASS_REPORTS_STUDENT_EMAIL;
 export const STUDENT_NAME = "Andre by Cogito";
 export const STUDENT_PASSWORD =
   process.env.SEED_STUDENT_PASSWORD ?? "Student123!";

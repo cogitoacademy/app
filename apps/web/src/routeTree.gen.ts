@@ -15,6 +15,7 @@ import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as InviteRouteImport } from './routes/invite'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as ReferralChoiceRouteImport } from './routes/referral-choice'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AppAchievementsRouteImport } from './routes/_app.achievements'
 import { Route as AppAdminRouteImport } from './routes/_app.admin'
@@ -40,6 +41,7 @@ import { Route as AppKnowledgeBankRouteImport } from './routes/_app.knowledge-ba
 import { Route as AppNotificationsRouteImport } from './routes/_app.notifications'
 import { Route as AppOnboardingRouteImport } from './routes/_app.onboarding'
 import { Route as AppProfileRouteImport } from './routes/_app.profile'
+import { Route as AppReferralsRouteImport } from './routes/_app.referrals'
 import { Route as AppTutorBookingsRouteImport } from './routes/_app.tutor-bookings'
 import { Route as AppTutorsRouteImport } from './routes/_app.tutors'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
@@ -76,6 +78,11 @@ const LoginRoute = LoginRouteImport.update({
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReferralChoiceRoute = ReferralChoiceRouteImport.update({
+  id: '/referral-choice',
+  path: '/referral-choice',
   getParentRoute: () => rootRouteImport,
 } as any)
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
@@ -203,6 +210,11 @@ const AppProfileRoute = AppProfileRouteImport.update({
   path: '/profile',
   getParentRoute: () => AppRoute,
 } as any)
+const AppReferralsRoute = AppReferralsRouteImport.update({
+  id: '/referrals',
+  path: '/referrals',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppTutorBookingsRoute = AppTutorBookingsRouteImport.update({
   id: '/tutor-bookings',
   path: '/tutor-bookings',
@@ -251,6 +263,7 @@ export interface FileRoutesByFullPath {
   '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/referral-choice': typeof ReferralChoiceRoute
   '/verify-email': typeof VerifyEmailRoute
   '/achievements': typeof AppAchievementsRoute
   '/admin': typeof AppAdminRoute
@@ -276,6 +289,7 @@ export interface FileRoutesByFullPath {
   '/notifications': typeof AppNotificationsRoute
   '/onboarding': typeof AppOnboardingRoute
   '/profile': typeof AppProfileRoute
+  '/referrals': typeof AppReferralsRoute
   '/tutor-bookings': typeof AppTutorBookingsRoute
   '/tutors': typeof AppTutorsRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -291,6 +305,7 @@ export interface FileRoutesByTo {
   '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/referral-choice': typeof ReferralChoiceRoute
   '/verify-email': typeof VerifyEmailRoute
   '/achievements': typeof AppAchievementsRoute
   '/admin': typeof AppAdminRoute
@@ -316,6 +331,7 @@ export interface FileRoutesByTo {
   '/notifications': typeof AppNotificationsRoute
   '/onboarding': typeof AppOnboardingRoute
   '/profile': typeof AppProfileRoute
+  '/referrals': typeof AppReferralsRoute
   '/tutor-bookings': typeof AppTutorBookingsRoute
   '/tutors': typeof AppTutorsRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -333,6 +349,7 @@ export interface FileRoutesById {
   '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/referral-choice': typeof ReferralChoiceRoute
   '/verify-email': typeof VerifyEmailRoute
   '/_app/achievements': typeof AppAchievementsRoute
   '/_app/admin': typeof AppAdminRoute
@@ -358,6 +375,7 @@ export interface FileRoutesById {
   '/_app/notifications': typeof AppNotificationsRoute
   '/_app/onboarding': typeof AppOnboardingRoute
   '/_app/profile': typeof AppProfileRoute
+  '/_app/referrals': typeof AppReferralsRoute
   '/_app/tutor-bookings': typeof AppTutorBookingsRoute
   '/_app/tutors': typeof AppTutorsRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -375,6 +393,7 @@ export interface FileRouteTypes {
     | '/invite'
     | '/login'
     | '/reset-password'
+    | '/referral-choice'
     | '/verify-email'
     | '/achievements'
     | '/admin'
@@ -400,6 +419,7 @@ export interface FileRouteTypes {
     | '/notifications'
     | '/onboarding'
     | '/profile'
+    | '/referrals'
     | '/tutor-bookings'
     | '/tutors'
     | '/auth/callback'
@@ -415,6 +435,7 @@ export interface FileRouteTypes {
     | '/invite'
     | '/login'
     | '/reset-password'
+    | '/referral-choice'
     | '/verify-email'
     | '/achievements'
     | '/admin'
@@ -440,6 +461,7 @@ export interface FileRouteTypes {
     | '/notifications'
     | '/onboarding'
     | '/profile'
+    | '/referrals'
     | '/tutor-bookings'
     | '/tutors'
     | '/auth/callback'
@@ -456,6 +478,7 @@ export interface FileRouteTypes {
     | '/invite'
     | '/login'
     | '/reset-password'
+    | '/referral-choice'
     | '/verify-email'
     | '/_app/achievements'
     | '/_app/admin'
@@ -481,6 +504,7 @@ export interface FileRouteTypes {
     | '/_app/notifications'
     | '/_app/onboarding'
     | '/_app/profile'
+    | '/_app/referrals'
     | '/_app/tutor-bookings'
     | '/_app/tutors'
     | '/auth/callback'
@@ -498,6 +522,7 @@ export interface RootRouteChildren {
   InviteRoute: typeof InviteRoute
   LoginRoute: typeof LoginRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  ReferralChoiceRoute: typeof ReferralChoiceRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
 }
@@ -544,6 +569,13 @@ declare module '@tanstack/react-router' {
       path: '/reset-password'
       fullPath: '/reset-password'
       preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/referral-choice': {
+      id: '/referral-choice'
+      path: '/referral-choice'
+      fullPath: '/referral-choice'
+      preLoaderRoute: typeof ReferralChoiceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/verify-email': {
@@ -721,6 +753,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppProfileRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/referrals': {
+      id: '/_app/referrals'
+      path: '/referrals'
+      fullPath: '/referrals'
+      preLoaderRoute: typeof AppReferralsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/tutor-bookings': {
       id: '/_app/tutor-bookings'
       path: '/tutor-bookings'
@@ -805,6 +844,7 @@ interface AppRouteChildren {
   AppNotificationsRoute: typeof AppNotificationsRoute
   AppOnboardingRoute: typeof AppOnboardingRoute
   AppProfileRoute: typeof AppProfileRoute
+  AppReferralsRoute: typeof AppReferralsRoute
   AppTutorBookingsRoute: typeof AppTutorBookingsRoute
   AppTutorsRoute: typeof AppTutorsRoute
   AppAdminTutorsProfileIdRoute: typeof AppAdminTutorsProfileIdRoute
@@ -839,6 +879,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppNotificationsRoute: AppNotificationsRoute,
   AppOnboardingRoute: AppOnboardingRoute,
   AppProfileRoute: AppProfileRoute,
+  AppReferralsRoute: AppReferralsRoute,
   AppTutorBookingsRoute: AppTutorBookingsRoute,
   AppTutorsRoute: AppTutorsRoute,
   AppAdminTutorsProfileIdRoute: AppAdminTutorsProfileIdRoute,
@@ -858,6 +899,7 @@ const rootRouteChildren: RootRouteChildren = {
   InviteRoute: InviteRoute,
   LoginRoute: LoginRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  ReferralChoiceRoute: ReferralChoiceRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   AuthCallbackRoute: AuthCallbackRoute,
 }

@@ -20,6 +20,7 @@ import { log } from "../../lib/logger";
 import type { NotificationService } from "../notification/notification.service";
 import type { PaymentService } from "../payment/payment.service";
 import type { WalletService } from "../wallet/wallet.service";
+import type { ReferralService } from "../referral/referral.service";
 import {
   ClassEnrollmentConflictError,
   ClassEnrollmentInvalidOperationError,
@@ -96,6 +97,7 @@ export function createClassEnrollmentService(deps: {
   >;
   notification: Pick<NotificationService, "write">;
   appBaseUrl: string;
+  referralPort?: Pick<ReferralService, "recordEligibleFirstCompletion">;
   clock?: () => Date;
 }) {
   const repo = createClassEnrollmentRepo();

@@ -12,7 +12,10 @@ import {
   FRIEND_EMAIL,
   STUDENT_EMAIL,
   STUDENT_PASSWORD,
+  T05_CLASS_ENROLLMENT_STUDENT_EMAIL,
 } from "../fixtures/test-accounts";
+import { resetE2eAuthRateLimit } from "../fixtures/auth-rate-limit";
+import { fillDateTimeInput } from "../helpers/date-time-input";
 
 type AdminClass = {
   id: string;
@@ -86,6 +89,7 @@ function assertT05EnrollmentTarget() {
 }
 
 async function createApiContext(email: string, password: string) {
+  resetE2eAuthRateLimit();
   const context = await request.newContext({
     baseURL: process.env.SERVER_URL ?? "http://localhost:3201",
   });
@@ -97,11 +101,6 @@ async function createApiContext(email: string, password: string) {
     throw new Error(`API sign-in returned ${response.status()}`);
   }
   return context;
-}
-
-function toDateTimeLocal(value: Date) {
-  const local = new Date(value.getTime() - value.getTimezoneOffset() * 60_000);
-  return local.toISOString().slice(0, 16);
 }
 
 async function rpc<T>(
@@ -133,7 +132,12 @@ async function createPublishedCohort(
 ): Promise<AdminClass> {
   const cohortIndex = nextCohortIndex++;
   const firstStart = new Date(
-    Date.UTC(2045, 0, 1 + testRunStartOffsetDays + cohortIndex * 300, 10),
+    Date.UTC(
+      new Date().getUTCFullYear(),
+      new Date().getUTCMonth(),
+      new Date().getUTCDate() + 30 + testRunStartOffsetDays + cohortIndex * 300,
+      10,
+    ),
   );
   const sessions = Array.from({ length: options.sessions }, (_, index) => {
     const startAt = new Date(firstStart.getTime() + index * 7 * 86_400_000);
@@ -192,21 +196,40 @@ function captureRpc(
 }
 
 test("student enrolls in full, half, and single plans with stable checkout and installment state", async ({
-  page,
   browser,
 }) => {
   test.setTimeout(120_000);
   assertT05EnrollmentTarget();
+  if (!T05_CLASS_ENROLLMENT_STUDENT_EMAIL) {
+    throw new Error("Missing isolated T05 class-enrollment student fixture");
+  }
   const adminApi = await createApiContext(ADMIN_EMAIL, ADMIN_PASSWORD);
-  const studentApi = await createApiContext(STUDENT_EMAIL, STUDENT_PASSWORD);
+  // This second 200-Mark run-scoped wallet is reserved for this multi-plan
+  // journey. The T05 student also funds booking-flow holds and separate
+  // lifecycle tests; sharing that mutable wallet made parallel tests race.
+  const studentApi = await createApiContext(
+    T05_CLASS_ENROLLMENT_STUDENT_EMAIL,
+    STUDENT_PASSWORD,
+  );
   const friendApi = await createApiContext(FRIEND_EMAIL, STUDENT_PASSWORD);
+  let studentContext:
+    | Awaited<ReturnType<typeof browser.newContext>>
+    | undefined;
   let friendContext: Awaited<ReturnType<typeof browser.newContext>> | undefined;
   let continuationContext:
     | Awaited<ReturnType<typeof browser.newContext>>
     | undefined;
-  let continuationPage = page;
+  let page: Page;
+  let continuationPage: Page;
 
   try {
+    studentContext = await browser.newContext({
+      baseURL: process.env.WEB_URL ?? "http://localhost:3200",
+      storageState: await studentApi.storageState(),
+    });
+    page = await studentContext.newPage();
+    continuationPage = page;
+
     const competitions = await rpc<
       { id: string; isActive: boolean; parentId: string | null }[]
     >(adminApi, "admin/listCompetitionCatalog", { includeArchived: false });
@@ -232,7 +255,7 @@ test("student enrolls in full, half, and single plans with stable checkout and i
     const suffix = randomUUID().slice(0, 8);
     // Keep retries isolated from already-published fixture sessions in the
     // disposable E2E database, where the seeded tutor is shared.
-    testRunStartOffsetDays = Number.parseInt(suffix, 16) % 100_000;
+    testRunStartOffsetDays = Number.parseInt(suffix, 16) % 15_000;
     const fullClass = await createPublishedCohort(adminApi, references, {
       title: `T05 full ${suffix}`,
       sessions: 4,
@@ -628,6 +651,7 @@ test("student enrolls in full, half, and single plans with stable checkout and i
   } finally {
     await friendContext?.close();
     await continuationContext?.close();
+    await studentContext?.close();
     await friendApi.dispose();
     await studentApi.dispose();
     await adminApi.dispose();
@@ -660,7 +684,7 @@ test("admin cancels a class with an exact future-hold return and retained studen
     if (!competition || !tutor)
       throw new Error("Missing class cancellation fixture references");
     const suffix = randomUUID().slice(0, 8);
-    testRunStartOffsetDays = Number.parseInt(suffix, 16) % 100_000;
+    testRunStartOffsetDays = Number.parseInt(suffix, 16) % 15_000;
     const adminClass = await createPublishedCohort(
       adminApi,
       { competitionId: competition.id, tutorId: tutor.user.id },
@@ -761,7 +785,7 @@ test("admin cancels one session, postpones once, and student confirms the exact 
       throw new Error("Missing lifecycle browser fixture references");
 
     const suffix = randomUUID().slice(0, 8);
-    testRunStartOffsetDays = Number.parseInt(suffix, 16) % 100_000;
+    testRunStartOffsetDays = Number.parseInt(suffix, 16) % 15_000;
     const academyClass = await createPublishedCohort(
       adminApi,
       { competitionId: competition.id, tutorId: tutor.user.id },
@@ -850,9 +874,11 @@ test("admin cancels one session, postpones once, and student confirms the exact 
         ),
       }));
     for (const replacement of replacements) {
-      await card
-        .getByLabel(`Replacement start · session ${replacement.sequenceNumber}`)
-        .fill(toDateTimeLocal(replacement.startAt));
+      await fillDateTimeInput(
+        adminPage,
+        `replacement-${replacement.sessionId}`,
+        replacement.startAt,
+      );
     }
     await card
       .getByLabel("Decision reason")

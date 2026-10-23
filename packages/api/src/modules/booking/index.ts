@@ -22,6 +22,7 @@ import type {
   ReleaseParams,
   DeductParams,
 } from "../wallet/wallet.service";
+import type { EligibleReferralCompletion } from "../referral/referral.service";
 import { createBookingRepo } from "./booking.repo";
 import { createBookingService } from "./booking.service";
 import {
@@ -45,6 +46,13 @@ export interface BookingWalletPort {
   release(db: DbOrTx, params: ReleaseParams): Promise<WalletSnapshot>;
   deduct(db: DbOrTx, params: DeductParams): Promise<WalletSnapshot>;
   getByUserId(db: DbOrTx, userId: string): Promise<WalletSnapshot | null>;
+}
+
+export interface BookingReferralPort {
+  recordEligibleFirstCompletion(
+    db: DbOrTx,
+    input: EligibleReferralCompletion,
+  ): Promise<unknown>;
 }
 
 export interface BookingPricingPort {
@@ -365,6 +373,7 @@ export function createBookingModule(deps: {
   meeting: BookingMeetingPort;
   competitionPalette?: BookingCompetitionPalettePort;
   roomPort?: BookingRoomPort;
+  referralPort?: BookingReferralPort;
 }) {
   const repo = createBookingRepo(deps.db);
   const service = createBookingService({
@@ -377,6 +386,7 @@ export function createBookingModule(deps: {
     meeting: deps.meeting,
     competitionPalette: deps.competitionPalette,
     roomPort: deps.roomPort,
+    referralPort: deps.referralPort,
   });
   const handler = createBookingHandler(service);
   const tutorActionsHandler = createTutorActionsHandler(service);

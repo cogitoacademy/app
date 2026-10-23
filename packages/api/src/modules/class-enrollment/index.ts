@@ -2,6 +2,7 @@ import type { DbType } from "../../lib/db";
 import type { NotificationService } from "../notification/notification.service";
 import type { PaymentService } from "../payment/payment.service";
 import type { WalletService } from "../wallet/wallet.service";
+import type { ReferralService } from "../referral/referral.service";
 import { createClassEnrollmentHandler } from "./class-enrollment.handler";
 import { createClassEnrollmentService } from "./class-enrollment.service";
 
@@ -14,6 +15,7 @@ export function createClassEnrollmentModule(deps: {
   >;
   notification: Pick<NotificationService, "write">;
   appBaseUrl: string;
+  referralPort?: Pick<ReferralService, "recordEligibleFirstCompletion">;
   clock?: () => Date;
 }) {
   const service = createClassEnrollmentService(deps);

@@ -8,12 +8,23 @@ import {
   getPreAccountSignupOutcome,
   sendPreAccountSignupOtp,
   setPreAccountSignupEmailSender,
+  setSignupReferralChoiceWriter,
   setSignupWelcomeEmailSender,
 } from "@cogito-app/auth";
 import { db } from "@cogito-app/db";
-import { user, verification } from "@cogito-app/db/schema";
+import {
+  referralCampaign,
+  referralChoice,
+  referralCode,
+  friendRewardDecision,
+  referralSemesterUsage,
+  user,
+  verification,
+  wallet,
+} from "@cogito-app/db/schema";
 
 import { resetDatabase } from "../helpers/test-client";
+import { services } from "../../services";
 
 type SentOtp = { email: string; otp: string };
 
@@ -33,6 +44,7 @@ function wireTestMail() {
   setSignupWelcomeEmailSender(async ({ user: signupUser }) => {
     welcomedUserIds.push(signupUser.id);
   });
+  setSignupReferralChoiceWriter(services.referral.applyEmailSignupChoice);
 }
 
 async function sendCode(email: string, signupAttemptId = randomUUID()) {
@@ -50,6 +62,7 @@ async function complete(input: {
   name?: string;
   password?: string;
   headers?: Headers;
+  referralCode?: string;
 }) {
   return completePreAccountSignup({
     email: input.email,
@@ -57,6 +70,7 @@ async function complete(input: {
     name: input.name ?? "Signup Test",
     otp: input.otp,
     signupAttemptId: input.signupAttemptId,
+    referralCode: input.referralCode,
     headers: input.headers ?? new Headers(),
   });
 }
@@ -68,6 +82,7 @@ describe("REQ-AUTH-01 pre-account email OTP", () => {
 
   afterEach(() => {
     setPreAccountSignupEmailSender(null);
+    setSignupReferralChoiceWriter(null);
     setSignupWelcomeEmailSender(null);
   });
 
@@ -365,6 +380,249 @@ describe("REQ-AUTH-01 pre-account email OTP", () => {
       ok: true,
     });
     expect(welcomedUserIds).toHaveLength(1);
+    const createdUser = await db.query.user.findFirst({
+      where: eq(user.email, email),
+    });
+    expect(createdUser).toBeDefined();
+    const choice = await db.query.referralChoice.findFirst({
+      where: eq(referralChoice.userId, createdUser!.id),
+    });
+    expect(choice).toMatchObject({
+      kind: "none",
+      welcomeMarksSnapshot: 0,
+      friendRewardMarksSnapshot: null,
+    });
+    const signupWallet = await db.query.wallet.findFirst({
+      where: eq(wallet.userId, createdUser!.id),
+    });
+    expect(signupWallet).toBeUndefined();
+  });
+
+  test("saves friend attribution and the signup reward in the verified signup transaction", async () => {
+    wireTestMail();
+    const referrerId = `referrer-${randomUUID()}`;
+    await db.insert(user).values({
+      id: referrerId,
+      name: "Referral Referrer",
+      email: newEmail("referrer"),
+      emailVerified: true,
+      role: "student",
+    });
+    const referral = await services.referral.getMine(referrerId);
+    const email = newEmail("referred");
+    const { signupAttemptId, otp } = await sendCode(email);
+
+    expect(
+      await complete({
+        email,
+        signupAttemptId,
+        otp,
+        referralCode: referral.code,
+      }),
+    ).toMatchObject({ ok: true });
+
+    const createdUser = await db.query.user.findFirst({
+      where: eq(user.email, email),
+    });
+    expect(createdUser).toBeDefined();
+    const choice = await db.query.referralChoice.findFirst({
+      where: eq(referralChoice.userId, createdUser!.id),
+    });
+    expect(choice).toMatchObject({
+      kind: "friend",
+      codeSnapshot: referral.code,
+      referrerUserId: referrerId,
+      welcomeMarksSnapshot: 15,
+      friendRewardMarksSnapshot: 15,
+    });
+    const signupWallet = await db.query.wallet.findFirst({
+      where: eq(wallet.userId, createdUser!.id),
+    });
+    expect(signupWallet).toMatchObject({
+      totalBalance: 15,
+      availableBalance: 15,
+    });
+  });
+
+  test("accepts an active KOL code and locks its commission terms at signup", async () => {
+    wireTestMail();
+    const adminId = `admin-${randomUUID()}`;
+    await db.insert(user).values({
+      id: adminId,
+      name: "Referral Admin",
+      email: newEmail("admin"),
+      emailVerified: true,
+      role: "admin",
+    });
+    const activationAt = new Date(Date.now() - 60_000);
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60_000);
+    const campaign = await services.referral.createKolCampaign(adminId, {
+      name: "October creator campaign",
+      code: "KOL2026",
+      activationAt,
+      expiresAt,
+      attributionWindowDays: 90,
+      flatAmountIdr: 0,
+      percentBps: 1_000,
+    });
+    const email = newEmail("kol-referred");
+    const { signupAttemptId, otp } = await sendCode(email);
+
+    expect(
+      await complete({ email, signupAttemptId, otp, referralCode: "kol2026" }),
+    ).toMatchObject({ ok: true });
+
+    const createdUser = await db.query.user.findFirst({
+      where: eq(user.email, email),
+    });
+    expect(createdUser).toBeDefined();
+    const choice = await db.query.referralChoice.findFirst({
+      where: eq(referralChoice.userId, createdUser!.id),
+    });
+    expect(choice).toMatchObject({
+      kind: "kol",
+      codeSnapshot: "KOL2026",
+      campaignId: campaign.id,
+      welcomeMarksSnapshot: 15,
+      friendRewardMarksSnapshot: null,
+      kolFlatAmountIdrSnapshot: 0,
+      kolPercentBpsSnapshot: 1_000,
+    });
+    expect(choice!.kolAttributionExpiresAt!.getTime()).toBeGreaterThan(
+      choice!.decidedAt.getTime(),
+    );
+    expect(
+      choice!.kolAttributionExpiresAt!.getTime() - choice!.decidedAt.getTime(),
+    ).toBe(90 * 24 * 60 * 60_000);
+    expect(
+      await db.query.referralCode.findFirst({
+        where: eq(referralCode.campaignId, campaign.id),
+      }),
+    ).toBeDefined();
+    expect(
+      await db.query.referralCampaign.findFirst({
+        where: eq(referralCampaign.id, campaign.id),
+      }),
+    ).toBeDefined();
+  });
+
+  test("serializes semester cap across referrals and keeps a zero decision permanent", async () => {
+    wireTestMail();
+    const referrerId = `referrer-${randomUUID()}`;
+    const adminId = `admin-${randomUUID()}`;
+    await db.insert(user).values([
+      {
+        id: referrerId,
+        name: "Cap Referrer",
+        email: newEmail("cap-referrer"),
+        emailVerified: true,
+        role: "student",
+      },
+      {
+        id: adminId,
+        name: "Referral Admin",
+        email: newEmail("referral-admin"),
+        emailVerified: true,
+        role: "admin",
+      },
+    ]);
+    const referral = await services.referral.getMine(referrerId);
+    await services.referral.updateSettings(adminId, {
+      expectedVersion: 0,
+      welcomeMarks: 15,
+      friendRewardMarks: 15,
+      semesterCapMarks: 10,
+      reason: "Exercise concurrent referral cap in test",
+    });
+
+    async function signupReferred(label: string) {
+      const email = newEmail(label);
+      const { signupAttemptId, otp } = await sendCode(email);
+      expect(
+        await complete({
+          email,
+          signupAttemptId,
+          otp,
+          referralCode: referral.code,
+        }),
+      ).toMatchObject({ ok: true });
+      const createdUser = await db.query.user.findFirst({
+        where: eq(user.email, email),
+      });
+      if (!createdUser) throw new Error("Referred signup was not saved.");
+      return createdUser.id;
+    }
+
+    const [firstStudentId, secondStudentId] = await Promise.all([
+      signupReferred("cap-first"),
+      signupReferred("cap-second"),
+    ]);
+    const completedAt = new Date();
+    await Promise.all(
+      [firstStudentId, secondStudentId].map((studentId) =>
+        db.transaction((tx) =>
+          services.referral.recordEligibleFirstCompletion(tx, {
+            studentId,
+            completionType: "solo",
+            completionId: `cap-completion-${studentId}`,
+            completedAt,
+            chargedMarks: 15,
+          }),
+        ),
+      ),
+    );
+
+    const cappedDecisions = await db
+      .select({ creditedMarks: friendRewardDecision.creditedMarks })
+      .from(friendRewardDecision)
+      .where(eq(friendRewardDecision.referrerUserId, referrerId));
+    expect(cappedDecisions.map((row) => row.creditedMarks).toSorted()).toEqual([
+      0, 10,
+    ]);
+    const [usage] = await db
+      .select({ creditedMarks: referralSemesterUsage.creditedMarks })
+      .from(referralSemesterUsage)
+      .where(eq(referralSemesterUsage.referrerUserId, referrerId));
+    expect(usage?.creditedMarks).toBe(10);
+
+    await services.referral.updateSettings(adminId, {
+      expectedVersion: 1,
+      welcomeMarks: 15,
+      friendRewardMarks: 15,
+      semesterCapMarks: 0,
+      reason: "Exercise permanent zero reward in test",
+    });
+    const zeroStudentId = await signupReferred("cap-zero");
+    const zeroCompletedAt = new Date();
+    const zeroDecision = await db.transaction((tx) =>
+      services.referral.recordEligibleFirstCompletion(tx, {
+        studentId: zeroStudentId,
+        completionType: "cohort",
+        completionId: `zero-completion-${zeroStudentId}`,
+        completedAt: zeroCompletedAt,
+        chargedMarks: 1,
+      }),
+    );
+    expect(zeroDecision?.creditedMarks).toBe(0);
+
+    await services.referral.updateSettings(adminId, {
+      expectedVersion: 2,
+      welcomeMarks: 15,
+      friendRewardMarks: 15,
+      semesterCapMarks: 75,
+      reason: "Raise cap after permanent zero decision in test",
+    });
+    const zeroReplay = await db.transaction((tx) =>
+      services.referral.recordEligibleFirstCompletion(tx, {
+        studentId: zeroStudentId,
+        completionType: "masterclass",
+        completionId: `later-completion-${zeroStudentId}`,
+        completedAt: new Date(Date.now() + 10),
+        chargedMarks: 1,
+      }),
+    );
+    expect(zeroReplay?.id).toBe(zeroDecision?.id);
+    expect(zeroReplay?.creditedMarks).toBe(0);
   });
 
   test("concurrent consume creates one account and one welcome and records outcome", async () => {

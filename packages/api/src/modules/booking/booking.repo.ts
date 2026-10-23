@@ -433,6 +433,24 @@ async function findLedgerEventKeys(
   return rows.map((row) => row.eventKey);
 }
 
+async function findLedgerEventAmounts(
+  conn: DbOrTx,
+  bookingId: string,
+  eventKeys: string[],
+): Promise<Map<string, number>> {
+  if (eventKeys.length === 0) return new Map();
+  const rows = await conn
+    .select({ eventKey: ledgerEntry.eventKey, amount: ledgerEntry.amount })
+    .from(ledgerEntry)
+    .where(
+      and(
+        eq(ledgerEntry.bookingId, bookingId),
+        inArray(ledgerEntry.eventKey, eventKeys),
+      ),
+    );
+  return new Map(rows.map((row) => [row.eventKey, row.amount]));
+}
+
 /** Returns invitees whose response can still keep a group in invitation phase. */
 async function findPendingInvitees(conn: DbOrTx, bookingId: string) {
   return conn
@@ -982,7 +1000,7 @@ async function listCompletionFeedbackHistoryByFeedback(
     .orderBy(asc(sessionCompletionFeedbackHistory.version));
 }
 
-async function hasChargeableFeedbackEntitlement(
+export async function hasChargeableFeedbackEntitlement(
   conn: DbOrTx,
   bookingId: string,
   userId: string,
@@ -1981,6 +1999,7 @@ export function createBookingRepo(db: DbType) {
     findParticipant,
     findConfirmedParticipants,
     findLedgerEventKeys,
+    findLedgerEventAmounts,
     findPendingInvitees,
     findUserEmails,
     findUsersByIds,

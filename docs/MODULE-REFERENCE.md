@@ -11,6 +11,77 @@ values. This prevents PostgreSQL microseconds from repeatedly selecting a
 failed first batch. Rotation remains volatile and restarts from the oldest due
 candidate after process restart; notification event-key idempotency is durable.
 
+## Referral settlement review corrections (22 October 2026)
+
+`settlementTransaction` retries a fully rolled-back PostgreSQL `40P01` at most
+three times, including driver-wrapped causes; domain and uniqueness failures are
+not retried. Its callbacks contain database/outbox work only and cover all
+report completion adapters. Reward decisions acquire shared user-row locks and
+require both current roles to be student, coordinated with ordinary role updates.
+An existing saved decision still replays unchanged.
+
+For an ended solo no-show, only the admin report path can confirm delivery using
+the existing reason/receipt/three-field contract. It reads the exact student's
+prior marked-no-show or legacy expiry deduction key, records the audited
+no-show-to-completed transition, and creates one earned fee/reward. No second
+wallet deduction occurs. Student reads accept that same charge only after the
+booking is completed/reported; a penalty alone does not grant access or rewards.
+
+## Referral and signup module source milestone (22 October 2026)
+
+`packages/api/src/modules/referral` owns referral choices, settings history,
+student codes, KOL campaign validation/snapshots, and first friend reward
+decisions. `packages/auth/src/index.ts` invokes the email choice writer in the
+verified signup transaction. Its Better Auth user-create hook marks only a new
+Google-created student pending; `packages/api/src/procedures.ts` blocks student
+app APIs until the choice is saved. The authenticated `referral.saveGoogleChoice`
+procedure is the only pending-account resolution path.
+
+Schema: `referral_code` has one global code value and one friend code per
+student or campaign code per KOL campaign; `referral_choice` has one immutable
+choice per user and stores welcome/settings/KOL term snapshots;
+`referral_settings_revision` retains effective-time history;
+`referral_semester_usage` is unique by referrer and WIB half-year; and
+`friend_reward_decision` is unique by referred user and stores positive or zero
+credit decisions. `referral_campaign` stores KOL activation/expiry and terms.
+Signup welcome ledger keys use `referral.signup.<userId>` with the choice ID as
+source reference; friend rewards use `referral.friend.<studentId>` with the
+decision ID as source reference.
+
+Email/Google choice, welcome credit, and choice snapshot share one transaction.
+At completion, booking and class-report modules call the referral port in their
+existing settlement transaction. Only positive-charge deliveries qualify;
+Q06 prior no-show charges qualify after a delivered report, while a penalty-only
+no-show does not. The service locks the referred choice, then the referrer’s
+semester usage row, applies the completion-time cap, writes one decision even
+when zero, and credits a positive reward atomically. Cap exhaustion does not
+roll over or retry, and cap reductions do not reverse existing credits.
+
+Student `referral.getMine` lazily creates a stable friend code and returns the
+active signup settings plus current-semester earned/remaining Marks and end
+date. Admin APIs create audited settings revisions and KOL campaigns. KOL signup
+terms are immutable snapshots, but first-purchase commission, transfers,
+partial/overpayment accounting, CSV, corrections, and reversal handling remain
+unimplemented. Parent-generated additive migration
+`0071_referral_registration_rewards` follows 0070 and is applied only to
+guarded loopback test 6769/cogito-test (journal 72). Development 6767 and
+production remain unmigrated. Wallet creation accepts the caller's transaction,
+including its upsert, so referral credits do not escape the signup or completion
+transaction.
+## Report PDF pagination follow-up (22 October 2026)
+
+Metadata columns paginate wrapped lines above the footer and label continued
+values. The class adapter selects its session title as the report topic. Normal
+feedback bullets preserve their line breaks; dense current-format lists flow
+inline only when needed to fit, retaining bullet markers and the fixed font
+size. Private-booking legacy layout uses the current report version's history
+`actorRole`; pre-history rows without a current version entry remain legacy. That
+classification replaces the text-length cutoff, so short legacy fields also keep
+their line breaks and can continue on labelled pages. Academy class reports use
+the current layout. Parent PostgreSQL coverage validates exact-student ledger
+entitlement and funded/spent class allocation filters; it uses UUID-owned
+fixtures and no reset/seed.
+
 ## Classes UI composition (22 October 2026)
 
 The student catalog uses Selia Card/Field/Input/Button, with one card per class and
@@ -79,12 +150,14 @@ input-only attributes belong in inputProps.
 
 CrossBrowserDateTimeInput composes DatePicker and MinuteTimeInput, preserving a
 local YYYY-MM-DDTHH:mm string and the existing caller's timezone conversion. The
-calendar trigger uses the component ID; the time input uses ID-time. Required or
-partial date/time values and times before the same-day minimum fail form
-validation. Choosing a date without a time initializes midnight; clearing the
-date clears the combined value. CardBody owns direct-child table width/spacing
-and no longer negatively offsets arbitrary Stack content. Header actions wrap
-below the title based on Card width. See the UI audit plan for coverage limits.
+calendar trigger uses the component ID; the time input uses ID-time. Without an
+explicit maximum date, the calendar year list extends 100 years beyond the
+current year so future class schedules remain selectable. Required or partial
+date/time values and times before the same-day minimum fail form validation.
+Choosing a date without a time initializes midnight; clearing the date clears
+the combined value. CardBody owns direct-child table width/spacing and no longer
+negatively offsets arbitrary Stack content. Header actions wrap below the title
+based on Card width. See the UI audit plan for coverage limits.
 
 ## T06 parent integration and local verification (2026-10-21)
 
@@ -515,8 +588,8 @@ separate `reportRemindersQueued` and `reportRemindersFailed` counters. At parent
 integration `1f9b6dd7`, the full guarded class-enrollment PostgreSQL suite passed
 44 tests / 354 expectations (exit 0, 9.62s); the pure reminder suite passed
 7 tests / 25 expectations (exit 0, 0.15s). No development seed or migration ran.
-PDF export and broader legacy solo/group/
-series reminder coverage remain pending.
+At that parent checkpoint PDF export and broader legacy solo/group/series reminder
+coverage were pending; see the current Report Export Module status below.
 
 ## V3 class/session draft foundation (2026-10-19)
 
@@ -528,7 +601,7 @@ Server validation requires an active competition (including an active parent for
 
 `classes.list` and `classes.get` are public procedures backed by `listPublished` and `getPublished`. Both map through an explicit student DTO; detail treats drafts as not found. It includes only catalog fields and tutor display name, with no payout/tax fields, private tutor account data, room details, audit/version values, or roster.
 
-Drafts are not public and do not reserve rooms; conflict checks happen at publication. The admin editor uploads PNG/JPEG/WebP/GIF covers through the existing protected upload flow (max 5 MB) and saves the returned key on the draft; approved M01 cover/curriculum assets remain pending. Admin publish controls, notifications, and durable Meet retry are implemented and browser-verified. Student enrollment is implemented in the T05 module below; T06 cancellation and T07 report/expiry settlement and reminders are implemented. The role-based report workspace is documented above; PDF remains open; on-demand booking reports are documented above, with acceptance pending. Public list/detail projection is implemented as described above. This is not a V3 activation or release checkpoint.
+Drafts are not public and do not reserve rooms; conflict checks happen at publication. The admin editor uploads PNG/JPEG/WebP/GIF covers through the existing protected upload flow (max 5 MB) and saves the returned key on the draft; approved M01 cover/curriculum assets remain pending. Admin publish controls, notifications, and durable Meet retry are implemented and browser-verified. Student enrollment is implemented in the T05 module below; T06 cancellation and T07 report/expiry settlement and reminders are implemented. The role-based report workspace is documented above; the private PDF source is documented below with guarded DB/browser/server-bundle acceptance still open. On-demand booking report acceptance is recorded in PR #305. Public list/detail projection is implemented as described above. This is not a V3 activation or release checkpoint.
 
 ## V3 class publication and meeting jobs (2026-10-20)
 
@@ -1434,6 +1507,48 @@ The Participants fieldset owns the derived Solo/Group badge; summaries represent
 - Group deadline repricing (B3): `expireBookings` reprices partial groups (confirmed ≥ 2 but < target) to `AWAITING_RECONFIRMATION` with a fresh 12h deadline instead of expiring (#46)
 - Group-series creation (B8) and per-session post-H2 forfeit (B9) landed in #46
 - Follow-ups (reconfirmation-deadline reprice, per-participant no-show, admin per-session cancel, per-session reschedule) are **implemented** — U3/U5–U7 closed by REVIEW-FIXES-3 P3.8/P5 (see `docs/plans/active/PRD-GAPS-PHASE3.md`, all U-items closed); group-series full-series withdrawal block (U4) **implemented** in REVIEW-FIXES-2 PR F (`BOOKING_SERIES_NO_OPT_OUT`)
+
+---
+
+## Report Export Module
+
+**Purpose:** Build private student report PDFs from the booking and academy
+session report sources without adding report data to a public DTO.
+
+**Files:**
+
+- `report-export.access.ts` — student-self/admin-selected authorization policy;
+  tutors and other roles are denied
+- `report-export.window.ts` — WIB calendar-month start and inclusive generation
+  cutoff calculation
+- `report-export.service.ts` — repeatable-read report lookup, exact private
+  booking/class entitlement, live student/tutor/class metadata and stable order
+- `report-export.pdf.ts` — paginated PDF layout using a bundled DejaVu Sans font
+  from `font.json`; no runtime font or logo fetch
+- `index.ts` — `createReportExportModule({ db })`
+- `apps/server/src/routes/report-export-routes.ts` — authenticated summary and
+  PDF HTTP handlers, private cache headers and generic attachment name
+
+**Service Methods:**
+
+- `getSummary(studentId)` — returns eligible report count, the WIB period start,
+  generation instant and timezone without student-identifying report details
+- `generatePdf(studentId)` — returns a PDF or `null` when the student has no
+  eligible reports
+
+**Eligibility and ordering:** The read-only repeatable-read transaction captures
+its generation cutoff after the student read establishes its snapshot. Completed
+solo/group booking reports require the selected student's exact chargeable
+feedback entitlement through the Q06 ledger helper; completed series children
+remain eligible after parent cancellation. Cohort/masterclass reports require a
+completed session and that student's funded allocation with a positive funded
+and spent amount. Both use the scheduled start in WIB from the same calendar day
+three months before generation through the inclusive cutoff. Rows sort by
+scheduled start descending, then report ID ascending. Known escaped legacy
+booking feedback is decoded from its history status once; legacy text is never
+truncated. Every report has live student name, competition, mode, tutor, date,
+time, type, topic, cohort/class and session metadata plus discussion, strengths
+and improvement bullets. Long content flows to numbered continuation pages.
 
 ---
 

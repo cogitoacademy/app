@@ -547,7 +547,9 @@ export function BookingDetailPage({
     isAdmin &&
     !isSeriesBooking &&
     (booking.currentState === "completed" ||
-      (booking.currentState === "scheduled" && sessionHasEnded));
+      ((booking.currentState === "scheduled" ||
+        (booking.type === "solo" && booking.currentState === "no_show")) &&
+        sessionHasEnded));
   const reportHistory = feedbackHistoryQuery.data ?? [];
   const sessionLabels: Record<string, string> = {};
   for (const s of seriesSessions ?? []) {

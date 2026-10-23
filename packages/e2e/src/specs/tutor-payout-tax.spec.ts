@@ -12,6 +12,7 @@ import {
   TUTOR_EMAIL,
   TUTOR_PASSWORD,
 } from "../fixtures/test-accounts";
+import { resetE2eAuthRateLimit } from "../fixtures/auth-rate-limit";
 
 const serverUrl = process.env.SERVER_URL ?? "http://localhost:3101";
 
@@ -46,6 +47,7 @@ async function createAuthenticatedPage(
   email: string,
   password: string,
 ) {
+  resetE2eAuthRateLimit();
   const api = await request.newContext({ baseURL: serverUrl });
   const signIn = await api.post("/api/auth/sign-in/email", {
     data: { email, password },

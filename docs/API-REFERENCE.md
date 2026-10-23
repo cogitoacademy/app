@@ -1,5 +1,62 @@
 # Cogito API Reference
 
+## AUTH-02 and referral source contract (22 October 2026)
+
+Deployment prerequisite: additive migration `0071_referral_registration_rewards`
+is applied only to guarded loopback test 6769/cogito-test. Parent web/server
+typechecks and focused financial PostgreSQL regressions pass; development and
+production migration plus authenticated OAuth browser acceptance remain pending.
+
+The existing admin completion-report endpoint also accepts an ended solo
+student no-show when delivery is explicitly confirmed and an audit reason is
+provided. It requires an existing student-specific no-show charge, reuses it
+without another deduction, and keeps request-key replay/version correction
+semantics. Ordinary tutor completion does not gain this terminal-state permission.
+
+Email signup `POST /api/auth/sign-up/email` accepts the existing OTP fields plus
+optional `referralCode`. A valid code saves the immutable friend/KOL choice and
+welcome credit inside the account/proof transaction; an omitted/empty code saves
+`kind: "none"` and gives no welcome credit. Invalid referral input rolls the
+whole signup transaction back and leaves the proof available for a valid retry.
+
+Runtime RPC paths below use procedure-key casing, not `.route({ path })`
+metadata. RPC request bodies use the `{"json": input}` envelope.
+
+- `POST /rpc/referral/saveGoogleChoice` — authenticated pending Google student;
+  input `{ code: string | null }`. Saves the single choice, welcome credit, and
+  clears the pending flag atomically. A saved choice is idempotent; accounts
+  that are not pending cannot add attribution. No OTP is sent by this flow.
+- `POST /rpc/referral/getMine` — verified student, no input. Returns
+  `{ code, settings: { welcomeMarks, friendRewardMarks }, semester: { key,
+  startsAt, endsAt, earnedMarks, capMarks, remainingMarks } }`. Dates serialize
+  as ISO timestamps; semester boundaries are Jan–Jun and Jul–Dec in WIB.
+- `POST /rpc/adminReferral/getSettings` — admin, no input; returns the active
+  versioned welcome/reward/cap settings.
+- `POST /rpc/adminReferral/updateSettings` — admin; input
+  `{ expectedVersion, welcomeMarks, friendRewardMarks, semesterCapMarks,
+  reason }`; creates an audited settings revision.
+- `POST /rpc/adminReferral/createKolCampaign` — admin; input
+  `{ name, code, activationAt?, expiresAt, attributionWindowDays,
+  flatAmountIdr, percentBps }`. Expiry must follow activation, codes are
+  globally unique, and at least one commission term is positive.
+- `POST /rpc/adminReferral/listKolCampaigns` — admin, no input; returns
+  campaign dates, code, attribution window, and saved terms.
+
+The KOL endpoints validate and snapshot signup attribution only. First-top-up
+commission decisions, transfer records, CSV, corrections, and reversals are not
+implemented in this slice.
+## Report PDF metadata follow-up (22 October 2026)
+
+The private report summary/download contract is unchanged. Academy `Topic` in
+the PDF uses the scheduled session title and `Session` its sequence number;
+curriculum text is not exported as metadata. Eligibility has parent PostgreSQL
+coverage (1 test / 16 assertions); HTTP authorization/header checks remain
+covered separately. Placeholder branding remains provisional.
+
+The admin report selector passes `role: "student"` to `admin.searchUsers`,
+which applies the optional role filter before the result limit. Callers that omit
+`role` retain the general admin search behavior.
+
 ## Classes presentation (22 October 2026)
 
 The UI reuses `classes/list`, `classes/get`, `classes/getMyEnrollments`,
@@ -16,6 +73,43 @@ Chromium journey (52.3s). The browser verifies assigned-tutor authorship, versio
 history, consumption of only the owned booking hold, and no repeat settlement
 on correction. Migration 0070 is applied to local test/dev; production is separate.
 The endpoint and service contracts below are unchanged by these fixture repairs.
+
+## Private student report export (22 October 2026)
+
+These are authenticated Elysia HTTP routes, not oRPC procedures. Both accept a
+direct JSON body (`{ "studentId"?: string }`), not the oRPC `json` envelope. A
+student may omit `studentId` and exports only their own reports; a supplied ID
+must match the signed-in student. Admins must select a student ID. Tutors and
+other roles are denied. Student IDs stay in the POST body, not the URL; summary
+returns count/date metadata only, never the student name or report text. Both
+routes are limited to 10 requests per minute and return
+`Cache-Control: private, no-store`.
+
+### `POST /reports/student/summary`
+
+- **Auth:** Signed-in student (self only) or admin (selected student required).
+- **Input:** `{ studentId? }`.
+- **Output:** `{ reportCount, periodStart, generatedAt, timezone: "Asia/Jakarta" }`;
+  date values are ISO timestamps.
+- **Rules:** Counts eligible reports in the read-only repeatable-read snapshot.
+  Eligibility is based on the scheduled WIB date from the same calendar day
+  three months before generation through the generation instant, inclusive. An
+  unknown/non-student target returns 404; missing admin selection returns 400;
+  unauthorized roles/targets return 403.
+
+### `POST /reports/student/pdf`
+
+- **Auth/Input:** Same as the summary route.
+- **Output:** `application/pdf` attachment with generic filename
+  `student-session-reports.pdf`; returns 204 when there are no eligible reports.
+- **Rules:** Newest scheduled report first with report ID as a stable tie-break.
+  Private solo/group reports require the exact student's chargeable feedback
+  entitlement, including Q06 no-show ledger cases; a delivered series child
+  remains eligible after parent cancellation. Cohort/masterclass reports require
+  the selected student's funded, charged session allocation. The PDF carries
+  the live student name, session/tutor/class metadata, all three feedback
+  sections, WIB generation date and page numbering. The bundled font and
+  placeholder Cogito header need no runtime remote assets.
 
 
 ## Ongoing experience UI (22 October 2026)
@@ -49,6 +143,8 @@ Numeric inputs still pass through each caller's existing conversion and schema
 validation. CrossBrowserDateTimeInput returns a local YYYY-MM-DDTHH:mm string;
 Academy, lifecycle and payout callers retain their existing conversion before
 sending the API timestamp. The UI control does not infer or change timezones.
+DatePicker's default year navigation now extends 100 years forward so future
+dates can be selected; it changes no accepted API range.
 
 ## T06 parent integration and local verification (2026-10-21)
 
@@ -914,9 +1010,9 @@ used to retrieve production OTPs.
 
 - **RPC path:** `/rpc/admin/users/search`
 - **Auth:** Admin
-- **Input:** `{ query, limit? }` (`query` is trimmed and must contain at least 2 characters; `limit` defaults to 10 and is capped at 20)
+- **Input:** `{ query, limit?, role? }` (`query` is trimmed and must contain at least 2 characters; `limit` defaults to 10 and is capped at 20; `role` may be `student`, `tutor`, or `admin`)
 - **Output:** `UserSearchResult[]` where each result is `{ id, name, email, image, role }`
-- **Description:** Case-insensitive partial lookup for admin support workflows. Matches `name`, `email`, or `id`; exact email/ID matches are ranked first. Wildcard characters are treated literally. The wallet lookup UI uses the selected result's `id` with `admin.getWallet` and `admin.listLedgerEntries`; the Knowledge Bank access form filters the same bounded result set to students and uses the selected email for a grant.
+- **Description:** Case-insensitive partial lookup for admin support workflows. Matches `name`, `email`, or `id`; exact email/ID matches are ranked first. Wildcard characters are treated literally. When supplied, `role` is filtered by the database before `limit`; without it, all roles remain eligible. The wallet lookup UI uses the selected result's `id` with `admin.getWallet` and `admin.listLedgerEntries`; the Knowledge Bank access form keeps its existing client-side student filter and uses the selected email for a grant.
 
 ### `admin.setRole`
 

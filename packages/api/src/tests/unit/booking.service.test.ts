@@ -100,6 +100,7 @@ function mockRepo(overrides: Record<string, unknown> = {}) {
     findParticipant: mock(async () => null),
     findConfirmedParticipants: mock(async () => []),
     findLedgerEventKeys: mock(async () => []),
+    findLedgerEventAmounts: mock(async () => new Map()),
     findPendingInvitees: mock(async () => []),
     findUserEmails: mock(async () => []),
     findUsersByIds: mock(async () => []),
@@ -377,6 +378,7 @@ function createService(
     meeting?: Record<string, unknown>;
     pricing?: Record<string, unknown>;
     roomPort?: Record<string, unknown>;
+    referralPort?: Record<string, unknown>;
   } = {},
 ) {
   const db = makeDb();
@@ -393,6 +395,9 @@ function createService(
   const roomPort = overrides.roomPort
     ? { ...makeRoomPort(), ...overrides.roomPort }
     : makeRoomPort();
+  const referralPort = overrides.referralPort ?? {
+    recordEligibleFirstCompletion: mock(async () => null),
+  };
   const service = createBookingService({
     db,
     repo,
@@ -402,6 +407,7 @@ function createService(
     notification,
     meeting,
     roomPort,
+    referralPort,
   } as any);
   return {
     service,
@@ -413,6 +419,7 @@ function createService(
     notification,
     meeting,
     roomPort,
+    referralPort,
   };
 }
 
@@ -2962,6 +2969,79 @@ describe("BookingService", () => {
       expect(result.originalMarks).toBe(150);
       expect(wallet.release).not.toHaveBeenCalled();
       expect(notification.writeBestEffort.mock.calls.length).toBe(2);
+    });
+
+    test("Q06: delivered series child qualifies a prior chargeable no-show once", async () => {
+      const booking = makeBooking({
+        type: "series",
+        targetGroupSize: 3,
+        currentState: "scheduled",
+        holdAmount: 100,
+        originalMarks: 150,
+      });
+      const session = {
+        id: "s1",
+        seriesBookingId: "b1",
+        scheduledStartAt: new Date(Date.now() - 3600_000),
+        scheduledEndAt: new Date(Date.now() + 3600_000),
+        currentState: "scheduled",
+        holdAmount: 50,
+        priceSnapshot: null,
+      };
+      const referralPort = {
+        recordEligibleFirstCompletion: mock(async () => null),
+      };
+      const { service, wallet, repo } = createService({
+        referralPort,
+        repo: {
+          findBookingById: mock(async () => ({ ...booking, version: 2 }))
+            .mockImplementationOnce(async () => booking)
+            .mockImplementationOnce(async () => booking),
+          findSessionById: mock(async () => session),
+          listSessionsBySeriesId: mock(async () => [
+            session,
+            { ...session, id: "s2" },
+          ]),
+          findConfirmedParticipants: mock(async () => [
+            { id: "p1", userId: "absent-student", heldAmount: 100 },
+          ]),
+          findLedgerEventAmounts: mock(
+            async () => new Map([["booking.b1.no_show.absent-student.s1", 50]]),
+          ),
+          findParticipant: mock(async () => ({
+            id: "p1",
+            userId: "student1",
+            heldAmount: 100,
+          })),
+          updateParticipantState: mock(async () => {}),
+          updateBookingHoldAmount: mock(async () => {}),
+          completeSession: mock(async () => {}),
+        },
+      });
+
+      await service.completeSession(
+        "b1",
+        "tutor1",
+        "s1",
+        TEST_COMPLETION_FEEDBACK,
+      );
+
+      expect(wallet.deduct).not.toHaveBeenCalled();
+      expect(referralPort.recordEligibleFirstCompletion).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          studentId: "absent-student",
+          chargedMarks: 50,
+          completionType: "series_child",
+          completionId: "s1",
+          completedAt: expect.any(Date),
+        }),
+      );
+      expect(repo.completeSession).toHaveBeenCalledWith(
+        expect.anything(),
+        "s1",
+        expect.any(Date),
+      );
     });
 
     test("L1: series completion deducts at most the remaining held amount after an admin partial cancel", async () => {
@@ -8730,6 +8810,24 @@ describe("BookingService additional coverage paths", () => {
     );
   });
 
+  test("Q06: a no-show penalty alone does not create a friend reward", async () => {
+    const { service, referralPort } = createService({
+      repo: {
+        findBookingById: mock(async () =>
+          makeBooking({
+            currentState: "scheduled",
+            scheduledStartAt: new Date(Date.now() - 60 * 60 * 1000),
+          }),
+        ),
+        findParticipant: mock(async () => makeParticipant()),
+      },
+    });
+
+    await service.markParticipantNoShow("b1", "tutor1", "student1");
+
+    expect(referralPort.recordEligibleFirstCompletion).not.toHaveBeenCalled();
+  });
+
   test("rejects no-show marking after a series session report exists", async () => {
     const { service, wallet, repo } = createService({
       repo: {
@@ -9404,9 +9502,9 @@ describe("BookingService additional coverage paths", () => {
         tutorId: "tutor2",
         tutorName: "Budi Tutor",
         bankName: "BRI",
-        bankAccountNumber: "00456",
-        bankAccountHolderName: "Budi Tutor",
-        bankAccountOpeningCity: "Bandung",
+        bankAccountNumber: "00999",
+        bankAccountHolderName: "Budi Updated",
+        bankAccountOpeningCity: "Jakarta",
         bankAccountOwnership: "self",
         bankTransferDisclaimerAccepted: true,
       },
@@ -9417,17 +9515,30 @@ describe("BookingService additional coverage paths", () => {
         tutorId: "tutor2",
         tutorName: "Budi Tutor",
         bankName: "BRI",
-        bankAccountNumber: null,
-        bankAccountHolderName: null,
-        profileBankAccountNumber: "00456",
-        profileBankAccountHolderName: "Budi Tutor",
-        profileBankAccountOpeningCity: "Bandung",
-        profileBankAccountOwnership: "self",
+        bankAccountNumber: "00456",
+        bankAccountHolderName: "Budi Tutor",
+        bankAccountOpeningCity: "Bandung",
+        bankAccountOwnership: "self",
         grossHonorariumIdr: 300_000,
         transferFeeIdr: 2_500,
         netHonorariumIdr: 297_500,
         status: "paid",
         paidAt: new Date("2026-08-10T00:00:00Z"),
+      },
+      {
+        id: "paid-without-account-snapshot",
+        tutorId: "tutor2",
+        tutorName: "Budi Tutor",
+        bankName: "BRI",
+        bankAccountNumber: null,
+        bankAccountHolderName: null,
+        bankAccountOpeningCity: null,
+        bankAccountOwnership: null,
+        grossHonorariumIdr: 100_000,
+        transferFeeIdr: 2_500,
+        netHonorariumIdr: 97_500,
+        status: "paid",
+        paidAt: new Date("2026-08-11T00:00:00Z"),
       },
     ]);
     const { service } = createService({
@@ -9445,13 +9556,23 @@ describe("BookingService additional coverage paths", () => {
       dateFrom: new Date("2026-08-15T00:00:00Z"),
       dateTo: new Date("2026-08-31T23:59:59Z"),
     });
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(3);
     expect(rows).toContainEqual(
       expect.objectContaining({
         id: "paid-1",
         status: "paid",
         bankAccountNumber: "00456",
+        bankAccountHolderName: "Budi Tutor",
+        bankAccountOpeningCity: "Bandung",
         netHonorariumIdr: 297_500,
+      }),
+    );
+    expect(rows).toContainEqual(
+      expect.objectContaining({
+        id: "paid-without-account-snapshot",
+        bankAccountNumber: null,
+        bankAccountHolderName: null,
+        payoutAccountComplete: false,
       }),
     );
     expect(rows).toContainEqual(
