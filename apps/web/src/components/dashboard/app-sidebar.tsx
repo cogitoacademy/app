@@ -18,9 +18,11 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   Sidebar,
   SidebarContent,
+  SidebarCollapsible,
+  SidebarCollapsibleTrigger,
+  SidebarCollapsiblePanel,
   SidebarFooter,
   SidebarGroup,
-  SidebarGroupTitle,
   SidebarHeader,
   SidebarItem,
   SidebarItemButton,
@@ -29,6 +31,7 @@ import {
   SidebarMenu,
 } from "@cogito-app/ui/components/selia/sidebar";
 import {
+  IconChevronDown,
   IconCalendarEvent,
   IconBrandWhatsapp,
   IconCertificate,
@@ -274,91 +277,129 @@ export function AppSidebar({
         <SidebarMenu>
           {navigationGroups.map((group) => (
             <SidebarGroup key={group.label}>
-              <SidebarGroupTitle>{group.label}</SidebarGroupTitle>
-              <SidebarList>
-                {group.items.map((item) => {
-                  const Icon = item.icon;
+              <SidebarCollapsible defaultOpen>
+                <SidebarCollapsibleTrigger
+                  render={
+                    <SidebarItemButton
+                      className="text-sm font-medium text-dimmed"
+                      expandableIndicator={false}
+                    />
+                  }
+                >
+                  {group.label}
+                  <IconChevronDown
+                    aria-hidden="true"
+                    className="ml-auto transition-transform in-data-[panel-open]:rotate-180 motion-reduce:transition-none"
+                  />
+                </SidebarCollapsibleTrigger>
+                <SidebarCollapsiblePanel>
+                  <SidebarList>
+                    {group.items.map((item) => {
+                      const Icon = item.icon;
 
-                  return (
-                    <SidebarItem key={item.to}>
-                      <SidebarItemButton
-                        active={pathname === item.to}
-                        render={
-                          <Link
-                            to={item.to}
-                            className={
-                              pathname === item.to
-                                ? "text-cogito-orange! [&>svg]:text-cogito-orange! **:transition-colors **:duration-150 **:ease-linear"
-                                : undefined
+                      return (
+                        <SidebarItem key={item.to}>
+                          <SidebarItemButton
+                            active={pathname === item.to}
+                            render={
+                              <Link
+                                to={item.to}
+                                className={
+                                  pathname === item.to
+                                    ? "text-cogito-orange! [&>svg]:text-cogito-orange! **:transition-colors **:duration-150 **:ease-linear"
+                                    : undefined
+                                }
+                                preload="intent"
+                                aria-label={
+                                  item.to === "/bookings" &&
+                                  bookingActionCount > 0
+                                    ? `${item.label}, ${bookingActionBadge} needs action`
+                                    : item.label
+                                }
+                              />
                             }
-                            preload="intent"
-                            aria-label={
-                              item.to === "/bookings" && bookingActionCount > 0
-                                ? `${item.label}, ${bookingActionBadge} needs action`
-                                : item.label
-                            }
-                          />
-                        }
-                      >
-                        <Icon />
-                        <span className="min-w-0 truncate">{item.label}</span>
-                        {item.to === "/bookings" && bookingActionCount > 0 ? (
-                          <Badge
-                            variant="danger-solid"
-                            size="sm"
-                            pill
-                            aria-label={`${bookingActionBadge} bookings need action`}
-                            className="ml-auto min-w-5 shrink-0 justify-center tabular-nums text-[10px]"
                           >
-                            {bookingActionBadge}
-                          </Badge>
-                        ) : null}
-                      </SidebarItemButton>
-                    </SidebarItem>
-                  );
-                })}
-              </SidebarList>
+                            <Icon />
+                            <span className="min-w-0 truncate">
+                              {item.label}
+                            </span>
+                            {item.to === "/bookings" &&
+                            bookingActionCount > 0 ? (
+                              <Badge
+                                variant="danger-solid"
+                                size="sm"
+                                pill
+                                aria-label={`${bookingActionBadge} bookings need action`}
+                                className="ml-auto min-w-5 shrink-0 justify-center tabular-nums text-[10px]"
+                              >
+                                {bookingActionBadge}
+                              </Badge>
+                            ) : null}
+                          </SidebarItemButton>
+                        </SidebarItem>
+                      );
+                    })}
+                  </SidebarList>
+                </SidebarCollapsiblePanel>
+              </SidebarCollapsible>
             </SidebarGroup>
           ))}
           <SidebarGroup>
-            <SidebarGroupTitle>Resources</SidebarGroupTitle>
-            <SidebarList>
-              {visibleResourceItems.map((item) => {
-                const Icon = item.icon;
-
-                return (
-                  <SidebarItem key={item.to}>
-                    <SidebarItemButton
-                      active={pathname === item.to}
-                      render={
-                        <Link
-                          to={item.to}
-                          className={
-                            pathname === item.to
-                              ? "text-cogito-orange! [&>svg]:text-cogito-orange! **:transition-colors **:duration-150 **:ease-linear"
-                              : undefined
-                          }
-                          aria-label={item.label}
-                        />
-                      }
-                    >
-                      <Icon />
-                      {item.label}
-                    </SidebarItemButton>
-                  </SidebarItem>
-                );
-              })}
-              <SidebarItem>
-                <WhatsAppSupportDialog
-                  trigger={
-                    <SidebarItemButton aria-label="WhatsApp Support">
-                      <IconBrandWhatsapp />
-                      WhatsApp Support
-                    </SidebarItemButton>
-                  }
+            <SidebarCollapsible defaultOpen>
+              <SidebarCollapsibleTrigger
+                render={
+                  <SidebarItemButton
+                    className="text-sm font-medium text-dimmed"
+                    expandableIndicator={false}
+                  />
+                }
+              >
+                Resources
+                <IconChevronDown
+                  aria-hidden="true"
+                  className="ml-auto transition-transform in-data-[panel-open]:rotate-180 motion-reduce:transition-none"
                 />
-              </SidebarItem>
-            </SidebarList>
+              </SidebarCollapsibleTrigger>
+              <SidebarCollapsiblePanel>
+                <SidebarList>
+                  {visibleResourceItems.map((item) => {
+                    const Icon = item.icon;
+
+                    return (
+                      <SidebarItem key={item.to}>
+                        <SidebarItemButton
+                          active={pathname === item.to}
+                          render={
+                            <Link
+                              to={item.to}
+                              className={
+                                pathname === item.to
+                                  ? "text-cogito-orange! [&>svg]:text-cogito-orange! **:transition-colors **:duration-150 **:ease-linear"
+                                  : undefined
+                              }
+                              aria-label={item.label}
+                            />
+                          }
+                        >
+                          <Icon />
+                          {item.label}
+                        </SidebarItemButton>
+                      </SidebarItem>
+                    );
+                  })}
+                  <SidebarItem>
+                    <WhatsAppSupportDialog
+                      trigger={
+                        <SidebarItemButton aria-label="WhatsApp Support">
+                          <IconBrandWhatsapp />
+                          WhatsApp Support
+                        </SidebarItemButton>
+                      }
+                    />
+                  </SidebarItem>
+                </SidebarList>
+              </SidebarCollapsiblePanel>
+            </SidebarCollapsible>
           </SidebarGroup>
         </SidebarMenu>
       </SidebarContent>
