@@ -709,17 +709,19 @@ during setup because nested Bun children loaded the regular env file instead of
 the selected payout file.
 
 The scoped fixes preserve both strict limiter guards and the production auth
-limit, fund only the exact 6769 T05 run-scoped student for the established
-booking/enrollment assertions, assert current student Marks pricing and the
+limit, give the exact 6769 T05 booking/lifecycle student 326 Marks for its
+booking hold and create a second run-scoped 200-Mark class student, assert
+current student Marks pricing and the
 read-only tutor honorarium table, use retry-stable class session dates, and pass
 the resolved absolute E2E env file into child Bun commands. Both browser
 partitions, all tests, and the 100% coverage thresholds remain enabled. Focused
 local pure guard/environment checks pass 15 tests / 50 expectations under
 available Bun 1.4.0-canary.1. Playwright test discovery lists all 54 tests in
-14 files without starting a browser. Pre-commit lint/format hooks pass with
-existing warnings. The serial pre-push check, push and one manual CI dispatch
-remain; no local database, Redis, seed, migration or provider action is part of
-this remediation.
+14 files without starting a browser. The remaining validation is the normal
+pre-commit and serial pre-push hooks followed by one manual CI run on the pushed
+head; that run must cover the profile merge, unchanged 100% gate, regular E2E,
+and payout E2E. No local database, Redis, seed, migration or provider action is
+part of this remediation.
 
 Run [#39909560681](https://github.com/cogitoacademy/app/actions/runs/39909560681)
 on `6ef0b948` passed Build, Lint and Type Check. The server unit suite finished
@@ -734,7 +736,19 @@ wrote LCOV to configured `coverage/lcov.info` despite a custom
 `--coverage-dir`. The workflow now removes that default profile before each
 partition, requires a fresh non-empty file, and snapshots it to the partition
 path before the next Bun process. The fail-closed merger and thresholds are
-unchanged. E2E status for this run remains pending.
+unchanged. E2E completed with the payout partition successful and the regular
+partition at 45 passed, 5 failed, and 1 flaky. Three enrollment/report failures
+were a shared-wallet race: the multi-plan journey spends 149 Marks while other
+parallel class journeys need 127 after the booking-flow hold. The multi-plan
+case now uses a second run-scoped 200-Mark student in its own authenticated
+browser context; the T05 326-Mark account and the 80/44/25 and insufficient-funds
+assertions remain intact. The class-publish test now has a 90-second timeout
+for its existing multi-step assertions. The FAQ validation passed on retry;
+the uppercase auth `NOT_FOUND` was the deliberate route-case rejection. Focused
+pure guard/environment and LCOV tests pass 17 tests / 63 expectations, and
+Playwright discovery still lists 54 tests across 14 files. One manual CI run on
+the pushed head must verify the profile merge, unchanged 100% gate, regular E2E,
+and payout E2E before this remediation is accepted.
 
 ## T07 on-demand booking report continuation (2026-10-22)
 

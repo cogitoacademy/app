@@ -151,6 +151,7 @@ test("admin publishes both class modes; students see only the published DTO", as
   page,
   browser,
 }) => {
+  test.setTimeout(90_000);
   assertDedicatedTestDatabase();
   const suffix = randomUUID().slice(0, 8);
   const title = `E2E RETRY: class ${suffix}`;

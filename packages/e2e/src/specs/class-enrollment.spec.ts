@@ -12,6 +12,7 @@ import {
   FRIEND_EMAIL,
   STUDENT_EMAIL,
   STUDENT_PASSWORD,
+  T05_CLASS_ENROLLMENT_STUDENT_EMAIL,
 } from "../fixtures/test-accounts";
 import { resetE2eAuthRateLimit } from "../fixtures/auth-rate-limit";
 
@@ -194,21 +195,40 @@ function captureRpc(
 }
 
 test("student enrolls in full, half, and single plans with stable checkout and installment state", async ({
-  page,
   browser,
 }) => {
   test.setTimeout(120_000);
   assertT05EnrollmentTarget();
+  if (!T05_CLASS_ENROLLMENT_STUDENT_EMAIL) {
+    throw new Error("Missing isolated T05 class-enrollment student fixture");
+  }
   const adminApi = await createApiContext(ADMIN_EMAIL, ADMIN_PASSWORD);
-  const studentApi = await createApiContext(STUDENT_EMAIL, STUDENT_PASSWORD);
+  // This second 200-Mark run-scoped wallet is reserved for this multi-plan
+  // journey. The T05 student also funds booking-flow holds and separate
+  // lifecycle tests; sharing that mutable wallet made parallel tests race.
+  const studentApi = await createApiContext(
+    T05_CLASS_ENROLLMENT_STUDENT_EMAIL,
+    STUDENT_PASSWORD,
+  );
   const friendApi = await createApiContext(FRIEND_EMAIL, STUDENT_PASSWORD);
+  let studentContext:
+    | Awaited<ReturnType<typeof browser.newContext>>
+    | undefined;
   let friendContext: Awaited<ReturnType<typeof browser.newContext>> | undefined;
   let continuationContext:
     | Awaited<ReturnType<typeof browser.newContext>>
     | undefined;
-  let continuationPage = page;
+  let page: Page;
+  let continuationPage: Page;
 
   try {
+    studentContext = await browser.newContext({
+      baseURL: process.env.WEB_URL ?? "http://localhost:3200",
+      storageState: await studentApi.storageState(),
+    });
+    page = await studentContext.newPage();
+    continuationPage = page;
+
     const competitions = await rpc<
       { id: string; isActive: boolean; parentId: string | null }[]
     >(adminApi, "admin/listCompetitionCatalog", { includeArchived: false });
@@ -630,6 +650,7 @@ test("student enrolls in full, half, and single plans with stable checkout and i
   } finally {
     await friendContext?.close();
     await continuationContext?.close();
+    await studentContext?.close();
     await friendApi.dispose();
     await studentApi.dispose();
     await adminApi.dispose();

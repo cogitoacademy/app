@@ -626,6 +626,21 @@ async function seed() {
       DEFAULT_SEED_STUDENTS[2].name,
     ),
   ]);
+
+  const classEnrollmentStudentEmail =
+    process.env.T05_CLASS_ENROLLMENT_STUDENT_EMAIL?.trim().toLowerCase();
+  if (
+    process.env.NODE_ENV === "test" &&
+    process.env.T05_ENROLLMENT_TEST_DB_PORT === "6769" &&
+    classEnrollmentStudentEmail
+  ) {
+    await seedDemoStudent(
+      classEnrollmentStudentEmail,
+      friendPassword,
+      "Class Enrollment E2E",
+      200,
+    );
+  }
 }
 
 if (import.meta.main) {

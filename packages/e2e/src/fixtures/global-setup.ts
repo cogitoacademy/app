@@ -106,15 +106,22 @@ async function globalSetup() {
     process.env.T05_ENROLLMENT_TEST_DB_PORT === "6769"
       ? createRunScopedStudentEmail(randomUUID())
       : DEFAULT_STUDENT_EMAIL;
+  const runScopedClassStudentEmail =
+    process.env.T05_ENROLLMENT_TEST_DB_PORT === "6769"
+      ? createRunScopedStudentEmail(randomUUID())
+      : undefined;
 
-  // The T05 disposable database keeps each run's enrollment, cancellation and
-  // payment history attached to its own seeded student instead of deleting it.
+  // Keep booking/lifecycle history on one fresh T05 student and reserve a
+  // second fresh wallet for the parallel multi-plan class journey.
   process.env.E2E_STUDENT_EMAIL = runScopedStudentEmail;
   process.env.SEED_REVIEW_STUDENT_EMAIL = runScopedStudentEmail;
+  if (runScopedClassStudentEmail) {
+    process.env.T05_CLASS_ENROLLMENT_STUDENT_EMAIL = runScopedClassStudentEmail;
+  }
 
   console.log(
     process.env.T05_ENROLLMENT_TEST_DB_PORT === "6769"
-      ? "Creating a fresh T05 student identity for this run..."
+      ? "Creating fresh T05 student identities for this run..."
       : "Resetting seed student state...",
   );
   const testSeedEnv = {
