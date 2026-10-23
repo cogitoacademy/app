@@ -1,5 +1,25 @@
 # Release v3 - SDD execution and acceptance plan
 
+## KOL settlement release/dev sync (24 October 2026)
+
+PR #319 is merged into release at 61031cc9, following sidebar #318 and
+synthetic auth/referral/KOL acceptance #317. Root dev source is synchronized.
+The normal Drizzle postgres-js runner applied additive 0073/0074 only to dev
+localhost:6767/cogito-app; journal count advanced 74 -> 76. Booking (34), ledger
+(90) and completion-feedback (2) counts stayed unchanged; settlement entries
+start empty. No reset, seed or external transfer ran. Production is unchanged.
+
+API was explicitly restarted to load shared module changes; health is HTTP 200
+and unauthenticated /rpc/adminReferral/getKolSettlement returns 401. Web remains
+on localhost:3000, Midtrans uses its existing sandbox config, and scheduler is
+disabled only for the preview process. Logs: tmp/v3-dev/runtime/api-settlement.*.
+
+The extra pre-settlement Docker dump command did not return and was stopped;
+no fresh dump from that attempt is verified. Earlier checkpoint dumps remain
+under ignored tmp/v3-dev/checkpoint. Re-establish a fresh verified backup and
+restore rehearsal before any production rollout. This supersedes earlier
+0073/0074 dev-unapplied notes; live provider/OAuth and client UAT remain open.
+
 ## KOL settlement browser acceptance (24 October 2026)
 
 Seven synthetic Chromium settlement cases pass (19.8s): admin opening,
