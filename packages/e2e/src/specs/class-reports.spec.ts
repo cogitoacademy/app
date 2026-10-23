@@ -74,7 +74,7 @@ function assertT05EnrollmentTarget() {
 
 async function createApiContext(
   role: "admin" | "student" | "tutor",
-  stateName = role,
+  stateName: string = role,
 ) {
   return request.newContext({
     baseURL: process.env.SERVER_URL ?? "http://localhost:3201",

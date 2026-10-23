@@ -72,7 +72,7 @@ async function saveRoleStorageState(
   password: string,
   serverUrl: string,
   authDir: string,
-  stateName = role,
+  stateName: string = role,
 ) {
   const roleContext = await request.newContext({ baseURL: serverUrl });
   try {
