@@ -438,9 +438,7 @@ export function createMidtransPaymentProvider(opts: {
           refundAmountIdr < amountIdr)
           ? "partial"
           : undefined,
-      ...(status === "PAID" ||
-      status === "SETTLED" ||
-      status === "REFUNDED"
+      ...(status === "PAID" || status === "SETTLED" || status === "REFUNDED"
         ? {
             providerSuccessTimeStatus: providerSuccessAt
               ? ("verified" as const)

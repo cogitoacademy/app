@@ -62,9 +62,9 @@ export function AdminKolCommissionsPage() {
           <Text>
             Transfers, partial payments, overpayments, CSV exports, and reversal
             adjustments are handled in a later finance slice. A refunded payment
-            retains first-purchase eligibility and its commission is set to zero.
-            If Midtrans cannot return its original success time, the commission
-            stays on hold until that ordering evidence is resolved.
+            retains first-purchase eligibility and its commission is set to
+            zero. If Midtrans cannot return its original success time, the
+            commission stays on hold until that ordering evidence is resolved.
           </Text>
         </CardBody>
       </Card>

@@ -577,7 +577,10 @@ export function createReferralService(deps: {
       Number.isFinite(payment.providerSuccessAt.getTime())
         ? payment.providerSuccessAt
         : null;
-    if (!providerSuccessAt && input.providerSuccessTimeStatus !== "unavailable") {
+    if (
+      !providerSuccessAt &&
+      input.providerSuccessTimeStatus !== "unavailable"
+    ) {
       throw new Error(
         "An unresolved KOL purchase must be explicitly marked as missing provider time.",
       );
@@ -797,9 +800,9 @@ export function createReferralService(deps: {
             ? "A late earlier verified purchase was found refunded; the first-event decision moved to it with zero commission."
             : action === "kol_commission_provider_time_resolved" && !isEligible
               ? "A verified provider success time resolved the hold, but the payment was at or after attribution expiry and receives zero commission."
-            : action === "kol_commission_provider_time_resolved"
-              ? "A verified provider success time resolved the previous hold and all known purchase times were re-evaluated."
-              : "Late earlier provider success callback; candidate ordering re-evaluated by provider time and payment ID.";
+              : action === "kol_commission_provider_time_resolved"
+                ? "A verified provider success time resolved the previous hold and all known purchase times were re-evaluated."
+                : "Late earlier provider success callback; candidate ordering re-evaluated by provider time and payment ID.";
       await audit.record({
         db: conn,
         actorId: null,

@@ -478,7 +478,7 @@ describe("first eligible KOL purchase commission", () => {
           eq(auditLog.targetId, decision!.id),
           eq(
             auditLog.action,
-              "kol_commission_earlier_refunded_purchase_correction",
+            "kol_commission_earlier_refunded_purchase_correction",
           ),
         ),
       );
