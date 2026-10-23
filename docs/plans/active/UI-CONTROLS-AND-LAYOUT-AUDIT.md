@@ -2,17 +2,36 @@
 
 ## Classes UI follow-up (22 October 2026)
 
-- Completed: one-card catalog, local search/type filters, explicit WIB dates and
-  price units, separate navigation links, curriculum/enrollment detail layout.
+- Completed: one compact catalog card per class, local search/type filters,
+  explicit WIB dates and price units, curriculum/enrollment detail layout.
+- Completed follow-up: the whole catalog card links to class details, the
+  schedule uses a divider-based list, and enrollment appears first on mobile.
+  Reduced-motion users do not receive the card hover translation. The payment
+  action retains the explicit “Reserve and confirm Marks” label.
+- Verified on 23 October: web `check-types --checkers 1`, focused oxlint, and
+  14 synthetic Chromium cases passed, including the existing 11 layout/report
+  cases plus unverified-student verification/return, signed-out login redirect,
+  and non-student dashboard redirect. Reviewed captured 320px catalog/detail
+  and 1440px detail screenshots. This used a temporary copy of
+  `classes-layout.spec.ts` with the catalog button locator changed to the new
+  full-card link. Integration now updates that permanent locator; all 14
+  cases in the checked-in suite pass against the combined UI and PDF export
+  source (36.6 seconds), including PDF downloads and responsive class/report flows.
 - Completed: published-first admin studio tabs, retained draft editor mounting,
   expandable lifecycle controls, wider editor and wrapping confirmation actions.
 - Completed: bounded report session list, mobile focus/scroll to selected report,
   and correct Class studio/Class details app header labels.
-- Verified: 11 synthetic Chromium cases at 320/390/768/1440px and mobile report
-  flows for all three roles; dark-mode student coverage at 768px. No horizontal
+- Previously verified: 11 synthetic Chromium cases at
+  320/390/768/1440px and mobile report flows for all three roles; dark-mode
+  student coverage at 768px. No horizontal
   page overflow or page errors in those cases. Existing role guards and payment
   math remain. Full DB-backed publish/enrollment/cancellation journeys were not
   rerun; their UI locators were updated for the intentional navigation changes.
+
+The T3 preview reached the synthetic frontend, but its unmocked auth request
+failed (`TypeError: Failed to fetch`) and snapshot timed out after 15000ms.
+Browser evidence above comes from the repository's mocked Playwright workflow,
+not a live API session. No DB/provider checks were performed.
 
 
 Scope: all web TSX source and the shared Selia controls; repair browser-native
