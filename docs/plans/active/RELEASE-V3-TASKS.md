@@ -755,16 +755,27 @@ passed Build, Lint, Type Check and all server/coverage test partitions, but the
 LCOV merger failed because Bun 1.3.14 emitted `FNF`/`FNH` without `FN`/`FNDA`
 identities for some files. The 100% threshold step did not run. The regular E2E
 partition had 48 passes and 3 failures; the payout partition passed all 3 tests.
-The bounded E2E fixes fill and assert native `datetime-local` inputs, select the
-replacement textbox unambiguously, and isolate the class-report student's 200
-Marks wallet. The existing 326-Mark booking/lifecycle account, the multi-plan
-200-Mark account, all 80/44/25 pricing assertions, and insufficient-funds
-assertions remain intact. The LCOV merger now keeps summary counts as maximum
-lower bounds, preserves exact named unions and raw profiles, and records
-identity-incomplete sources in a sidecar; the 100% thresholds are unchanged.
-Local focused proof passes 6 merger tests / 55 expectations and 2 E2E identity
-tests / 4 expectations. Normal serial pre-push and one manual CI run on the
-updated pushed head remain pending. No local DB or browser run was done.
+The bounded E2E fixes use the Selia date picker and minute-time control for
+class and replacement schedules, isolate the class-report student's 200 Marks
+wallet, and match the report-version badge exactly. Future dates remain within
+the calendar's 100-year navigation range. The existing 326-Mark
+booking/lifecycle account, the multi-plan 200-Mark account, all 80/44/25 pricing
+assertions, and insufficient-funds assertions remain intact. The LCOV merger
+now keeps summary counts as maximum lower bounds, preserves exact named unions
+and raw profiles, and records identity-incomplete sources in a sidecar; the
+100% thresholds are unchanged.
+
+Run [#39934748543](https://github.com/cogitoacademy/app/actions/runs/39934748543)
+on `8945d6b` passed Build, Lint and Type Check. The test assertions in all three
+coverage partitions passed, but coverage collection exited nonzero because the
+root Bun 80% per-file threshold was checked against the reset-free fixture and
+payout profiles before merging. LCOV merge produced 270 source records; the
+100% merged gate did not run. Regular E2E had 48 passes and 3 failures; payout
+E2E passed 3/3. The follow-up removes only the partition-local threshold with a
+temporary Bun config and keeps the merged gate at 100%. The focused LCOV suite passes 11 tests / 145 expectations under available
+Bun 1.4.0-canary.1; changed TypeScript formatting passes, and focused lint
+exits successfully with existing `no-await-in-loop` warnings. Serial pre-push
+and a new full CI run remain pending.
 
 ## T07 on-demand booking report continuation (2026-10-22)
 

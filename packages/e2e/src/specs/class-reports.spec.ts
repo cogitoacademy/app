@@ -349,7 +349,9 @@ test("tutor records, admin corrects, and student reads a real class session repo
       .getByRole("button", { name: "Use my draft over version 2" })
       .click();
     await tutorPage.getByRole("button", { name: "Save correction" }).click();
-    await expect(tutorPage.getByText("Version 3")).toBeVisible();
+    await expect(
+      tutorPage.getByText("Version 3", { exact: true }),
+    ).toBeVisible();
 
     const finalReport = (await reportRows(tutorApi)).find(
       (row) => row.sessionId === sessionId,

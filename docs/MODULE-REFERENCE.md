@@ -82,12 +82,14 @@ input-only attributes belong in inputProps.
 
 CrossBrowserDateTimeInput composes DatePicker and MinuteTimeInput, preserving a
 local YYYY-MM-DDTHH:mm string and the existing caller's timezone conversion. The
-calendar trigger uses the component ID; the time input uses ID-time. Required or
-partial date/time values and times before the same-day minimum fail form
-validation. Choosing a date without a time initializes midnight; clearing the
-date clears the combined value. CardBody owns direct-child table width/spacing
-and no longer negatively offsets arbitrary Stack content. Header actions wrap
-below the title based on Card width. See the UI audit plan for coverage limits.
+calendar trigger uses the component ID; the time input uses ID-time. Without an
+explicit maximum date, the calendar year list extends 100 years beyond the
+current year so future class schedules remain selectable. Required or partial
+date/time values and times before the same-day minimum fail form validation.
+Choosing a date without a time initializes midnight; clearing the date clears
+the combined value. CardBody owns direct-child table width/spacing and no longer
+negatively offsets arbitrary Stack content. Header actions wrap below the title
+based on Card width. See the UI audit plan for coverage limits.
 
 ## T06 parent integration and local verification (2026-10-21)
 

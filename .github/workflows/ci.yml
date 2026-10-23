@@ -293,6 +293,13 @@ jobs:
         id: coverage
         run: |
           set +e
+          # Individual partitions cover only part of the API; the merged LCOV gate enforces 100% below.
+          coverage_config="$(mktemp .coverage-collection-bunfig.XXXXXX.toml)" || exit 1
+          trap 'rm -f "$coverage_config"' EXIT
+          if ! sed '/^coverageThreshold[[:space:]]*=/d' bunfig.toml > "$coverage_config"; then
+            echo "::error::Could not create the partitioned coverage Bun config"
+            exit 1
+          fi
           mkdir -p coverage/api-resettable coverage/api-fixtures coverage/api-payout
 
           reset_coverage_profile() {
@@ -325,7 +332,7 @@ jobs:
 
           TEST_DATABASE_ALLOW_RESET=true \
           TEST_DATABASE_RESET_TARGET="$DATABASE_URL" \
-            bun test --coverage --coverage-reporter=lcov --timeout 30000 \
+            bun --config="$coverage_config" test --coverage --coverage-reporter=lcov --timeout 30000 \
               --path-ignore-patterns '**/booking-admin-reports.test.ts' \
               --path-ignore-patterns '**/class-enrollment.test.ts' \
               --path-ignore-patterns '**/report-export.test.ts' \
@@ -336,7 +343,7 @@ jobs:
 
           fixture_lcov_status=0
           reset_coverage_profile || fixture_lcov_status=1
-          bun test --coverage --coverage-reporter=lcov --timeout 30000 \
+          bun --config="$coverage_config" test --coverage --coverage-reporter=lcov --timeout 30000 \
             packages/api/src/tests/integration/booking-admin-reports.test.ts \
             packages/api/src/tests/integration/class-enrollment.test.ts \
             packages/api/src/tests/integration/report-export.test.ts
@@ -348,7 +355,7 @@ jobs:
           DATABASE_URL="$PAYOUT_DATABASE_URL" \
           TEST_DATABASE_ALLOW_RESET=true \
           TEST_DATABASE_RESET_TARGET="$PAYOUT_DATABASE_URL" \
-            bun test --coverage --coverage-reporter=lcov --timeout 30000 \
+            bun --config="$coverage_config" test --coverage --coverage-reporter=lcov --timeout 30000 \
               packages/api/src/tests/integration/booking-payout-g16.test.ts
           payout_status=$?
           capture_coverage_profile coverage/api-payout/lcov.info || payout_lcov_status=1

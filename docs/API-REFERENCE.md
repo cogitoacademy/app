@@ -98,6 +98,8 @@ Numeric inputs still pass through each caller's existing conversion and schema
 validation. CrossBrowserDateTimeInput returns a local YYYY-MM-DDTHH:mm string;
 Academy, lifecycle and payout callers retain their existing conversion before
 sending the API timestamp. The UI control does not infer or change timezones.
+DatePicker's default year navigation now extends 100 years forward so future
+dates can be selected; it changes no accepted API range.
 
 ## T06 parent integration and local verification (2026-10-21)
 

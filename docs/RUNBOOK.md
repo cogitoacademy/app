@@ -2870,10 +2870,22 @@ retained local 6769/6770 fixtures.
 The resettable API/env/auth/DB/OpenAPI partition requires both reset values to
 match `DATABASE_URL` exactly:
 
+Each partition is only a partial coverage profile, so CI uses a temporary copy
+of the root Bun config without its per-file `coverageThreshold`; the merged
+LCOV gate below applies the 100% requirements after all profiles are combined.
+Create that config before running the coverage partitions and pass it to each
+Bun process:
+
+```bash
+coverage_config="$(mktemp .coverage-collection-bunfig.XXXXXX.toml)"
+trap 'rm -f "$coverage_config"' EXIT
+sed '/^coverageThreshold[[:space:]]*=/d' bunfig.toml > "$coverage_config"
+```
+
 ```bash
 TEST_DATABASE_ALLOW_RESET=true \
 TEST_DATABASE_RESET_TARGET="$DATABASE_URL" \
-bun test --coverage --coverage-reporter=lcov --timeout 30000 \
+bun --config="$coverage_config" test --coverage --coverage-reporter=lcov --timeout 30000 \
   --path-ignore-patterns '**/booking-admin-reports.test.ts' \
   --path-ignore-patterns '**/class-enrollment.test.ts' \
   --path-ignore-patterns '**/report-export.test.ts' \
@@ -2886,7 +2898,7 @@ The reset-free report fixture partition uses the 6769 `DATABASE_URL`, with
 `TEST_DATABASE_ALLOW_RESET` and `TEST_DATABASE_RESET_TARGET` unset:
 
 ```bash
-bun test --coverage --coverage-reporter=lcov --timeout 30000 \
+bun --config="$coverage_config" test --coverage --coverage-reporter=lcov --timeout 30000 \
   packages/api/src/tests/integration/booking-admin-reports.test.ts \
   packages/api/src/tests/integration/class-enrollment.test.ts \
   packages/api/src/tests/integration/report-export.test.ts
@@ -2901,7 +2913,7 @@ The payout partition uses a separately migrated `cogito-test-payout` at
 DATABASE_URL="$PAYOUT_DATABASE_URL" \
 TEST_DATABASE_ALLOW_RESET=true \
 TEST_DATABASE_RESET_TARGET="$PAYOUT_DATABASE_URL" \
-bun test --coverage --coverage-reporter=lcov --timeout 30000 \
+bun --config="$coverage_config" test --coverage --coverage-reporter=lcov --timeout 30000 \
   packages/api/src/tests/integration/booking-payout-g16.test.ts
 ```
 

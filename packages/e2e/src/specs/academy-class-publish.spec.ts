@@ -4,7 +4,6 @@ import {
   request,
   test,
   type APIRequestContext,
-  type Page,
 } from "@playwright/test";
 import {
   ADMIN_EMAIL,
@@ -13,13 +12,7 @@ import {
   STUDENT_PASSWORD,
 } from "../fixtures/test-accounts";
 import { resetE2eAuthRateLimit } from "../fixtures/auth-rate-limit";
-
-async function fillDateTime(page: Page, id: string, date: Date) {
-  const input = page.locator(`#${id}`);
-  const expected = toDateTimeLocal(date);
-  await input.fill(expected);
-  await expect(input).toHaveValue(expected);
-}
+import { fillDateTimeInput } from "../helpers/date-time-input";
 
 type AdminClassSession = {
   id: string;
@@ -80,12 +73,6 @@ function assertDedicatedTestDatabase() {
   }
 }
 
-function toDateTimeLocal(date: Date) {
-  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
-    .toISOString()
-    .slice(0, 16);
-}
-
 async function createApiContext(email: string, password: string) {
   resetE2eAuthRateLimit();
   const context = await request.newContext({
@@ -142,7 +129,9 @@ test("admin publishes both class modes; students see only the published DTO", as
   const suffix = randomUUID().slice(0, 8);
   const title = `E2E RETRY: class ${suffix}`;
   const scheduleOffsetDays = Number.parseInt(suffix, 16) % 365;
-  const firstStart = new Date(2045, 0, 1 + scheduleOffsetDays, 10);
+  const firstStart = new Date();
+  firstStart.setDate(firstStart.getDate() + 30 + scheduleOffsetDays);
+  firstStart.setHours(10, 0, 0, 0);
   const firstEnd = new Date(firstStart.getTime() + 60 * 60 * 1000);
   const secondStart = new Date(firstStart);
   secondStart.setDate(secondStart.getDate() + 7);
@@ -233,7 +222,11 @@ test("admin publishes both class modes; students see only the published DTO", as
       "readonly",
       "",
     );
-    await fillDateTime(adminPage, "class-minimum-check-at", minimumCheckAt);
+    await fillDateTimeInput(
+      adminPage,
+      "class-minimum-check-at",
+      minimumCheckAt,
+    );
     await adminPage.locator("#class-minimum-enrollment").fill("2");
 
     await adminPage
@@ -244,8 +237,8 @@ test("admin publishes both class modes; students see only the published DTO", as
       .getByLabel("Curriculum description (English)")
       .nth(0)
       .fill("Automated test curriculum fixture.");
-    await fillDateTime(adminPage, "session-0-start", firstStart);
-    await fillDateTime(adminPage, "session-0-end", firstEnd);
+    await fillDateTimeInput(adminPage, "session-0-start", firstStart);
+    await fillDateTimeInput(adminPage, "session-0-end", firstEnd);
     await adminPage.locator("#session-0-capacity").fill("4");
     await adminPage.locator("#session-0-tutor").click();
     await adminPage.getByRole("option").first().click();
@@ -259,8 +252,8 @@ test("admin publishes both class modes; students see only the published DTO", as
       .getByLabel("Curriculum description (English)")
       .nth(1)
       .fill("Automated test curriculum fixture.");
-    await fillDateTime(adminPage, "session-1-start", secondStart);
-    await fillDateTime(adminPage, "session-1-end", secondEnd);
+    await fillDateTimeInput(adminPage, "session-1-start", secondStart);
+    await fillDateTimeInput(adminPage, "session-1-end", secondEnd);
     await adminPage.locator("#session-1-capacity").fill("4");
     await adminPage.locator("#session-1-mode").click();
     await adminPage.getByRole("option", { name: "In person" }).click();
