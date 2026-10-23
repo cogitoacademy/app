@@ -436,7 +436,7 @@ to milliseconds. The initial focused unit suite passed 7 tests / 27
 expectations and its fairness follow-up passed 8 / 33; the current suite passes
 10 tests / 44 expectations, including a pg-proxy regression for a sub-
 millisecond end just before 24 elapsed hours. Parent verified four uncached
-workspace checks at `b0b80bec`; this precision delta passed bun run check-types (4/4 tasks, 15.204s; 2 cached); the normal pre-push hook reruns it. DB and browser acceptance remain with parent integration.
+workspace checks at `b0b80bec`; this precision delta passed bun run check-types (4/4 tasks, 15.204s; 2 cached); the normal pre-push hook reruns it. Guarded PostgreSQL acceptance results are recorded below.
 
 The bounded scan keeps an in-process keyset cursor in schedule-end, booking-ID,
 then child-session-ID order. It advances after each candidate even when its
@@ -485,8 +485,8 @@ The backend, payout source support, role-based `/class-reports` workspace, and
 pending-report reminder worker are implemented. The shared page shows settlement
 preview/readback to tutors/admins, keeps student settlement fields null,
 normalizes feedback bullets, and preserves unsaved edits on stale-version
-conflicts. It supports versioned admin edits with a required reason; the
-booking-detail on-demand report source is authored in an isolated worktree; migration 0070 and DB/Chromium acceptance plus PDF remain pending.
+conflicts. It supports versioned admin edits with a required reason.
+The booking-detail on-demand report implementation was verified in merged PR #305; migration 0070 is applied on local test/dev. PDF support and broader acceptance remain open.
 
 `class-enrollment.report-reminders.ts` runs from the existing one-minute
 `class-enrollment-check` job. It selects at most 100 ended, scheduled sessions in
