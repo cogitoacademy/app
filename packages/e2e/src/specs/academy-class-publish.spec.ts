@@ -15,24 +15,10 @@ import {
 import { resetE2eAuthRateLimit } from "../fixtures/auth-rate-limit";
 
 async function fillDateTime(page: Page, id: string, date: Date) {
-  await page.locator(`#${id}`).click();
-  const calendar = page.getByRole("dialog").last();
-  await calendar.getByRole("combobox", { name: "Choose the Year" }).click();
-  await page
-    .getByRole("option", { name: String(date.getFullYear()), exact: true })
-    .click();
-  await calendar.getByRole("combobox", { name: "Choose the Month" }).click();
-  await page
-    .getByRole("option", {
-      name: date.toLocaleString("en-US", { month: "long" }),
-      exact: true,
-    })
-    .click();
-  await calendar
-    .locator("button[aria-label]")
-    .filter({ hasText: new RegExp(`^${date.getDate()}$`) })
-    .click();
-  await page.locator(`#${id}-time`).fill(toDateTimeLocal(date).split("T")[1]!);
+  const input = page.locator(`#${id}`);
+  const expected = toDateTimeLocal(date);
+  await input.fill(expected);
+  await expect(input).toHaveValue(expected);
 }
 
 type AdminClassSession = {

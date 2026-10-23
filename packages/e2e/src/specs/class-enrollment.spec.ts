@@ -874,7 +874,9 @@ test("admin cancels one session, postpones once, and student confirms the exact 
       }));
     for (const replacement of replacements) {
       await card
-        .getByLabel(`Replacement start · session ${replacement.sequenceNumber}`)
+        .getByRole("textbox", {
+          name: `Replacement start · session ${replacement.sequenceNumber}`,
+        })
         .fill(toDateTimeLocal(replacement.startAt));
     }
     await card

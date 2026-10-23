@@ -375,10 +375,15 @@ snapshots its fresh, non-empty output under `coverage/api-*` before the next
 process runs. The workflow uses this configured output because CI did not
 produce the requested custom `--coverage-dir` paths. Those three raw profiles
 are merged before the existing gate. The merge rejects missing, empty, or
-recordless LCOV profiles. `.github/scripts/merge-lcov.test.ts` covers the union
-and failure behavior. The payout schema is migrated through a separate
-`apps/server/.env.test-payout` file. No helper guard or coverage gate
-was changed. `test-setup.ts` has no database URL fallback; provide a target
+recordless LCOV profiles. For Bun profiles that include `FNF`/`FNH` but omit
+function identities, the merger preserves maximum summary counts and the exact
+named-function union, then writes a sidecar identifying sources whose function
+identity is incomplete. The PR comment labels these counts as lower bounds and
+the 100% gate fails if unidentified functions remain uncovered; configured
+thresholds are unchanged. `.github/scripts/merge-lcov.test.ts` covers overlapping
+summary-only profiles, mixed named/summary profiles, raw-profile preservation,
+and invalid or incomplete details. The payout schema is migrated through a
+separate `apps/server/.env.test-payout` file. `test-setup.ts` has no database URL fallback; provide a target
 explicitly for DB-backed work. The retained 6769 run-scoped financial fixtures
 were not reset in this task. The non-reset T05 per-run E2E identity path remains
 unchanged. A source scan found 69 API test files calling the shared helper;
@@ -704,7 +709,7 @@ this exact guarded test database; no customer pricing pointer or external
 provider is called. Vite uses `apps/web/node_modules/.vite-t05-enrollment` for
 the T05 browser server to avoid contending with the existing app's Vite cache.
 
-The Playwright global setup requires `NODE_ENV=test`, `T05_ENROLLMENT_TEST_DB_PORT=6769`, loopback PostgreSQL port 6769 and exact `/cogito-test`. It skips cleanup on 6767 and 6768. Each 6769 run gets fresh seeded student identities, including the familiar Andre display name; existing enrollment, cancellation, ledger, quote and payment history is left unchanged. This avoids rewriting financial history and gives the run independent wallets. The T05 booking/lifecycle student starts with 326 Marks: booking-flow reserves 126 Marks before class-enrollment coverage, which retains its established 200-Mark funding assertions. Global setup also creates a second run-scoped student with 200 Marks for the parallel multi-plan class journey, keeping its 149-Mark spend separate from the booking and lifecycle tests; its 80/44/25 pricing and insufficient-funds assertions remain active. Other seed targets keep the 200-Mark default. The test seed blanks Resend credentials. The disposable T05 database accumulates two run-scoped accounts and their fixtures per run; volume cleanup remains a separately assigned lifecycle task. The separate payout target at 6770 keeps the legacy-only reset for the exact Andre seed identity.
+The Playwright global setup requires `NODE_ENV=test`, `T05_ENROLLMENT_TEST_DB_PORT=6769`, loopback PostgreSQL port 6769 and exact `/cogito-test`. It skips cleanup on 6767 and 6768. Each 6769 run gets fresh seeded student identities, including the familiar Andre display name; existing enrollment, cancellation, ledger, quote and payment history is left unchanged. This avoids rewriting financial history and gives the run independent wallets. The T05 booking/lifecycle student starts with 326 Marks: booking-flow reserves 126 Marks before class-enrollment coverage, which retains its established 200-Mark funding assertions. Global setup also creates a second run-scoped student with 200 Marks for the parallel multi-plan class journey, keeping its 149-Mark spend separate from the booking and lifecycle tests; its 80/44/25 pricing and insufficient-funds assertions remain active. With the T07 class-report opt-in, setup creates a third isolated 200-Mark report student and storage state so parallel enrollment journeys cannot consume report funding. Other seed targets keep the 200-Mark default. The test seed blanks Resend credentials. The disposable T05 database accumulates run-scoped accounts and their fixtures per run; volume cleanup remains a separately assigned lifecycle task. The separate payout target at 6770 keeps the legacy-only reset for the exact Andre seed identity.
 
 Pure guard and identity regression commands: `bun --smol test --timeout 30000 apps/server/src/seed/reset-seed-student.guard.test.ts packages/e2e/src/fixtures/test-accounts.test.ts`. The 6769 integration guard is authored in `apps/server/src/seed/reset-seed-student.integration.test.ts`; run it only during the assigned database window. The current authoring slice did not run reset, database integration, migration, browser E2E or full typecheck.
 
@@ -2880,13 +2885,18 @@ typecheck. After every process, the workflow copies the fresh configured
 to be non-empty. It clears the default profile before the next process so no
 partition can reuse stale coverage. The merger unions all three raw profiles
 into `coverage/lcov.merged.info` and leaves the final Bun-generated
-`coverage/lcov.info` untouched. The coverage comment enforces 100% coverage for
-`packages/api` lines, overall lines, functions, and branches from the merged
-file; a 0/0 branch total is treated as 100%. It runs only after successful test
-and merge commands, so an incomplete raw profile cannot be reported as merged
-coverage. A failed coverage command is propagated explicitly by the following
-step. If the gate fails on a merged profile, inspect the missing function/line
-records and add a behavior-level test before pushing. The generated PR comment
+`coverage/lcov.info` untouched. Named functions retain their exact union. If a
+Bun profile supplies `FNF`/`FNH` without function identities, the merger uses
+the maximum profile counts and known named counts as lower bounds, and writes
+`coverage/lcov.function-identity.json` to record incomplete identities. The
+coverage comment labels these counts as lower bounds and blocks the gate when
+unidentified functions remain uncovered. It enforces the unchanged 100% for
+`packages/api` lines, overall lines, functions, and branches; a 0/0 branch total
+is treated as 100%. It runs only after successful test and merge commands, so
+an incomplete raw profile cannot be reported as merged coverage. A failed
+coverage command is propagated explicitly by the following step. If the gate
+fails on a merged profile, inspect the missing function/line records and add a
+behavior-level test before pushing. The generated PR comment
 uses blank lines between its status blockquote and tables; preserve these
 separators when editing the renderer.
 The DB unit test's environment mock includes an auth secret because Bun can
@@ -2895,6 +2905,16 @@ restore the mocked environment after each case so a development-mode SSL test
 cannot affect the following auth integration cases.
 The Bun command's own function/statement output is
 diagnostic; the lcov gate is authoritative.
+
+PR310 CI run [#39913840116](https://github.com/cogitoacademy/app/actions/runs/39913840116)
+passed its server and coverage test partitions but failed the LCOV merge because
+Bun 1.3.14 omitted function identities while keeping the `FNF`/`FNH` summaries;
+it did not reach the 100% threshold step. E2E had 48 regular passes and 3
+failures, while the separate payout partition passed all 3 tests. Current
+focused proof is 6 LCOV merger tests / 55 expectations and 2 E2E identity tests
+/ 4 expectations. The serial hook and one hosted rerun on the updated branch
+remain pending. Do not use local database or browser acceptance as a substitute
+for the isolated hosted jobs.
 
 The CI lint job uses the pinned oxlint 1.80.0 and oxfmt 0.65.0 toolchain. It
 emits **documented-intentional warnings**: `no-await-in-loop` = sequential

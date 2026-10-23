@@ -641,6 +641,21 @@ async function seed() {
       200,
     );
   }
+
+  const classReportsStudentEmail =
+    process.env.T07_CLASS_REPORTS_STUDENT_EMAIL?.trim().toLowerCase();
+  if (
+    process.env.NODE_ENV === "test" &&
+    process.env.T05_ENROLLMENT_TEST_DB_PORT === "6769" &&
+    classReportsStudentEmail
+  ) {
+    await seedDemoStudent(
+      classReportsStudentEmail,
+      friendPassword,
+      "Class Reports E2E",
+      200,
+    );
+  }
 }
 
 if (import.meta.main) {

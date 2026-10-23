@@ -67,11 +67,12 @@ function assertT05EnrollmentTarget(env: NodeJS.ProcessEnv) {
 }
 
 async function saveRoleStorageState(
-  role: "admin" | "tutor",
+  role: "admin" | "tutor" | "student",
   email: string,
   password: string,
   serverUrl: string,
   authDir: string,
+  stateName = role,
 ) {
   const roleContext = await request.newContext({ baseURL: serverUrl });
   try {
@@ -84,7 +85,7 @@ async function saveRoleStorageState(
       );
     }
     await roleContext.storageState({
-      path: path.join(authDir, `${role}.json`),
+      path: path.join(authDir, `${stateName}.json`),
     });
   } finally {
     await roleContext.dispose();
@@ -110,6 +111,11 @@ async function globalSetup() {
     process.env.T05_ENROLLMENT_TEST_DB_PORT === "6769"
       ? createRunScopedStudentEmail(randomUUID())
       : undefined;
+  const runScopedReportStudentEmail =
+    process.env.T05_ENROLLMENT_TEST_DB_PORT === "6769" &&
+    process.env.T07_CLASS_REPORTS_E2E === "1"
+      ? createRunScopedStudentEmail(randomUUID())
+      : undefined;
 
   // Keep booking/lifecycle history on one fresh T05 student and reserve a
   // second fresh wallet for the parallel multi-plan class journey.
@@ -117,6 +123,9 @@ async function globalSetup() {
   process.env.SEED_REVIEW_STUDENT_EMAIL = runScopedStudentEmail;
   if (runScopedClassStudentEmail) {
     process.env.T05_CLASS_ENROLLMENT_STUDENT_EMAIL = runScopedClassStudentEmail;
+  }
+  if (runScopedReportStudentEmail) {
+    process.env.T07_CLASS_REPORTS_STUDENT_EMAIL = runScopedReportStudentEmail;
   }
 
   console.log(
@@ -145,6 +154,7 @@ async function globalSetup() {
     RESEND_API_KEY: "",
     E2E_STUDENT_EMAIL: runScopedStudentEmail,
     SEED_REVIEW_STUDENT_EMAIL: runScopedStudentEmail,
+    T07_CLASS_REPORTS_STUDENT_EMAIL: runScopedReportStudentEmail,
     SEED_ADMIN_PASSWORD: process.env.SEED_ADMIN_PASSWORD ?? "AdminPassword123!",
     SEED_TUTOR_PASSWORD: process.env.SEED_TUTOR_PASSWORD ?? "Tutor123!",
     SEED_STUDENT_PASSWORD: process.env.SEED_STUDENT_PASSWORD ?? "Student123!",
@@ -200,6 +210,17 @@ async function globalSetup() {
   }
   await authContext.storageState({ path: path.join(authDir, "student.json") });
   await authContext.dispose();
+
+  if (runScopedReportStudentEmail) {
+    await saveRoleStorageState(
+      "student",
+      runScopedReportStudentEmail,
+      testSeedEnv.SEED_STUDENT_PASSWORD,
+      e2eEnvironment.serverUrl,
+      authDir,
+      "t07-report-student",
+    );
+  }
 
   if (
     process.env.T06_CLASS_LIFECYCLE_E2E === "1" ||

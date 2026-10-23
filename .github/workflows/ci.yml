@@ -378,6 +378,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LCOV_FILE: ./coverage/lcov.merged.info
+          LCOV_FUNCTION_IDENTITY_MANIFEST: ./coverage/lcov.function-identity.json
           PR_NUMBER: ${{ github.event.pull_request.number }}
           COVERAGE_API_THRESHOLD: 100
           COVERAGE_OVERALL_THRESHOLD: 100

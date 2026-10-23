@@ -7,14 +7,26 @@ type Coverage = {
   lines: Map<number, number>;
   functions: Map<string, FunctionCoverage>;
   branches: Map<string, number | null>;
+  functionDefinitions: number;
+  functionHits: number;
 };
 
-type RawRecord = Omit<Coverage, "functions"> & {
+type RawRecord = {
+  source: string;
+  lines: Map<number, number>;
+  branches: Map<string, number | null>;
   lineDefinitions: number;
-  functionDefinitions: number;
+  functionDefinitions?: number;
+  functionHitsSummary?: number;
   branchDefinitions: number;
   functionNames: Array<{ line: number; name: string }>;
   functionHits: Map<string, number>;
+};
+
+type FunctionIdentityManifest = {
+  version: 1;
+  identityIncompleteSources: string[];
+  unresolvedUncoveredSources: string[];
 };
 
 function addMax<K>(map: Map<K, number>, key: K, value: number) {
@@ -33,13 +45,89 @@ function mergeBranch(
   );
 }
 
+function parseSummaryCount(value: string, field: string, source: string) {
+  const count = Number(value);
+  if (!/^\d+$/.test(value) || !Number.isSafeInteger(count)) {
+    throw new Error(`Invalid LCOV ${field} summary for ${source}: ${value}`);
+  }
+  return count;
+}
+
+function summarizeFunctions(record: RawRecord) {
+  const named = new Map<string, { line: number; name: string }>();
+  for (const fn of record.functionNames) {
+    named.set(`${fn.line}\0${fn.name}`, fn);
+  }
+  const namedHits = [...named.values()].filter(
+    (fn) => (record.functionHits.get(fn.name) ?? 0) > 0,
+  ).length;
+
+  if (
+    record.functionHitsSummary !== undefined &&
+    record.functionDefinitions === undefined
+  ) {
+    throw new Error(`LCOV FNH summary is missing FNF for ${record.source}`);
+  }
+  if (
+    record.functionDefinitions !== undefined &&
+    record.functionDefinitions < named.size
+  ) {
+    throw new Error(
+      `LCOV FNF is smaller than named functions for ${record.source}`,
+    );
+  }
+  if (
+    record.functionHitsSummary !== undefined &&
+    record.functionHitsSummary < namedHits
+  ) {
+    throw new Error(`LCOV FNH is smaller than named hits for ${record.source}`);
+  }
+  if (
+    record.functionDefinitions !== undefined &&
+    record.functionHitsSummary !== undefined &&
+    record.functionHitsSummary > record.functionDefinitions
+  ) {
+    throw new Error(`LCOV FNH exceeds FNF for ${record.source}`);
+  }
+
+  const definitions = Math.max(
+    record.functionDefinitions ?? named.size,
+    named.size,
+  );
+  const hits = Math.max(record.functionHitsSummary ?? namedHits, namedHits);
+  const unnamedDefinitions = definitions - named.size;
+  if (hits > namedHits + unnamedDefinitions) {
+    throw new Error(
+      `LCOV function summary conflicts with named hits for ${record.source}`,
+    );
+  }
+
+  return {
+    definitions,
+    hits,
+  };
+}
+
+function summarizeMergedFunctions(file: Coverage) {
+  const functions = [...file.functions.values()];
+  const definitions = Math.max(file.functionDefinitions, functions.length);
+  const namedHits = functions.filter((fn) => fn.hits > 0).length;
+  const hits = Math.max(file.functionHits, namedHits);
+  const identityIncomplete = definitions > functions.length || hits > namedHits;
+
+  return {
+    definitions,
+    hits,
+    identityIncomplete,
+    unresolvedUncovered: identityIncomplete && hits < definitions,
+  };
+}
+
 function mergeFile(records: RawRecord[], files: Map<string, Coverage>) {
   for (const record of records) {
+    const functionSummary = summarizeFunctions(record);
     if (record.lineDefinitions > 0 && record.lines.size === 0) {
       throw new Error(`LCOV line details missing for ${record.source}`);
-    }
-    if (record.functionDefinitions > 0 && record.functionNames.length === 0) {
-      throw new Error(`LCOV function details missing for ${record.source}`);
     }
     if (record.branchDefinitions > 0 && record.branches.size === 0) {
       throw new Error(`LCOV branch details missing for ${record.source}`);
@@ -50,7 +138,14 @@ function mergeFile(records: RawRecord[], files: Map<string, Coverage>) {
       lines: new Map<number, number>(),
       functions: new Map<string, FunctionCoverage>(),
       branches: new Map<string, number | null>(),
+      functionDefinitions: 0,
+      functionHits: 0,
     };
+    file.functionDefinitions = Math.max(
+      file.functionDefinitions,
+      functionSummary.definitions,
+    );
+    file.functionHits = Math.max(file.functionHits, functionSummary.hits);
     for (const [line, hits] of record.lines) addMax(file.lines, line, hits);
     for (const fn of record.functionNames) {
       const key = `${fn.line}\0${fn.name}`;
@@ -74,7 +169,10 @@ function parseLcov(content: string) {
   const records: RawRecord[] = [];
   let record: RawRecord | undefined;
   const finish = () => {
-    if (record) records.push(record);
+    if (record) {
+      summarizeFunctions(record);
+      records.push(record);
+    }
     record = undefined;
   };
 
@@ -87,7 +185,6 @@ function parseLcov(content: string) {
         lines: new Map(),
         branches: new Map(),
         lineDefinitions: 0,
-        functionDefinitions: 0,
         branchDefinitions: 0,
         functionNames: [],
         functionHits: new Map(),
@@ -124,7 +221,17 @@ function parseLcov(content: string) {
     } else if (line.startsWith("LF:") && record) {
       record.lineDefinitions = Number(line.slice(3)) || 0;
     } else if (line.startsWith("FNF:") && record) {
-      record.functionDefinitions = Number(line.slice(4)) || 0;
+      record.functionDefinitions = parseSummaryCount(
+        line.slice(4),
+        "FNF",
+        record.source,
+      );
+    } else if (line.startsWith("FNH:") && record) {
+      record.functionHitsSummary = parseSummaryCount(
+        line.slice(4),
+        "FNH",
+        record.source,
+      );
     } else if (line.startsWith("BRF:") && record) {
       record.branchDefinitions = Number(line.slice(4)) || 0;
     } else if (line === "end_of_record") {
@@ -142,6 +249,7 @@ function renderLcov(files: Map<string, Coverage>) {
       const functions = [...file.functions.values()].toSorted(
         (a, b) => a.line - b.line || a.name.localeCompare(b.name),
       );
+      const functionSummary = summarizeMergedFunctions(file);
       const lines = [...file.lines].toSorted((a, b) => a[0] - b[0]);
       const branches = [...file.branches].toSorted((a, b) =>
         a[0].localeCompare(b[0]),
@@ -152,8 +260,8 @@ function renderLcov(files: Map<string, Coverage>) {
           `FN:${fn.line},${fn.name}`,
           `FNDA:${fn.hits},${fn.name}`,
         ]),
-        `FNF:${functions.length}`,
-        `FNH:${functions.filter((fn) => fn.hits > 0).length}`,
+        `FNF:${functionSummary.definitions}`,
+        `FNH:${functionSummary.hits}`,
         ...lines.map(([line, hits]) => `DA:${line},${hits}`),
         `LF:${lines.length}`,
         `LH:${lines.filter(([, hits]) => hits > 0).length}`,
@@ -165,6 +273,23 @@ function renderLcov(files: Map<string, Coverage>) {
     })
     .join("\n")
     .concat("\n");
+}
+
+function functionIdentityManifest(
+  files: Map<string, Coverage>,
+): FunctionIdentityManifest {
+  const records = [...files.values()].toSorted((a, b) =>
+    a.source.localeCompare(b.source),
+  );
+  return {
+    version: 1,
+    identityIncompleteSources: records
+      .filter((file) => summarizeMergedFunctions(file).identityIncomplete)
+      .map((file) => file.source),
+    unresolvedUncoveredSources: records
+      .filter((file) => summarizeMergedFunctions(file).unresolvedUncovered)
+      .map((file) => file.source),
+  };
 }
 
 async function main() {
@@ -187,6 +312,10 @@ async function main() {
   if (files.size === 0) throw new Error("No LCOV records were found.");
 
   await Bun.write("coverage/lcov.merged.info", renderLcov(files));
+  await Bun.write(
+    "coverage/lcov.function-identity.json",
+    `${JSON.stringify(functionIdentityManifest(files), null, 2)}\n`,
+  );
   console.log(`Merged LCOV coverage for ${files.size} source files.`);
 }
 

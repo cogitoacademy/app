@@ -27,6 +27,12 @@ interface LcovRecord {
   branchesHit: number;
 }
 
+interface FunctionIdentityManifest {
+  version: 1;
+  identityIncompleteSources: string[];
+  unresolvedUncoveredSources: string[];
+}
+
 function parseLcov(content: string): LcovRecord[] {
   const records: LcovRecord[] = [];
   let current: Partial<LcovRecord> = {};
@@ -134,6 +140,63 @@ async function main() {
     process.exit(1);
   }
 
+  const identityManifestPath = process.env.LCOV_FUNCTION_IDENTITY_MANIFEST;
+  let identityManifest: FunctionIdentityManifest | undefined;
+  if (identityManifestPath) {
+    const manifestFile = Bun.file(identityManifestPath);
+    if (!(await manifestFile.exists())) {
+      throw new Error(
+        `Function identity manifest missing: ${identityManifestPath}`,
+      );
+    }
+    const manifestText = await manifestFile.text();
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(manifestText);
+    } catch {
+      throw new Error("Function identity manifest is invalid JSON.");
+    }
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      !("version" in parsed) ||
+      parsed.version !== 1 ||
+      !("identityIncompleteSources" in parsed) ||
+      !Array.isArray(parsed.identityIncompleteSources) ||
+      !parsed.identityIncompleteSources.every(
+        (source): source is string => typeof source === "string",
+      ) ||
+      !("unresolvedUncoveredSources" in parsed) ||
+      !Array.isArray(parsed.unresolvedUncoveredSources) ||
+      !parsed.unresolvedUncoveredSources.every(
+        (source): source is string => typeof source === "string",
+      )
+    ) {
+      throw new Error("Function identity manifest has an invalid shape.");
+    }
+    identityManifest = parsed as FunctionIdentityManifest;
+    const incomplete = new Set(identityManifest.identityIncompleteSources);
+    if (
+      identityManifest.unresolvedUncoveredSources.some(
+        (source) => !incomplete.has(source),
+      )
+    ) {
+      throw new Error(
+        "Function identity manifest marks a source unresolved without missing identities.",
+      );
+    }
+    const sources = new Set(records.map((record) => record.file));
+    if (
+      identityManifest.identityIncompleteSources.some(
+        (source) => !sources.has(source),
+      )
+    ) {
+      throw new Error(
+        "Function identity manifest references a source missing from LCOV.",
+      );
+    }
+  }
+
   const apiRecords = records.filter((r) => isApiFile(r.file));
 
   const apiLines = sumLines(apiRecords);
@@ -182,6 +245,16 @@ async function main() {
   const branchesPctNum = pctNum(totals.branchesHit, totals.branchesFound);
 
   const gateFailures: string[] = [];
+  const identityIncompleteSources = new Set(
+    identityManifest?.identityIncompleteSources ?? [],
+  );
+  const unresolvedUncoveredSources =
+    identityManifest?.unresolvedUncoveredSources ?? [];
+  if (unresolvedUncoveredSources.length > 0) {
+    gateFailures.push(
+      `function union is unverified for ${unresolvedUncoveredSources.length} source(s) with unidentified uncovered functions`,
+    );
+  }
   if (apiPct < apiThreshold) {
     gateFailures.push(
       `packages/api lines ${apiPct.toFixed(1)}% < ${apiThreshold}% threshold`,
@@ -213,7 +286,7 @@ async function main() {
     `|--------|----------|`,
     `| packages/api lines | ${pct(apiLines.linesHit, apiLines.linesFound)} (${apiLines.linesHit}/${apiLines.linesFound}) — gate ${apiThreshold}% |`,
     `| Overall lines | ${pct(overallLines.linesHit, overallLines.linesFound)} (${overallLines.linesHit}/${overallLines.linesFound}) — gate ${overallThreshold}% |`,
-    `| Functions | ${functionsPct} (${totals.functionsHit}/${totals.functionsFound}) — gate ${functionsThreshold}% |`,
+    `| Functions | ${identityIncompleteSources.size > 0 ? `lower-bound counts ≥${totals.functionsHit}/≥${totals.functionsFound}; identities missing in ${identityIncompleteSources.size} source(s)` : `${functionsPct} (${totals.functionsHit}/${totals.functionsFound})`} — gate ${functionsThreshold}% |`,
     `| Branches | ${branchesPct} (${totals.branchesHit}/${totals.branchesFound}) — gate ${branchesThreshold}% |`,
   ].join("\n");
 
@@ -226,7 +299,10 @@ async function main() {
         /^\/home\/runner\/work\/[^/]+\/[^/]+\//,
         "",
       );
-      return `| ${shortPath} | ${pct(r.linesHit, r.linesFound)} | ${pct(r.functionsHit, r.functionsFound)} |`;
+      const functionCell = identityIncompleteSources.has(r.file)
+        ? `lower-bound counts ≥${r.functionsHit}/≥${r.functionsFound}; identity incomplete`
+        : pct(r.functionsHit, r.functionsFound);
+      return `| ${shortPath} | ${pct(r.linesHit, r.linesFound)} | ${functionCell} |`;
     });
 
   const perFileTable =

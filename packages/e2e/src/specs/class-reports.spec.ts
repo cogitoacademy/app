@@ -8,7 +8,10 @@ import {
   type APIRequestContext,
   type Page,
 } from "@playwright/test";
-import { TUTOR_EMAIL } from "../fixtures/test-accounts";
+import {
+  T07_CLASS_REPORTS_STUDENT_EMAIL,
+  TUTOR_EMAIL,
+} from "../fixtures/test-accounts";
 import { resolveE2eEnvFile } from "../fixtures/e2e-environment";
 
 type TestClass = {
@@ -69,10 +72,13 @@ function assertT05EnrollmentTarget() {
   }
 }
 
-async function createApiContext(role: "admin" | "student" | "tutor") {
+async function createApiContext(
+  role: "admin" | "student" | "tutor",
+  stateName = role,
+) {
   return request.newContext({
     baseURL: process.env.SERVER_URL ?? "http://localhost:3201",
-    storageState: path.resolve(process.cwd(), ".auth", `${role}.json`),
+    storageState: path.resolve(process.cwd(), ".auth", `${stateName}.json`),
   });
 }
 
@@ -169,8 +175,11 @@ test("tutor records, admin corrects, and student reads a real class session repo
 }) => {
   test.setTimeout(180_000);
   assertT05EnrollmentTarget();
+  if (!T07_CLASS_REPORTS_STUDENT_EMAIL) {
+    throw new Error("Missing isolated T07 class-report student fixture.");
+  }
   const adminApi = await createApiContext("admin");
-  const studentApi = await createApiContext("student");
+  const studentApi = await createApiContext("student", "t07-report-student");
   const tutorApi = await createApiContext("tutor");
   let tutorContext: Awaited<ReturnType<typeof browser.newContext>> | undefined;
   let adminContext: Awaited<ReturnType<typeof browser.newContext>> | undefined;
@@ -315,7 +324,9 @@ test("tutor records, admin corrects, and student reads a real class session repo
         .getByRole("textbox", { name: "Correction reason" })
         .fill("Clarify the next lesson plan");
       await adminPage.getByRole("button", { name: "Save correction" }).click();
-      await expect(adminPage.getByText("Version 2")).toBeVisible();
+      await expect(
+        adminPage.getByText("Version 2", { exact: true }),
+      ).toBeVisible();
     } finally {
       await adminContext.close();
       adminContext = undefined;
