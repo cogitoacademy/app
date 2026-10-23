@@ -1305,6 +1305,12 @@ describe("KOL settlement PostgreSQL acceptance (parent-owned)", () => {
       (await referral.adjustKolCommission(adminId, correction)).entries,
     ).toHaveLength(3);
     await expect(
+      referral.adjustKolCommission(adminId, {
+        ...correction,
+        expectedObligationIdr: 1,
+      }),
+    ).rejects.toThrow("different values");
+    await expect(
       referral.recordKolTransfer(adminId, { ...first, amountIdr: 9999 }),
     ).rejects.toThrow("different values");
     const history = corrected.entries.filter((row) => row.kind === "transfer");
@@ -1432,7 +1438,7 @@ describe("KOL settlement PostgreSQL acceptance (parent-owned)", () => {
     const result = await referral.exportKolMonthly({ month: "2100-01" });
     expect(result.csv).toContain("Calculated IDR (current)");
     expect(result.csv).toContain("Transferred IDR (lifetime)");
-    expect(result.csv).toContain('"35000","0","35000","10000","25000","0"');
+    expect(result.csv).toContain("35000,0,35000,10000,25000,0");
     expect(result.csv).toContain("'=external,reference");
     const ownRows = result.csv
       .split("\r\n")

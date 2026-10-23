@@ -98,7 +98,7 @@ describe("KOL external settlement", () => {
   });
   test("CSV quotes multiline references and neutralizes formulas", () => {
     expect(kolCsv([[" =SUM(A1)", 'bank,"ref"\nnext', -5000]])).toBe(
-      `\uFEFF"' =SUM(A1)","bank,""ref""\nnext","'-5000"`,
+      `\uFEFF"' =SUM(A1)","bank,""ref""\nnext",-5000`,
     );
   });
 });

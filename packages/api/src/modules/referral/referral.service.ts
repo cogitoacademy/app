@@ -1037,6 +1037,8 @@ export function createReferralService(deps: {
       const paidAt = "paidAt" in input ? input.paidAt : null;
       const reference = "reference" in input ? input.reference : null;
       const reason = "reason" in input ? input.reason : null;
+      const expectedObligationIdr =
+        "expectedObligationIdr" in input ? input.expectedObligationIdr : null;
       if (prior) {
         if (
           prior.decisionId !== input.decisionId ||
@@ -1045,7 +1047,8 @@ export function createReferralService(deps: {
           prior.amountIdr !== input.amountIdr ||
           prior.paidAt?.getTime() !== paidAt?.getTime() ||
           prior.reference !== reference ||
-          prior.reason !== reason
+          prior.reason !== reason ||
+          prior.expectedObligationIdr !== expectedObligationIdr
         )
           throw new ReferralError(
             "KOL_SETTLEMENT_CONFLICT",
@@ -1084,6 +1087,7 @@ export function createReferralService(deps: {
           operationId: input.operationId,
           kind,
           amountIdr: input.amountIdr,
+          expectedObligationIdr,
           paidAt,
           reference,
           reason,
@@ -1166,7 +1170,7 @@ export function createReferralService(deps: {
             eq(referralCampaign.id, referralChoice.campaignId),
           )
           .where(
-            sql`(${kolCommissionDecision.providerSuccessAt} >= ${from} AND ${kolCommissionDecision.providerSuccessAt} < ${to}) OR (${kolCommissionDecision.providerSuccessAt} IS NULL AND ${kolCommissionDecision.createdAt} >= ${from} AND ${kolCommissionDecision.createdAt} < ${to}) OR EXISTS (SELECT 1 FROM ${kolSettlementEntry} WHERE ${kolSettlementEntry.decisionId} = ${kolCommissionDecision.id} AND coalesce(${kolSettlementEntry.paidAt}, ${kolSettlementEntry.createdAt}) >= ${from} AND coalesce(${kolSettlementEntry.paidAt}, ${kolSettlementEntry.createdAt}) < ${to})`,
+            sql`(${kolCommissionDecision.providerSuccessAt} >= ${from.toISOString()}::timestamptz AND ${kolCommissionDecision.providerSuccessAt} < ${to.toISOString()}::timestamptz) OR (${kolCommissionDecision.providerSuccessAt} IS NULL AND ${kolCommissionDecision.createdAt} >= ${from.toISOString()}::timestamptz AND ${kolCommissionDecision.createdAt} < ${to.toISOString()}::timestamptz) OR EXISTS (SELECT 1 FROM ${kolSettlementEntry} WHERE ${kolSettlementEntry.decisionId} = ${kolCommissionDecision.id} AND coalesce(${kolSettlementEntry.paidAt}, ${kolSettlementEntry.createdAt}) >= ${from.toISOString()}::timestamptz AND coalesce(${kolSettlementEntry.paidAt}, ${kolSettlementEntry.createdAt}) < ${to.toISOString()}::timestamptz)`,
           )
           .orderBy(asc(kolCommissionDecision.id))
           .limit(5001);

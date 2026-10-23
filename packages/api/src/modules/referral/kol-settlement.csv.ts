@@ -1,4 +1,8 @@
 export function kolCsvCell(value: unknown): string {
+  if (typeof value === "number") {
+    if (!Number.isSafeInteger(value)) throw new Error("Unsafe CSV amount.");
+    return String(value);
+  }
   let text =
     value == null
       ? ""

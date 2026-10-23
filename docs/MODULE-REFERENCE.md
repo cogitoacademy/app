@@ -1,5 +1,7 @@
 # Cogito Module Reference
 
+KOL settlement entries persist expected_obligation_idr for adjustment replay matching (additive migration 0074). Monthly CSV SQL binds explicit ISO timestamptz bounds, and the encoder preserves validated numeric adjustments.
+
 ## KOL external settlement source (23 October 2026)
 
 `referral.service` adds `getKolSettlement`, `recordKolTransfer`,

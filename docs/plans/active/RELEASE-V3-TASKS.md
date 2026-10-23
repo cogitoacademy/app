@@ -1,5 +1,18 @@
 # Release v3 - SDD execution and acceptance plan
 
+## KOL settlement parent verification (24 October 2026)
+
+Review fixes retain numeric negative adjustments in CSV, persist and compare
+adjustment replay preconditions, and bind WIB month boundaries as explicit ISO
+timestamptz values. Migration 0074 adds only expected_obligation_idr; applied
+0073 remains unchanged. Both migrations are applied only to guarded test
+6769/cogito-test (journal 75), without reset/seed. Current acceptance passes
+25 tests / 223 assertions across 20 PostgreSQL cases (including prior PR312
+ordering/refund regressions) and five settlement policy/CSV units. Concurrent
+transfer/replay, stale corrections, audit rollback, refund retention and the
+monthly CSV path pass. Dev/production migration and browser settlement
+acceptance remain pending at this checkpoint.
+
 ## T09 KOL settlement source handoff (23 October 2026)
 
 Implemented source for REQ-KOL-02/03 / AC-K03: decision-bound external transfers,

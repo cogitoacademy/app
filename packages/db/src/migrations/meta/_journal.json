@@ -519,6 +519,13 @@
       "when": 1792774252615,
       "tag": "0073_kol_external_settlement",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1792780107013,
+      "tag": "0074_kol_settlement_replay_precondition",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,7 @@
 # Cogito API Reference
 
+Adjustment idempotency compares the original expected obligation as well as amount/reason; a changed precondition with the same operation ID returns KOL_SETTLEMENT_CONFLICT. CSV financial integers remain numeric, while textual formula prefixes are neutralized.
+
 ## KOL external settlement source (23 October 2026)
 
 All four procedures are admin-only, under `/rpc/adminReferral/`. Request bodies

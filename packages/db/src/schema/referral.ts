@@ -330,6 +330,9 @@ export const kolSettlementEntry = pgTable(
     operationId: text("operation_id").notNull(),
     kind: text("kind").$type<"transfer" | "adjustment">().notNull(),
     amountIdr: bigint("amount_idr", { mode: "number" }).notNull(),
+    expectedObligationIdr: bigint("expected_obligation_idr", {
+      mode: "number",
+    }),
     paidAt: timestamp("paid_at", { withTimezone: true }),
     reference: text("reference"),
     reason: text("reason"),
