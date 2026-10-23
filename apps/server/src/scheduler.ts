@@ -62,7 +62,16 @@ export async function initScheduler(): Promise<void> {
       };
     },
     onReconcilePayments: () => services.payment.reconcilePendingPayments(50),
-    onClassEnrollmentDueJobs: () => services.classEnrollment.processDueJobs(),
+    onClassEnrollmentDueJobs: async () => {
+      const classEnrollment = await services.classEnrollment.processDueJobs();
+      const bookingReportReminders =
+        await services.bookingReportReminders.processPendingReportReminders();
+      return {
+        ...classEnrollment,
+        bookingReportRemindersQueued: bookingReportReminders.queued,
+        bookingReportRemindersFailed: bookingReportReminders.failed,
+      };
+    },
   });
 
   if (!scheduler) {

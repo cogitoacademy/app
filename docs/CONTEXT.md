@@ -1,5 +1,37 @@
 # Cogito App — Codebase Context
 
+## Integrated V3 progress checkpoint (23 October 2026)
+
+The remaining V3 source checkpoints are integrated through PR #310 (private
+student PDF and test infrastructure), #309 (AUTH-02 and friend rewards), #312
+(KOL first-top-up decisions/refund evidence), #314 (compact class UI and auth
+states), and this #313 reminder integration. Normal pre-push lint and all four
+workspace typecheck tasks pass on the combined source. Guarded non-reset
+PostgreSQL regressions pass 34 tests / 365 assertions across admin reports,
+friend rewards, KOL decisions, PDF eligibility and legacy reminder precision.
+Focused payment/provider/webhook/referral/reminder/retry units pass 160 / 428.
+Private PDF access/layout/window/service/HTTP checks pass 13 / 44. The full
+server tsdown build passes after restoring missing lockfile-pinned native
+Rolldown artifacts with a frozen dependency reinstall.
+The checked-in synthetic UI/PDF suite passes 14 Chromium cases at responsive
+sizes; its catalog locator now uses the full-card link.
+
+All local V3 branch/worktree progress was inventoried against release: older
+T06/T07, class publication, payout/tax, sidebar/profile and UI-controls commits
+are patch-equivalent or superseded by the release implementation. Preserve the
+old dirty drafts; do not merge their stale schema, source or generated snapshots.
+The September keyboard-booking branch is unique but outside V3 and incomplete
+(interactive-control/modal key handling and planned detail/help flows); it stays
+separate. Client quotation sources, fonts and rendered PDF artifacts are retained
+locally and excluded from application commits.
+
+Only test 6769/cogito-test has migration 0072 (journal 73); no database reset,
+seed, development/production migration or live provider action ran. Remaining
+release gates include real OAuth/enrollment/publish journeys, KOL admin browser
+acceptance, actual email/provider delivery, final PDF branding, deployment and
+client UAT. The ad hoc API-project typecheck includes the test tree and still
+has test typing errors; the supported four-workspace production check passes.
+
 ## KOL PostgreSQL integration checkpoint (23 October 2026)
 
 Migration 0072 is applied only to `127.0.0.1:6769/cogito-test` (Drizzle
@@ -896,10 +928,10 @@ submitted/corrected history event, and `legacy_snapshot` events, are decoded
 exactly once on read. New versioned text is never unescaped; legacy content is
 not backfilled or truncated and may exceed the current 600-codepoint input cap.
 Class report settlement is implemented in the T07 backend. The role-based report
-workspace is documented below; private PDF source implementation and its focused
-render checks are recorded in the current checkpoint above. Guarded database,
-browser and deployment-bundle acceptance plus broader legacy reminder coverage
-remain pending. On-demand booking reports are in the isolated source continuation above.
+workspace is documented below; PDF remains pending. On-demand booking reports
+are in the isolated source continuation above. Legacy reminder coverage is
+implemented in the 23 October continuation below, with its verification state
+recorded there.
 Focused report + booking regression: 295 tests pass; web typecheck passes.
 
 ## V3 class session reports and payout identity (2026-10-21)
@@ -925,10 +957,9 @@ races, cancelled/completed exclusions, transactional rollback/retry, and unchang
 wallet, allocation, ledger, fee, report and session facts across reminder writes.
 Whole-class cancellation leaves a retained past scheduled session eligible until
 its report is submitted; cancelled/completed sessions and completed classes stop.
-The legacy solo/group/series reminder policy is unchanged and broader coverage is
-still pending. PDF source, focused tests and rendered sample are recorded in the
-current checkpoint above; parent DB/browser/deployment acceptance remains open.
-Tutor, admin, and student browser acceptance
+At this class-reminder checkpoint, the legacy solo/group/series reminder policy
+was unchanged; separate coverage was added in the 23 October continuation below.
+PDF remains open. Tutor, admin, and student browser acceptance
 passes against real RPCs, as do web and E2E no-emit typechecks from the earlier
 report implementation checkpoint. This reminder verification used no browser,
 live email or external provider and required no migration.
@@ -2413,7 +2444,7 @@ file are the permanent record; plan-file archives are not maintained.
 
 | Plan                                                  | Status                                                                                                                                                                                                                                                                                                                                                                        |
 | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `docs/plans/active/RELEASE-V3-PRD.md` + SPEC/TASKS    | `RELEASE-V3-TASKS.md` is the current status authority. T03 tax/payout, T05 enrollment, the integrated T06 core lifecycle, and T07 class report settlement/reminders have focused evidence; the T07 reminder worker is integrated at 1f9b6dd7 and parent-verified (44 PostgreSQL tests / 354 expectations; pure reminders 7 / 25); no development seed or migration ran in that checkpoint. T07 on-demand booking admin reports/corrections are verified in PR #305: 42 tests / 218 assertions plus one real-RPC Chromium journey. Migration 0070 is applied to guarded test and local dev; production rollout is separate. Private PDF source, combined export and rate-limit checks: 27 tests / 98 expectations and a rendered seven-page sample are recorded in the current isolated checkpoint; DB/browser/deployment acceptance and broader legacy solo/group/series reminder coverage remain open. T04, T08, T10, T11 and overall release acceptance remain in progress; T09/T12 and OPS01 are open. |
+| `docs/plans/active/RELEASE-V3-PRD.md` + SPEC/TASKS    | `RELEASE-V3-TASKS.md` is the current status authority. T03 tax/payout, T05 enrollment, the integrated T06 core lifecycle, and T07 class report settlement/reminders have focused evidence; the T07 reminder worker is integrated at 1f9b6dd7 and parent-verified (44 PostgreSQL tests / 354 expectations; pure reminders 7 / 25); no development seed or migration ran in that checkpoint. T07 on-demand booking admin reports/corrections are verified in PR #305: 42 tests / 218 assertions plus one real-RPC Chromium journey. Migration 0070 is applied to guarded test and local dev; production rollout is separate. PDF remains open. Legacy on-demand reminders are implemented in the 23 October continuation; focused unit tests pass 10 / 44 after SQL timestamp precision fixes; guarded SQL cursor and period/write regressions passed 3 tests / 32 expectations at 127.0.0.1:6769/cogito-test on source 14790f8c plus test-only timestamp fixture corrections. The normal pre-push typecheck passed 4/4 tasks in 14.961s (2 cached); no migration, reset, or seed ran. Browser acceptance and actual email delivery remain unverified. T04, T08, T10, T11 and overall release acceptance remain in progress; T09/T12 and OPS01 are open. |
 | `docs/plans/active/DEFERRED-OPS-TASKS.md`             | Active — code gaps done, §3/§4 operator-console items pending                                                                                                                                                                                                                                                                                                                 |
 | `docs/plans/active/DEPLOYMENT-PLAN.md`                | Active — applied 2026-08-31; remaining scope tracked in the plan                                                                                                                                                                                                                                                                                                              |
 | `docs/plans/active/PAYMENT-INTEGRITY-FLAP.md`         | Active — payment-integrity alert stability                                                                                                                                                                                                                                                                                                                                    |
@@ -2896,6 +2927,37 @@ submitted reports stop reminders. It does not touch report, delivery, wallet,
 allocation or tutor-fee state. Fake-clock unit tests pass 7 / 25; guarded non-reset
 PostgreSQL regressions pass 3 / 34 on exact loopback `6769/cogito-test`, using
 only owned UUID fixtures. No live email, browser or external provider was used.
-Legacy solo/group/series reminder coverage remains pending. The PDF and dedicated
-on-demand admin correction work were pending at this reminder checkpoint; see
-the current source and acceptance status above.
+At this 21 October class-only checkpoint, legacy solo/group/series reminder
+coverage remained pending; the 23 October continuation below records its
+implementation. PDF export and the
+dedicated on-demand admin correction workflow remain pending.
+
+### T07 legacy on-demand missing-report reminders (23 October)
+
+The existing one-minute `class-enrollment-check` scheduler now also runs a
+bounded tutor-only worker for ended solo/group bookings and scheduled series
+children without their matching report. It repeats at session end and every 24
+elapsed hours, with delayed runs writing only the current period. The worker
+locks the booking and (for a series) its child, then rechecks tutor, state,
+schedule, report absence and event identity in the notification/outbox
+transaction. Whole-session cancel/completed/no-show states are excluded;
+participant-level group/series no-show does not by itself mean the remaining
+session was not delivered. The message explicitly asks tutors to report only if
+delivery occurred. It does not mutate completion, report, wallet, fee or
+settlement state and adds no migration. SQL eligibility, elapsed periods, and
+locked schedule fingerprints use full stored timestamp precision; only the
+pagination cursor is normalized to milliseconds. Historical focused suites
+passed 7 / 27 and 8 / 33; the current unit suite passes 10 tests / 44
+expectations, including a pg-proxy period regression. The normal pre-push typecheck passed 4/4 tasks in 14.961s (2 cached). Guarded non-reset PostgreSQL acceptance passed 3 tests / 32 expectations at 127.0.0.1:6769/cogito-test; browser and actual email delivery remain open. PDF remains open.
+
+The global bounded scan advances a process-local keyset cursor after each
+candidate, including failed outbox writes, and wraps to retry the oldest due
+items. Restart returns to the oldest item; event-key/outbox dedupe is durable,
+but the fairness cursor is not. A unit regression covers a failed 100-item
+batch progressing to later eligible bookings and wraparound retry. Guarded
+PostgreSQL regressions for actual report/state rechecks, duplicate scheduling,
+tutor-only email outbox identity, microsecond cursor progress, single and
+series-child 24-hour boundaries, due-at-end and same-millisecond reschedule
+rejection passed 3 tests / 32 expectations on guarded loopback 127.0.0.1:6769/cogito-test, with test-only timestamp fixture corrections and no migration, reset, or seed. The current
+focused unit suite
+passes 10 tests / 44 expectations. The normal pre-push typecheck passed 4/4 tasks in 14.961s (2 cached).

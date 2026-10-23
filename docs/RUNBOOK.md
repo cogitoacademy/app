@@ -1,5 +1,30 @@
 # Cogito Runbook
 
+## Reminder SQL cursor precision correction (23 October 2026)
+
+The cursor projection, SQL ordering, and keyset predicates now use the same
+millisecond precision. Computed timestamp projections use Drizzle's timestamp
+decoder, and cursor parameters are explicit ISO timestamptz values. The focused
+suite passes 9 tests / 40 assertions, including database-free Drizzle adapter
+decoding/binding and the 100-failure rotation regression. A guarded PostgreSQL
+case now exercises the production SQL finder against 101 owned rows with
+sub-millisecond timestamps; that DB case remains unrun. No DB, migration, reset,
+seed, browser, or provider operation ran for this correction.
+
+Parent verification also passes all four workspace typecheck tasks uncached in
+34.469 seconds with one checker, serial execution, and a local 1 GiB Go heap
+target. That resource setting is local tooling configuration, not an app limit.
+
+## Booking reminder parent verification (23 October 2026)
+
+At source commit `c328d6ad`, the parent reran the reminder unit suite: 7 tests
+and 27 assertions pass. All four workspace typecheck tasks pass uncached in
+8.002 seconds with serial execution and the repo-pinned single checker.
+The earlier broad type errors were caused by an incomplete local Zod 4.4.3
+package; restoring its missing declarations resolved the errors without source
+changes. PostgreSQL concurrency, actual email delivery, and browser acceptance
+remain unverified. No database, Redis, provider, reset, seed, or migration ran.
+
 ## KOL PostgreSQL integration checkpoint (23 October 2026)
 
 Migration 0072 is applied only to `127.0.0.1:6769/cogito-test` (Drizzle
@@ -684,7 +709,8 @@ truncate, development seed or migration ran; no live email, browser or external
 provider ran. Focused oxfmt 0.65.0 `--check` and oxlint 1.80.0 exited 0 on the
 changed integration test; lint reported only existing file warnings. The full
 check was not a typecheck or browser acceptance run. PDF export, dedicated
-on-demand admin correction and broader legacy reminder coverage remain pending.
+At this 22 October checkpoint, dedicated on-demand admin correction and legacy
+reminder coverage remained pending; see the 23 October continuation below.
 Logs: `tmp/v3-dev/t07-reminders-integrated-db-final.log` and
 `tmp/v3-dev/t07-reminders-pure-final.log`.
 
@@ -712,8 +738,9 @@ or tutor fees, and does not interpret a no-show expiry as delivery. No migration
 or new environment variable is required. Observe `class_report_reminder_failed` and the
 `class_enrollment_due_jobs_complete` `reportRemindersQueued`/
 `reportRemindersFailed` fields; email sends still appear under the existing
-notification dispatch logs. Legacy solo/group/series reminder coverage remains
-pending and their existing report/expiry behavior is unchanged.
+notification dispatch logs. At this class-only checkpoint, legacy
+solo/group/series reminder coverage remained pending; the 23 October section
+below records its implementation and current verification state.
 
 The focused fake-clock suite passed 7 tests / 25 expectations. Guarded PostgreSQL
 tests passed 3 / 34 on exact loopback `6769/cogito-test`; the integration test
@@ -732,9 +759,59 @@ files and focused oxlint 1.80.0 (exit 0; existing non-fatal loop/scoping
 warnings). No broad typecheck or browser run was performed for that bounded
 source slice.
 
-PDF report export, the dedicated on-demand admin correction workflow, broader
-legacy report-reminder coverage and overall release acceptance remain pending T07
-work.
+PDF report export, the dedicated on-demand admin correction workflow and overall
+release acceptance remain pending T07 work. Legacy on-demand reminder coverage
+is recorded in the 23 October continuation below.
+
+## T07 legacy on-demand missing-report reminders (23 October)
+
+The existing `class-enrollment-check` scheduler invokes the legacy booking worker
+after the class-enrollment due jobs. It scans at most 100 ended solo/group
+bookings or series children per pass. Whole-booking/session cancel, completed
+and no-show states are excluded; participant-level group/series no-show does
+not by itself prove that no delivery occurred. A stable current-period event key
+and the existing notification email outbox keep each tutor notification
+idempotent. The first reminder is due at the scheduled end, then every 24 elapsed
+hours; a delayed scheduler queues only the current period.
+
+Before enqueue, the worker locks the booking and series child in completion lock
+order and rechecks tutor ownership, scheduled state, exact schedule, matching
+report absence and event key in the notification transaction. The message directs
+the tutor to submit a report only if the session was delivered. The worker does
+not write report, delivery, settlement, wallet, allocation or fee state, and it
+needs no schema migration or environment variable. The job result adds
+`bookingReportRemindersQueued` and `bookingReportRemindersFailed` counters; per-
+candidate failures log `booking_report_reminder_failed`.
+
+Elapsed periods and exact schedule fingerprints use the full stored PostgreSQL
+timestamp precision; millisecond normalization is limited to keyset
+pagination. The initial focused pure suite passed 7 tests / 27 expectations and
+its fairness follow-up passed 8 / 33; the current suite passes 10 tests / 44
+expectations, including a pg-proxy period regression. Normal pre-push lint and
+serial typecheck passed on the current reminder head; typecheck was 4/4 tasks
+in 14.961s (2 cached). Parent's guarded non-reset PostgreSQL suite then passed
+3 tests / 32 expectations at 127.0.0.1:6769/cogito-test against the
+production finder and locked writer. No migration, reset, seed, or provider
+call ran. Browser acceptance and actual email delivery remain unverified.
+
+The worker rotates through a stable keyset cursor after each candidate, including
+failed writes, and wraps to retry older due items once it reaches the end. The
+cursor is process-local and resets to the oldest due item on restart; event-key
+dedupe and email outbox rows remain persistent. No retry state migration is
+required. `packages/api/src/tests/integration/booking.report-reminders.test.ts`
+adds guarded non-reset coverage for report/state rechecks, duplicate jobs and
+notification/outbox identity. Later regressions exercise the production SQL
+finder and locked writer at microsecond boundaries, including 101-row cursor
+progress, single and series-child day boundaries, due-at-end, and same-
+millisecond reschedule rejection. Parent ran the guarded tests only against
+loopback 127.0.0.1:6769/cogito-test with reset overrides absent; all 3 tests /
+32 expectations passed. The test-only epoch formatter now matches PostgreSQL's
+six-digit fractional precision, and year-0100 fixtures avoid Bun's year-0001
+date parsing quirk. The current focused
+unit suite passes 10 tests / 44 expectations. Parent's serial workspace check
+passed at `b0b80bec`; the current normal pre-push typecheck passed 4/4 tasks in
+14.961s (2 cached). Guarded DB acceptance is complete; browser acceptance and
+actual email delivery remain pending.
 
 ## Prior local integration checkpoint (21 October)
 

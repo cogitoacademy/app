@@ -1,5 +1,16 @@
 # Cogito Module Reference
 
+## Booking reminder cursor precision
+
+The process-local rotation key uses the session end time truncated to
+milliseconds, booking ID, and child-session ID. SQL projections, ordering, and
+keyset predicates use that identical precision; actual due-time eligibility
+still compares the original timestamp. Computed timestamps use the existing
+timestamp column decoder, and SQL cursor bounds bind explicit ISO timestamptz
+values. This prevents PostgreSQL microseconds from repeatedly selecting a
+failed first batch. Rotation remains volatile and restarts from the oldest due
+candidate after process restart; notification event-key idempotency is durable.
+
 ## Referral settlement review corrections (22 October 2026)
 
 `settlementTransaction` retries a fully rolled-back PostgreSQL `40P01` at most
@@ -566,6 +577,52 @@ application hard-delete path was found; this is the existing retention boundary,
 not a new release gate. Historical rows are not backfilled and unknown actors
 remain unknown.
 
+### Legacy on-demand missing-report reminders (2026-10-23)
+
+The existing one-minute `class-enrollment-check` job also runs a bounded worker
+for ended legacy solo/group bookings and each scheduled series child without a
+matching report. Whole-booking/session cancellation, completion, and no-show
+outcomes are excluded. A participant-level group/series no-show does not by
+itself establish that the tutor failed to deliver to the remaining participants;
+the reminder text asks the tutor to submit a report only if delivery occurred.
+This follows REQ-REPORT-02 and does not treat no-show expiry as proof of delivery.
+
+The first reminder is due at the scheduled end, followed by 24-hour elapsed
+periods. A delayed job queues only the current period. Stable event keys use
+`booking:{bookingId}:session:{booking|sessionId}:missing-report:day:{period}`.
+Before writing, the worker locks the booking then (for series) the child session
+and rechecks tutor ownership, state, exact schedule, report absence and the
+current event key inside the same transaction as the in-app notification and
+existing email outbox row. Only the assigned tutor is notified. No report,
+delivery, settlement, wallet or fee state changes, and no migration is needed.
+The SQL finder calculates due periods and exact schedule fingerprints from the
+full stored timestamp precision. Only keyset pagination normalizes timestamps
+to milliseconds. The initial focused unit suite passed 7 tests / 27
+expectations and its fairness follow-up passed 8 / 33; the current suite passes
+10 tests / 44 expectations, including a pg-proxy regression for a sub-
+millisecond end just before 24 elapsed hours. Parent verified four uncached
+workspace checks at `b0b80bec`; this precision delta passed bun run check-types (4/4 tasks, 15.204s; 2 cached); the normal pre-push hook reruns it. Guarded PostgreSQL acceptance results are recorded below.
+
+The bounded scan keeps an in-process keyset cursor in schedule-end, booking-ID,
+then child-session-ID order. It advances after each candidate even when its
+outbox write fails, then wraps to the oldest due item when there are no later
+candidates. A failed oldest batch therefore does not monopolize every scheduler
+pass. A process restart resets the cursor to the beginning; event keys and the
+transactional outbox remain durable, but retry fairness position is not. No
+per-candidate retry table or migration is used. The follow-up unit test covers
+100 persistent failures, progress to a later eligible booking, and retry after
+wraparound. Guarded PostgreSQL regressions now also exercise the production SQL
+finder and locked writer at microsecond boundaries: 101-row pagination
+progress, single and series-child day boundaries, exact-end eligibility, and
+same-millisecond reschedule rejection. Parent ran the guarded suite against the
+exact loopback target 127.0.0.1:6769/cogito-test; **3 tests / 32 expectations
+passed**, including concurrent duplicate jobs, outbox identity, cursor
+progress, and precision-boundary cases. No migration, reset, seed, or provider
+call ran. The focused unit suite passes 10 tests / 44 expectations. Normal
+pre-push lint and typecheck passed on head 56fc3bbd; typecheck completed 4/4
+tasks in 14.961s (2 cached). Browser acceptance and actual email delivery remain
+unverified.
+
 ## V3 class session report and settlement boundary (2026-10-21)
 
 `class-enrollment.reports.ts` owns `classes.submitSessionReport` and
@@ -593,11 +650,8 @@ The backend, payout source support, role-based `/class-reports` workspace, and
 pending-report reminder worker are implemented. The shared page shows settlement
 preview/readback to tutors/admins, keeps student settlement fields null,
 normalizes feedback bullets, and preserves unsaved edits on stale-version
-conflicts. It supports versioned admin edits with a required reason; the
-On-demand booking reports/corrections and migration 0070 are verified in PR #305,
-including guarded DB and Chromium acceptance. Private student PDF source and
-focused checks are documented in the Report Export Module below; guarded export
-DB/browser and server tsdown/Docker acceptance remain open.
+conflicts. It supports versioned admin edits with a required reason.
+The booking-detail on-demand report implementation was verified in merged PR #305; migration 0070 is applied on local test/dev. PDF support and broader acceptance remain open.
 
 `class-enrollment.report-reminders.ts` runs from the existing one-minute
 `class-enrollment-check` job. It selects at most 100 ended, scheduled sessions in
@@ -616,8 +670,9 @@ link. A submitted report, cancelled session, completed state, or stale schedule/
 tutor candidate suppresses the write; cancelling the parent class does not suppress
 a still-scheduled retained past session. The worker never changes report, session
 or financial state and does not use no-show expiry as proof of delivery. This
-class-only flow leaves legacy solo/group/series reminders unchanged; broader
-legacy reminder coverage remains pending.
+class sessions keep their existing class-specific query and event identity. The
+same one-minute scheduler separately runs the legacy on-demand worker described
+above, with its own booking/session identity and period keys.
 
 The integrated `createClassEnrollmentService.processDueJobs()` runs this bounded
 global report scan alongside installment reminder processing and returns

@@ -19,6 +19,7 @@ import { createDiscoveryModule } from "./modules/tutor-discovery";
 import { createInviteModule } from "./modules/invite";
 import { createAchievementModule } from "./modules/achievement";
 import { createBookingModule } from "./modules/booking";
+import type { BookingReportReminderService } from "./modules/booking";
 import { createNotificationModule } from "./modules/notification";
 import { createEmailModule } from "./modules/email";
 import { createPaymentModule } from "./modules/payment";
@@ -117,6 +118,7 @@ export interface ServiceRegistry {
   invite: InviteService;
   achievement: AchievementService;
   booking: BookingService;
+  bookingReportReminders: BookingReportReminderService;
   notification: NotificationService;
   email: EmailService;
   payment: PaymentService;
@@ -375,6 +377,7 @@ function createServices() {
   });
   const booking = createBookingModule({
     db,
+    appBaseUrl: env.CORS_ORIGIN,
     wallet: wallet.service,
     pricing: pricing.service,
     audit: audit.service,
@@ -504,6 +507,7 @@ function createServices() {
     invite: invite.service,
     achievement: achievement.service,
     booking: booking.service,
+    bookingReportReminders: booking.reportReminders,
     notification: notification.service,
     email: email.service,
     payment: payment.service,
