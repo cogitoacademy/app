@@ -38,6 +38,8 @@ export interface SchedulerHandlers {
     expiredCheckouts: number;
     defaultedInstallments: number;
     remindersQueued: number;
+    bookingReportRemindersQueued?: number;
+    bookingReportRemindersFailed?: number;
   }>;
   onReconcilePayments?: () => Promise<{
     checked: number;
@@ -241,7 +243,7 @@ export function createSchedulerService(
             log({
               level: "info",
               action: "class_enrollment_check_complete",
-              message: `Expired ${enrollmentResult.expiredCheckouts} checkouts, defaulted ${enrollmentResult.defaultedInstallments} installments, queued ${enrollmentResult.remindersQueued} reminders`,
+              message: `Expired ${enrollmentResult.expiredCheckouts} checkouts, defaulted ${enrollmentResult.defaultedInstallments} installments, queued ${enrollmentResult.remindersQueued} class reminders and ${enrollmentResult.bookingReportRemindersQueued ?? 0} legacy booking report reminders (${enrollmentResult.bookingReportRemindersFailed ?? 0} failures)`,
               traceId: ctx.traceId,
               userId: ctx.userId,
               ...enrollmentResult,

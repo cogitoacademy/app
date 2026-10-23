@@ -25,15 +25,17 @@ import type {
 import { createBookingRepo } from "./booking.repo";
 import { createBookingService } from "./booking.service";
 import {
+  createBookingReportReminderProcessor,
+  createBookingReportReminderRepo,
+} from "./booking.report-reminders";
+import {
   createBookingHandler,
   createTutorActionsHandler,
 } from "./booking.handler";
 import type {
-  BookingService,
   TutorPayoutAllocationDetail,
   TutorPayoutSourceItem,
 } from "./booking.service";
-import type { BookingHandler, TutorActionsHandler } from "./booking.handler";
 import type { BookingCompetitionPalettePort } from "./booking-topic-palette";
 
 export type BookingModule = ReturnType<typeof createBookingModule>;
@@ -355,6 +357,7 @@ export interface TutorPayoutReportRow {
 
 export function createBookingModule(deps: {
   db: DbType;
+  appBaseUrl: string;
   wallet: BookingWalletPort;
   pricing: BookingPricingPort;
   audit: BookingAuditPort;
@@ -377,7 +380,17 @@ export function createBookingModule(deps: {
   });
   const handler = createBookingHandler(service);
   const tutorActionsHandler = createTutorActionsHandler(service);
-  return { service, handler, tutorActionsHandler };
+  const reportReminders = createBookingReportReminderProcessor({
+    db: deps.db,
+    repo: createBookingReportReminderRepo(),
+    notification: deps.notification,
+    appBaseUrl: deps.appBaseUrl,
+  });
+  return { service, handler, tutorActionsHandler, reportReminders };
 }
 
-export type { BookingService, BookingHandler, TutorActionsHandler };
+export type { BookingService } from "./booking.service";
+export type { BookingHandler, TutorActionsHandler } from "./booking.handler";
+export type BookingReportReminderService = ReturnType<
+  typeof createBookingReportReminderProcessor
+>;

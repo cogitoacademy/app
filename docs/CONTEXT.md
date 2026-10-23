@@ -695,8 +695,10 @@ submitted/corrected history event, and `legacy_snapshot` events, are decoded
 exactly once on read. New versioned text is never unescaped; legacy content is
 not backfilled or truncated and may exceed the current 600-codepoint input cap.
 Class report settlement is implemented in the T07 backend. The role-based report
-workspace is documented below; PDF and broader legacy reminder coverage remain
-pending. On-demand booking reports are in the isolated source continuation above.
+workspace is documented below; PDF remains pending. On-demand booking reports
+are in the isolated source continuation above. Legacy reminder coverage is
+implemented in the 23 October continuation below, with its verification state
+recorded there.
 Focused report + booking regression: 295 tests pass; web typecheck passes.
 
 ## V3 class session reports and payout identity (2026-10-21)
@@ -722,8 +724,9 @@ races, cancelled/completed exclusions, transactional rollback/retry, and unchang
 wallet, allocation, ledger, fee, report and session facts across reminder writes.
 Whole-class cancellation leaves a retained past scheduled session eligible until
 its report is submitted; cancelled/completed sessions and completed classes stop.
-The legacy solo/group/series reminder policy is unchanged and broader coverage is
-still pending. PDF remains open. Tutor, admin, and student browser acceptance
+At this class-reminder checkpoint, the legacy solo/group/series reminder policy
+was unchanged; separate coverage was added in the 23 October continuation below.
+PDF remains open. Tutor, admin, and student browser acceptance
 passes against real RPCs, as do web and E2E no-emit typechecks from the earlier
 report implementation checkpoint. This reminder verification used no browser,
 live email or external provider and required no migration.
@@ -2198,7 +2201,7 @@ file are the permanent record; plan-file archives are not maintained.
 
 | Plan                                                  | Status                                                                                                                                                                                                                                                                                                                                                                        |
 | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `docs/plans/active/RELEASE-V3-PRD.md` + SPEC/TASKS    | `RELEASE-V3-TASKS.md` is the current status authority. T03 tax/payout, T05 enrollment, the integrated T06 core lifecycle, and T07 class report settlement/reminders have focused evidence; the T07 reminder worker is integrated at 1f9b6dd7 and parent-verified (44 PostgreSQL tests / 354 expectations; pure reminders 7 / 25); no development seed or migration ran in that checkpoint. T07 on-demand booking admin reports/corrections are verified in PR #305: 42 tests / 218 assertions plus one real-RPC Chromium journey. Migration 0070 is applied to guarded test and local dev; production rollout is separate. PDF and broader legacy solo/group/series reminder coverage remain open. T04, T08, T10, T11 and overall release acceptance remain in progress; T09/T12 and OPS01 are open. |
+| `docs/plans/active/RELEASE-V3-PRD.md` + SPEC/TASKS    | `RELEASE-V3-TASKS.md` is the current status authority. T03 tax/payout, T05 enrollment, the integrated T06 core lifecycle, and T07 class report settlement/reminders have focused evidence; the T07 reminder worker is integrated at 1f9b6dd7 and parent-verified (44 PostgreSQL tests / 354 expectations; pure reminders 7 / 25); no development seed or migration ran in that checkpoint. T07 on-demand booking admin reports/corrections are verified in PR #305: 42 tests / 218 assertions plus one real-RPC Chromium journey. Migration 0070 is applied to guarded test and local dev; production rollout is separate. PDF remains open. Legacy on-demand reminders are implemented in the 23 October continuation; focused unit tests pass 7 / 27, serial typecheck runs through the normal pre-push hook, and parent-owned DB/browser acceptance remains pending. T04, T08, T10, T11 and overall release acceptance remain in progress; T09/T12 and OPS01 are open. |
 | `docs/plans/active/DEFERRED-OPS-TASKS.md`             | Active — code gaps done, §3/§4 operator-console items pending                                                                                                                                                                                                                                                                                                                 |
 | `docs/plans/active/DEPLOYMENT-PLAN.md`                | Active — applied 2026-08-31; remaining scope tracked in the plan                                                                                                                                                                                                                                                                                                              |
 | `docs/plans/active/PAYMENT-INTEGRITY-FLAP.md`         | Active — payment-integrity alert stability                                                                                                                                                                                                                                                                                                                                    |
@@ -2683,3 +2686,20 @@ PostgreSQL regressions pass 3 / 34 on exact loopback `6769/cogito-test`, using
 only owned UUID fixtures. No live email, browser or external provider was used.
 Legacy solo/group/series reminder coverage remains pending. PDF export and the
 dedicated on-demand admin correction workflow remain pending.
+
+### T07 legacy on-demand missing-report reminders (23 October)
+
+The existing one-minute `class-enrollment-check` scheduler now also runs a
+bounded tutor-only worker for ended solo/group bookings and scheduled series
+children without their matching report. It repeats at session end and every 24
+elapsed hours, with delayed runs writing only the current period. The worker
+locks the booking and (for a series) its child, then rechecks tutor, state,
+schedule, report absence and event identity in the notification/outbox
+transaction. Whole-session cancel/completed/no-show states are excluded;
+participant-level group/series no-show does not by itself mean the remaining
+session was not delivered. The message explicitly asks tutors to report only if
+delivery occurred. It does not mutate completion, report, wallet, fee or
+settlement state and adds no migration. Focused unit tests pass 7 tests / 27
+expectations, and the normal serial typecheck
+runs through the repository's pre-push hook. Parent-owned DB/browser gaps remain;
+PDF remains open.

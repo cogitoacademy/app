@@ -404,7 +404,8 @@ truncate, development seed or migration ran; no live email, browser or external
 provider ran. Focused oxfmt 0.65.0 `--check` and oxlint 1.80.0 exited 0 on the
 changed integration test; lint reported only existing file warnings. The full
 check was not a typecheck or browser acceptance run. PDF export, dedicated
-on-demand admin correction and broader legacy reminder coverage remain pending.
+At this 22 October checkpoint, dedicated on-demand admin correction and legacy
+reminder coverage remained pending; see the 23 October continuation below.
 Logs: `tmp/v3-dev/t07-reminders-integrated-db-final.log` and
 `tmp/v3-dev/t07-reminders-pure-final.log`.
 
@@ -452,9 +453,34 @@ files and focused oxlint 1.80.0 (exit 0; existing non-fatal loop/scoping
 warnings). No broad typecheck or browser run was performed for that bounded
 source slice.
 
-PDF report export, the dedicated on-demand admin correction workflow, broader
-legacy report-reminder coverage and overall release acceptance remain pending T07
-work.
+PDF report export, the dedicated on-demand admin correction workflow and overall
+release acceptance remain pending T07 work. Legacy on-demand reminder coverage
+is recorded in the 23 October continuation below.
+
+## T07 legacy on-demand missing-report reminders (23 October)
+
+The existing `class-enrollment-check` scheduler invokes the legacy booking worker
+after the class-enrollment due jobs. It scans at most 100 ended solo/group
+bookings or series children per pass. Whole-booking/session cancel, completed
+and no-show states are excluded; participant-level group/series no-show does
+not by itself prove that no delivery occurred. A stable current-period event key
+and the existing notification email outbox keep each tutor notification
+idempotent. The first reminder is due at the scheduled end, then every 24 elapsed
+hours; a delayed scheduler queues only the current period.
+
+Before enqueue, the worker locks the booking and series child in completion lock
+order and rechecks tutor ownership, scheduled state, exact schedule, matching
+report absence and event key in the notification transaction. The message directs
+the tutor to submit a report only if the session was delivered. The worker does
+not write report, delivery, settlement, wallet, allocation or fee state, and it
+needs no schema migration or environment variable. The job result adds
+`bookingReportRemindersQueued` and `bookingReportRemindersFailed` counters; per-
+candidate failures log `booking_report_reminder_failed`.
+
+The focused pure suite passes 7 tests / 27 expectations. The serial typecheck is
+run through the repository's normal pre-push hook. No DB test, browser
+acceptance, migration, provider call, reset or seed ran here; those integration
+checks remain with the parent.
 
 ## Prior local integration checkpoint (21 October)
 

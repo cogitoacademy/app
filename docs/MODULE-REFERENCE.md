@@ -401,6 +401,28 @@ application hard-delete path was found; this is the existing retention boundary,
 not a new release gate. Historical rows are not backfilled and unknown actors
 remain unknown.
 
+### Legacy on-demand missing-report reminders (2026-10-23)
+
+The existing one-minute `class-enrollment-check` job also runs a bounded worker
+for ended legacy solo/group bookings and each scheduled series child without a
+matching report. Whole-booking/session cancellation, completion, and no-show
+outcomes are excluded. A participant-level group/series no-show does not by
+itself establish that the tutor failed to deliver to the remaining participants;
+the reminder text asks the tutor to submit a report only if delivery occurred.
+This follows REQ-REPORT-02 and does not treat no-show expiry as proof of delivery.
+
+The first reminder is due at the scheduled end, followed by 24-hour elapsed
+periods. A delayed job queues only the current period. Stable event keys use
+`booking:{bookingId}:session:{booking|sessionId}:missing-report:day:{period}`.
+Before writing, the worker locks the booking then (for series) the child session
+and rechecks tutor ownership, state, exact schedule, report absence and the
+current event key inside the same transaction as the in-app notification and
+existing email outbox row. Only the assigned tutor is notified. No report,
+delivery, settlement, wallet or fee state changes, and no migration is needed.
+The focused unit suite passes 7 tests / 27 expectations. The release typecheck
+runs through the repository's serial pre-push hook; DB and browser acceptance
+remain with parent integration.
+
 ## V3 class session report and settlement boundary (2026-10-21)
 
 `class-enrollment.reports.ts` owns `classes.submitSessionReport` and
@@ -448,8 +470,9 @@ link. A submitted report, cancelled session, completed state, or stale schedule/
 tutor candidate suppresses the write; cancelling the parent class does not suppress
 a still-scheduled retained past session. The worker never changes report, session
 or financial state and does not use no-show expiry as proof of delivery. This
-class-only flow leaves legacy solo/group/series reminders unchanged; broader
-legacy reminder coverage remains pending.
+class sessions keep their existing class-specific query and event identity. The
+same one-minute scheduler separately runs the legacy on-demand worker described
+above, with its own booking/session identity and period keys.
 
 The integrated `createClassEnrollmentService.processDueJobs()` runs this bounded
 global report scan alongside installment reminder processing and returns
