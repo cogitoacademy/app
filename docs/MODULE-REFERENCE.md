@@ -454,8 +454,8 @@ exact loopback target 127.0.0.1:6769/cogito-test; **3 tests / 32 expectations
 passed**, including concurrent duplicate jobs, outbox identity, cursor
 progress, and precision-boundary cases. No migration, reset, seed, or provider
 call ran. The focused unit suite passes 10 tests / 44 expectations. Normal
-pre-push lint and typecheck passed on head 90aa3210; typecheck completed 4/4
-tasks in 33.24s (2 cached). Browser acceptance and actual email delivery remain
+pre-push lint and typecheck passed on head 56fc3bbd; typecheck completed 4/4
+tasks in 14.961s (2 cached). Browser acceptance and actual email delivery remain
 unverified.
 
 ## V3 class session report and settlement boundary (2026-10-21)
