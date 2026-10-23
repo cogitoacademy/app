@@ -109,6 +109,7 @@ export interface ListUsersResult {
 export interface SearchUsersInput {
   query: string;
   limit?: number;
+  role?: UserRole;
 }
 
 export interface SetRoleInput {
@@ -255,7 +256,12 @@ export function createAdminService(deps: {
   }
 
   async function searchUsers(input: SearchUsersInput) {
-    return adminRepo.searchUsers(db, input.query.trim(), input.limit ?? 10);
+    return adminRepo.searchUsers(
+      db,
+      input.query.trim(),
+      input.limit ?? 10,
+      input.role,
+    );
   }
 
   async function getDashboardAnalytics(

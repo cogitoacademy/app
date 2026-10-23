@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ORPCError } from "@orpc/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CogitoUser } from "@cogito-app/auth";
@@ -28,6 +28,7 @@ import { Text } from "@cogito-app/ui/components/selia/text";
 import { toastManager } from "@cogito-app/ui/components/selia/toast";
 import {
   IconCalendarEvent,
+  IconDownload,
   IconFileText,
   IconRefresh,
 } from "@tabler/icons-react";
@@ -37,6 +38,7 @@ import type { CompletionFeedbackDraft } from "@/components/booking/complete-sess
 import Loader from "@/components/loader";
 import { getUserFacingError } from "@/lib/error-message";
 import { authClient } from "@/lib/auth-client";
+import { serverUrl } from "@/lib/server-url";
 import { orpc } from "@/utils/orpc";
 import type { z } from "zod";
 
@@ -113,6 +115,13 @@ function isConflict(error: unknown) {
 }
 
 type ReportRow = z.infer<typeof listClassSessionReportsOutput>[number];
+type ExportStudent = { id: string; name: string; email: string; role: string };
+type ExportSummary = {
+  reportCount: number;
+  periodStart: string;
+  generatedAt: string;
+  timezone: "Asia/Jakarta";
+};
 
 export function ClassSessionReportsPage() {
   const queryClient = useQueryClient();
@@ -120,6 +129,56 @@ export function ClassSessionReportsPage() {
   const role = (auth.data?.user as CogitoUser | undefined)?.role;
   const isStudent = role === "student";
   const isAdmin = role === "admin";
+  const currentUserId = (auth.data?.user as CogitoUser | undefined)?.id;
+  const [exportStudent, setExportStudent] = useState<ExportStudent | null>(
+    null,
+  );
+  const [studentSearch, setStudentSearch] = useState("");
+  const [debouncedStudentSearch, setDebouncedStudentSearch] = useState("");
+  const [downloadPending, setDownloadPending] = useState(false);
+  const [downloadEmpty, setDownloadEmpty] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => setDebouncedStudentSearch(studentSearch.trim()),
+      250,
+    );
+    return () => window.clearTimeout(timer);
+  }, [studentSearch]);
+
+  const exportStudentSearchQuery = useQuery({
+    ...orpc.admin.searchUsers.queryOptions({
+      input: {
+        query: debouncedStudentSearch || "--",
+        limit: 10,
+        role: "student",
+      },
+    }),
+    enabled: isAdmin && !exportStudent && debouncedStudentSearch.length >= 2,
+  });
+  const exportStudentOptions = (exportStudentSearchQuery.data ??
+    []) as ExportStudent[];
+  const exportStudentId = isStudent
+    ? currentUserId
+    : isAdmin
+      ? exportStudent?.id
+      : undefined;
+  const exportSummaryQuery = useQuery({
+    queryKey: ["student-report-pdf-summary", exportStudentId],
+    queryFn: async () => {
+      const response = await fetch(`${serverUrl}/reports/student/summary`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(isAdmin ? { studentId: exportStudentId } : {}),
+      });
+      if (!response.ok) throw new Error("Could not check report eligibility.");
+      return (await response.json()) as ExportSummary;
+    },
+    enabled: Boolean(exportStudentId),
+    staleTime: 30_000,
+  });
   const reportsQuery = useQuery(
     orpc.classes.listSessionReports.queryOptions({ input: {} }),
   );
@@ -283,6 +342,9 @@ export function ClassSessionReportsPage() {
       await queryClient.invalidateQueries({
         queryKey: orpc.classes.listSessionReports.key(),
       });
+      await queryClient.invalidateQueries({
+        queryKey: ["student-report-pdf-summary"],
+      });
       toastManager.add({
         title: expectedVersion === 0 ? "Report recorded" : "Report updated",
         description:
@@ -305,6 +367,41 @@ export function ClassSessionReportsPage() {
         description: getUserFacingError(error),
         type: "error",
       });
+    }
+  }
+
+  async function downloadStudentReports() {
+    if (!exportStudentId) return;
+    setDownloadPending(true);
+    setDownloadEmpty(false);
+    setDownloadError(null);
+    try {
+      const response = await fetch(`${serverUrl}/reports/student/pdf`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(isAdmin ? { studentId: exportStudentId } : {}),
+      });
+      if (response.status === 204) {
+        setDownloadEmpty(true);
+        await exportSummaryQuery.refetch();
+        return;
+      }
+      if (!response.ok) {
+        throw new Error("Could not download this student report.");
+      }
+      const fileUrl = URL.createObjectURL(await response.blob());
+      const anchor = document.createElement("a");
+      anchor.href = fileUrl;
+      anchor.download = `student-session-reports-${new Date().toISOString().slice(0, 10)}.pdf`;
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(fileUrl), 1000);
+    } catch (error) {
+      setDownloadError(
+        getUserFacingError(error, "Could not download this student report."),
+      );
+    } finally {
+      setDownloadPending(false);
     }
   }
 
@@ -372,6 +469,147 @@ export function ClassSessionReportsPage() {
           {rows.length} session{rows.length === 1 ? "" : "s"}
         </Badge>
       </div>
+
+      {isStudent || isAdmin ? (
+        <Card>
+          <CardHeader>
+            <div>
+              <CardTitle>Download student report PDF</CardTitle>
+              <CardDescription className="mt-2">
+                Includes reported, delivered sessions scheduled in the last
+                three calendar months. Student access follows the paid-session
+                report rules.
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardBody className="space-y-4">
+            {isAdmin && !exportStudent ? (
+              <div className="max-w-xl space-y-3">
+                <Field>
+                  <FieldLabel htmlFor="report-export-student-search">
+                    Choose a student
+                  </FieldLabel>
+                  <Input
+                    id="report-export-student-search"
+                    value={studentSearch}
+                    onChange={(event) => setStudentSearch(event.target.value)}
+                    placeholder="Search by student name or email"
+                    autoComplete="off"
+                  />
+                </Field>
+                {debouncedStudentSearch.length >= 2 ? (
+                  <div
+                    role="group"
+                    aria-label="Student search results"
+                    className="space-y-1 rounded-lg border border-border p-2"
+                  >
+                    {exportStudentSearchQuery.isFetching ? (
+                      <Text className="p-2 text-sm text-muted" role="status">
+                        Searching students…
+                      </Text>
+                    ) : exportStudentOptions.length ? (
+                      exportStudentOptions.map((candidate) => (
+                        <Button
+                          key={candidate.id}
+                          variant="plain"
+                          className="w-full justify-start"
+                          onClick={() => {
+                            setExportStudent(candidate);
+                            setStudentSearch("");
+                            setDownloadEmpty(false);
+                          }}
+                        >
+                          {candidate.name} · {candidate.email}
+                        </Button>
+                      ))
+                    ) : (
+                      <Text className="p-2 text-sm text-muted" role="status">
+                        No students match that search.
+                      </Text>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {isAdmin && exportStudent ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <Text className="font-medium">
+                  {exportStudent.name} · {exportStudent.email}
+                </Text>
+                <Button
+                  variant="plain"
+                  size="sm"
+                  onClick={() => {
+                    setExportStudent(null);
+                    setDownloadEmpty(false);
+                    setDownloadError(null);
+                  }}
+                >
+                  Change student
+                </Button>
+              </div>
+            ) : null}
+
+            {exportStudentId && exportSummaryQuery.isPending ? (
+              <Text className="text-sm text-muted" role="status">
+                Checking eligible reports…
+              </Text>
+            ) : null}
+            {exportStudentId && exportSummaryQuery.isError ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <Text className="text-sm text-danger" role="alert">
+                  {getUserFacingError(
+                    exportSummaryQuery.error,
+                    "Could not check eligible reports.",
+                  )}
+                </Text>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => void exportSummaryQuery.refetch()}
+                >
+                  Try again
+                </Button>
+              </div>
+            ) : null}
+            {exportSummaryQuery.data?.reportCount === 0 || downloadEmpty ? (
+              <Card className="border-item-border bg-item">
+                <CardBody className="space-y-1 py-4" role="status">
+                  <Text className="font-medium">
+                    No eligible reports in the last three calendar months
+                  </Text>
+                  <Text className="text-sm text-muted">
+                    Reports appear after a delivered session has a report and
+                    the selected student has a chargeable entitlement.
+                  </Text>
+                </CardBody>
+              </Card>
+            ) : null}
+            {exportSummaryQuery.data?.reportCount ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <Badge variant="info">
+                  {exportSummaryQuery.data.reportCount} eligible report
+                  {exportSummaryQuery.data.reportCount === 1 ? "" : "s"}
+                </Badge>
+                <Button
+                  onClick={() => void downloadStudentReports()}
+                  disabled={downloadPending}
+                  progress={downloadPending}
+                >
+                  <IconDownload aria-hidden="true" />
+                  {downloadPending ? "Preparing PDF" : "Download PDF"}
+                </Button>
+              </div>
+            ) : null}
+            {downloadError ? (
+              <Text className="text-sm text-danger" role="alert">
+                {downloadError}
+              </Text>
+            ) : null}
+          </CardBody>
+        </Card>
+      ) : null}
 
       <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,19rem)_minmax(0,1fr)]">
         <section

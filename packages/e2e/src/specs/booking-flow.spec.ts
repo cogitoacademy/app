@@ -10,6 +10,7 @@ import {
   TUTOR_NAME,
   TUTOR_PASSWORD,
 } from "../fixtures/test-accounts";
+import { resetE2eAuthRateLimit } from "../fixtures/auth-rate-limit";
 
 async function login(page: Page, email = SEED_EMAIL, password = SEED_PASSWORD) {
   if (email === SEED_EMAIL) {
@@ -18,6 +19,7 @@ async function login(page: Page, email = SEED_EMAIL, password = SEED_PASSWORD) {
   } else {
     await page.context().clearCookies();
   }
+  resetE2eAuthRateLimit();
   await page.goto("/login");
   const pathsAfterLoginPage: string[] = [];
   page.on("framenavigated", (frame) => {
@@ -192,7 +194,11 @@ async function expectAcceptedBooking(page: Page) {
 test("student can log in and see starting balance", async ({ page }) => {
   await login(page);
   await page.goto("/balance");
-  await expect(page.getByText("200").first()).toBeVisible();
+  const startingMarks =
+    process.env.T05_ENROLLMENT_TEST_DB_PORT === "6769" ? 326 : 200;
+  await expect(
+    page.getByText(String(startingMarks), { exact: true }).first(),
+  ).toBeVisible();
   await expect(
     page.getByText("Available balance", { exact: true }),
   ).toBeVisible();

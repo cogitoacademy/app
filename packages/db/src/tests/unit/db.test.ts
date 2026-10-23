@@ -1,7 +1,8 @@
-import { describe, test, expect, mock } from "bun:test";
+import { afterEach, describe, test, expect, mock } from "bun:test";
 
 const mockEnv = {
   DATABASE_URL: "postgresql://test:test@localhost:5432/test",
+  BETTER_AUTH_SECRET: "test-only-secret-at-least-32-characters-long",
   NODE_ENV: "test",
   DB_SSL_ENABLED: false,
   DB_SSL_REJECT_UNAUTHORIZED: false,
@@ -11,6 +12,14 @@ const mockEnv = {
   // Bun can share this module mock with integration tests in one process.
   CORS_ORIGIN: "http://localhost:3000",
 };
+const initialMockEnv = { ...mockEnv };
+
+// Bun can share this module mock with API integration tests in the same
+// process. Restore fields changed by this file so later auth tests still see
+// the test environment.
+afterEach(() => {
+  Object.assign(mockEnv, initialMockEnv);
+});
 
 mock.module("@cogito-app/env/server", () => ({
   env: mockEnv,
@@ -86,5 +95,13 @@ describe("db", () => {
         ],
       }),
     ).not.toThrow();
+  });
+
+  test("restores the shared environment after each case", () => {
+    expect(mockEnv.NODE_ENV).toBe(initialMockEnv.NODE_ENV);
+    expect(mockEnv.DB_SSL_ENABLED).toBe(initialMockEnv.DB_SSL_ENABLED);
+    expect(mockEnv.DB_SSL_REJECT_UNAUTHORIZED).toBe(
+      initialMockEnv.DB_SSL_REJECT_UNAUTHORIZED,
+    );
   });
 });

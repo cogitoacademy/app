@@ -98,6 +98,8 @@ import type { ContactService } from "./modules/contact/contact.service";
 import type { ContactHandler } from "./modules/contact/contact.handler";
 import type { ReferralService } from "./modules/referral/referral.service";
 import type { ReferralHandler } from "./modules/referral/referral.handler";
+import { createReportExportModule } from "./modules/report-export";
+import type { ReportExportService } from "./modules/report-export";
 
 export interface ServiceRegistry {
   audit: AuditPort;
@@ -129,6 +131,7 @@ export interface ServiceRegistry {
   meeting: MeetingModule;
   contact: ContactService;
   referral: ReferralService;
+  reportExport: ReportExportService;
 }
 
 export interface HandlerRegistry {
@@ -449,6 +452,7 @@ function createServices() {
     appBaseUrl: env.CORS_ORIGIN,
     referralPort: referral.service,
   });
+  const reportExport = createReportExportModule({ db });
 
   const adminBooking = createAdminBookingModule({
     db,
@@ -513,6 +517,7 @@ function createServices() {
     meeting,
     contact: contact.service,
     referral: referral.service,
+    reportExport: reportExport.service,
   };
 
   const handlers: HandlerRegistry = {

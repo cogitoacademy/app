@@ -183,6 +183,11 @@ Defaults: cohort full 20/session, half 22/session, single 25/session; flat tutor
 | REQ-PAYOUT-02 | Transfer remains external. Admin records actual amount, actual payment date and optional reference/proof before paid; operator/time retained. Actual transfer must equal calculated net to mark fully paid. Corrections require an audited action. A void retains history and returns included sessions to unpaid; if money was transferred, reconcile that transfer before repayment. | S01 §4; Q08 resolved 20 Oct |
 | REQ-PAYOUT-03 | Tutor screen/email shows gross/rate/tax/transfer fee/net/covered sessions. Monthly tax CSV sums non-void paid snapshots, not current tax profiles: legal name,NIK,NPWP,status,gross paid,all applicable rates,withholding,net,monthly withholding total; mixed rates preserve payout detail. Month based on actual payment date. | S01 §4 |
 
+For REQ-REPORT-04, dense current-format feedback may flow inline only when
+needed to keep the session on one page. Legacy layout follows the report's
+current history version, preserves feedback line breaks, and uses clearly
+labelled continuation pages when needed, per Q07.
+
 ## 8. Registration and referrals
 
 | Requirement | Acceptance criteria | Source / decision |

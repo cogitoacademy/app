@@ -37,6 +37,9 @@ export const DEFAULT_SEED_STUDENTS = [
   { email: "cogito.athena@yopmail.com", name: "Athena by Cogito" },
 ] as const;
 
+// Booking-flow E2E holds 126 Marks before T05 class-enrollment coverage.
+const T05_E2E_STUDENT_INITIAL_MARKS = 326;
+
 export function seedAllowed(
   nodeEnv: string,
   allowFlag: string | undefined,
@@ -140,7 +143,12 @@ async function seedPackages() {
   console.log("Seeded mark packages");
 }
 
-async function seedDemoStudent(email: string, password: string, name: string) {
+async function seedDemoStudent(
+  email: string,
+  password: string,
+  name: string,
+  initialMarks = 200,
+) {
   const student = await ensureUser(email, password, name);
   await db
     .update(user)
@@ -158,10 +166,10 @@ async function seedDemoStudent(email: string, password: string, name: string) {
       ),
   });
 
-  if (!existingCredit && wallet.totalBalance < 200) {
+  if (!existingCredit && wallet.totalBalance < initialMarks) {
     await services.wallet.credit(db, {
       walletId: wallet.id,
-      amount: 200,
+      amount: initialMarks,
       eventKey: "seed.demo_student_credit",
       sourceReference: "seed",
       actorType: "system",
@@ -593,6 +601,10 @@ async function seed() {
       DEFAULT_SEED_STUDENTS[0].email,
     demoPassword(process.env.SEED_STUDENT_PASSWORD, "student123"),
     DEFAULT_SEED_STUDENTS[0].name,
+    process.env.NODE_ENV === "test" &&
+      process.env.T05_ENROLLMENT_TEST_DB_PORT === "6769"
+      ? T05_E2E_STUDENT_INITIAL_MARKS
+      : 200,
   );
 
   await seedPresentationBooking(tutorUser.id, reviewStudent.id);
@@ -614,6 +626,36 @@ async function seed() {
       DEFAULT_SEED_STUDENTS[2].name,
     ),
   ]);
+
+  const classEnrollmentStudentEmail =
+    process.env.T05_CLASS_ENROLLMENT_STUDENT_EMAIL?.trim().toLowerCase();
+  if (
+    process.env.NODE_ENV === "test" &&
+    process.env.T05_ENROLLMENT_TEST_DB_PORT === "6769" &&
+    classEnrollmentStudentEmail
+  ) {
+    await seedDemoStudent(
+      classEnrollmentStudentEmail,
+      friendPassword,
+      "Class Enrollment E2E",
+      200,
+    );
+  }
+
+  const classReportsStudentEmail =
+    process.env.T07_CLASS_REPORTS_STUDENT_EMAIL?.trim().toLowerCase();
+  if (
+    process.env.NODE_ENV === "test" &&
+    process.env.T05_ENROLLMENT_TEST_DB_PORT === "6769" &&
+    classReportsStudentEmail
+  ) {
+    await seedDemoStudent(
+      classReportsStudentEmail,
+      friendPassword,
+      "Class Reports E2E",
+      200,
+    );
+  }
 }
 
 if (import.meta.main) {
