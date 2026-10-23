@@ -41,6 +41,15 @@ export const paymentRecord = pgTable(
     providerEventId: text("provider_event_id"),
     // Provider-side request/order id used for authoritative status lookup.
     providerRequestId: text("provider_request_id"),
+    // Verified provider time of successful payment, distinct from webhook receipt time.
+    providerSuccessAt: timestamp("provider_success_at", { withTimezone: true }),
+    // Provider refund facts are kept separate from the locally persisted payment status.
+    providerRefundKind: text("provider_refund_kind").$type<
+      "partial" | "full"
+    >(),
+    providerRefundAmountIdr: integer("provider_refund_amount_idr"),
+    // Bounded SHA-256 fingerprint of authenticated provider refund identity/history.
+    providerRefundIdentity: text("provider_refund_identity"),
     // H4: the provider checkout URL, persisted so a PENDING re-purchase can
     // return the stored URL instead of re-calling the provider.
     checkoutUrl: text("checkout_url"),
@@ -73,6 +82,18 @@ export const paymentRecord = pgTable(
     check(
       "payment_quote_choice_check",
       sql`${table.quoteChoice} IS NULL OR ${table.quoteChoice} IN ('package','custom','recommended')`,
+    ),
+    check(
+      "payment_provider_refund_kind_check",
+      sql`${table.providerRefundKind} IS NULL OR ${table.providerRefundKind} IN ('partial','full')`,
+    ),
+    check(
+      "payment_provider_refund_amount_check",
+      sql`${table.providerRefundAmountIdr} IS NULL OR ${table.providerRefundAmountIdr} >= 0`,
+    ),
+    check(
+      "payment_provider_refund_identity_check",
+      sql`${table.providerRefundIdentity} IS NULL OR ${table.providerRefundIdentity} ~ '^[a-f0-9]{64}$'`,
     ),
     uniqueIndex("payment_provider_event_id_idx").on(table.providerEventId),
     index("payment_userId_idx").on(table.userId),

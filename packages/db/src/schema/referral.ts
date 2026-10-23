@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   check,
   index,
+  bigint,
   integer,
   pgTable,
   text,
@@ -9,6 +10,7 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
+import { paymentRecord } from "./payment-record";
 import { uuidPrimaryKey, user } from "./auth";
 import { ledgerEntry } from "./wallet";
 
@@ -232,6 +234,88 @@ export const friendRewardDecision = pgTable(
     index("friend_reward_referrer_semester_idx").on(
       table.referrerUserId,
       table.semesterKey,
+    ),
+  ],
+);
+
+export const kolCommissionDecision = pgTable(
+  "kol_commission_decision",
+  {
+    id: uuidPrimaryKey,
+    referredUserId: text("referred_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    choiceId: text("choice_id")
+      .notNull()
+      .references(() => referralChoice.id, { onDelete: "restrict" }),
+    paymentId: text("payment_id")
+      .notNull()
+      .references(() => paymentRecord.id, { onDelete: "restrict" }),
+    providerSuccessAt: timestamp("provider_success_at", {
+      withTimezone: true,
+    }),
+    providerSuccessTimeState: text("provider_success_time_state")
+      .$type<"verified" | "unresolved">()
+      .notNull()
+      .default("verified"),
+    paymentStatusSnapshot: text("payment_status_snapshot").notNull(),
+    refundReconciliationState: text("refund_reconciliation_state")
+      .$type<"none" | "partial_refund">()
+      .notNull()
+      .default("none"),
+    providerRefundAmountIdrSnapshot: integer(
+      "provider_refund_amount_idr_snapshot",
+    ),
+    providerRefundIdentitySnapshot: text("provider_refund_identity_snapshot"),
+    purchaseAmountIdrSnapshot: integer(
+      "purchase_amount_idr_snapshot",
+    ).notNull(),
+    flatAmountIdrSnapshot: integer("flat_amount_idr_snapshot").notNull(),
+    percentBpsSnapshot: integer("percent_bps_snapshot").notNull(),
+    commissionAmountIdr: bigint("commission_amount_idr", {
+      mode: "number",
+    }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    check(
+      "kol_commission_amounts_nonnegative",
+      sql`${table.purchaseAmountIdrSnapshot} > 0 AND ${table.flatAmountIdrSnapshot} >= 0 AND ${table.percentBpsSnapshot} BETWEEN 0 AND 10000 AND ${table.commissionAmountIdr} >= 0`,
+    ),
+    check(
+      "kol_commission_success_time_state_check",
+      sql`${table.providerSuccessTimeState} IN ('verified', 'unresolved') AND ((${table.providerSuccessTimeState} = 'verified' AND ${table.providerSuccessAt} IS NOT NULL) OR (${table.providerSuccessTimeState} = 'unresolved' AND ${table.providerSuccessAt} IS NULL AND ${table.commissionAmountIdr} = 0))`,
+    ),
+    check(
+      "kol_commission_payment_status_check",
+      sql`${table.paymentStatusSnapshot} IN ('PENDING','PAID','SETTLED','FAILED','EXPIRED','REFUNDED')`,
+    ),
+    check(
+      "kol_commission_refund_reconciliation_state_check",
+      sql`${table.refundReconciliationState} IN ('none','partial_refund')`,
+    ),
+    check(
+      "kol_commission_refund_amount_check",
+      sql`${table.providerRefundAmountIdrSnapshot} IS NULL OR ${table.providerRefundAmountIdrSnapshot} >= 0`,
+    ),
+    check(
+      "kol_commission_refund_identity_check",
+      sql`${table.providerRefundIdentitySnapshot} IS NULL OR ${table.providerRefundIdentitySnapshot} ~ '^[a-f0-9]{64}$'`,
+    ),
+    uniqueIndex("kol_commission_decision_referred_user_uniq").on(
+      table.referredUserId,
+    ),
+    uniqueIndex("kol_commission_decision_payment_uniq").on(table.paymentId),
+    index("kol_commission_decision_success_idx").on(table.providerSuccessAt),
+    index("kol_commission_decision_created_idx").on(
+      table.createdAt.desc(),
+      table.id.desc(),
     ),
   ],
 );
