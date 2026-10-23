@@ -21,6 +21,17 @@ open. Earlier settlement-deferred checkpoints below describe their historical
 source slices, superseded here for implementation only. T09 remains in progress.
 
 
+## Core acceptance refresh (23 October 2026)
+
+The reset-free `class-enrollment.test.ts` suite passes 44 PostgreSQL tests /
+354 assertions against exact loopback 6769/cogito-test on integrated release
+source `fe3a6ea4`. It covers enrollment funding/expiry, class lifecycle/report
+settlement and reminder invariants using run-owned fixtures and targeted
+cleanup. No reset, migration, provider action or dev database write ran.
+This refresh does not claim a real browser journey or production acceptance.
+AUTH-02 source is already integrated through PR #309; its remaining gate is
+real Google/new-account choice/save/resume acceptance, not parent integration.
+
 ## Development sync checkpoint (23 October 2026)
 
 Root checkout is synchronized to integrated release source `31774397`. The
