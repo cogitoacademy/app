@@ -32,6 +32,7 @@ export type LegacyBookingReportReminderCandidate = {
   sessionId: string | null;
   scheduledStartAt: Date;
   scheduledEndAt: Date;
+  cursorScheduledEndAt: Date;
 };
 
 export interface BookingReportReminderRepo {
@@ -70,7 +71,8 @@ function reminderOrder(
   right: LegacyBookingReportReminderCandidate,
 ) {
   return (
-    left.scheduledEndAt.getTime() - right.scheduledEndAt.getTime() ||
+    left.cursorScheduledEndAt.getTime() -
+      right.cursorScheduledEndAt.getTime() ||
     left.bookingId.localeCompare(right.bookingId) ||
     (left.sessionId ?? "").localeCompare(right.sessionId ?? "")
   );
@@ -90,26 +92,38 @@ export function createBookingReportReminderRepo(): BookingReportReminderRepo {
       const singleEventKey = sql`'booking:' || ${booking.id} || ':session:booking:missing-report:day:' || (${singlePeriod})::text`;
       const seriesPeriod = sql`floor(extract(epoch from (${nowAtIso}::timestamptz - ${bookingSession.scheduledEndAt})) / 86400)::bigint`;
       const seriesEventKey = sql`'booking:' || ${booking.id} || ':session:' || ${bookingSession.id} || ':missing-report:day:' || (${seriesPeriod})::text`;
+      // Match JavaScript cursor precision; raw SQL timestamps also need Drizzle's date decoder.
+      const singleCursorEndAt =
+        sql`date_trunc('milliseconds', ${booking.scheduledEndAt})`.mapWith(
+          booking.scheduledEndAt,
+        );
+      const seriesCursorEndAt =
+        sql`date_trunc('milliseconds', ${bookingSession.scheduledEndAt})`.mapWith(
+          bookingSession.scheduledEndAt,
+        );
+      const afterCursorEndAt = after
+        ? sql`${after.cursorScheduledEndAt.toISOString()}::timestamptz`
+        : undefined;
       const afterSingle = after
         ? or(
-            gt(booking.scheduledEndAt, after.scheduledEndAt),
+            gt(singleCursorEndAt, afterCursorEndAt),
             and(
-              eq(booking.scheduledEndAt, after.scheduledEndAt),
+              eq(singleCursorEndAt, afterCursorEndAt),
               gt(booking.id, after.bookingId),
             ),
           )
         : undefined;
       const afterSeries = after
         ? or(
-            gt(bookingSession.scheduledEndAt, after.scheduledEndAt),
+            gt(seriesCursorEndAt, afterCursorEndAt),
             and(
-              eq(bookingSession.scheduledEndAt, after.scheduledEndAt),
+              eq(seriesCursorEndAt, afterCursorEndAt),
               gt(booking.id, after.bookingId),
             ),
             ...(after.sessionId
               ? [
                   and(
-                    eq(bookingSession.scheduledEndAt, after.scheduledEndAt),
+                    eq(seriesCursorEndAt, afterCursorEndAt),
                     eq(booking.id, after.bookingId),
                     gt(bookingSession.id, after.sessionId),
                   ),
@@ -127,6 +141,7 @@ export function createBookingReportReminderRepo(): BookingReportReminderRepo {
             sessionId: sql<string | null>`null`,
             scheduledStartAt: booking.scheduledStartAt,
             scheduledEndAt: booking.scheduledEndAt,
+            cursorScheduledEndAt: singleCursorEndAt,
           })
           .from(booking)
           .where(
@@ -159,7 +174,7 @@ export function createBookingReportReminderRepo(): BookingReportReminderRepo {
               ),
             ),
           )
-          .orderBy(asc(booking.scheduledEndAt), asc(booking.id))
+          .orderBy(asc(singleCursorEndAt), asc(booking.id))
           .limit(candidateLimit),
         db
           .select({
@@ -169,6 +184,7 @@ export function createBookingReportReminderRepo(): BookingReportReminderRepo {
             sessionId: bookingSession.id,
             scheduledStartAt: bookingSession.scheduledStartAt,
             scheduledEndAt: bookingSession.scheduledEndAt,
+            cursorScheduledEndAt: seriesCursorEndAt,
           })
           .from(booking)
           .innerJoin(
@@ -211,7 +227,7 @@ export function createBookingReportReminderRepo(): BookingReportReminderRepo {
             ),
           )
           .orderBy(
-            asc(bookingSession.scheduledEndAt),
+            asc(seriesCursorEndAt),
             asc(booking.id),
             asc(bookingSession.id),
           )
@@ -227,6 +243,7 @@ export function createBookingReportReminderRepo(): BookingReportReminderRepo {
           sessionId: row.sessionId,
           scheduledStartAt: row.scheduledStartAt,
           scheduledEndAt: row.scheduledEndAt,
+          cursorScheduledEndAt: row.cursorScheduledEndAt,
         }))
         .toSorted(reminderOrder)
         .slice(0, candidateLimit);

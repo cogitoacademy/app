@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { drizzle } from "drizzle-orm/pg-proxy";
 import type { DbType } from "../../lib/db";
 import type { TxClient } from "../../lib/tx";
 import type {
@@ -9,12 +10,60 @@ import {
   bookingReportReminderEventKey,
   bookingReportReminderPeriod,
   createBookingReportReminderProcessor,
+  createBookingReportReminderRepo,
   type BookingReportReminderRepo,
   type LegacyBookingReportReminderCandidate,
 } from "../../modules/booking/booking.report-reminders";
 import { notificationEmailHtml } from "../../modules/notification/notification.service";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+test("SQL cursors decode normalized timestamps and bind an ISO timestamp boundary", async () => {
+  const queries: Array<{ query: string; params: unknown[] }> = [];
+  const database = drizzle(async (query, params) => {
+    queries.push({ query, params });
+    return {
+      rows: query.includes('inner join "booking_session"')
+        ? []
+        : [
+            [
+              "cursor-booking",
+              "solo",
+              "tutor",
+              null,
+              "2026-10-23 02:00:00+00",
+              "2026-10-23 03:00:00.000500+00",
+              "2026-10-23 03:00:00+00",
+            ],
+          ],
+    };
+  });
+  const repo = createBookingReportReminderRepo();
+  const at = new Date("2026-10-23T04:00:00.000Z");
+  const candidates = await repo.findDue(database as unknown as DbType, at, 100);
+  const cursor = candidates[0];
+  expect(cursor).toBeDefined();
+  if (!cursor) throw new Error("Expected a decoded SQL cursor");
+  expect(cursor.cursorScheduledEndAt).toBeInstanceOf(Date);
+  expect(cursor.cursorScheduledEndAt.toISOString()).toBe(
+    "2026-10-23T03:00:00.000Z",
+  );
+  await repo.findDue(database as unknown as DbType, at, 100, cursor);
+  expect(queries).toHaveLength(4);
+  expect(
+    queries.every(({ query }) => query.includes("date_trunc('milliseconds'")),
+  ).toBe(true);
+  expect(
+    queries
+      .slice(2)
+      .every(({ params }) => params.includes("2026-10-23T03:00:00.000Z")),
+  ).toBe(true);
+  expect(
+    queries.every(({ params }) =>
+      params.every((value) => !(value instanceof Date)),
+    ),
+  ).toBe(true);
+});
 
 type FakeSession = {
   id: string;
@@ -94,6 +143,7 @@ function makeRepo(rows: FakeBooking[]) {
             sessionId: null,
             scheduledStartAt: row.scheduledStartAt,
             scheduledEndAt: row.scheduledEndAt,
+            cursorScheduledEndAt: row.scheduledEndAt,
           });
           continue;
         }
@@ -121,6 +171,7 @@ function makeRepo(rows: FakeBooking[]) {
             sessionId: session.id,
             scheduledStartAt: session.scheduledStartAt,
             scheduledEndAt: session.scheduledEndAt,
+            cursorScheduledEndAt: session.scheduledEndAt,
           });
         }
       }
@@ -128,17 +179,18 @@ function makeRepo(rows: FakeBooking[]) {
       const selected = candidates
         .toSorted(
           (left, right) =>
-            left.scheduledEndAt.getTime() - right.scheduledEndAt.getTime() ||
+            left.cursorScheduledEndAt.getTime() -
+              right.cursorScheduledEndAt.getTime() ||
             left.bookingId.localeCompare(right.bookingId) ||
             (left.sessionId ?? "").localeCompare(right.sessionId ?? ""),
         )
         .filter((candidate) => {
           if (!after) return true;
           return (
-            candidate.scheduledEndAt.getTime() >
-              after.scheduledEndAt.getTime() ||
-            (candidate.scheduledEndAt.getTime() ===
-              after.scheduledEndAt.getTime() &&
+            candidate.cursorScheduledEndAt.getTime() >
+              after.cursorScheduledEndAt.getTime() ||
+            (candidate.cursorScheduledEndAt.getTime() ===
+              after.cursorScheduledEndAt.getTime() &&
               (candidate.bookingId.localeCompare(after.bookingId) > 0 ||
                 (candidate.bookingId === after.bookingId &&
                   (candidate.sessionId ?? "").localeCompare(

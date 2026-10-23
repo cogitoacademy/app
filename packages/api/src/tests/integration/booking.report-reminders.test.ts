@@ -103,10 +103,9 @@ async function createUser(role: "tutor" | "student") {
   return { id, email };
 }
 
-async function createScheduledBooking(tutorId: string, studentId: string) {
-  const id = crypto.randomUUID();
+function scheduledBookingRow(id: string, tutorId: string, studentId: string) {
   const scheduledStartAt = new Date(fixtureEndAt.getTime() - 60 * 60_000);
-  await db.insert(bookingTable).values({
+  return {
     id,
     type: "solo",
     modality: "online",
@@ -133,17 +132,40 @@ async function createScheduledBooking(tutorId: string, studentId: string) {
     },
     originalMarks: 0,
     holdAmount: 0,
-  });
-  ownedBookingIds.add(id);
-  await db.insert(bookingParticipant).values({
-    bookingId: id,
-    userId: studentId,
-    role: "proposer",
-    confirmationState: "confirmed",
-    heldAmount: 0,
-    confirmedAt: new Date(),
-  });
-  return { id, scheduledStartAt, scheduledEndAt: fixtureEndAt };
+  } satisfies typeof bookingTable.$inferInsert;
+}
+
+async function createScheduledBookingBatch(
+  tutorId: string,
+  studentId: string,
+  count: number,
+) {
+  const rows = Array.from({ length: count }, () =>
+    scheduledBookingRow(crypto.randomUUID(), tutorId, studentId),
+  ).toSorted((left, right) => left.id.localeCompare(right.id));
+  await db.insert(bookingTable).values(rows);
+  for (const row of rows) ownedBookingIds.add(row.id);
+  await db.insert(bookingParticipant).values(
+    rows.map((row) => ({
+      bookingId: row.id,
+      userId: studentId,
+      role: "proposer",
+      confirmationState: "confirmed",
+      heldAmount: 0,
+      confirmedAt: new Date(),
+    })),
+  );
+  return rows.map(({ id, scheduledStartAt, scheduledEndAt }) => ({
+    id,
+    scheduledStartAt,
+    scheduledEndAt,
+  }));
+}
+
+async function createScheduledBooking(tutorId: string, studentId: string) {
+  const [fixture] = await createScheduledBookingBatch(tutorId, studentId, 1);
+  if (!fixture) throw new Error("Expected one scheduled booking fixture");
+  return fixture;
 }
 
 function candidateFor(
@@ -159,6 +181,7 @@ function candidateFor(
     sessionId: null,
     scheduledStartAt,
     scheduledEndAt,
+    cursorScheduledEndAt: scheduledEndAt,
   };
 }
 
@@ -407,5 +430,86 @@ describe("legacy booking report reminders PostgreSQL invariants", () => {
         dispatches: [],
       });
     }
+  });
+
+  test("SQL cursor advances past a failed batch with sub-millisecond timestamps", async () => {
+    const fixtures = await createScheduledBookingBatch(tutorId, studentId, 101);
+    const fixtureIds = fixtures.map(({ id }) => id).toSorted();
+    const fixtureIdSet = new Set(fixtureIds);
+    const healthyId = fixtureIds[100];
+    const firstPageIds = fixtureIds.slice(0, 100);
+    if (!healthyId) throw new Error("Expected a 101st reminder fixture");
+
+    await db
+      .update(bookingTable)
+      .set({
+        scheduledStartAt: sql<Date>`'0999-12-31T23:00:00.000500Z'::timestamptz`,
+        scheduledEndAt: sql<Date>`'1000-01-01T00:00:00.000500Z'::timestamptz`,
+      })
+      .where(inArray(bookingTable.id, fixtureIds));
+
+    const nowAt = new Date("2026-10-23T03:00:00.000Z");
+    const actualFirstPage = await repo.findDue(db, nowAt, 100);
+    expect(
+      actualFirstPage
+        .filter((candidate) => fixtureIdSet.has(candidate.bookingId))
+        .map((candidate) => candidate.bookingId),
+    ).toEqual(firstPageIds);
+
+    const attempts = new Map<string, number>();
+    const fixtureRepo: BookingReportReminderRepo = {
+      async findDue(database, readAt, limit, after) {
+        return (await repo.findDue(database, readAt, limit, after)).filter(
+          (candidate) => fixtureIdSet.has(candidate.bookingId),
+        );
+      },
+      writeIfPending(database, candidate, readAt, eventKey, write) {
+        return repo.writeIfPending(
+          database,
+          candidate,
+          readAt,
+          eventKey,
+          write,
+        );
+      },
+    };
+    const processor = createBookingReportReminderProcessor({
+      db,
+      repo: fixtureRepo,
+      notification: {
+        async write(params) {
+          const attemptsForBooking = attempts.get(params.bookingId) ?? 0;
+          attempts.set(params.bookingId, attemptsForBooking + 1);
+          if (params.bookingId !== healthyId) {
+            throw new Error("injected persistent outbox failure");
+          }
+          return services.notification.write(params);
+        },
+      },
+      appBaseUrl: "https://cogito.example",
+      clock: () => nowAt,
+    });
+
+    await processor.processPendingReportReminders();
+    expect([...attempts.keys()].toSorted()).toEqual(firstPageIds.toSorted());
+    expect(attempts.has(healthyId)).toBe(false);
+
+    await processor.processPendingReportReminders();
+    expect(attempts.get(healthyId)).toBe(1);
+
+    await processor.processPendingReportReminders();
+    expect(attempts.get(firstPageIds[0] ?? "")).toBe(2);
+    expect(attempts.get(healthyId)).toBe(1);
+
+    const period = bookingReportReminderPeriod(
+      new Date("1000-01-01T00:00:00.000Z"),
+      nowAt,
+    );
+    if (period === null) throw new Error("Expected an ended reminder fixture");
+    const records = await reminderRecords(
+      bookingReportReminderEventKey(healthyId, null, period),
+    );
+    expect(records.notifications).toHaveLength(1);
+    expect(records.dispatches).toHaveLength(1);
   });
 });

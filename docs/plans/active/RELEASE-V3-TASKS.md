@@ -1,5 +1,15 @@
 # Release v3 - SDD execution and acceptance plan
 
+## Reminder precision review correction (23 October 2026)
+
+The PR #313 follow-up resolves the remaining sub-millisecond cursor starvation
+case by normalizing SQL projection/order/predicates consistently and decoding
+the computed timestamp through Drizzle. Focused tests pass 9 / 40; the new
+Drizzle adapter regression checks timestamp decoding and ISO parameter binding.
+The authored guarded PostgreSQL regression uses the real finder with 101
+sub-millisecond rows; it is unrun. The stale API description and current
+CONTEXT test count are reconciled. PostgreSQL acceptance remains pending.
+
 ## Booking reminder verification checkpoint (23 October 2026)
 
 Parent verification at `c328d6ad` passes 7 reminder unit tests / 27 assertions

@@ -1,5 +1,16 @@
 # Cogito Module Reference
 
+## Booking reminder cursor precision
+
+The process-local rotation key uses the session end time truncated to
+milliseconds, booking ID, and child-session ID. SQL projections, ordering, and
+keyset predicates use that identical precision; actual due-time eligibility
+still compares the original timestamp. Computed timestamps use the existing
+timestamp column decoder, and SQL cursor bounds bind explicit ISO timestamptz
+values. This prevents PostgreSQL microseconds from repeatedly selecting a
+failed first batch. Rotation remains volatile and restarts from the oldest due
+candidate after process restart; notification event-key idempotency is durable.
+
 ## Classes UI composition (22 October 2026)
 
 The student catalog uses Selia Card/Field/Input/Button, with one card per class and

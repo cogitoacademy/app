@@ -1,5 +1,20 @@
 # Cogito Runbook
 
+## Reminder SQL cursor precision correction (23 October 2026)
+
+The cursor projection, SQL ordering, and keyset predicates now use the same
+millisecond precision. Computed timestamp projections use Drizzle's timestamp
+decoder, and cursor parameters are explicit ISO timestamptz values. The focused
+suite passes 9 tests / 40 assertions, including database-free Drizzle adapter
+decoding/binding and the 100-failure rotation regression. A guarded PostgreSQL
+case now exercises the production SQL finder against 101 owned rows with
+sub-millisecond timestamps; that DB case remains unrun. No DB, migration, reset,
+seed, browser, or provider operation ran for this correction.
+
+Parent verification also passes all four workspace typecheck tasks uncached in
+34.469 seconds with one checker, serial execution, and a local 1 GiB Go heap
+target. That resource setting is local tooling configuration, not an app limit.
+
 ## Booking reminder parent verification (23 October 2026)
 
 At source commit `c328d6ad`, the parent reran the reminder unit suite: 7 tests
