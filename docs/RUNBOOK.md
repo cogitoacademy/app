@@ -1,5 +1,21 @@
 # Cogito Runbook
 
+## DB-free referral/KOL browser regression
+
+From `packages/e2e`, run:
+
+```powershell
+bun run test --config=playwright.v3-referral-kol.config.ts
+bun run check-types
+```
+
+The isolated config starts only Vite on 3304, refuses an existing server, and
+uses its own cache/output directory. API origin 3305 is intercepted by synthetic
+session/RPC fixtures; no API process or global setup runs. Do not substitute the
+main Playwright config: its setup can seed retained DB state. Ten Chromium
+cases pass; these cover UI contracts only, not OAuth, DB or provider acceptance.
+Development ports 3000/3001 and the sidebar test port 3302 are untouched.
+
 ## Development sync checkpoint (23 October 2026)
 
 Root checkout is synchronized to integrated release source `31774397`. The

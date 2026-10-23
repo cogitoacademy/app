@@ -1,5 +1,13 @@
 # Cogito Module Reference
 
+## Referral/KOL browser contract coverage
+
+`packages/e2e/src/specs/v3-referral-kol.spec.ts` covers referral-choice route
+states and save recovery, plus admin commission cursor navigation, historical
+partial-refund warnings, full-refund zero display and unresolved-success-time
+holds. Ten synthetic Chromium cases pass. It changes no financial rules and
+proves no real OAuth, DB ordering, persisted choice or provider behavior.
+
 ## Booking reminder cursor precision
 
 The process-local rotation key uses the session end time truncated to
