@@ -71,3 +71,33 @@ export function isKolCampaignActive(
 ) {
   return campaign.activationAt <= at && at < campaign.expiresAt;
 }
+
+export function isKolPurchaseEligible(
+  providerSuccessAt: Date,
+  attributionExpiresAt: Date,
+) {
+  return providerSuccessAt < attributionExpiresAt;
+}
+
+export function calculateKolCommission(input: {
+  purchaseAmountIdr: number;
+  flatAmountIdr: number;
+  percentBps: number;
+}) {
+  return (
+    input.flatAmountIdr +
+    Math.round((input.purchaseAmountIdr * input.percentBps) / 10_000)
+  );
+}
+
+export function isEarlierKolPurchase(
+  candidate: { paymentId: string; providerSuccessAt: Date },
+  current: { paymentId: string; providerSuccessAt: Date },
+) {
+  const timeDifference =
+    candidate.providerSuccessAt.getTime() - current.providerSuccessAt.getTime();
+  return (
+    timeDifference < 0 ||
+    (timeDifference === 0 && candidate.paymentId < current.paymentId)
+  );
+}

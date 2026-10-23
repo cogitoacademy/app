@@ -201,6 +201,38 @@ labelled continuation pages when needed, per Q07.
 | REQ-KOL-02 | One qualifying first purchase creates one commission even when webhook deliveries or status updates repeat. Admin records actual amount, payment date, and reference for external transfers, with calculated, transferred, and outstanding amounts; partial transfers remain partial and excess stays visible as overpayment. No automatic recovery or offset. Monthly CSV lists attributed users, qualifying purchases, and the calculated, transferred, and outstanding amounts with enough detail for reconciliation. | S01 §5 |
 | REQ-KOL-03 | Admin correction needs reason/before-after and cannot rewrite a settled transfer or the student's saved registration choice. Genuine payment invalidation voids the qualifying commission; paid transfer history is retained with adjustment/overpayment for finance. A reversal does not automatically make a later top-up a new first event. Friend reward is not reversed. No new customer cash-refund feature. | S01 §5; Q12 resolved 20 Oct |
 
+**KOL ordering decision (user, 23 October 2026):** “first” means the
+qualifying payment with the earliest verified provider success timestamp. A
+late callback for an earlier success corrects the current commission decision
+and appends an immutable audit event with the old and new payment, purchase
+amount, provider time, and commission. Equal timestamps use ascending stable
+payment ID as the deterministic tie-breaker. Persist provider time with the
+payment; for Midtrans, use authenticated status lookup because its webhook
+signature does not cover timestamp fields. Its notification docs define
+`transaction_time` as transaction initiation; the status API exposes no
+`capture_time`. Therefore a verified card `capture` still credits Marks while
+the KOL decision is held at zero as unresolved, preventing later purchases from
+taking first place until exact provider time is available. Non-card settlement
+uses authenticated `settlement_time`. Never substitute webhook receive/commit
+time. A full refund keeps that purchase reserved as the first event and voids
+the commission to zero, including when the refund arrives before the delayed
+success callback; refunded payments never credit Marks. If the original success
+time is unavailable, persist an unresolved zero-commission hold and prevent
+later purchases from taking first place until verified time resolves the
+ordering with audit. This decision slice has no settled KOL transfer to rewrite.
+Transfer settlement, CSV, and reversal adjustment remain separate acceptance
+work; a reversal never resets first-event eligibility.
+
+**Partial-refund decision (user, 23 October 2026):** preserve the original
+first-purchase reservation and historical calculated commission, and mark that
+decision for manual reconciliation. Partial-refund handling does not prorate
+commission or move wallet Marks; a later trusted successful-purchase event
+still uses the existing one-time credit path. The local payment status remains
+its actual saved state while authenticated provider refund state is stored
+separately. Any later full refund uses the existing full-refund path once; it
+does not rewrite an external transfer. Transfer settlement, cash-refund
+accounting, and partial/overpayment adjustment remain separate finance work.
+
 ## 9. Website, content migration and landing
 
 | Requirement | Acceptance criteria | Source / decision |

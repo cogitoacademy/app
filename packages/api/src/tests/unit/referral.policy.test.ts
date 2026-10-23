@@ -2,9 +2,12 @@ import { describe, expect, test } from "bun:test";
 
 import {
   calculateFriendReward,
+  calculateKolCommission,
   generateFriendReferralCode,
   getReferralSemester,
   isKolCampaignActive,
+  isKolPurchaseEligible,
+  isEarlierKolPurchase,
   normalizeReferralCode,
 } from "../../modules/referral/referral.policy";
 
@@ -71,5 +74,72 @@ describe("referral policy", () => {
       isKolCampaignActive(campaign, new Date(campaign.expiresAt.getTime() - 1)),
     ).toBe(true);
     expect(isKolCampaignActive(campaign, campaign.expiresAt)).toBe(false);
+  });
+
+  test("KOL purchase eligibility is strictly before the saved expiry", () => {
+    const expiry = new Date("2026-12-01T00:00:00.000Z");
+    expect(isKolPurchaseEligible(new Date(expiry.getTime() - 1), expiry)).toBe(
+      true,
+    );
+    expect(isKolPurchaseEligible(expiry, expiry)).toBe(false);
+    expect(isKolPurchaseEligible(new Date(expiry.getTime() + 1), expiry)).toBe(
+      false,
+    );
+  });
+
+  test("commission uses saved flat and basis-point terms with whole-rupiah rounding", () => {
+    expect(
+      calculateKolCommission({
+        purchaseAmountIdr: 350_000,
+        flatAmountIdr: 0,
+        percentBps: 1_000,
+      }),
+    ).toBe(35_000);
+    expect(
+      calculateKolCommission({
+        purchaseAmountIdr: 1_000,
+        flatAmountIdr: 7_500,
+        percentBps: 5,
+      }),
+    ).toBe(7_501);
+    expect(
+      calculateKolCommission({
+        purchaseAmountIdr: 1,
+        flatAmountIdr: 0,
+        percentBps: 1,
+      }),
+    ).toBe(0);
+    expect(
+      calculateKolCommission({
+        purchaseAmountIdr: 350_000,
+        flatAmountIdr: 4_000,
+        percentBps: 0,
+      }),
+    ).toBe(4_000);
+  });
+
+  test("earliest provider success wins and equal timestamps use payment ID", () => {
+    const time = new Date("2026-10-23T05:00:00.000Z");
+    expect(
+      isEarlierKolPurchase(
+        { paymentId: "purchase-b", providerSuccessAt: time },
+        {
+          paymentId: "purchase-c",
+          providerSuccessAt: new Date(time.getTime() + 1),
+        },
+      ),
+    ).toBe(true);
+    expect(
+      isEarlierKolPurchase(
+        { paymentId: "purchase-a", providerSuccessAt: time },
+        { paymentId: "purchase-b", providerSuccessAt: time },
+      ),
+    ).toBe(true);
+    expect(
+      isEarlierKolPurchase(
+        { paymentId: "purchase-c", providerSuccessAt: time },
+        { paymentId: "purchase-b", providerSuccessAt: time },
+      ),
+    ).toBe(false);
   });
 });

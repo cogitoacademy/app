@@ -34,7 +34,21 @@ export function createStubPaymentProvider(
     );
     if (!valid) throw unauthorized("Invalid webhook signature");
 
-    return JSON.parse(rawBody) as WebhookPayload;
+    const payload = JSON.parse(rawBody) as WebhookPayload & {
+      providerSuccessAt?: Date | string | null;
+    };
+    const providerSuccessAt =
+      typeof payload.providerSuccessAt === "string"
+        ? new Date(payload.providerSuccessAt)
+        : payload.providerSuccessAt;
+    return {
+      ...payload,
+      providerSuccessAt:
+        providerSuccessAt instanceof Date &&
+        Number.isFinite(providerSuccessAt.getTime())
+          ? providerSuccessAt
+          : null,
+    };
   }
 
   // Stub refunds return a deterministic mock id (X1); no real money moves.

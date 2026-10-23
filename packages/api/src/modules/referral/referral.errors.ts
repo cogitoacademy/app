@@ -5,7 +5,8 @@ export type ReferralErrorCode =
   | "REFERRAL_CHOICE_REQUIRED"
   | "REFERRAL_SETTINGS_CONFLICT"
   | "REFERRAL_CAMPAIGN_INVALID"
-  | "REFERRAL_CODE_TAKEN";
+  | "REFERRAL_CODE_TAKEN"
+  | "REFERRAL_INVALID_CURSOR";
 
 export class ReferralError extends Error {
   constructor(
